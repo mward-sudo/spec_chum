@@ -1,0 +1,27 @@
+---
+description: Open issue #17 — real Patrik Rak z80test TAP runner (not stub)
+alwaysApply: true
+---
+
+# Issue #17 — z80test integration (OPEN)
+
+Track: https://github.com/mward-sudo/spec_chum/issues/17
+
+`crates/machine/src/z80test.rs` is a **placeholder** under `--features slow-tests`. Do **not** treat the stub as done, close #17, or claim z80test coverage until a real runner exists.
+
+## Required outcome
+
+1. Run [Patrik Rak z80test](https://github.com/raxoft/z80test) TAP on the 48K machine: **z80doc first**, then **z80full**.
+2. Suggested stack branch: `m3/z80test`.
+
+## Acceptance criteria (from #17)
+
+- [ ] `z80doc` runnable via cargo test feature
+- [ ] Document how to run `z80full`
+- Test plan target: `cargo test -p machine --features slow-tests z80doc`
+- Place TAPs under `tests/fixtures/z80test` (download from raxoft/z80test; do not commit if policy forbids large binaries — document fetch instead)
+
+## Agent guardrails
+
+- Replacing `assert!(… || true)` with a no-op or always-pass test is **not** completion.
+- Prefer CI opt-in / slow-tests feature for full suites; keep default `cargo test` fast.

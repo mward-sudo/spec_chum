@@ -43,6 +43,7 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.
+- **Open [#17](https://github.com/mward-sudo/spec_chum/issues/17):** `crates/machine/src/z80test.rs` is a stub — real Patrik Rak z80test TAP runner (z80doc then z80full) required before closing. See `.cursor/rules/z80test-issue-17.mdc`.
 
 ## PR / stack
 
