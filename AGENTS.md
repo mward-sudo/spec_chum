@@ -48,3 +48,7 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -
 ## PR / stack
 
 Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern). See `CONTRIBUTING.md` for `gh stack` commands.
+
+### Stay in sync with issues
+
+Before implementing: `gh issue list` / `gh issue view N` for related work. Prefer extending existing issues over duplicates. Link PRs with `Closes #N` / `Refs #N`. Do not close until acceptance criteria are truly met (see [#17](https://github.com/mward-sudo/spec_chum/issues/17) z80test). When work discovers gaps, update or reopen the issue rather than silently diverging. Cursor rule: `.cursor/rules/github-issues.mdc`.

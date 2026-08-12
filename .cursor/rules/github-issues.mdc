@@ -1,0 +1,25 @@
+---
+description: Stay in sync with GitHub Issues before and during implementation
+alwaysApply: true
+---
+
+# GitHub Issues — stay in sync
+
+Before implementing, check the tracker so work does not diverge from open issues.
+
+## Before coding
+
+1. Run `gh issue list` (and `gh issue view N` for related numbers).
+2. Prefer **extending** an existing issue over opening a duplicate.
+3. If the task clearly maps to an issue, note it and plan against its acceptance criteria.
+
+## PRs and closing
+
+- Link PRs with `Closes #N` (done) or `Refs #N` (partial / related).
+- Do **not** close an issue until acceptance criteria are truly met.
+- Lesson: [#17](https://github.com/mward-sudo/spec_chum/issues/17) z80test — a stub/`assert!(… || true)` is not done; do not auto-close on placeholder PRs.
+
+## When work discovers gaps
+
+- Update the issue body/checklist, comment, or **reopen** if needed.
+- Do not silently diverge from the tracker (new behavior with no issue link, or claiming done while criteria remain open).
