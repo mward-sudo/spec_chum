@@ -1,0 +1,7 @@
+# Clippy tool config (thresholds / test allowances). Lint levels live in Cargo.toml.
+cognitive-complexity-threshold = 30
+too-many-arguments-threshold = 8
+type-complexity-threshold = 250
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = true

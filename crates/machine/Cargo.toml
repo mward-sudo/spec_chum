@@ -11,3 +11,9 @@ bus = { workspace = true }
 ula = { workspace = true }
 tape = { workspace = true }
 formats = { workspace = true }
+
+[lints]
+workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,43 @@
+---
+description: Rust idioms and lint expectations for Spec Chum
+globs: "**/*.rs"
+alwaysApply: false
+---
+
+# Rust practices (Spec Chum)
+
+Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) when designing public crate APIs.
+
+## Errors
+
+```rust
+// ✅ library crates
+#[derive(Debug, thiserror::Error)]
+pub enum LoadError {
+    #[error("invalid header")]
+    BadHeader,
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
+// ✅ app / binaries
+fn run() -> anyhow::Result<()> { /* ... */ Ok(()) }
+
+// ❌ non-test library / hot paths
+let v = x.unwrap();
+```
+
+## Safety & style
+
+- `unsafe_code` is denied via workspace lints. Prefer safe APIs; if `unsafe` is unavoidable, isolate it and document `// SAFETY: ...`.
+- Prefer `&T` / iterators over needless clones; avoid `clone()` in T-state hot loops (Z80/ULA).
+- Derive `Debug` on public types; keep APIs small (`pub(crate)` by default).
+- Use `?` for propagation; no empty `catch` / discarded `Result`s.
+
+## Verification
+
+```bash
+./scripts/check.sh
+```
+
+Fix fmt/clippy/test failures before considering the change complete.

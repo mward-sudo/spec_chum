@@ -6,3 +6,9 @@ license.workspace = true
 description = "Spec Chum bus crate"
 
 [dependencies]
+
+[lints]
+workspace = true
+
+[lints]
+workspace = true

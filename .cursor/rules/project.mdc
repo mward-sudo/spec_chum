@@ -1,0 +1,13 @@
+---
+description: Spec Chum project constraints and agent workflow
+alwaysApply: true
+---
+
+# Spec Chum — project rules
+
+- Emulator workspace: `z80`, `bus`, `ula`, `tape`, `formats`, `machine`, `app`.
+- Prefer additive changes inside the owning crate; avoid drive-by refactors across crates.
+- Never edit plan files under `.cursor/plans/` (or similar).
+- Never commit ROM binaries; fetch with `./scripts/fetch_roms.sh`.
+- Before finishing Rust work, run `./scripts/check.sh` (fmt + clippy `-D warnings` + tests).
+- Follow `AGENTS.md` and `CONTRIBUTING.md` for TDD and PR expectations.

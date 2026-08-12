@@ -6,3 +6,9 @@ license.workspace = true
 description = "Spec Chum tape crate"
 
 [dependencies]
+
+[lints]
+workspace = true
+
+[lints]
+workspace = true
