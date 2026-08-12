@@ -9,4 +9,3 @@ description = "Spec Chum ula crate"
 
 [lints]
 workspace = true
-

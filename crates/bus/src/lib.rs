@@ -1,9 +1,384 @@
-//! Spec Chum `bus` crate.
+//! Spec Chum bus — 48K/128K memory maps and port decode.
+
+#![allow(clippy::pedantic)]
+
+use ula::{contention_delay, floating_bus_byte, Ula48, FRAME_TSTATES_48};
+
+/// Keyboard matrix: 8 rows × 5 keys (active low).
+#[derive(Clone, Debug)]
+pub struct Keyboard {
+    /// Bits 0–4 active-low per row; rows selected by A8–A15 of port address.
+    pub rows: [u8; 8],
+}
+
+impl Default for Keyboard {
+    fn default() -> Self {
+        Self { rows: [0x1f; 8] }
+    }
+}
+
+impl Keyboard {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn reset(&mut self) {
+        self.rows = [0x1f; 8];
+    }
+
+    /// Set a key pressed (true) or released in Spectrum matrix coordinates.
+    pub fn set_key(&mut self, row: usize, bit: u8, pressed: bool) {
+        if row >= 8 || bit > 4 {
+            return;
+        }
+        if pressed {
+            self.rows[row] &= !(1 << bit);
+        } else {
+            self.rows[row] |= 1 << bit;
+        }
+    }
+
+    #[must_use]
+    pub fn read(&self, port_hi: u8) -> u8 {
+        let mut v = 0x1f;
+        for (i, row) in self.rows.iter().enumerate() {
+            if port_hi & (1 << i) == 0 {
+                v &= row;
+            }
+        }
+        v
+    }
+}
+
+/// 48K Spectrum memory + ULA port FE.
+#[derive(Clone, Debug)]
+pub struct Bus48 {
+    pub rom: [u8; 16384],
+    pub ram: [u8; 49152],
+    pub keyboard: Keyboard,
+    pub ear: bool,
+    pub mic: bool,
+    pub beeper: bool,
+    pub border: u8,
+    /// Frame-relative T-state (0..69888).
+    pub frame_t: u32,
+    pub ula: Ula48,
+    /// Timestamped beeper edges: (frame_t, level).
+    pub beeper_edges: Vec<(u32, bool)>,
+}
+
+impl Default for Bus48 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Bus48 {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            rom: [0; 16384],
+            ram: [0; 49152],
+            keyboard: Keyboard::new(),
+            ear: false,
+            mic: false,
+            beeper: false,
+            border: 0,
+            frame_t: 0,
+            ula: Ula48::new(),
+            beeper_edges: Vec::new(),
+        }
+    }
+
+    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), String> {
+        if data.len() != 16384 {
+            return Err(format!("48K ROM must be 16384 bytes, got {}", data.len()));
+        }
+        self.rom.copy_from_slice(data);
+        Ok(())
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_contended(addr: u16) -> bool {
+        (0x4000..0x8000).contains(&addr)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn contend_at(&self, addr: u16) -> u32 {
+        if Self::is_contended(addr) {
+            contention_delay(self.frame_t)
+        } else {
+            0
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn read(&self, addr: u16) -> u8 {
+        if addr < 0x4000 {
+            self.rom[addr as usize]
+        } else {
+            self.ram[addr as usize - 0x4000]
+        }
+    }
+
+    #[inline]
+    pub fn write(&mut self, addr: u16, value: u8) {
+        if addr >= 0x4000 {
+            self.ram[addr as usize - 0x4000] = value;
+        }
+    }
+
+    /// Screen bitmap+attrs live at 0x4000 in RAM bank.
+    #[must_use]
+    pub fn screen_bytes(&self) -> &[u8] {
+        &self.ram[0..6912]
+    }
+
+    pub fn in_fe(&self, port: u16) -> u8 {
+        let keys = self.keyboard.read((port >> 8) as u8);
+        let mut v = 0xa0 | keys; // bits 7,5 often 1; bit 6 = EAR
+        if self.ear {
+            v |= 0x40;
+        }
+        // Floating bus when ULA not driving keyboard-only — classic: odd ports
+        if port & 1 != 0 {
+            // Fully decoded FE only when A0=0
+        }
+        v
+    }
+
+    pub fn out_fe(&mut self, value: u8) {
+        self.border = value & 7;
+        self.ula.set_border(self.frame_t, self.border);
+        let beep = value & 0x10 != 0;
+        if beep != self.beeper {
+            self.beeper = beep;
+            self.beeper_edges.push((self.frame_t, beep));
+        }
+        self.mic = value & 0x08 != 0;
+    }
+
+    pub fn in_port(&mut self, port: u16) -> u8 {
+        if port & 1 == 0 {
+            return self.in_fe(port);
+        }
+        // Floating bus on unattached ports
+        floating_bus_byte(self.frame_t, self.screen_bytes()).unwrap_or(0xff)
+    }
+
+    pub fn out_port(&mut self, port: u16, value: u8) {
+        if port & 1 == 0 {
+            self.out_fe(value);
+        }
+    }
+
+    pub fn advance_frame_t(&mut self, dt: u32) {
+        self.frame_t = (self.frame_t + dt) % FRAME_TSTATES_48;
+    }
+}
+
+/// 128K bus with 7FFD paging + AY ports.
+#[derive(Clone, Debug)]
+pub struct Bus128 {
+    pub rom: [[u8; 16384]; 2],
+    pub banks: [[u8; 16384]; 8],
+    pub page: u8,
+    pub locked: bool,
+    pub keyboard: Keyboard,
+    pub ear: bool,
+    pub beeper: bool,
+    pub border: u8,
+    pub frame_t: u32,
+    pub ay_reg: u8,
+    pub ay_regs: [u8; 16],
+    pub beeper_edges: Vec<(u32, bool)>,
+}
+
+impl Default for Bus128 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Bus128 {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            rom: [[0; 16384]; 2],
+            banks: [[0; 16384]; 8],
+            page: 0,
+            locked: false,
+            keyboard: Keyboard::new(),
+            ear: false,
+            beeper: false,
+            border: 0,
+            frame_t: 0,
+            ay_reg: 0,
+            ay_regs: [0; 16],
+            beeper_edges: Vec::new(),
+        }
+    }
+
+    pub fn load_rom128(&mut self, data: &[u8]) -> Result<(), String> {
+        if data.len() != 32768 {
+            return Err(format!("128 ROM must be 32768 bytes, got {}", data.len()));
+        }
+        self.rom[0].copy_from_slice(&data[0..16384]);
+        self.rom[1].copy_from_slice(&data[16384..32768]);
+        Ok(())
+    }
+
+    #[inline]
+    fn rom_num(&self) -> usize {
+        usize::from(self.page & 0x10 != 0)
+    }
+
+    #[inline]
+    fn screen_bank(&self) -> usize {
+        if self.page & 0x08 != 0 {
+            7
+        } else {
+            5
+        }
+    }
+
+    #[inline]
+    fn paged_bank(&self) -> usize {
+        usize::from(self.page & 7)
+    }
+
+    #[must_use]
+    pub fn read(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x3fff => self.rom[self.rom_num()][addr as usize],
+            0x4000..=0x7fff => self.banks[5][addr as usize - 0x4000],
+            0x8000..=0xbfff => self.banks[2][addr as usize - 0x8000],
+            0xc000..=0xffff => self.banks[self.paged_bank()][addr as usize - 0xc000],
+        }
+    }
+
+    pub fn write(&mut self, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x3fff => {}
+            0x4000..=0x7fff => self.banks[5][addr as usize - 0x4000] = value,
+            0x8000..=0xbfff => self.banks[2][addr as usize - 0x8000] = value,
+            0xc000..=0xffff => self.banks[self.paged_bank()][addr as usize - 0xc000] = value,
+        }
+    }
+
+    #[must_use]
+    pub fn screen_bytes(&self) -> &[u8] {
+        &self.banks[self.screen_bank()][0..6912]
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_contended_bank(bank: usize) -> bool {
+        matches!(bank, 1 | 3 | 5 | 7)
+    }
+
+    #[must_use]
+    pub fn contend_at(&self, addr: u16) -> u32 {
+        let contended = match addr {
+            0x4000..=0x7fff => true,
+            0xc000..=0xffff => Self::is_contended_bank(self.paged_bank()),
+            _ => false,
+        };
+        if contended {
+            contention_delay(self.frame_t)
+        } else {
+            0
+        }
+    }
+
+    pub fn out_7ffd(&mut self, value: u8) {
+        if self.locked {
+            return;
+        }
+        self.page = value;
+        if value & 0x20 != 0 {
+            self.locked = true;
+        }
+    }
+
+    pub fn in_port(&mut self, port: u16) -> u8 {
+        if port & 1 == 0 {
+            let keys = self.keyboard.read((port >> 8) as u8);
+            let mut v = 0xa0 | keys;
+            if self.ear {
+                v |= 0x40;
+            }
+            return v;
+        }
+        // AY register read
+        if port & 0xc002 == 0xc000 {
+            return self.ay_regs[usize::from(self.ay_reg & 0x0f)];
+        }
+        0xff
+    }
+
+    pub fn out_port(&mut self, port: u16, value: u8) {
+        if port & 1 == 0 {
+            self.border = value & 7;
+            let beep = value & 0x10 != 0;
+            if beep != self.beeper {
+                self.beeper = beep;
+                self.beeper_edges.push((self.frame_t, beep));
+            }
+            return;
+        }
+        // 7FFD: A15=0, A1=0
+        if port & 0x8002 == 0 {
+            self.out_7ffd(value);
+            return;
+        }
+        // FFFD select / BFFD data
+        if port & 0xc002 == 0xc000 {
+            self.ay_reg = value;
+            return;
+        }
+        if port & 0xc002 == 0x8000 {
+            self.ay_regs[usize::from(self.ay_reg & 0x0f)] = value;
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn crate_loads() {
-        assert_eq!(1 + 1, 2);
+    fn rom_ram_map() {
+        let mut b = Bus48::new();
+        b.rom[0] = 0xAA;
+        b.write(0x4000, 0x55);
+        assert_eq!(b.read(0), 0xAA);
+        assert_eq!(b.read(0x4000), 0x55);
+        b.write(0x0000, 0x11);
+        assert_eq!(b.read(0), 0xAA, "ROM not writable");
+    }
+
+    #[test]
+    fn keyboard_row() {
+        let mut k = Keyboard::new();
+        k.set_key(0, 0, true); // Caps shift row
+        assert_eq!(k.read(0xfe), 0x1e);
+    }
+
+    #[test]
+    fn page_7ffd() {
+        let mut b = Bus128::new();
+        b.banks[3][0] = 0x42;
+        b.out_7ffd(0x03);
+        assert_eq!(b.read(0xc000), 0x42);
+        b.out_7ffd(0x20); // lock
+        b.out_7ffd(0x00);
+        assert_eq!(b.page & 7, 0); // still locked at previous? lock after write
+                                   // actually we locked with bank 0 from 0x20
+        assert!(b.locked);
     }
 }
