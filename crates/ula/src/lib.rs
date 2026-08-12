@@ -149,7 +149,11 @@ impl Ula48 {
         self.border_events.push((frame_t, self.border));
     }
 
-    pub fn end_frame(&mut self) {
+    /// Begin a new frame: advance flash phase and reset border event log.
+    ///
+    /// Call at the **start** of frame emulation so the previous frame’s events
+    /// remain available for `render_rgba` until the next frame begins.
+    pub fn begin_frame(&mut self) {
         self.frame = self.frame.wrapping_add(1);
         if self.frame.is_multiple_of(16) {
             self.flash_phase = !self.flash_phase;
@@ -158,25 +162,92 @@ impl Ula48 {
         self.border_events.push((0, self.border));
     }
 
-    /// Render 352×296 (with border) or paper-only 256×192 into RGBA8.
+    /// Deprecated alias — prefer `begin_frame` at frame start.
+    pub fn end_frame(&mut self) {
+        self.begin_frame();
+    }
+
+    /// Border colour active at frame T-state `t`.
+    #[must_use]
+    pub fn border_at(&self, t: u32) -> u8 {
+        let mut col = self.border_events.first().map_or(self.border, |&(_, c)| c);
+        for &(et, c) in &self.border_events {
+            if et <= t {
+                col = c;
+            }
+        }
+        col
+    }
+
+    /// Frame T-state when framebuffer pixel `(x, y)` is painted (with-border mode).
+    ///
+    /// Uses 2 pixels/T horizontally. Paper origin aligns with `paper_start` at
+    /// `(ox, oy)` so mid-line border changes match ULA beam timing.
+    #[must_use]
+    pub fn pixel_tstate(
+        x: usize,
+        y: usize,
+        _ox: usize,
+        oy: usize,
+        paper_start: u32,
+        t_line: u32,
+    ) -> u32 {
+        let line_base = if y < oy {
+            paper_start.saturating_sub(((oy - y) as u32).saturating_mul(t_line))
+        } else {
+            paper_start.saturating_add(((y - oy) as u32).saturating_mul(t_line))
+        };
+        line_base.saturating_add((x as u32) / 2)
+    }
+
+    /// Render 352×296 (with border) or paper-only 256×192 into RGBA8 (48K timing).
     pub fn render_rgba(&self, screen: &[u8], out: &mut [u8], with_border: bool) {
+        self.render_rgba_timed(screen, out, with_border, PAPER_START_48, T_LINE_48);
+    }
+
+    /// Render with explicit line timing (48K: 224, 128K/+2: 228).
+    pub fn render_rgba_timed(
+        &self,
+        screen: &[u8],
+        out: &mut [u8],
+        with_border: bool,
+        paper_start: u32,
+        t_line: u32,
+    ) {
         let (w, h, ox, oy) = if with_border {
             (352usize, 296usize, 48usize, 48usize)
         } else {
             (256, 192, 0, 0)
         };
         assert!(out.len() >= w * h * 4);
-        let border_rgb = palette_rgb(self.border, false);
-        // fill border
-        for y in 0..h {
-            for x in 0..w {
-                let i = (y * w + x) * 4;
+
+        if with_border {
+            // Per-pixel border from beam T-state (mid-line / per-byte accurate).
+            for y in 0..h {
+                for x in 0..w {
+                    let in_paper = (oy..oy + 192).contains(&y) && (ox..ox + 256).contains(&x);
+                    if in_paper {
+                        continue;
+                    }
+                    let t = Self::pixel_tstate(x, y, ox, oy, paper_start, t_line);
+                    let rgb = palette_rgb(self.border_at(t), false);
+                    let i = (y * w + x) * 4;
+                    out[i] = rgb[0];
+                    out[i + 1] = rgb[1];
+                    out[i + 2] = rgb[2];
+                    out[i + 3] = 255;
+                }
+            }
+        } else {
+            let border_rgb = palette_rgb(self.border, false);
+            for i in (0..w * h * 4).step_by(4) {
                 out[i] = border_rgb[0];
                 out[i + 1] = border_rgb[1];
                 out[i + 2] = border_rgb[2];
                 out[i + 3] = 255;
             }
         }
+
         if screen.len() < 6912 {
             return;
         }
@@ -206,24 +277,6 @@ impl Ula48 {
                 out[i + 1] = rgb[1];
                 out[i + 2] = rgb[2];
                 out[i + 3] = 255;
-            }
-        }
-        // Apply border events coarsely by scanline for beam-ish accuracy
-        if with_border && self.border_events.len() > 1 {
-            for &(t, col) in &self.border_events {
-                let rgb = palette_rgb(col, false);
-                let line = (t / T_LINE_48) as usize;
-                if line < h {
-                    for x in 0..w {
-                        let in_paper = line >= oy && line < oy + 192 && x >= ox && x < ox + 256;
-                        if !in_paper {
-                            let i = (line * w + x) * 4;
-                            out[i] = rgb[0];
-                            out[i + 1] = rgb[1];
-                            out[i + 2] = rgb[2];
-                        }
-                    }
-                }
             }
         }
     }
@@ -285,5 +338,55 @@ mod tests {
         let mut out = vec![0u8; 256 * 192 * 4];
         ula.render_rgba(&screen, &mut out, false);
         assert_eq!(out[3], 255);
+    }
+
+    #[test]
+    fn mid_line_border_change_splits_scanline() {
+        let mut ula = Ula48::new();
+        ula.border = 1; // blue
+        ula.border_events = vec![(0, 1)];
+        // Change to red mid-way through paper line 0 (framebuffer y = 48).
+        // Paper starts at x=48; mid paper ~ x=48+128 → t ≈ PAPER_START + 64.
+        let t_mid = PAPER_START_48 + 64;
+        ula.set_border(t_mid, 2); // red
+
+        let screen = vec![0u8; 6912];
+        let mut out = vec![0u8; 352 * 296 * 4];
+        ula.render_rgba(&screen, &mut out, true);
+
+        let y = 48usize; // first paper line — left/right border on same line
+        let left_i = (y * 352 + 10) * 4; // left border
+        let right_i = (y * 352 + 340) * 4; // right border
+        let blue = palette_rgb(1, false);
+        let red = palette_rgb(2, false);
+        assert_eq!(&out[left_i..left_i + 3], &blue);
+        assert_eq!(
+            &out[right_i..right_i + 3],
+            &red,
+            "right border after mid-line OUT should be new colour"
+        );
+    }
+
+    #[test]
+    fn mid_line_border_128_uses_228_pitch() {
+        let mut ula = Ula48::new();
+        ula.border = 0;
+        ula.border_events = vec![(0, 0)];
+        // Top border line y=10: line_base = PAPER_START_128 - (48-10)*228
+        let y = 10usize;
+        let line_base =
+            PAPER_START_128.saturating_sub(((48 - y) as u32).saturating_mul(T_LINE_128));
+        ula.set_border(line_base + 40, 4); // green after x≈80
+
+        let screen = vec![0u8; 6912];
+        let mut out = vec![0u8; 352 * 296 * 4];
+        ula.render_rgba_timed(&screen, &mut out, true, PAPER_START_128, T_LINE_128);
+
+        let before_i = (y * 352 + 60) * 4; // x/2 = 30
+        let after_i = (y * 352 + 100) * 4; // x/2 = 50
+        let black = palette_rgb(0, false);
+        let green = palette_rgb(4, false);
+        assert_eq!(&out[before_i..before_i + 3], &black);
+        assert_eq!(&out[after_i..after_i + 3], &green);
     }
 }

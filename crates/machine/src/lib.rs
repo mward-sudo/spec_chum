@@ -240,6 +240,7 @@ impl Machine {
         }
         if let Self::Spec48 { bus, ula, .. } = self {
             bus.border = snap.border;
+            bus.ula.border = snap.border;
             ula.border = snap.border;
         }
     }
@@ -255,6 +256,10 @@ impl Machine {
             } => {
                 bus.beeper_edges.clear();
                 bus.frame_t = 0;
+                bus.ula.border = bus.border;
+                bus.ula.begin_frame();
+                ula.border = bus.border;
+                ula.begin_frame();
                 let mut last_t = cpu.t;
                 while bus.frame_t < FRAME_TSTATES_48 {
                     if Self::try_flash_load_48(cpu, bus, tape) {
@@ -280,8 +285,7 @@ impl Machine {
                         break;
                     }
                 }
-                ula.border = bus.border;
-                ula.end_frame();
+                // Keep border_events for render; next run_frame begin_frame clears them.
                 bus.frame_t = 0;
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
@@ -296,6 +300,10 @@ impl Machine {
             } => {
                 bus.beeper_edges.clear();
                 bus.frame_t = 0;
+                bus.ula.border = bus.border;
+                bus.ula.begin_frame();
+                ula.border = bus.border;
+                ula.begin_frame();
                 const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
@@ -341,8 +349,6 @@ impl Machine {
                 while ay_samples.len() < AY_SAMPLES {
                     ay_samples.push(bus.ay.sample_mono());
                 }
-                ula.border = bus.border;
-                ula.end_frame();
                 bus.frame_t = 0;
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
@@ -546,8 +552,18 @@ impl Machine {
 
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
         match self {
-            Self::Spec48 { bus, ula, .. } => ula.render_rgba(bus.screen_bytes(), out, with_border),
-            Self::Spec128 { bus, ula, .. } => ula.render_rgba(bus.screen_bytes(), out, with_border),
+            Self::Spec48 { bus, .. } => {
+                bus.ula.render_rgba(bus.screen_bytes(), out, with_border);
+            }
+            Self::Spec128 { bus, .. } => {
+                bus.ula.render_rgba_timed(
+                    bus.screen_bytes(),
+                    out,
+                    with_border,
+                    ula::PAPER_START_128,
+                    ula::T_LINE_128,
+                );
+            }
         }
     }
 
