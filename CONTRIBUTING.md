@@ -38,6 +38,8 @@ Local quality gate (same as CI intent):
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests required.
 - Integration tests that need ROMs must skip cleanly when `roms/` is missing.
+- **z80test** (Patrik Rak): `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed -- --nocapture`.
+  For `z80full`: `./scripts/fetch_z80test.sh` then `cargo test -p machine --features slow-tests --release z80full -- --nocapture --ignored`.
 
 ## Stack commands (non-interactive)
 
