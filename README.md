@@ -44,7 +44,7 @@ Honest gaps after the M0–M4 scaffolding (tracking issues):
 
 - **z80test** — `z80doc` runs under `--features slow-tests` (see `tests/fixtures/z80test`). `z80full` and related TAPs: `./scripts/fetch_z80test.sh` then the same feature ([#17](https://github.com/mward-sudo/spec_chum/issues/17)).
 - **AY audio** — 128K has AY register I/O only; no PSG synthesis or mix with the beeper ([#33](https://github.com/mward-sudo/spec_chum/issues/33)).
-- **128K/+2 timing** — still uses 48K-oriented contention windows; floating bus on 128 returns `0xff`; border/beam updates are coarse ([#34](https://github.com/mward-sudo/spec_chum/issues/34)).
+- **128K/+2 timing** — contention and floating bus use 128K line timing (`T_LINE_128` / `PAPER_START_128`); **border/beam** updates remain coarse (scanline) ([#34](https://github.com/mward-sudo/spec_chum/issues/34)).
 
 Later scope (unchanged): +2A/+3 ([#24](https://github.com/mward-sudo/spec_chum/issues/24)), TZX/RZX/Kempston/disk ([#25](https://github.com/mward-sudo/spec_chum/issues/25)).
 
