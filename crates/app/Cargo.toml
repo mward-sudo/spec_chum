@@ -6,6 +6,10 @@ license.workspace = true
 description = "Spec Chum egui frontend"
 default-run = "spec_chum"
 
+[lib]
+name = "app"
+path = "src/lib.rs"
+
 [[bin]]
 name = "spec_chum"
 path = "src/main.rs"
