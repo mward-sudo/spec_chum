@@ -16,12 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux audio deps
-<<<<<<< HEAD
+      - name: Install Linux audio/GUI deps
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libgtk-3-dev libglib2.0-dev
-=======
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libgtk-3-dev libglib2.0-dev
->>>>>>> origin/main
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
