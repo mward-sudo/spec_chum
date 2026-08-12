@@ -23,6 +23,39 @@ pub struct EmulatorSession {
     pub muted: bool,
     pub status: String,
     pub model: Model,
+    /// Scripted matrix keys (e.g. auto-type `LOAD ""`).
+    key_script: Option<KeyScript>,
+}
+
+/// Hold a chord for `frames` emulated frames, then advance.
+#[derive(Clone, Debug)]
+struct KeyScript {
+    steps: Vec<(Vec<(usize, u8)>, u32)>,
+    step_i: usize,
+    frames_left: u32,
+}
+
+impl KeyScript {
+    /// 48K keyword mode: J (`LOAD`) then `""` then Enter.
+    fn load_quotes_48k() -> Self {
+        let j = vec![(6, 3)];
+        let quote = vec![keymap::SYM, (5, 0)];
+        let enter = vec![(6, 0)];
+        let gap = Vec::new();
+        Self {
+            steps: vec![
+                (j, 6),
+                (gap.clone(), 3),
+                (quote.clone(), 6),
+                (gap.clone(), 3),
+                (quote, 6),
+                (gap, 3),
+                (enter, 6),
+            ],
+            step_i: 0,
+            frames_left: 0,
+        }
+    }
 }
 
 impl EmulatorSession {
@@ -40,6 +73,7 @@ impl EmulatorSession {
             muted: false,
             status: "Load a ROM via Machine menu (or auto-detect roms/)".into(),
             model,
+            key_script: None,
         }
     }
 
@@ -121,7 +155,10 @@ impl EmulatorSession {
             Ok(img) => {
                 if let Some(m) = self.machine.as_mut() {
                     m.insert_tape(tape::TapPlayer::new(img));
-                    self.status = format!("Inserted TAP {}", path.display());
+                    self.status = format!(
+                        "Inserted TAP {} (paused — Tape → Play, or Type LOAD \"\")",
+                        path.display()
+                    );
                 } else {
                     self.status = "Load a machine ROM before inserting tape".into();
                 }
@@ -131,17 +168,118 @@ impl EmulatorSession {
     }
 
     pub fn load_tzx(&mut self, path: &Path) {
-        match tape::TzxPlayer::load(path) {
-            Ok(player) => {
-                if let Some(m) = self.machine.as_mut() {
-                    m.insert_tzx(player);
-                    self.status = format!("Inserted TZX {}", path.display());
-                } else {
-                    self.status = "Load a machine ROM before inserting tape".into();
+        let data = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                self.status = format!("TZX error: {e}");
+                return;
+            }
+        };
+        let Some(m) = self.machine.as_mut() else {
+            self.status = "Load a machine ROM before inserting tape".into();
+            return;
+        };
+        // Standard-speed TZX → TAP deck so ROM LD-BYTES flash-load works (e.g. The Boggit).
+        if tape::TzxPlayer::is_standard_speed_only(&data) {
+            match tape::TzxPlayer::to_tap_image(&data) {
+                Ok(tap) if !tap.blocks.is_empty() => {
+                    let n = tap.blocks.len();
+                    m.insert_tape(tape::TapPlayer::new(tap));
+                    self.status = format!(
+                        "Inserted TZX {} as TAP ({n} blocks, paused). 48K: Tape→Type LOAD \"\" then Play. 128K: menu Tape Loader + Play.",
+                        path.display()
+                    );
+                    return;
                 }
+                Ok(_) => {}
+                Err(e) => {
+                    self.status = format!("TZX error: {e}");
+                    return;
+                }
+            }
+        }
+        match tape::TzxPlayer::parse(&data) {
+            Ok(player) => {
+                m.insert_tzx(player);
+                self.status = format!(
+                    "Inserted TZX {} (pulse playback, paused — Play when loader is ready)",
+                    path.display()
+                );
             }
             Err(e) => self.status = format!("TZX error: {e}"),
         }
+    }
+
+    pub fn play_tape(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            if m.has_tape() {
+                m.set_tape_playing(true);
+                self.status = "Tape playing".into();
+            } else {
+                self.status = "No tape inserted".into();
+            }
+        }
+    }
+
+    pub fn pause_tape(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            m.set_tape_playing(false);
+            self.status = "Tape paused".into();
+        }
+    }
+
+    pub fn rewind_tape(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            m.rewind_tape();
+            self.status = "Tape rewound (paused)".into();
+        }
+    }
+
+    /// Queue `LOAD ""` + Enter for 48K keyword mode; starts tape after a short delay via Play separately.
+    pub fn type_load_quotes(&mut self) {
+        match self.model {
+            Model::Spectrum48 => {
+                self.key_script = Some(KeyScript::load_quotes_48k());
+                self.status =
+                    "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into();
+            }
+            Model::Spectrum128 | Model::SpectrumPlus3 => {
+                self.status =
+                    "128K/+2A: select Tape Loader on the menu (ENTER), then Tape → Play".into();
+            }
+        }
+    }
+
+    /// Advance scripted keys if any; returns true when a script consumed input this frame.
+    pub fn tick_key_script(&mut self) -> bool {
+        if self.key_script.is_none() || self.machine.is_none() {
+            return false;
+        }
+        let script = self.key_script.as_mut().unwrap();
+        if script.step_i >= script.steps.len() {
+            self.key_script = None;
+            return false;
+        }
+        if script.frames_left == 0 {
+            script.frames_left = script.steps[script.step_i].1.max(1);
+        }
+        let keys = script.steps[script.step_i].0.clone();
+        {
+            let kb = self.machine.as_mut().unwrap().keyboard_mut();
+            kb.reset();
+            for &(row, bit) in &keys {
+                kb.set_key(row, bit, true);
+            }
+        }
+        let script = self.key_script.as_mut().unwrap();
+        script.frames_left -= 1;
+        if script.frames_left == 0 {
+            script.step_i += 1;
+        }
+        if script.step_i >= script.steps.len() {
+            self.key_script = None;
+        }
+        true
     }
 
     pub fn load_rzx(&mut self, path: &Path) {
@@ -404,6 +542,24 @@ impl SpecChumApp {
                     ui.checkbox(&mut self.session.throttle, "Throttle ~50Hz");
                     ui.checkbox(&mut self.session.muted, "Mute");
                 });
+                ui.menu_button("Tape", |ui| {
+                    if ui.button("Play tape").clicked() {
+                        self.session.play_tape();
+                        ui.close_menu();
+                    }
+                    if ui.button("Pause tape").clicked() {
+                        self.session.pause_tape();
+                        ui.close_menu();
+                    }
+                    if ui.button("Rewind tape").clicked() {
+                        self.session.rewind_tape();
+                        ui.close_menu();
+                    }
+                    if ui.button("Type LOAD \"\" (48K)").clicked() {
+                        self.session.type_load_quotes();
+                        ui.close_menu();
+                    }
+                });
                 ui.menu_button("Help", |ui| {
                     ui.label("Spec Chum — from-scratch ZX Spectrum emulator");
                     ui.separator();
@@ -413,8 +569,10 @@ impl SpecChumApp {
             });
         });
 
-        let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
-        self.session.sync_keyboard(&keys_down, modifiers);
+        if !self.session.tick_key_script() {
+            let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
+            self.session.sync_keyboard(&keys_down, modifiers);
+        }
 
         let audio = self.session.tick_frame();
         if let Ok(mut b) = self.beeper.lock() {
@@ -564,6 +722,39 @@ mod tests {
         assert_eq!(rows[0] & 1, 0); // Caps
         assert_eq!(rows[3] & (1 << 4), 0); // 5
         assert!(m.kempston_mut().left);
+    }
+
+    #[test]
+    fn tzx_standard_inserts_as_paused_tap() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            return;
+        }
+        let boggit = PathBuf::from("/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx");
+        if !boggit.exists() {
+            // Fall back to synthesizing via fixture TAP path only
+            let tap = EmulatorSession::workspace_root().join("tests/fixtures/tape/minimal_code.tap");
+            session.load_tap(&tap);
+            assert!(!session.machine.as_ref().unwrap().tape_playing());
+            session.play_tape();
+            assert!(session.machine.as_ref().unwrap().tape_playing());
+            return;
+        }
+        session.load_tzx(&boggit);
+        assert!(
+            session.status.contains("as TAP"),
+            "status={}",
+            session.status
+        );
+        assert!(!session.machine.as_ref().unwrap().tape_playing());
+        assert!(session.machine.as_ref().unwrap().has_tape());
+        session.type_load_quotes();
+        assert!(session.key_script.is_some());
+        for _ in 0..40 {
+            let _ = session.tick_key_script();
+        }
+        assert!(session.key_script.is_none(), "script should finish");
     }
 
     #[test]

@@ -44,6 +44,28 @@ impl TapeDeck {
             Self::Tzx(_) => None,
         }
     }
+
+    pub fn set_playing(&mut self, playing: bool) {
+        match self {
+            Self::Tap(t) => t.set_playing(playing),
+            Self::Tzx(t) => t.set_playing(playing),
+        }
+    }
+
+    #[must_use]
+    pub fn playing(&self) -> bool {
+        match self {
+            Self::Tap(t) => t.playing,
+            Self::Tzx(t) => t.playing,
+        }
+    }
+
+    pub fn rewind(&mut self) {
+        match self {
+            Self::Tap(t) => t.rewind(),
+            Self::Tzx(t) => t.rewind(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -317,7 +339,8 @@ impl Machine {
         }
     }
 
-    pub fn insert_tape(&mut self, player: TapPlayer) {
+    pub fn insert_tape(&mut self, mut player: TapPlayer) {
+        player.set_playing(false);
         match self {
             Self::Spec48 { tape, .. }
             | Self::Spec128 { tape, .. }
@@ -325,11 +348,54 @@ impl Machine {
         }
     }
 
-    pub fn insert_tzx(&mut self, player: TzxPlayer) {
+    pub fn insert_tzx(&mut self, mut player: TzxPlayer) {
+        player.set_playing(false);
         match self {
             Self::Spec48 { tape, .. }
             | Self::Spec128 { tape, .. }
             | Self::SpecPlus3 { tape, .. } => *tape = Some(TapeDeck::Tzx(player)),
+        }
+    }
+
+    pub fn set_tape_playing(&mut self, playing: bool) {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => {
+                if let Some(t) = tape.as_mut() {
+                    t.set_playing(playing);
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn tape_playing(&self) -> bool {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => tape.as_ref().is_some_and(TapeDeck::playing),
+        }
+    }
+
+    pub fn rewind_tape(&mut self) {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => {
+                if let Some(t) = tape.as_mut() {
+                    t.rewind();
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn has_tape(&self) -> bool {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => tape.is_some(),
         }
     }
 
@@ -1032,6 +1098,7 @@ mod tests {
         let mut m = Machine::new_48k(&rom).unwrap();
         assert!(!m.ear(), "EAR idle without tape");
         m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
         // Pilot starts high; first instruction group must raise EAR.
         let _ = m.run_frame();
         // Parallel probe advanced by one frame of T-states should share block index.
@@ -1061,6 +1128,7 @@ mod tests {
         };
         let mut m = Machine::new_48k(&rom).unwrap();
         m.insert_tape(TapPlayer::new(img.clone()));
+        m.set_tape_playing(true);
         let mut probe = TapPlayer::new(img);
         for _ in 0..10 {
             m.run_frame();

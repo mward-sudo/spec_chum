@@ -36,6 +36,8 @@ pub struct TzxPlayer {
     pulse_i: usize,
     remain: u32,
     level: bool,
+    /// When false, [`Self::advance`] does not consume pulses.
+    pub playing: bool,
     /// Index into logical playable blocks (for UI/tests).
     pub block: usize,
     block_starts: Vec<usize>,
@@ -237,6 +239,7 @@ impl TzxPlayer {
             pulse_i: 0,
             remain: 0,
             level: false,
+            playing: true,
             block: 0,
             block_starts,
         };
@@ -244,10 +247,25 @@ impl TzxPlayer {
         Ok(player)
     }
 
+    pub fn set_playing(&mut self, playing: bool) {
+        self.playing = playing;
+    }
+
+    /// Rewind to the first pulse and pause.
+    pub fn rewind(&mut self) {
+        self.playing = false;
+        self.block = 0;
+        self.start();
+    }
+
     fn start(&mut self) {
         if let Some(&(r, l)) = self.pulses.first() {
             self.remain = r;
             self.level = l;
+            self.pulse_i = 0;
+        } else {
+            self.remain = 0;
+            self.level = false;
             self.pulse_i = 0;
         }
     }
@@ -264,6 +282,9 @@ impl TzxPlayer {
 
     /// Advance `dt` T-states; returns current EAR level.
     pub fn advance(&mut self, mut dt: u32) -> bool {
+        if !self.playing {
+            return self.level;
+        }
         while dt > 0 {
             if self.pulses.is_empty() {
                 self.level = false;
@@ -290,6 +311,67 @@ impl TzxPlayer {
             dt -= step;
         }
         self.level
+    }
+
+    /// True when every data-bearing block is standard-speed (0x10) — safe to flash-load via TAP.
+    #[must_use]
+    pub fn is_standard_speed_only(data: &[u8]) -> bool {
+        if data.len() < 10 || &data[0..7] != b"ZXTape!" {
+            return false;
+        }
+        let mut i = 10usize;
+        let mut saw_data = false;
+        while i < data.len() {
+            let id = data[i];
+            i += 1;
+            match id {
+                0x10 => {
+                    saw_data = true;
+                    if i + 4 > data.len() {
+                        return false;
+                    }
+                    let len = u16::from_le_bytes([data[i + 2], data[i + 3]]) as usize;
+                    i += 4 + len;
+                }
+                0x11 | 0x12 | 0x13 | 0x14 => return false,
+                0x20 => i += 2,
+                0x21 => {
+                    let n = data.get(i).copied().unwrap_or(0) as usize;
+                    i += 1 + n;
+                }
+                0x22 => {}
+                0x30 => {
+                    let n = data.get(i).copied().unwrap_or(0) as usize;
+                    i += 1 + n;
+                }
+                0x32 => {
+                    if i + 2 > data.len() {
+                        return false;
+                    }
+                    let n = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+                    i += 2 + n;
+                }
+                0x33 => {
+                    let n = data.get(i).copied().unwrap_or(0) as usize;
+                    i += 1 + n * 3;
+                }
+                0x35 => {
+                    if i + 0x14 > data.len() {
+                        return false;
+                    }
+                    let n = u32::from_le_bytes([
+                        data[i + 0x10],
+                        data[i + 0x11],
+                        data[i + 0x12],
+                        data[i + 0x13],
+                    ]) as usize;
+                    i += 0x14 + n;
+                }
+                0x5a => i += 9,
+                _ => return false,
+            }
+        }
+        saw_data
     }
 
     /// Extract standard-speed (0x10) payloads as a TAP image when present.
@@ -479,6 +561,7 @@ fn append_pure_data(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn minimal_tzx_standard(payload: &[u8]) -> Vec<u8> {
         let mut v = Vec::new();
@@ -524,5 +607,32 @@ mod tests {
         v.extend_from_slice(&4u16.to_le_bytes());
         let p = TzxPlayer::parse(&v).unwrap();
         assert_eq!(p.scheduled_pulses(), 4);
+    }
+
+    #[test]
+    fn standard_only_detects_boggit_style() {
+        let data = minimal_tzx_standard(&[0x00, 0x41, 0x00]);
+        assert!(TzxPlayer::is_standard_speed_only(&data));
+        // Optional real-world fixture (never committed).
+        let boggit = PathBuf::from("/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx");
+        if let Ok(bytes) = std::fs::read(&boggit) {
+            assert!(
+                TzxPlayer::is_standard_speed_only(&bytes),
+                "Boggit Side 1 should be standard-speed 0x10 blocks"
+            );
+            let tap = TzxPlayer::to_tap_image(&bytes).unwrap();
+            assert!(tap.blocks.len() >= 4);
+        }
+    }
+
+    #[test]
+    fn paused_player_does_not_advance() {
+        let data = minimal_tzx_standard(&[0xff, 1, 2, 3, 0]);
+        let mut p = TzxPlayer::parse(&data).unwrap();
+        p.set_playing(false);
+        let before = p.scheduled_pulses();
+        let _ = p.advance(1_000_000);
+        assert_eq!(p.scheduled_pulses(), before);
+        assert_eq!(p.block, 0);
     }
 }
