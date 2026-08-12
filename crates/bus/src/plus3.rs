@@ -202,12 +202,12 @@ impl BusPlus3 {
         if port & 0xc002 == 0xc000 {
             return self.ay.read_data();
         }
-        // FDC data 3FFD: A15=0,A14=1,A13=1,A1=0
-        if port & 0xe002 == 0x6000 {
+        // FDC data 3FFD — A15=0, A14=0, A13=1, A12=1, A1=0
+        if port & 0xf002 == 0x3000 {
             return self.fdc.read_data_byte();
         }
-        // FDC status 2FFD: A15=0,A14=1,A13=0,A1=0
-        if port & 0xe002 == 0x4000 {
+        // FDC status 2FFD — A15=0, A14=0, A13=1, A12=0, A1=0
+        if port & 0xf002 == 0x2000 {
             return if self.fdc.data_remaining() > 0 {
                 0xc0 // RQM + DIO
             } else {
@@ -229,13 +229,21 @@ impl BusPlus3 {
             }
             return;
         }
-        // 1FFD before 7FFD (both have A15=0, A1=0; 1FFD also A13=1)
-        if port & 0x8002 == 0 {
-            if port & 0x2000 != 0 {
-                self.out_1ffd(value);
-            } else {
-                self.out_7ffd(value);
-            }
+        // Amstrad +2A/+3 paging (partial decode from FAQ / 128kreference):
+        // 1FFD: A15=0, A14=0, A13=0, A12=1, A1=0
+        // 7FFD: A15=0, A14=1, A1=0  (tighter than Toastrack 128K)
+        // Previous code treated any A13=1 as 1FFD, so OUT 7FFDh (A13=1) corrupted paging.
+        if port & 0xf002 == 0x1000 {
+            self.out_1ffd(value);
+            return;
+        }
+        if port & 0xc002 == 0x4000 {
+            self.out_7ffd(value);
+            return;
+        }
+        // FDC data 3FFD (command bytes ignored until full µPD765 is wired)
+        if port & 0xf002 == 0x3000 {
+            let _ = value;
             return;
         }
         if port & 0xc002 == 0xc000 {
@@ -312,5 +320,28 @@ mod tests {
         assert_eq!(b.page_7ffd & 7, 0);
         b.out_1ffd(0x01);
         assert!(!b.special_paging());
+    }
+
+    #[test]
+    fn out_7ffd_address_does_not_hit_1ffd() {
+        let mut b = BusPlus3::new();
+        // Real ROM uses OUT (C),A with BC=7FFD. Mis-decoding A13 as 1FFD breaks boot.
+        b.out_port(0x7ffd, 0x10); // ROM1 via bit 4
+        assert_eq!(b.page_7ffd, 0x10);
+        assert_eq!(b.page_1ffd, 0);
+        assert!(!b.special_paging());
+        b.out_port(0x1ffd, 0x04); // ROM high bit
+        assert_eq!(b.page_1ffd, 0x04);
+        assert_eq!(b.rom_num(), 3); // hi|lo = 2|1
+    }
+
+    #[test]
+    fn partial_decode_matches_amstrad_masks() {
+        let mut b = BusPlus3::new();
+        b.out_port(0x3ffd, 0); // FDC data — must not touch paging
+        assert_eq!(b.page_7ffd, 0);
+        assert_eq!(b.page_1ffd, 0);
+        b.out_port(0x7ffd, 0x05);
+        assert_eq!(b.page_7ffd, 0x05);
     }
 }

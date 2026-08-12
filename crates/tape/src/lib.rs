@@ -67,6 +67,8 @@ pub struct TapPlayer {
     pub image: TapImage,
     /// Index of the block currently playing (or next to play when idle between blocks).
     pub block: usize,
+    /// When false, [`Self::advance`] does not consume pulses (deck paused).
+    pub playing: bool,
     /// Pulse schedule: (duration T-states, EAR level while this pulse is active).
     pulses: Vec<(u32, bool)>,
     pulse_i: usize,
@@ -80,6 +82,7 @@ impl TapPlayer {
         let mut p = Self {
             image,
             block: 0,
+            playing: true,
             pulses: Vec::new(),
             pulse_i: 0,
             remain: 0,
@@ -87,6 +90,17 @@ impl TapPlayer {
         };
         p.queue_block(0);
         p
+    }
+
+    pub fn set_playing(&mut self, playing: bool) {
+        self.playing = playing;
+    }
+
+    /// Rewind to the first block and pause.
+    pub fn rewind(&mut self) {
+        self.block = 0;
+        self.playing = false;
+        self.queue_block(0);
     }
 
     /// Number of pulses currently scheduled (including pause). Useful for tests.
@@ -161,6 +175,9 @@ impl TapPlayer {
 
     /// Advance `dt` T-states; returns current EAR level.
     pub fn advance(&mut self, mut dt: u32) -> bool {
+        if !self.playing {
+            return self.level;
+        }
         while dt > 0 {
             if self.pulses.is_empty() {
                 self.level = false;
