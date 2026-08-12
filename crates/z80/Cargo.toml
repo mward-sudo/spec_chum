@@ -10,5 +10,3 @@ description = "Spec Chum z80 crate"
 [lints]
 workspace = true
 
-[lints]
-workspace = true
