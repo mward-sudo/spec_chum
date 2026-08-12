@@ -47,6 +47,16 @@ impl Memory for FlatMem {
     }
 }
 
+impl Io for FlatMem {
+    fn in_port(&mut self, _port: u16, _t: u64) -> (u8, u32) {
+        (0xff, 0)
+    }
+
+    fn out_port(&mut self, _port: u16, _value: u8, _t: u64) -> u32 {
+        0
+    }
+}
+
 /// I/O that always returns `0xFF` and ignores writes (Fuse default).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NullIo;

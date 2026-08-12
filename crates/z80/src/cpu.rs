@@ -27,7 +27,7 @@ impl Cpu {
     }
 
     /// Execute one instruction (or HALT idle of 4 T). Returns T-states consumed.
-    pub fn step<M: Memory, I: Io>(&mut self, mem: &mut M, io: &mut I) -> u32 {
+    pub fn step<B: Memory + Io>(&mut self, bus: &mut B) -> u32 {
         // `interrupt_deferred` suppresses IRQ acceptance for one instruction after EI.
         // Cleared at the beginning of the instruction following EI.
         self.interrupt_deferred = false;
@@ -38,7 +38,7 @@ impl Cpu {
             return 4;
         }
 
-        opcodes::execute(self, mem, io)
+        opcodes::execute(self, bus)
     }
 
     /// Accept a maskable interrupt if enabled. Returns T-states of ACK sequence, or 0.

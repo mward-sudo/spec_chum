@@ -254,15 +254,24 @@ fn parse_expected(path: &std::path::Path) -> Vec<Expected> {
     out
 }
 
-/// Fuse test I/O: IN returns the high byte of the port address.
-#[derive(Clone, Copy, Debug, Default)]
-struct FuseIo;
+/// Flat memory + Fuse I/O for test vectors (IN returns port high byte).
+struct FuseBus {
+    mem: FlatMem,
+}
 
-impl crate::bus::Io for FuseIo {
+impl crate::bus::Memory for FuseBus {
+    fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
+        self.mem.read(addr, t)
+    }
+    fn write(&mut self, addr: u16, value: u8, t: u64) -> u32 {
+        self.mem.write(addr, value, t)
+    }
+}
+
+impl crate::bus::Io for FuseBus {
     fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
         ((port >> 8) as u8, 0)
     }
-
     fn out_port(&mut self, _port: u16, _value: u8, _t: u64) -> u32 {
         0
     }
@@ -270,12 +279,13 @@ impl crate::bus::Io for FuseIo {
 
 fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
     let mut cpu = tin.cpu.clone();
-    let mut mem = tin.mem.clone();
-    let mut io = FuseIo;
+    let mut bus = FuseBus {
+        mem: tin.mem.clone(),
+    };
     let start = cpu.t;
     // Fuse: run until at least `run_tstates` have elapsed (instruction boundaries).
     while cpu.t - start < tin.run_tstates {
-        let dt = cpu.step(&mut mem, &mut io);
+        let dt = cpu.step(&mut bus);
         if dt == 0 {
             break;
         }
@@ -344,7 +354,7 @@ fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
         errs.push(format!("T: got {dt} want {}", exp.tstates));
     }
     for (a, v) in &exp.mem {
-        let got = mem.data[*a as usize];
+        let got = bus.mem.data[*a as usize];
         if got != *v {
             errs.push(format!("mem[{a:04X}]: got {got:02X} want {v:02X}"));
         }
@@ -399,17 +409,16 @@ fn fuse_all_vectors() {
 
 #[test]
 fn dd_ld_ixh_smoke() {
-    use crate::bus::{FlatMem, NullIo};
+    use crate::bus::FlatMem;
     use crate::cpu::Cpu;
     let mut cpu = Cpu::new();
     let mut mem = FlatMem::new();
-    let mut io = NullIo;
     mem.data[0] = 0xdd;
     mem.data[1] = 0x26;
     mem.data[2] = 0xad;
     cpu.regs.set_ix(0x5f40);
     cpu.regs.set_hl(0xadea);
-    cpu.step(&mut mem, &mut io);
+    cpu.step(&mut mem);
     assert_eq!(cpu.regs.ix(), 0xad40, "IX");
     assert_eq!(cpu.regs.hl(), 0xadea, "HL unchanged");
 }
