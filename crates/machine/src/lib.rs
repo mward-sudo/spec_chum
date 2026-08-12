@@ -1237,7 +1237,11 @@ mod tests {
             m.run_frame();
         }
         if let Machine::SpecPlus3 { bus, cpu, .. } = &mut m {
-            assert_eq!(bus.page_1ffd & 0x01, 0, "must leave special paging off at menu");
+            assert_eq!(
+                bus.page_1ffd & 0x01,
+                0,
+                "must leave special paging off at menu"
+            );
             let screen_nz = bus.screen_bytes().iter().filter(|&&b| b != 0).count();
             assert!(
                 screen_nz > 100,

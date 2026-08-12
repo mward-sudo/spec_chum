@@ -333,7 +333,7 @@ impl TzxPlayer {
                     let len = u16::from_le_bytes([data[i + 2], data[i + 3]]) as usize;
                     i += 4 + len;
                 }
-                0x11 | 0x12 | 0x13 | 0x14 => return false,
+                0x11..=0x14 => return false,
                 0x20 => i += 2,
                 0x21 => {
                     let n = data.get(i).copied().unwrap_or(0) as usize;

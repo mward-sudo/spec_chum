@@ -60,11 +60,11 @@ impl Chord {
 pub fn chord_for(key: Key, modifiers: Modifiers) -> Option<Chord> {
     // Arrow keys → Spectrum cursor (Caps + 5/6/7/8), regardless of Shift.
     match key {
-        Key::ArrowLeft => return Some(Chord::with_caps(3, 4)),  // 5
-        Key::ArrowDown => return Some(Chord::with_caps(4, 4)),  // 6
-        Key::ArrowUp => return Some(Chord::with_caps(4, 3)),    // 7
+        Key::ArrowLeft => return Some(Chord::with_caps(3, 4)), // 5
+        Key::ArrowDown => return Some(Chord::with_caps(4, 4)), // 6
+        Key::ArrowUp => return Some(Chord::with_caps(4, 3)),   // 7
         Key::ArrowRight => return Some(Chord::with_caps(4, 2)), // 8
-        Key::Backspace => return Some(Chord::with_caps(4, 0)),  // Caps+0 delete
+        Key::Backspace => return Some(Chord::with_caps(4, 0)), // Caps+0 delete
         _ => {}
     }
 
