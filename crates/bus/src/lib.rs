@@ -1,10 +1,12 @@
-//! Spec Chum bus — 48K/128K memory maps and port decode.
+//! Spec Chum bus — 48K/128K/+2A/+3 memory maps and port decode.
 
 #![allow(clippy::pedantic)]
 
 mod ay;
+mod plus3;
 
 pub use ay::Ay8912;
+pub use plus3::{is_contended_bank_plus3, BusPlus3};
 
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
