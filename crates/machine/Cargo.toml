@@ -15,5 +15,3 @@ formats = { workspace = true }
 [lints]
 workspace = true
 
-[lints]
-workspace = true
