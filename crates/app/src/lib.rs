@@ -1,5 +1,6 @@
 //! Spec Chum — egui frontend library (testable without a display).
 
+mod display;
 mod keymap;
 
 pub use keymap::MAPPING_DOC;
@@ -594,14 +595,12 @@ impl SpecChumApp {
                 ctx.load_texture("screen", image.clone(), egui::TextureOptions::NEAREST)
             });
             tex.set(image, egui::TextureOptions::NEAREST);
-            let scale = 2.0;
-            ui.image((
-                tex.id(),
-                egui::vec2(
-                    self.session.width as f32 * scale,
-                    self.session.height as f32 * scale,
-                ),
-            ));
+            let src = egui::vec2(self.session.width as f32, self.session.height as f32);
+            let avail = ui.available_size();
+            let fitted = display::fit_size(src, avail);
+            ui.centered_and_justified(|ui| {
+                ui.image((tex.id(), fitted));
+            });
         });
 
         if self.session.running {
