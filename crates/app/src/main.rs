@@ -16,16 +16,19 @@ fn main() -> eframe::Result {
 
 struct SpecChumApp {
     framebuffer: Vec<egui::Color32>,
-    width: usize,
-    height: usize,
+    width: u16,
+    height: u16,
 }
 
 impl Default for SpecChumApp {
     fn default() -> Self {
-        let width = 320;
-        let height = 240;
+        let width = 320_u16;
+        let height = 240_u16;
         Self {
-            framebuffer: vec![egui::Color32::from_rgb(0x00, 0x00, 0x80); width * height],
+            framebuffer: vec![
+                egui::Color32::from_rgb(0x00, 0x00, 0x80);
+                usize::from(width) * usize::from(height)
+            ],
             width,
             height,
         }
@@ -51,13 +54,13 @@ impl eframe::App for SpecChumApp {
             ui.heading("Spec Chum");
             ui.label("Hardware-accurate ZX Spectrum emulator (Rust + egui)");
             let image = egui::ColorImage {
-                size: [self.width, self.height],
+                size: [usize::from(self.width), usize::from(self.height)],
                 pixels: self.framebuffer.clone(),
             };
             let tex = ctx.load_texture("screen", image, egui::TextureOptions::NEAREST);
             ui.image((
                 tex.id(),
-                egui::vec2(self.width as f32 * 2.0, self.height as f32 * 2.0),
+                egui::vec2(f32::from(self.width) * 2.0, f32::from(self.height) * 2.0),
             ));
         });
     }
