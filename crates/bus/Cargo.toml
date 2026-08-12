@@ -1,0 +1,8 @@
+[package]
+name = "bus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Spec Chum bus crate"
+
+[dependencies]

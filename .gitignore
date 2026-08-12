@@ -1,0 +1,11 @@
+/target
+**/*.rs.bk
+.DS_Store
+roms/
+*.rom
+*.ROM
+.idea/
+.vscode/
+*.swp
+*.swo
+.rom-cache/

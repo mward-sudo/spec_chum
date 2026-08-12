@@ -1,0 +1,8 @@
+[package]
+name = "z80"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Spec Chum z80 crate"
+
+[dependencies]

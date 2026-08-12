@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/z80",
+    "crates/bus",
+    "crates/ula",
+    "crates/tape",
+    "crates/formats",
+    "crates/machine",
+    "crates/app",
+]
+default-members = ["crates/app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/mward-sudo/spec_chum"
+authors = ["mward-sudo"]
+
+[workspace.dependencies]
+z80 = { path = "crates/z80" }
+bus = { path = "crates/bus" }
+ula = { path = "crates/ula" }
+tape = { path = "crates/tape" }
+formats = { path = "crates/formats" }
+machine = { path = "crates/machine" }
+eframe = { version = "0.31", default-features = true }
+egui = "0.31"
+cpal = "0.15"
+thiserror = "2"

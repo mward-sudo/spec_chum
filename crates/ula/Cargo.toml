@@ -1,0 +1,8 @@
+[package]
+name = "ula"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Spec Chum ula crate"
+
+[dependencies]
