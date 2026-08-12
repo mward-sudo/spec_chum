@@ -1,5 +1,9 @@
 //! Spec Chum — egui frontend library (testable without a display).
 
+mod keymap;
+
+pub use keymap::MAPPING_DOC;
+
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -170,53 +174,42 @@ impl EmulatorSession {
         }
     }
 
-    pub fn apply_key(&mut self, key: egui::Key, pressed: bool) {
+    /// Rebuild the Spectrum matrix from currently held egui keys (macOS-friendly).
+    pub fn sync_keyboard(&mut self, keys_down: &std::collections::HashSet<egui::Key>, modifiers: egui::Modifiers) {
         let Some(machine) = self.machine.as_mut() else {
             return;
         };
         let kb = machine.keyboard_mut();
-        let mapping: &[(egui::Key, usize, u8)] = &[
-            (egui::Key::Num1, 3, 0),
-            (egui::Key::Num2, 3, 1),
-            (egui::Key::Num3, 3, 2),
-            (egui::Key::Num4, 3, 3),
-            (egui::Key::Num5, 3, 4),
-            (egui::Key::Num6, 4, 4),
-            (egui::Key::Num7, 4, 3),
-            (egui::Key::Num8, 4, 2),
-            (egui::Key::Num9, 4, 1),
-            (egui::Key::Num0, 4, 0),
-            (egui::Key::Q, 2, 0),
-            (egui::Key::W, 2, 1),
-            (egui::Key::E, 2, 2),
-            (egui::Key::R, 2, 3),
-            (egui::Key::T, 2, 4),
-            (egui::Key::Y, 5, 4),
-            (egui::Key::U, 5, 3),
-            (egui::Key::I, 5, 2),
-            (egui::Key::O, 5, 1),
-            (egui::Key::P, 5, 0),
-            (egui::Key::A, 1, 0),
-            (egui::Key::S, 1, 1),
-            (egui::Key::D, 1, 2),
-            (egui::Key::F, 1, 3),
-            (egui::Key::G, 1, 4),
-            (egui::Key::H, 6, 4),
-            (egui::Key::J, 6, 3),
-            (egui::Key::K, 6, 2),
-            (egui::Key::L, 6, 1),
-            (egui::Key::Enter, 6, 0),
-            (egui::Key::Z, 0, 1),
-            (egui::Key::X, 0, 2),
-            (egui::Key::C, 0, 3),
-            (egui::Key::V, 0, 4),
-            (egui::Key::B, 7, 4),
-            (egui::Key::N, 7, 3),
-            (egui::Key::M, 7, 2),
-            (egui::Key::Space, 7, 0),
-        ];
-        for &(k, row, bit) in mapping {
-            if k == key {
+        kb.reset();
+        let suppress_caps = keys_down.iter().any(|k| keymap::suppresses_modifier_caps(*k));
+        for (row, bit) in keymap::modifier_keys(modifiers, suppress_caps) {
+            kb.set_key(row, bit, true);
+        }
+        for key in keys_down {
+            if let Some(chord) = keymap::chord_for(*key, modifiers) {
+                for (row, bit) in chord.keys {
+                    kb.set_key(row, bit, true);
+                }
+            }
+        }
+        // Kempston: arrows + Tab fire (alongside cursor matrix chords).
+        let k = machine.kempston_mut();
+        k.left = keys_down.contains(&egui::Key::ArrowLeft);
+        k.right = keys_down.contains(&egui::Key::ArrowRight);
+        k.up = keys_down.contains(&egui::Key::ArrowUp);
+        k.down = keys_down.contains(&egui::Key::ArrowDown);
+        k.fire = keys_down.contains(&egui::Key::Tab);
+    }
+
+    /// Apply a single egui key edge (tests / scripted input).
+    pub fn apply_key(&mut self, key: egui::Key, pressed: bool) {
+        let modifiers = egui::Modifiers::default();
+        let Some(machine) = self.machine.as_mut() else {
+            return;
+        };
+        let kb = machine.keyboard_mut();
+        if let Some(chord) = keymap::chord_for(key, modifiers) {
+            for (row, bit) in chord.keys {
                 kb.set_key(row, bit, pressed);
             }
         }
@@ -227,8 +220,15 @@ impl EmulatorSession {
             return;
         };
         let kb = machine.keyboard_mut();
-        kb.set_key(0, 0, modifiers.shift);
-        kb.set_key(7, 1, modifiers.ctrl || modifiers.alt);
+        for (row, bit) in keymap::modifier_keys(modifiers, false) {
+            kb.set_key(row, bit, true);
+        }
+        if !modifiers.shift {
+            kb.set_key(keymap::CAPS.0, keymap::CAPS.1, false);
+        }
+        if !(modifiers.alt || modifiers.ctrl) {
+            kb.set_key(keymap::SYM.0, keymap::SYM.1, false);
+        }
     }
 
     /// Run one emulated frame into the RGBA framebuffer when `running`.
@@ -406,42 +406,15 @@ impl SpecChumApp {
                 });
                 ui.menu_button("Help", |ui| {
                     ui.label("Spec Chum — from-scratch ZX Spectrum emulator");
+                    ui.separator();
+                    ui.label(MAPPING_DOC);
                 });
                 ui.label(&self.session.status);
             });
         });
 
-        let key_events: Vec<(egui::Key, bool)> = ctx.input(|i| {
-            i.events
-                .iter()
-                .filter_map(|e| match e {
-                    egui::Event::Key {
-                        key,
-                        pressed,
-                        repeat,
-                        ..
-                    } if !repeat => Some((*key, *pressed)),
-                    _ => None,
-                })
-                .collect()
-        });
-        for (key, pressed) in key_events {
-            self.session.apply_key(key, pressed);
-            // Arrow keys → Kempston; Tab = fire
-            if let Some(m) = self.session.machine.as_mut() {
-                let k = m.kempston_mut();
-                match key {
-                    egui::Key::ArrowRight => k.right = pressed,
-                    egui::Key::ArrowLeft => k.left = pressed,
-                    egui::Key::ArrowDown => k.down = pressed,
-                    egui::Key::ArrowUp => k.up = pressed,
-                    egui::Key::Tab => k.fire = pressed,
-                    _ => {}
-                }
-            }
-        }
-        let modifiers = ctx.input(|i| i.modifiers);
-        self.session.apply_modifiers(modifiers);
+        let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
+        self.session.sync_keyboard(&keys_down, modifiers);
 
         let audio = self.session.tick_frame();
         if let Ok(mut b) = self.beeper.lock() {
@@ -554,6 +527,44 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quote_maps_to_symbol_p_on_session() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let mut keys = std::collections::HashSet::new();
+        keys.insert(egui::Key::Quote);
+        let mut mods = egui::Modifiers::default();
+        mods.shift = true;
+        session.sync_keyboard(&keys, mods);
+        let kb = session.machine.as_mut().unwrap().keyboard_mut();
+        // Symbol (row7 bit1) and P (row5 bit0) active-low
+        assert_eq!(kb.rows[7] & (1 << 1), 0);
+        assert_eq!(kb.rows[5] & (1 << 0), 0);
+        // Caps must not be forced by Shift for punctuation
+        assert_ne!(kb.rows[0] & (1 << 0), 0);
+    }
+
+    #[test]
+    fn arrow_left_maps_caps_5() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            return;
+        }
+        let mut keys = std::collections::HashSet::new();
+        keys.insert(egui::Key::ArrowLeft);
+        session.sync_keyboard(&keys, egui::Modifiers::default());
+        let m = session.machine.as_mut().unwrap();
+        let rows = m.keyboard_mut().rows;
+        assert_eq!(rows[0] & 1, 0); // Caps
+        assert_eq!(rows[3] & (1 << 4), 0); // 5
+        assert!(m.kempston_mut().left);
+    }
 
     #[test]
     fn session_loads_tap_fixture_headless() {
