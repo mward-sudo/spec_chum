@@ -78,12 +78,22 @@ impl Memory for MemIo128<'_> {
 
 impl Io for MemIo128<'_> {
     fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
-        (self.bus.in_port(port), 0)
+        let wait = if port & 1 == 0 {
+            self.bus.contend_at(0x4000)
+        } else {
+            0
+        };
+        (self.bus.in_port(port), wait)
     }
 
     fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
+        let wait = if port & 1 == 0 {
+            self.bus.contend_at(0x4000)
+        } else {
+            0
+        };
         self.bus.out_port(port, value);
-        0
+        wait
     }
 }
 

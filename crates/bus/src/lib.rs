@@ -2,7 +2,10 @@
 
 #![allow(clippy::pedantic)]
 
-use ula::{contention_delay, floating_bus_byte, Ula48, FRAME_TSTATES_48};
+use ula::{
+    contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
+    FRAME_TSTATES_48,
+};
 
 /// Keyboard matrix: 8 rows × 5 keys (active low).
 #[derive(Clone, Debug)]
@@ -289,7 +292,7 @@ impl Bus128 {
             _ => false,
         };
         if contended {
-            contention_delay(self.frame_t)
+            contention_delay_128(self.frame_t)
         } else {
             0
         }
@@ -318,7 +321,7 @@ impl Bus128 {
         if port & 0xc002 == 0xc000 {
             return self.ay_regs[usize::from(self.ay_reg & 0x0f)];
         }
-        0xff
+        floating_bus_byte_128(self.frame_t, self.screen_bytes()).unwrap_or(0xff)
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
@@ -380,5 +383,24 @@ mod tests {
         assert_eq!(b.page & 7, 0); // still locked at previous? lock after write
                                    // actually we locked with bank 0 from 0x20
         assert!(b.locked);
+    }
+
+    #[test]
+    fn contend_128_differs_from_48_at_paper_start() {
+        let mut b = Bus128::new();
+        b.frame_t = ula::PAPER_START_128;
+        assert_eq!(b.contend_at(0x4000), 6);
+        b.frame_t = ula::PAPER_START_48;
+        assert_eq!(b.contend_at(0x4000), 0);
+    }
+
+    #[test]
+    fn floating_bus_128_not_always_ff() {
+        let mut b = Bus128::new();
+        b.banks[5][0] = 0x3c;
+        b.frame_t = ula::PAPER_START_128;
+        // Odd unattached port → floating bus pattern (not idle 0xFF)
+        let v = b.in_port(0x00ff);
+        assert_eq!(v, 0x3c);
     }
 }

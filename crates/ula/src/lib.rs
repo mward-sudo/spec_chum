@@ -19,47 +19,60 @@ pub const PAPER_START_128: u32 = 14361;
 /// Contention pattern (48K/128K): delays for T-states within the 8-cycle window.
 const CONTENTION: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
 
-/// Delay added when accessing contended memory at `frame_t`.
-#[must_use]
-pub fn contention_delay(frame_t: u32) -> u32 {
-    // Only during paper display lines, within 128 T of line (16 bytes * 8)
-    if frame_t < PAPER_START_48 {
+#[inline]
+fn contention_delay_params(frame_t: u32, paper_start: u32, t_line: u32) -> u32 {
+    if frame_t < paper_start {
         return 0;
     }
-    let t = frame_t - PAPER_START_48;
-    let line = t / T_LINE_48;
+    let t = frame_t - paper_start;
+    let line = t / t_line;
     if line >= 192 {
         return 0;
     }
-    let x = t % T_LINE_48;
+    let x = t % t_line;
     if x >= 128 {
         return 0;
     }
     CONTENTION[(x % 8) as usize]
 }
 
-/// Floating bus byte during ULA fetch, if any.
+/// Delay added when accessing contended memory at `frame_t` (48K timing).
 #[must_use]
-pub fn floating_bus_byte(frame_t: u32, screen: &[u8]) -> Option<u8> {
+pub fn contention_delay(frame_t: u32) -> u32 {
+    contention_delay_48(frame_t)
+}
+
+/// 48K contended-memory delay.
+#[must_use]
+pub fn contention_delay_48(frame_t: u32) -> u32 {
+    contention_delay_params(frame_t, PAPER_START_48, T_LINE_48)
+}
+
+/// 128K / grey +2 contended-memory delay (228 T/line, later paper start).
+#[must_use]
+pub fn contention_delay_128(frame_t: u32) -> u32 {
+    contention_delay_params(frame_t, PAPER_START_128, T_LINE_128)
+}
+
+#[inline]
+fn floating_bus_params(frame_t: u32, screen: &[u8], paper_start: u32, t_line: u32) -> Option<u8> {
     if screen.len() < 6912 {
         return None;
     }
-    if frame_t < PAPER_START_48 {
+    if frame_t < paper_start {
         return None;
     }
-    let t = frame_t - PAPER_START_48;
-    let line = t / T_LINE_48;
+    let t = frame_t - paper_start;
+    let line = t / t_line;
     if line >= 192 {
         return None;
     }
-    let x = t % T_LINE_48;
+    let x = t % t_line;
     if x >= 128 {
         return None;
     }
-    let col = (x / 4) as usize; // 2 pixels per T, 8 pixels per byte → /4? actually 2 pix/T so 4T/byte
+    let col = (x / 4) as usize;
     let row = line as usize;
-    // Idle slots return 0xFF; attribute / bitmap fetches return data.
-    // Simplified: attribute cell during attr fetch cycles.
     let phase = x % 8;
     let y = row;
     let third = y / 64;
@@ -70,8 +83,25 @@ pub fn floating_bus_byte(frame_t: u32, screen: &[u8]) -> Option<u8> {
     match phase {
         0 | 1 => Some(screen[bitmap_off.min(6143)]),
         2 | 3 => Some(screen[attr_off.min(6911)]),
-        _ => None, // idle → 0xFF
+        _ => None,
     }
+}
+
+/// Floating bus byte during ULA fetch (48K), if any.
+#[must_use]
+pub fn floating_bus_byte(frame_t: u32, screen: &[u8]) -> Option<u8> {
+    floating_bus_byte_48(frame_t, screen)
+}
+
+#[must_use]
+pub fn floating_bus_byte_48(frame_t: u32, screen: &[u8]) -> Option<u8> {
+    floating_bus_params(frame_t, screen, PAPER_START_48, T_LINE_48)
+}
+
+/// Floating bus byte during ULA fetch (128K / grey +2).
+#[must_use]
+pub fn floating_bus_byte_128(frame_t: u32, screen: &[u8]) -> Option<u8> {
+    floating_bus_params(frame_t, screen, PAPER_START_128, T_LINE_128)
 }
 
 /// Spectrum RGB for ink/paper (bright).
@@ -221,6 +251,31 @@ mod tests {
         assert_eq!(contention_delay(t), 6);
         assert_eq!(contention_delay(t + 1), 5);
         assert_eq!(contention_delay(t + 7), 0);
+    }
+
+    #[test]
+    fn contention_table_128_uses_228_line() {
+        assert_eq!(contention_delay_128(0), 0);
+        assert_eq!(
+            contention_delay_128(PAPER_START_48),
+            0,
+            "48K paper start is still idle on 128"
+        );
+        let t = PAPER_START_128;
+        assert_eq!(contention_delay_128(t), 6);
+        assert_eq!(contention_delay_128(t + 1), 5);
+        // Past 128 T into the 228-T line → no contention
+        assert_eq!(contention_delay_128(t + 128), 0);
+        // Next display line starts 228 T later
+        assert_eq!(contention_delay_128(t + T_LINE_128), 6);
+    }
+
+    #[test]
+    fn floating_bus_128_active_in_paper() {
+        let mut screen = vec![0u8; 6912];
+        screen[0] = 0xA5;
+        assert_eq!(floating_bus_byte_128(PAPER_START_128, &screen), Some(0xA5));
+        assert_eq!(floating_bus_byte_128(0, &screen), None);
     }
 
     #[test]
