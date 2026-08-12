@@ -43,8 +43,7 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.
-- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` (fixture in `tests/fixtures/z80test/`).
-- **Open [#17](https://github.com/mward-sudo/spec_chum/issues/17):** `crates/machine/src/z80test.rs` is a stub — real Patrik Rak z80test TAP runner (z80doc then z80full) required before closing. See `.cursor/rules/z80test-issue-17.mdc`.
+- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` (fixture in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) is **done** (`z80doc`); `z80full` remains opt-in/`#[ignore]` — see `.cursor/rules/z80test-issue-17.mdc`.
 
 ## PR / stack
 
@@ -52,4 +51,7 @@ Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern)
 
 ### Stay in sync with issues
 
-Before implementing: `gh issue list` / `gh issue view N` for related work. Prefer extending existing issues over duplicates. Link PRs with `Closes #N` / `Refs #N`. Do not close until acceptance criteria are truly met (see [#17](https://github.com/mward-sudo/spec_chum/issues/17) z80test). When work discovers gaps, update or reopen the issue rather than silently diverging. Cursor rule: `.cursor/rules/github-issues.mdc`.
+Before implementing: `gh issue list` / `gh issue view N` for related work. Prefer extending existing issues over duplicates. Link PRs with `Closes #N` / `Refs #N`. Do not close until acceptance criteria are truly met. When work discovers gaps, update or reopen the issue rather than silently diverging. Cursor rule: `.cursor/rules/github-issues.mdc`.
+
+Open accuracy follow-ups (do not treat as closed): [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY synthesis, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam; later [#24](https://github.com/mward-sudo/spec_chum/issues/24)/[#25](https://github.com/mward-sudo/spec_chum/issues/25).
+

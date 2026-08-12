@@ -6,7 +6,7 @@
 - Before implementing, check related issues (`gh issue list` / `gh issue view N`). Prefer extending an existing issue over opening a duplicate.
 - Use stacked PRs via `gh stack` (one concern per branch).
 - Link PRs with `Closes #N` / `Refs #N`.
-- Do not close an issue until its acceptance criteria are truly met (placeholder/stub PRs must use `Refs`, not `Closes` — see [#17](https://github.com/mward-sudo/spec_chum/issues/17)).
+- Do not close an issue until its acceptance criteria are truly met (placeholder/stub PRs must use `Refs`, not `Closes`).
 - When work discovers gaps, update or reopen the issue rather than silently diverging from the tracker.
 
 ## Rust practices

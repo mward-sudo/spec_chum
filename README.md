@@ -42,9 +42,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for Rust practices, TDD expectations, and
 
 Honest gaps after the M0–M4 scaffolding (tracking issues):
 
-- **z80test** — `z80doc` runs under `--features slow-tests` (see `tests/fixtures/z80test`). `z80full` and related TAPs: `./scripts/fetch_z80test.sh` then the same feature ([#17](https://github.com/mward-sudo/spec_chum/issues/17)).
+- **z80test** — `z80doc` is integrated ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed); keep slow-tests green. `z80full` is optional/`#[ignore]` via `./scripts/fetch_z80test.sh` (see `tests/fixtures/z80test`).
 - **AY audio** — 128K has AY register I/O only; no PSG synthesis or mix with the beeper ([#33](https://github.com/mward-sudo/spec_chum/issues/33)).
-- **128K/+2 timing** — contention and floating bus use 128K line timing (`T_LINE_128` / `PAPER_START_128`); **border/beam** updates remain coarse (scanline) ([#34](https://github.com/mward-sudo/spec_chum/issues/34)).
+- **Border / beam** — border events still apply coarsely by scanline, not mid-line / per-byte beam ([#34](https://github.com/mward-sudo/spec_chum/issues/34); 128K contention + floating bus already use `T_LINE_128` / `PAPER_START_128`).
 
 Later scope (unchanged): +2A/+3 ([#24](https://github.com/mward-sudo/spec_chum/issues/24)), TZX/RZX/Kempston/disk ([#25](https://github.com/mward-sudo/spec_chum/issues/25)).
 

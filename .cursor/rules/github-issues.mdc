@@ -17,7 +17,7 @@ Before implementing, check the tracker so work does not diverge from open issues
 
 - Link PRs with `Closes #N` (done) or `Refs #N` (partial / related).
 - Do **not** close an issue until acceptance criteria are truly met.
-- Lesson: [#17](https://github.com/mward-sudo/spec_chum/issues/17) z80test — a stub/`assert!(… || true)` is not done; do not auto-close on placeholder PRs.
+- Lesson: closed [#17](https://github.com/mward-sudo/spec_chum/issues/17) z80test — an early stub/`assert!(… || true)` was not done; do not auto-close on placeholder PRs. Keep `z80doc` slow-tests green; `z80full` stays optional/`#[ignore]`.
 
 ## When work discovers gaps
 
