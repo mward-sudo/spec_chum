@@ -1,6 +1,10 @@
-//! Spec Chum tape — TAP loading via EAR bitstream.
+//! Spec Chum tape — TAP/TZX loading via EAR bitstream.
 
 #![allow(clippy::pedantic)]
+
+mod tzx;
+
+pub use tzx::{TzxError, TzxPlayer};
 
 use std::path::Path;
 

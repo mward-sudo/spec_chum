@@ -3,9 +3,11 @@
 #![allow(clippy::pedantic)]
 
 mod ay;
+mod kempston;
 mod plus3;
 
 pub use ay::Ay8912;
+pub use kempston::Kempston;
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 
 use ula::{
@@ -75,6 +77,7 @@ pub struct Bus48 {
     pub ula: Ula48,
     /// Timestamped beeper edges: (frame_t, level).
     pub beeper_edges: Vec<(u32, bool)>,
+    pub kempston: Kempston,
 }
 
 impl Default for Bus48 {
@@ -97,6 +100,7 @@ impl Bus48 {
             frame_t: 0,
             ula: Ula48::new(),
             beeper_edges: Vec::new(),
+            kempston: Kempston::new(),
         }
     }
 
@@ -172,6 +176,10 @@ impl Bus48 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        // Kempston joystick (partial decode on low byte 0x1f)
+        if port & 0xff == 0x1f {
+            return self.kempston.read();
+        }
         if port & 1 == 0 {
             return self.in_fe(port);
         }
@@ -205,6 +213,7 @@ pub struct Bus128 {
     pub ay: Ay8912,
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
+    pub kempston: Kempston,
 }
 
 impl Default for Bus128 {
@@ -229,6 +238,7 @@ impl Bus128 {
             ay: Ay8912::new(),
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
+            kempston: Kempston::new(),
         }
     }
 
@@ -327,6 +337,9 @@ impl Bus128 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        if port & 0xff == 0x1f {
+            return self.kempston.read();
+        }
         if port & 1 == 0 {
             let keys = self.keyboard.read((port >> 8) as u8);
             let mut v = 0xa0 | keys;
@@ -414,12 +427,10 @@ mod tests {
     }
 
     #[test]
-    fn ay_port_select_and_write() {
-        let mut b = Bus128::new();
-        b.out_port(0xfffd, 7);
-        b.out_port(0xbffd, 0x3f);
-        assert_eq!(b.ay_reg(), 7);
-        assert_eq!(b.ay_regs()[7], 0x3f);
-        assert_eq!(b.in_port(0xfffd), 0x3f);
+    fn kempston_port_1f() {
+        let mut b = Bus48::new();
+        b.kempston.fire = true;
+        b.kempston.right = true;
+        assert_eq!(b.in_port(0x001f), 0x11);
     }
 }

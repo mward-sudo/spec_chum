@@ -126,6 +126,50 @@ impl EmulatorSession {
         }
     }
 
+    pub fn load_tzx(&mut self, path: &Path) {
+        match tape::TzxPlayer::load(path) {
+            Ok(player) => {
+                if let Some(m) = self.machine.as_mut() {
+                    m.insert_tzx(player);
+                    self.status = format!("Inserted TZX {}", path.display());
+                } else {
+                    self.status = "Load a machine ROM before inserting tape".into();
+                }
+            }
+            Err(e) => self.status = format!("TZX error: {e}"),
+        }
+    }
+
+    pub fn load_rzx(&mut self, path: &Path) {
+        match formats::RzxRecording::load(path) {
+            Ok(rec) => {
+                if let Some(m) = self.machine.as_mut() {
+                    m.insert_rzx(rec);
+                    self.status = format!("Loaded RZX {}", path.display());
+                } else {
+                    self.status = "Load a machine ROM before RZX".into();
+                }
+            }
+            Err(e) => self.status = format!("RZX error: {e}"),
+        }
+    }
+
+    pub fn load_dsk(&mut self, path: &Path) {
+        match formats::DskImage::load(path) {
+            Ok(img) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.insert_disk(img) {
+                        Ok(()) => self.status = format!("Inserted DSK {}", path.display()),
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load +2A/+3 ROM before inserting disk".into();
+                }
+            }
+            Err(e) => self.status = format!("DSK error: {e}"),
+        }
+    }
+
     pub fn apply_key(&mut self, key: egui::Key, pressed: bool) {
         let Some(machine) = self.machine.as_mut() else {
             return;
@@ -295,6 +339,33 @@ impl SpecChumApp {
                         }
                         ui.close_menu();
                     }
+                    if ui.button("Open TZX…").clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("TZX", &["tzx"])
+                            .pick_file()
+                        {
+                            self.session.load_tzx(&path);
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("Open RZX…").clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("RZX", &["rzx"])
+                            .pick_file()
+                        {
+                            self.session.load_rzx(&path);
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("Open DSK…").clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("DSK", &["dsk"])
+                            .pick_file()
+                        {
+                            self.session.load_dsk(&path);
+                        }
+                        ui.close_menu();
+                    }
                     if ui.button("Quit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
@@ -356,6 +427,18 @@ impl SpecChumApp {
         });
         for (key, pressed) in key_events {
             self.session.apply_key(key, pressed);
+            // Arrow keys → Kempston; Tab = fire
+            if let Some(m) = self.session.machine.as_mut() {
+                let k = m.kempston_mut();
+                match key {
+                    egui::Key::ArrowRight => k.right = pressed,
+                    egui::Key::ArrowLeft => k.left = pressed,
+                    egui::Key::ArrowDown => k.down = pressed,
+                    egui::Key::ArrowUp => k.up = pressed,
+                    egui::Key::Tab => k.fire = pressed,
+                    _ => {}
+                }
+            }
         }
         let modifiers = ctx.input(|i| i.modifiers);
         self.session.apply_modifiers(modifiers);

@@ -32,6 +32,8 @@ pub struct BusPlus3 {
     pub ay: Ay8912,
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
+    pub kempston: crate::Kempston,
+    pub fdc: formats::Plus3Fdc,
 }
 
 impl Default for BusPlus3 {
@@ -57,6 +59,8 @@ impl BusPlus3 {
             ay: Ay8912::new(),
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
+            kempston: crate::Kempston::new(),
+            fdc: formats::Plus3Fdc::new(),
         }
     }
 
@@ -183,6 +187,9 @@ impl BusPlus3 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        if port & 0xff == 0x1f {
+            return self.kempston.read();
+        }
         if port & 1 == 0 {
             let keys = self.keyboard.read((port >> 8) as u8);
             let mut v = 0xa0 | keys;
@@ -194,6 +201,18 @@ impl BusPlus3 {
         // AY register read
         if port & 0xc002 == 0xc000 {
             return self.ay.read_data();
+        }
+        // FDC data 3FFD: A15=0,A14=1,A13=1,A1=0
+        if port & 0xe002 == 0x6000 {
+            return self.fdc.read_data_byte();
+        }
+        // FDC status 2FFD: A15=0,A14=1,A13=0,A1=0
+        if port & 0xe002 == 0x4000 {
+            return if self.fdc.data_remaining() > 0 {
+                0xc0 // RQM + DIO
+            } else {
+                0x80 // RQM
+            };
         }
         // No floating bus on +2A/+3
         0xff
