@@ -3,8 +3,11 @@
 ## Workflow
 
 - Track work in GitHub Issues (milestones M0–M4).
+- Before implementing, check related issues (`gh issue list` / `gh issue view N`). Prefer extending an existing issue over opening a duplicate.
 - Use stacked PRs via `gh stack` (one concern per branch).
 - Link PRs with `Closes #N` / `Refs #N`.
+- Do not close an issue until its acceptance criteria are truly met (placeholder/stub PRs must use `Refs`, not `Closes` — see [#17](https://github.com/mward-sudo/spec_chum/issues/17)).
+- When work discovers gaps, update or reopen the issue rather than silently diverging from the tracker.
 
 ## Rust practices
 
@@ -24,7 +27,8 @@ Local quality gate (same as CI intent):
 ## AI / agent-assisted work
 
 - Read `AGENTS.md` for crate boundaries and hard constraints.
-- Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs).
+- Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync.
+- Before coding, agents should consult open issues so implementations do not drift from tracked acceptance criteria.
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
