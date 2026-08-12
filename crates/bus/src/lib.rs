@@ -202,6 +202,7 @@ pub struct Bus128 {
     pub frame_t: u32,
     pub ay: Ay8912,
     pub beeper_edges: Vec<(u32, bool)>,
+    pub ula: Ula48,
 }
 
 impl Default for Bus128 {
@@ -225,6 +226,7 @@ impl Bus128 {
             frame_t: 0,
             ay: Ay8912::new(),
             beeper_edges: Vec::new(),
+            ula: Ula48::new(),
         }
     }
 
@@ -341,6 +343,7 @@ impl Bus128 {
     pub fn out_port(&mut self, port: u16, value: u8) {
         if port & 1 == 0 {
             self.border = value & 7;
+            self.ula.set_border(self.frame_t, self.border);
             let beep = value & 0x10 != 0;
             if beep != self.beeper {
                 self.beeper = beep;
