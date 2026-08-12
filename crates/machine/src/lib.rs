@@ -142,19 +142,19 @@ impl Io for MemIoPlus3<'_> {
 pub enum Machine {
     Spec48 {
         cpu: Cpu,
-        bus: Bus48,
+        bus: Box<Bus48>,
         ula: Ula48,
         tape: Option<TapPlayer>,
     },
     Spec128 {
         cpu: Cpu,
-        bus: Bus128,
+        bus: Box<Bus128>,
         ula: Ula48,
         tape: Option<TapPlayer>,
     },
     SpecPlus3 {
         cpu: Cpu,
-        bus: BusPlus3,
+        bus: Box<BusPlus3>,
         ula: Ula48,
         tape: Option<TapPlayer>,
     },
@@ -174,7 +174,7 @@ impl Machine {
         bus.load_rom(rom)?;
         Ok(Self::Spec48 {
             cpu: Cpu::new(),
-            bus,
+            bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
         })
@@ -185,7 +185,7 @@ impl Machine {
         bus.load_rom128(rom)?;
         Ok(Self::Spec128 {
             cpu: Cpu::new(),
-            bus,
+            bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
         })
@@ -196,7 +196,7 @@ impl Machine {
         bus.load_rom64(rom)?;
         Ok(Self::SpecPlus3 {
             cpu: Cpu::new(),
-            bus,
+            bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
         })
@@ -345,7 +345,7 @@ impl Machine {
                         continue;
                     }
                     if int_active_48(bus.frame_t) {
-                        let mut mio = MemIo48 { bus };
+                        let mut mio = MemIo48 { bus: bus.as_mut() };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
                             Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
@@ -354,7 +354,7 @@ impl Machine {
                             continue;
                         }
                     }
-                    let mut mio = MemIo48 { bus };
+                    let mut mio = MemIo48 { bus: bus.as_mut() };
                     cpu.step(&mut mio);
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
@@ -392,7 +392,7 @@ impl Machine {
                         continue;
                     }
                     if bus.frame_t < INT_LENGTH_128 {
-                        let mut mio = MemIo128 { bus };
+                        let mut mio = MemIo128 { bus: bus.as_mut() };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
                             Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
@@ -408,7 +408,7 @@ impl Machine {
                             continue;
                         }
                     }
-                    let mut mio = MemIo128 { bus };
+                    let mut mio = MemIo128 { bus: bus.as_mut() };
                     cpu.step(&mut mio);
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
@@ -455,7 +455,7 @@ impl Machine {
                         continue;
                     }
                     if bus.frame_t < INT_LENGTH_128 {
-                        let mut mio = MemIoPlus3 { bus };
+                        let mut mio = MemIoPlus3 { bus: bus.as_mut() };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
                             Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
@@ -471,7 +471,7 @@ impl Machine {
                             continue;
                         }
                     }
-                    let mut mio = MemIoPlus3 { bus };
+                    let mut mio = MemIoPlus3 { bus: bus.as_mut() };
                     cpu.step(&mut mio);
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
@@ -650,7 +650,7 @@ impl Machine {
                     return;
                 }
                 if int_active_48(bus.frame_t) {
-                    let mut mio = MemIo48 { bus };
+                    let mut mio = MemIo48 { bus: bus.as_mut() };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
                         Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
@@ -659,7 +659,7 @@ impl Machine {
                     }
                 }
                 let last_t = cpu.t;
-                let mut mio = MemIo48 { bus };
+                let mut mio = MemIo48 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
@@ -670,7 +670,7 @@ impl Machine {
                     return;
                 }
                 if bus.frame_t < INT_LENGTH_128 {
-                    let mut mio = MemIo128 { bus };
+                    let mut mio = MemIo128 { bus: bus.as_mut() };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
                         Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
@@ -680,7 +680,7 @@ impl Machine {
                     }
                 }
                 let last_t = cpu.t;
-                let mut mio = MemIo128 { bus };
+                let mut mio = MemIo128 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
@@ -692,7 +692,7 @@ impl Machine {
                     return;
                 }
                 if bus.frame_t < INT_LENGTH_128 {
-                    let mut mio = MemIoPlus3 { bus };
+                    let mut mio = MemIoPlus3 { bus: bus.as_mut() };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
                         Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
@@ -702,7 +702,7 @@ impl Machine {
                     }
                 }
                 let last_t = cpu.t;
-                let mut mio = MemIoPlus3 { bus };
+                let mut mio = MemIoPlus3 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
@@ -717,7 +717,7 @@ impl Machine {
         match self {
             Self::Spec48 { cpu, bus, tape, .. } => {
                 let last_t = cpu.t;
-                let mut mio = MemIo48 { bus };
+                let mut mio = MemIo48 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
@@ -725,7 +725,7 @@ impl Machine {
             }
             Self::Spec128 { cpu, bus, tape, .. } => {
                 let last_t = cpu.t;
-                let mut mio = MemIo128 { bus };
+                let mut mio = MemIo128 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
@@ -734,7 +734,7 @@ impl Machine {
             }
             Self::SpecPlus3 { cpu, bus, tape, .. } => {
                 let last_t = cpu.t;
-                let mut mio = MemIoPlus3 { bus };
+                let mut mio = MemIoPlus3 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
