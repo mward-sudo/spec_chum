@@ -53,5 +53,18 @@ if [[ -d "$CACHE/zx-roms/spectrum128-plus2/plus2" ]]; then
   done < <(find "$CACHE/zx-roms/spectrum128-plus2/plus2" -name '*.rom' -maxdepth 1)
 fi
 
+if [[ -d "$CACHE/zx-roms/spectrum-plus3/plus3" ]]; then
+  mkdir -p "$ROM_DIR/plus3"
+  while IFS= read -r f; do
+    copy_rom "$f" "$ROM_DIR/plus3/$(basename "$f")" || true
+  done < <(find "$CACHE/zx-roms/spectrum-plus3/plus3" -name '*.rom' -maxdepth 1)
+fi
+if [[ -d "$CACHE/zx-roms/spectrum-plus3/plus2a" ]]; then
+  mkdir -p "$ROM_DIR/plus2a"
+  while IFS= read -r f; do
+    copy_rom "$f" "$ROM_DIR/plus2a/$(basename "$f")" || true
+  done < <(find "$CACHE/zx-roms/spectrum-plus3/plus2a" -name '*.rom' -maxdepth 1)
+fi
+
 echo "$ZX_ROMS_REF" > "$ROM_DIR/.zx-roms-ref"
 echo "Done. ROM dir: $ROM_DIR"

@@ -77,6 +77,22 @@ impl EmulatorSession {
                         format!("Missing {}. Run ./scripts/fetch_roms.sh", rom128.display());
                 }
             }
+            Model::SpectrumPlus3 => {
+                let rom = root.join("roms/plus3/plus3.rom");
+                let rom_alt = root.join("roms/plus2a/plus2a.rom");
+                let path = if rom.exists() { rom } else { rom_alt };
+                if let Ok(data) = std::fs::read(&path) {
+                    match Machine::new_plus3(&data) {
+                        Ok(m) => {
+                            self.machine = Some(m);
+                            self.status = format!("Loaded {}", path.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Missing +2A/+3 ROM. Run ./scripts/fetch_roms.sh".to_string();
+                }
+            }
         }
     }
 
@@ -292,6 +308,16 @@ impl SpecChumApp {
                     }
                     if ui
                         .radio_value(&mut self.session.model, Model::Spectrum128, "Spectrum 128K")
+                        .clicked()
+                    {
+                        self.session.try_autoload_rom();
+                    }
+                    if ui
+                        .radio_value(
+                            &mut self.session.model,
+                            Model::SpectrumPlus3,
+                            "Spectrum +2A/+3",
+                        )
                         .clicked()
                     {
                         self.session.try_autoload_rom();
