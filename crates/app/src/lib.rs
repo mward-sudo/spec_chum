@@ -172,16 +172,16 @@ impl EmulatorSession {
     }
 
     /// Run one emulated frame into the RGBA framebuffer when `running`.
-    pub fn tick_frame(&mut self) -> Vec<(u32, bool)> {
+    pub fn tick_frame(&mut self) -> machine::FrameAudio {
         if !self.running {
-            return Vec::new();
+            return machine::FrameAudio::default();
         }
         let Some(machine) = self.machine.as_mut() else {
-            return Vec::new();
+            return machine::FrameAudio::default();
         };
-        let edges = machine.run_frame();
+        let audio = machine.run_frame();
         machine.render_rgba(&mut self.framebuffer, self.with_border);
-        edges
+        audio
     }
 }
 
@@ -204,20 +204,26 @@ impl std::fmt::Debug for SpecChumApp {
 
 struct BeeperState {
     edges: Vec<(u32, bool)>,
+    ay_samples: Vec<f32>,
+    ay_index: usize,
     level: bool,
     sample_rate: u32,
     frame_t_per_sample: f32,
     t: f32,
+    muted: bool,
 }
 
 impl Default for BeeperState {
     fn default() -> Self {
         Self {
             edges: Vec::new(),
+            ay_samples: Vec::new(),
+            ay_index: 0,
             level: false,
             sample_rate: 44100,
             frame_t_per_sample: 69888.0 / 44100.0,
             t: 0.0,
+            muted: false,
         }
     }
 }
@@ -328,10 +334,13 @@ impl SpecChumApp {
         let modifiers = ctx.input(|i| i.modifiers);
         self.session.apply_modifiers(modifiers);
 
-        let edges = self.session.tick_frame();
-        if !self.session.muted {
-            if let Ok(mut b) = self.beeper.lock() {
-                b.edges = edges;
+        let audio = self.session.tick_frame();
+        if let Ok(mut b) = self.beeper.lock() {
+            b.muted = self.session.muted;
+            if !self.session.muted {
+                b.edges = audio.beeper_edges;
+                b.ay_samples = audio.ay_samples;
+                b.ay_index = 0;
                 b.t = 0.0;
             }
         }
@@ -395,6 +404,12 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
                 let Ok(mut st) = state.lock() else {
                     return;
                 };
+                if st.muted {
+                    for sample in data.iter_mut() {
+                        *sample = 0.0;
+                    }
+                    return;
+                }
                 for sample in data.iter_mut() {
                     while let Some(&(edge_t, level)) = st.edges.first() {
                         if st.t >= edge_t as f32 {
@@ -404,8 +419,18 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
                             break;
                         }
                     }
-                    let amp = if st.level { 0.2 } else { -0.2 };
-                    *sample = amp;
+                    let beep = if st.level { 0.15 } else { -0.15 };
+                    let ay = if st.ay_index < st.ay_samples.len() {
+                        let v = st.ay_samples[st.ay_index];
+                        st.ay_index += 1;
+                        // AY samples are 0..1; center and scale for mix.
+                        (v - 0.5) * 0.5
+                    } else if let Some(&last) = st.ay_samples.last() {
+                        (last - 0.5) * 0.5
+                    } else {
+                        0.0
+                    };
+                    *sample = (beep + ay).clamp(-1.0, 1.0);
                     st.t += st.frame_t_per_sample;
                 }
             },
