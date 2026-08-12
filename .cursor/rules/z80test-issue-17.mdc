@@ -1,27 +1,22 @@
 ---
-description: Open issue #17 — real Patrik Rak z80test TAP runner (not stub)
+description: Issue #17 DONE — keep z80doc green; z80full opt-in/ignored
 alwaysApply: true
 ---
 
-# Issue #17 — z80test integration (OPEN)
+# Issue #17 — z80test integration (DONE)
 
-Track: https://github.com/mward-sudo/spec_chum/issues/17
+Track: https://github.com/mward-sudo/spec_chum/issues/17 (closed)
 
-`crates/machine/src/z80test.rs` is a **placeholder** under `--features slow-tests`. Do **not** treat the stub as done, close #17, or claim z80test coverage until a real runner exists.
+Real Patrik Rak [z80test](https://github.com/raxoft/z80test) TAP runner lives in `crates/machine/src/z80test.rs` under `--features slow-tests`. **Do not reopen #17** or treat the harness as a stub.
 
-## Required outcome
+## Current expectations
 
-1. Run [Patrik Rak z80test](https://github.com/raxoft/z80test) TAP on the 48K machine: **z80doc first**, then **z80full**.
-2. Suggested stack branch: `m3/z80test`.
-
-## Acceptance criteria (from #17)
-
-- [ ] `z80doc` runnable via cargo test feature
-- [ ] Document how to run `z80full`
-- Test plan target: `cargo test -p machine --features slow-tests z80doc`
-- Place TAPs under `tests/fixtures/z80test` (download from raxoft/z80test; do not commit if policy forbids large binaries — document fetch instead)
+1. **`z80doc`** — checked-in fixture; keep CI / opt-in slow-tests green:
+   `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed`
+2. **`z80full`** — still optional / `#[ignore]`; fetch with `./scripts/fetch_z80test.sh`, then run with `--ignored`. Not required to keep #17 closed.
 
 ## Agent guardrails
 
-- Replacing `assert!(… || true)` with a no-op or always-pass test is **not** completion.
-- Prefer CI opt-in / slow-tests feature for full suites; keep default `cargo test` fast.
+- Prefer CI opt-in / `slow-tests` for full suites; keep default `cargo test` fast.
+- Fixtures: `tests/fixtures/z80test/` (see that README).
+- Open accuracy follow-ups are elsewhere (e.g. [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam).
