@@ -4,31 +4,24 @@
 
 use std::path::Path;
 
+use thiserror::Error;
+
 #[derive(Clone, Debug)]
 pub struct TapImage {
     pub blocks: Vec<Vec<u8>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum TapeError {
-    Io(std::io::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("{0}")]
     Format(String),
 }
 
-impl std::fmt::Display for TapeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Io(e) => write!(f, "{e}"),
-            Self::Format(s) => write!(f, "{s}"),
-        }
-    }
-}
-
-impl std::error::Error for TapeError {}
-
 impl TapImage {
     pub fn load(path: &Path) -> Result<Self, TapeError> {
-        let data = std::fs::read(path).map_err(TapeError::Io)?;
+        let data = std::fs::read(path)?;
         Self::parse(&data)
     }
 
@@ -50,12 +43,27 @@ impl TapImage {
     }
 }
 
-/// Generates EAR levels for a TAP block (simplified ROM timing).
+/// Spectrum ROM LD-BYTES entry used for flash-load traps.
+pub const LD_BYTES_TRAP_PC: u16 = 0x056C;
+
+/// Pilot / sync / data pulse timings (T-states), matching the 48K ROM loader.
+pub const PILOT_PULSE_T: u32 = 2168;
+pub const PILOT_HEADER_PULSES: u32 = 8063;
+pub const PILOT_DATA_PULSES: u32 = 3223;
+pub const SYNC1_T: u32 = 667;
+pub const SYNC2_T: u32 = 735;
+pub const BIT0_T: u32 = 855;
+pub const BIT1_T: u32 = 1710;
+/// Inter-block pause (~1s at 3.5 MHz).
+pub const PAUSE_T: u32 = 3_500_000;
+
+/// Generates EAR levels for a TAP block (ROM timing).
 #[derive(Clone, Debug)]
 pub struct TapPlayer {
     pub image: TapImage,
+    /// Index of the block currently playing (or next to play when idle between blocks).
     pub block: usize,
-    /// Pulse schedule: remaining T-states at current level, then flip.
+    /// Pulse schedule: (duration T-states, EAR level while this pulse is active).
     pulses: Vec<(u32, bool)>,
     pulse_i: usize,
     remain: u32,
@@ -77,49 +85,89 @@ impl TapPlayer {
         p
     }
 
+    /// Number of pulses currently scheduled (including pause). Useful for tests.
+    #[must_use]
+    pub fn scheduled_pulses(&self) -> usize {
+        self.pulses.len()
+    }
+
+    #[must_use]
+    pub fn ear_level(&self) -> bool {
+        self.level
+    }
+
+    #[must_use]
+    pub fn finished(&self) -> bool {
+        self.block >= self.image.blocks.len() && self.pulses.is_empty()
+    }
+
+    /// Skip the EAR bitstream for the current block (used by flash-load traps).
+    pub fn consume_block(&mut self) {
+        if self.block < self.image.blocks.len() {
+            self.block += 1;
+        }
+        self.queue_block(self.block);
+    }
+
+    #[must_use]
+    pub fn current_block_bytes(&self) -> Option<&[u8]> {
+        self.image.blocks.get(self.block).map(Vec::as_slice)
+    }
+
     fn queue_block(&mut self, idx: usize) {
         self.pulses.clear();
         self.pulse_i = 0;
         self.remain = 0;
         let Some(block) = self.image.blocks.get(idx) else {
+            self.level = false;
             return;
         };
-        // Pilot: 2168 T, 8063/3223 pulses depending on flag
+        // Pilot: `N` alternating pulses of 2168 T (not N pairs).
         let flag = block.first().copied().unwrap_or(0);
-        let pilot_count = if flag == 0 { 8063 } else { 3223 };
+        let pilot_count = if flag == 0 {
+            PILOT_HEADER_PULSES
+        } else {
+            PILOT_DATA_PULSES
+        };
+        let mut level = true;
         for _ in 0..pilot_count {
-            self.pulses.push((2168, true));
-            self.pulses.push((2168, false));
+            self.pulses.push((PILOT_PULSE_T, level));
+            level = !level;
         }
-        // Sync
-        self.pulses.push((667, true));
-        self.pulses.push((735, false));
-        // Data bits
+        // Sync pulses
+        self.pulses.push((SYNC1_T, true));
+        self.pulses.push((SYNC2_T, false));
+        // Data bits (MSB first): each bit is two equal edges
         for &byte in block {
             for bit in (0..8).rev() {
                 let one = byte & (1 << bit) != 0;
-                let len = if one { 1710 } else { 855 };
+                let len = if one { BIT1_T } else { BIT0_T };
                 self.pulses.push((len, true));
                 self.pulses.push((len, false));
             }
         }
-        // pause
-        self.pulses.push((3_500_000, false));
+        // Pause (silence)
+        self.pulses.push((PAUSE_T, false));
         if let Some(&(r, l)) = self.pulses.first() {
             self.remain = r;
             self.level = l;
+            self.pulse_i = 0;
         }
     }
 
     /// Advance `dt` T-states; returns current EAR level.
     pub fn advance(&mut self, mut dt: u32) -> bool {
-        while dt > 0 && self.pulse_i < self.pulses.len() {
+        while dt > 0 {
+            if self.pulses.is_empty() {
+                self.level = false;
+                break;
+            }
             if self.remain == 0 {
                 self.pulse_i += 1;
                 if self.pulse_i >= self.pulses.len() {
                     self.block += 1;
                     self.queue_block(self.block);
-                    break;
+                    continue;
                 }
                 let (r, l) = self.pulses[self.pulse_i];
                 self.remain = r;
@@ -129,20 +177,94 @@ impl TapPlayer {
             self.remain -= step;
             dt -= step;
         }
+        // If we landed exactly on a pulse boundary at end-of-block, promote.
+        if self.remain == 0 && !self.pulses.is_empty() && self.pulse_i + 1 >= self.pulses.len() {
+            self.block += 1;
+            self.queue_block(self.block);
+        }
         self.level
     }
 }
 
-/// Flash-load: poke TAP block into memory via LD-BYTES trap (0x056C).
+/// XOR checksum used by Spectrum TAP blocks (all bytes including flag, excluding the checksum byte itself).
+#[must_use]
+pub fn tap_checksum(bytes: &[u8]) -> u8 {
+    bytes.iter().fold(0u8, |acc, b| acc ^ b)
+}
+
+/// Flash-load: poke TAP block payload (excluding flag + checksum) into memory.
 pub fn flash_load_block(machine_ram_write: &mut dyn FnMut(u16, u8), block: &[u8], addr: u16) {
-    for (i, b) in block.iter().enumerate() {
+    if block.len() < 2 {
+        return;
+    }
+    // Skip flag (first) and checksum (last)
+    for (i, b) in block[1..block.len() - 1].iter().enumerate() {
         machine_ram_write(addr.wrapping_add(i as u16), *b);
+    }
+}
+
+/// Result of attempting an LD-BYTES flash-load trap.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TapeTrapResult {
+    /// No trap (PC mismatch or no tape).
+    Ignored,
+    /// Block loaded or verified; caller should simulate RET with carry set.
+    Success { addr: u16, len: u16 },
+    /// Missing/mismatched block; caller should simulate RET with carry clear.
+    Failure,
+}
+
+/// Interpret CPU state at [`LD_BYTES_TRAP_PC`] and apply the next TAP block if present.
+///
+/// On `Success` / `Failure`, the player has already consumed (or not) the block as appropriate;
+/// the CPU must still perform a ROM-compatible return (RET) and flag update.
+#[must_use]
+pub fn evaluate_ld_bytes_trap(
+    pc: u16,
+    flag_expected: u8,
+    load: bool,
+    addr: u16,
+    len: u16,
+    player: &mut TapPlayer,
+) -> TapeTrapResult {
+    if pc != LD_BYTES_TRAP_PC {
+        return TapeTrapResult::Ignored;
+    }
+    let Some(block) = player.current_block_bytes() else {
+        return TapeTrapResult::Failure;
+    };
+    if block.is_empty() || block[0] != flag_expected {
+        return TapeTrapResult::Failure;
+    }
+    // Block is flag + `len` data bytes + checksum
+    if block.len() != usize::from(len) + 2 {
+        return TapeTrapResult::Failure;
+    }
+    let data = &block[1..block.len() - 1];
+    let checksum = block[block.len() - 1];
+    if tap_checksum(&block[..block.len() - 1]) != checksum {
+        return TapeTrapResult::Failure;
+    }
+    if load {
+        // Caller writes memory using Success { addr, len }
+        let _ = data;
+        player.consume_block();
+        TapeTrapResult::Success { addr, len }
+    } else {
+        // Verify path: caller compares; we only check length/checksum here.
+        player.consume_block();
+        TapeTrapResult::Success { addr, len }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn fixture_tap() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/tape/minimal_code.tap")
+    }
 
     #[test]
     fn parse_empty() {
@@ -156,7 +278,108 @@ mod tests {
         let t = TapImage::parse(&raw).unwrap();
         assert_eq!(t.blocks.len(), 1);
         assert_eq!(t.blocks[0], vec![0x00, 0x11, 0x22]);
-        // checksum-ish not validated
-        let _ = raw;
+    }
+
+    #[test]
+    fn header_pilot_pulse_count_matches_rom() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x11, 0x22]],
+        };
+        let p = TapPlayer::new(img);
+        // pilot + sync(2) + 3 bytes * 8 bits * 2 edges + pause
+        let expected = PILOT_HEADER_PULSES as usize + 2 + (3 * 8 * 2) + 1;
+        assert_eq!(p.scheduled_pulses(), expected);
+    }
+
+    #[test]
+    fn data_pilot_pulse_count_matches_rom() {
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x00]],
+        };
+        let p = TapPlayer::new(img);
+        let expected = PILOT_DATA_PULSES as usize + 2 + (2 * 8 * 2) + 1;
+        assert_eq!(p.scheduled_pulses(), expected);
+    }
+
+    #[test]
+    fn ear_toggles_during_pilot() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x00]],
+        };
+        let mut p = TapPlayer::new(img);
+        let first = p.ear_level();
+        assert!(first, "pilot starts high");
+        // Mid-first-pulse: still high
+        assert!(p.advance(PILOT_PULSE_T / 2));
+        // Cross into second pilot pulse: low
+        assert!(!p.advance(PILOT_PULSE_T));
+        // Third pulse: high again
+        assert!(p.advance(PILOT_PULSE_T));
+    }
+
+    #[test]
+    fn advances_to_next_block_after_pause() {
+        let img = TapImage {
+            blocks: vec![vec![0x00], vec![0xff, 0x00]],
+        };
+        let mut p = TapPlayer::new(img);
+        assert_eq!(p.block, 0);
+        // Pilot + sync + 1 byte*16 edges + pause
+        let t = PILOT_HEADER_PULSES * PILOT_PULSE_T
+            + SYNC1_T
+            + SYNC2_T
+            + 16 * BIT0_T // flag 0x00 → all zero bits
+            + PAUSE_T;
+        p.advance(t);
+        assert_eq!(p.block, 1);
+        assert_eq!(
+            p.scheduled_pulses(),
+            PILOT_DATA_PULSES as usize + 2 + (2 * 8 * 2) + 1
+        );
+    }
+
+    #[test]
+    fn load_minimal_fixture() {
+        let path = fixture_tap();
+        let img = TapImage::load(&path).expect("fixture TAP");
+        assert_eq!(img.blocks.len(), 2);
+        assert_eq!(img.blocks[0][0], 0x00);
+        assert_eq!(img.blocks[1][0], 0xff);
+        assert_eq!(
+            tap_checksum(&img.blocks[0][..img.blocks[0].len() - 1]),
+            *img.blocks[0].last().unwrap()
+        );
+    }
+
+    #[test]
+    fn flash_load_skips_flag_and_checksum() {
+        let block = vec![0xff, 0x11, 0x22, 0x33, 0xff ^ 0x11 ^ 0x22 ^ 0x33];
+        let mut mem = [0u8; 8];
+        flash_load_block(
+            &mut |addr, v| {
+                mem[addr as usize] = v;
+            },
+            &block,
+            0,
+        );
+        assert_eq!(&mem[..3], &[0x11, 0x22, 0x33]);
+    }
+
+    #[test]
+    fn ld_bytes_trap_consumes_matching_block() {
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x42, 0xff ^ 0x42]],
+        };
+        let mut p = TapPlayer::new(img);
+        let r = evaluate_ld_bytes_trap(LD_BYTES_TRAP_PC, 0xff, true, 0x8000, 1, &mut p);
+        assert_eq!(
+            r,
+            TapeTrapResult::Success {
+                addr: 0x8000,
+                len: 1
+            }
+        );
+        assert_eq!(p.block, 1);
+        assert!(p.finished() || p.current_block_bytes().is_none());
     }
 }
