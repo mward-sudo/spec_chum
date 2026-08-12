@@ -3,7 +3,7 @@
 #![allow(clippy::pedantic)]
 #![allow(clippy::large_enum_variant)]
 
-#[cfg(test)]
+#[cfg(all(test, feature = "slow-tests"))]
 mod z80test;
 
 use bus::{Bus128, Bus48};
@@ -455,6 +455,45 @@ impl Machine {
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
             }
         }
+    }
+
+    /// One CPU instruction without IRQ or tape flash-load traps (for hosted tests).
+    pub fn step_cpu_only(&mut self) {
+        match self {
+            Self::Spec48 { cpu, bus, tape, .. } => {
+                let last_t = cpu.t;
+                let mut mio = MemIo48 { bus };
+                cpu.step(&mut mio);
+                let dt = (cpu.t - last_t) as u32;
+                Self::advance_tape_ear(tape, &mut bus.ear, dt);
+                bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_48;
+            }
+            Self::Spec128 { cpu, bus, tape, .. } => {
+                let last_t = cpu.t;
+                let mut mio = MemIo128 { bus };
+                cpu.step(&mut mio);
+                let dt = (cpu.t - last_t) as u32;
+                Self::advance_tape_ear(tape, &mut bus.ear, dt);
+                bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
+            }
+        }
+    }
+
+    /// Simulate `RET` (pop PC from stack).
+    pub fn ret(&mut self) {
+        let sp = self.cpu().regs.sp;
+        let lo = self.read_mem(sp);
+        let hi = self.read_mem(sp.wrapping_add(1));
+        self.cpu_mut().regs.sp = sp.wrapping_add(2);
+        self.cpu_mut().regs.pc = u16::from_le_bytes([lo, hi]);
+    }
+
+    /// Push `addr` onto the stack (as a CALL would).
+    pub fn push_word(&mut self, addr: u16) {
+        let sp = self.cpu().regs.sp.wrapping_sub(2);
+        self.cpu_mut().regs.sp = sp;
+        self.write_mem(sp, (addr & 0xff) as u8);
+        self.write_mem(sp.wrapping_add(1), (addr >> 8) as u8);
     }
 
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {

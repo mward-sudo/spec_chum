@@ -47,3 +47,30 @@ jobs:
 
       - name: test
         run: cargo test --workspace
+
+  z80doc:
+    name: z80doc (slow-tests, release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cache ROMs
+        id: rom-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            roms
+            .rom-cache
+          key: roms-${{ hashFiles('scripts/fetch_roms.sh') }}
+
+      - name: Fetch ROMs
+        run: ./scripts/fetch_roms.sh
+
+      - name: z80doc
+        run: cargo test -p machine --features slow-tests --release z80doc_all_tests_passed -- --nocapture
