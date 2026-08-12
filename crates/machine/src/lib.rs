@@ -3,6 +3,9 @@
 #![allow(clippy::pedantic)]
 #![allow(clippy::large_enum_variant)]
 
+#[cfg(test)]
+mod z80test;
+
 use bus::{Bus128, Bus48};
 use formats::Snapshot48;
 use tape::TapPlayer;

@@ -14,3 +14,7 @@ formats = { workspace = true }
 
 [lints]
 workspace = true
+
+[features]
+default = []
+slow-tests = []
