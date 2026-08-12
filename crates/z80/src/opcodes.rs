@@ -910,9 +910,14 @@ fn sbc16(a: u16, b: u16, c: bool) -> (u16, u8) {
         .wrapping_sub(u32::from(b))
         .wrapping_sub(u32::from(c_in));
     let r = r32 as u16;
-    let mut f = flag::N | sz53((r >> 8) as u8);
+    // Z is for the full 16-bit result; XY from the high byte (not sz53, which zeros on high==0).
+    let hi = (r >> 8) as u8;
+    let mut f = flag::N | (hi & (flag::X | flag::Y));
     if r == 0 {
         f |= flag::Z;
+    }
+    if r & 0x8000 != 0 {
+        f |= flag::S;
     }
     if r32 & 0x1_0000 != 0 {
         f |= flag::C;
@@ -923,9 +928,6 @@ fn sbc16(a: u16, b: u16, c: bool) -> (u16, u8) {
     if (a ^ b) & (a ^ r) & 0x8000 != 0 {
         f |= flag::PV;
     }
-    if r & 0x8000 != 0 {
-        f |= flag::S;
-    }
     (r, f)
 }
 
@@ -933,9 +935,13 @@ fn adc16(a: u16, b: u16, c: bool) -> (u16, u8) {
     let c_in = u16::from(c);
     let r32 = u32::from(a) + u32::from(b) + u32::from(c_in);
     let r = r32 as u16;
-    let mut f = sz53((r >> 8) as u8);
+    let hi = (r >> 8) as u8;
+    let mut f = hi & (flag::X | flag::Y);
     if r == 0 {
         f |= flag::Z;
+    }
+    if r & 0x8000 != 0 {
+        f |= flag::S;
     }
     if r32 > 0xffff {
         f |= flag::C;
@@ -945,9 +951,6 @@ fn adc16(a: u16, b: u16, c: bool) -> (u16, u8) {
     }
     if !(a ^ b) & (a ^ r) & 0x8000 != 0 {
         f |= flag::PV;
-    }
-    if r & 0x8000 != 0 {
-        f |= flag::S;
     }
     (r, f)
 }
