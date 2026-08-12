@@ -2,6 +2,10 @@
 
 #![allow(clippy::pedantic)]
 
+mod ay;
+
+pub use ay::Ay8912;
+
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
     FRAME_TSTATES_48,
@@ -196,8 +200,7 @@ pub struct Bus128 {
     pub beeper: bool,
     pub border: u8,
     pub frame_t: u32,
-    pub ay_reg: u8,
-    pub ay_regs: [u8; 16],
+    pub ay: Ay8912,
     pub beeper_edges: Vec<(u32, bool)>,
 }
 
@@ -220,10 +223,21 @@ impl Bus128 {
             beeper: false,
             border: 0,
             frame_t: 0,
-            ay_reg: 0,
-            ay_regs: [0; 16],
+            ay: Ay8912::new(),
             beeper_edges: Vec::new(),
         }
+    }
+
+    /// Compatibility: selected AY register index.
+    #[must_use]
+    pub fn ay_reg(&self) -> u8 {
+        self.ay.selected
+    }
+
+    /// Compatibility: raw AY register file.
+    #[must_use]
+    pub fn ay_regs(&self) -> &[u8; 16] {
+        &self.ay.regs
     }
 
     pub fn load_rom128(&mut self, data: &[u8]) -> Result<(), String> {
@@ -319,7 +333,7 @@ impl Bus128 {
         }
         // AY register read
         if port & 0xc002 == 0xc000 {
-            return self.ay_regs[usize::from(self.ay_reg & 0x0f)];
+            return self.ay.read_data();
         }
         floating_bus_byte_128(self.frame_t, self.screen_bytes()).unwrap_or(0xff)
     }
@@ -341,11 +355,11 @@ impl Bus128 {
         }
         // FFFD select / BFFD data
         if port & 0xc002 == 0xc000 {
-            self.ay_reg = value;
+            self.ay.select(value);
             return;
         }
         if port & 0xc002 == 0x8000 {
-            self.ay_regs[usize::from(self.ay_reg & 0x0f)] = value;
+            self.ay.write_data(value);
         }
     }
 }
@@ -395,12 +409,12 @@ mod tests {
     }
 
     #[test]
-    fn floating_bus_128_not_always_ff() {
+    fn ay_port_select_and_write() {
         let mut b = Bus128::new();
-        b.banks[5][0] = 0x3c;
-        b.frame_t = ula::PAPER_START_128;
-        // Odd unattached port → floating bus pattern (not idle 0xFF)
-        let v = b.in_port(0x00ff);
-        assert_eq!(v, 0x3c);
+        b.out_port(0xfffd, 7);
+        b.out_port(0xbffd, 0x3f);
+        assert_eq!(b.ay_reg(), 7);
+        assert_eq!(b.ay_regs()[7], 0x3f);
+        assert_eq!(b.in_port(0xfffd), 0x3f);
     }
 }

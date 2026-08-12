@@ -113,6 +113,14 @@ pub enum Machine {
     },
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct FrameAudio {
+    /// Beeper edges: (frame_t, level).
+    pub beeper_edges: Vec<(u32, bool)>,
+    /// Mono AY samples for this frame (empty on 48K). Amplitude roughly 0..1.
+    pub ay_samples: Vec<f32>,
+}
+
 impl Machine {
     pub fn new_48k(rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus48::new();
@@ -171,6 +179,7 @@ impl Machine {
                 bus.page = 0;
                 bus.locked = false;
                 bus.beeper_edges.clear();
+                bus.ay.reset();
                 *ula = Ula48::new();
                 *tape = None;
             }
@@ -235,8 +244,8 @@ impl Machine {
         }
     }
 
-    /// Run one video frame; returns beeper edges for the frame.
-    pub fn run_frame(&mut self) -> Vec<(u32, bool)> {
+    /// Run one video frame; returns beeper edges and AY samples for the frame.
+    pub fn run_frame(&mut self) -> FrameAudio {
         match self {
             Self::Spec48 {
                 cpu,
@@ -274,7 +283,10 @@ impl Machine {
                 ula.border = bus.border;
                 ula.end_frame();
                 bus.frame_t = 0;
-                std::mem::take(&mut bus.beeper_edges)
+                FrameAudio {
+                    beeper_edges: std::mem::take(&mut bus.beeper_edges),
+                    ay_samples: Vec::new(),
+                }
             }
             Self::Spec128 {
                 cpu,
@@ -284,6 +296,9 @@ impl Machine {
             } => {
                 bus.beeper_edges.clear();
                 bus.frame_t = 0;
+                const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
+                let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
+                let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
                 let mut last_t = cpu.t;
                 while bus.frame_t < FRAME_TSTATES_128 {
                     if Self::try_flash_load_128(cpu, bus, tape) {
@@ -294,7 +309,14 @@ impl Machine {
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
                             Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
+                            bus.ay.advance(irq_t);
                             bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
+                            while ay_samples.len() < AY_SAMPLES
+                                && f64::from(bus.frame_t)
+                                    >= (ay_samples.len() as f64 + 1.0) * t_per_sample
+                            {
+                                ay_samples.push(bus.ay.sample_mono());
+                            }
                             last_t = cpu.t;
                             continue;
                         }
@@ -304,15 +326,28 @@ impl Machine {
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
                     Self::advance_tape_ear(tape, &mut bus.ear, dt);
+                    bus.ay.advance(dt);
                     bus.frame_t += dt;
+                    while ay_samples.len() < AY_SAMPLES
+                        && f64::from(bus.frame_t.min(FRAME_TSTATES_128))
+                            >= (ay_samples.len() as f64 + 1.0) * t_per_sample
+                    {
+                        ay_samples.push(bus.ay.sample_mono());
+                    }
                     if bus.frame_t >= FRAME_TSTATES_128 {
                         break;
                     }
                 }
+                while ay_samples.len() < AY_SAMPLES {
+                    ay_samples.push(bus.ay.sample_mono());
+                }
                 ula.border = bus.border;
                 ula.end_frame();
                 bus.frame_t = 0;
-                std::mem::take(&mut bus.beeper_edges)
+                FrameAudio {
+                    beeper_edges: std::mem::take(&mut bus.beeper_edges),
+                    ay_samples,
+                }
             }
         }
     }
@@ -453,6 +488,7 @@ impl Machine {
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
                         Self::advance_tape_ear(tape, &mut bus.ear, irq_t);
+                        bus.ay.advance(irq_t);
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
                         return;
                     }
@@ -462,6 +498,7 @@ impl Machine {
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
+                bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
             }
         }
@@ -484,6 +521,7 @@ impl Machine {
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(tape, &mut bus.ear, dt);
+                bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
             }
         }
@@ -675,5 +713,37 @@ mod tests {
         assert_eq!(m.read_mem(0x8004), 0x42);
         assert_eq!(m.read_mem(0x8005), 0xc9);
         assert_eq!(m.tape_block(), Some(2));
+    }
+
+    fn rom128() -> Option<Vec<u8>> {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/128/spec128uk.rom");
+        std::fs::read(p).ok()
+    }
+
+    #[test]
+    fn ay_frame_audio_nonzero_when_tone_programmed() {
+        let Some(rom) = rom128() else {
+            eprintln!("skip: roms/128/spec128uk.rom missing");
+            return;
+        };
+        let mut m = Machine::new_128k(&rom).unwrap();
+        // Program AY tone A via ports
+        if let Machine::Spec128 { bus, .. } = &mut m {
+            bus.out_port(0xfffd, 0); // select R0
+            bus.out_port(0xbffd, 16); // fine
+            bus.out_port(0xfffd, 1);
+            bus.out_port(0xbffd, 0); // coarse
+            bus.out_port(0xfffd, 8);
+            bus.out_port(0xbffd, 0x0f); // volume
+            bus.out_port(0xfffd, 7);
+            bus.out_port(0xbffd, 0x38); // tone A only
+        }
+        let audio = m.run_frame();
+        assert!(!audio.ay_samples.is_empty());
+        let energy: f32 = audio.ay_samples.iter().map(|s| s * s).sum();
+        assert!(
+            energy > 0.01,
+            "AY tone should produce frame audio energy, got {energy}"
+        );
     }
 }
