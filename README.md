@@ -38,15 +38,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for Rust practices, TDD expectations, and
 ./scripts/check.sh   # fmt + clippy -D warnings + tests
 ```
 
-## Known limitations
+## Known limitations / follow-ups
 
-Honest gaps after the M0–M4 scaffolding (tracking issues):
-
-- **z80test** — `z80doc` is integrated ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed); keep slow-tests green. `z80full` is optional/`#[ignore]` via `./scripts/fetch_z80test.sh` (see `tests/fixtures/z80test`).
-- **AY audio** — 128K has AY register I/O only; no PSG synthesis or mix with the beeper ([#33](https://github.com/mward-sudo/spec_chum/issues/33)).
-- **Border / beam** — border events still apply coarsely by scanline, not mid-line / per-byte beam ([#34](https://github.com/mward-sudo/spec_chum/issues/34); 128K contention + floating bus already use `T_LINE_128` / `PAPER_START_128`).
-
-Later scope (unchanged): +2A/+3 ([#24](https://github.com/mward-sudo/spec_chum/issues/24)), TZX/RZX/Kempston/disk ([#25](https://github.com/mward-sudo/spec_chum/issues/25)).
+- **z80test** — `z80doc` is integrated ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed); keep slow-tests green. `z80full` is optional/`#[ignore]` via `./scripts/fetch_z80test.sh`.
+- **AY** — mono PSG + beeper mix shipped ([#33](https://github.com/mward-sudo/spec_chum/issues/33)); stereo ACB/ABC pan is a possible follow-up.
+- **Disk** — +3 DSK sector read path is minimal ([#25](https://github.com/mward-sudo/spec_chum/issues/25)); full uPD765 command set / write support can deepen later.
 
 ## License
 

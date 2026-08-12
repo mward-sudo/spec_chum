@@ -53,5 +53,5 @@ Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern)
 
 Before implementing: `gh issue list` / `gh issue view N` for related work. Prefer extending existing issues over duplicates. Link PRs with `Closes #N` / `Refs #N`. Do not close until acceptance criteria are truly met. When work discovers gaps, update or reopen the issue rather than silently diverging. Cursor rule: `.cursor/rules/github-issues.mdc`.
 
-Open accuracy follow-ups (do not treat as closed): [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY synthesis, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam; later [#24](https://github.com/mward-sudo/spec_chum/issues/24)/[#25](https://github.com/mward-sudo/spec_chum/issues/25).
+Recently closed accuracy/feature issues: [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
 
