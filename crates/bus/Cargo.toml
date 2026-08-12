@@ -7,6 +7,7 @@ description = "Spec Chum bus crate"
 
 [dependencies]
 ula = { workspace = true }
+formats = { workspace = true }
 
 [lints]
 workspace = true

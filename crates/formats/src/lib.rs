@@ -1,6 +1,12 @@
-//! Spec Chum formats — SNA and Z80 snapshot loaders.
+//! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK.
 
 #![allow(clippy::pedantic)]
+
+mod dsk;
+mod rzx;
+
+pub use dsk::{DskImage, Plus3Fdc, Sector};
+pub use rzx::{apply_input_byte, RzxFrame, RzxRecording};
 
 use std::path::Path;
 

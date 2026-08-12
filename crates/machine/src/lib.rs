@@ -6,11 +6,51 @@
 #[cfg(all(test, feature = "slow-tests"))]
 mod z80test;
 
-use bus::{Bus128, Bus48, BusPlus3};
-use formats::Snapshot48;
-use tape::{evaluate_ld_bytes_trap, flash_load_block, TapPlayer, TapeTrapResult, LD_BYTES_TRAP_PC};
+use bus::{Bus128, Bus48, BusPlus3, Kempston};
+use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot48};
+use tape::{
+    evaluate_ld_bytes_trap, flash_load_block, TapPlayer, TapeTrapResult, TzxPlayer,
+    LD_BYTES_TRAP_PC,
+};
 use ula::{int_active_48, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48, INT_LENGTH_128};
 use z80::{flag, Cpu, Io, Memory};
+
+/// Inserted tape image (TAP pulse player or TZX pulse player).
+#[derive(Clone, Debug)]
+pub enum TapeDeck {
+    Tap(TapPlayer),
+    Tzx(TzxPlayer),
+}
+
+impl TapeDeck {
+    pub fn advance(&mut self, dt: u32) -> bool {
+        match self {
+            Self::Tap(t) => t.advance(dt),
+            Self::Tzx(t) => t.advance(dt),
+        }
+    }
+
+    #[must_use]
+    pub fn block(&self) -> Option<usize> {
+        match self {
+            Self::Tap(t) => Some(t.block),
+            Self::Tzx(t) => Some(t.block),
+        }
+    }
+
+    pub fn as_tap_mut(&mut self) -> Option<&mut TapPlayer> {
+        match self {
+            Self::Tap(t) => Some(t),
+            Self::Tzx(_) => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RzxPlayer {
+    pub recording: RzxRecording,
+    pub frame: usize,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Model {
@@ -144,19 +184,22 @@ pub enum Machine {
         cpu: Cpu,
         bus: Box<Bus48>,
         ula: Ula48,
-        tape: Option<TapPlayer>,
+        tape: Option<TapeDeck>,
+        rzx: Option<RzxPlayer>,
     },
     Spec128 {
         cpu: Cpu,
         bus: Box<Bus128>,
         ula: Ula48,
-        tape: Option<TapPlayer>,
+        tape: Option<TapeDeck>,
+        rzx: Option<RzxPlayer>,
     },
     SpecPlus3 {
         cpu: Cpu,
         bus: Box<BusPlus3>,
         ula: Ula48,
-        tape: Option<TapPlayer>,
+        tape: Option<TapeDeck>,
+        rzx: Option<RzxPlayer>,
     },
 }
 
@@ -177,6 +220,7 @@ impl Machine {
             bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
+            rzx: None,
         })
     }
 
@@ -188,6 +232,7 @@ impl Machine {
             bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
+            rzx: None,
         })
     }
 
@@ -199,6 +244,7 @@ impl Machine {
             bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
+            rzx: None,
         })
     }
 
@@ -218,19 +264,23 @@ impl Machine {
                 bus,
                 ula,
                 tape,
+                rzx,
             } => {
                 cpu.reset();
                 bus.keyboard.reset();
                 bus.frame_t = 0;
                 bus.beeper_edges.clear();
+                bus.kempston.reset();
                 *ula = Ula48::new();
                 *tape = None;
+                *rzx = None;
             }
             Self::Spec128 {
                 cpu,
                 bus,
                 ula,
                 tape,
+                rzx,
             } => {
                 cpu.reset();
                 bus.keyboard.reset();
@@ -239,14 +289,17 @@ impl Machine {
                 bus.locked = false;
                 bus.beeper_edges.clear();
                 bus.ay.reset();
+                bus.kempston.reset();
                 *ula = Ula48::new();
                 *tape = None;
+                *rzx = None;
             }
             Self::SpecPlus3 {
                 cpu,
                 bus,
                 ula,
                 tape,
+                rzx,
             } => {
                 cpu.reset();
                 bus.keyboard.reset();
@@ -256,8 +309,10 @@ impl Machine {
                 bus.locked = false;
                 bus.beeper_edges.clear();
                 bus.ay.reset();
+                bus.kempston.reset();
                 *ula = Ula48::new();
                 *tape = None;
+                *rzx = None;
             }
         }
     }
@@ -266,7 +321,94 @@ impl Machine {
         match self {
             Self::Spec48 { tape, .. }
             | Self::Spec128 { tape, .. }
-            | Self::SpecPlus3 { tape, .. } => *tape = Some(player),
+            | Self::SpecPlus3 { tape, .. } => *tape = Some(TapeDeck::Tap(player)),
+        }
+    }
+
+    pub fn insert_tzx(&mut self, player: TzxPlayer) {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => *tape = Some(TapeDeck::Tzx(player)),
+        }
+    }
+
+    pub fn insert_rzx(&mut self, recording: RzxRecording) {
+        match self {
+            Self::Spec48 { rzx, .. } | Self::Spec128 { rzx, .. } | Self::SpecPlus3 { rzx, .. } => {
+                *rzx = Some(RzxPlayer {
+                    recording,
+                    frame: 0,
+                })
+            }
+        }
+    }
+
+    pub fn insert_disk(&mut self, image: DskImage) -> Result<(), String> {
+        match self {
+            Self::SpecPlus3 { bus, .. } => {
+                bus.fdc.insert(image);
+                Ok(())
+            }
+            _ => Err("+3 disk requires SpectrumPlus3 model".into()),
+        }
+    }
+
+    pub fn kempston_mut(&mut self) -> &mut Kempston {
+        match self {
+            Self::Spec48 { bus, .. } => &mut bus.kempston,
+            Self::Spec128 { bus, .. } => &mut bus.kempston,
+            Self::SpecPlus3 { bus, .. } => &mut bus.kempston,
+        }
+    }
+
+    fn apply_rzx_frame(&mut self) {
+        let inputs = {
+            let rzx = match self {
+                Self::Spec48 { rzx, .. }
+                | Self::Spec128 { rzx, .. }
+                | Self::SpecPlus3 { rzx, .. } => rzx,
+            };
+            let Some(player) = rzx.as_mut() else {
+                return;
+            };
+            if player.frame >= player.recording.frames.len() {
+                return;
+            }
+            let inputs = player.recording.frames[player.frame].inputs.clone();
+            player.frame += 1;
+            inputs
+        };
+        for byte in inputs {
+            match self {
+                Self::Spec48 { bus, .. } => {
+                    apply_input_byte(byte, &mut bus.keyboard.rows, |v| {
+                        bus.kempston.right = v & 1 != 0;
+                        bus.kempston.left = v & 2 != 0;
+                        bus.kempston.down = v & 4 != 0;
+                        bus.kempston.up = v & 8 != 0;
+                        bus.kempston.fire = v & 0x10 != 0;
+                    });
+                }
+                Self::Spec128 { bus, .. } => {
+                    apply_input_byte(byte, &mut bus.keyboard.rows, |v| {
+                        bus.kempston.right = v & 1 != 0;
+                        bus.kempston.left = v & 2 != 0;
+                        bus.kempston.down = v & 4 != 0;
+                        bus.kempston.up = v & 8 != 0;
+                        bus.kempston.fire = v & 0x10 != 0;
+                    });
+                }
+                Self::SpecPlus3 { bus, .. } => {
+                    apply_input_byte(byte, &mut bus.keyboard.rows, |v| {
+                        bus.kempston.right = v & 1 != 0;
+                        bus.kempston.left = v & 2 != 0;
+                        bus.kempston.down = v & 4 != 0;
+                        bus.kempston.up = v & 8 != 0;
+                        bus.kempston.fire = v & 0x10 != 0;
+                    });
+                }
+            }
         }
     }
 
@@ -276,7 +418,7 @@ impl Machine {
         match self {
             Self::Spec48 { tape, .. }
             | Self::Spec128 { tape, .. }
-            | Self::SpecPlus3 { tape, .. } => tape.as_ref().map(|t| t.block),
+            | Self::SpecPlus3 { tape, .. } => tape.as_ref().and_then(TapeDeck::block),
         }
     }
 
@@ -326,12 +468,14 @@ impl Machine {
 
     /// Run one video frame; returns beeper edges and AY samples for the frame.
     pub fn run_frame(&mut self) -> FrameAudio {
+        self.apply_rzx_frame();
         match self {
             Self::Spec48 {
                 cpu,
                 bus,
                 ula,
                 tape,
+                ..
             } => {
                 bus.beeper_edges.clear();
                 bus.frame_t = 0;
@@ -376,6 +520,7 @@ impl Machine {
                 bus,
                 ula,
                 tape,
+                ..
             } => {
                 bus.beeper_edges.clear();
                 bus.frame_t = 0;
@@ -439,6 +584,7 @@ impl Machine {
                 bus,
                 ula,
                 tape,
+                ..
             } => {
                 bus.beeper_edges.clear();
                 bus.frame_t = 0;
@@ -500,7 +646,7 @@ impl Machine {
         }
     }
 
-    fn advance_tape_ear(tape: &mut Option<TapPlayer>, ear: &mut bool, dt: u32) {
+    fn advance_tape_ear(tape: &mut Option<TapeDeck>, ear: &mut bool, dt: u32) {
         if dt == 0 {
             return;
         }
@@ -520,11 +666,14 @@ impl Machine {
         cpu.regs.pc = u16::from_le_bytes([lo, hi]);
     }
 
-    fn try_flash_load_48(cpu: &mut Cpu, bus: &mut Bus48, tape: &mut Option<TapPlayer>) -> bool {
+    fn try_flash_load_48(cpu: &mut Cpu, bus: &mut Bus48, tape: &mut Option<TapeDeck>) -> bool {
         if cpu.regs.pc != LD_BYTES_TRAP_PC {
             return false;
         }
-        let Some(player) = tape.as_mut() else {
+        let Some(deck) = tape.as_mut() else {
+            return false;
+        };
+        let Some(player) = deck.as_tap_mut() else {
             return false;
         };
         let flag_expected = cpu.regs.a;
@@ -554,11 +703,14 @@ impl Machine {
         }
     }
 
-    fn try_flash_load_128(cpu: &mut Cpu, bus: &mut Bus128, tape: &mut Option<TapPlayer>) -> bool {
+    fn try_flash_load_128(cpu: &mut Cpu, bus: &mut Bus128, tape: &mut Option<TapeDeck>) -> bool {
         if cpu.regs.pc != LD_BYTES_TRAP_PC {
             return false;
         }
-        let Some(player) = tape.as_mut() else {
+        let Some(deck) = tape.as_mut() else {
+            return false;
+        };
+        let Some(player) = deck.as_tap_mut() else {
             return false;
         };
         let flag_expected = cpu.regs.a;
@@ -591,12 +743,15 @@ impl Machine {
     fn try_flash_load_plus3(
         cpu: &mut Cpu,
         bus: &mut BusPlus3,
-        tape: &mut Option<TapPlayer>,
+        tape: &mut Option<TapeDeck>,
     ) -> bool {
         if cpu.regs.pc != LD_BYTES_TRAP_PC {
             return false;
         }
-        let Some(player) = tape.as_mut() else {
+        let Some(deck) = tape.as_mut() else {
+            return false;
+        };
+        let Some(player) = deck.as_tap_mut() else {
             return false;
         };
         let flag_expected = cpu.regs.a;
