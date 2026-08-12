@@ -621,14 +621,13 @@ fn daa(cpu: &mut Cpu) {
     let mut f = cpu.regs.f;
     let n = f & flag::N != 0;
     let mut correction = 0u16;
-    if f & flag::H != 0 || (!n && a & 0x0f > 9) {
+    // Low/high corrections apply regardless of N (N only chooses add vs sub).
+    if f & flag::H != 0 || a & 0x0f > 9 {
         correction |= 0x06;
     }
-    if f & flag::C != 0 || (!n && a > 0x99) {
+    if f & flag::C != 0 || a > 0x99 {
         correction |= 0x60;
         f |= flag::C;
-    } else {
-        f &= !flag::C;
     }
     if n {
         a = a.wrapping_sub(correction);
@@ -1024,7 +1023,7 @@ fn block_cp<M: Memory>(cpu: &mut Cpu, mem: &mut M, inc: bool, repeat: bool) {
     let v = cpu.read_mem(mem, hl);
     cpu.add_t(5);
     let (_, mut f) = sub8(cpu.regs.a, v);
-    f = (f & !(flag::C | flag::PV)) | (cpu.regs.f & flag::C);
+    f = (f & !(flag::C | flag::PV | flag::X | flag::Y)) | (cpu.regs.f & flag::C);
     if inc {
         cpu.regs.set_hl(hl.wrapping_add(1));
     } else {
@@ -1035,16 +1034,13 @@ fn block_cp<M: Memory>(cpu: &mut Cpu, mem: &mut M, inc: bool, repeat: bool) {
     if bc != 0 {
         f |= flag::PV;
     }
-    let n = cpu
-        .regs
-        .a
-        .wrapping_sub(v)
-        .wrapping_sub(u8::from(f & flag::H != 0));
+    let mut n = cpu.regs.a.wrapping_sub(v);
+    if f & flag::H != 0 {
+        n = n.wrapping_sub(1);
+    }
+    f |= n & flag::X;
     if n & 0x02 != 0 {
         f |= flag::Y;
-    }
-    if n & 0x08 != 0 {
-        f |= flag::X;
     }
     cpu.regs.f = f;
     cpu.regs.q = f;
@@ -1063,6 +1059,7 @@ fn block_in<M: Memory, I: Io>(cpu: &mut Cpu, mem: &mut M, io: &mut I, inc: bool,
     let hl = cpu.regs.hl();
     cpu.write_mem(mem, hl, v);
     cpu.regs.b = cpu.regs.b.wrapping_sub(1);
+    let b = cpu.regs.b;
     if inc {
         cpu.regs.set_hl(hl.wrapping_add(1));
         cpu.regs.memptr = bc.wrapping_add(1);
@@ -1070,10 +1067,26 @@ fn block_in<M: Memory, I: Io>(cpu: &mut Cpu, mem: &mut M, io: &mut I, inc: bool,
         cpu.regs.set_hl(hl.wrapping_sub(1));
         cpu.regs.memptr = bc.wrapping_sub(1);
     }
-    // flags approximate
-    cpu.regs.f = sz53(cpu.regs.b) | if parity(cpu.regs.b) { flag::PV } else { 0 };
-    cpu.regs.q = cpu.regs.f;
-    if repeat && cpu.regs.b != 0 {
+    // INI: C+1; IND: C-1 (C from port address before B--).
+    let c_side = if inc {
+        (bc as u8).wrapping_add(1)
+    } else {
+        (bc as u8).wrapping_sub(1)
+    };
+    let k = u16::from(v) + u16::from(c_side);
+    let mut f = sz53(b);
+    if k > 0xff {
+        f |= flag::C | flag::H;
+    }
+    if parity((k as u8 & 7) ^ b) {
+        f |= flag::PV;
+    }
+    if v & 0x80 != 0 {
+        f |= flag::N;
+    }
+    cpu.regs.f = f;
+    cpu.regs.q = f;
+    if repeat && b != 0 {
         cpu.add_t(5);
         cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
     }
@@ -1084,18 +1097,35 @@ fn block_out<M: Memory, I: Io>(cpu: &mut Cpu, mem: &mut M, io: &mut I, inc: bool
     let hl = cpu.regs.hl();
     let v = cpu.read_mem(mem, hl);
     cpu.regs.b = cpu.regs.b.wrapping_sub(1);
+    let b = cpu.regs.b;
     let bc = cpu.regs.bc();
     cpu.out_port(io, bc, v);
-    if inc {
-        cpu.regs.set_hl(hl.wrapping_add(1));
+    let hl2 = if inc {
+        let a = hl.wrapping_add(1);
+        cpu.regs.set_hl(a);
         cpu.regs.memptr = bc.wrapping_add(1);
+        a
     } else {
-        cpu.regs.set_hl(hl.wrapping_sub(1));
+        let a = hl.wrapping_sub(1);
+        cpu.regs.set_hl(a);
         cpu.regs.memptr = bc.wrapping_sub(1);
+        a
+    };
+    // OUTI/OUTD: k = value + L after HL update.
+    let k = u16::from(v) + u16::from(hl2 as u8);
+    let mut f = sz53(b);
+    if k > 0xff {
+        f |= flag::C | flag::H;
     }
-    cpu.regs.f = sz53(cpu.regs.b);
-    cpu.regs.q = cpu.regs.f;
-    if repeat && cpu.regs.b != 0 {
+    if parity((k as u8 & 7) ^ b) {
+        f |= flag::PV;
+    }
+    if v & 0x80 != 0 {
+        f |= flag::N;
+    }
+    cpu.regs.f = f;
+    cpu.regs.q = f;
+    if repeat && b != 0 {
         cpu.add_t(5);
         cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
     }

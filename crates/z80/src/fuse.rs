@@ -11,7 +11,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-use crate::bus::{FlatMem, NullIo};
+use crate::bus::FlatMem;
 use crate::cpu::Cpu;
 
 fn fixtures_dir() -> PathBuf {
@@ -254,10 +254,24 @@ fn parse_expected(path: &std::path::Path) -> Vec<Expected> {
     out
 }
 
+/// Fuse test I/O: IN returns the high byte of the port address.
+#[derive(Clone, Copy, Debug, Default)]
+struct FuseIo;
+
+impl crate::bus::Io for FuseIo {
+    fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
+        ((port >> 8) as u8, 0)
+    }
+
+    fn out_port(&mut self, _port: u16, _value: u8, _t: u64) -> u32 {
+        0
+    }
+}
+
 fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
     let mut cpu = tin.cpu.clone();
     let mut mem = tin.mem.clone();
-    let mut io = NullIo;
+    let mut io = FuseIo;
     let start = cpu.t;
     // Fuse: run until at least `run_tstates` have elapsed (instruction boundaries).
     while cpu.t - start < tin.run_tstates {
@@ -358,53 +372,26 @@ fn fuse_smoke_nop() {
 }
 
 #[test]
-fn fuse_documented_subset() {
+fn fuse_all_vectors() {
     let dir = fixtures_dir();
     let tests = parse_in_file(&dir.join("tests.in"));
     let expected = parse_expected(&dir.join("tests.expected"));
-    // Prefer documented main-set names (no underscore suffix, no dd/fd/cb/ed prefixes in name length>2)
+    assert_eq!(tests.len(), expected.len());
     let mut failed = 0usize;
-    let mut ran = 0usize;
     let mut first_errs = Vec::new();
     for (tin, exp) in tests.iter().zip(expected.iter()) {
         assert_eq!(tin.name, exp.name);
-        if tin.name.contains('_') {
-            continue;
-        }
-        // I/O vectors need event-driven ports; covered later with Fuse event IO.
-        let n = tin.name.as_str();
-        if n == "db"
-            || n == "d3"
-            || n.starts_with("ed4")
-            || n.starts_with("ed5")
-            || n.starts_with("ed6")
-            || n.starts_with("ed7")
-            || n.starts_with("eda1")
-            || n.starts_with("eda9")
-            || n.starts_with("edb1")
-            || n.starts_with("edb9")
-            || n.starts_with("eda2")
-            || n.starts_with("eda3")
-            || n.starts_with("edaa")
-            || n.starts_with("edab")
-            || n.starts_with("edb2")
-            || n.starts_with("edb3")
-            || n.starts_with("edba")
-            || n.starts_with("edbb")
-        {
-            continue;
-        }
-        ran += 1;
         if let Err(e) = run_case(tin, exp) {
             failed += 1;
-            if first_errs.len() < 25 {
+            if first_errs.len() < 40 {
                 first_errs.push(e);
             }
         }
     }
     if failed > 0 {
         panic!(
-            "{failed}/{ran} Fuse tests failed. First errors:\n{}",
+            "{failed}/{} Fuse tests failed. First errors:\n{}",
+            tests.len(),
             first_errs.join("\n")
         );
     }
@@ -425,30 +412,4 @@ fn dd_ld_ixh_smoke() {
     cpu.step(&mut mem, &mut io);
     assert_eq!(cpu.regs.ix(), 0xad40, "IX");
     assert_eq!(cpu.regs.hl(), 0xadea, "HL unchanged");
-}
-
-#[test]
-fn ed70_in_f_smoke() {
-    use crate::bus::{FlatMem, Io};
-    use crate::cpu::Cpu;
-    #[derive(Default)]
-    struct FuseIo;
-    impl Io for FuseIo {
-        fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
-            ((port >> 8) as u8, 0)
-        }
-        fn out_port(&mut self, _port: u16, _value: u8, _t: u64) -> u32 {
-            0
-        }
-    }
-    let mut cpu = Cpu::new();
-    let mut mem = FlatMem::new();
-    let mut io = FuseIo;
-    mem.data[0] = 0xed;
-    mem.data[1] = 0x70;
-    cpu.regs.set_bc(0xf7d6);
-    let t0 = cpu.t;
-    cpu.step(&mut mem, &mut io);
-    assert_eq!(cpu.t - t0, 12, "T");
-    assert_eq!(cpu.regs.memptr, 0xf7d7, "MP");
 }

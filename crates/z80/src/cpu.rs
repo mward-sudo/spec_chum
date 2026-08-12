@@ -42,7 +42,7 @@ impl Cpu {
     }
 
     /// Accept a maskable interrupt if enabled. Returns T-states of ACK sequence, or 0.
-    pub fn interrupt<M: Memory, I: Io>(&mut self, mem: &mut M, _io: &mut I) -> u32 {
+    pub fn interrupt<M: Memory>(&mut self, mem: &mut M) -> u32 {
         if self.interrupt_deferred || !self.regs.iff1 {
             return 0;
         }
@@ -53,7 +53,6 @@ impl Cpu {
 
         match self.regs.im {
             0 => {
-                // Spectrum typically sees RST 38 on bus
                 self.push(mem, self.regs.pc);
                 self.regs.pc = 0x0038;
                 self.regs.memptr = 0x0038;
@@ -68,7 +67,6 @@ impl Cpu {
                 13
             }
             _ => {
-                // IM 2
                 self.push(mem, self.regs.pc);
                 let vec = (u16::from(self.regs.i) << 8) | 0x00ff;
                 let lo = self.read_mem(mem, vec);
