@@ -1,5 +1,7 @@
 # Spec Chum
 
+[![CI](https://github.com/mward-sudo/spec_chum/actions/workflows/ci.yml/badge.svg)](https://github.com/mward-sudo/spec_chum/actions/workflows/ci.yml)
+
 A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust with an egui frontend.
 
 ## Goals
@@ -30,7 +32,11 @@ Source: [spectrumforeveryone/zx-roms](https://github.com/spectrumforeveryone/zx-
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for TDD expectations and the `gh stack` workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for Rust practices, TDD expectations, and the `gh stack` workflow. Agent-oriented notes live in [AGENTS.md](AGENTS.md).
+
+```bash
+./scripts/check.sh   # fmt + clippy -D warnings + tests
+```
 
 ## License
 
