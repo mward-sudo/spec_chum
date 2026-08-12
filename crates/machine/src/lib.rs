@@ -1164,8 +1164,20 @@ mod tests {
         };
         let mut m = Machine::new_plus3(&rom).unwrap();
         assert_eq!(m.model(), Model::SpectrumPlus3);
-        m.run_frame();
-        if let Machine::SpecPlus3 { bus, .. } = &mut m {
+        // Boot long enough for the editor menu to paint (was blank when 7FFD→1FFD).
+        for _ in 0..120 {
+            m.run_frame();
+        }
+        if let Machine::SpecPlus3 { bus, cpu, .. } = &mut m {
+            assert_eq!(bus.page_1ffd & 0x01, 0, "must leave special paging off at menu");
+            let screen_nz = bus.screen_bytes().iter().filter(|&&b| b != 0).count();
+            assert!(
+                screen_nz > 100,
+                "expected menu pixels, got {screen_nz} nonzero (PC={:04X} 7FFD={:02X} 1FFD={:02X})",
+                cpu.regs.pc,
+                bus.page_7ffd,
+                bus.page_1ffd
+            );
             bus.banks[0][0] = 0x5a;
             bus.out_1ffd(0x01);
             assert_eq!(bus.read(0x0000), 0x5a);
