@@ -88,6 +88,22 @@ struct ContentView: View {
                 .accessibilityLabel("Tape progress")
             }
 
+            Toggle("Instant", isOn: $host.instantLoad)
+                .toggleStyle(.checkbox)
+                .help("Flash-load TAP/standard TZX at LD-BYTES (near-instant)")
+
+            Picker("Speed", selection: $host.tapeSpeed) {
+                Text("1x").tag(UInt32(1))
+                Text("2x").tag(UInt32(2))
+                Text("5x").tag(UInt32(5))
+                Text("10x").tag(UInt32(10))
+                Text("20x").tag(UInt32(20))
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 90)
+            .help("EAR bitstream speed when Instant is off (also speeds TZX pulse tapes)")
+            .disabled(host.instantLoad)
+
             Spacer()
 
             Picker("Model", selection: $host.model) {

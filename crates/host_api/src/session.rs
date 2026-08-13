@@ -275,6 +275,24 @@ impl HostSession {
         Ok(())
     }
 
+    #[must_use]
+    pub fn tape_load_options(&self) -> Option<machine::TapeLoadOptions> {
+        self.machine.as_ref().map(Machine::tape_load_options)
+    }
+
+    pub fn set_tape_load_options(
+        &mut self,
+        opts: machine::TapeLoadOptions,
+    ) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.set_tape_load_options(opts);
+        let mode = if opts.flash_load { "instant" } else { "EAR" };
+        self.status = format!("Tape load: {mode}, speed {}x", opts.speed.clamp(1, 64));
+        Ok(())
+    }
+
     /// Set one Spectrum matrix key (`row` 0..7, `bit` 0..4).
     pub fn set_key(&mut self, row: usize, bit: u8, pressed: bool) -> Result<(), HostError> {
         let Some(m) = self.machine.as_mut() else {

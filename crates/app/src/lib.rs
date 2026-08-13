@@ -586,6 +586,29 @@ impl SpecChumApp {
                             self.session.type_load_quotes();
                             ui.close_menu();
                         }
+                        ui.separator();
+                        if let Some(m) = self.session.machine.as_mut() {
+                            let mut opts = m.tape_load_options();
+                            let mut instant = opts.flash_load;
+                            if ui.checkbox(&mut instant, "Instant flash-load").changed() {
+                                opts.flash_load = instant;
+                                m.set_tape_load_options(opts);
+                                self.session.status = if instant {
+                                    "Tape: instant flash-load".into()
+                                } else {
+                                    format!("Tape: EAR load at {}x", opts.speed)
+                                };
+                            }
+                            ui.label("EAR speed:");
+                            for speed in [1u32, 2, 5, 10, 20] {
+                                let selected = opts.speed == speed;
+                                if ui.selectable_label(selected, format!("{speed}x")).clicked() {
+                                    opts.speed = speed;
+                                    m.set_tape_load_options(opts);
+                                    self.session.status = format!("Tape: EAR load at {speed}x");
+                                }
+                            }
+                        }
                     });
                     ui.menu_button("Help", |ui| {
                         ui.label("Spec Chum — from-scratch ZX Spectrum emulator");

@@ -305,6 +305,55 @@ pub extern "C" fn sc_tape_progress(
     0
 }
 
+/// Read tape load options. `flash_load`/`speed` may be null to skip.
+#[no_mangle]
+pub extern "C" fn sc_tape_get_load_options(
+    handle: *mut c_void,
+    flash_load: *mut c_int,
+    speed: *mut c_uint,
+) -> c_int {
+    let Some(s) = session_mut(handle) else {
+        return -1;
+    };
+    let Some(opts) = s.tape_load_options() else {
+        return -1;
+    };
+    // SAFETY: optional out-params from caller.
+    unsafe {
+        if !flash_load.is_null() {
+            *flash_load = i32::from(opts.flash_load);
+        }
+        if !speed.is_null() {
+            *speed = opts.speed;
+        }
+    }
+    0
+}
+
+/// Set instant flash-load and EAR speed multiplier (clamped to 1..=64).
+#[no_mangle]
+pub extern "C" fn sc_tape_set_load_options(
+    handle: *mut c_void,
+    flash_load: c_int,
+    speed: c_uint,
+) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.set_tape_load_options(machine::TapeLoadOptions {
+        flash_load: flash_load != 0,
+        speed,
+    }) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
 /// Pointer to mono f32 PCM from the last `sc_run_frame` (valid until next mutating call).
 #[no_mangle]
 pub extern "C" fn sc_audio_ptr(handle: *mut c_void) -> *const f32 {

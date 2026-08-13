@@ -42,6 +42,9 @@ int sc_tape_progress(void *handle,
                      unsigned int *block_count,
                      unsigned int *pulse_index,
                      unsigned int *pulse_count);
+/* Instant flash-load (1) vs EAR-only (0); speed multiplier 1..64 */
+int sc_tape_get_load_options(void *handle, int *flash_load, unsigned int *speed);
+int sc_tape_set_load_options(void *handle, int flash_load, unsigned int speed);
 
 const float *sc_audio_ptr(void *handle);
 unsigned int sc_audio_frames(void *handle);

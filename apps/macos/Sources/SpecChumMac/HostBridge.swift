@@ -23,6 +23,14 @@ final class HostBridge: ObservableObject {
     @Published private(set) var status: String = "Starting…"
     @Published private(set) var tapePlaying: Bool = false
     @Published private(set) var hasTape: Bool = false
+    /// Instant flash-load when true; EAR bitstream when false.
+    @Published var instantLoad: Bool = true {
+        didSet { pushTapeLoadOptions() }
+    }
+    /// EAR speed multiplier presets (also applied when instant is off).
+    @Published var tapeSpeed: UInt32 = 1 {
+        didSet { pushTapeLoadOptions() }
+    }
     /// 0...1 tape position for ProgressView; nil when no tape.
     @Published private(set) var tapeFraction: Double?
     @Published private(set) var tapeBlockLabel: String = ""
@@ -31,6 +39,7 @@ final class HostBridge: ObservableObject {
             guard let handle, oldValue != model else { return }
             _ = sc_set_model(handle, model.rawValue)
             tryAutoloadRom()
+            pushTapeLoadOptions()
             refreshStatus()
         }
     }
@@ -55,6 +64,7 @@ final class HostBridge: ObservableObject {
         }
         tryAutoloadRom()
         refreshStatus()
+        syncTapeLoadOptionsFromHost()
         let rate = Double(sc_audio_sample_rate(handle))
         audio.ensureStarted(sampleRate: rate > 0 ? rate : 44100)
     }
@@ -183,6 +193,7 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "ROM load failed"
         } else {
+            pushTapeLoadOptions()
             refreshStatus()
         }
     }
@@ -222,6 +233,25 @@ final class HostBridge: ObservableObject {
         _ = sc_tape_rewind(handle)
         refreshStatus()
         tapePlaying = false
+    }
+
+    private var suppressTapeOptsPush = false
+
+    func syncTapeLoadOptionsFromHost() {
+        guard let handle else { return }
+        var flash: Int32 = 1
+        var speed: UInt32 = 1
+        guard sc_tape_get_load_options(handle, &flash, &speed) == 0 else { return }
+        suppressTapeOptsPush = true
+        instantLoad = flash != 0
+        tapeSpeed = max(1, min(speed, 64))
+        suppressTapeOptsPush = false
+    }
+
+    private func pushTapeLoadOptions() {
+        guard let handle, !suppressTapeOptsPush else { return }
+        _ = sc_tape_set_load_options(handle, instantLoad ? 1 : 0, max(1, min(tapeSpeed, 64)))
+        refreshStatus()
     }
 
     func reset() {
