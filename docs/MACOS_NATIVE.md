@@ -52,7 +52,19 @@ Insert starts **paused**. Enter the loader first (48K: `LOAD ""` / Type LOAD; 12
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm flash-load / EAR. Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 
-Standard-speed TZX is converted to TAP for flash-load. Flash-load is near-instant (little border activity); EAR-driven loads still produce border stripes and load tones via the EAR∥beeper speaker mix.
+Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (default) is near-instant (little border activity). Turn Instant off for authentic EAR border stripes / load tones; use the **Speed** control (`1x`…`20x`) to turbo the EAR bitstream. Options: Mac toolbar Instant checkbox + Speed menu; egui **Tape** menu; `sc_tape_set_load_options`.
+
+### Verify on Mac 48K
+
+1. `./scripts/fetch_roms.sh` then `./scripts/run_macos_app.sh`
+2. Model **48K**. Open `tests/fixtures/tape/attr_mark.tap` (or `print_ok.tap` / `minimal_code.tap`).
+3. Leave **Instant** on. Type `LOAD ""` + Enter (or use egui Type LOAD). Press **Play**.
+4. Expect program name in the border/ROM print path, then a quick data load. For `attr_mark.tap`, `RANDOMIZE USR 32768` should paint the top-left attribute.
+5. Optional: local Boggit TZX (not in git) — same flow; first header should show `BOGGIT pt1`. Later custom-loader blocks (`flag 0xC8`) need Instant off / EAR (or game’s own loader).
+
+### Experience ~20s load
+
+Abbreviated “feel of loading” that always finishes in about 20 seconds is tracked separately (follow-up to #81); ship Instant + Speed first.
 
 ## Keyboard (Mac native shell)
 

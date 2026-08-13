@@ -92,6 +92,32 @@ impl TapeDeck {
     }
 }
 
+/// User controls for tape loading speed / instant flash-load.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TapeLoadOptions {
+    /// When true, TAP decks trap at LD-BYTES and poke bytes immediately.
+    pub flash_load: bool,
+    /// EAR bitstream speed multiplier (`1` = realtime). Clamped to `1..=64`.
+    pub speed: u32,
+}
+
+impl Default for TapeLoadOptions {
+    fn default() -> Self {
+        Self {
+            flash_load: true,
+            speed: 1,
+        }
+    }
+}
+
+impl TapeLoadOptions {
+    #[must_use]
+    pub fn with_speed(mut self, speed: u32) -> Self {
+        self.speed = speed.clamp(1, 64);
+        self
+    }
+}
+
 /// Tape position for UI progress (block + pulse within the current schedule).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TapeProgress {
@@ -257,6 +283,7 @@ pub enum Machine {
         bus: Box<Bus48>,
         ula: Ula48,
         tape: Option<TapeDeck>,
+        tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
     },
     Spec128 {
@@ -264,6 +291,7 @@ pub enum Machine {
         bus: Box<Bus128>,
         ula: Ula48,
         tape: Option<TapeDeck>,
+        tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
     },
     SpecPlus3 {
@@ -271,6 +299,7 @@ pub enum Machine {
         bus: Box<BusPlus3>,
         ula: Ula48,
         tape: Option<TapeDeck>,
+        tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
     },
 }
@@ -292,6 +321,7 @@ impl Machine {
             bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
+            tape_opts: TapeLoadOptions::default(),
             rzx: None,
         })
     }
@@ -304,6 +334,7 @@ impl Machine {
             bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
+            tape_opts: TapeLoadOptions::default(),
             rzx: None,
         })
     }
@@ -316,6 +347,7 @@ impl Machine {
             bus: Box::new(bus),
             ula: Ula48::new(),
             tape: None,
+            tape_opts: TapeLoadOptions::default(),
             rzx: None,
         })
     }
@@ -337,6 +369,7 @@ impl Machine {
                 ula,
                 tape,
                 rzx,
+                ..
             } => {
                 cpu.reset();
                 bus.keyboard.reset();
@@ -353,6 +386,7 @@ impl Machine {
                 ula,
                 tape,
                 rzx,
+                ..
             } => {
                 cpu.reset();
                 bus.keyboard.reset();
@@ -372,6 +406,7 @@ impl Machine {
                 ula,
                 tape,
                 rzx,
+                ..
             } => {
                 cpu.reset();
                 bus.keyboard.reset();
@@ -386,6 +421,27 @@ impl Machine {
                 *tape = None;
                 *rzx = None;
             }
+        }
+    }
+
+    #[must_use]
+    pub fn tape_load_options(&self) -> TapeLoadOptions {
+        match self {
+            Self::Spec48 { tape_opts, .. }
+            | Self::Spec128 { tape_opts, .. }
+            | Self::SpecPlus3 { tape_opts, .. } => *tape_opts,
+        }
+    }
+
+    pub fn set_tape_load_options(&mut self, opts: TapeLoadOptions) {
+        let opts = TapeLoadOptions {
+            flash_load: opts.flash_load,
+            speed: opts.speed.clamp(1, 64),
+        };
+        match self {
+            Self::Spec48 { tape_opts, .. }
+            | Self::Spec128 { tape_opts, .. }
+            | Self::SpecPlus3 { tape_opts, .. } => *tape_opts = opts,
         }
     }
 
@@ -606,6 +662,7 @@ impl Machine {
                 bus,
                 ula,
                 tape,
+                tape_opts,
                 ..
             } => {
                 bus.beeper_edges.clear();
@@ -623,7 +680,7 @@ impl Machine {
                         last_t = cpu.t;
                         continue;
                     }
-                    if Self::try_flash_load_48(cpu, bus, tape) {
+                    if tape_opts.flash_load && Self::try_flash_load_48(cpu, bus, tape) {
                         continue;
                     }
                     if int_active_48(bus.frame_t) {
@@ -637,6 +694,7 @@ impl Machine {
                                 &mut bus.beeper_edges,
                                 bus.frame_t,
                                 irq_t,
+                                tape_opts.speed,
                             );
                             bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_48;
                             last_t = cpu.t;
@@ -654,6 +712,7 @@ impl Machine {
                         &mut bus.beeper_edges,
                         bus.frame_t,
                         dt,
+                        tape_opts.speed,
                     );
                     bus.frame_t += dt;
                     if bus.frame_t >= FRAME_TSTATES_48 {
@@ -672,6 +731,7 @@ impl Machine {
                 bus,
                 ula,
                 tape,
+                tape_opts,
                 ..
             } => {
                 bus.beeper_edges.clear();
@@ -692,7 +752,7 @@ impl Machine {
                         last_t = cpu.t;
                         continue;
                     }
-                    if Self::try_flash_load_128(cpu, bus, tape) {
+                    if tape_opts.flash_load && Self::try_flash_load_128(cpu, bus, tape) {
                         continue;
                     }
                     if bus.frame_t < INT_LENGTH_128 {
@@ -706,6 +766,7 @@ impl Machine {
                                 &mut bus.beeper_edges,
                                 bus.frame_t,
                                 irq_t,
+                                tape_opts.speed,
                             );
                             bus.ay.advance(irq_t);
                             bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -730,6 +791,7 @@ impl Machine {
                         &mut bus.beeper_edges,
                         bus.frame_t,
                         dt,
+                        tape_opts.speed,
                     );
                     bus.ay.advance(dt);
                     bus.frame_t += dt;
@@ -757,6 +819,7 @@ impl Machine {
                 bus,
                 ula,
                 tape,
+                tape_opts,
                 ..
             } => {
                 bus.beeper_edges.clear();
@@ -777,7 +840,7 @@ impl Machine {
                         last_t = cpu.t;
                         continue;
                     }
-                    if Self::try_flash_load_plus3(cpu, bus, tape) {
+                    if tape_opts.flash_load && Self::try_flash_load_plus3(cpu, bus, tape) {
                         continue;
                     }
                     if bus.frame_t < INT_LENGTH_128 {
@@ -791,6 +854,7 @@ impl Machine {
                                 &mut bus.beeper_edges,
                                 bus.frame_t,
                                 irq_t,
+                                tape_opts.speed,
                             );
                             bus.ay.advance(irq_t);
                             bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -815,6 +879,7 @@ impl Machine {
                         &mut bus.beeper_edges,
                         bus.frame_t,
                         dt,
+                        tape_opts.speed,
                     );
                     bus.ay.advance(dt);
                     bus.frame_t += dt;
@@ -847,6 +912,7 @@ impl Machine {
         edges: &mut Vec<(u32, bool)>,
         frame_t: u32,
         dt: u32,
+        speed: u32,
     ) {
         if dt == 0 {
             return;
@@ -858,7 +924,8 @@ impl Machine {
         if !t.playing() {
             return;
         }
-        let new_ear = t.advance(dt);
+        let advance_dt = dt.saturating_mul(speed.max(1));
+        let new_ear = t.advance(advance_dt);
         if new_ear != *ear {
             *ear = new_ear;
             let level = beeper || new_ear;
@@ -895,8 +962,9 @@ impl Machine {
         let Some(player) = deck.as_tap_mut() else {
             return false;
         };
-        let flag_expected = cpu.regs.a;
-        let load = cpu.regs.f & flag::C != 0;
+        // ROM did `EX AF,AF'` before 0x056C — flag + load/verify carry are in A′/F′.
+        let flag_expected = cpu.regs.a_;
+        let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
         let len = cpu.regs.de();
         let sp = cpu.regs.sp;
@@ -932,8 +1000,8 @@ impl Machine {
         let Some(player) = deck.as_tap_mut() else {
             return false;
         };
-        let flag_expected = cpu.regs.a;
-        let load = cpu.regs.f & flag::C != 0;
+        let flag_expected = cpu.regs.a_;
+        let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
         let len = cpu.regs.de();
         let sp = cpu.regs.sp;
@@ -973,8 +1041,8 @@ impl Machine {
         let Some(player) = deck.as_tap_mut() else {
             return false;
         };
-        let flag_expected = cpu.regs.a;
-        let load = cpu.regs.f & flag::C != 0;
+        let flag_expected = cpu.regs.a_;
+        let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
         let len = cpu.regs.de();
         let sp = cpu.regs.sp;
@@ -1019,7 +1087,13 @@ impl Machine {
     /// One machine step: flash-load trap, optional IRQ, or one CPU instruction.
     pub fn step_once(&mut self) {
         match self {
-            Self::Spec48 { cpu, bus, tape, .. } => {
+            Self::Spec48 {
+                cpu,
+                bus,
+                tape,
+                tape_opts,
+                ..
+            } => {
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -1029,12 +1103,13 @@ impl Machine {
                         &mut bus.beeper_edges,
                         bus.frame_t,
                         HOLD_T,
+                        tape_opts.speed,
                     );
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_48;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
                 }
-                if Self::try_flash_load_48(cpu, bus, tape) {
+                if tape_opts.flash_load && Self::try_flash_load_48(cpu, bus, tape) {
                     return;
                 }
                 if int_active_48(bus.frame_t) {
@@ -1048,6 +1123,7 @@ impl Machine {
                             &mut bus.beeper_edges,
                             bus.frame_t,
                             irq_t,
+                            tape_opts.speed,
                         );
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_48;
                         return;
@@ -1064,10 +1140,17 @@ impl Machine {
                     &mut bus.beeper_edges,
                     bus.frame_t,
                     dt,
+                    tape_opts.speed,
                 );
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_48;
             }
-            Self::Spec128 { cpu, bus, tape, .. } => {
+            Self::Spec128 {
+                cpu,
+                bus,
+                tape,
+                tape_opts,
+                ..
+            } => {
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -1077,13 +1160,14 @@ impl Machine {
                         &mut bus.beeper_edges,
                         bus.frame_t,
                         HOLD_T,
+                        tape_opts.speed,
                     );
                     bus.ay.advance(HOLD_T);
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_128;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
                 }
-                if Self::try_flash_load_128(cpu, bus, tape) {
+                if tape_opts.flash_load && Self::try_flash_load_128(cpu, bus, tape) {
                     return;
                 }
                 if bus.frame_t < INT_LENGTH_128 {
@@ -1097,6 +1181,7 @@ impl Machine {
                             &mut bus.beeper_edges,
                             bus.frame_t,
                             irq_t,
+                            tape_opts.speed,
                         );
                         bus.ay.advance(irq_t);
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -1114,11 +1199,18 @@ impl Machine {
                     &mut bus.beeper_edges,
                     bus.frame_t,
                     dt,
+                    tape_opts.speed,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
             }
-            Self::SpecPlus3 { cpu, bus, tape, .. } => {
+            Self::SpecPlus3 {
+                cpu,
+                bus,
+                tape,
+                tape_opts,
+                ..
+            } => {
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -1128,13 +1220,14 @@ impl Machine {
                         &mut bus.beeper_edges,
                         bus.frame_t,
                         HOLD_T,
+                        tape_opts.speed,
                     );
                     bus.ay.advance(HOLD_T);
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_128;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
                 }
-                if Self::try_flash_load_plus3(cpu, bus, tape) {
+                if tape_opts.flash_load && Self::try_flash_load_plus3(cpu, bus, tape) {
                     return;
                 }
                 if bus.frame_t < INT_LENGTH_128 {
@@ -1148,6 +1241,7 @@ impl Machine {
                             &mut bus.beeper_edges,
                             bus.frame_t,
                             irq_t,
+                            tape_opts.speed,
                         );
                         bus.ay.advance(irq_t);
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -1165,6 +1259,7 @@ impl Machine {
                     &mut bus.beeper_edges,
                     bus.frame_t,
                     dt,
+                    tape_opts.speed,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -1175,7 +1270,13 @@ impl Machine {
     /// One CPU instruction without IRQ or tape flash-load traps (for hosted tests).
     pub fn step_cpu_only(&mut self) {
         match self {
-            Self::Spec48 { cpu, bus, tape, .. } => {
+            Self::Spec48 {
+                cpu,
+                bus,
+                tape,
+                tape_opts,
+                ..
+            } => {
                 let last_t = cpu.t;
                 let mut mio = MemIo48 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
@@ -1187,10 +1288,17 @@ impl Machine {
                     &mut bus.beeper_edges,
                     bus.frame_t,
                     dt,
+                    tape_opts.speed,
                 );
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_48;
             }
-            Self::Spec128 { cpu, bus, tape, .. } => {
+            Self::Spec128 {
+                cpu,
+                bus,
+                tape,
+                tape_opts,
+                ..
+            } => {
                 let last_t = cpu.t;
                 let mut mio = MemIo128 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
@@ -1202,11 +1310,18 @@ impl Machine {
                     &mut bus.beeper_edges,
                     bus.frame_t,
                     dt,
+                    tape_opts.speed,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
             }
-            Self::SpecPlus3 { cpu, bus, tape, .. } => {
+            Self::SpecPlus3 {
+                cpu,
+                bus,
+                tape,
+                tape_opts,
+                ..
+            } => {
                 let last_t = cpu.t;
                 let mut mio = MemIoPlus3 { bus: bus.as_mut() };
                 cpu.step(&mut mio);
@@ -1218,6 +1333,7 @@ impl Machine {
                     &mut bus.beeper_edges,
                     bus.frame_t,
                     dt,
+                    tape_opts.speed,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -1454,8 +1570,11 @@ mod tests {
         m.write_mem(0x5f00, (ret & 0xff) as u8);
         m.write_mem(0x5f01, (ret >> 8) as u8);
         m.cpu_mut().regs.pc = LD_BYTES_TRAP_PC;
-        m.cpu_mut().regs.a = 0xff;
-        m.cpu_mut().regs.f |= flag::C;
+        // Mimic ROM after EX AF,AF': flag + carry live in A′/F′; A is dirty.
+        m.cpu_mut().regs.a = 0x0f;
+        m.cpu_mut().regs.f = 0;
+        m.cpu_mut().regs.a_ = 0xff;
+        m.cpu_mut().regs.f_ = flag::C;
         m.cpu_mut().regs.set_ix(0x8000);
         m.cpu_mut().regs.set_de((data.len() - 2) as u16);
 
@@ -1492,8 +1611,10 @@ mod tests {
         m.write_mem(0x5f00, (ret & 0xff) as u8);
         m.write_mem(0x5f01, (ret >> 8) as u8);
         m.cpu_mut().regs.pc = LD_BYTES_TRAP_PC;
-        m.cpu_mut().regs.a = 0x00; // header flag
-        m.cpu_mut().regs.f |= flag::C;
+        m.cpu_mut().regs.a = 0x0f;
+        m.cpu_mut().regs.f = 0;
+        m.cpu_mut().regs.a_ = 0x00; // header flag in A′
+        m.cpu_mut().regs.f_ = flag::C;
         m.cpu_mut().regs.set_ix(0x5c00);
         m.cpu_mut().regs.set_de((header.len() - 2) as u16);
         if let Machine::Spec48 { bus, .. } = &mut m {
@@ -1550,6 +1671,206 @@ mod tests {
             !audio.beeper_edges.is_empty(),
             "EAR pilot should produce speaker edges for load tones"
         );
+    }
+
+    #[test]
+    fn rom_ld_bytes_entry_flash_loads_via_shadow_af() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage::load(&fixture_tap()).expect("fixture");
+        let header = img.blocks[0].clone();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+
+        // Call ROM LD-BYTES (0x0556) with flag in A and load carry — ROM will EX AF,AF'
+        // before the 0x056C trap; flash-load must read A′/F′.
+        let ret = 0x7000u16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.a = 0x00;
+        m.cpu_mut().regs.f = flag::C;
+        m.cpu_mut().regs.set_ix(0x5c00);
+        m.cpu_mut().regs.set_de(17);
+        m.cpu_mut().regs.pc = 0x0556;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+
+        for _ in 0..256 {
+            m.step_once();
+            if m.cpu().regs.pc == ret {
+                break;
+            }
+        }
+        assert_eq!(m.cpu().regs.pc, ret, "LD-BYTES should return via SA/LD-RET");
+        assert_eq!(m.cpu().regs.f & flag::C, flag::C, "carry set on success");
+        // Filename in header payload starts at offset 1 (type) + 1… name at IX+1
+        assert_eq!(m.read_mem(0x5c00), header[1], "type byte");
+        assert_eq!(m.read_mem(0x5c01), b't');
+        assert_eq!(m.read_mem(0x5c02), b'e');
+        assert_eq!(m.tape_block(), Some(1));
+    }
+
+    #[test]
+    fn attr_mark_fixture_flash_loads_code_bytes() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark");
+        let data = img.blocks[1].clone();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        let mut player = TapPlayer::new(img);
+        player.consume_block();
+        m.insert_tape(player);
+        m.set_tape_playing(true);
+
+        let ret = 0x1234u16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.pc = LD_BYTES_TRAP_PC;
+        m.cpu_mut().regs.a = 0x0f;
+        m.cpu_mut().regs.a_ = 0xff;
+        m.cpu_mut().regs.f_ = flag::C;
+        m.cpu_mut().regs.set_ix(0x8000);
+        m.cpu_mut().regs.set_de((data.len() - 2) as u16);
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        m.step_once();
+        assert_eq!(m.cpu().regs.pc, ret);
+        assert_eq!(m.read_mem(0x8000), 0x21);
+        assert_eq!(m.read_mem(0x8001), 0x00);
+        assert_eq!(m.read_mem(0x8002), 0x58);
+        assert_eq!(m.read_mem(0x8003), 0x36);
+        assert_eq!(m.read_mem(0x8004), 0xd7);
+        assert_eq!(m.read_mem(0x8005), 0xc9);
+    }
+
+    #[test]
+    fn flash_load_can_be_disabled_for_ear_path() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage::load(&fixture_tap()).expect("fixture");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        m.cpu_mut().regs.pc = LD_BYTES_TRAP_PC;
+        m.cpu_mut().regs.a_ = 0x00;
+        m.cpu_mut().regs.f_ = flag::C;
+        m.cpu_mut().regs.set_de(17);
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, 0x00);
+        m.write_mem(0x5f01, 0x70);
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        m.step_once();
+        // Without flash-load, ROM proceeds into edge-detect (not an instant RET).
+        assert_ne!(m.cpu().regs.pc, 0x7000);
+        assert_eq!(
+            m.tape_block(),
+            Some(0),
+            "EAR path should not consume via trap"
+        );
+    }
+
+    #[test]
+    fn tape_speed_multiplier_advances_pulses_faster() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage::load(&fixture_tap()).expect("fixture");
+        let mut slow = Machine::new_48k(&rom).unwrap();
+        let mut fast = Machine::new_48k(&rom).unwrap();
+        slow.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
+        fast.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 10,
+        });
+        slow.insert_tape(TapPlayer::new(img.clone()));
+        fast.insert_tape(TapPlayer::new(img));
+        slow.set_tape_playing(true);
+        fast.set_tape_playing(true);
+        for _ in 0..3 {
+            let _ = slow.run_frame();
+            let _ = fast.run_frame();
+        }
+        let sp = slow.tape_progress().unwrap();
+        let fp = fast.tape_progress().unwrap();
+        assert!(
+            fp.pulse_index > sp.pulse_index || fp.block_index > sp.block_index,
+            "10x speed should advance further (slow pulse {}/{}, fast {}/{})",
+            sp.pulse_index,
+            sp.block_index,
+            fp.pulse_index,
+            fp.block_index
+        );
+    }
+
+    #[test]
+    fn boggit_header_flash_loads_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let boggit = PathBuf::from("/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx");
+        if !boggit.is_file() {
+            eprintln!("skip: local Boggit TZX not present");
+            return;
+        }
+        let data = std::fs::read(&boggit).expect("read boggit");
+        assert!(
+            tape::TzxPlayer::is_standard_speed_only(&data),
+            "Boggit side 1 should convert to TAP"
+        );
+        let img = tape::TzxPlayer::to_tap_image(&data).expect("to tap");
+        let header = img.blocks[0].clone();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+
+        let ret = 0x7000u16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.a = 0x00;
+        m.cpu_mut().regs.f = flag::C;
+        m.cpu_mut().regs.set_ix(0x5c00);
+        m.cpu_mut().regs.set_de(17);
+        m.cpu_mut().regs.pc = 0x0556;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        for _ in 0..256 {
+            m.step_once();
+            if m.cpu().regs.pc == ret {
+                break;
+            }
+        }
+        assert_eq!(m.cpu().regs.pc, ret);
+        assert_eq!(m.read_mem(0x5c00), header[1]);
+        // "BOGGIT pt1"
+        assert_eq!(m.read_mem(0x5c01), b'B');
+        assert_eq!(m.read_mem(0x5c02), b'O');
+        assert_eq!(m.read_mem(0x5c06), b'T');
     }
 
     fn rom128() -> Option<Vec<u8>> {

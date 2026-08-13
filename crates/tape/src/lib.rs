@@ -246,8 +246,13 @@ pub enum TapeTrapResult {
 /// The trap is ignored while the deck is paused (`playing == false`) so Tape → Play is required
 /// before flash-load or EAR bitstream progress.
 ///
+/// Blocks whose flag byte does not match `flag_expected` are skipped (ROM keeps searching).
+///
 /// On `Success` / `Failure`, the player has already consumed (or not) the block as appropriate;
 /// the CPU must still perform a ROM-compatible return (RET) and flag update.
+///
+/// **Register note:** the 48K ROM executes `EX AF,AF'` before [`LD_BYTES_TRAP_PC`], so callers
+/// must pass the expected flag / load-vs-verify carry from **A′ / F′**, not A / F.
 #[must_use]
 pub fn evaluate_ld_bytes_trap(
     pc: u16,
@@ -263,30 +268,30 @@ pub fn evaluate_ld_bytes_trap(
     if !player.playing {
         return TapeTrapResult::Ignored;
     }
-    let Some(block) = player.current_block_bytes() else {
-        return TapeTrapResult::Failure;
-    };
-    if block.is_empty() || block[0] != flag_expected {
-        return TapeTrapResult::Failure;
-    }
-    // Block is flag + `len` data bytes + checksum
-    if block.len() != usize::from(len) + 2 {
-        return TapeTrapResult::Failure;
-    }
-    let data = &block[1..block.len() - 1];
-    let checksum = block[block.len() - 1];
-    if tap_checksum(&block[..block.len() - 1]) != checksum {
-        return TapeTrapResult::Failure;
-    }
-    if load {
-        // Caller writes memory using Success { addr, len }
-        let _ = data;
+    loop {
+        let Some(block) = player.current_block_bytes() else {
+            return TapeTrapResult::Failure;
+        };
+        if block.is_empty() {
+            player.consume_block();
+            continue;
+        }
+        if block[0] != flag_expected {
+            // Wrong flag: skip and keep searching (authentic LD-BYTES behaviour).
+            player.consume_block();
+            continue;
+        }
+        // Block is flag + `len` data bytes + checksum
+        if block.len() != usize::from(len) + 2 {
+            return TapeTrapResult::Failure;
+        }
+        let checksum = block[block.len() - 1];
+        if tap_checksum(&block[..block.len() - 1]) != checksum {
+            return TapeTrapResult::Failure;
+        }
+        let _ = load;
         player.consume_block();
-        TapeTrapResult::Success { addr, len }
-    } else {
-        // Verify path: caller compares; we only check length/checksum here.
-        player.consume_block();
-        TapeTrapResult::Success { addr, len }
+        return TapeTrapResult::Success { addr, len };
     }
 }
 
@@ -414,6 +419,30 @@ mod tests {
         );
         assert_eq!(p.block, 1);
         assert!(p.finished() || p.current_block_bytes().is_none());
+    }
+
+    #[test]
+    fn ld_bytes_trap_skips_wrong_flag_then_loads() {
+        let data = vec![0xff, 0x42, 0xff ^ 0x42];
+        let header = {
+            let mut h = vec![0x00, 0x11];
+            h.push(tap_checksum(&h));
+            h
+        };
+        let img = TapImage {
+            blocks: vec![data, header.clone()],
+        };
+        let mut p = TapPlayer::new(img);
+        // Expecting header flag 0 — first block is data, should be skipped.
+        let r = evaluate_ld_bytes_trap(LD_BYTES_TRAP_PC, 0x00, true, 0x5c00, 1, &mut p);
+        assert_eq!(
+            r,
+            TapeTrapResult::Success {
+                addr: 0x5c00,
+                len: 1
+            }
+        );
+        assert_eq!(p.block, 2);
     }
 
     #[test]
