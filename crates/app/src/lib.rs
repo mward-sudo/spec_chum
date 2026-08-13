@@ -38,22 +38,46 @@ struct KeyScript {
 }
 
 impl KeyScript {
-    /// 48K keyword mode: J (`LOAD`) then `""` then Enter.
+    /// Frames a key must stay down / gaps between chords for 48K ROM debounce.
+    /// Shorter (6/3) drops the second `"` so `LOAD ""` never reaches LD-BYTES (#85).
+    const PRESS: u32 = 10;
+    const GAP: u32 = 5;
+
+    /// 48K keyword mode: J (`LOAD`) then `""` then Enter (PROGRAM tapes).
     fn load_quotes_48k() -> Self {
+        Self::load_quotes_48k_inner(false)
+    }
+
+    /// 48K: `LOAD "" CODE` Enter (CODE tapes such as `attr_mark.tap`).
+    fn load_quotes_code_48k() -> Self {
+        Self::load_quotes_48k_inner(true)
+    }
+
+    fn load_quotes_48k_inner(with_code: bool) -> Self {
         let j = vec![(6, 3)];
         let quote = vec![keymap::SYM, (5, 0)];
+        let extend = vec![keymap::CAPS, keymap::SYM];
+        let code_i = vec![(5, 2)]; // I in E mode → CODE
         let enter = vec![(6, 0)];
         let gap = Vec::new();
+        let mut steps = vec![
+            (j, Self::PRESS),
+            (gap.clone(), Self::GAP),
+            (quote.clone(), Self::PRESS),
+            (gap.clone(), Self::GAP),
+            (quote, Self::PRESS),
+            (gap.clone(), Self::GAP),
+        ];
+        if with_code {
+            steps.push((extend, Self::PRESS));
+            steps.push((gap.clone(), Self::GAP));
+            steps.push((code_i, Self::PRESS));
+            steps.push((gap.clone(), Self::GAP));
+        }
+        steps.push((enter, Self::PRESS));
+        steps.push((gap, 15));
         Self {
-            steps: vec![
-                (j, 6),
-                (gap.clone(), 3),
-                (quote.clone(), 6),
-                (gap.clone(), 3),
-                (quote, 6),
-                (gap, 3),
-                (enter, 6),
-            ],
+            steps,
             step_i: 0,
             frames_left: 0,
         }
@@ -237,13 +261,29 @@ impl EmulatorSession {
         }
     }
 
-    /// Queue `LOAD ""` + Enter for 48K keyword mode; starts tape after a short delay via Play separately.
+    /// Queue `LOAD ""` + Enter for 48K keyword mode; press Play separately when LD-BYTES waits.
     pub fn type_load_quotes(&mut self) {
+        self.type_load_quotes_inner(false);
+    }
+
+    /// Queue `LOAD "" CODE` + Enter (48K) for CODE blocks.
+    pub fn type_load_quotes_code(&mut self) {
+        self.type_load_quotes_inner(true);
+    }
+
+    fn type_load_quotes_inner(&mut self, with_code: bool) {
         match self.model {
             Model::Spectrum48 => {
-                self.key_script = Some(KeyScript::load_quotes_48k());
-                self.status =
-                    "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into();
+                self.key_script = Some(if with_code {
+                    KeyScript::load_quotes_code_48k()
+                } else {
+                    KeyScript::load_quotes_48k()
+                });
+                self.status = if with_code {
+                    "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
+                } else {
+                    "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
+                };
             }
             Model::Spectrum128 | Model::SpectrumPlus3 => {
                 self.status =
@@ -584,6 +624,10 @@ impl SpecChumApp {
                         }
                         if ui.button("Type LOAD \"\" (48K)").clicked() {
                             self.session.type_load_quotes();
+                            ui.close_menu();
+                        }
+                        if ui.button("Type LOAD \"\" CODE (48K)").clicked() {
+                            self.session.type_load_quotes_code();
                             ui.close_menu();
                         }
                         ui.separator();
@@ -928,10 +972,31 @@ mod tests {
         assert!(session.machine.as_ref().unwrap().has_tape());
         session.type_load_quotes();
         assert!(session.key_script.is_some());
-        for _ in 0..40 {
-            let _ = session.tick_key_script();
+        // PRESS/GAP timings need more than 40 frames for the full script.
+        for _ in 0..200 {
+            if !session.tick_key_script() {
+                break;
+            }
         }
         assert!(session.key_script.is_none(), "script should finish");
+    }
+
+    #[test]
+    fn type_load_quotes_code_script_finishes() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        session.type_load_quotes_code();
+        assert!(session.key_script.is_some());
+        for _ in 0..200 {
+            if !session.tick_key_script() {
+                break;
+            }
+        }
+        assert!(session.key_script.is_none(), "CODE script should finish");
     }
 
     #[test]

@@ -2034,6 +2034,59 @@ mod tests {
         assert_eq!(m.read_mem(0x5c06), b'T');
     }
 
+    /// Optional local e2e: scripted `LOAD ""` + Play flash-loads Boggit PROGRAM header.
+    /// Set `SPEC_CHUM_BOGGIT_TZX` (do not commit the TZX).
+    #[test]
+    fn boggit_load_quotes_flash_loads_header_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let Some(boggit) = std::env::var_os("SPEC_CHUM_BOGGIT_TZX").map(PathBuf::from) else {
+            eprintln!("skip: set SPEC_CHUM_BOGGIT_TZX for Boggit LOAD \"\" e2e");
+            return;
+        };
+        if !boggit.is_file() {
+            eprintln!("skip: SPEC_CHUM_BOGGIT_TZX not a file ({boggit:?})");
+            return;
+        }
+        let data = std::fs::read(&boggit).expect("read boggit");
+        let img = tape::TzxPlayer::to_tap_image(&data).expect("to tap");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
+        m.insert_tape(TapPlayer::new(img));
+        for _ in 0..200 {
+            let _ = m.run_frame();
+        }
+        type_load_48k(&mut m, false);
+        assert_eq!(m.cpu().regs.pc, LD_BYTES_TRAP_PC);
+        m.set_tape_playing(true);
+        let mut progressed = false;
+        for _ in 0..200 {
+            let _ = m.run_frame();
+            let block = m.tape_block();
+            // Header (+ follow-on blocks) consumed, or PC left ROM into the loader.
+            if block.is_some_and(|b| b >= 1) || m.cpu().regs.pc >= 0x4000 {
+                progressed = true;
+                break;
+            }
+        }
+        assert!(
+            progressed,
+            "Boggit LOAD \"\" should flash-load past the first block (PC={:04X} block={:?})",
+            m.cpu().regs.pc,
+            m.tape_block()
+        );
+        eprintln!(
+            "Boggit LOAD \"\" progressed: PC={:04X} block={:?}",
+            m.cpu().regs.pc,
+            m.tape_block()
+        );
+    }
+
     fn rom128() -> Option<Vec<u8>> {
         let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/128/spec128uk.rom");
         std::fs::read(p).ok()
@@ -2109,8 +2162,45 @@ mod tests {
         }
     }
 
-    /// Shared LOAD "" harness body. Returns whether CODE bytes landed at 0x8000.
-    /// Caller must hold `trace::test_lock()` and configure categories.
+    /// Hold a matrix chord for `frames` emulated frames (48K keyboard entry).
+    ///
+    /// ROM debounce needs ~8+ frames pressed and a clear gap; 6/3 dropped the
+    /// second `"` so `LOAD ""` never reached LD-BYTES (see #85).
+    fn hold_keys(m: &mut Machine, keys: &[(usize, u8)], frames: u32) {
+        for _ in 0..frames {
+            let kb = m.keyboard_mut();
+            kb.reset();
+            for &(row, bit) in keys {
+                kb.set_key(row, bit, true);
+            }
+            let _ = m.run_frame();
+        }
+    }
+
+    /// Script `LOAD ""` [CODE] Enter for 48K keyword mode.
+    fn type_load_48k(m: &mut Machine, with_code: bool) {
+        const PRESS: u32 = 10;
+        const GAP: u32 = 5;
+        hold_keys(m, &[(6, 3)], PRESS); // J = LOAD
+        hold_keys(m, &[], GAP);
+        hold_keys(m, &[(7, 1), (5, 0)], PRESS); // Sym+P = "
+        hold_keys(m, &[], GAP);
+        hold_keys(m, &[(7, 1), (5, 0)], PRESS); // "
+        hold_keys(m, &[], GAP);
+        if with_code {
+            // Caps+Sym → E mode, then I → CODE (token 0xAF).
+            hold_keys(m, &[(0, 0), (7, 1)], PRESS);
+            hold_keys(m, &[], GAP);
+            hold_keys(m, &[(5, 2)], PRESS);
+            hold_keys(m, &[], GAP);
+        }
+        hold_keys(m, &[(6, 0)], PRESS); // Enter
+        hold_keys(m, &[], 15);
+        m.keyboard_mut().reset();
+    }
+
+    /// Shared `LOAD "" CODE` harness for `attr_mark.tap`. Returns whether CODE
+    /// bytes landed at 0x8000. Caller must hold `trace::test_lock()` when tracing.
     fn run_attr_mark_load_path(rom: &[u8]) -> (Machine, bool) {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/tape/attr_mark.tap");
@@ -2124,31 +2214,11 @@ mod tests {
         for _ in 0..200 {
             let _ = m.run_frame();
         }
-        let sym = (7usize, 1u8);
-        let chords: [(Vec<(usize, u8)>, u32); 8] = [
-            (vec![(6, 3)], 6), // J = LOAD
-            (vec![], 3),
-            (vec![sym, (5, 0)], 6), // Sym + P = "
-            (vec![], 3),
-            (vec![sym, (5, 0)], 6), // "
-            (vec![], 3),
-            (vec![(6, 0)], 6), // Enter
-            (vec![], 10),
-        ];
-        for (keys, frames) in chords {
-            for _ in 0..frames {
-                let kb = m.keyboard_mut();
-                kb.reset();
-                for &(row, bit) in &keys {
-                    kb.set_key(row, bit, true);
-                }
-                let _ = m.run_frame();
-            }
-        }
-        m.keyboard_mut().reset();
+        // attr_mark is a CODE block — plain LOAD "" only accepts PROGRAM headers.
+        type_load_48k(&mut m, true);
         m.set_tape_playing(true);
         let mut loaded = false;
-        for _ in 0..400 {
+        for _ in 0..200 {
             let _ = m.run_frame();
             if m.read_mem(0x8000) == 0x21
                 && m.read_mem(0x8001) == 0x00
@@ -2164,14 +2234,10 @@ mod tests {
         (m, loaded)
     }
 
-    /// Deterministic tape repro harness (observability).
+    /// Deterministic tape repro harness (observability + success).
     ///
-    /// Runs a 48K `LOAD ""` path against `tests/fixtures/tape/attr_mark.tap` with
+    /// Runs 48K `LOAD "" CODE` against `tests/fixtures/tape/attr_mark.tap` with
     /// the structured trace enabled. On load failure, dumps the ring to stderr.
-    ///
-    /// Load success is reported but not required for CI green while tape is still
-    /// broken in practice (#85); observability itself is asserted. For a hard
-    /// gate, run `attr_mark_load_path_must_succeed` with `--ignored`.
     ///
     /// Local commercial tape (do **not** commit):
     /// `<path-to-local-commercial-tape>/The Boggit - Side 1.tzx`
@@ -2218,20 +2284,20 @@ mod tests {
             "expected tape.* trace events when exercising LOAD path; dump head:\n{}",
             dump.chars().take(1200).collect::<String>()
         );
-
-        if loaded {
-            eprintln!("attr_mark LOAD \"\" succeeded (CODE at 0x8000)");
-        } else {
-            eprintln!(
-                "attr_mark LOAD \"\" did not place CODE at 0x8000 (tracked by #85); \
-                 trace dump above is the debugging artifact"
-            );
-        }
+        assert!(
+            dump.contains("tape.flash.enter") && dump.contains("tape.flash.exit"),
+            "expected flash-load enter/exit; dump head:\n{}",
+            dump.chars().take(1200).collect::<String>()
+        );
+        assert!(
+            loaded,
+            "attr_mark LOAD \"\" CODE did not place CODE at 0x8000"
+        );
+        eprintln!("attr_mark LOAD \"\" CODE succeeded (CODE at 0x8000)");
     }
 
-    /// Hard success gate for attr_mark `LOAD ""` (ignored until #85 is fixed).
+    /// Hard success gate for attr_mark `LOAD "" CODE`.
     #[test]
-    #[ignore = "blocked on #85 tape LOAD; run with --ignored --nocapture to dump"]
     fn attr_mark_load_path_must_succeed() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -2254,6 +2320,62 @@ mod tests {
             trace::dump_to_stderr();
         }
         assert!(loaded, "attr_mark CODE missing at 0x8000");
+    }
+
+    /// `print_ok.tap` is a PROGRAM — plain `LOAD ""` must flash-load both blocks.
+    #[test]
+    fn print_ok_load_quotes_succeeds() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/print_ok.tap");
+        let img = TapImage::load(&path).expect("print_ok.tap");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
+        m.insert_tape(TapPlayer::new(img));
+        for _ in 0..200 {
+            let _ = m.run_frame();
+        }
+        type_load_48k(&mut m, false);
+        assert_eq!(
+            m.cpu().regs.pc,
+            LD_BYTES_TRAP_PC,
+            "LOAD \"\" should reach LD-BYTES while paused"
+        );
+        m.set_tape_playing(true);
+        let mut done = false;
+        for _ in 0..200 {
+            let _ = m.run_frame();
+            // Both TAP blocks consumed and back in the editor / running.
+            if m.tape_block() == Some(2) || m.tape_block().is_none() {
+                // Program line 10 starts with length bytes; look for PRINT token 0xF5
+                // or the "OK" string in the loaded BASIC area.
+                let prog = u16::from_le_bytes([m.read_mem(0x5C53), m.read_mem(0x5C54)]);
+                let eline = u16::from_le_bytes([m.read_mem(0x5C59), m.read_mem(0x5C5A)]);
+                let mut found_ok = false;
+                for a in prog..eline {
+                    if m.read_mem(a) == b'O' && m.read_mem(a.wrapping_add(1)) == b'K' {
+                        found_ok = true;
+                        break;
+                    }
+                }
+                if found_ok {
+                    done = true;
+                    break;
+                }
+            }
+        }
+        assert!(
+            done,
+            "print_ok LOAD \"\" should place BASIC containing OK (PC={:04X} block={:?})",
+            m.cpu().regs.pc,
+            m.tape_block()
+        );
     }
 
     #[test]
