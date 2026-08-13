@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 @main
 struct SpecChumMacApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var host = HostBridge()
 
     var body: some Scene {

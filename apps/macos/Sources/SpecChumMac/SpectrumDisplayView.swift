@@ -20,9 +20,9 @@ struct SpectrumDisplayView: NSViewRepresentable {
 
 /// Spectrum framebuffer view that owns keyboard focus and injects matrix keys.
 ///
-/// SwiftUI often keeps first-responder away from `NSViewRepresentable` children.
-/// We claim focus on appear/click and also install a local key monitor so typing
-/// reaches BASIC when the hosting view (but not a toolbar control) has focus.
+/// SwiftUI focus rings are decorative and do not make the process key. We activate
+/// `NSApp`, make the window key, and become first responder. A local monitor remains
+/// only as a backup when a SwiftUI host steals first responder while we stay key.
 final class SpectrumNSView: NSView {
     weak var host: HostBridge?
     private var held: Set<UInt16> = []
@@ -32,7 +32,24 @@ final class SpectrumNSView: NSView {
     private var focusRequestObserver: NSObjectProtocol?
 
     override var acceptsFirstResponder: Bool { true }
+    override var canBecomeKeyView: Bool { true }
     override var isFlipped: Bool { false }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        focusRingType = .none
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func drawFocusRingMask() {
+        // No decorative focus ring — keyboard focus is still accepted.
+    }
+
+    override var focusRingMaskBounds: NSRect { .zero }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -118,7 +135,9 @@ final class SpectrumNSView: NSView {
             super.keyDown(with: event)
             return
         }
-        applyKey(code: event.keyCode, pressed: true, flags: event.modifierFlags)
+        if !event.isARepeat {
+            applyKey(code: event.keyCode, pressed: true, flags: event.modifierFlags)
+        }
     }
 
     override func keyUp(with event: NSEvent) {
@@ -142,17 +161,20 @@ final class SpectrumNSView: NSView {
     // MARK: - Focus / monitor
 
     func claimFocus() {
-        window?.makeFirstResponder(self)
+        activateSpecChum()
+        guard let window else { return }
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(self)
     }
 
-    /// Capture when we (or a non-control SwiftUI host) own focus; skip real controls.
-    private func shouldCaptureKeys() -> Bool {
+    /// Backup capture only when we are not first responder but the window is key.
+    private func shouldMonitorCapture() -> Bool {
         guard let window, window.isKeyWindow else { return false }
         guard let fr = window.firstResponder else { return true }
-        if fr === self { return true }
+        if fr === self { return false }
         if fr is NSTextView || fr is NSTextField { return false }
         if fr is NSControl { return false }
-        // SwiftUI hosting views are plain NSViews — still need the monitor.
+        // SwiftUI hosting views are plain NSViews — monitor fills the gap.
         return true
     }
 
@@ -167,7 +189,8 @@ final class SpectrumNSView: NSView {
                 return event
             }
 
-            guard self.shouldCaptureKeys() else { return event }
+            // Prefer the first-responder path when we own focus.
+            guard self.shouldMonitorCapture() else { return event }
 
             switch event.type {
             case .keyDown:
