@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @ObservedObject var host: HostBridge
-    @FocusState private var spectrumFocused: Bool
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0 / 50.0)) { timeline in
@@ -19,10 +18,9 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
-                    .focusable()
-                    .focused($spectrumFocused)
+                    // No SwiftUI `.focusable()` — that drew a blue ring without making us key.
                     .onTapGesture {
-                        spectrumFocused = true
+                        activateSpecChum()
                         FocusSpectrumView.post()
                     }
 
@@ -43,7 +41,7 @@ struct ContentView: View {
         .background(WindowBackground())
         .onAppear {
             host.runFrame()
-            spectrumFocused = true
+            activateSpecChum()
             FocusSpectrumView.post()
         }
     }
