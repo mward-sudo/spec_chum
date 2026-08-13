@@ -218,15 +218,20 @@ impl BusPlus3 {
         0xff
     }
 
+    /// Record a speaker edge when the mixed EAR∥beeper level changes.
+    pub fn push_speaker_level(&mut self, level: bool) {
+        if self.beeper_edges.last().map(|&(_, l)| l) != Some(level) {
+            self.beeper_edges.push((self.frame_t, level));
+        }
+    }
+
     pub fn out_port(&mut self, port: u16, value: u8) {
         if port & 1 == 0 {
             self.border = value & 7;
             self.ula.set_border(self.frame_t, self.border);
             let beep = value & 0x10 != 0;
-            if beep != self.beeper {
-                self.beeper = beep;
-                self.beeper_edges.push((self.frame_t, beep));
-            }
+            self.beeper = beep;
+            self.push_speaker_level(beep || self.ear);
             return;
         }
         // Amstrad +2A/+3 paging (partial decode from FAQ / 128kreference):

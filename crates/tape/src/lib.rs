@@ -109,6 +109,12 @@ impl TapPlayer {
         self.pulses.len()
     }
 
+    /// Index of the active pulse within [`Self::scheduled_pulses`] (0 if idle).
+    #[must_use]
+    pub fn pulse_index(&self) -> usize {
+        self.pulse_i
+    }
+
     #[must_use]
     pub fn ear_level(&self) -> bool {
         self.level

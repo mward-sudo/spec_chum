@@ -593,6 +593,23 @@ impl SpecChumApp {
                         ui.label(MAPPING_DOC);
                     });
                     ui.separator();
+                    if let Some(p) = self
+                        .session
+                        .machine
+                        .as_ref()
+                        .and_then(Machine::tape_progress)
+                    {
+                        ui.add(
+                            egui::ProgressBar::new(p.fraction())
+                                .desired_width(120.0)
+                                .show_percentage(),
+                        );
+                        ui.label(format!(
+                            "tape {}/{}",
+                            p.block_index.saturating_add(1).min(p.block_count.max(1)),
+                            p.block_count
+                        ));
+                    }
                     if self
                         .session
                         .machine

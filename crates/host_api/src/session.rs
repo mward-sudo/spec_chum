@@ -58,6 +58,8 @@ pub struct HostSession {
     height: usize,
     running: bool,
     status: String,
+    /// Mono PCM for the last frame (~882 samples @ 44100 Hz / 50 fps).
+    audio_pcm: Vec<f32>,
 }
 
 impl HostSession {
@@ -73,6 +75,7 @@ impl HostSession {
             height,
             running: true,
             status: "No ROM loaded".into(),
+            audio_pcm: Vec::new(),
         }
     }
 
@@ -142,6 +145,18 @@ impl HostSession {
     #[must_use]
     pub fn has_tape(&self) -> bool {
         self.machine.as_ref().is_some_and(Machine::has_tape)
+    }
+
+    /// Tape progress for UI, if a deck is inserted.
+    #[must_use]
+    pub fn tape_progress(&self) -> Option<machine::TapeProgress> {
+        self.machine.as_ref().and_then(Machine::tape_progress)
+    }
+
+    /// Mono PCM samples from the last [`Self::run_frame`] (empty if no machine).
+    #[must_use]
+    pub fn audio_pcm(&self) -> &[f32] {
+        &self.audio_pcm
     }
 
     pub fn set_model(&mut self, model: ModelId) {
@@ -288,8 +303,51 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return;
         };
-        let _audio = m.run_frame();
+        let audio = m.run_frame();
+        let frame_t = match m.model() {
+            machine::Model::Spectrum48 => 69_888,
+            machine::Model::Spectrum128 | machine::Model::SpectrumPlus3 => 70_908,
+        };
+        render_frame_pcm(&audio, frame_t, &mut self.audio_pcm);
         m.render_rgba(&mut self.framebuffer, self.with_border);
+    }
+}
+
+/// Host audio sample rate (matches egui cpal default path).
+pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
+/// Samples rendered per 50 Hz frame.
+pub const AUDIO_SAMPLES_PER_FRAME: usize = (AUDIO_SAMPLE_RATE as usize) / 50;
+
+fn render_frame_pcm(audio: &machine::FrameAudio, frame_tstates: u32, out: &mut Vec<f32>) {
+    out.clear();
+    out.resize(AUDIO_SAMPLES_PER_FRAME, 0.0);
+    let t_per = frame_tstates as f32 / AUDIO_SAMPLES_PER_FRAME as f32;
+    let mut edge_i = 0usize;
+    let mut level = false;
+    let mut t = 0.0f32;
+    let mut ay_i = 0usize;
+    for sample in out.iter_mut() {
+        while edge_i < audio.beeper_edges.len() {
+            let (edge_t, edge_level) = audio.beeper_edges[edge_i];
+            if t >= edge_t as f32 {
+                level = edge_level;
+                edge_i += 1;
+            } else {
+                break;
+            }
+        }
+        let beep = if level { 0.15 } else { -0.15 };
+        let ay = if ay_i < audio.ay_samples.len() {
+            let v = audio.ay_samples[ay_i];
+            ay_i += 1;
+            (v - 0.5) * 0.5
+        } else if let Some(&last) = audio.ay_samples.last() {
+            (last - 0.5) * 0.5
+        } else {
+            0.0
+        };
+        *sample = (beep + ay).clamp(-1.0, 1.0);
+        t += t_per;
     }
 }
 
@@ -430,6 +488,48 @@ mod tests {
             let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
             assert_ne!(rows[6] & (1 << 3), 0, "J released");
         }
+    }
+
+    #[test]
+    fn open_fixture_tap_progress_and_audio_pcm() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        let tap = workspace_root().join("tests/fixtures/tape/minimal_code.tap");
+        s.open_tape(&tap).expect("tap");
+        let p = s.tape_progress().expect("progress");
+        assert_eq!(p.block_index, 0);
+        assert_eq!(p.block_count, 2);
+        s.play_tape().expect("play");
+        s.run_frame();
+        assert_eq!(s.audio_pcm().len(), AUDIO_SAMPLES_PER_FRAME);
+        let energy: f32 = s.audio_pcm().iter().map(|x| x * x).sum();
+        assert!(
+            energy > 0.01,
+            "playing tape should produce audible energy, got {energy}"
+        );
+    }
+
+    #[test]
+    fn open_local_boggit_tzx_as_tap_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let boggit = PathBuf::from("/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx");
+        if !boggit.is_file() {
+            eprintln!("skip: local Boggit TZX not present");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.open_tape(&boggit).expect("boggit tzx");
+        let p = s.tape_progress().expect("progress");
+        assert!(p.block_count >= 2, "expected TAP conversion with blocks");
+        assert!(s.status().contains("TAP") || s.status().contains("TZX"));
     }
 
     #[test]

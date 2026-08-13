@@ -37,6 +37,15 @@ int sc_tape_pause(void *handle);
 int sc_tape_rewind(void *handle);
 int sc_tape_playing(void *handle);
 int sc_has_tape(void *handle);
+int sc_tape_progress(void *handle,
+                     unsigned int *block_index,
+                     unsigned int *block_count,
+                     unsigned int *pulse_index,
+                     unsigned int *pulse_count);
+
+const float *sc_audio_ptr(void *handle);
+unsigned int sc_audio_frames(void *handle);
+unsigned int sc_audio_sample_rate(void *handle);
 
 int sc_set_key(void *handle, unsigned int row, unsigned int bit, int pressed);
 int sc_clear_keys(void *handle);

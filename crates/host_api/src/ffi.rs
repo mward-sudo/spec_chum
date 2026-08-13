@@ -272,6 +272,61 @@ pub extern "C" fn sc_has_tape(handle: *mut c_void) -> c_int {
     session_mut(handle).is_some_and(|s| s.has_tape()) as c_int
 }
 
+/// Fill out-params with tape progress. Returns 0 on success, -1 if no tape/handle.
+#[no_mangle]
+pub extern "C" fn sc_tape_progress(
+    handle: *mut c_void,
+    block_index: *mut c_uint,
+    block_count: *mut c_uint,
+    pulse_index: *mut c_uint,
+    pulse_count: *mut c_uint,
+) -> c_int {
+    let Some(s) = session_mut(handle) else {
+        return -1;
+    };
+    let Some(p) = s.tape_progress() else {
+        return -1;
+    };
+    // SAFETY: caller-provided out pointers; null means skip that field.
+    unsafe {
+        if !block_index.is_null() {
+            *block_index = p.block_index;
+        }
+        if !block_count.is_null() {
+            *block_count = p.block_count;
+        }
+        if !pulse_index.is_null() {
+            *pulse_index = p.pulse_index;
+        }
+        if !pulse_count.is_null() {
+            *pulse_count = p.pulse_count;
+        }
+    }
+    0
+}
+
+/// Pointer to mono f32 PCM from the last `sc_run_frame` (valid until next mutating call).
+#[no_mangle]
+pub extern "C" fn sc_audio_ptr(handle: *mut c_void) -> *const f32 {
+    session_mut(handle)
+        .map(|s| s.audio_pcm().as_ptr())
+        .unwrap_or(ptr::null())
+}
+
+/// Number of mono samples in [`sc_audio_ptr`].
+#[no_mangle]
+pub extern "C" fn sc_audio_frames(handle: *mut c_void) -> c_uint {
+    session_mut(handle)
+        .map(|s| s.audio_pcm().len() as c_uint)
+        .unwrap_or(0)
+}
+
+/// Host audio sample rate (Hz).
+#[no_mangle]
+pub extern "C" fn sc_audio_sample_rate(_handle: *mut c_void) -> c_uint {
+    crate::session::AUDIO_SAMPLE_RATE
+}
+
 #[no_mangle]
 pub extern "C" fn sc_set_key(
     handle: *mut c_void,
