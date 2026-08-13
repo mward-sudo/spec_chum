@@ -92,12 +92,14 @@ in **A′ / F′** (after `EX AF,AF'`). Trace `FlashLoadEnter` prints both AF an
 ## Failing-load harness
 
 ```bash
-# Runs LOAD "" with tracing; dumps ring to stderr if CODE is missing (CI still
-# asserts that tape/machine events were recorded):
+# attr_mark is a CODE block — harness types LOAD "" CODE; asserts flash enter/exit + bytes:
 cargo test -p machine attr_mark_load_path_dumps_trace_on_failure -- --nocapture
 
-# Hard success gate (ignored until #85):
-cargo test -p machine attr_mark_load_path_must_succeed -- --ignored --nocapture
+# Same path, hard gate (also runs in default `cargo test`):
+cargo test -p machine attr_mark_load_path_must_succeed -- --nocapture
+
+# PROGRAM fixture (plain LOAD ""):
+cargo test -p machine print_ok_load_quotes_succeeds -- --nocapture
 
 # Optional file dump:
 SPEC_CHUM_TRACE_FILE=/tmp/spec_chum_trace.txt \
@@ -105,14 +107,14 @@ SPEC_CHUM_TRACE_FILE=/tmp/spec_chum_trace.txt \
 ```
 
 Fixture: `tests/fixtures/tape/attr_mark.tap` (CODE at `0x8000` marking attr
-`0x5800`).
+`0x5800`). Use **Tape → Type LOAD "" CODE** (or type `LOAD "" CODE` by hand).
+Plain `LOAD ""` only accepts PROGRAM headers (see `print_ok.tap`).
 
 Local commercial tape for optional repro (**do not commit**):
 
 `<path-to-local-commercial-tape>/The Boggit - Side 1.tzx`
 
-See also `tests/fixtures/tape/README.md` and open issue for tape load still
-failing in practice (blocked on this infra until traces identify the cause).
+See also `tests/fixtures/tape/README.md`.
 
 ## Hot-path cost
 

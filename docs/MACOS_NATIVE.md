@@ -59,7 +59,7 @@ Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (d
 
 1. `./scripts/fetch_roms.sh` then `./scripts/run_macos_app.sh`
 2. Model **48K**. Open `tests/fixtures/tape/attr_mark.tap` (or `print_ok.tap` / `minimal_code.tap`).
-3. Leave **Instant** on. Type `LOAD ""` + Enter (or use egui Type LOAD). Press **Play**.
+3. Leave **Instant** on. For PROGRAM loaders type `LOAD ""` + Enter (egui **Type LOAD ""**). For CODE blocks type `LOAD "" CODE` (egui **Type LOAD "" CODE**). Press **Play**.
 4. Expect program name in the border/ROM print path, then a quick data load. For `attr_mark.tap`, `RANDOMIZE USR 32768` should paint the top-left attribute.
 5. Optional: local Boggit TZX (not in git) — same flow; first header should show `BOGGIT pt1`. Later custom-loader blocks (`flag 0xC8`) need Instant off / EAR (or game’s own loader).
 
