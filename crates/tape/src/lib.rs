@@ -259,6 +259,8 @@ pub enum TapeTrapResult {
 ///
 /// **Register note:** the 48K ROM executes `EX AF,AF'` before [`LD_BYTES_TRAP_PC`], so callers
 /// must pass the expected flag / load-vs-verify carry from **A′ / F′**, not A / F.
+///
+/// When the `tape` trace category is enabled, skip/fail reasons are recorded for debugging.
 #[must_use]
 pub fn evaluate_ld_bytes_trap(
     pc: u16,
@@ -272,6 +274,14 @@ pub fn evaluate_ld_bytes_trap(
         return TapeTrapResult::Ignored;
     }
     if !player.playing {
+        trace::emit(trace::EventKind::FlashLoadSkip {
+            reason: trace::FlashSkipReason::Paused,
+            block: player.block as u32,
+            flag_got: 0,
+            flag_want: flag_expected,
+            block_len: 0,
+            want_len: len,
+        });
         return TapeTrapResult::Ignored;
     }
     // `load` is kept for a ROM-compatible signature; the machine layer applies
@@ -279,28 +289,76 @@ pub fn evaluate_ld_bytes_trap(
     let _ = load;
     let start_block = player.block;
     loop {
+        let block_i = player.block as u32;
         let Some(block) = player.current_block_bytes() else {
             // No matching flag left: restore so a retry does not need a manual rewind.
             player.rewind_to_block(start_block);
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::NoBlock,
+                block: block_i,
+                flag_got: 0,
+                flag_want: flag_expected,
+                block_len: 0,
+                want_len: len,
+            });
             return TapeTrapResult::Failure;
         };
         if block.is_empty() {
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::EmptyBlock,
+                block: block_i,
+                flag_got: 0,
+                flag_want: flag_expected,
+                block_len: 0,
+                want_len: len,
+            });
             player.consume_block();
             continue;
         }
-        if block[0] != flag_expected {
+        let flag_got = block[0];
+        let block_len = block.len() as u16;
+        if flag_got != flag_expected {
             // Wrong flag: skip and keep searching (authentic LD-BYTES behaviour).
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::WrongFlag,
+                block: block_i,
+                flag_got,
+                flag_want: flag_expected,
+                block_len,
+                want_len: len,
+            });
             player.consume_block();
             continue;
         }
         // Block is flag + `len` data bytes + checksum
         if block.len() != usize::from(len) + 2 {
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::LengthMismatch,
+                block: block_i,
+                flag_got,
+                flag_want: flag_expected,
+                block_len,
+                want_len: len,
+            });
             return TapeTrapResult::Failure;
         }
         let checksum = block[block.len() - 1];
         if tap_checksum(&block[..block.len() - 1]) != checksum {
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::ChecksumFail,
+                block: block_i,
+                flag_got,
+                flag_want: flag_expected,
+                block_len,
+                want_len: len,
+            });
             return TapeTrapResult::Failure;
         }
+        trace::emit(trace::EventKind::TapeBlock {
+            index: block_i,
+            flag: flag_got,
+            len,
+        });
         player.consume_block();
         return TapeTrapResult::Success { addr, len };
     }

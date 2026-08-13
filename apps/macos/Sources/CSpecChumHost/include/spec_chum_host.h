@@ -58,6 +58,17 @@ char *sc_status(void *handle);
 char *sc_last_error(void);
 void sc_string_free(char *s);
 
+/* Debug / observability (see docs/DEBUGGING.md) */
+/* cats: bitmask — cpu=1 bus=2 tape=4 ula=8 machine=16; 0 disables */
+void sc_debug_init_from_env(void);
+void sc_debug_set_categories(unsigned int cats);
+unsigned int sc_debug_get_categories(void);
+void sc_debug_clear(void);
+/* Heap UTF-8 dump; free with sc_string_free. */
+char *sc_debug_dump(void);
+int sc_debug_dump_to_file(const char *path);
+unsigned int sc_debug_event_count(void);
+
 #ifdef __cplusplus
 }
 #endif

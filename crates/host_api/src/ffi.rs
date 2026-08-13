@@ -444,6 +444,65 @@ pub extern "C" fn sc_string_free(s: *mut c_char) {
     drop(unsafe { CString::from_raw(s) });
 }
 
+/// Apply `SPEC_CHUM_DEBUG` / `SPEC_CHUM_TRACE` (idempotent).
+#[no_mangle]
+pub extern "C" fn sc_debug_init_from_env() {
+    trace::init_from_env();
+}
+
+/// Set enabled trace categories (bitmask: cpu=1, bus=2, tape=4, ula=8, machine=16).
+#[no_mangle]
+pub extern "C" fn sc_debug_set_categories(cats: c_uint) {
+    trace::enable(trace::Category::from_bits(u64::from(cats)));
+}
+
+#[no_mangle]
+pub extern "C" fn sc_debug_get_categories() -> c_uint {
+    trace::categories().bits() as c_uint
+}
+
+#[no_mangle]
+pub extern "C" fn sc_debug_clear() {
+    trace::clear();
+}
+
+/// Heap-allocated UTF-8 dump of the ring; free with [`sc_string_free`].
+#[no_mangle]
+pub extern "C" fn sc_debug_dump() -> *mut c_char {
+    let s = trace::dump_string().replace('\0', "");
+    CString::new(s)
+        .map(CString::into_raw)
+        .unwrap_or(ptr::null_mut())
+}
+
+/// Write the ring dump to `path`. Returns 0 on success.
+#[no_mangle]
+pub extern "C" fn sc_debug_dump_to_file(path: *const c_char) -> c_int {
+    clear_last_error();
+    if path.is_null() {
+        set_last_error("null path");
+        return -1;
+    }
+    // SAFETY: caller-provided C string.
+    let cstr = unsafe { CStr::from_ptr(path) };
+    let Ok(path) = cstr.to_str() else {
+        set_last_error("path not utf-8");
+        return -1;
+    };
+    match trace::dump_to_file(path) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_debug_event_count() -> c_uint {
+    trace::len() as c_uint
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

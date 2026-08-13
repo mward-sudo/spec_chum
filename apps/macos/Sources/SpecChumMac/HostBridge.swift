@@ -1,6 +1,7 @@
 import AppKit
 import CSpecChumHost
 import Foundation
+import UniformTypeIdentifiers
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
@@ -62,6 +63,7 @@ final class HostBridge: ObservableObject {
             status = HostBridge.takeLastError() ?? "Failed to create host session"
             return
         }
+        sc_debug_init_from_env()
         tryAutoloadRom()
         refreshStatus()
         syncTapeLoadOptionsFromHost()
@@ -271,6 +273,42 @@ final class HostBridge: ObservableObject {
     func clearKeys() {
         guard let handle else { return }
         _ = sc_clear_keys(handle)
+    }
+
+    /// Default categories: bus|tape|ula|machine (bits 2|4|8|16 = 30).
+    func enableDefaultTrace() {
+        sc_debug_set_categories(2 | 4 | 8 | 16)
+        status = "Trace enabled (default categories), events=\(sc_debug_event_count())"
+    }
+
+    func clearTrace() {
+        sc_debug_clear()
+        status = "Trace ring cleared"
+    }
+
+    func dumpTraceToDesktop() {
+        let dir = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let url = dir.appendingPathComponent("spec_chum_trace.txt")
+        dumpTrace(to: url)
+    }
+
+    func dumpTracePanel() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "spec_chum_trace.txt"
+        panel.allowedContentTypes = [.plainText]
+        if panel.runModal() == .OK, let url = panel.url {
+            dumpTrace(to: url)
+        }
+    }
+
+    private func dumpTrace(to url: URL) {
+        let ok = url.path.withCString { sc_debug_dump_to_file($0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "Trace dump failed"
+        } else {
+            status = "Trace dump → \(url.path) (\(sc_debug_event_count()) events in ring)"
+        }
     }
 
     func tryAutoloadRom() {

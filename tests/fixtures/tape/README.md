@@ -18,3 +18,13 @@ That script writes `minimal_code.tap`, `attr_mark.tap`, and `print_ok.tap`. It d
 | `minimal.tzx` | Minimal standard-speed TZX wrapper used by TZX unit tests (not rebuilt by the script above) |
 
 Do not add commercial game TAPs.
+
+## Local repro (not in git)
+
+Optional commercial tape for optional local tests (never commit):
+
+`<path-to-local-commercial-tape>/The Boggit - Side 1.tzx`
+
+Debug / observability for failed loads: see [`docs/DEBUGGING.md`](../../../docs/DEBUGGING.md).
+Harness: `cargo test -p machine attr_mark_load_path_dumps_trace_on_failure -- --nocapture`.
+

@@ -18,6 +18,7 @@ path = "src/main.rs"
 machine = { workspace = true }
 formats = { workspace = true }
 tape = { workspace = true }
+trace = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
 cpal = { workspace = true }

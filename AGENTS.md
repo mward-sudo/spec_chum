@@ -16,6 +16,7 @@ From-scratch ZX Spectrum emulator in Rust + egui. Cycle-accurate Z80 and ULA tim
 | `tape` | Tape loading |
 | `formats` | Snapshot / tape file formats |
 | `machine` | Wired Spectrum models |
+| `trace` | Structured debug ring buffer (env/host gated) |
 | `host_api` | C ABI host surface for native shells / future cores |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 

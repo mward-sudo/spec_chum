@@ -44,6 +44,24 @@ struct SpecChumMacApp: App {
                     }
                 }
             }
+
+            CommandMenu("Debug") {
+                Button("Enable default trace") {
+                    host.enableDefaultTrace()
+                }
+                Button("Dump trace to Desktop…") {
+                    host.dumpTraceToDesktop()
+                }
+                Button("Dump trace to file…") {
+                    host.dumpTracePanel()
+                }
+                Button("Clear trace ring") {
+                    host.clearTrace()
+                }
+                Divider()
+                Button("Env: SPEC_CHUM_DEBUG=1 or SPEC_CHUM_TRACE=tape,cpu") {}
+                    .disabled(true)
+            }
         }
     }
 

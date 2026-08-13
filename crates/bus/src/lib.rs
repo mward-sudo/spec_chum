@@ -161,6 +161,18 @@ impl Bus48 {
         if port & 1 != 0 {
             // Fully decoded FE only when A0=0
         }
+        if trace::enabled(trace::Category::BUS) {
+            // Subsample FE polls — ROM LD-BYTES hammers this port.
+            static FE_IN_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let n = FE_IN_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n.is_multiple_of(1024) {
+                trace::emit(trace::EventKind::BusPortFe {
+                    write: false,
+                    value: v,
+                    ear: self.ear,
+                });
+            }
+        }
         v
     }
 
@@ -172,6 +184,19 @@ impl Bus48 {
         // Mix MIC/beeper with EAR so tape load tones reach the speaker path.
         self.push_speaker_level(beep || self.ear);
         self.mic = value & 0x08 != 0;
+        if trace::enabled(trace::Category::BUS) {
+            trace::emit(trace::EventKind::BusPortFe {
+                write: true,
+                value,
+                ear: self.ear,
+            });
+        }
+        if trace::enabled(trace::Category::ULA) {
+            trace::emit(trace::EventKind::UlaBorder {
+                color: self.border,
+                frame_t: self.frame_t,
+            });
+        }
     }
 
     /// Record a speaker edge when the mixed EAR∥beeper level changes.
@@ -340,6 +365,9 @@ impl Bus128 {
         if value & 0x20 != 0 {
             self.locked = true;
         }
+        if trace::enabled(trace::Category::BUS) {
+            trace::emit(trace::EventKind::BusPort7ffd { value });
+        }
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
@@ -351,6 +379,17 @@ impl Bus128 {
             let mut v = 0xa0 | keys;
             if self.ear {
                 v |= 0x40;
+            }
+            if trace::enabled(trace::Category::BUS) {
+                static FE_IN_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let n = FE_IN_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if n.is_multiple_of(1024) {
+                    trace::emit(trace::EventKind::BusPortFe {
+                        write: false,
+                        value: v,
+                        ear: self.ear,
+                    });
+                }
             }
             return v;
         }
@@ -375,6 +414,19 @@ impl Bus128 {
             let beep = value & 0x10 != 0;
             self.beeper = beep;
             self.push_speaker_level(beep || self.ear);
+            if trace::enabled(trace::Category::BUS) {
+                trace::emit(trace::EventKind::BusPortFe {
+                    write: true,
+                    value,
+                    ear: self.ear,
+                });
+            }
+            if trace::enabled(trace::Category::ULA) {
+                trace::emit(trace::EventKind::UlaBorder {
+                    color: self.border,
+                    frame_t: self.frame_t,
+                });
+            }
             return;
         }
         // 7FFD: A15=0, A1=0

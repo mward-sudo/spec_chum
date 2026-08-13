@@ -15,6 +15,28 @@ use tape::{
 use ula::{int_active_48, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48, INT_LENGTH_128};
 use z80::{flag, Cpu, Io, Memory};
 
+fn next_frame_n() -> u32 {
+    static FRAME_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    FRAME_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+fn reg_snap(cpu: &Cpu) -> trace::RegSnap {
+    let r = &cpu.regs;
+    trace::RegSnap {
+        pc: r.pc,
+        sp: r.sp,
+        af: r.af(),
+        bc: r.bc(),
+        de: r.de(),
+        hl: r.hl(),
+        ix: r.ix(),
+        iy: r.iy(),
+        af_: u16::from(r.a_) << 8 | u16::from(r.f_),
+        iff1: r.iff1,
+        halted: r.halted,
+    }
+}
+
 /// Inserted tape image (TAP pulse player or TZX pulse player).
 #[derive(Clone, Debug)]
 pub enum TapeDeck {
@@ -316,6 +338,7 @@ impl Machine {
     pub fn new_48k(rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus48::new();
         bus.load_rom(rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 0 });
         Ok(Self::Spec48 {
             cpu: Cpu::new(),
             bus: Box::new(bus),
@@ -329,6 +352,7 @@ impl Machine {
     pub fn new_128k(rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus128::new();
         bus.load_rom128(rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 1 });
         Ok(Self::Spec128 {
             cpu: Cpu::new(),
             bus: Box::new(bus),
@@ -342,6 +366,7 @@ impl Machine {
     pub fn new_plus3(rom: &[u8]) -> Result<Self, String> {
         let mut bus = BusPlus3::new();
         bus.load_rom64(rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 2 });
         Ok(Self::SpecPlus3 {
             cpu: Cpu::new(),
             bus: Box::new(bus),
@@ -443,6 +468,10 @@ impl Machine {
             | Self::Spec128 { tape_opts, .. }
             | Self::SpecPlus3 { tape_opts, .. } => *tape_opts = opts,
         }
+        trace::emit(trace::EventKind::MachineLoadMode {
+            flash_load: opts.flash_load,
+            speed: opts.speed as u8,
+        });
     }
 
     pub fn insert_tape(&mut self, mut player: TapPlayer) {
@@ -469,7 +498,14 @@ impl Machine {
             | Self::Spec128 { tape, .. }
             | Self::SpecPlus3 { tape, .. } => {
                 if let Some(t) = tape.as_mut() {
+                    let block = t.block().unwrap_or(0) as u32;
+                    let blocks = t.block_count() as u32;
                     t.set_playing(playing);
+                    if playing {
+                        trace::emit(trace::EventKind::TapePlay { block, blocks });
+                    } else {
+                        trace::emit(trace::EventKind::TapePause { block });
+                    }
                 }
             }
         }
@@ -491,6 +527,7 @@ impl Machine {
             | Self::SpecPlus3 { tape, .. } => {
                 if let Some(t) = tape.as_mut() {
                     t.rewind();
+                    trace::emit(trace::EventKind::TapeRewind);
                 }
             }
         }
@@ -671,6 +708,10 @@ impl Machine {
                 bus.ula.begin_frame();
                 ula.border = bus.border;
                 ula.begin_frame();
+                if trace::enabled(trace::Category::ULA) {
+                    let frame = next_frame_n();
+                    trace::emit(trace::EventKind::UlaFrame { frame });
+                }
                 let mut last_t = cpu.t;
                 while bus.frame_t < FRAME_TSTATES_48 {
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
@@ -740,6 +781,10 @@ impl Machine {
                 bus.ula.begin_frame();
                 ula.border = bus.border;
                 ula.begin_frame();
+                if trace::enabled(trace::Category::ULA) {
+                    let frame = next_frame_n();
+                    trace::emit(trace::EventKind::UlaFrame { frame });
+                }
                 const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
@@ -828,6 +873,10 @@ impl Machine {
                 bus.ula.begin_frame();
                 ula.border = bus.border;
                 ula.begin_frame();
+                if trace::enabled(trace::Category::ULA) {
+                    let frame = next_frame_n();
+                    trace::emit(trace::EventKind::UlaFrame { frame });
+                }
                 const AY_SAMPLES: usize = 882;
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
@@ -928,6 +977,22 @@ impl Machine {
         let new_ear = t.advance(advance_dt);
         if new_ear != *ear {
             *ear = new_ear;
+            // Count EAR edges; emit a sampled rate (edges since last sample), not the stride.
+            if trace::enabled(trace::Category::TAPE) {
+                static EAR_EDGES: std::sync::atomic::AtomicU32 =
+                    std::sync::atomic::AtomicU32::new(0);
+                static EAR_SAMPLES: std::sync::atomic::AtomicU32 =
+                    std::sync::atomic::AtomicU32::new(0);
+                let edges = EAR_EDGES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                let samples = EAR_SAMPLES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if samples.is_multiple_of(256) {
+                    trace::emit(trace::EventKind::TapeEarRate {
+                        edges_per_frame: edges,
+                        level: new_ear,
+                    });
+                    EAR_EDGES.store(0, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
             let level = beeper || new_ear;
             if edges.last().map(|&(_, l)| l) != Some(level) {
                 edges.push((frame_t, level));
@@ -938,7 +1003,16 @@ impl Machine {
     /// Tape inserted but paused at LD-BYTES: hold PC so Play can still flash-load / EAR-load.
     #[must_use]
     fn hold_ld_bytes_until_play(pc: u16, tape: &Option<TapeDeck>) -> bool {
-        pc == LD_BYTES_TRAP_PC && tape.as_ref().is_some_and(|t| !t.playing())
+        let holding = pc == LD_BYTES_TRAP_PC && tape.as_ref().is_some_and(|t| !t.playing());
+        if holding && trace::enabled(trace::Category::MACHINE) {
+            // Sampled: one event per hold check would flood; emit sparsely via counter.
+            static HOLD_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let n = HOLD_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n.is_multiple_of(1024) {
+                trace::emit(trace::EventKind::MachineLdBytesHold { holding: true, pc });
+            }
+        }
+        holding
     }
 
     fn ret_from_tape_trap(cpu: &mut Cpu, lo: u8, hi: u8, success: bool) {
@@ -967,6 +1041,18 @@ impl Machine {
         let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
         let len = cpu.regs.de();
+        let block = player.block as u32;
+        trace::set_t_hint(cpu.t);
+        if trace::enabled(trace::Category::TAPE) {
+            trace::emit(trace::EventKind::FlashLoadEnter {
+                regs: reg_snap(cpu),
+                flag_expected,
+                load,
+                addr,
+                len,
+                block,
+            });
+        }
         let sp = cpu.regs.sp;
         let ret_lo = bus.read(sp);
         let ret_hi = bus.read(sp.wrapping_add(1));
@@ -981,10 +1067,26 @@ impl Machine {
                 }
                 cpu.regs.set_ix(dest.wrapping_add(n));
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, true);
+                if trace::enabled(trace::Category::TAPE) {
+                    trace::emit(trace::EventKind::FlashLoadExit {
+                        success: true,
+                        bytes: n,
+                        block_after: player.block as u32,
+                        regs: reg_snap(cpu),
+                    });
+                }
                 true
             }
             TapeTrapResult::Failure => {
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, false);
+                if trace::enabled(trace::Category::TAPE) {
+                    trace::emit(trace::EventKind::FlashLoadExit {
+                        success: false,
+                        bytes: 0,
+                        block_after: player.block as u32,
+                        regs: reg_snap(cpu),
+                    });
+                }
                 true
             }
         }
@@ -1004,6 +1106,18 @@ impl Machine {
         let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
         let len = cpu.regs.de();
+        let block = player.block as u32;
+        trace::set_t_hint(cpu.t);
+        if trace::enabled(trace::Category::TAPE) {
+            trace::emit(trace::EventKind::FlashLoadEnter {
+                regs: reg_snap(cpu),
+                flag_expected,
+                load,
+                addr,
+                len,
+                block,
+            });
+        }
         let sp = cpu.regs.sp;
         let ret_lo = bus.read(sp);
         let ret_hi = bus.read(sp.wrapping_add(1));
@@ -1018,10 +1132,26 @@ impl Machine {
                 }
                 cpu.regs.set_ix(dest.wrapping_add(n));
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, true);
+                if trace::enabled(trace::Category::TAPE) {
+                    trace::emit(trace::EventKind::FlashLoadExit {
+                        success: true,
+                        bytes: n,
+                        block_after: player.block as u32,
+                        regs: reg_snap(cpu),
+                    });
+                }
                 true
             }
             TapeTrapResult::Failure => {
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, false);
+                if trace::enabled(trace::Category::TAPE) {
+                    trace::emit(trace::EventKind::FlashLoadExit {
+                        success: false,
+                        bytes: 0,
+                        block_after: player.block as u32,
+                        regs: reg_snap(cpu),
+                    });
+                }
                 true
             }
         }
@@ -1045,6 +1175,18 @@ impl Machine {
         let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
         let len = cpu.regs.de();
+        let block = player.block as u32;
+        trace::set_t_hint(cpu.t);
+        if trace::enabled(trace::Category::TAPE) {
+            trace::emit(trace::EventKind::FlashLoadEnter {
+                regs: reg_snap(cpu),
+                flag_expected,
+                load,
+                addr,
+                len,
+                block,
+            });
+        }
         let sp = cpu.regs.sp;
         let ret_lo = bus.read(sp);
         let ret_hi = bus.read(sp.wrapping_add(1));
@@ -1059,10 +1201,26 @@ impl Machine {
                 }
                 cpu.regs.set_ix(dest.wrapping_add(n));
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, true);
+                if trace::enabled(trace::Category::TAPE) {
+                    trace::emit(trace::EventKind::FlashLoadExit {
+                        success: true,
+                        bytes: n,
+                        block_after: player.block as u32,
+                        regs: reg_snap(cpu),
+                    });
+                }
                 true
             }
             TapeTrapResult::Failure => {
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, false);
+                if trace::enabled(trace::Category::TAPE) {
+                    trace::emit(trace::EventKind::FlashLoadExit {
+                        success: false,
+                        bytes: 0,
+                        block_after: player.block as u32,
+                        regs: reg_snap(cpu),
+                    });
+                }
                 true
             }
         }
@@ -1949,5 +2107,190 @@ mod tests {
             assert_eq!(bus.read(0x0000), 0x5a);
             assert_eq!(bus.in_port(0x00ff), 0xff, "no floating bus");
         }
+    }
+
+    /// Shared LOAD "" harness body. Returns whether CODE bytes landed at 0x8000.
+    /// Caller must hold `trace::test_lock()` and configure categories.
+    fn run_attr_mark_load_path(rom: &[u8]) -> (Machine, bool) {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark.tap");
+        let mut m = Machine::new_48k(rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
+        m.insert_tape(TapPlayer::new(img));
+        for _ in 0..200 {
+            let _ = m.run_frame();
+        }
+        let sym = (7usize, 1u8);
+        let chords: [(Vec<(usize, u8)>, u32); 8] = [
+            (vec![(6, 3)], 6), // J = LOAD
+            (vec![], 3),
+            (vec![sym, (5, 0)], 6), // Sym + P = "
+            (vec![], 3),
+            (vec![sym, (5, 0)], 6), // "
+            (vec![], 3),
+            (vec![(6, 0)], 6), // Enter
+            (vec![], 10),
+        ];
+        for (keys, frames) in chords {
+            for _ in 0..frames {
+                let kb = m.keyboard_mut();
+                kb.reset();
+                for &(row, bit) in &keys {
+                    kb.set_key(row, bit, true);
+                }
+                let _ = m.run_frame();
+            }
+        }
+        m.keyboard_mut().reset();
+        m.set_tape_playing(true);
+        let mut loaded = false;
+        for _ in 0..400 {
+            let _ = m.run_frame();
+            if m.read_mem(0x8000) == 0x21
+                && m.read_mem(0x8001) == 0x00
+                && m.read_mem(0x8002) == 0x58
+                && m.read_mem(0x8003) == 0x36
+                && m.read_mem(0x8004) == 0xd7
+                && m.read_mem(0x8005) == 0xc9
+            {
+                loaded = true;
+                break;
+            }
+        }
+        (m, loaded)
+    }
+
+    /// Deterministic tape repro harness (observability).
+    ///
+    /// Runs a 48K `LOAD ""` path against `tests/fixtures/tape/attr_mark.tap` with
+    /// the structured trace enabled. On load failure, dumps the ring to stderr.
+    ///
+    /// Load success is reported but not required for CI green while tape is still
+    /// broken in practice (#85); observability itself is asserted. For a hard
+    /// gate, run `attr_mark_load_path_must_succeed` with `--ignored`.
+    ///
+    /// Local commercial tape (do **not** commit):
+    /// `<path-to-local-commercial-tape>/The Boggit - Side 1.tzx`
+    #[test]
+    fn attr_mark_load_path_dumps_trace_on_failure() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+
+        let _lock = trace::test_lock();
+        struct TraceRestore;
+        impl Drop for TraceRestore {
+            fn drop(&mut self) {
+                trace::disable();
+                trace::clear();
+            }
+        }
+        let _restore = TraceRestore;
+        trace::clear();
+        trace::enable(trace::Category::DEFAULT | trace::Category::TAPE);
+
+        let (m, loaded) = run_attr_mark_load_path(&rom);
+        let dump = trace::dump_string();
+        if !loaded {
+            eprintln!("=== attr_mark LOAD path failed — dumping trace ===");
+            eprintln!(
+                "PC={:04X} tape_block={:?} playing={} AF'={:02X}{:02X}",
+                m.cpu().regs.pc,
+                m.tape_block(),
+                m.tape_playing(),
+                m.cpu().regs.a_,
+                m.cpu().regs.f_
+            );
+            eprintln!("{dump}");
+            let _ = trace::dump_to_env_file();
+        }
+
+        assert!(
+            dump.contains("tape.play")
+                || dump.contains("tape.flash")
+                || dump.contains("tape.block")
+                || dump.contains("tape.ear_rate"),
+            "expected tape.* trace events when exercising LOAD path; dump head:\n{}",
+            dump.chars().take(1200).collect::<String>()
+        );
+
+        if loaded {
+            eprintln!("attr_mark LOAD \"\" succeeded (CODE at 0x8000)");
+        } else {
+            eprintln!(
+                "attr_mark LOAD \"\" did not place CODE at 0x8000 (tracked by #85); \
+                 trace dump above is the debugging artifact"
+            );
+        }
+    }
+
+    /// Hard success gate for attr_mark `LOAD ""` (ignored until #85 is fixed).
+    #[test]
+    #[ignore = "blocked on #85 tape LOAD; run with --ignored --nocapture to dump"]
+    fn attr_mark_load_path_must_succeed() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let _lock = trace::test_lock();
+        struct TraceRestore;
+        impl Drop for TraceRestore {
+            fn drop(&mut self) {
+                trace::disable();
+                trace::clear();
+            }
+        }
+        let _restore = TraceRestore;
+        trace::clear();
+        trace::enable(trace::Category::DEFAULT | trace::Category::TAPE);
+        let (_m, loaded) = run_attr_mark_load_path(&rom);
+        if !loaded {
+            eprintln!("=== attr_mark hard gate failed — dumping trace ===");
+            trace::dump_to_stderr();
+        }
+        assert!(loaded, "attr_mark CODE missing at 0x8000");
+    }
+
+    #[test]
+    fn flash_load_skip_appears_in_trace_dump() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x11, 0xff ^ 0x11], vec![0x00, 0x22, 0x22]],
+        };
+        let _lock = trace::test_lock();
+        trace::clear();
+        trace::enable(trace::Category::TAPE);
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        // Expect header flag 0x00 but first block is data 0xff → skip then load.
+        let ret = 0x7000u16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.pc = LD_BYTES_TRAP_PC;
+        m.cpu_mut().regs.a_ = 0x00;
+        m.cpu_mut().regs.f_ = flag::C;
+        m.cpu_mut().regs.set_ix(0x5c00);
+        m.cpu_mut().regs.set_de(1);
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        m.step_once();
+        let dump = trace::dump_string();
+        assert!(
+            dump.contains("wrong_flag") || dump.contains("tape.flash"),
+            "dump=\n{dump}"
+        );
+        trace::disable();
+        trace::clear();
     }
 }
