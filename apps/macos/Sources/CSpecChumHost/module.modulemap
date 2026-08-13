@@ -1,0 +1,5 @@
+module CSpecChumHost [system] {
+    header "include/spec_chum_host.h"
+    link "spec_chum_host"
+    export *
+}

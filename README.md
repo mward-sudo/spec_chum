@@ -2,9 +2,11 @@
 
 [![CI](https://github.com/mward-sudo/spec_chum/actions/workflows/ci.yml/badge.svg)](https://github.com/mward-sudo/spec_chum/actions/workflows/ci.yml)
 
-A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust with an egui frontend.
+A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust with an egui frontend (plus an optional native macOS SwiftUI shell).
 
 UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libretro): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md).
+
+Native macOS (liquid glass): [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md) — `./scripts/run_macos_app.sh`.
 
 ## Goals
 
@@ -21,6 +23,17 @@ cargo build --release
 ./scripts/fetch_roms.sh
 cargo run -p app --release
 ```
+
+### Native macOS shell (optional)
+
+Requires full Xcode. Builds Rust `host_api` + SwiftUI:
+
+```bash
+./scripts/fetch_roms.sh
+./scripts/run_macos_app.sh
+```
+
+See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 ## ROMs
 

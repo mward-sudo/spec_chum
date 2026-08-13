@@ -16,9 +16,10 @@ From-scratch ZX Spectrum emulator in Rust + egui. Cycle-accurate Z80 and ULA tim
 | `tape` | Tape loading |
 | `formats` | Snapshot / tape file formats |
 | `machine` | Wired Spectrum models |
+| `host_api` | C ABI host surface for native shells / future cores |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 
-Prefer changes inside the owning crate. Cross-crate refactors need a clear reason.
+Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`).
 
 ## Hard constraints
 
