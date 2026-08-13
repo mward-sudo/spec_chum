@@ -717,7 +717,10 @@ impl Machine {
             return;
         }
         if let Some(t) = tape.as_mut() {
-            *ear = t.advance(dt);
+            // Motor off: do not drive EAR with a frozen pilot level (insert starts paused).
+            if t.playing() {
+                *ear = t.advance(dt);
+            }
         }
     }
 
@@ -1142,6 +1145,38 @@ mod tests {
     }
 
     #[test]
+    fn tape_paused_does_not_advance_ear_until_play() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage::load(&fixture_tap()).expect("fixture");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.insert_tape(TapPlayer::new(img));
+        assert!(!m.tape_playing());
+        let block0 = m.tape_block();
+        for _ in 0..5 {
+            let _ = m.run_frame();
+        }
+        assert_eq!(m.tape_block(), block0, "paused tape must not advance");
+        assert!(!m.ear(), "paused pilot must not drive EAR");
+        m.set_tape_playing(true);
+        let mut saw_high = false;
+        for _ in 0..5 {
+            let _ = m.run_frame();
+            if m.ear() {
+                saw_high = true;
+                break;
+            }
+        }
+        assert!(saw_high, "Play must advance EAR during pilot");
+        assert!(
+            m.tape_block() != block0 || m.ear(),
+            "Play should move the deck or at least raise EAR"
+        );
+    }
+
+    #[test]
     fn flash_load_trap_loads_data_block() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -1154,6 +1189,7 @@ mod tests {
         let mut player = TapPlayer::new(img);
         player.consume_block();
         m.insert_tape(player);
+        m.set_tape_playing(true);
 
         // Set up a fake CALL return address and LD-BYTES register state.
         let ret = 0x1234u16;

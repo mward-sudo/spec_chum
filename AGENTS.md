@@ -16,7 +16,7 @@ From-scratch ZX Spectrum emulator in Rust + egui. Cycle-accurate Z80 and ULA tim
 | `tape` | Tape loading |
 | `formats` | Snapshot / tape file formats |
 | `machine` | Wired Spectrum models |
-| `app` | egui / eframe frontend binary |
+| `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 
 Prefer changes inside the owning crate. Cross-crate refactors need a clear reason.
 

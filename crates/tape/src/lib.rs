@@ -237,6 +237,9 @@ pub enum TapeTrapResult {
 
 /// Interpret CPU state at [`LD_BYTES_TRAP_PC`] and apply the next TAP block if present.
 ///
+/// The trap is ignored while the deck is paused (`playing == false`) so Tape → Play is required
+/// before flash-load or EAR bitstream progress.
+///
 /// On `Success` / `Failure`, the player has already consumed (or not) the block as appropriate;
 /// the CPU must still perform a ROM-compatible return (RET) and flag update.
 #[must_use]
@@ -249,6 +252,9 @@ pub fn evaluate_ld_bytes_trap(
     player: &mut TapPlayer,
 ) -> TapeTrapResult {
     if pc != LD_BYTES_TRAP_PC {
+        return TapeTrapResult::Ignored;
+    }
+    if !player.playing {
         return TapeTrapResult::Ignored;
     }
     let Some(block) = player.current_block_bytes() else {
@@ -402,5 +408,41 @@ mod tests {
         );
         assert_eq!(p.block, 1);
         assert!(p.finished() || p.current_block_bytes().is_none());
+    }
+
+    #[test]
+    fn ld_bytes_trap_ignored_while_paused() {
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x42, 0xff ^ 0x42]],
+        };
+        let mut p = TapPlayer::new(img);
+        p.set_playing(false);
+        let r = evaluate_ld_bytes_trap(LD_BYTES_TRAP_PC, 0xff, true, 0x8000, 1, &mut p);
+        assert_eq!(r, TapeTrapResult::Ignored);
+        assert_eq!(p.block, 0);
+        p.set_playing(true);
+        let r = evaluate_ld_bytes_trap(LD_BYTES_TRAP_PC, 0xff, true, 0x8000, 1, &mut p);
+        assert_eq!(
+            r,
+            TapeTrapResult::Success {
+                addr: 0x8000,
+                len: 1
+            }
+        );
+    }
+
+    #[test]
+    fn advance_does_not_consume_while_paused() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x00]],
+        };
+        let mut p = TapPlayer::new(img);
+        p.set_playing(false);
+        let level = p.ear_level();
+        assert_eq!(p.advance(PILOT_PULSE_T * 10), level);
+        assert_eq!(p.block, 0);
+        p.set_playing(true);
+        assert!(p.advance(PILOT_PULSE_T / 2), "still in first pilot pulse");
+        assert!(!p.advance(PILOT_PULSE_T), "cross into second pilot pulse");
     }
 }

@@ -472,15 +472,15 @@ impl SpecChumApp {
             self.theme_applied = true;
         }
         egui::TopBottomPanel::top("menu")
+            .exact_height(theme::menu_bar_min_height())
             .frame(
                 egui::Frame::new()
                     .fill(ctx.style().visuals.panel_fill)
-                    .inner_margin(egui::Margin::symmetric(12, 8))
+                    .inner_margin(egui::Margin::symmetric(10, 4))
                     .stroke(egui::Stroke::NONE),
             )
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.add_space(theme::macos_traffic_light_inset());
+                ui.horizontal_centered(|ui| {
                     ui.menu_button("File", |ui| {
                         if ui.button("Open snapshot (SNA/Z80)…").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
@@ -592,6 +592,15 @@ impl SpecChumApp {
                         ui.separator();
                         ui.label(MAPPING_DOC);
                     });
+                    ui.separator();
+                    if self
+                        .session
+                        .machine
+                        .as_ref()
+                        .is_some_and(Machine::tape_playing)
+                    {
+                        ui.strong("▶ tape");
+                    }
                     ui.label(&self.session.status);
                 });
             });
@@ -790,6 +799,38 @@ mod tests {
     }
 
     #[test]
+    fn play_tape_advances_ear_on_fixture() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let tap = EmulatorSession::workspace_root().join("tests/fixtures/tape/minimal_code.tap");
+        session.load_tap(&tap);
+        assert!(!session.machine.as_ref().unwrap().tape_playing());
+        for _ in 0..3 {
+            session.tick_frame();
+        }
+        assert!(
+            !session.machine.as_ref().unwrap().ear(),
+            "paused tape must not drive EAR"
+        );
+        session.play_tape();
+        assert!(session.machine.as_ref().unwrap().tape_playing());
+        assert!(session.status.contains("playing"));
+        let mut saw_high = false;
+        for _ in 0..8 {
+            session.tick_frame();
+            if session.machine.as_ref().unwrap().ear() {
+                saw_high = true;
+                break;
+            }
+        }
+        assert!(saw_high, "Tape → Play must raise EAR during pilot");
+    }
+
+    #[test]
     fn session_loads_tap_fixture_headless() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
@@ -825,8 +866,6 @@ mod tests {
         let mut saw_machine = false;
         let _ = ctx.run(raw, |ctx| {
             app.ui(ctx);
-            // Widgets from the previous frame are available via full output / memory;
-            // assert status label was set and texture path did not panic.
             saw_file = true;
             saw_machine = app.session.status.contains("Loaded")
                 || app.session.status.contains("Missing")
@@ -834,10 +873,15 @@ mod tests {
         });
         assert!(saw_file);
         assert!(saw_machine, "status={}", app.session.status);
-        // Second frame after menus exist
+        // Second frame after menus exist — menu strip must reserve clickable height.
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             app.ui(ctx);
+            assert!(
+                theme::menu_bar_min_height() >= 28.0,
+                "menu bar must be tall enough to click"
+            );
         });
         assert_eq!(app.session.framebuffer.len(), 352 * 296 * 4);
+        assert_eq!(ctx.style().visuals.panel_fill.a(), 255);
     }
 }
