@@ -27,11 +27,25 @@ Local quality gate (same as CI intent):
 ## AI / agent-assisted work
 
 - Read `AGENTS.md` for crate boundaries and hard constraints.
-- Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync.
-- Before coding, agents should consult open issues so implementations do not drift from tracked acceptance criteria.
+- Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync and `pr-review-merge.mdc` for bot review gates.
+- Before coding, agents should consult open issues, so implementations do not drift from tracked acceptance criteria.
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
+- **Before merge:** run `./scripts/check_pr_reviews.sh` (or pass the PR number). Do not merge with unresolved **actionable** CodeRabbit (or similar bot) comments unless the user explicitly waives them; fix or reply with a wontfix reason, then resolve threads.
+
+## Review check before merge
+
+CodeRabbit is **not** a required GitHub status check. Agents must still run the local gate before merge:
+
+```bash
+./scripts/check_pr_reviews.sh          # current branch PR
+./scripts/check_pr_reviews.sh 87       # explicit PR
+# Explicit waiver only when the user asked for one:
+./scripts/check_pr_reviews.sh 87 --waive "user waived nit: comma-only"
+```
+
+The script paginates GraphQL `reviewThreads`, lists unresolved bot comments, and exits non-zero unless waived.
 
 ## TDD
 

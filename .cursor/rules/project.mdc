@@ -12,3 +12,4 @@ alwaysApply: true
 - Before finishing Rust work, run `./scripts/check.sh` (fmt + clippy `-D warnings` + tests).
 - Follow `AGENTS.md` and `CONTRIBUTING.md` for TDD and PR expectations.
 - Before implementing, check GitHub Issues (`gh issue list` / related `gh issue view`); see `github-issues.mdc`.
+- Before merge: unresolved actionable CodeRabbit/bot review blocks merge unless the user waives; see `pr-review-merge.mdc`.

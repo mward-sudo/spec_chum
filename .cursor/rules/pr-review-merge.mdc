@@ -1,0 +1,20 @@
+---
+description: Do not merge PRs with unresolved actionable bot review
+alwaysApply: true
+---
+
+# PR review / merge gate
+
+Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unresolved CodeRabbit threads. Do not repeat that.
+
+## Before merge (agents)
+
+1. Run `./scripts/check_pr_reviews.sh` (paginates GraphQL `reviewThreads`; fails on unresolved bot comments).
+2. Treat **CodeRabbit** (and similar bot) comments as blocking when they are **actionable** (bugs, incorrect behavior, clear maintainability fixes).
+3. **Do not merge** while actionable bot threads remain unresolved, unless the user **explicitly waives** them (`--waive` / `SPEC_CHUM_REVIEW_WAIVER`, and document the waiver in the PR).
+4. Disposition each finding: fix in code, reply with a short wontfix reason, then resolve the thread when GitHub allows.
+5. After pushing fixes, wait for a fresh bot pass when practical; address new actionable comments the same way.
+
+CodeRabbit CI status may remain optional; the script is the agent-facing gate (not a brittle required check).
+
+Non-actionable nitpicks may be waived with a one-line reason; do not silently ignore Major/functional findings.

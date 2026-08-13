@@ -54,5 +54,9 @@ Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern)
 
 Before implementing: `gh issue list` / `gh issue view N` for related work. Prefer extending existing issues over duplicates. Link PRs with `Closes #N` / `Refs #N`. Do not close until acceptance criteria are truly met. When work discovers gaps, update or reopen the issue rather than silently diverging. Cursor rule: `.cursor/rules/github-issues.mdc`.
 
+### Before merge — bot review threads
+
+Do **not** merge while CodeRabbit (or similar bots) have unresolved **actionable** review comments, unless the user explicitly waives them. Run `./scripts/check_pr_reviews.sh` before merge; fix or document wontfix, then resolve. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83)).
+
 Recently closed accuracy/feature issues: [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
 

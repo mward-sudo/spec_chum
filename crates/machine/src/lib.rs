@@ -1831,9 +1831,12 @@ mod tests {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         };
-        let boggit = PathBuf::from("/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx");
+        let Some(boggit) = std::env::var_os("SPEC_CHUM_BOGGIT_TZX").map(PathBuf::from) else {
+            eprintln!("skip: set SPEC_CHUM_BOGGIT_TZX to run the Boggit regression");
+            return;
+        };
         if !boggit.is_file() {
-            eprintln!("skip: local Boggit TZX not present");
+            eprintln!("skip: SPEC_CHUM_BOGGIT_TZX path is not a file ({boggit:?})");
             return;
         }
         let data = std::fs::read(&boggit).expect("read boggit");

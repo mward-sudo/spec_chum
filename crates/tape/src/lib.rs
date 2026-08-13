@@ -133,6 +133,12 @@ impl TapPlayer {
         self.queue_block(self.block);
     }
 
+    /// Restore the deck to `idx` without changing play/pause (flash-load search rollback).
+    pub fn rewind_to_block(&mut self, idx: usize) {
+        self.block = idx.min(self.image.blocks.len());
+        self.queue_block(self.block);
+    }
+
     #[must_use]
     pub fn current_block_bytes(&self) -> Option<&[u8]> {
         self.image.blocks.get(self.block).map(Vec::as_slice)
@@ -268,8 +274,14 @@ pub fn evaluate_ld_bytes_trap(
     if !player.playing {
         return TapeTrapResult::Ignored;
     }
+    // `load` is kept for a ROM-compatible signature; the machine layer applies
+    // load-vs-verify (poke memory or not) after Success.
+    let _ = load;
+    let start_block = player.block;
     loop {
         let Some(block) = player.current_block_bytes() else {
+            // No matching flag left: restore so a retry does not need a manual rewind.
+            player.rewind_to_block(start_block);
             return TapeTrapResult::Failure;
         };
         if block.is_empty() {
@@ -289,7 +301,6 @@ pub fn evaluate_ld_bytes_trap(
         if tap_checksum(&block[..block.len() - 1]) != checksum {
             return TapeTrapResult::Failure;
         }
-        let _ = load;
         player.consume_block();
         return TapeTrapResult::Success { addr, len };
     }
@@ -443,6 +454,17 @@ mod tests {
             }
         );
         assert_eq!(p.block, 2);
+    }
+
+    #[test]
+    fn ld_bytes_trap_restores_position_when_flag_not_found() {
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x42, 0xff ^ 0x42]],
+        };
+        let mut p = TapPlayer::new(img);
+        let r = evaluate_ld_bytes_trap(LD_BYTES_TRAP_PC, 0x00, true, 0x5c00, 1, &mut p);
+        assert_eq!(r, TapeTrapResult::Failure);
+        assert_eq!(p.block, 0, "should not drain the deck when no flag matches");
     }
 
     #[test]

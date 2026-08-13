@@ -288,8 +288,13 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         m.set_tape_load_options(opts);
-        let mode = if opts.flash_load { "instant" } else { "EAR" };
-        self.status = format!("Tape load: {mode}, speed {}x", opts.speed.clamp(1, 64));
+        let effective = m.tape_load_options();
+        let mode = if effective.flash_load {
+            "instant"
+        } else {
+            "EAR"
+        };
+        self.status = format!("Tape load: {mode}, speed {}x", effective.speed);
         Ok(())
     }
 

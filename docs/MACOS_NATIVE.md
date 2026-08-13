@@ -64,7 +64,7 @@ Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (d
 
 ### Experience ~20s load
 
-Abbreviated “feel of loading” that always finishes in about 20 seconds is tracked separately (follow-up to #81); ship Instant + Speed first.
+Abbreviated “feel of loading” that always finishes in about 20 seconds is tracked separately (follow-up to #82); ship Instant + Speed first.
 
 ## Keyboard (Mac native shell)
 
