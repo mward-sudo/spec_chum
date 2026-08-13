@@ -405,6 +405,34 @@ mod tests {
     }
 
     #[test]
+    fn set_key_holds_across_run_frames() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+
+        // J must stay pressed for the whole hold — turbo hosts + flicker would
+        // otherwise look like multiple keyword presses to 48K BASIC.
+        s.set_key(6, 3, true).expect("J down");
+        for i in 0..16 {
+            s.run_frame();
+            let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+            assert_eq!(
+                rows[6] & (1 << 3),
+                0,
+                "J must remain pressed after frame {i}"
+            );
+        }
+        s.set_key(6, 3, false).expect("J up");
+        {
+            let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+            assert_ne!(rows[6] & (1 << 3), 0, "J released");
+        }
+    }
+
+    #[test]
     fn model_id_roundtrip() {
         assert_eq!(ModelId::from_u32(0), Some(ModelId::Spectrum48));
         assert_eq!(ModelId::from_u32(1), Some(ModelId::Spectrum128));

@@ -5,8 +5,15 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @ObservedObject var host: HostBridge
 
+    /// Stable epoch — do **not** use `Date.now` here; parent re-renders would
+    /// rebuild the schedule and fire frames far above 50 Hz.
+    private static let frameTimeline = PeriodicTimelineSchedule(
+        from: Date(timeIntervalSinceReferenceDate: 0),
+        by: 1.0 / 50.0
+    )
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 50.0)) { timeline in
+        TimelineView(Self.frameTimeline) { timeline in
             VStack(spacing: 0) {
                 glassToolbar
                     .padding(.horizontal, 12)
@@ -35,6 +42,7 @@ struct ContentView: View {
                     .padding(.bottom, 10)
             }
             .onChange(of: timeline.date) { _, _ in
+                // HostBridge also wall-clock gates to ~50 Hz.
                 host.runFrame()
             }
         }

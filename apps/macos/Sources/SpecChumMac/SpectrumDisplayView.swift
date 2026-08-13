@@ -21,8 +21,13 @@ struct SpectrumDisplayView: NSViewRepresentable {
 /// Spectrum framebuffer view that owns keyboard focus and injects matrix keys.
 ///
 /// SwiftUI focus rings are decorative and do not make the process key. We activate
-/// `NSApp`, make the window key, and become first responder. A local monitor remains
-/// only as a backup when a SwiftUI host steals first responder while we stay key.
+/// `NSApp`, make the window key, and become first responder. Prefer first-responder
+/// `keyDown` / `keyUp` / `flagsChanged`. A local monitor is only a backup when a
+/// SwiftUI host steals first responder while the window stays key — it must not
+/// inject when we already own focus (would double-deliver presses).
+///
+/// Autorepeat (`isARepeat`) is ignored: Spectrum keeps a key held until keyUp;
+/// OS repeats would look like press edges and spam 48K keywords (e.g. LOAD).
 final class SpectrumNSView: NSView {
     weak var host: HostBridge?
     private var held: Set<UInt16> = []
@@ -135,9 +140,9 @@ final class SpectrumNSView: NSView {
             super.keyDown(with: event)
             return
         }
-        if !event.isARepeat {
-            applyKey(code: event.keyCode, pressed: true, flags: event.modifierFlags)
-        }
+        // Ignore OS autorepeat — hold until keyUp.
+        guard !event.isARepeat else { return }
+        applyKey(code: event.keyCode, pressed: true, flags: event.modifierFlags)
     }
 
     override func keyUp(with event: NSEvent) {
@@ -242,13 +247,18 @@ final class SpectrumNSView: NSView {
 
     private func applyKey(code: UInt16, pressed: Bool, flags: NSEvent.ModifierFlags) {
         if pressed {
-            held.insert(code)
-        } else {
-            held.remove(code)
+            // Duplicate keyDown (or monitor + view) while already held: keep matrix stable.
+            if !held.insert(code).inserted {
+                return
+            }
+        } else if held.remove(code) == nil {
+            return
         }
         syncMatrix(flags: flags)
     }
 
+    /// Rebuild matrix from `held` + modifiers. Only on real press/release/flags
+    /// changes so `run_frame` never observes a cleared intermediate state.
     private func syncMatrix(flags: NSEvent.ModifierFlags) {
         host?.clearKeys()
         let suppressCaps = held.contains { SpectrumKeymap.suppressesModifierCaps(keyCode: $0) }

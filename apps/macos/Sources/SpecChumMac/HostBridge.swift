@@ -34,6 +34,11 @@ final class HostBridge: ObservableObject {
 
     private var handle: UnsafeMutableRawPointer?
     private let romSearchRoots: [URL]
+    /// Wall-clock gate so SwiftUI over-scheduling cannot turbo the Spectrum.
+    private var lastFrameUptime: TimeInterval = 0
+    private static let framePeriod: TimeInterval = 1.0 / 50.0
+    /// After a hitch, advance at most this many Spectrum frames per host tick.
+    private static let maxCatchUpFrames = 2
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
@@ -52,11 +57,48 @@ final class HostBridge: ObservableObject {
         }
     }
 
-    func runFrame() {
+    /// Run Spectrum frame(s) capped to ~50 Hz wall clock (egui throttle parity).
+    /// Returns whether at least one `sc_run_frame` ran.
+    @discardableResult
+    func runFrame() -> Bool {
+        guard let handle else { return false }
+        let now = ProcessInfo.processInfo.systemUptime
+        if lastFrameUptime == 0 {
+            lastFrameUptime = now
+            sc_run_frame(handle)
+            syncTapePublished()
+            return true
+        }
+
+        var ran = 0
+        while now - lastFrameUptime >= Self.framePeriod, ran < Self.maxCatchUpFrames {
+            sc_run_frame(handle)
+            lastFrameUptime += Self.framePeriod
+            ran += 1
+        }
+        // If we stalled longer than the catch-up window, resync to wall clock.
+        if now - lastFrameUptime > Self.framePeriod * Double(Self.maxCatchUpFrames) {
+            lastFrameUptime = now
+        }
+        if ran > 0 {
+            syncTapePublished()
+            return true
+        }
+        return false
+    }
+
+    private func syncTapePublished() {
         guard let handle else { return }
-        sc_run_frame(handle)
-        tapePlaying = sc_tape_playing(handle) != 0
-        hasTape = sc_has_tape(handle) != 0
+        let playing = sc_tape_playing(handle) != 0
+        let tape = sc_has_tape(handle) != 0
+        // Avoid @Published writes every tick — they re-enter SwiftUI and can
+        // reset TimelineView(.periodic(from: .now)) into a turbo frame loop.
+        if playing != tapePlaying {
+            tapePlaying = playing
+        }
+        if tape != hasTape {
+            hasTape = tape
+        }
     }
 
     /// Copy current RGBA framebuffer into an `NSImage` (nearest-neighbor friendly).

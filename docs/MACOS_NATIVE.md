@@ -65,13 +65,34 @@ is key. On launch / appear / click the shell calls `NSApp.activate`,
 `makeKeyAndOrderFront`, and makes the Spectrum `NSView` first responder
 (`acceptsFirstResponder`, no decorative focus ring). Prefer the view’s
 `keyDown` / `keyUp` / `flagsChanged`; a local `NSEvent` monitor is only a backup
-when a SwiftUI host steals first responder while the window stays key.
+when a SwiftUI host steals first responder while the window stays key (it does
+**not** inject while the Spectrum view is first responder).
 ⌘-modified keys clear the matrix and are left alone for menu shortcuts.
 
+**Hold until keyUp:** OS autorepeat (`NSEvent.isARepeat`) is ignored. Spectrum
+keeps a matrix key held until `keyUp`; treating repeats as new presses spams 48K
+keyword mode (e.g. one short `j` → many `LOAD`s). Duplicate press events while a
+key is already held are also ignored so the matrix does not flicker.
+
 **Verify:** after `./scripts/run_macos_app.sh`, typing must **not** appear in Terminal;
-after 48K BASIC boots, letters should appear in BASIC.
+after 48K BASIC boots, letters should appear in BASIC; one short `j` → one `LOAD`.
 
 Not yet: Kempston mirroring (egui still maps Tab/arrows to joystick).
+
+## Frame pacing (~50 Hz)
+
+The shell advances the core with `sc_run_frame` at **~50 Hz wall clock**, matching
+egui’s `request_repaint_after(20ms)` throttle:
+
+- `TimelineView` uses a **stable** `PeriodicTimelineSchedule` (not `from: .now` on
+  every parent re-render — that reset the schedule and turbo’d the machine).
+- `HostBridge.runFrame()` also gates on `ProcessInfo.systemUptime` (~20 ms period,
+  small catch-up after hitches) so SwiftUI over-scheduling cannot run unbounded frames.
+- `@Published` tape flags are updated only when values change (writing them every
+  frame re-entered SwiftUI and worsened the turbo loop).
+
+**Verify:** 48K BASIC cursor blink should look like real hardware / egui (~50 Hz),
+not a rapid flicker.
 
 ## Liquid glass APIs used
 
