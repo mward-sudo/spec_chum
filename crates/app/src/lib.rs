@@ -605,7 +605,11 @@ impl SpecChumApp {
                                 if ui.selectable_label(selected, format!("{speed}x")).clicked() {
                                     opts.speed = speed;
                                     m.set_tape_load_options(opts);
-                                    self.session.status = format!("Tape: EAR load at {speed}x");
+                                    self.session.status = if opts.flash_load {
+                                        format!("Tape: instant flash-load, EAR speed {speed}x")
+                                    } else {
+                                        format!("Tape: EAR load at {speed}x")
+                                    };
                                 }
                             }
                         }

@@ -27,11 +27,21 @@ Local quality gate (same as CI intent):
 ## AI / agent-assisted work
 
 - Read `AGENTS.md` for crate boundaries and hard constraints.
-- Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync.
+- Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync and `pr-review-merge.mdc` for bot review gates.
 - Before coding, agents should consult open issues so implementations do not drift from tracked acceptance criteria.
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
+- **Before merge:** check `gh pr view` / review threads. Do not merge with unresolved **actionable** CodeRabbit (or similar bot) comments unless the user explicitly waives them; fix or reply with a wontfix reason, then resolve threads.
+
+## Lightweight review check (optional)
+
+No required CI status for CodeRabbit. Before merging, a quick manual check is enough:
+
+```bash
+gh pr view <N> --comments
+# or: unresolved threads via gh api graphql (reviewThreads { isResolved })
+```
 
 ## TDD
 
