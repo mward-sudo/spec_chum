@@ -1,91 +1,147 @@
 import AppKit
-import SwiftUI
 
-/// Spectrum matrix helpers for a minimal Mac keymap (vertical slice).
+/// Mac → Spectrum matrix mapping (parity with `crates/app/src/keymap.rs`).
+///
+/// Uses hardware key codes so mapping works even when synthetic / empty
+/// `characters` are present (flagsChanged rebuilds, local monitors).
 enum SpectrumKeymap {
     static let caps: (UInt32, UInt32) = (0, 0)
     static let sym: (UInt32, UInt32) = (7, 1)
 
-    /// Map a Mac key code / characters to matrix positions held while the key is down.
-    static func chords(for event: NSEvent) -> [(UInt32, UInt32)] {
-        var keys: [(UInt32, UInt32)] = []
-        let flags = event.modifierFlags
+    /// Matrix chords for one physical key + current modifiers.
+    static func chords(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> [(UInt32, UInt32)] {
+        let shift = flags.contains(.shift)
 
-        if flags.contains(.shift) {
+        // Arrows / delete → Caps + digit (ignore host Shift as extra Caps).
+        switch keyCode {
+        case 123: return [caps, (3, 4)] // left → Caps+5
+        case 125: return [caps, (4, 4)] // down → Caps+6
+        case 126: return [caps, (4, 3)] // up → Caps+7
+        case 124: return [caps, (4, 2)] // right → Caps+8
+        case 51: return [caps, (4, 0)] // delete → Caps+0
+        default: break
+        }
+
+        // Symbol-layer punctuation (host Shift must not also inject Caps).
+        if let punct = punctChord(keyCode: keyCode, shift: shift) {
+            return punct
+        }
+
+        var keys: [(UInt32, UInt32)] = []
+        if shift {
             keys.append(caps)
         }
         if flags.contains(.option) || flags.contains(.control) {
             keys.append(sym)
         }
 
-        switch event.keyCode {
-        case 123: // left
-            return [caps, (3, 4)]
-        case 125: // down
-            return [caps, (4, 4)]
-        case 126: // up
-            return [caps, (4, 3)]
-        case 124: // right
-            return [caps, (4, 2)]
-        case 51: // delete
-            return [caps, (4, 0)]
+        switch keyCode {
         case 36: // return
             keys.append((6, 0))
-            return keys
         case 49: // space
             keys.append((7, 0))
-            return keys
         default:
-            break
-        }
-
-        if let chars = event.charactersIgnoringModifiers?.lowercased(), let ch = chars.first {
-            if let pair = letterDigit(ch) {
+            if let pair = letterDigit(keyCode: keyCode) {
                 keys.append(pair)
             }
         }
         return keys
     }
 
-    private static func letterDigit(_ ch: Character) -> (UInt32, UInt32)? {
-        switch ch {
-        case "z": return (0, 1)
-        case "x": return (0, 2)
-        case "c": return (0, 3)
-        case "v": return (0, 4)
-        case "a": return (1, 0)
-        case "s": return (1, 1)
-        case "d": return (1, 2)
-        case "f": return (1, 3)
-        case "g": return (1, 4)
-        case "q": return (2, 0)
-        case "w": return (2, 1)
-        case "e": return (2, 2)
-        case "r": return (2, 3)
-        case "t": return (2, 4)
-        case "1": return (3, 0)
-        case "2": return (3, 1)
-        case "3": return (3, 2)
-        case "4": return (3, 3)
-        case "5": return (3, 4)
-        case "0": return (4, 0)
-        case "9": return (4, 1)
-        case "8": return (4, 2)
-        case "7": return (4, 3)
-        case "6": return (4, 4)
-        case "p": return (5, 0)
-        case "o": return (5, 1)
-        case "i": return (5, 2)
-        case "u": return (5, 3)
-        case "y": return (5, 4)
-        case "l": return (6, 1)
-        case "k": return (6, 2)
-        case "j": return (6, 3)
-        case "h": return (6, 4)
-        case "m": return (7, 2)
-        case "n": return (7, 3)
-        case "b": return (7, 4)
+    /// Caps / Symbol when held alone (no punctuation/arrow owning the chord).
+    static func modifierKeys(flags: NSEvent.ModifierFlags, suppressCaps: Bool) -> [(UInt32, UInt32)] {
+        var out: [(UInt32, UInt32)] = []
+        if flags.contains(.shift), !suppressCaps {
+            out.append(caps)
+        }
+        if flags.contains(.option) || flags.contains(.control) {
+            out.append(sym)
+        }
+        return out
+    }
+
+    static func suppressesModifierCaps(keyCode: UInt16) -> Bool {
+        switch keyCode {
+        case 123, 124, 125, 126, 51: // arrows, delete
+            return true
+        case 39, 41, 43, 47, 44, 27, 24, 33, 30, 42, 50: // punct
+            return true
+        default:
+            return false
+        }
+    }
+
+    // MARK: - Private
+
+    private static func letterDigit(keyCode: UInt16) -> (UInt32, UInt32)? {
+        // ANSI US key codes (same as Carbon / HIToolbox).
+        switch keyCode {
+        case 18: return (3, 0) // 1
+        case 19: return (3, 1) // 2
+        case 20: return (3, 2) // 3
+        case 21: return (3, 3) // 4
+        case 23: return (3, 4) // 5
+        case 22: return (4, 4) // 6
+        case 26: return (4, 3) // 7
+        case 28: return (4, 2) // 8
+        case 25: return (4, 1) // 9
+        case 29: return (4, 0) // 0
+        case 12: return (2, 0) // Q
+        case 13: return (2, 1) // W
+        case 14: return (2, 2) // E
+        case 15: return (2, 3) // R
+        case 17: return (2, 4) // T
+        case 16: return (5, 4) // Y
+        case 32: return (5, 3) // U
+        case 34: return (5, 2) // I
+        case 31: return (5, 1) // O
+        case 35: return (5, 0) // P
+        case 0: return (1, 0) // A
+        case 1: return (1, 1) // S
+        case 2: return (1, 2) // D
+        case 3: return (1, 3) // F
+        case 5: return (1, 4) // G
+        case 4: return (6, 4) // H
+        case 38: return (6, 3) // J
+        case 40: return (6, 2) // K
+        case 37: return (6, 1) // L
+        case 6: return (0, 1) // Z
+        case 7: return (0, 2) // X
+        case 8: return (0, 3) // C
+        case 9: return (0, 4) // V
+        case 11: return (7, 4) // B
+        case 45: return (7, 3) // N
+        case 46: return (7, 2) // M
         default: return nil
+        }
+    }
+
+    private static func punctChord(keyCode: UInt16, shift: Bool) -> [(UInt32, UInt32)]? {
+        switch keyCode {
+        case 39: // ' / "
+            return shift ? [sym, (5, 0)] : [sym, (4, 3)] // P / 7
+        case 41: // ; / :
+            return shift ? [sym, (0, 1)] : [sym, (5, 1)] // Z / O
+        case 43: // , / <
+            return shift ? [sym, (2, 3)] : [sym, (7, 3)] // R / N
+        case 47: // . / >
+            return shift ? [sym, (2, 4)] : [sym, (7, 2)] // T / M
+        case 44: // / / ?
+            return shift ? [sym, (0, 3)] : [sym, (0, 4)] // C / V
+        case 27: // - / _
+            return shift ? [sym, (4, 0)] : [sym, (6, 3)] // 0 / J
+        case 24: // = / +
+            return shift ? [sym, (6, 2)] : [sym, (6, 1)] // K / L
+        case 33: // [ / {
+            return shift ? [sym, (1, 3)] : [sym, (5, 4)] // F / Y
+        case 30: // ] / }
+            return shift ? [sym, (1, 4)] : [sym, (5, 3)] // G / U
+        case 42: // \ / |
+            return shift ? [sym, (1, 1)] : [sym, (1, 2)] // S / D
+        case 50: // ` / ~
+            return shift ? [sym, (1, 0)] : [sym, (0, 2)] // A / X
+        default:
+            return nil
         }
     }
 }

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @ObservedObject var host: HostBridge
+    @FocusState private var spectrumFocused: Bool
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0 / 50.0)) { timeline in
@@ -18,6 +19,12 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
+                    .focusable()
+                    .focused($spectrumFocused)
+                    .onTapGesture {
+                        spectrumFocused = true
+                        FocusSpectrumView.post()
+                    }
 
                 Text(host.status)
                     .font(.callout)
@@ -36,6 +43,8 @@ struct ContentView: View {
         .background(WindowBackground())
         .onAppear {
             host.runFrame()
+            spectrumFocused = true
+            FocusSpectrumView.post()
         }
     }
 
@@ -91,6 +100,15 @@ struct ContentView: View {
         if panel.runModal() == .OK, let url = panel.url {
             host.openTape(at: url)
         }
+    }
+}
+
+/// Ask the embedded Spectrum `NSView` to take first responder (SwiftUI focus alone is not enough).
+enum FocusSpectrumView {
+    static let name = Notification.Name("SpecChumFocusSpectrumView")
+
+    static func post() {
+        NotificationCenter.default.post(name: name, object: nil)
     }
 }
 

@@ -40,6 +40,30 @@ Environment:
 - Toolbar / status chrome via SwiftUI **`glassEffect`** on macOS 26+; fallback **`.ultraThinMaterial`**
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`
+- Keyboard: Spectrum view focuses on appear/click; local `NSEvent` monitor + `sc_set_key` (see below)
+
+## Keyboard (Mac native shell)
+
+Mapping matches egui (`crates/app/src/keymap.rs`) using **ANSI key codes** in
+`SpectrumKeymap.swift`:
+
+| Host | Spectrum |
+| --- | --- |
+| Letters / digits | Direct matrix |
+| Shift | Caps Shift |
+| Option / Ctrl | Symbol Shift |
+| Arrows | Caps + 5/6/7/8 (cursor) |
+| Backspace | Caps + 0 (DELETE) |
+| `'` / `"` | Symbol + 7 / Symbol + P |
+| `; , . / - = [ ] \\ \`` (+ Shift variants) | Same Symbol layer as egui |
+
+**Focus:** SwiftUI often keeps first responder off `NSViewRepresentable` children.
+The shell claims focus on appear/click and installs a **local key monitor** while
+the window is key (unless a real control/text field has focus) so BASIC typing
+works even when the hosting view steals focus. ⌘-modified keys clear the matrix
+and are left alone for menu shortcuts.
+
+Not yet: Kempston mirroring (egui still maps Tab/arrows to joystick).
 
 ## Liquid glass APIs used
 
@@ -52,7 +76,7 @@ Environment:
 ## Not in this slice (still egui-only or follow-ups)
 
 - Audio (beeper / AY via `cpal` in egui)
-- Full macOS keymap parity (Symbol-layer punctuation, Kempston)
+- Kempston joystick mirroring in the native shell
 - Snapshots (SNA/Z80), RZX, DSK
 - App bundle / signing / notarization
 - CI job that compiles the Swift shell (Linux CI stays Rust-only)
