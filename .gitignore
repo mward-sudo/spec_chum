@@ -9,3 +9,5 @@ roms/
 *.swp
 *.swo
 .rom-cache/
+apps/macos/.build/
+

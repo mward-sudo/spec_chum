@@ -4,13 +4,13 @@ How Spec Chum should present the emulator to users, and why we keep the current 
 
 ## Recommendation (default)
 
-**Keep Rust core + egui/eframe as the primary host.** Polish carefully, and avoid fake “liquid glass” / fullsize content under the macOS titlebar.
+**Keep Rust core + egui/eframe as the primary cross-platform host.** Polish carefully, and avoid fake “liquid glass” / fullsize content under the macOS titlebar.
 
-Spec Chum’s scarce resource is **hardware accuracy** (Z80, ULA, tape), not UI novelty. egui already ships framebuffer blit, menus, file dialogs (`rfd`), and headless `Context::run` tests. A multi-shell rewrite would burn months without improving T-state fidelity.
+Spec Chum’s scarce resource is **hardware accuracy** (Z80, ULA, tape), not UI novelty. egui already ships framebuffer blit, menus, file dialogs (`rfd`), and headless `Context::run` tests.
 
-**Optional later:** a thin **libretro / RetroArch** core once the `machine` host API is stable (`run_frame`, framebuffer, audio batch, input inject, optional serialize). Tracked in [#64](https://github.com/mward-sudo/spec_chum/issues/64). Do not start a full libretro implementation until that surface is deliberate—document first; scaffolding only if clearly valuable.
+**Optional on macOS:** a native SwiftUI shell with real liquid glass / materials, driven by the `host_api` C ABI — see [MACOS_NATIVE.md](MACOS_NATIVE.md) and [#66](https://github.com/mward-sudo/spec_chum/issues/66). This does **not** replace egui on Linux/Windows/CI.
 
-Revisit native shells only if we hit a hard wall on platform menus, accessibility, or App Store packaging that egui cannot meet.
+**Optional later:** a thin **libretro / RetroArch** core once the machine host API is stable (`run_frame`, framebuffer, audio batch, input inject, optional serialize). Tracked in [#64](https://github.com/mward-sudo/spec_chum/issues/64). The same `crates/host_api` surface is a useful stepping stone.
 
 ## Comparison (emulator frontends)
 
@@ -75,10 +75,11 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 
 | Choice | Rationale |
 | --- | --- |
-| Stay on **egui/eframe** | Already integrated; testable headless; matches small-team bandwidth |
-| No fullsize content under titlebar | Hit-testing and traffic lights must stay out of the menu strip |
-| Opaque panels | Predictable contrast and clicks; drop fake glass |
-| Native multi-shell later (optional) | Only if packaging/a11y/menus become product-critical |
+| Stay on **egui/eframe** as default | Already integrated; testable headless; matches small-team bandwidth |
+| Optional **SwiftUI macOS shell** | Native menus + liquid glass via `host_api`; see [MACOS_NATIVE.md](MACOS_NATIVE.md) / #66 — does not replace egui |
+| No fullsize content under titlebar (egui) | Hit-testing and traffic lights must stay out of the menu strip |
+| Opaque egui panels | Predictable contrast and clicks; drop fake glass in egui |
+| Native multi-shell beyond macOS later | Only if packaging/a11y/menus become product-critical |
 | Avoid Tauri/Dioxus-web for the machine loop | Extra process/IPC is the wrong complexity for a Spectrum core |
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
 

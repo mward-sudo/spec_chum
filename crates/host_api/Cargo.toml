@@ -1,0 +1,21 @@
+[package]
+name = "host_api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C ABI host surface for Spec Chum (native shells / future cores)"
+publish = false
+
+[lib]
+name = "spec_chum_host"
+crate-type = ["rlib", "staticlib", "cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+machine = { workspace = true }
+formats = { workspace = true }
+tape = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

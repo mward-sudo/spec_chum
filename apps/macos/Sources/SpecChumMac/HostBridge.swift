@@ -1,0 +1,212 @@
+import AppKit
+import CSpecChumHost
+import Foundation
+
+/// Thin Swift wrapper around the Spec Chum C host API.
+final class HostBridge: ObservableObject {
+    enum Model: UInt32, CaseIterable, Identifiable {
+        case spectrum48 = 0
+        case spectrum128 = 1
+        case spectrumPlus3 = 2
+
+        var id: UInt32 { rawValue }
+
+        var title: String {
+            switch self {
+            case .spectrum48: "Spectrum 48K"
+            case .spectrum128: "Spectrum 128K"
+            case .spectrumPlus3: "Spectrum +2A/+3"
+            }
+        }
+    }
+
+    @Published private(set) var status: String = "Starting…"
+    @Published private(set) var tapePlaying: Bool = false
+    @Published private(set) var hasTape: Bool = false
+    @Published var model: Model = .spectrum48 {
+        didSet {
+            guard let handle, oldValue != model else { return }
+            _ = sc_set_model(handle, model.rawValue)
+            tryAutoloadRom()
+            refreshStatus()
+        }
+    }
+
+    private var handle: UnsafeMutableRawPointer?
+    private let romSearchRoots: [URL]
+
+    init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
+        self.romSearchRoots = romSearchRoots
+        handle = sc_create(Model.spectrum48.rawValue, 1)
+        if handle == nil {
+            status = HostBridge.takeLastError() ?? "Failed to create host session"
+            return
+        }
+        tryAutoloadRom()
+        refreshStatus()
+    }
+
+    deinit {
+        if let handle {
+            sc_destroy(handle)
+        }
+    }
+
+    func runFrame() {
+        guard let handle else { return }
+        sc_run_frame(handle)
+        tapePlaying = sc_tape_playing(handle) != 0
+        hasTape = sc_has_tape(handle) != 0
+    }
+
+    /// Copy current RGBA framebuffer into an `NSImage` (nearest-neighbor friendly).
+    func makeFrameImage() -> NSImage? {
+        guard let handle else { return nil }
+        let ptr = sc_framebuffer_ptr(handle)
+        let w = Int(sc_framebuffer_width(handle))
+        let h = Int(sc_framebuffer_height(handle))
+        guard let ptr, w > 0, h > 0 else { return nil }
+
+        let bytesPerRow = w * 4
+        let data = Data(bytes: ptr, count: w * h * 4)
+        guard let provider = CGDataProvider(data: data as CFData) else { return nil }
+        guard let cgImage = CGImage(
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        ) else { return nil }
+        let size = NSSize(width: w, height: h)
+        return NSImage(cgImage: cgImage, size: size)
+    }
+
+    func loadRom(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_rom(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "ROM load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func openTape(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_open_tape(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "Tape open failed"
+        } else {
+            refreshStatus()
+            hasTape = true
+            tapePlaying = false
+        }
+    }
+
+    func playTape() {
+        guard let handle else { return }
+        if sc_tape_play(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Play failed"
+        } else {
+            refreshStatus()
+            tapePlaying = true
+        }
+    }
+
+    func pauseTape() {
+        guard let handle else { return }
+        _ = sc_tape_pause(handle)
+        refreshStatus()
+        tapePlaying = false
+    }
+
+    func rewindTape() {
+        guard let handle else { return }
+        _ = sc_tape_rewind(handle)
+        refreshStatus()
+        tapePlaying = false
+    }
+
+    func reset() {
+        guard let handle else { return }
+        if sc_reset(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Reset failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func setKey(row: UInt32, bit: UInt32, pressed: Bool) {
+        guard let handle else { return }
+        _ = sc_set_key(handle, row, bit, pressed ? 1 : 0)
+    }
+
+    func clearKeys() {
+        guard let handle else { return }
+        _ = sc_clear_keys(handle)
+    }
+
+    func tryAutoloadRom() {
+        let candidates: [String] = {
+            switch model {
+            case .spectrum48:
+                return ["roms/spec48.rom"]
+            case .spectrum128:
+                return ["roms/128/spec128uk.rom"]
+            case .spectrumPlus3:
+                return ["roms/plus3/plus3.rom", "roms/plus2a/plus2a.rom"]
+            }
+        }()
+        for root in romSearchRoots {
+            for rel in candidates {
+                let url = root.appendingPathComponent(rel)
+                if FileManager.default.isReadableFile(atPath: url.path) {
+                    loadRom(at: url)
+                    return
+                }
+            }
+        }
+        status = "Missing ROM — run ./scripts/fetch_roms.sh"
+    }
+
+    private func refreshStatus() {
+        guard let handle else { return }
+        if let cstr = sc_status(handle) {
+            status = String(cString: cstr)
+            sc_string_free(cstr)
+        }
+    }
+
+    private static func takeLastError() -> String? {
+        guard let cstr = sc_last_error() else { return nil }
+        let s = String(cString: cstr)
+        sc_string_free(cstr)
+        return s
+    }
+
+    static func defaultRomRoots() -> [URL] {
+        var roots: [URL] = []
+        roots.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        if let env = ProcessInfo.processInfo.environment["SPEC_CHUM_ROOT"] {
+            roots.append(URL(fileURLWithPath: env))
+        }
+        if let exe = Bundle.main.executableURL?.deletingLastPathComponent() {
+            var dir = exe
+            for _ in 0 ..< 8 {
+                let probe = dir.appendingPathComponent("roms/spec48.rom")
+                if FileManager.default.isReadableFile(atPath: probe.path) {
+                    roots.append(dir)
+                    break
+                }
+                dir = dir.deletingLastPathComponent()
+            }
+        }
+        return roots
+    }
+}
