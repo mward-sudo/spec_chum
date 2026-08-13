@@ -56,7 +56,7 @@ Before implementing: `gh issue list` / `gh issue view N` for related work. Prefe
 
 ### Before merge — bot review threads
 
-Do **not** merge while CodeRabbit (or similar bots) have unresolved **actionable** review comments, unless the user explicitly waives them. Check with `gh pr view` / review threads; fix or document wontfix, then resolve. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83)).
+Do **not** merge while CodeRabbit (or similar bots) have unresolved **actionable** review comments, unless the user explicitly waives them. Run `./scripts/check_pr_reviews.sh` before merge; fix or document wontfix, then resolve. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83)).
 
 Recently closed accuracy/feature issues: [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
 

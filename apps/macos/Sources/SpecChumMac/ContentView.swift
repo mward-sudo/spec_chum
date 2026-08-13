@@ -101,8 +101,8 @@ struct ContentView: View {
             }
             .pickerStyle(.menu)
             .frame(maxWidth: 90)
-            // Keep enabled while Instant is on: non-TAP / pulse TZX still uses EAR and speed.
-            .help("EAR bitstream speed (also speeds TZX pulse tapes; Instant only flash-loads TAP)")
+            // Keep enabled while Instant is on: pulse / non-standard TZX still uses EAR + speed.
+            .help("EAR bitstream speed (also speeds pulse TZX; Instant flash-loads TAP + standard-speed TZX)")
 
             Spacer()
 
