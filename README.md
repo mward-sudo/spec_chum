@@ -4,7 +4,7 @@
 
 A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust with an egui frontend.
 
-UI stack rationale (egui vs iced / Slint / Tauri / native shells): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md).
+UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libretro): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md).
 
 ## Goals
 
