@@ -76,6 +76,18 @@ struct ContentView: View {
             }
             .disabled(!host.hasTape)
 
+            if let frac = host.tapeFraction {
+                VStack(alignment: .leading, spacing: 2) {
+                    ProgressView(value: frac)
+                        .progressViewStyle(.linear)
+                        .frame(minWidth: 120, maxWidth: 180)
+                    Text(host.tapeBlockLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Tape progress")
+            }
+
             Spacer()
 
             Picker("Model", selection: $host.model) {

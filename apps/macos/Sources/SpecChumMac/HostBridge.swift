@@ -23,6 +23,9 @@ final class HostBridge: ObservableObject {
     @Published private(set) var status: String = "Starting…"
     @Published private(set) var tapePlaying: Bool = false
     @Published private(set) var hasTape: Bool = false
+    /// 0...1 tape position for ProgressView; nil when no tape.
+    @Published private(set) var tapeFraction: Double?
+    @Published private(set) var tapeBlockLabel: String = ""
     @Published var model: Model = .spectrum48 {
         didSet {
             guard let handle, oldValue != model else { return }
@@ -39,6 +42,9 @@ final class HostBridge: ObservableObject {
     private static let framePeriod: TimeInterval = 1.0 / 50.0
     /// After a hitch, advance at most this many Spectrum frames per host tick.
     private static let maxCatchUpFrames = 2
+    private let audio = TapeAudioPlayer()
+    /// Publish progress at most ~4 Hz to avoid SwiftUI churn.
+    private var progressPublishCounter: UInt32 = 0
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
@@ -49,9 +55,12 @@ final class HostBridge: ObservableObject {
         }
         tryAutoloadRom()
         refreshStatus()
+        let rate = Double(sc_audio_sample_rate(handle))
+        audio.ensureStarted(sampleRate: rate > 0 ? rate : 44100)
     }
 
     deinit {
+        audio.stop()
         if let handle {
             sc_destroy(handle)
         }
@@ -67,6 +76,7 @@ final class HostBridge: ObservableObject {
             lastFrameUptime = now
             sc_run_frame(handle)
             syncTapePublished()
+            enqueueAudio()
             return true
         }
 
@@ -82,9 +92,17 @@ final class HostBridge: ObservableObject {
         }
         if ran > 0 {
             syncTapePublished()
+            enqueueAudio()
             return true
         }
         return false
+    }
+
+    private func enqueueAudio() {
+        guard let handle else { return }
+        let n = Int(sc_audio_frames(handle))
+        guard n > 0, let ptr = sc_audio_ptr(handle) else { return }
+        audio.schedule(samples: ptr, count: n)
     }
 
     private func syncTapePublished() {
@@ -98,6 +116,36 @@ final class HostBridge: ObservableObject {
         }
         if tape != hasTape {
             hasTape = tape
+        }
+        progressPublishCounter &+= 1
+        if progressPublishCounter % 12 == 0 || !tape {
+            refreshTapeProgress()
+        }
+    }
+
+    private func refreshTapeProgress() {
+        guard let handle, sc_has_tape(handle) != 0 else {
+            if tapeFraction != nil {
+                tapeFraction = nil
+                tapeBlockLabel = ""
+            }
+            return
+        }
+        var block: UInt32 = 0
+        var blocks: UInt32 = 0
+        var pulse: UInt32 = 0
+        var pulses: UInt32 = 0
+        guard sc_tape_progress(handle, &block, &blocks, &pulse, &pulses) == 0, blocks > 0 else {
+            return
+        }
+        let within = pulses == 0 ? 0.0 : Double(min(pulse, pulses)) / Double(pulses)
+        let frac = min(1.0, (Double(min(block, blocks)) + within) / Double(blocks))
+        let label = "Tape \(min(block + 1, blocks))/\(blocks)"
+        if tapeFraction.map({ abs($0 - frac) > 0.002 }) ?? true {
+            tapeFraction = frac
+        }
+        if label != tapeBlockLabel {
+            tapeBlockLabel = label
         }
     }
 
@@ -148,6 +196,7 @@ final class HostBridge: ObservableObject {
             refreshStatus()
             hasTape = true
             tapePlaying = false
+            refreshTapeProgress()
         }
     }
 

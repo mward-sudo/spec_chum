@@ -280,6 +280,16 @@ impl TzxPlayer {
         self.pulses.len()
     }
 
+    #[must_use]
+    pub fn pulse_index(&self) -> usize {
+        self.pulse_i
+    }
+
+    #[must_use]
+    pub fn block_count(&self) -> usize {
+        self.block_starts.len().max(1)
+    }
+
     /// Advance `dt` T-states; returns current EAR level.
     pub fn advance(&mut self, mut dt: u32) -> bool {
         if !self.playing {

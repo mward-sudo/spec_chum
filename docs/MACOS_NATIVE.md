@@ -42,7 +42,17 @@ Environment:
 - Toolbar / status chrome via SwiftUI **`glassEffect`** on macOS 26+; fallback **`.ultraThinMaterial`**
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`
+- **Audio:** mono PCM from `sc_audio_*` each frame via `AVAudioEngine` (beeper + EAR mix + AY)
+- **Tape progress:** `ProgressView` from `sc_tape_progress` (block / pulse position)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)
+
+## Tape loading (Play / LD-BYTES)
+
+Insert starts **paused**. Enter the loader first (48K: `LOAD ""` / Type LOAD; 128K: Tape Loader), then **Tape → Play**.
+
+The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm flash-load / EAR. Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
+
+Standard-speed TZX is converted to TAP for flash-load. Flash-load is near-instant (little border activity); EAR-driven loads still produce border stripes and load tones via the EAR∥beeper speaker mix.
 
 ## Keyboard (Mac native shell)
 
@@ -104,7 +114,6 @@ not a rapid flicker.
 
 ## Not in this slice (still egui-only or follow-ups)
 
-- Audio (beeper / AY via `cpal` in egui)
 - Kempston joystick mirroring in the native shell
 - Snapshots (SNA/Z80), RZX, DSK
 - Signed / notarized distribution bundle (dev launch uses a staged `.app` via `open`)

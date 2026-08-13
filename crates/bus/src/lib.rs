@@ -168,11 +168,17 @@ impl Bus48 {
         self.border = value & 7;
         self.ula.set_border(self.frame_t, self.border);
         let beep = value & 0x10 != 0;
-        if beep != self.beeper {
-            self.beeper = beep;
-            self.beeper_edges.push((self.frame_t, beep));
-        }
+        self.beeper = beep;
+        // Mix MIC/beeper with EAR so tape load tones reach the speaker path.
+        self.push_speaker_level(beep || self.ear);
         self.mic = value & 0x08 != 0;
+    }
+
+    /// Record a speaker edge when the mixed EAR∥beeper level changes.
+    pub fn push_speaker_level(&mut self, level: bool) {
+        if self.beeper_edges.last().map(|&(_, l)| l) != Some(level) {
+            self.beeper_edges.push((self.frame_t, level));
+        }
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
@@ -355,15 +361,20 @@ impl Bus128 {
         floating_bus_byte_128(self.frame_t, self.screen_bytes()).unwrap_or(0xff)
     }
 
+    /// Record a speaker edge when the mixed EAR∥beeper level changes.
+    pub fn push_speaker_level(&mut self, level: bool) {
+        if self.beeper_edges.last().map(|&(_, l)| l) != Some(level) {
+            self.beeper_edges.push((self.frame_t, level));
+        }
+    }
+
     pub fn out_port(&mut self, port: u16, value: u8) {
         if port & 1 == 0 {
             self.border = value & 7;
             self.ula.set_border(self.frame_t, self.border);
             let beep = value & 0x10 != 0;
-            if beep != self.beeper {
-                self.beeper = beep;
-                self.beeper_edges.push((self.frame_t, beep));
-            }
+            self.beeper = beep;
+            self.push_speaker_level(beep || self.ear);
             return;
         }
         // 7FFD: A15=0, A1=0
