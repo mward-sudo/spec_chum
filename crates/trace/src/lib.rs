@@ -92,19 +92,17 @@ impl std::ops::BitOrAssign for Category {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FlashSkipReason {
-    WrongPc = 0,
-    Paused = 1,
-    NoBlock = 2,
-    EmptyBlock = 3,
-    WrongFlag = 4,
-    LengthMismatch = 5,
-    ChecksumFail = 6,
+    Paused = 0,
+    NoBlock = 1,
+    EmptyBlock = 2,
+    WrongFlag = 3,
+    LengthMismatch = 4,
+    ChecksumFail = 5,
 }
 
 impl Display for FlashSkipReason {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.write_str(match self {
-            Self::WrongPc => "wrong_pc",
             Self::Paused => "paused",
             Self::NoBlock => "no_block",
             Self::EmptyBlock => "empty_block",
@@ -177,14 +175,6 @@ pub enum EventKind {
     BusPort1ffd {
         value: u8,
     },
-    BusEar {
-        level: bool,
-    },
-    BusContended {
-        addr: u16,
-        write: bool,
-        wait: u8,
-    },
     TapePlay {
         block: u32,
         blocks: u32,
@@ -252,11 +242,9 @@ impl EventKind {
     pub fn category(self) -> Category {
         match self {
             Self::CpuStep { .. } | Self::CpuIrq { .. } | Self::CpuHalt { .. } => Category::CPU,
-            Self::BusPortFe { .. }
-            | Self::BusPort7ffd { .. }
-            | Self::BusPort1ffd { .. }
-            | Self::BusEar { .. }
-            | Self::BusContended { .. } => Category::BUS,
+            Self::BusPortFe { .. } | Self::BusPort7ffd { .. } | Self::BusPort1ffd { .. } => {
+                Category::BUS
+            }
             Self::TapePlay { .. }
             | Self::TapePause { .. }
             | Self::TapeRewind
@@ -287,12 +275,6 @@ impl Display for EventKind {
             ),
             Self::BusPort7ffd { value } => write!(f, "bus.7ffd out={value:02X}"),
             Self::BusPort1ffd { value } => write!(f, "bus.1ffd out={value:02X}"),
-            Self::BusEar { level } => write!(f, "bus.ear level={}", u8::from(level)),
-            Self::BusContended { addr, write, wait } => write!(
-                f,
-                "bus.contend addr={addr:04X} {} wait={wait}",
-                if write { "wr" } else { "rd" }
-            ),
             Self::TapePlay { block, blocks } => write!(f, "tape.play block={block}/{blocks}"),
             Self::TapePause { block } => write!(f, "tape.pause block={block}"),
             Self::TapeRewind => write!(f, "tape.rewind"),
@@ -337,7 +319,7 @@ impl Display for EventKind {
                 level,
             } => write!(
                 f,
-                "tape.ear_rate edges={edges_per_frame} level={}",
+                "tape.ear_rate window_edges={edges_per_frame} level={}",
                 u8::from(level)
             ),
             Self::UlaFrame { frame } => write!(f, "ula.frame n={frame}"),
@@ -637,55 +619,54 @@ pub fn test_lock() -> std::sync::MutexGuard<'static, ()> {
 
 /// Test helper: enable categories, clear ring, run `f`, restore previous enable mask.
 pub fn with_trace<R>(cats: Category, f: impl FnOnce() -> R) -> R {
-    let prev = categories();
+    struct Restore(Category);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            enable(self.0);
+        }
+    }
+    let _restore = Restore(categories());
     clear();
     enable(cats);
-    let out = f();
-    enable(prev);
-    out
+    f()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    fn exclusive<R>(f: impl FnOnce() -> R) -> R {
-        static LOCK: Mutex<()> = Mutex::new(());
-        let _g = LOCK.lock().expect("trace test lock");
-        f()
-    }
 
     #[test]
     fn disabled_emit_is_noop() {
-        exclusive(|| {
-            disable();
-            clear();
-            emit(EventKind::TapeRewind);
-            assert_eq!(len(), 0);
-        });
+        let _g = test_lock();
+        disable();
+        clear();
+        emit(EventKind::TapeRewind);
+        assert_eq!(len(), 0);
     }
 
     #[test]
     fn ring_keeps_last_n() {
-        exclusive(|| {
-            disable();
-            clear();
-            enable(Category::TAPE);
-            {
-                let mut g = ring().lock().expect("lock");
-                *g = Ring::new(4);
-            }
-            for i in 0..10u32 {
-                emit(EventKind::TapePause { block: i });
-            }
-            let snap = snapshot();
-            assert_eq!(snap.len(), 4);
-            assert_eq!(snap[0].kind, EventKind::TapePause { block: 6 });
-            assert_eq!(snap[3].kind, EventKind::TapePause { block: 9 });
-            disable();
-            clear();
-        });
+        let _g = test_lock();
+        disable();
+        clear();
+        enable(Category::TAPE);
+        {
+            let mut g = ring().lock().expect("lock");
+            *g = Ring::new(4);
+        }
+        for i in 0..10u32 {
+            emit(EventKind::TapePause { block: i });
+        }
+        let snap = snapshot();
+        assert_eq!(snap.len(), 4);
+        assert_eq!(snap[0].kind, EventKind::TapePause { block: 6 });
+        assert_eq!(snap[3].kind, EventKind::TapePause { block: 9 });
+        {
+            let mut g = ring().lock().expect("lock");
+            *g = Ring::new(DEFAULT_CAPACITY);
+        }
+        disable();
+        clear();
     }
 
     #[test]
@@ -701,23 +682,22 @@ mod tests {
 
     #[test]
     fn dump_contains_flash_skip() {
-        exclusive(|| {
-            disable();
-            clear();
-            enable(Category::TAPE);
-            emit(EventKind::FlashLoadSkip {
-                reason: FlashSkipReason::WrongFlag,
-                block: 0,
-                flag_got: 0xff,
-                flag_want: 0x00,
-                block_len: 19,
-                want_len: 17,
-            });
-            let s = dump_string();
-            assert!(s.contains("tape.flash.skip"));
-            assert!(s.contains("wrong_flag"));
-            disable();
-            clear();
+        let _g = test_lock();
+        disable();
+        clear();
+        enable(Category::TAPE);
+        emit(EventKind::FlashLoadSkip {
+            reason: FlashSkipReason::WrongFlag,
+            block: 0,
+            flag_got: 0xff,
+            flag_want: 0x00,
+            block_len: 19,
+            want_len: 17,
         });
+        let s = dump_string();
+        assert!(s.contains("tape.flash.skip"));
+        assert!(s.contains("wrong_flag"));
+        disable();
+        clear();
     }
 }

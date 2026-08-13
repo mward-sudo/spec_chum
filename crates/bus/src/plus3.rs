@@ -202,6 +202,17 @@ impl BusPlus3 {
             if self.ear {
                 v |= 0x40;
             }
+            if trace::enabled(trace::Category::BUS) {
+                static FE_IN_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let n = FE_IN_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if n.is_multiple_of(1024) {
+                    trace::emit(trace::EventKind::BusPortFe {
+                        write: false,
+                        value: v,
+                        ear: self.ear,
+                    });
+                }
+            }
             return v;
         }
         // AY register read

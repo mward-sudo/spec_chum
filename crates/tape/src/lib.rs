@@ -274,16 +274,14 @@ pub fn evaluate_ld_bytes_trap(
         return TapeTrapResult::Ignored;
     }
     if !player.playing {
-        if trace::enabled(trace::Category::TAPE) {
-            trace::emit(trace::EventKind::FlashLoadSkip {
-                reason: trace::FlashSkipReason::Paused,
-                block: player.block as u32,
-                flag_got: 0,
-                flag_want: flag_expected,
-                block_len: 0,
-                want_len: len,
-            });
-        }
+        trace::emit(trace::EventKind::FlashLoadSkip {
+            reason: trace::FlashSkipReason::Paused,
+            block: player.block as u32,
+            flag_got: 0,
+            flag_want: flag_expected,
+            block_len: 0,
+            want_len: len,
+        });
         return TapeTrapResult::Ignored;
     }
     // `load` is kept for a ROM-compatible signature; the machine layer applies

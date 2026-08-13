@@ -23,7 +23,7 @@ Do not add commercial game TAPs.
 
 Optional commercial tape for optional local tests (never commit):
 
-`/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx`
+`<path-to-local-commercial-tape>/The Boggit - Side 1.tzx`
 
 Debug / observability for failed loads: see [`docs/DEBUGGING.md`](../../../docs/DEBUGGING.md).
 Harness: `cargo test -p machine attr_mark_load_path_dumps_trace_on_failure -- --nocapture`.

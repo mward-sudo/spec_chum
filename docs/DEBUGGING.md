@@ -27,7 +27,7 @@ Hosts call `trace::init_from_env()` (egui `main`, `HostSession::new`,
 | --- | --- | --- |
 | `cpu` | 1 | Instruction / IRQ / HALT samples |
 | `bus` | 2 | Port `FE` / `7FFD` / `1FFD`, EAR edges |
-| `tape` | 4 | Play/pause/rewind, block consume, flash-load enter/exit/skip, EAR rate |
+| `tape` | 4 | Play/pause/rewind, block consume, flash-load enter/exit/skip, sampled EAR edge counts |
 | `ula` | 8 | Frame count, border changes (sampled) |
 | `machine` | 16 | Model, load mode, LD-BYTES hold |
 
@@ -109,7 +109,7 @@ Fixture: `tests/fixtures/tape/attr_mark.tap` (CODE at `0x8000` marking attr
 
 Local commercial tape for optional repro (**do not commit**):
 
-`/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx`
+`<path-to-local-commercial-tape>/The Boggit - Side 1.tzx`
 
 See also `tests/fixtures/tape/README.md` and open issue for tape load still
 failing in practice (blocked on this infra until traces identify the cause).

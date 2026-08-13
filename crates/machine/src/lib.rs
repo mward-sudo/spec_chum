@@ -977,15 +977,20 @@ impl Machine {
         let new_ear = t.advance(advance_dt);
         if new_ear != *ear {
             *ear = new_ear;
-            // Subsample EAR edges — every edge would blow the ring during pilot.
+            // Count EAR edges; emit a sampled rate (edges since last sample), not the stride.
             if trace::enabled(trace::Category::TAPE) {
-                static EAR_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-                let n = EAR_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if n.is_multiple_of(256) {
+                static EAR_EDGES: std::sync::atomic::AtomicU32 =
+                    std::sync::atomic::AtomicU32::new(0);
+                static EAR_SAMPLES: std::sync::atomic::AtomicU32 =
+                    std::sync::atomic::AtomicU32::new(0);
+                let edges = EAR_EDGES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                let samples = EAR_SAMPLES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if samples.is_multiple_of(256) {
                     trace::emit(trace::EventKind::TapeEarRate {
-                        edges_per_frame: 256,
+                        edges_per_frame: edges,
                         level: new_ear,
                     });
+                    EAR_EDGES.store(0, std::sync::atomic::Ordering::Relaxed);
                 }
             }
             let level = beeper || new_ear;
@@ -2104,45 +2109,23 @@ mod tests {
         }
     }
 
-    /// Deterministic tape repro harness (observability).
-    ///
-    /// Runs a 48K `LOAD ""` path against `tests/fixtures/tape/attr_mark.tap` with
-    /// the structured trace enabled. On load failure, dumps the ring to stderr.
-    ///
-    /// Load success is reported but not required for CI green while tape is still
-    /// broken in practice (#85); observability itself is asserted. For a hard
-    /// gate, run `attr_mark_load_path_must_succeed` with `--ignored`.
-    ///
-    /// Local commercial tape (do **not** commit):
-    /// `/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx`
-    #[test]
-    fn attr_mark_load_path_dumps_trace_on_failure() {
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
+    /// Shared LOAD "" harness body. Returns whether CODE bytes landed at 0x8000.
+    /// Caller must hold `trace::test_lock()` and configure categories.
+    fn run_attr_mark_load_path(rom: &[u8]) -> (Machine, bool) {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/tape/attr_mark.tap");
         let img = TapImage::load(&path).expect("attr_mark.tap");
-
-        // Serialize against other tests that share the global ring.
-        let _lock = trace::test_lock();
-        trace::clear();
-        trace::enable(trace::Category::DEFAULT | trace::Category::TAPE);
-
-        let mut m = Machine::new_48k(&rom).unwrap();
+        let mut m = Machine::new_48k(rom).unwrap();
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
         });
         m.insert_tape(TapPlayer::new(img));
-
         for _ in 0..200 {
             let _ = m.run_frame();
         }
-
         let sym = (7usize, 1u8);
-        let chords: Vec<(Vec<(usize, u8)>, u32)> = vec![
+        let chords: [(Vec<(usize, u8)>, u32); 8] = [
             (vec![(6, 3)], 6), // J = LOAD
             (vec![], 3),
             (vec![sym, (5, 0)], 6), // Sym + P = "
@@ -2164,7 +2147,6 @@ mod tests {
         }
         m.keyboard_mut().reset();
         m.set_tape_playing(true);
-
         let mut loaded = false;
         for _ in 0..400 {
             let _ = m.run_frame();
@@ -2179,7 +2161,40 @@ mod tests {
                 break;
             }
         }
+        (m, loaded)
+    }
 
+    /// Deterministic tape repro harness (observability).
+    ///
+    /// Runs a 48K `LOAD ""` path against `tests/fixtures/tape/attr_mark.tap` with
+    /// the structured trace enabled. On load failure, dumps the ring to stderr.
+    ///
+    /// Load success is reported but not required for CI green while tape is still
+    /// broken in practice (#85); observability itself is asserted. For a hard
+    /// gate, run `attr_mark_load_path_must_succeed` with `--ignored`.
+    ///
+    /// Local commercial tape (do **not** commit):
+    /// `<path-to-local-commercial-tape>/The Boggit - Side 1.tzx`
+    #[test]
+    fn attr_mark_load_path_dumps_trace_on_failure() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+
+        let _lock = trace::test_lock();
+        struct TraceRestore;
+        impl Drop for TraceRestore {
+            fn drop(&mut self) {
+                trace::disable();
+                trace::clear();
+            }
+        }
+        let _restore = TraceRestore;
+        trace::clear();
+        trace::enable(trace::Category::DEFAULT | trace::Category::TAPE);
+
+        let (m, loaded) = run_attr_mark_load_path(&rom);
         let dump = trace::dump_string();
         if !loaded {
             eprintln!("=== attr_mark LOAD path failed — dumping trace ===");
@@ -2199,10 +2214,8 @@ mod tests {
             dump.contains("tape.play")
                 || dump.contains("tape.flash")
                 || dump.contains("tape.block")
-                || dump.contains("tape.ear_rate")
-                || dump.contains("machine.load_mode")
-                || dump.contains("ula.frame"),
-            "expected tape/ula/machine trace events even when LOAD fails; dump head:\n{}",
+                || dump.contains("tape.ear_rate"),
+            "expected tape.* trace events when exercising LOAD path; dump head:\n{}",
             dump.chars().take(1200).collect::<String>()
         );
 
@@ -2214,9 +2227,6 @@ mod tests {
                  trace dump above is the debugging artifact"
             );
         }
-
-        trace::disable();
-        trace::clear();
     }
 
     /// Hard success gate for attr_mark `LOAD ""` (ignored until #85 is fixed).
@@ -2227,58 +2237,23 @@ mod tests {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         };
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/tape/attr_mark.tap");
-        let img = TapImage::load(&path).expect("attr_mark.tap");
         let _lock = trace::test_lock();
+        struct TraceRestore;
+        impl Drop for TraceRestore {
+            fn drop(&mut self) {
+                trace::disable();
+                trace::clear();
+            }
+        }
+        let _restore = TraceRestore;
         trace::clear();
         trace::enable(trace::Category::DEFAULT | trace::Category::TAPE);
-        let mut m = Machine::new_48k(&rom).unwrap();
-        m.set_tape_load_options(TapeLoadOptions {
-            flash_load: true,
-            speed: 1,
-        });
-        m.insert_tape(TapPlayer::new(img));
-        for _ in 0..200 {
-            let _ = m.run_frame();
-        }
-        let sym = (7usize, 1u8);
-        for (keys, frames) in [
-            (vec![(6, 3)], 6u32),
-            (vec![], 3),
-            (vec![sym, (5, 0)], 6),
-            (vec![], 3),
-            (vec![sym, (5, 0)], 6),
-            (vec![], 3),
-            (vec![(6, 0)], 6),
-            (vec![], 10),
-        ] {
-            for _ in 0..frames {
-                let kb = m.keyboard_mut();
-                kb.reset();
-                for &(row, bit) in &keys {
-                    kb.set_key(row, bit, true);
-                }
-                let _ = m.run_frame();
-            }
-        }
-        m.keyboard_mut().reset();
-        m.set_tape_playing(true);
-        let mut loaded = false;
-        for _ in 0..400 {
-            let _ = m.run_frame();
-            if m.read_mem(0x8000) == 0x21 && m.read_mem(0x8005) == 0xc9 {
-                loaded = true;
-                break;
-            }
-        }
+        let (_m, loaded) = run_attr_mark_load_path(&rom);
         if !loaded {
             eprintln!("=== attr_mark hard gate failed — dumping trace ===");
             trace::dump_to_stderr();
         }
         assert!(loaded, "attr_mark CODE missing at 0x8000");
-        trace::disable();
-        trace::clear();
     }
 
     #[test]
