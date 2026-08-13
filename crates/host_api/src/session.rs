@@ -376,6 +376,35 @@ mod tests {
     }
 
     #[test]
+    fn set_key_injects_and_clear_resets_matrix() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+
+        // J = row 6 bit 3 (LOAD keyword); matrix bits are active-low.
+        s.set_key(6, 3, true).expect("J down");
+        {
+            let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+            assert_eq!(rows[6] & (1 << 3), 0, "J bit should be pressed (cleared)");
+        }
+
+        s.set_key(7, 1, true).expect("Symbol Shift");
+        {
+            let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+            assert_eq!(rows[7] & (1 << 1), 0, "Sym bit pressed");
+        }
+
+        s.clear_keys().expect("clear");
+        {
+            let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+            assert!(rows.iter().all(|&r| r == 0x1f), "all rows idle after clear");
+        }
+    }
+
+    #[test]
     fn model_id_roundtrip() {
         assert_eq!(ModelId::from_u32(0), Some(ModelId::Spectrum48));
         assert_eq!(ModelId::from_u32(1), Some(ModelId::Spectrum128));
