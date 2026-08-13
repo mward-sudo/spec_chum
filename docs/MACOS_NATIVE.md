@@ -55,12 +55,13 @@ Mapping matches egui (`crates/app/src/keymap.rs`) using **ANSI key codes** in
 | Arrows | Caps + 5/6/7/8 (cursor) |
 | Backspace | Caps + 0 (DELETE) |
 | `'` / `"` | Symbol + 7 / Symbol + P |
-| `; , . / - =` (+ Shift variants) | Same Symbol layer as egui |
+| `; , . / - = [ ] \\ \`` (+ Shift variants) | Same Symbol layer as egui |
 
 **Focus:** SwiftUI often keeps first responder off `NSViewRepresentable` children.
 The shell claims focus on appear/click and installs a **local key monitor** while
-the window is key so BASIC typing works even when the hosting view steals focus.
-⌘-modified keys are left alone for menu shortcuts.
+the window is key (unless a real control/text field has focus) so BASIC typing
+works even when the hosting view steals focus. ⌘-modified keys clear the matrix
+and are left alone for menu shortcuts.
 
 Not yet: Kempston mirroring (egui still maps Tab/arrows to joystick).
 

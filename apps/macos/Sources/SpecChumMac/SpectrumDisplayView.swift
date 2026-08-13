@@ -21,8 +21,8 @@ struct SpectrumDisplayView: NSViewRepresentable {
 /// Spectrum framebuffer view that owns keyboard focus and injects matrix keys.
 ///
 /// SwiftUI often keeps first-responder away from `NSViewRepresentable` children.
-/// We claim focus on appear/click and also install a local key monitor while the
-/// window is key so typing reaches BASIC even when the hosting view steals focus.
+/// We claim focus on appear/click and also install a local key monitor so typing
+/// reaches BASIC when the hosting view (but not a toolbar control) has focus.
 final class SpectrumNSView: NSView {
     weak var host: HostBridge?
     private var held: Set<UInt16> = []
@@ -113,8 +113,8 @@ final class SpectrumNSView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        // Prefer local monitor path; still handle if we are first responder.
         if event.modifierFlags.contains(.command) {
+            releaseAllKeys()
             super.keyDown(with: event)
             return
         }
@@ -123,6 +123,8 @@ final class SpectrumNSView: NSView {
 
     override func keyUp(with event: NSEvent) {
         if event.modifierFlags.contains(.command) {
+            // keyUp for a letter after ⌘chord still carries .command — clear stuck bits.
+            releaseAllKeys()
             super.keyUp(with: event)
             return
         }
@@ -130,6 +132,10 @@ final class SpectrumNSView: NSView {
     }
 
     override func flagsChanged(with event: NSEvent) {
+        if event.modifierFlags.contains(.command) {
+            releaseAllKeys()
+            return
+        }
         syncMatrix(flags: event.modifierFlags)
     }
 
@@ -139,15 +145,30 @@ final class SpectrumNSView: NSView {
         window?.makeFirstResponder(self)
     }
 
+    /// Capture when we (or a non-control SwiftUI host) own focus; skip real controls.
+    private func shouldCaptureKeys() -> Bool {
+        guard let window, window.isKeyWindow else { return false }
+        guard let fr = window.firstResponder else { return true }
+        if fr === self { return true }
+        if fr is NSTextView || fr is NSTextField { return false }
+        if fr is NSControl { return false }
+        // SwiftUI hosting views are plain NSViews — still need the monitor.
+        return true
+    }
+
     private func installKeyMonitor() {
         removeKeyMonitor()
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) {
             [weak self] event in
-            guard let self, self.window?.isKeyWindow == true else { return event }
-            // Leave menu / system shortcuts alone.
+            guard let self else { return event }
+
             if event.modifierFlags.contains(.command) {
+                self.releaseAllKeys()
                 return event
             }
+
+            guard self.shouldCaptureKeys() else { return event }
+
             switch event.type {
             case .keyDown:
                 if !event.isARepeat {
@@ -197,7 +218,6 @@ final class SpectrumNSView: NSView {
     // MARK: - Matrix sync
 
     private func applyKey(code: UInt16, pressed: Bool, flags: NSEvent.ModifierFlags) {
-        // Ignore auto-repeat floods; matrix already held.
         if pressed {
             held.insert(code)
         } else {
@@ -213,8 +233,6 @@ final class SpectrumNSView: NSView {
             host?.setKey(row: row, bit: bit, pressed: true)
         }
         for code in held {
-            // Skip re-applying Caps/Sym from each chord when modifiers already applied,
-            // except for chords that own Caps/Sym (arrows / punctuation).
             let chord = SpectrumKeymap.chords(keyCode: code, flags: flags)
             if SpectrumKeymap.suppressesModifierCaps(keyCode: code) {
                 for (row, bit) in chord {
