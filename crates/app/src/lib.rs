@@ -614,6 +614,98 @@ impl SpecChumApp {
                             }
                         }
                     });
+                    ui.menu_button("Debug", |ui| {
+                        let cats = trace::categories();
+                        let mut tape = cats.contains(trace::Category::TAPE);
+                        let mut cpu = cats.contains(trace::Category::CPU);
+                        let mut bus = cats.contains(trace::Category::BUS);
+                        let mut ula = cats.contains(trace::Category::ULA);
+                        let mut machine = cats.contains(trace::Category::MACHINE);
+                        let mut changed = false;
+                        changed |= ui.checkbox(&mut tape, "Trace tape").changed();
+                        changed |= ui.checkbox(&mut cpu, "Trace CPU").changed();
+                        changed |= ui.checkbox(&mut bus, "Trace bus").changed();
+                        changed |= ui.checkbox(&mut ula, "Trace ULA").changed();
+                        changed |= ui.checkbox(&mut machine, "Trace machine").changed();
+                        if changed {
+                            let mut c = trace::Category::NONE;
+                            if tape {
+                                c |= trace::Category::TAPE;
+                            }
+                            if cpu {
+                                c |= trace::Category::CPU;
+                            }
+                            if bus {
+                                c |= trace::Category::BUS;
+                            }
+                            if ula {
+                                c |= trace::Category::ULA;
+                            }
+                            if machine {
+                                c |= trace::Category::MACHINE;
+                            }
+                            trace::enable(c);
+                            self.session.status = format!(
+                                "Trace categories=0x{:x} ({} events)",
+                                c.bits(),
+                                trace::len()
+                            );
+                        }
+                        if ui.button("Clear ring").clicked() {
+                            trace::clear();
+                            self.session.status = "Trace cleared".into();
+                            ui.close_menu();
+                        }
+                        if ui.button("Dump to stderr").clicked() {
+                            trace::dump_to_stderr();
+                            self.session.status =
+                                format!("Dumped {} trace events to stderr", trace::len());
+                            ui.close_menu();
+                        }
+                        if ui.button("Dump to file…").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .set_file_name("spec_chum_trace.txt")
+                                .save_file()
+                            {
+                                match trace::dump_to_file(&path) {
+                                    Ok(()) => {
+                                        self.session.status =
+                                            format!("Trace dump → {}", path.display());
+                                    }
+                                    Err(e) => {
+                                        self.session.status = format!("Trace dump failed: {e}");
+                                    }
+                                }
+                            }
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if let Some(m) = self.session.machine.as_ref() {
+                            let r = &m.cpu().regs;
+                            ui.label(format!(
+                                "PC={:04X} SP={:04X} AF={:04X} AF'={:02X}{:02X}",
+                                r.pc,
+                                r.sp,
+                                r.af(),
+                                r.a_,
+                                r.f_
+                            ));
+                            if let Some(b) = m.tape_block() {
+                                ui.label(format!(
+                                    "Tape block {b}/{} playing={}",
+                                    m.tape_progress().map(|p| p.block_count).unwrap_or(0),
+                                    m.tape_playing()
+                                ));
+                            } else {
+                                ui.label("No tape");
+                            }
+                        }
+                        let snap = trace::snapshot();
+                        ui.label(format!("Last events ({}/ring):", snap.len().min(12)));
+                        for ev in snap.iter().rev().take(12) {
+                            ui.monospace(ev.to_string());
+                        }
+                    });
                     ui.menu_button("Help", |ui| {
                         ui.label("Spec Chum — from-scratch ZX Spectrum emulator");
                         ui.separator();

@@ -7,6 +7,7 @@ members = [
     "crates/tape",
     "crates/formats",
     "crates/machine",
+    "crates/trace",
     "crates/host_api",
     "crates/app",
 ]
@@ -26,6 +27,7 @@ ula = { path = "crates/ula" }
 tape = { path = "crates/tape" }
 formats = { path = "crates/formats" }
 machine = { path = "crates/machine" }
+trace = { path = "crates/trace" }
 eframe = { version = "0.31", default-features = true }
 egui = "0.31"
 cpal = "0.15"

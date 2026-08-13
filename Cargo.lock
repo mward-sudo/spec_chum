@@ -212,6 +212,7 @@ dependencies = [
  "machine",
  "rfd",
  "tape",
+ "trace",
 ]
 
 [[package]]
@@ -604,6 +605,7 @@ name = "bus"
 version = "0.1.0"
 dependencies = [
  "formats",
+ "trace",
  "ula",
 ]
 
@@ -1621,6 +1623,7 @@ dependencies = [
  "machine",
  "tape",
  "thiserror 2.0.20",
+ "trace",
 ]
 
 [[package]]
@@ -1963,6 +1966,7 @@ dependencies = [
  "bus",
  "formats",
  "tape",
+ "trace",
  "ula",
  "z80",
 ]
@@ -3272,6 +3276,7 @@ name = "tape"
 version = "0.1.0"
 dependencies = [
  "thiserror 2.0.20",
+ "trace",
 ]
 
 [[package]]
@@ -3414,6 +3419,10 @@ checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
 dependencies = [
  "winnow",
 ]
+
+[[package]]
+name = "trace"
+version = "0.1.0"
 
 [[package]]
 name = "tracing"

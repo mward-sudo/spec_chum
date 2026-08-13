@@ -35,10 +35,11 @@ Environment:
 - `SPEC_CHUM_ROOT` — repo root used to find `roms/` (set by the app wrapper)
 - `DEVELOPER_DIR` — override Xcode path (defaults to `Xcode.app` or `Xcode-beta.app`)
 - `DYLD_LIBRARY_PATH` — set by the staged `.app` launcher to `target/release`
+- `SPEC_CHUM_DEBUG=1` / `SPEC_CHUM_TRACE=tape,cpu` — structured tracing (see [`DEBUGGING.md`](DEBUGGING.md)); Mac **Debug** menu dumps the ring
 
 ## What this vertical slice includes
 
-- Native `MenuBar` / `Commands` (File → Open Tape / Open ROM, Tape Play/Pause/Rewind, Machine Reset + model)
+- Native `MenuBar` / `Commands` (File → Open Tape / Open ROM, Tape Play/Pause/Rewind, Machine Reset + model, Debug trace dump)
 - Toolbar / status chrome via SwiftUI **`glassEffect`** on macOS 26+; fallback **`.ultraThinMaterial`**
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`

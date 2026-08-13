@@ -4,6 +4,7 @@ use app::SpecChumApp;
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    trace::init_from_env();
     // Use a normal titlebar (not fullsize content view). Drawing under the macOS
     // titlebar buried menu hit-tests in the traffic-light / drag region (#60).
     let viewport = egui::ViewportBuilder::default()

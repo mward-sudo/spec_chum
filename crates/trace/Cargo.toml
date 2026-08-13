@@ -1,13 +1,12 @@
 [package]
-name = "tape"
+name = "trace"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Spec Chum tape crate"
+description = "Spec Chum structured emulator trace / debug ring buffer"
+publish = false
 
 [dependencies]
-thiserror = { workspace = true }
-trace = { workspace = true }
 
 [lints]
 workspace = true

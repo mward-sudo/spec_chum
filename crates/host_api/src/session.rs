@@ -65,6 +65,7 @@ pub struct HostSession {
 impl HostSession {
     #[must_use]
     pub fn new(model: ModelId, with_border: bool) -> Self {
+        trace::init_from_env();
         let (width, height) = dims(with_border);
         Self {
             machine: None,

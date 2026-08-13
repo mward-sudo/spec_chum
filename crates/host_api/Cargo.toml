@@ -15,6 +15,7 @@ path = "src/lib.rs"
 machine = { workspace = true }
 formats = { workspace = true }
 tape = { workspace = true }
+trace = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]

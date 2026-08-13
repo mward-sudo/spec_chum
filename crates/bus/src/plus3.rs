@@ -177,6 +177,9 @@ impl BusPlus3 {
         if value & 0x20 != 0 {
             self.locked = true;
         }
+        if trace::enabled(trace::Category::BUS) {
+            trace::emit(trace::EventKind::BusPort7ffd { value });
+        }
     }
 
     pub fn out_1ffd(&mut self, value: u8) {
@@ -184,6 +187,9 @@ impl BusPlus3 {
             return;
         }
         self.page_1ffd = value;
+        if trace::enabled(trace::Category::BUS) {
+            trace::emit(trace::EventKind::BusPort1ffd { value });
+        }
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
@@ -232,6 +238,19 @@ impl BusPlus3 {
             let beep = value & 0x10 != 0;
             self.beeper = beep;
             self.push_speaker_level(beep || self.ear);
+            if trace::enabled(trace::Category::BUS) {
+                trace::emit(trace::EventKind::BusPortFe {
+                    write: true,
+                    value,
+                    ear: self.ear,
+                });
+            }
+            if trace::enabled(trace::Category::ULA) {
+                trace::emit(trace::EventKind::UlaBorder {
+                    color: self.border,
+                    frame_t: self.frame_t,
+                });
+            }
             return;
         }
         // Amstrad +2A/+3 paging (partial decode from FAQ / 128kreference):

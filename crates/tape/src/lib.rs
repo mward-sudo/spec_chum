@@ -259,6 +259,8 @@ pub enum TapeTrapResult {
 ///
 /// **Register note:** the 48K ROM executes `EX AF,AF'` before [`LD_BYTES_TRAP_PC`], so callers
 /// must pass the expected flag / load-vs-verify carry from **A′ / F′**, not A / F.
+///
+/// When the `tape` trace category is enabled, skip/fail reasons are recorded for debugging.
 #[must_use]
 pub fn evaluate_ld_bytes_trap(
     pc: u16,
@@ -272,35 +274,103 @@ pub fn evaluate_ld_bytes_trap(
         return TapeTrapResult::Ignored;
     }
     if !player.playing {
+        if trace::enabled(trace::Category::TAPE) {
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::Paused,
+                block: player.block as u32,
+                flag_got: 0,
+                flag_want: flag_expected,
+                block_len: 0,
+                want_len: len,
+            });
+        }
         return TapeTrapResult::Ignored;
     }
+<<<<<<< HEAD
     // `load` is kept for a ROM-compatible signature; the machine layer applies
     // load-vs-verify (poke memory or not) after Success.
     let _ = load;
     let start_block = player.block;
+=======
+    let _ = load;
+>>>>>>> 92c3806 (Add structured emulator debug tracing and dump harness.)
     loop {
+        let block_i = player.block as u32;
         let Some(block) = player.current_block_bytes() else {
+<<<<<<< HEAD
             // No matching flag left: restore so a retry does not need a manual rewind.
             player.rewind_to_block(start_block);
+=======
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::NoBlock,
+                block: block_i,
+                flag_got: 0,
+                flag_want: flag_expected,
+                block_len: 0,
+                want_len: len,
+            });
+>>>>>>> 92c3806 (Add structured emulator debug tracing and dump harness.)
             return TapeTrapResult::Failure;
         };
         if block.is_empty() {
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::EmptyBlock,
+                block: block_i,
+                flag_got: 0,
+                flag_want: flag_expected,
+                block_len: 0,
+                want_len: len,
+            });
             player.consume_block();
             continue;
         }
-        if block[0] != flag_expected {
+        let flag_got = block[0];
+        let block_len = block.len() as u16;
+        if flag_got != flag_expected {
             // Wrong flag: skip and keep searching (authentic LD-BYTES behaviour).
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::WrongFlag,
+                block: block_i,
+                flag_got,
+                flag_want: flag_expected,
+                block_len,
+                want_len: len,
+            });
             player.consume_block();
             continue;
         }
         // Block is flag + `len` data bytes + checksum
         if block.len() != usize::from(len) + 2 {
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::LengthMismatch,
+                block: block_i,
+                flag_got,
+                flag_want: flag_expected,
+                block_len,
+                want_len: len,
+            });
             return TapeTrapResult::Failure;
         }
         let checksum = block[block.len() - 1];
         if tap_checksum(&block[..block.len() - 1]) != checksum {
+            trace::emit(trace::EventKind::FlashLoadSkip {
+                reason: trace::FlashSkipReason::ChecksumFail,
+                block: block_i,
+                flag_got,
+                flag_want: flag_expected,
+                block_len,
+                want_len: len,
+            });
             return TapeTrapResult::Failure;
         }
+<<<<<<< HEAD
+=======
+        trace::emit(trace::EventKind::TapeBlock {
+            index: block_i,
+            flag: flag_got,
+            len,
+        });
+>>>>>>> 92c3806 (Add structured emulator debug tracing and dump harness.)
         player.consume_block();
         return TapeTrapResult::Success { addr, len };
     }
