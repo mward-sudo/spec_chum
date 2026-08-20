@@ -21,7 +21,7 @@ git tag -a v0.1.0 -m "Spec Chum 0.1.0"
 git push origin v0.1.0
 ```
 
-4. The [Release](../.github/workflows/release.yml) workflow runs on `v*.*.*`
+1. The [Release](../.github/workflows/release.yml) workflow runs on `v*.*.*`
    tags. It also supports **Actions → Release → Run workflow** with an existing
    tag if you need to rebuild assets.
 

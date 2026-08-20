@@ -23,7 +23,8 @@ P12="$TMP/developer-id.p12"
 KEYCHAIN="$TMP/signing.keychain-db"
 KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 
-echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode >"$P12"
+# macOS BSD base64 uses -D (GNU --decode is not available on runners).
+echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 -D >"$P12"
 
 # macOS GitHub runners use bash 3.2 — avoid mapfile/associative arrays.
 LOGIN_KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
@@ -41,10 +42,11 @@ trap cleanup EXIT
 security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
 security set-keychain-settings -lut 21600 "$KEYCHAIN"
 security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-security import "$P12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 \
-  -k "$KEYCHAIN"
+# Import identity + private key; allow codesign without UI prompts.
+security import "$P12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -f pkcs12 \
+  -k "$KEYCHAIN" -T /usr/bin/codesign
 security list-keychains -d user -s "$KEYCHAIN" "$LOGIN_KEYCHAIN"
-security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" \
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" \
   "$KEYCHAIN"
 
 for f in "$@"; do

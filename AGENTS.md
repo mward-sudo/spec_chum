@@ -33,7 +33,7 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 
 GitHub Release binaries (egui `spec_chum` + `spec-chum-debug`) are built by
 `.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
-Do not attach ROMs. Native SwiftUI `.app` CI is [#68](https://github.com/mward-sudo/spec_chum/issues/68).
+Do not attach ROMs. Native SwiftUI `.app` / DMG packaging, notarisation, and related CI are tracked in [#68](https://github.com/mward-sudo/spec_chum/issues/68) (out of scope for the CLI release workflow).
 
 ## Agent workflow (clippy-first)
 
