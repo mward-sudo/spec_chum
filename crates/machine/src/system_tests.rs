@@ -25,13 +25,9 @@ fn rom128_path() -> PathBuf {
 }
 
 fn rom_plus3() -> Option<Vec<u8>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms");
-    for rel in ["plus3/plus3.rom", "plus2a/plus2a.rom"] {
-        if let Ok(bytes) = std::fs::read(root.join(rel)) {
-            return Some(bytes);
-        }
-    }
-    None
+    // Do not fall back to +2A: +3 boot tests must exercise the Sinclair +3 ROM path.
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus3/plus3.rom");
+    std::fs::read(path).ok()
 }
 
 fn tap_path(name: &str) -> Option<PathBuf> {
@@ -161,6 +157,23 @@ fn assert_screen_has(text: &str, needle: &str) {
     assert!(
         text.contains(needle),
         "expected screen to contain {needle:?}\n{text}"
+    );
+}
+
+/// Classic ULA contended-NOP delay window: eight ordered columns `6 5 4 3 2 1 0 0`.
+fn assert_contended_nop_pattern(text: &str) {
+    const EXPECTED: [i32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
+    let found = text.lines().any(|line| {
+        let nums: Vec<i32> = line
+            .split_whitespace()
+            .filter_map(|tok| tok.parse().ok())
+            .collect();
+        nums.windows(EXPECTED.len())
+            .any(|window| window == EXPECTED)
+    });
+    assert!(
+        found,
+        "expected ordered contended-NOP pattern {EXPECTED:?} on one screen row\n{text}"
     );
 }
 
@@ -324,14 +337,11 @@ fn timingtest_48k_contended_nop_shows_delay_pattern() {
     hold_keys(&mut machine, &[], 5);
     let text = run_until_contains(&mut machine, "contended NOP", AFTER_LOAD_FRAMES);
     assert_screen_has(&text, "contended NOP");
-    // Classic ULA 6,5,4,3,2,1,0,0 window appears as decimal columns.
-    for n in ["  6", "  5", "  4", "  3", "  2", "  1"] {
-        assert_screen_has(&text, n);
-    }
+    assert_contended_nop_pattern(&text);
 }
 
 #[test]
-fn ulatest3_48k_banner_and_frame_time() {
+fn ulatest3_48k_banner_frame_and_grid() {
     let Some(mut machine) = skip_no_rom(Model::Spectrum48) else {
         return;
     };
@@ -339,7 +349,23 @@ fn ulatest3_48k_banner_and_frame_time() {
         return;
     };
     load_program_tap(&mut machine, &tap);
-    let text = run_until_contains(&mut machine, "ULA test 3", AFTER_LOAD_FRAMES);
-    assert_screen_has(&text, "ULA test 3");
+    // Title first; the floating-bus/contention matrix then paints below it.
+    let text = run_until_contains(&mut machine, "ULA test 3 by JB", AFTER_LOAD_FRAMES);
+    assert_screen_has(&text, "ULA test 3 by JB");
+    let text = run_until_contains(&mut machine, "69888", AFTER_LOAD_FRAMES);
     assert_screen_has(&text, "69888");
+    // Grid cells are largely attribute-coloured; require a painted matrix region
+    // (rows below the title) rather than brittle glyph OCR of inverted cells.
+    let mut matrix_nz = 0usize;
+    for row in 2..22u8 {
+        for col in 0..32u8 {
+            if glyph_at(&machine, col, row).iter().any(|&b| b != 0) {
+                matrix_nz += 1;
+            }
+        }
+    }
+    assert!(
+        matrix_nz > 64,
+        "ULA test 3 floating-bus/contention grid should paint below the title, got {matrix_nz} nonzero cells\n{text}"
+    );
 }
