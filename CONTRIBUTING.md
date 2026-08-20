@@ -32,20 +32,39 @@ Local quality gate (same as CI intent):
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
-- **Before merge:** run `./scripts/check_pr_reviews.sh` (or pass the PR number). Do not merge with unresolved **actionable** CodeRabbit (or similar bot) comments unless the user explicitly waives them; fix or reply with a wontfix reason, then resolve threads.
+- **Before merge / finish PR:** mark ready if still draft, request one CodeRabbit pass when merge-candidate, then run `./scripts/check_pr_reviews.sh`. **Hold until CodeRabbit is clean** on HEAD (not pending / missing / rate-limited) **and** unresolved **actionable** bot threads are cleared, unless the user explicitly waives. See below.
+
+## CodeRabbit — review when ready (usage)
+
+When [`.coderabbit.yaml`](.coderabbit.yaml) is on the default branch (or the PR branch), automatic reviews are **off** so iteration pushes do not burn allowance. Workflow:
+
+1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
+2. When merge-candidate: mark **Ready for review**, then request **one** pass — `@coderabbitai full review` or label `coderabbit-review` (use `@coderabbitai review` only for a later incremental).
+3. Disposition actionable threads, then run the merge gate below.
+
+If the YAML and CodeRabbit GitHub app UI disagree, keep **Automatic Reviews** off in the app so committed config wins. Undraft alone may not trigger a review — always comment or label.
 
 ## Review check before merge
 
-CodeRabbit is **not** a required GitHub status check. Agents must still run the local gate before merge:
+Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. For **ready** PRs, hold until a completed review on HEAD **and** unresolved actionable bot threads are dispositioned.
+
+**Hold policy (ready / non-draft):** Do not merge while CodeRabbit’s commit status on the PR head is pending, in progress/queued, **rate-limited**, **skipped**, failed, or missing (including when on-demand review was never requested). CodeRabbit may report `Review rate limited` or `Review skipped: …` with a green/success state — that is still a hold. Prefer a follow-up issue titled like `Revisit CodeRabbit on PR #N (rate-limited)` rather than merging.
+
+**Drafts:** `./scripts/check_pr_reviews.sh` skips CodeRabbit HEAD completeness but still fails on unresolved bot threads. Do not merge drafts.
+
+**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs (and when reviews/comments arrive) using the default `GITHUB_TOKEN` (`pull-requests: read`). Treat a failing check as blocking for merge. After resolving threads or when CodeRabbit finishes, re-run that job if GitHub did not re-trigger it.
+
+**Agents / local (mandatory before merge):**
 
 ```bash
 ./scripts/check_pr_reviews.sh          # current branch PR
 ./scripts/check_pr_reviews.sh 87       # explicit PR
 # Explicit waiver only when the user asked for one:
 ./scripts/check_pr_reviews.sh 87 --waive "user waived nit: comma-only"
+# Or add PR label: waive-bot-reviews
 ```
 
-The script paginates GraphQL `reviewThreads`, lists unresolved bot comments, and exits non-zero unless waived.
+The script (1) on ready PRs checks CodeRabbit on HEAD and **hard-fails** on pending / rate-limited / skipped / missing / error (drafts skip this step), then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
 
 ## TDD
 

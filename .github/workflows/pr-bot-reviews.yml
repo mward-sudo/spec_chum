@@ -1,0 +1,136 @@
+# PR status check: for ready PRs, fail when CodeRabbit has not completed a
+# review on HEAD (pending / in progress / rate-limited / missing / error);
+# drafts skip CR completeness. Always fail when unresolved CodeRabbit/bot
+# review threads remain.
+# Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
+#
+# Checkout uses the PR base (or default branch) so the checker script comes from a
+# trusted ref before GH_TOKEN is exposed — not the untrusted merge/head ref.
+#
+# Note: the workflow *definition* still comes from the merge commit on `pull_request`
+# events. Switching to `pull_request_target` is deferred until this file lives on
+# the default branch (otherwise the gate cannot run on the introducing PR).
+#
+# Re-runs when reviews/comments arrive (CodeRabbit often posts after the first push).
+# Resolving a thread does not always emit an event — re-run this job after fixing.
+name: Bot review threads
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number (required for manual runs outside a PR)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+# One in-flight gate per PR so a cancelled/superseded run cannot publish a
+# stale success after a newer failure for the same head SHA.
+concurrency:
+  group: bot-review-threads-${{ github.event.pull_request.number || inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  check-bot-threads:
+    name: unresolved bot threads
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Resolve PR number
+        id: pr
+        env:
+          PR_FROM_EVENT: ${{ github.event.pull_request.number }}
+          PR_FROM_INPUT: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          n="${PR_FROM_EVENT:-}"
+          if [[ -z "$n" ]]; then
+            n="${PR_FROM_INPUT:-}"
+          fi
+          if [[ -z "${n:-}" ]]; then
+            echo "Could not determine PR number for event ${GITHUB_EVENT_NAME:-unknown}" >&2
+            exit 2
+          fi
+          if [[ ! "$n" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid PR number: $n" >&2
+            exit 2
+          fi
+          printf 'number=%s\n' "$n" >> "$GITHUB_OUTPUT"
+          echo "Checking PR #$n"
+
+      - name: Resolve PR head SHA
+        id: head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          sha="${EVENT_HEAD:-}"
+          if [[ -z "$sha" ]]; then
+            sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
+          fi
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid head SHA: $sha" >&2
+            exit 2
+          fi
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check CodeRabbit HEAD status + unresolved bot threads
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          # Bootstrap: this workflow checks out the PR base (trusted). On the
+          # introducing PR the script is not on base yet — skip rather than
+          # checking out untrusted head code. After merge, base has the script.
+          if [[ ! -x ./scripts/check_pr_reviews.sh ]]; then
+            echo "scripts/check_pr_reviews.sh not present on trusted base ref; skipping CI gate (bootstrap)."
+            echo "Local/agent gate remains mandatory: ./scripts/check_pr_reviews.sh"
+            exit 0
+          fi
+          ./scripts/check_pr_reviews.sh "$PR_NUMBER"
+
+      # Required checks key off the PR head; review_comment runs may otherwise
+      # attach only to a merge-ref GITHUB_SHA and leave a stale head check green.
+      # !cancelled(): do not publish after concurrency cancel-in-progress.
+      - name: Publish check on PR head
+        if: ${{ !cancelled() && steps.head.outputs.sha != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.head.outputs.sha }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+        run: |
+          set -euo pipefail
+          conclusion=failure
+          title='CodeRabbit / bot review gate failed'
+          if [[ "${GATE_OUTCOME:-failure}" == "success" ]]; then
+            conclusion=success
+            title='CodeRabbit clean + no unresolved bot threads'
+          elif [[ "${GATE_OUTCOME:-}" == "skipped" ]]; then
+            conclusion=neutral
+            title='Bot review gate skipped'
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='unresolved bot threads' \
+            -f head_sha="$HEAD_SHA" \
+            -f status=completed \
+            -f conclusion="$conclusion" \
+            -f 'output[title]='"$title" \
+            -f 'output[summary]=Ready PRs: fails when CodeRabbit is pending/missing/rate-limited on HEAD or unresolved bot threads remain. Drafts skip CR completeness but still fail on unresolved threads. See the workflow run for details.'

@@ -5,16 +5,39 @@ alwaysApply: true
 
 # PR review / merge gate
 
-Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unresolved CodeRabbit threads. Do not repeat that.
+Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unresolved CodeRabbit threads. **Do not repeat that.**
 
-## Before merge (agents)
+## On-demand + hold-until-clean (unified)
 
-1. Run `./scripts/check_pr_reviews.sh` (paginates GraphQL `reviewThreads`; fails on unresolved bot comments).
-2. Treat **CodeRabbit** (and similar bot) comments as blocking when they are **actionable** (bugs, incorrect behavior, clear maintainability fixes).
-3. **Do not merge** while actionable bot threads remain unresolved, unless the user **explicitly waives** them (`--waive` / `SPEC_CHUM_REVIEW_WAIVER`, and document the waiver in the PR).
-4. Disposition each finding: fix in code, reply with a short wontfix reason, then resolve the thread when GitHub allows.
-5. After pushing fixes, wait for a fresh bot pass when practical; address new actionable comments the same way.
+CodeRabbit may be **on-demand** (see `.coderabbit.yaml` when present; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Agents still get **one** completed CR pass before merge of a ready PR:
 
-CodeRabbit CI status may remain optional; the script is the agent-facing gate (not a brittle required check).
+1. Iterate on a **draft** PR (no CR required yet).
+2. When merge-candidate: mark ready → comment `@coderabbitai full review` (or label `coderabbit-review`).
+3. Disposition threads → `./scripts/check_pr_reviews.sh` → merge.
 
-Non-actionable nitpicks may be waived with a one-line reason; do not silently ignore Major/functional findings.
+Do not spam `@coderabbitai review` on every push. Prefer `@coderabbitai review` only for a later incremental pass after the first full review.
+
+## Hard rule — hold until CodeRabbit is clean (ready PRs)
+
+A **ready / non-draft** PR is **not merge-ready** (agents must **not** merge or treat as finished) while **either**:
+
+1. **CodeRabbit has not completed a review on the latest HEAD** — status pending, in progress/queued, **rate-limited**, **skipped**, failed/errored, or missing. A green commit status with description `Review rate limited` or `Review skipped: …` is **not** a pass.
+2. **`./scripts/check_pr_reviews.sh` reports unresolved actionable bot threads** — unless the user **explicitly** waives.
+
+**Draft PRs:** the script skips CodeRabbit HEAD completeness (pass message: draft — CR not required yet) but still fails on unresolved bot threads if any exist. Do not merge drafts.
+
+Ignoring the ready-PR conditions is a process failure. Prefer opening a follow-up issue (`Revisit CodeRabbit on PR #N (rate-limited)`) when rate-limited rather than merging.
+
+## Before merge / when asked to finish or merge a PR
+
+1. Confirm the PR is **ready** (not draft) and a CodeRabbit review was requested once it became merge-candidate (auto-review may be off by design).
+2. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**. On ready PRs the script hard-fails on rate-limited / skipped / pending / missing CodeRabbit **and** on unresolved bot threads.
+3. If CodeRabbit is pending, missing, skipped, or rate-limited on HEAD: **hold** — request review if needed, wait for a completed review (e.g. `Review completed`), then re-run the script. Do not merge on a rate-limited or skipped status.
+4. Treat bot comments as blocking when **actionable** (bugs, wrong behavior, clear maintainability fixes).
+5. Disposition each finding: fix in code, or reply with a short wontfix reason, then **resolve** the thread.
+6. Re-run the script (and re-run the CI check if it failed) after addressing feedback.
+7. Only waive with user instruction: `--waive "reason"`, `SPEC_CHUM_REVIEW_WAIVER`, or PR label `waive-bot-reviews` — and document the waiver on the PR.
+
+Non-actionable nitpicks may be waived with a one-line reason; do **not** silently ignore Major/functional findings.
+
+See `CONTRIBUTING.md` → “Review check before merge”.
