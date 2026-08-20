@@ -3578,8 +3578,9 @@ mod tests {
         // PROG+CODE = blocks 0..3; first custom `0xC8` is block 4. Require that block
         // consumed (index ≥ 5) or game entry. Full Side-1 (block ≥ 8) is Instant-fast;
         // EAR@5+ still bit-accurate so huge C8s need minutes — not required for CI.
+        // PROG+CODE = blocks 0..3; four custom `0xC8` blocks are 4..7 → success at ≥8.
         let done =
-            |m: &Machine| m.cpu().regs.pc == 0x5b00 || m.tape_block().is_some_and(|b| b >= 5);
+            |m: &Machine| m.cpu().regs.pc == 0x5b00 || m.tape_block().is_some_and(|b| b >= 8);
 
         let full = std::env::var_os("SPEC_CHUM_FULL_TAPE_MATRIX").is_some();
         let mut report = String::from("boggit matrix:\n");
