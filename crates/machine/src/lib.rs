@@ -187,7 +187,7 @@ impl TapeProgress {
         let block = self.block_index.min(self.block_count) as f32;
         let within = if self.pulse_count == 0 {
             // Consumed trailing zero-pulse block (e.g. 0x20 pause_ms=0): treat as done.
-            if self.block_index + 1 >= self.block_count {
+            if self.block_index.saturating_add(1) >= self.block_count {
                 1.0
             } else {
                 0.0
@@ -2473,6 +2473,14 @@ mod tests {
             pulse_count: 0,
         };
         assert!((mid.fraction() - 1.0 / 3.0).abs() < f32::EPSILON);
+        // u32::MAX + 1 must not panic in debug; treat as past the end → complete.
+        let max = TapeProgress {
+            block_index: u32::MAX,
+            block_count: 1,
+            pulse_index: 0,
+            pulse_count: 0,
+        };
+        assert_eq!(max.fraction(), 1.0);
     }
 
     #[test]
