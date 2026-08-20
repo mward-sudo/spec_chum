@@ -144,6 +144,9 @@ else
     cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is ${CR_STATE}: ${CR_DESC:-no description}"
   elif [[ "$CR_STATE" != "success" ]]; then
     cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is unexpected (${CR_STATE}: ${CR_DESC:-no description})."
+  elif [[ "$CR_DESC_LC" != "review completed" ]]; then
+    # Only the known final description counts — empty / "in progress" success must not pass.
+    cr_hold_reason="CodeRabbit on HEAD ${HEAD_SHA:0:12} is not a completed review (status=\"${CR_DESC:-none}\"; state=${CR_STATE}). Waiting for \"Review completed\"."
   fi
 
   if [[ -n "$cr_hold_reason" ]]; then

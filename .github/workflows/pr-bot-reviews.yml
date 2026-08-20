@@ -95,7 +95,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
-        run: ./scripts/check_pr_reviews.sh "$PR_NUMBER"
+        run: |
+          set -euo pipefail
+          # Bootstrap: this workflow checks out the PR base (trusted). On the
+          # introducing PR the script is not on base yet — skip rather than
+          # checking out untrusted head code. After merge, base has the script.
+          if [[ ! -x ./scripts/check_pr_reviews.sh ]]; then
+            echo "scripts/check_pr_reviews.sh not present on trusted base ref; skipping CI gate (bootstrap)."
+            echo "Local/agent gate remains mandatory: ./scripts/check_pr_reviews.sh"
+            exit 0
+          fi
+          ./scripts/check_pr_reviews.sh "$PR_NUMBER"
 
       # Required checks key off the PR head; review_comment runs may otherwise
       # attach only to a merge-ref GITHUB_SHA and leave a stale head check green.
