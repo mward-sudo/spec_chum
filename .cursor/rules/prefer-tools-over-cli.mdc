@@ -22,7 +22,7 @@ Do not inspect or edit the repo with `cat`, `sed`, `awk`, `head`, `tail`, `rg`, 
 ## Shell is still correct for
 
 - `cargo`, `./scripts/check.sh`, and other project scripts
-- git commit / push (follow the commit protocol in user rules)
+- `git` (status/diff/log/commit/push/etc.; follow the commit protocol in user rules)
 - `gh` for GitHub (issues, PRs, checks) — required by user rules; do not replace with ad-hoc HTTP
 - running the emulator binary and tests
 
