@@ -83,6 +83,19 @@ jobs:
         with:
           ref: ${{ steps.resolved.outputs.ref }}
 
+      # Signing scripts run with credentials — always take them from the default
+      # branch, never from a tag-controlled tree (CWE-829).
+      - name: Fetch trusted signing scripts
+        if: runner.os == 'macOS' || runner.os == 'Windows'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: |
+            scripts/ci
+          sparse-checkout-cone-mode: true
+          path: .trusted-ci
+          persist-credentials: false
+
       - name: Version
         id: version
         shell: bash
@@ -165,8 +178,8 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           TARGET: ${{ matrix.target }}
         run: |
-          chmod +x scripts/ci/sign-macos.sh
-          scripts/ci/sign-macos.sh \
+          chmod +x .trusted-ci/scripts/ci/sign-macos.sh
+          .trusted-ci/scripts/ci/sign-macos.sh \
             "dist/spec-chum-${VERSION}-${TARGET}/spec_chum" \
             "dist/spec-chum-${VERSION}-${TARGET}/spec-chum-debug"
           # Re-pack after signing (strip/archive happened before sign).
@@ -183,7 +196,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           $dir = "dist/spec-chum-$env:VERSION-$env:TARGET"
-          ./scripts/ci/sign-windows.ps1 "$dir/spec_chum.exe" "$dir/spec-chum-debug.exe"
+          & ".trusted-ci/scripts/ci/sign-windows.ps1" "$dir/spec_chum.exe" "$dir/spec-chum-debug.exe"
           $out = "spec-chum-$env:VERSION-$env:TARGET"
           python -c "import shutil; shutil.make_archive('packed/$out', 'zip', 'dist', '$out')"
 
