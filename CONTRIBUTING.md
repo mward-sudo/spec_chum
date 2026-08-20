@@ -39,7 +39,7 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 
 ## CodeRabbit — review when ready (usage)
 
-When [`.coderabbit.yaml`](.coderabbit.yaml) is on the default branch (or the PR branch), automatic reviews are **off** so iteration pushes do not burn allowance. Workflow:
+Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://docs.coderabbit.ai/configuration/auto-review), [review commands](https://docs.coderabbit.ai/reference/review-commands)). Automatic reviews are **off** so iteration pushes do not burn allowance. Workflow:
 
 1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
 2. When merge-candidate: mark **Ready for review**, then request **one** pass — `@coderabbitai full review` or label `coderabbit-review` (use `@coderabbitai review` only for a later incremental).
