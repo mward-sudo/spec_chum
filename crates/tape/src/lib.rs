@@ -60,6 +60,33 @@ pub const BIT0_T: u32 = 855;
 pub const BIT1_T: u32 = 1710;
 /// Inter-block pause (~1s at 3.5 MHz).
 pub const PAUSE_T: u32 = 3_500_000;
+/// Fewest leader pulses still accepted by the 48K ROM LD-LEADER loop.
+const MIN_PILOT_PULSES: u32 = 2_560;
+
+/// Append one edge-to-edge pulse and toggle the EAR level.
+pub(crate) fn push_pulse(pulses: &mut Vec<(u32, bool)>, level: &mut bool, duration: u32) {
+    pulses.push((duration, *level));
+    *level = !*level;
+}
+
+/// Pilot count for a TAP flag byte, optionally shortened for turbo (`speed` ≥ 2).
+#[must_use]
+pub fn pilot_pulses_for_speed(flag: u8, speed: u32) -> u32 {
+    let full = if flag == 0 {
+        PILOT_HEADER_PULSES
+    } else {
+        PILOT_DATA_PULSES
+    };
+    let speed = speed.max(1);
+    (full / speed).max(MIN_PILOT_PULSES).min(full)
+}
+
+/// Inter-block pause T-states at the given turbo multiplier.
+#[must_use]
+pub fn pause_t_for_speed(speed: u32) -> u32 {
+    let speed = speed.max(1);
+    (PAUSE_T / speed).max(3_500)
+}
 
 /// Generates EAR levels for a TAP block (ROM timing).
 #[derive(Clone, Debug)]
@@ -74,6 +101,8 @@ pub struct TapPlayer {
     pulse_i: usize,
     remain: u32,
     level: bool,
+    /// Turbo: fewer leader pulses and a shorter pause; bit/sync widths stay ROM-accurate.
+    speed: u32,
 }
 
 impl TapPlayer {
@@ -87,6 +116,7 @@ impl TapPlayer {
             pulse_i: 0,
             remain: 0,
             level: false,
+            speed: 1,
         };
         p.queue_block(0);
         p
@@ -94,6 +124,17 @@ impl TapPlayer {
 
     pub fn set_playing(&mut self, playing: bool) {
         self.playing = playing;
+    }
+
+    /// EAR turbo (`1` = realtime). Rebuilds the current block's pulse schedule.
+    pub fn set_speed(&mut self, speed: u32) {
+        self.speed = speed.clamp(1, 64);
+        self.queue_block(self.block);
+    }
+
+    #[must_use]
+    pub fn speed(&self) -> u32 {
+        self.speed
     }
 
     /// Rewind to the first block and pause.
@@ -152,32 +193,25 @@ impl TapPlayer {
             self.level = false;
             return;
         };
-        // Pilot: `N` alternating pulses of 2168 T (not N pairs).
+        // Pilot: `N` alternating edges of 2168 T. Sync/data must continue toggling —
+        // a hardcoded SYNC1 high after an odd leader merges the last pilot with sync
+        // and the 48K ROM never locks onto the block.
         let flag = block.first().copied().unwrap_or(0);
-        let pilot_count = if flag == 0 {
-            PILOT_HEADER_PULSES
-        } else {
-            PILOT_DATA_PULSES
-        };
         let mut level = true;
-        for _ in 0..pilot_count {
-            self.pulses.push((PILOT_PULSE_T, level));
-            level = !level;
+        for _ in 0..pilot_pulses_for_speed(flag, self.speed) {
+            push_pulse(&mut self.pulses, &mut level, PILOT_PULSE_T);
         }
-        // Sync pulses
-        self.pulses.push((SYNC1_T, true));
-        self.pulses.push((SYNC2_T, false));
-        // Data bits (MSB first): each bit is two equal edges
+        push_pulse(&mut self.pulses, &mut level, SYNC1_T);
+        push_pulse(&mut self.pulses, &mut level, SYNC2_T);
         for &byte in block {
             for bit in (0..8).rev() {
                 let one = byte & (1 << bit) != 0;
                 let len = if one { BIT1_T } else { BIT0_T };
-                self.pulses.push((len, true));
-                self.pulses.push((len, false));
+                push_pulse(&mut self.pulses, &mut level, len);
+                push_pulse(&mut self.pulses, &mut level, len);
             }
         }
-        // Pause (silence)
-        self.pulses.push((PAUSE_T, false));
+        push_pulse(&mut self.pulses, &mut level, pause_t_for_speed(self.speed));
         if let Some(&(r, l)) = self.pulses.first() {
             self.remain = r;
             self.level = l;
@@ -422,6 +456,46 @@ mod tests {
         assert!(!p.advance(PILOT_PULSE_T));
         // Third pulse: high again
         assert!(p.advance(PILOT_PULSE_T));
+    }
+
+    #[test]
+    fn tap_pulses_always_alternate_including_sync() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x11, 0x22]],
+        };
+        let p = TapPlayer::new(img);
+        let pulses = p.pulses.clone();
+        assert!(pulses.len() > PILOT_HEADER_PULSES as usize + 2);
+        for w in pulses.windows(2) {
+            assert_ne!(
+                w[0].1, w[1].1,
+                "adjacent EAR pulses must toggle (merged sync/pilot breaks ROM LD-BYTES)"
+            );
+        }
+        let last_pilot = pulses[PILOT_HEADER_PULSES as usize - 1];
+        let sync1 = pulses[PILOT_HEADER_PULSES as usize];
+        assert_eq!(sync1.0, SYNC1_T);
+        assert_ne!(last_pilot.1, sync1.1);
+    }
+
+    #[test]
+    fn turbo_speed_shortens_leader_not_bit_widths() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x00]],
+        };
+        let mut p = TapPlayer::new(img);
+        let slow_n = p.scheduled_pulses();
+        p.set_speed(10);
+        let fast_n = p.scheduled_pulses();
+        assert!(
+            fast_n < slow_n,
+            "10x should drop leader pulses ({slow_n} vs {fast_n})"
+        );
+        assert_eq!(
+            pilot_pulses_for_speed(0, 10),
+            (PILOT_HEADER_PULSES / 10).max(2_560)
+        );
+        assert_eq!(p.pulses[0].0, PILOT_PULSE_T);
     }
 
     #[test]

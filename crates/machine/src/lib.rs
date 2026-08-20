@@ -145,6 +145,7 @@ pub struct TapeLoadOptions {
     /// When true, TAP decks trap at LD-BYTES and poke bytes immediately.
     pub flash_load: bool,
     /// EAR bitstream speed multiplier (`1` = realtime). Clamped to `1..=64`.
+    /// Shortens TAP leader/pause; data pulse widths stay ROM-accurate so LD-BYTES can lock.
     pub speed: u32,
 }
 
@@ -585,9 +586,20 @@ impl Machine {
             speed: opts.speed.clamp(1, 64),
         };
         match self {
-            Self::Spec48 { tape_opts, .. }
-            | Self::Spec128 { tape_opts, .. }
-            | Self::SpecPlus3 { tape_opts, .. } => *tape_opts = opts,
+            Self::Spec48 {
+                tape_opts, tape, ..
+            }
+            | Self::Spec128 {
+                tape_opts, tape, ..
+            }
+            | Self::SpecPlus3 {
+                tape_opts, tape, ..
+            } => {
+                *tape_opts = opts;
+                if let Some(TapeDeck::Tap(p)) = tape.as_mut() {
+                    p.set_speed(opts.speed);
+                }
+            }
         }
         trace::emit(trace::EventKind::MachineLoadMode {
             flash_load: opts.flash_load,
@@ -597,6 +609,7 @@ impl Machine {
 
     pub fn insert_tape(&mut self, mut player: TapPlayer) {
         player.set_playing(false);
+        player.set_speed(self.tape_load_options().speed);
         match self {
             Self::Spec48 { tape, .. }
             | Self::Spec128 { tape, .. }
@@ -1213,7 +1226,7 @@ impl Machine {
         edges: &mut Vec<(u32, bool)>,
         frame_t: u32,
         dt: u32,
-        speed: u32,
+        _speed: u32,
     ) {
         if dt == 0 {
             return;
@@ -1225,8 +1238,8 @@ impl Machine {
         if !t.playing() {
             return;
         }
-        let advance_dt = dt.saturating_mul(speed.max(1));
-        let new_ear = t.advance(advance_dt);
+        // TAP turbo shortens leader/pause when the block is queued; keep CPU:tape 1:1 here.
+        let new_ear = t.advance(dt);
         if new_ear != *ear {
             *ear = new_ear;
             // Count EAR edges; emit a sampled rate (edges since last sample), not the stride.
@@ -1994,35 +2007,92 @@ impl Machine {
         }
     }
 
+    fn hold_keys(&mut self, keys: &[(usize, u8)], frames: u32) {
+        for _ in 0..frames {
+            let kb = self.keyboard_mut();
+            kb.reset();
+            for &(row, bit) in keys {
+                kb.set_key(row, bit, true);
+            }
+            let _ = self.run_frame();
+        }
+    }
+
     /// Script `LOAD ""` [CODE] Enter for 48K keyword mode (ROM debounce included).
     pub fn type_load_quotes_48k(&mut self, with_code: bool) {
         const PRESS: u32 = 10;
         const GAP: u32 = 5;
-        fn hold(m: &mut Machine, keys: &[(usize, u8)], frames: u32) {
-            for _ in 0..frames {
-                let kb = m.keyboard_mut();
-                kb.reset();
-                for &(row, bit) in keys {
-                    kb.set_key(row, bit, true);
-                }
-                let _ = m.run_frame();
-            }
-        }
-        hold(self, &[(6, 3)], PRESS);
-        hold(self, &[], GAP);
-        hold(self, &[(7, 1), (5, 0)], PRESS);
-        hold(self, &[], GAP);
-        hold(self, &[(7, 1), (5, 0)], PRESS);
-        hold(self, &[], GAP);
+        self.hold_keys(&[(6, 3)], PRESS);
+        self.hold_keys(&[], GAP);
+        self.hold_keys(&[(7, 1), (5, 0)], PRESS);
+        self.hold_keys(&[], GAP);
+        self.hold_keys(&[(7, 1), (5, 0)], PRESS);
+        self.hold_keys(&[], GAP);
         if with_code {
-            hold(self, &[(0, 0), (7, 1)], PRESS);
-            hold(self, &[], GAP);
-            hold(self, &[(5, 2)], PRESS);
-            hold(self, &[], GAP);
+            self.hold_keys(&[(0, 0), (7, 1)], PRESS);
+            self.hold_keys(&[], GAP);
+            self.hold_keys(&[(5, 2)], PRESS);
+            self.hold_keys(&[], GAP);
         }
-        hold(self, &[(6, 0)], PRESS);
-        hold(self, &[], 15);
+        self.hold_keys(&[(6, 0)], PRESS);
+        self.hold_keys(&[], 15);
         self.keyboard_mut().reset();
+    }
+
+    fn wait_48_basic_prompt(&mut self, max_frames: u32) {
+        let mut stable = 0u32;
+        for _ in 0..max_frames {
+            let pc = self.cpu().regs.pc;
+            // 48K ROM MAIN-EXEC / WAIT-KEY after the copyright has finished.
+            if (0x12A0..=0x1600).contains(&pc) {
+                stable += 1;
+                if stable >= 20 {
+                    return;
+                }
+            } else {
+                stable = 0;
+            }
+            let _ = self.run_frame();
+        }
+    }
+
+    /// 128K menu: cursor-down to 48 BASIC, Enter, wait for the 48K prompt, then keywords.
+    pub fn type_load_quotes_128k(&mut self, with_code: bool) {
+        const PRESS: u32 = 10;
+        const GAP: u32 = 5;
+        // CAPS+6 = cursor down (Tape Loader → 128 BASIC → Calculator → 48 BASIC).
+        for _ in 0..3 {
+            self.hold_keys(&[(0, 0), (4, 4)], PRESS);
+            self.hold_keys(&[], GAP);
+        }
+        self.hold_keys(&[(6, 0)], PRESS);
+        self.hold_keys(&[], 10);
+        self.wait_48_basic_prompt(500);
+        self.type_load_quotes_48k(with_code);
+    }
+
+    /// +3 menu: cursor-down to 48 BASIC, Enter, then keyword `LOAD ""` [CODE].
+    pub fn type_load_quotes_plus3(&mut self, with_code: bool) {
+        const PRESS: u32 = 10;
+        const GAP: u32 = 5;
+        // CAPS+6 = cursor down (Loader → +3 BASIC → Calculator → 48 BASIC).
+        for _ in 0..3 {
+            self.hold_keys(&[(0, 0), (4, 4)], PRESS);
+            self.hold_keys(&[], GAP);
+        }
+        self.hold_keys(&[(6, 0)], PRESS);
+        self.hold_keys(&[], 10);
+        self.wait_48_basic_prompt(500);
+        self.type_load_quotes_48k(with_code);
+    }
+
+    /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +3 48 BASIC).
+    pub fn type_load_quotes(&mut self, with_code: bool) {
+        match self.model() {
+            Model::Spectrum48 => self.type_load_quotes_48k(with_code),
+            Model::Spectrum128 => self.type_load_quotes_128k(with_code),
+            Model::SpectrumPlus3 => self.type_load_quotes_plus3(with_code),
+        }
     }
 
     #[must_use]
@@ -2390,6 +2460,65 @@ mod tests {
     }
 
     #[test]
+    fn rom_ld_bytes_ear_loads_attr_mark_data_block() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark");
+        let data = img.blocks[1].clone();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
+        let mut player = TapPlayer::new(img);
+        player.consume_block();
+        m.insert_tape(player);
+        m.set_tape_playing(true);
+
+        let ret = 0x1234u16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.a = 0xff;
+        m.cpu_mut().regs.f = flag::C;
+        m.cpu_mut().regs.set_ix(0x8000);
+        m.cpu_mut().regs.set_de((data.len() - 2) as u16);
+        m.cpu_mut().regs.pc = 0x0556;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        let mut ok = false;
+        for _ in 0..400 {
+            let _ = m.run_frame();
+            if attr_mark_code_ok(&m) {
+                ok = true;
+                break;
+            }
+        }
+        if !ok {
+            eprintln!(
+                "EAR data fail PC={:04X} mem {:02X}{:02X}{:02X}{:02X}{:02X}{:02X} block={:?} IX={:04X} DE={:04X} F={:02X}",
+                m.cpu().regs.pc,
+                m.read_mem(0x8000),
+                m.read_mem(0x8001),
+                m.read_mem(0x8002),
+                m.read_mem(0x8003),
+                m.read_mem(0x8004),
+                m.read_mem(0x8005),
+                m.tape_block(),
+                m.cpu().regs.ix(),
+                m.cpu().regs.de(),
+                m.cpu().regs.f,
+            );
+        }
+        assert!(ok, "ROM LD-BYTES EAR path should load attr_mark CODE bytes");
+    }
+
+    #[test]
     fn flash_load_can_be_disabled_for_ear_path() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -2444,19 +2573,13 @@ mod tests {
         fast.insert_tape(TapPlayer::new(img));
         slow.set_tape_playing(true);
         fast.set_tape_playing(true);
-        for _ in 0..3 {
-            let _ = slow.run_frame();
-            let _ = fast.run_frame();
-        }
         let sp = slow.tape_progress().unwrap();
         let fp = fast.tape_progress().unwrap();
         assert!(
-            fp.pulse_index > sp.pulse_index || fp.block_index > sp.block_index,
-            "10x speed should advance further (slow pulse {}/{}, fast {}/{})",
-            sp.pulse_index,
-            sp.block_index,
-            fp.pulse_index,
-            fp.block_index
+            fp.pulse_count < sp.pulse_count,
+            "10x should schedule a shorter leader (slow {} pulses, fast {})",
+            sp.pulse_count,
+            fp.pulse_count
         );
     }
 
@@ -2672,6 +2795,94 @@ mod tests {
             }
         }
         (m, loaded)
+    }
+
+    fn attr_mark_code_ok(m: &Machine) -> bool {
+        m.read_mem(0x8000) == 0x21
+            && m.read_mem(0x8001) == 0x00
+            && m.read_mem(0x8002) == 0x58
+            && m.read_mem(0x8003) == 0x36
+            && m.read_mem(0x8004) == 0xd7
+            && m.read_mem(0x8005) == 0xc9
+    }
+
+    fn run_attr_mark_typed(
+        mut m: Machine,
+        img: TapImage,
+        flash_load: bool,
+        speed: u32,
+        warmup: u32,
+        max_frames: u32,
+    ) -> (Machine, bool) {
+        m.set_tape_load_options(TapeLoadOptions { flash_load, speed });
+        m.insert_tape(TapPlayer::new(img));
+        for _ in 0..warmup {
+            let _ = m.run_frame();
+        }
+        m.type_load_quotes(true);
+        m.set_tape_playing(true);
+        let mut loaded = false;
+        for _ in 0..max_frames {
+            let _ = m.run_frame();
+            if attr_mark_code_ok(&m) {
+                loaded = true;
+                break;
+            }
+        }
+        (m, loaded)
+    }
+
+    #[test]
+    fn attr_mark_ear_load_quotes_code_succeeds_at_speed_10() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark.tap");
+        let m = Machine::new_48k(&rom).unwrap();
+        // Speed 10 keeps ROM-accurate bit widths (leader/pause only); ~hundreds of frames.
+        // Speed 10 floors the leader so LD-LEADER's 1045-edge wait still fits; pause is /10.
+        let (_m, loaded) = run_attr_mark_typed(m, img, false, 10, 200, 2_000);
+        assert!(
+            loaded,
+            "EAR LOAD \"\" CODE should poke CODE at 0x8000 (speed 10; budget 2000 frames)"
+        );
+    }
+
+    #[test]
+    fn attr_mark_type_load_128k_flash() {
+        let Some(rom) = rom128() else {
+            eprintln!("skip: roms/128/spec128uk.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark.tap");
+        let m = Machine::new_128k(&rom).unwrap();
+        let (_m, loaded) = run_attr_mark_typed(m, img, true, 1, 200, 400);
+        assert!(
+            loaded,
+            "128K 48 BASIC LOAD \"\" CODE should flash-load attr_mark"
+        );
+    }
+
+    #[test]
+    fn attr_mark_type_load_plus3_flash() {
+        let Some(rom) = rom_plus3() else {
+            eprintln!("skip: plus3/plus2a ROM missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark.tap");
+        let m = Machine::new_plus3(&rom).unwrap();
+        let (_m, loaded) = run_attr_mark_typed(m, img, true, 1, 250, 400);
+        assert!(
+            loaded,
+            "+3 48 BASIC LOAD \"\" CODE should flash-load attr_mark"
+        );
     }
 
     /// Deterministic tape repro harness (observability + success).

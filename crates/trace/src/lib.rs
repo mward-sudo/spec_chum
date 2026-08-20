@@ -819,34 +819,79 @@ pub fn dump_ndjson() -> String {
     out
 }
 
+struct AppendSink {
+    writer: Option<std::io::BufWriter<File>>,
+    decided: bool,
+}
+
+static APPEND: Mutex<AppendSink> = Mutex::new(AppendSink {
+    writer: None,
+    decided: false,
+});
+
 fn maybe_append(ev: &TraceEvent) {
-    static SINK: OnceLock<Option<Mutex<std::io::BufWriter<File>>>> = OnceLock::new();
-    let sink = SINK.get_or_init(|| {
+    let Ok(mut sink) = APPEND.lock() else {
+        return;
+    };
+    if !sink.decided {
+        sink.decided = true;
         let flag = std::env::var("SPEC_CHUM_TRACE_APPEND")
             .map(|v| {
                 let t = v.trim();
                 t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
             })
             .unwrap_or(false);
-        if !flag {
-            return None;
+        if flag {
+            if let Ok(path) = std::env::var("SPEC_CHUM_TRACE_FILE") {
+                if !path.is_empty() {
+                    if let Ok(f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&path)
+                    {
+                        sink.writer = Some(std::io::BufWriter::new(f));
+                    }
+                }
+            }
         }
-        let path = std::env::var("SPEC_CHUM_TRACE_FILE").ok()?;
-        if path.is_empty() {
-            return None;
+    }
+    if let Some(w) = sink.writer.as_mut() {
+        let _ = writeln!(w, "{ev}");
+        let _ = w.flush();
+    }
+}
+
+/// Flush append-mode output so short CLI runs are not left empty.
+pub fn flush_append() {
+    if let Ok(mut sink) = APPEND.lock() {
+        if let Some(w) = sink.writer.as_mut() {
+            let _ = w.flush();
         }
-        let f = std::fs::OpenOptions::new()
+    }
+}
+
+#[cfg(test)]
+pub fn reset_append_sink_for_tests() {
+    if let Ok(mut sink) = APPEND.lock() {
+        *sink = AppendSink {
+            writer: None,
+            decided: false,
+        };
+    }
+}
+
+#[cfg(test)]
+pub fn configure_append_file_for_tests(path: &Path) {
+    reset_append_sink_for_tests();
+    if let Ok(mut sink) = APPEND.lock() {
+        if let Ok(f) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&path)
-            .ok()?;
-        Some(Mutex::new(std::io::BufWriter::new(f)))
-    });
-    let Some(lock) = sink.as_ref() else {
-        return;
-    };
-    if let Ok(mut w) = lock.lock() {
-        let _ = writeln!(w, "{ev}");
+            .open(path)
+        {
+            sink.writer = Some(std::io::BufWriter::new(f));
+        }
+        sink.decided = true;
     }
 }
 
@@ -968,5 +1013,34 @@ mod tests {
         assert!(s.contains("wrong_flag"));
         disable();
         clear();
+    }
+
+    #[test]
+    fn append_flushes_events_to_trace_file() {
+        let _g = test_lock();
+        let path = std::env::temp_dir().join(format!(
+            "spec_chum_append_{}_{}.txt",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_file(&path);
+        configure_append_file_for_tests(&path);
+        disable();
+        clear();
+        enable(Category::TAPE);
+        emit(EventKind::TapeRewind);
+        flush_append();
+        let body = std::fs::read_to_string(&path).unwrap_or_default();
+        reset_append_sink_for_tests();
+        let _ = std::fs::remove_file(&path);
+        disable();
+        clear();
+        assert!(
+            body.contains("tape.rewind"),
+            "append file should contain the event, got {body:?}"
+        );
     }
 }

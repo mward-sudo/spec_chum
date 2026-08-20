@@ -490,18 +490,16 @@ fn append_standard_block(
     };
     *level = true;
     for _ in 0..pilot_count {
-        pulses.push((PILOT_PULSE_T, *level));
-        *level = !*level;
+        crate::push_pulse(pulses, level, PILOT_PULSE_T);
     }
-    pulses.push((SYNC1_T, true));
-    pulses.push((SYNC2_T, false));
-    *level = false;
+    crate::push_pulse(pulses, level, SYNC1_T);
+    crate::push_pulse(pulses, level, SYNC2_T);
     for &byte in block {
         for bit in (0..8).rev() {
             let one = byte & (1 << bit) != 0;
             let len = if one { BIT1_T } else { BIT0_T };
-            pulses.push((len, true));
-            pulses.push((len, false));
+            crate::push_pulse(pulses, level, len);
+            crate::push_pulse(pulses, level, len);
         }
     }
     let pause = if pause_ms == 0 {
@@ -509,8 +507,7 @@ fn append_standard_block(
     } else {
         ms_to_t(pause_ms)
     };
-    pulses.push((pause, false));
-    *level = false;
+    crate::push_pulse(pulses, level, pause);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -529,12 +526,10 @@ fn append_turbo_block(
 ) {
     *level = true;
     for _ in 0..pilot_pulses {
-        pulses.push((u32::from(pilot), *level));
-        *level = !*level;
+        crate::push_pulse(pulses, level, u32::from(pilot));
     }
-    pulses.push((u32::from(sync1), true));
-    pulses.push((u32::from(sync2), false));
-    *level = false;
+    crate::push_pulse(pulses, level, u32::from(sync1));
+    crate::push_pulse(pulses, level, u32::from(sync2));
     append_pure_data(pulses, level, block, zero, one, used_bits, pause_ms);
 }
 
@@ -557,15 +552,14 @@ fn append_pure_data(
         for bit in (0..bits).rev() {
             let is_one = byte & (1 << bit) != 0;
             let len = if is_one { one } else { zero };
-            pulses.push((u32::from(len), true));
-            pulses.push((u32::from(len), false));
+            crate::push_pulse(pulses, level, u32::from(len));
+            crate::push_pulse(pulses, level, u32::from(len));
         }
     }
     let pause = ms_to_t(pause_ms);
     if pause > 0 {
-        pulses.push((pause, false));
+        crate::push_pulse(pulses, level, pause);
     }
-    *level = false;
 }
 
 #[cfg(test)]

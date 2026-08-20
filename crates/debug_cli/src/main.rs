@@ -151,23 +151,7 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
         flash_load: !cli.ear_load,
         speed: cli.speed,
     });
-    if let Some(list) = &cli.trace {
-        trace::enable(trace::Category::parse_list(list));
-    }
     Ok(m)
-}
-
-fn enter_tape_loader_menu(m: &mut Machine) {
-    const PRESS: u32 = 10;
-    const GAP: u32 = 5;
-    for _ in 0..PRESS {
-        m.keyboard_mut().set_key(6, 0, true);
-        let _ = m.run_frame();
-    }
-    m.keyboard_mut().reset();
-    for _ in 0..GAP {
-        let _ = m.run_frame();
-    }
 }
 
 fn attr_mark_code_loaded(m: &Machine) -> bool {
@@ -211,9 +195,17 @@ fn print_reason(r: BreakReason, json: bool) {
     }
 }
 
+fn exit_cli(code: i32) -> ! {
+    trace::flush_append();
+    std::process::exit(code);
+}
+
 fn main() -> Result<()> {
     trace::init_from_env();
     let cli = Cli::parse();
+    if let Some(list) = &cli.trace {
+        trace::enable(trace::Category::parse_list(list));
+    }
     let mut m = load_machine(&cli)?;
     match cli.cmd {
         Cmd::Run { frames } => {
@@ -230,7 +222,7 @@ fn main() -> Result<()> {
             }
             if m.debugger().last_hit.is_stop() {
                 print_reason(m.debugger().last_hit, cli.json);
-                std::process::exit(2);
+                exit_cli(2);
             }
         }
         Cmd::UntilPc { pc, max } => {
@@ -244,7 +236,7 @@ fn main() -> Result<()> {
             }
             print_reason(reason, cli.json);
             if !matches!(reason, BreakReason::Pc(_)) {
-                std::process::exit(2);
+                exit_cli(2);
             }
         }
         Cmd::DumpState => {
@@ -294,20 +286,18 @@ fn main() -> Result<()> {
             }
             print_reason(m.debugger().last_hit, cli.json);
             if !m.debugger().last_hit.is_stop() {
-                std::process::exit(2);
+                exit_cli(2);
             }
         }
         Cmd::TypeLoad { code, warmup, max } => {
             if cli.tap.is_none() && cli.tzx.is_none() {
                 bail!("type-load requires --tap or --tzx");
             }
+            m.set_tape_playing(false);
             for _ in 0..warmup {
                 let _ = m.run_frame();
             }
-            if matches!(m.model(), Model::Spectrum128 | Model::SpectrumPlus3) {
-                enter_tape_loader_menu(&mut m);
-            }
-            m.type_load_quotes_48k(code);
+            m.type_load_quotes(code);
             m.set_tape_playing(true);
             let limit = max.unwrap_or(if cli.ear_load { 200_000 } else { 200 });
             let mut loaded = false;
@@ -342,7 +332,7 @@ fn main() -> Result<()> {
                 }
             }
             if !loaded {
-                std::process::exit(2);
+                exit_cli(2);
             }
         }
         Cmd::WatchWrite { addr, max } => {
@@ -360,10 +350,11 @@ fn main() -> Result<()> {
             }
             print_reason(reason, cli.json);
             if !matches!(reason, BreakReason::Mem { .. }) {
-                std::process::exit(2);
+                exit_cli(2);
             }
         }
     }
+    trace::flush_append();
     Ok(())
 }
 

@@ -20,10 +20,13 @@ The `z80` crate does **not** emit traces. CPU events (`CpuStep` / `CpuIrq` /
 | `SPEC_CHUM_TRACE_CAPACITY=N` | Ring size (default **8192**) |
 | `SPEC_CHUM_TRACE_CPU_EVERY=N` | Sample every Nth CPU step when `cpu` is on (default 1) |
 | `SPEC_CHUM_TRACE_FILE=/path/to/dump.txt` | Optional path used by `dump_to_env_file()` / harness failures |
-| `SPEC_CHUM_TRACE_APPEND=1` | With `SPEC_CHUM_TRACE_FILE`, append each event as it is emitted |
+| `SPEC_CHUM_TRACE_APPEND=1` | With `SPEC_CHUM_TRACE_FILE`, append each event as it is emitted (writer is flushed so short CLI runs are not empty) |
 
 Hosts call `trace::init_from_env()` (egui `main`, `HostSession::new`,
-`sc_debug_init_from_env`) so env vars apply once at startup.
+`sc_debug_init_from_env`) so env vars apply once at startup. `spec-chum-debug`
+also applies `--trace` **before** tape insert / `type-load` so those events are
+recorded. `SPEC_CHUM_TRACE_APPEND=1` writes each event (and flushes) to
+`SPEC_CHUM_TRACE_FILE`; do not rely on `dump-trace` in a second process.
 
 ### Categories (bitmask)
 
@@ -79,8 +82,15 @@ cargo run -p debug_cli -- disasm --addr 056C --count 8
 
 # Tape + trace (enable categories on the command that generates events)
 cargo run -p debug_cli -- --tap tests/fixtures/tape/attr_mark.tap type-load --code
+# 128K / +3: 48 BASIC then LOAD "" CODE (not Tape Loader)
+cargo run -p debug_cli -- --model 128k --tap tests/fixtures/tape/attr_mark.tap type-load --code
+# EAR bitstream (ROM LD-BYTES; pause until typed). Speed shortens leader/pause only.
+cargo run -p debug_cli -- --model 48k --tap tests/fixtures/tape/attr_mark.tap \
+  --ear-load --speed 10 type-load --code --max 2000
+# Same process: --trace plus append (file is flushed; dump-trace cannot see another PID)
+SPEC_CHUM_TRACE_FILE=/tmp/sc_append.txt SPEC_CHUM_TRACE_APPEND=1 \
+  cargo run -p debug_cli -- --trace tape --tap tests/fixtures/tape/attr_mark.tap type-load --code
 cargo run -p debug_cli -- --trace tape,cpu --json dump-trace
-# Cross-process traces: SPEC_CHUM_TRACE_FILE=/tmp/sc.ndjson SPEC_CHUM_TRACE_APPEND=1
 
 # After `cargo build -p debug_cli`:
 ./target/debug/spec-chum-debug dump-state
