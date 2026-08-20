@@ -101,7 +101,8 @@ impl TapeDeck {
     pub fn pulse_index(&self) -> usize {
         match self {
             Self::Tap(t) => t.pulse_index(),
-            Self::Tzx(t) => t.pulse_index(),
+            // TZX: progress is within the active block, not the whole schedule.
+            Self::Tzx(t) => t.active_pulse_index(),
         }
     }
 
@@ -109,7 +110,7 @@ impl TapeDeck {
     pub fn pulse_count(&self) -> usize {
         match self {
             Self::Tap(t) => t.scheduled_pulses(),
-            Self::Tzx(t) => t.scheduled_pulses(),
+            Self::Tzx(t) => t.active_pulse_count(),
         }
     }
 
@@ -188,7 +189,12 @@ impl TapeProgress {
         }
         let block = self.block_index.min(self.block_count) as f32;
         let within = if self.pulse_count == 0 {
-            0.0
+            // Consumed trailing zero-pulse block (e.g. 0x20 pause_ms=0): treat as done.
+            if self.block_index.saturating_add(1) >= self.block_count {
+                1.0
+            } else {
+                0.0
+            }
         } else {
             self.pulse_index.min(self.pulse_count) as f32 / self.pulse_count as f32
         };
@@ -2004,9 +2010,50 @@ impl Machine {
 
     pub fn set_ear(&mut self, level: bool) {
         match self {
-            Self::Spec48 { bus, .. } => bus.ear = level,
-            Self::Spec128 { bus, .. } => bus.ear = level,
-            Self::SpecPlus3 { bus, .. } => bus.ear = level,
+            Self::Spec48 { bus, .. } => {
+                Self::set_ear_mixed(
+                    &mut bus.ear,
+                    bus.beeper,
+                    bus.frame_t,
+                    &mut bus.beeper_edges,
+                    level,
+                );
+            }
+            Self::Spec128 { bus, .. } => {
+                Self::set_ear_mixed(
+                    &mut bus.ear,
+                    bus.beeper,
+                    bus.frame_t,
+                    &mut bus.beeper_edges,
+                    level,
+                );
+            }
+            Self::SpecPlus3 { bus, .. } => {
+                Self::set_ear_mixed(
+                    &mut bus.ear,
+                    bus.beeper,
+                    bus.frame_t,
+                    &mut bus.beeper_edges,
+                    level,
+                );
+            }
+        }
+    }
+
+    fn set_ear_mixed(
+        ear: &mut bool,
+        beeper: bool,
+        frame_t: u32,
+        edges: &mut Vec<(u32, bool)>,
+        level: bool,
+    ) {
+        if *ear == level {
+            return;
+        }
+        *ear = level;
+        let mixed = level || beeper;
+        if edges.last().map(|&(_, l)| l) != Some(mixed) {
+            edges.push((frame_t, mixed));
         }
     }
 
@@ -2409,6 +2456,34 @@ mod tests {
         assert_eq!(p.block_count, n);
         assert!(p.pulse_count > 0);
         assert!(p.fraction() < 1.0);
+    }
+
+    #[test]
+    fn tape_progress_trailing_empty_block_reports_complete() {
+        // Mirrors TZX ending in a consumed 0x20 pause_ms=0 (zero pulses on final block).
+        let p = TapeProgress {
+            block_index: 2,
+            block_count: 3,
+            pulse_index: 0,
+            pulse_count: 0,
+        };
+        assert_eq!(p.fraction(), 1.0);
+        // Non-final empty block stays at the block boundary (not complete).
+        let mid = TapeProgress {
+            block_index: 1,
+            block_count: 3,
+            pulse_index: 0,
+            pulse_count: 0,
+        };
+        assert!((mid.fraction() - 1.0 / 3.0).abs() < f32::EPSILON);
+        // u32::MAX + 1 must not panic in debug; treat as past the end → complete.
+        let max = TapeProgress {
+            block_index: u32::MAX,
+            block_count: 1,
+            pulse_index: 0,
+            pulse_count: 0,
+        };
+        assert_eq!(max.fraction(), 1.0);
     }
 
     #[test]

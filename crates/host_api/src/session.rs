@@ -73,6 +73,8 @@ pub struct HostSession {
     status: String,
     /// Mono PCM for the last frame (~882 samples @ 44100 Hz / 50 fps).
     audio_pcm: Vec<f32>,
+    /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
+    last_speaker_level: bool,
 }
 
 impl HostSession {
@@ -90,6 +92,7 @@ impl HostSession {
             running: true,
             status: "No ROM loaded".into(),
             audio_pcm: Vec::new(),
+            last_speaker_level: false,
         }
     }
 
@@ -188,6 +191,7 @@ impl HostSession {
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
+        self.last_speaker_level = false;
         self.status = "ROM loaded".into();
         Ok(())
     }
@@ -430,7 +434,12 @@ impl HostSession {
             machine::Model::Spectrum48 => 69_888,
             machine::Model::Spectrum128 | machine::Model::SpectrumPlus3 => 70_908,
         };
-        render_frame_pcm(&audio, frame_t, &mut self.audio_pcm);
+        self.last_speaker_level = render_frame_pcm(
+            &audio,
+            frame_t,
+            self.last_speaker_level,
+            &mut self.audio_pcm,
+        );
         m.render_rgba(&mut self.framebuffer, self.with_border);
     }
 }
@@ -440,12 +449,17 @@ pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
 /// Samples rendered per 50 Hz frame.
 pub const AUDIO_SAMPLES_PER_FRAME: usize = (AUDIO_SAMPLE_RATE as usize) / 50;
 
-fn render_frame_pcm(audio: &machine::FrameAudio, frame_tstates: u32, out: &mut Vec<f32>) {
+fn render_frame_pcm(
+    audio: &machine::FrameAudio,
+    frame_tstates: u32,
+    initial_level: bool,
+    out: &mut Vec<f32>,
+) -> bool {
     out.clear();
     out.resize(AUDIO_SAMPLES_PER_FRAME, 0.0);
     let t_per = frame_tstates as f32 / AUDIO_SAMPLES_PER_FRAME as f32;
     let mut edge_i = 0usize;
-    let mut level = false;
+    let mut level = initial_level;
     let mut t = 0.0f32;
     let mut ay_i = 0usize;
     for sample in out.iter_mut() {
@@ -471,6 +485,18 @@ fn render_frame_pcm(audio: &machine::FrameAudio, frame_tstates: u32, out: &mut V
         *sample = (beep + ay).clamp(-1.0, 1.0);
         t += t_per;
     }
+    // Edges in the final sample interval (after the last sample instant) must
+    // still update the returned level so the next frame starts correctly.
+    while edge_i < audio.beeper_edges.len() {
+        let (edge_t, edge_level) = audio.beeper_edges[edge_i];
+        if edge_t < frame_tstates {
+            level = edge_level;
+            edge_i += 1;
+        } else {
+            break;
+        }
+    }
+    level
 }
 
 fn dims(with_border: bool) -> (usize, usize) {
@@ -622,16 +648,31 @@ mod tests {
         s.load_rom_bytes(&rom).expect("rom");
         let tap = workspace_root().join("tests/fixtures/tape/minimal_code.tap");
         s.open_tape(&tap).expect("tap");
-        let p = s.tape_progress().expect("progress");
-        assert_eq!(p.block_index, 0);
-        assert_eq!(p.block_count, 2);
+        s.set_tape_load_options(machine::TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        })
+        .expect("opts");
+        let p0 = s.tape_progress().expect("progress");
+        assert_eq!(p0.block_index, 0);
+        assert_eq!(p0.block_count, 2);
         s.play_tape().expect("play");
         s.run_frame();
-        assert_eq!(s.audio_pcm().len(), AUDIO_SAMPLES_PER_FRAME);
-        let energy: f32 = s.audio_pcm().iter().map(|x| x * x).sum();
+        let p1 = s.tape_progress().expect("progress after play");
         assert!(
-            energy > 0.01,
-            "playing tape should produce audible energy, got {energy}"
+            p1.pulse_index > p0.pulse_index || p1.fraction() > p0.fraction(),
+            "tape progress should advance after a playing frame (before={p0:?} after={p1:?})"
+        );
+        assert_eq!(s.audio_pcm().len(), AUDIO_SAMPLES_PER_FRAME);
+        let (min, max) = s
+            .audio_pcm()
+            .iter()
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &x| {
+                (lo.min(x), hi.max(x))
+            });
+        assert!(
+            max - min > 0.05,
+            "playing tape should produce a non-trivial PCM range, got min={min} max={max}"
         );
     }
 
@@ -731,5 +772,21 @@ mod tests {
             .open_tape(Path::new("/tmp/spec_chum_definitely_missing.tap"))
             .expect_err("missing");
         assert!(matches!(err, HostError::Io(_) | HostError::Message(_)));
+    }
+
+    #[test]
+    fn render_frame_pcm_carries_late_edge_into_next_level() {
+        let frame_tstates = 69_888u32;
+        let audio = machine::FrameAudio {
+            beeper_edges: vec![(frame_tstates - 1, true)],
+            ay_samples: Vec::new(),
+        };
+        let mut out = Vec::new();
+        let level = render_frame_pcm(&audio, frame_tstates, false, &mut out);
+        assert!(
+            level,
+            "edge near end of frame must update returned speaker level"
+        );
+        assert_eq!(out.len(), AUDIO_SAMPLES_PER_FRAME);
     }
 }
