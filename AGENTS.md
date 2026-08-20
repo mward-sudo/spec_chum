@@ -31,6 +31,10 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 - Binary (`app`): `anyhow` is fine for top-level error context.
 - `unsafe` is denied workspace-wide; only introduce it with a documented `SAFETY` rationale and a narrowly scoped `#[allow(unsafe_code)]`.
 
+GitHub Release binaries (egui `spec_chum` + `spec-chum-debug`) are built by
+`.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
+Do not attach ROMs. Native SwiftUI `.app` CI is [#68](https://github.com/mward-sudo/spec_chum/issues/68).
+
 ## Agent workflow (clippy-first)
 
 Before claiming a task done:

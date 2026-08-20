@@ -1,0 +1,222 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to package (e.g. v0.1.0). Leave empty to use the current ref."
+        required: false
+        type: string
+
+# Least privilege: only the publish job mints a release / attestations.
+# Signing secrets are optional; steps no-op when they are absent.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          REF="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$REF" >> "$GITHUB_OUTPUT"
+          if [[ "$REF" == v*.*.* ]]; then
+            echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Linux GUI/audio deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libgtk-3-dev libglib2.0-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Build binaries
+        shell: bash
+        run: cargo build --release -p app -p debug_cli --target ${{ matrix.target }}
+
+      - name: Stage and pack
+        id: pack
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCHIVE: ${{ matrix.archive }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          OUT="spec-chum-${VERSION}-${TARGET}"
+          mkdir -p "dist/$OUT"
+          BIN_DIR="target/${TARGET}/release"
+          if [[ "$TARGET" == *windows* ]]; then
+            cp "$BIN_DIR/spec_chum.exe" "dist/$OUT/"
+            cp "$BIN_DIR/spec-chum-debug.exe" "dist/$OUT/"
+          else
+            cp "$BIN_DIR/spec_chum" "dist/$OUT/"
+            cp "$BIN_DIR/spec-chum-debug" "dist/$OUT/"
+            strip "dist/$OUT/spec_chum" "dist/$OUT/spec-chum-debug" || true
+          fi
+          cp LICENSE "dist/$OUT/"
+          if find "dist/$OUT" -iname '*.rom' | grep -q .; then
+            echo "error: ROM files must not be packaged" >&2
+            exit 1
+          fi
+          printf '%s\n' \
+            "Spec Chum ${VERSION} (${TARGET})" \
+            "" \
+            "System ROMs are not included. Fetch them with ./scripts/fetch_roms.sh" \
+            "from a source checkout, or see README.md." \
+            > "dist/$OUT/README.txt"
+          mkdir -p packed
+          if [[ "$ARCHIVE" == zip ]]; then
+            (cd dist && python -c "import shutil; shutil.make_archive('../packed/${OUT}', 'zip', '.', '${OUT}')")
+            echo "asset=packed/${OUT}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -C dist -czf "packed/${OUT}.tar.gz" "$OUT"
+            echo "asset=packed/${OUT}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Codesign macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          chmod +x scripts/ci/sign-macos.sh
+          scripts/ci/sign-macos.sh \
+            "dist/spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}/spec_chum" \
+            "dist/spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}/spec-chum-debug"
+          # Re-pack after signing (strip/archive happened before sign).
+          OUT="spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}"
+          tar -C dist -czf "packed/${OUT}.tar.gz" "$OUT"
+
+      - name: Authenticode-sign Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          $target = "${{ matrix.target }}"
+          $dir = "dist/spec-chum-$ver-$target"
+          ./scripts/ci/sign-windows.ps1 "$dir/spec_chum.exe" "$dir/spec-chum-debug.exe"
+          $out = "spec-chum-$ver-$target"
+          python -c "import shutil; shutil.make_archive('packed/$out', 'zip', 'dist', '$out')"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}
+          path: ${{ steps.pack.outputs.asset }}
+          if-no-files-found: error
+
+  publish:
+    name: checksums, attest, GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums
+        id: sums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} dist/ \;
+          cd dist
+          sha256sum spec-chum-* > SHA256SUMS
+          if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
+            keyfile="$(mktemp)"
+            printf '%s\n' "$GPG_PRIVATE_KEY" >"$keyfile"
+            gpg --batch --import "$keyfile"
+            rm -f "$keyfile"
+            extra=()
+            if [[ -n "${GPG_PASSPHRASE:-}" ]]; then
+              extra=(--pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
+            fi
+            gpg --batch --yes "${extra[@]}" --detach-sign --armor SHA256SUMS
+          else
+            echo "skip: GPG_PRIVATE_KEY not set; SHA256SUMS unsigned"
+          fi
+          ls -la
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          overwrite: true
+          files: dist/*
+          body: |
+            Cross-platform **egui** host (`spec_chum`) and headless debugger (`spec-chum-debug`).
+
+            System ROMs are **not** included — fetch with `./scripts/fetch_roms.sh`.
+
+            Verify downloads with `SHA256SUMS` (and `SHA256SUMS.asc` when GPG signing is configured).
+            GitHub Artifact Attestations are attached to this workflow run.
+
+            Linux runtime: GTK 3 and ALSA development libraries equivalent
+            (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).

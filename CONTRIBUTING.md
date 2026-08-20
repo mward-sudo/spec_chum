@@ -24,6 +24,9 @@ Local quality gate (same as CI intent):
 ./scripts/check.sh
 ```
 
+GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
+`vX.Y.Z`. See [docs/RELEASE.md](docs/RELEASE.md).
+
 ## AI / agent-assisted work
 
 - Read `AGENTS.md` for crate boundaries and hard constraints.
