@@ -284,6 +284,17 @@ impl Machine {
     }
 }
 
+fn tape_json(t: &TapeInspect) -> String {
+    format!(
+        "{{\"playing\":{},\"flash_load\":{},\"speed\":{},\"block\":{},\"blocks\":{}}}",
+        u8::from(t.playing),
+        u8::from(t.flash_load),
+        t.speed,
+        t.block_index,
+        t.block_count
+    )
+}
+
 impl Inspect {
     /// Hand-rolled JSON (no serde).
     #[must_use]
@@ -294,16 +305,7 @@ impl Inspect {
             Model::Spectrum128 => "128k",
             Model::SpectrumPlus3 => "plus3",
         };
-        let tape = self.tape.as_ref().map_or("null".into(), |t| {
-            format!(
-                "{{\"playing\":{},\"flash_load\":{},\"speed\":{},\"block\":{}/{} }}",
-                u8::from(t.playing),
-                u8::from(t.flash_load),
-                t.speed,
-                t.block_index,
-                t.block_count
-            )
-        });
+        let tape = self.tape.as_ref().map_or("null".into(), tape_json);
         let ay = self.ay_regs.map_or("null".into(), |regs| {
             let list: Vec<String> = regs.iter().map(|b| format!("{b}")).collect();
             format!(
@@ -437,5 +439,26 @@ impl Display for Inspect {
             )?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tape_json_is_valid_object() {
+        let t = TapeInspect {
+            playing: true,
+            flash_load: false,
+            speed: 1,
+            block_index: 0,
+            block_count: 2,
+        };
+        let s = tape_json(&t);
+        assert!(!s.contains('/'), "{s}");
+        assert!(s.contains("\"block\":0"));
+        assert!(s.contains("\"blocks\":2"));
+        assert!(s.starts_with('{') && s.ends_with('}'));
     }
 }

@@ -293,7 +293,6 @@ impl BusPlus3 {
                     value,
                 });
             }
-            let _ = value;
             return;
         }
         if port & 0xc002 == 0xc000 {

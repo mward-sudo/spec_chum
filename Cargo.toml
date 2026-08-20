@@ -29,7 +29,6 @@ tape = { path = "crates/tape" }
 formats = { path = "crates/formats" }
 machine = { path = "crates/machine" }
 trace = { path = "crates/trace" }
-debug_cli = { path = "crates/debug_cli" }
 eframe = { version = "0.31", default-features = true }
 egui = "0.31"
 cpal = "0.15"

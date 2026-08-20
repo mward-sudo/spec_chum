@@ -15,6 +15,21 @@ use ula::{
     FRAME_TSTATES_48,
 };
 
+fn emit_floating_sampled(port: u16, frame_t: u32, value: u8) {
+    if !trace::enabled(trace::Category::BUS) {
+        return;
+    }
+    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if n.is_multiple_of(256) {
+        trace::emit(trace::EventKind::BusFloating {
+            port,
+            frame_t,
+            value,
+        });
+    }
+}
+
 /// Keyboard matrix: 8 rows × 5 keys (active low).
 #[derive(Clone, Debug)]
 pub struct Keyboard {
@@ -215,7 +230,9 @@ impl Bus48 {
             return self.in_fe(port);
         }
         // Floating bus on unattached ports
-        floating_bus_byte(self.frame_t, self.screen_bytes()).unwrap_or(0xff)
+        let v = floating_bus_byte(self.frame_t, self.screen_bytes()).unwrap_or(0xff);
+        emit_floating_sampled(port, self.frame_t, v);
+        v
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
@@ -397,7 +414,9 @@ impl Bus128 {
         if port & 0xc002 == 0xc000 {
             return self.ay.read_data();
         }
-        floating_bus_byte_128(self.frame_t, self.screen_bytes()).unwrap_or(0xff)
+        let v = floating_bus_byte_128(self.frame_t, self.screen_bytes()).unwrap_or(0xff);
+        emit_floating_sampled(port, self.frame_t, v);
+        v
     }
 
     /// Record a speaker edge when the mixed EAR∥beeper level changes.

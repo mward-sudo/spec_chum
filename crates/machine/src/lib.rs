@@ -246,9 +246,6 @@ impl Io for MemIo48<'_> {
             0
         };
         let v = self.bus.in_port(port);
-        if port & 1 != 0 && trace::enabled(trace::Category::BUS) {
-            emit_floating_sampled(port, self.bus.frame_t, v);
-        }
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
@@ -309,9 +306,6 @@ impl Io for MemIo128<'_> {
             0
         };
         let v = self.bus.in_port(port);
-        if port & 1 != 0 && trace::enabled(trace::Category::BUS) {
-            emit_floating_sampled(port, self.bus.frame_t, v);
-        }
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
@@ -404,15 +398,18 @@ fn emit_contend_sampled(addr: u16, frame_t: u32, wait: u32) {
     }
 }
 
-fn emit_floating_sampled(port: u16, frame_t: u32, value: u8) {
-    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    if n.is_multiple_of(256) {
-        trace::emit(trace::EventKind::BusFloating {
-            port,
-            frame_t,
-            value,
-        });
+fn mem_port_watch<'a>(
+    debugger: &'a Debugger,
+    hit: &'a Cell<Option<BreakReason>>,
+) -> Option<debugger::WatchHook<'a>> {
+    if debugger.mem_watches.is_empty() && debugger.port_watches.is_empty() {
+        None
+    } else {
+        Some(debugger::WatchHook {
+            mem: &debugger.mem_watches,
+            port: &debugger.port_watches,
+            hit,
+        })
     }
 }
 
@@ -849,8 +846,10 @@ impl Machine {
                     trace::emit(trace::EventKind::UlaFrame { frame });
                 }
                 let mut last_t = cpu.t;
+                let mut broke_on_pc = false;
                 while bus.frame_t < FRAME_TSTATES_48 {
                     if debugger.check_pc(cpu.regs.pc) {
+                        broke_on_pc = true;
                         break;
                     }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
@@ -924,7 +923,9 @@ impl Machine {
                     }
                 }
                 // Keep border_events for render; next run_frame begin_frame clears them.
-                bus.frame_t = 0;
+                if !broke_on_pc {
+                    bus.frame_t = 0;
+                }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples: Vec::new(),
@@ -953,8 +954,10 @@ impl Machine {
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
                 let mut last_t = cpu.t;
+                let mut broke_on_pc = false;
                 while bus.frame_t < FRAME_TSTATES_128 {
                     if debugger.check_pc(cpu.regs.pc) {
+                        broke_on_pc = true;
                         break;
                     }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
@@ -1044,7 +1047,9 @@ impl Machine {
                 while ay_samples.len() < AY_SAMPLES {
                     ay_samples.push(bus.ay.sample_mono());
                 }
-                bus.frame_t = 0;
+                if !broke_on_pc {
+                    bus.frame_t = 0;
+                }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples,
@@ -1073,8 +1078,10 @@ impl Machine {
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
                 let mut last_t = cpu.t;
+                let mut broke_on_pc = false;
                 while bus.frame_t < FRAME_TSTATES_128 {
                     if debugger.check_pc(cpu.regs.pc) {
+                        broke_on_pc = true;
                         break;
                     }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
@@ -1164,7 +1171,9 @@ impl Machine {
                 while ay_samples.len() < AY_SAMPLES {
                     ay_samples.push(bus.ay.sample_mono());
                 }
-                bus.frame_t = 0;
+                if !broke_on_pc {
+                    bus.frame_t = 0;
+                }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples,
@@ -1531,24 +1540,16 @@ impl Machine {
                     let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
                     (bytes, len, reg_snap(cpu))
                 });
-                let mem_w = debugger.mem_watches.clone();
-                let port_w = debugger.port_watches.clone();
                 let hit = Cell::new(None);
-                let watch = if mem_w.is_empty() && port_w.is_empty() {
-                    None
-                } else {
-                    Some(debugger::WatchHook {
-                        mem: &mem_w,
-                        port: &port_w,
-                        hit: &hit,
-                    })
-                };
                 let last_t = cpu.t;
-                let mut mio = MemIo48 {
-                    bus: bus.as_mut(),
-                    watch,
-                };
-                cpu.step(&mut mio);
+                {
+                    let watch = mem_port_watch(debugger, &hit);
+                    let mut mio = MemIo48 {
+                        bus: bus.as_mut(),
+                        watch,
+                    };
+                    cpu.step(&mut mio);
+                }
                 let dt = (cpu.t - last_t) as u32;
                 if let Some((bytes, len, regs)) = pre {
                     if was_halt {
@@ -1563,13 +1564,7 @@ impl Machine {
                     });
                 }
                 if let Some(reason) = hit.get() {
-                    debugger.paused = true;
-                    debugger.last_hit = reason;
-                    if let BreakReason::Mem { addr, write, value } = reason {
-                        if trace::enabled(trace::Category::MEM) {
-                            trace::emit(trace::EventKind::MemWatch { addr, write, value });
-                        }
-                    }
+                    debugger.apply_hit(reason);
                 }
                 Self::advance_tape_ear(
                     tape,
@@ -1651,24 +1646,16 @@ impl Machine {
                     let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
                     (bytes, len, reg_snap(cpu))
                 });
-                let mem_w = debugger.mem_watches.clone();
-                let port_w = debugger.port_watches.clone();
                 let hit = Cell::new(None);
-                let watch = if mem_w.is_empty() && port_w.is_empty() {
-                    None
-                } else {
-                    Some(debugger::WatchHook {
-                        mem: &mem_w,
-                        port: &port_w,
-                        hit: &hit,
-                    })
-                };
                 let last_t = cpu.t;
-                let mut mio = MemIo128 {
-                    bus: bus.as_mut(),
-                    watch,
-                };
-                cpu.step(&mut mio);
+                {
+                    let watch = mem_port_watch(debugger, &hit);
+                    let mut mio = MemIo128 {
+                        bus: bus.as_mut(),
+                        watch,
+                    };
+                    cpu.step(&mut mio);
+                }
                 let dt = (cpu.t - last_t) as u32;
                 if let Some((bytes, len, regs)) = pre {
                     if was_halt {
@@ -1683,8 +1670,7 @@ impl Machine {
                     });
                 }
                 if let Some(reason) = hit.get() {
-                    debugger.paused = true;
-                    debugger.last_hit = reason;
+                    debugger.apply_hit(reason);
                 }
                 Self::advance_tape_ear(
                     tape,
@@ -1767,24 +1753,16 @@ impl Machine {
                     let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
                     (bytes, len, reg_snap(cpu))
                 });
-                let mem_w = debugger.mem_watches.clone();
-                let port_w = debugger.port_watches.clone();
                 let hit = Cell::new(None);
-                let watch = if mem_w.is_empty() && port_w.is_empty() {
-                    None
-                } else {
-                    Some(debugger::WatchHook {
-                        mem: &mem_w,
-                        port: &port_w,
-                        hit: &hit,
-                    })
-                };
                 let last_t = cpu.t;
-                let mut mio = MemIoPlus3 {
-                    bus: bus.as_mut(),
-                    watch,
-                };
-                cpu.step(&mut mio);
+                {
+                    let watch = mem_port_watch(debugger, &hit);
+                    let mut mio = MemIoPlus3 {
+                        bus: bus.as_mut(),
+                        watch,
+                    };
+                    cpu.step(&mut mio);
+                }
                 let dt = (cpu.t - last_t) as u32;
                 if let Some((bytes, len, regs)) = pre {
                     if was_halt {
@@ -1799,8 +1777,7 @@ impl Machine {
                     });
                 }
                 if let Some(reason) = hit.get() {
-                    debugger.paused = true;
-                    debugger.last_hit = reason;
+                    debugger.apply_hit(reason);
                 }
                 Self::advance_tape_ear(
                     tape,
@@ -2046,6 +2023,8 @@ impl Machine {
         let pc = self.cpu().regs.pc;
         if self.debugger().paused {
             self.debugger_mut().continue_from_pc(pc);
+        } else {
+            self.debugger_mut().last_hit = BreakReason::None;
         }
         for _ in 0..max_insns {
             if self.debugger().paused {
@@ -2932,6 +2911,22 @@ mod tests {
         let reason = m.run_until_break(8);
         assert_eq!(reason, BreakReason::Pc(0x8000));
         assert_eq!(m.cpu().regs.pc, 0x8000);
+
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.write_mem(0x8000, 0x00); // NOP
+        m.write_mem(0x8001, 0x00);
+        m.cpu_mut().regs.pc = 0x8000;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        assert_eq!(m.run_until_break(2), BreakReason::Budget);
+        let pc_after = m.cpu().regs.pc;
+        assert_eq!(m.run_until_break(8), BreakReason::Budget);
+        assert_ne!(
+            m.cpu().regs.pc,
+            pc_after,
+            "second budget run must not stall"
+        );
 
         let mut m = Machine::new_48k(&rom).unwrap();
         m.write_mem(0x8000, 0x77); // LD (HL),A

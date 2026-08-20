@@ -27,6 +27,7 @@ pub struct EmulatorSession {
     pub model: Model,
     pub debug_open: bool,
     pub debug_mem_addr: u16,
+    pub debug_break_pc: u16,
     /// Scripted matrix keys (e.g. auto-type `LOAD ""`).
     key_script: Option<KeyScript>,
 }
@@ -103,6 +104,7 @@ impl EmulatorSession {
             model,
             debug_open: false,
             debug_mem_addr: 0,
+            debug_break_pc: 0,
             key_script: None,
         }
     }
@@ -812,19 +814,20 @@ impl SpecChumApp {
 
         self.debug_window(ctx);
 
-        if self.session.running
-            || self.session.debug_open
-            || self
-                .session
-                .machine
-                .as_ref()
-                .is_some_and(|m| m.debugger().paused)
-        {
-            if self.session.throttle && self.session.running {
+        let paused = self
+            .session
+            .machine
+            .as_ref()
+            .is_some_and(|m| m.debugger().paused);
+        let advancing = self.session.running && !paused;
+        if advancing {
+            if self.session.throttle {
                 ctx.request_repaint_after(std::time::Duration::from_millis(20));
             } else {
                 ctx.request_repaint();
             }
+        } else if self.session.debug_open || paused {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
     }
 
@@ -891,10 +894,18 @@ impl SpecChumApp {
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.label("Break PC");
-                    let mut bp = m.cpu().regs.pc;
-                    ui.add(egui::DragValue::new(&mut bp).hexadecimal(4, false, false));
+                    let mut bp = self.session.debug_break_pc;
+                    if ui
+                        .add(egui::DragValue::new(&mut bp).hexadecimal(4, false, false))
+                        .changed()
+                    {
+                        self.session.debug_break_pc = bp;
+                    }
+                    if ui.button("PC").clicked() {
+                        self.session.debug_break_pc = m.cpu().regs.pc;
+                    }
                     if ui.button("Add").clicked() {
-                        m.debugger_mut().add_pc_break(bp);
+                        m.debugger_mut().add_pc_break(self.session.debug_break_pc);
                     }
                     if ui.button("Clear breaks").clicked() {
                         m.debugger_mut().clear_breaks();
@@ -1177,8 +1188,11 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             app.ui(ctx);
         });
+        assert!(app.session.debug_open);
         if let Some(m) = app.session.machine.as_mut() {
+            let pc = m.cpu().regs.pc;
             m.step_once();
+            assert_ne!(m.cpu().regs.pc, pc, "step_once should advance PC");
         }
     }
 }

@@ -191,12 +191,21 @@ fn ld16(bytes: &[u8], dest: &str) -> Disasm {
     }
 }
 
+fn signed8(d: u8) -> String {
+    let v = d as i8;
+    if v < 0 {
+        format!("-${:02X}", v.unsigned_abs())
+    } else {
+        format!("+${v:02X}")
+    }
+}
+
 fn jr(bytes: &[u8], mnem: &str) -> Disasm {
     if !need(bytes, 2) {
         return trunc(2);
     }
     Disasm {
-        text: format!("{mnem} ${:02X}", bytes[1]),
+        text: format!("{mnem} {}", signed8(bytes[1])),
         len: 2,
     }
 }
@@ -417,7 +426,7 @@ fn disasm_index(bytes: &[u8], xy: &str) -> Disasm {
             Some((b[2] as i8, b[2]))
         }
     };
-    let idx_mem = |d: u8| format!("({xy}${d:02X})");
+    let idx_mem = |d: u8| format!("({xy}{})", signed8(d));
     match op {
         0x09 => two(&format!("ADD {hl},BC")),
         0x19 => two(&format!("ADD {hl},DE")),
@@ -592,7 +601,7 @@ fn disasm_ddcb(bytes: &[u8], xy: &str) -> Disasm {
     let op = bytes[3];
     let y = (op >> 3) & 7;
     let z = op & 7;
-    let mem = format!("({xy}${d:02X})");
+    let mem = format!("({xy}{})", signed8(d));
     let r = r8(z);
     let text = match op >> 6 {
         0 => {
@@ -635,7 +644,7 @@ mod tests {
         assert_eq!(t(&[0x00]), ("NOP".into(), 1));
         assert_eq!(t(&[0x3e, 0x41]), ("LD A,$41".into(), 2));
         assert_eq!(t(&[0x21, 0x00, 0x40]), ("LD HL,$4000".into(), 3));
-        assert_eq!(t(&[0x18, 0xfe]), ("JR $FE".into(), 2));
+        assert_eq!(t(&[0x18, 0xfe]), ("JR -$02".into(), 2));
         assert_eq!(t(&[0x76]), ("HALT".into(), 1));
         assert_eq!(t(&[0xc3, 0x6c, 0x05]), ("JP $056C".into(), 3));
         assert_eq!(t(&[0x78]), ("LD A,B".into(), 1));
@@ -648,8 +657,8 @@ mod tests {
         assert_eq!(t(&[0xed, 0xb0]), ("LDIR".into(), 2));
         assert_eq!(t(&[0xed, 0x43, 0x00, 0x40]), ("LD ($4000),BC".into(), 4));
         assert_eq!(t(&[0xdd, 0xe9]), ("JP (IX)".into(), 2));
-        assert_eq!(t(&[0xdd, 0xcb, 0x02, 0x46]), ("BIT 0,(IX$02)".into(), 4));
+        assert_eq!(t(&[0xdd, 0xcb, 0x02, 0x46]), ("BIT 0,(IX+$02)".into(), 4));
         assert_eq!(t(&[0xfd, 0x21, 0x3a, 0x5c]), ("LD IY,$5C3A".into(), 4));
-        assert_eq!(t(&[0xdd, 0x36, 0x01, 0xaa]), ("LD (IX$01),$AA".into(), 4));
+        assert_eq!(t(&[0xdd, 0x36, 0x01, 0xaa]), ("LD (IX+$01),$AA".into(), 4));
     }
 }

@@ -115,20 +115,26 @@ impl Debugger {
             .any(|w| w.addr == addr && ((write && w.write) || (!write && w.read)))
     }
 
-    pub fn on_mem(&mut self, addr: u16, write: bool, value: u8) {
-        if Self::hit_watch(&self.mem_watches, addr, write) {
-            self.paused = true;
-            self.last_hit = BreakReason::Mem { addr, write, value };
+    /// Apply a watch/break hit recorded during `step_once`.
+    pub fn apply_hit(&mut self, reason: BreakReason) {
+        self.paused = true;
+        self.last_hit = reason;
+        if let BreakReason::Mem { addr, write, value } = reason {
             if trace::enabled(trace::Category::MEM) {
                 trace::emit(trace::EventKind::MemWatch { addr, write, value });
             }
         }
     }
 
+    pub fn on_mem(&mut self, addr: u16, write: bool, value: u8) {
+        if Self::hit_watch(&self.mem_watches, addr, write) {
+            self.apply_hit(BreakReason::Mem { addr, write, value });
+        }
+    }
+
     pub fn on_port(&mut self, port: u16, write: bool, value: u8) {
         if Self::hit_watch(&self.port_watches, port, write) {
-            self.paused = true;
-            self.last_hit = BreakReason::Port { port, write, value };
+            self.apply_hit(BreakReason::Port { port, write, value });
         }
     }
 }

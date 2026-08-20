@@ -264,12 +264,12 @@ fn main() -> Result<()> {
                 write: true,
             });
             let reason = m.run_until_break(max);
-            print_reason(reason, cli.json);
             if cli.json {
                 println!("{}", m.inspect().to_json());
             } else {
                 print!("{}", m.inspect());
             }
+            print_reason(reason, cli.json);
             if !matches!(reason, BreakReason::Mem { .. }) {
                 std::process::exit(2);
             }

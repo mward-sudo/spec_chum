@@ -145,8 +145,15 @@ struct DebugInspectorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Debug inspector")
-                .font(.headline)
+            HStack {
+                Text("Debug inspector")
+                    .font(.headline)
+                Spacer()
+                Button("Done") {
+                    host.showInspector = false
+                }
+                .keyboardShortcut(.cancelAction)
+            }
             HStack(spacing: 16) {
                 Text(String(format: "PC %04X", host.debugPc))
                 Text(String(format: "SP %04X", host.debugSp))

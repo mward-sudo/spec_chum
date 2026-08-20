@@ -19,7 +19,7 @@ use std::path::Path;
 use std::ptr;
 use std::sync::Mutex;
 
-use crate::session::{HostError, HostSession, ModelId};
+use crate::session::{HostSession, ModelId};
 
 thread_local! {
     static LAST_ERROR: Mutex<Option<CString>> = const { Mutex::new(None) };
@@ -522,6 +522,15 @@ fn break_reason_code(reason: machine::BreakReason) -> c_int {
     }
 }
 
+fn require_u16(addr: c_uint, what: &str) -> Option<u16> {
+    if addr > 0xffff {
+        set_last_error(format!("{what} out of range"));
+        None
+    } else {
+        Some(addr as u16)
+    }
+}
+
 /// Peek one memory byte. Returns 0 on success, -1 on error.
 #[no_mangle]
 pub extern "C" fn sc_peek(handle: *mut c_void, addr: c_uint, out: *mut u8) -> c_int {
@@ -534,7 +543,10 @@ pub extern "C" fn sc_peek(handle: *mut c_void, addr: c_uint, out: *mut u8) -> c_
         set_last_error("null out");
         return -1;
     }
-    match s.peek(addr as u16) {
+    let Some(addr) = require_u16(addr, "addr") else {
+        return -1;
+    };
+    match s.peek(addr) {
         Ok(value) => {
             // SAFETY: caller-provided out pointer.
             unsafe {
@@ -557,7 +569,10 @@ pub extern "C" fn sc_poke(handle: *mut c_void, addr: c_uint, value: u8) -> c_int
         set_last_error("null handle");
         return -1;
     };
-    match s.poke(addr as u16, value) {
+    let Some(addr) = require_u16(addr, "addr") else {
+        return -1;
+    };
+    match s.poke(addr, value) {
         Ok(()) => 0,
         Err(e) => {
             set_last_error(e.to_string());
@@ -602,9 +617,12 @@ pub extern "C" fn sc_regs(
         set_last_error("null handle");
         return -1;
     };
-    let Ok(r) = s.regs() else {
-        set_last_error(HostError::NoMachine.to_string());
-        return -1;
+    let r = match s.regs() {
+        Ok(r) => r,
+        Err(e) => {
+            set_last_error(e.to_string());
+            return -1;
+        }
     };
     // SAFETY: optional out-params from caller.
     unsafe {
@@ -669,7 +687,10 @@ pub extern "C" fn sc_add_breakpoint(handle: *mut c_void, pc: c_uint) -> c_int {
         set_last_error("null handle");
         return -1;
     };
-    match s.add_breakpoint(pc as u16) {
+    let Some(pc) = require_u16(pc, "pc") else {
+        return -1;
+    };
+    match s.add_breakpoint(pc) {
         Ok(()) => 0,
         Err(e) => {
             set_last_error(e.to_string());
@@ -754,6 +775,7 @@ mod tests {
         let h = sc_create(0, 1);
         assert!(!h.is_null());
         assert_eq!(sc_peek(h, 0, &mut out), -1);
+        assert_eq!(sc_peek(h, 0x1_0000, &mut out), -1);
         assert_eq!(sc_step(h), -1);
         assert_eq!(sc_run_until_break(h, 1), -1);
         sc_destroy(h);

@@ -30,7 +30,7 @@ impl Category {
     pub const AY: Self = Self(1 << 5);
     pub const DISK: Self = Self(1 << 6);
     pub const MEM: Self = Self(1 << 7);
-    /// Convenience: everything except high-volume CPU instruction stream.
+    /// Convenience: BUS|TAPE|ULA|MACHINE (excludes high-volume CPU, AY, DISK, MEM).
     pub const DEFAULT: Self = Self(Self::BUS.0 | Self::TAPE.0 | Self::ULA.0 | Self::MACHINE.0);
     pub const ALL: Self = Self(
         Self::CPU.0
@@ -820,30 +820,33 @@ pub fn dump_ndjson() -> String {
 }
 
 fn maybe_append(ev: &TraceEvent) {
-    static APPEND: OnceLock<bool> = OnceLock::new();
-    let on = *APPEND.get_or_init(|| {
+    static SINK: OnceLock<Option<Mutex<std::io::BufWriter<File>>>> = OnceLock::new();
+    let sink = SINK.get_or_init(|| {
         let flag = std::env::var("SPEC_CHUM_TRACE_APPEND")
             .map(|v| {
                 let t = v.trim();
                 t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
             })
             .unwrap_or(false);
-        flag && std::env::var("SPEC_CHUM_TRACE_FILE")
-            .ok()
-            .is_some_and(|p| !p.is_empty())
+        if !flag {
+            return None;
+        }
+        let path = std::env::var("SPEC_CHUM_TRACE_FILE").ok()?;
+        if path.is_empty() {
+            return None;
+        }
+        let f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .ok()?;
+        Some(Mutex::new(std::io::BufWriter::new(f)))
     });
-    if !on {
-        return;
-    }
-    let Ok(path) = std::env::var("SPEC_CHUM_TRACE_FILE") else {
+    let Some(lock) = sink.as_ref() else {
         return;
     };
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-    {
-        let _ = writeln!(f, "{ev}");
+    if let Ok(mut w) = lock.lock() {
+        let _ = writeln!(w, "{ev}");
     }
 }
 

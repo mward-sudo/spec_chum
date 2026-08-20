@@ -59,11 +59,13 @@ C ABI (`host_api`):
 
 Agent / script entry. Crate `debug_cli`, binary `spec-chum-debug`.
 
+Each invocation is a **new process** (fresh machine and empty trace ring).
+Put `--trace`, `--snapshot`, `--tap`, and the subcommand on the **same** command.
+
 ```bash
-# Inspect after N frames
+# Inspect after N frames (run already prints Inspect)
 cargo run -p debug_cli -- --model 48k run --frames 1
-cargo run -p debug_cli -- dump-state
-cargo run -p debug_cli -- --json dump-state
+cargo run -p debug_cli -- --model 48k --json dump-state
 
 # Run until PC (hex), mem write watch, PC break over frames
 cargo run -p debug_cli -- until-pc 056C --max 10000000
@@ -75,10 +77,10 @@ cargo run -p debug_cli -- peek 4000 --len 64
 cargo run -p debug_cli -- disasm --count 16
 cargo run -p debug_cli -- disasm --addr 056C --count 8
 
-# Tape + trace
+# Tape + trace (enable categories on the command that generates events)
 cargo run -p debug_cli -- --tap tests/fixtures/tape/attr_mark.tap type-load --code
 cargo run -p debug_cli -- --trace tape,cpu --json dump-trace
-cargo run -p debug_cli -- dump-trace --last 32
+# Cross-process traces: SPEC_CHUM_TRACE_FILE=/tmp/sc.ndjson SPEC_CHUM_TRACE_APPEND=1
 
 # After `cargo build -p debug_cli`:
 ./target/debug/spec-chum-debug dump-state
