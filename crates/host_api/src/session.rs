@@ -47,6 +47,19 @@ pub enum HostError {
     Io(#[from] std::io::Error),
 }
 
+/// Core registers exposed through `sc_regs`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HostRegs {
+    pub pc: u16,
+    pub sp: u16,
+    pub af: u16,
+    pub bc: u16,
+    pub de: u16,
+    pub hl: u16,
+    pub ix: u16,
+    pub iy: u16,
+}
+
 /// Host-owned emulator session: machine + RGBA framebuffer + status.
 #[derive(Debug)]
 pub struct HostSession {
@@ -319,7 +332,89 @@ impl HostSession {
         Ok(())
     }
 
+    /// Peek one byte of machine memory.
+    pub fn peek(&self, addr: u16) -> Result<u8, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.read_mem(addr))
+    }
+
+    /// Poke one byte of machine memory.
+    pub fn poke(&mut self, addr: u16, value: u8) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.write_mem(addr, value);
+        Ok(())
+    }
+
+    /// JSON inspect snapshot (`Inspect::to_json`).
+    pub fn inspect_json(&self) -> Result<String, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.inspect().to_json())
+    }
+
+    /// Core registers for the C `sc_regs` ABI.
+    pub fn regs(&self) -> Result<HostRegs, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        let r = &m.cpu().regs;
+        Ok(HostRegs {
+            pc: r.pc,
+            sp: r.sp,
+            af: r.af(),
+            bc: r.bc(),
+            de: r.de(),
+            hl: r.hl(),
+            ix: r.ix(),
+            iy: r.iy(),
+        })
+    }
+
+    /// One CPU/machine instruction (`step_once`).
+    pub fn step(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.step_once();
+        Ok(())
+    }
+
+    /// Set the debugger paused flag (no-op without a machine).
+    pub fn set_paused(&mut self, paused: bool) {
+        if let Some(m) = self.machine.as_mut() {
+            m.debugger_mut().paused = paused;
+        }
+    }
+
+    #[must_use]
+    pub fn paused(&self) -> bool {
+        self.machine.as_ref().is_some_and(|m| m.debugger().paused)
+    }
+
+    /// Add a PC breakpoint.
+    pub fn add_breakpoint(&mut self, pc: u16) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.debugger_mut().add_pc_break(pc);
+        Ok(())
+    }
+
+    /// Run until breakpoint, halt, or instruction budget.
+    pub fn run_until_break(&mut self, max_insns: u32) -> Result<machine::BreakReason, HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.run_until_break(u64::from(max_insns)))
+    }
+
     /// Run one video frame into the RGBA framebuffer when `running`.
+    /// Skips advancing while the debugger is paused.
     pub fn run_frame(&mut self) {
         if !self.running {
             return;
@@ -327,6 +422,9 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return;
         };
+        if m.debugger().paused {
+            return;
+        }
         let audio = m.run_frame();
         let frame_t = match m.model() {
             machine::Model::Spectrum48 => 69_888,
@@ -563,6 +661,62 @@ mod tests {
         assert_eq!(ModelId::from_u32(2), Some(ModelId::SpectrumPlus3));
         assert_eq!(ModelId::from_u32(9), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
+    }
+
+    #[test]
+    fn peek_poke_and_inspect_json() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        let pc0 = s.regs().expect("regs").pc;
+        s.poke(0xC000, 0xA5).expect("poke");
+        assert_eq!(s.peek(0xC000).expect("peek ram"), 0xA5);
+        let json = s.inspect_json().expect("json");
+        assert!(
+            json.contains("\"pc\":"),
+            "inspect json should include pc: {json}"
+        );
+        s.step().expect("step");
+        assert_ne!(
+            s.regs().expect("regs").pc,
+            pc0,
+            "step should advance PC from ROM"
+        );
+        s.add_breakpoint(0x1234).expect("break");
+        s.set_paused(true);
+        assert!(s.paused());
+    }
+
+    #[test]
+    fn run_frame_skips_when_debugger_paused() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.run_frame();
+        let t0 = s.machine.as_ref().expect("machine").cpu().t;
+        s.set_paused(true);
+        assert!(s.paused());
+        s.run_frame();
+        let t1 = s.machine.as_ref().expect("machine").cpu().t;
+        assert_eq!(t0, t1, "paused debugger must not advance the machine");
+        s.set_paused(false);
+        s.run_frame();
+        let t2 = s.machine.as_ref().expect("machine").cpu().t;
+        assert!(t2 > t1, "unpaused run_frame should advance T-states");
+    }
+
+    #[test]
+    fn peek_without_machine_errors() {
+        let s = HostSession::new(ModelId::Spectrum48, true);
+        assert!(matches!(s.peek(0), Err(HostError::NoMachine)));
+        assert!(matches!(s.inspect_json(), Err(HostError::NoMachine)));
+        assert!(matches!(s.regs(), Err(HostError::NoMachine)));
     }
 
     #[test]

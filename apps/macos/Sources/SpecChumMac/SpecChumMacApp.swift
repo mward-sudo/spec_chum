@@ -46,6 +46,28 @@ struct SpecChumMacApp: App {
             }
 
             CommandMenu("Debug") {
+                Button(host.paused ? "Continue" : "Pause") {
+                    host.setPaused(!host.paused)
+                }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+                Button("Step") {
+                    if !host.paused {
+                        host.setPaused(true)
+                    }
+                    host.step()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+                Button("Add breakpoint at PC") {
+                    host.addBreakpointAtPc()
+                }
+                Button("Dump JSON to Desktop") {
+                    host.dumpTraceJsonToDesktop()
+                }
+                Button("Show inspector") {
+                    host.showInspector = true
+                    host.refreshInspector()
+                }
+                Divider()
                 Button("Enable default trace") {
                     host.enableDefaultTrace()
                 }

@@ -221,7 +221,15 @@ impl BusPlus3 {
         }
         // FDC data 3FFD — A15=0, A14=0, A13=1, A12=1, A1=0
         if port & 0xf002 == 0x3000 {
-            return self.fdc.read_data_byte();
+            let v = self.fdc.read_data_byte();
+            if trace::enabled(trace::Category::DISK) {
+                trace::emit(trace::EventKind::DiskFdc {
+                    port,
+                    write: false,
+                    value: v,
+                });
+            }
+            return v;
         }
         // FDC status 2FFD — A15=0, A14=0, A13=1, A12=0, A1=0
         if port & 0xf002 == 0x2000 {
@@ -278,15 +286,29 @@ impl BusPlus3 {
         }
         // FDC data 3FFD (command bytes ignored until full µPD765 is wired)
         if port & 0xf002 == 0x3000 {
+            if trace::enabled(trace::Category::DISK) {
+                trace::emit(trace::EventKind::DiskFdc {
+                    port,
+                    write: true,
+                    value,
+                });
+            }
             let _ = value;
             return;
         }
         if port & 0xc002 == 0xc000 {
             self.ay.select(value);
+            if trace::enabled(trace::Category::AY) {
+                trace::emit(trace::EventKind::AySelect { reg: value & 0x0f });
+            }
             return;
         }
         if port & 0xc002 == 0x8000 {
+            let reg = self.ay.selected;
             self.ay.write_data(value);
+            if trace::enabled(trace::Category::AY) {
+                trace::emit(trace::EventKind::AyWrite { reg, value });
+            }
         }
     }
 

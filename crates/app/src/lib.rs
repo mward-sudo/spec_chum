@@ -25,6 +25,8 @@ pub struct EmulatorSession {
     pub muted: bool,
     pub status: String,
     pub model: Model,
+    pub debug_open: bool,
+    pub debug_mem_addr: u16,
     /// Scripted matrix keys (e.g. auto-type `LOAD ""`).
     key_script: Option<KeyScript>,
 }
@@ -99,6 +101,8 @@ impl EmulatorSession {
             muted: false,
             status: "Load a ROM via Machine menu (or auto-detect roms/)".into(),
             model,
+            debug_open: false,
+            debug_mem_addr: 0,
             key_script: None,
         }
     }
@@ -426,6 +430,10 @@ impl EmulatorSession {
         let Some(machine) = self.machine.as_mut() else {
             return machine::FrameAudio::default();
         };
+        if machine.debugger().paused {
+            machine.render_rgba(&mut self.framebuffer, self.with_border);
+            return machine::FrameAudio::default();
+        }
         let audio = machine.run_frame();
         machine.render_rgba(&mut self.framebuffer, self.with_border);
         audio
@@ -659,18 +667,25 @@ impl SpecChumApp {
                         }
                     });
                     ui.menu_button("Debug", |ui| {
+                        if ui.button("Debugger window").clicked() {
+                            self.session.debug_open = true;
+                            ui.close_menu();
+                        }
+                        ui.separator();
                         let cats = trace::categories();
                         let mut tape = cats.contains(trace::Category::TAPE);
                         let mut cpu = cats.contains(trace::Category::CPU);
                         let mut bus = cats.contains(trace::Category::BUS);
                         let mut ula = cats.contains(trace::Category::ULA);
                         let mut machine = cats.contains(trace::Category::MACHINE);
+                        let mut ay = cats.contains(trace::Category::AY);
                         let mut changed = false;
                         changed |= ui.checkbox(&mut tape, "Trace tape").changed();
                         changed |= ui.checkbox(&mut cpu, "Trace CPU").changed();
                         changed |= ui.checkbox(&mut bus, "Trace bus").changed();
                         changed |= ui.checkbox(&mut ula, "Trace ULA").changed();
                         changed |= ui.checkbox(&mut machine, "Trace machine").changed();
+                        changed |= ui.checkbox(&mut ay, "Trace AY").changed();
                         if changed {
                             let mut c = trace::Category::NONE;
                             if tape {
@@ -687,6 +702,9 @@ impl SpecChumApp {
                             }
                             if machine {
                                 c |= trace::Category::MACHINE;
+                            }
+                            if ay {
+                                c |= trace::Category::AY;
                             }
                             trace::enable(c);
                             self.session.status = format!(
@@ -722,32 +740,6 @@ impl SpecChumApp {
                                 }
                             }
                             ui.close_menu();
-                        }
-                        ui.separator();
-                        if let Some(m) = self.session.machine.as_ref() {
-                            let r = &m.cpu().regs;
-                            ui.label(format!(
-                                "PC={:04X} SP={:04X} AF={:04X} AF'={:02X}{:02X}",
-                                r.pc,
-                                r.sp,
-                                r.af(),
-                                r.a_,
-                                r.f_
-                            ));
-                            if let Some(b) = m.tape_block() {
-                                ui.label(format!(
-                                    "Tape block {b}/{} playing={}",
-                                    m.tape_progress().map(|p| p.block_count).unwrap_or(0),
-                                    m.tape_playing()
-                                ));
-                            } else {
-                                ui.label("No tape");
-                            }
-                        }
-                        let snap = trace::snapshot();
-                        ui.label(format!("Last events ({}/ring):", snap.len().min(12)));
-                        for ev in snap.iter().rev().take(12) {
-                            ui.monospace(ev.to_string());
                         }
                     });
                     ui.menu_button("Help", |ui| {
@@ -818,13 +810,104 @@ impl SpecChumApp {
             });
         });
 
-        if self.session.running {
-            if self.session.throttle {
+        self.debug_window(ctx);
+
+        if self.session.running
+            || self.session.debug_open
+            || self
+                .session
+                .machine
+                .as_ref()
+                .is_some_and(|m| m.debugger().paused)
+        {
+            if self.session.throttle && self.session.running {
                 ctx.request_repaint_after(std::time::Duration::from_millis(20));
             } else {
                 ctx.request_repaint();
             }
         }
+    }
+
+    fn debug_window(&mut self, ctx: &egui::Context) {
+        let mut open = self.session.debug_open;
+        egui::Window::new("Debugger")
+            .open(&mut open)
+            .default_size([520.0, 480.0])
+            .show(ctx, |ui| {
+                let Some(m) = self.session.machine.as_mut() else {
+                    ui.label("No machine loaded");
+                    return;
+                };
+                let paused = m.debugger().paused;
+                ui.horizontal(|ui| {
+                    if paused {
+                        if ui.button("Run").clicked() {
+                            let pc = m.cpu().regs.pc;
+                            m.debugger_mut().continue_from_pc(pc);
+                            self.session.running = true;
+                        }
+                    } else if ui.button("Pause").clicked() {
+                        m.debugger_mut().paused = true;
+                        self.session.status = "Paused".into();
+                    }
+                    if ui.button("Step").clicked() {
+                        let pc = m.cpu().regs.pc;
+                        if m.debugger().paused {
+                            m.debugger_mut().continue_from_pc(pc);
+                        }
+                        m.debugger_mut().paused = false;
+                        m.step_once();
+                        m.debugger_mut().paused = true;
+                        m.render_rgba(&mut self.session.framebuffer, self.session.with_border);
+                    }
+                });
+                let ins = m.inspect();
+                ui.separator();
+                ui.monospace(format!("{ins}"));
+                ui.separator();
+                ui.label("Disassembly");
+                ui.monospace(m.disasm_window(m.cpu().regs.pc, 12));
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Hex at");
+                    let mut addr = self.session.debug_mem_addr;
+                    if ui
+                        .add(egui::DragValue::new(&mut addr).hexadecimal(4, false, false))
+                        .changed()
+                    {
+                        self.session.debug_mem_addr = addr;
+                    }
+                    if ui.button("PC").clicked() {
+                        self.session.debug_mem_addr = m.cpu().regs.pc;
+                    }
+                    if ui.button("SP").clicked() {
+                        self.session.debug_mem_addr = m.cpu().regs.sp;
+                    }
+                    if ui.button("HL").clicked() {
+                        self.session.debug_mem_addr = m.cpu().regs.hl();
+                    }
+                });
+                ui.monospace(m.hexdump(self.session.debug_mem_addr, 64));
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Break PC");
+                    let mut bp = m.cpu().regs.pc;
+                    ui.add(egui::DragValue::new(&mut bp).hexadecimal(4, false, false));
+                    if ui.button("Add").clicked() {
+                        m.debugger_mut().add_pc_break(bp);
+                    }
+                    if ui.button("Clear breaks").clicked() {
+                        m.debugger_mut().clear_breaks();
+                    }
+                });
+                ui.label(format!("PC breaks: {:?}", m.debugger().pc_breaks));
+                ui.separator();
+                ui.label(format!("Trace ({} events)", trace::len()));
+                for ev in trace::snapshot().iter().rev().take(16) {
+                    ui.monospace(ev.to_string());
+                }
+            });
+        self.session.debug_open = open;
     }
 }
 
@@ -1084,5 +1167,18 @@ mod tests {
         });
         assert_eq!(app.session.framebuffer.len(), 352 * 296 * 4);
         assert_eq!(ctx.style().visuals.panel_fill.a(), 255);
+    }
+
+    #[test]
+    fn debug_window_smoke_headless() {
+        let mut app = SpecChumApp::new_with_audio(false);
+        app.session.debug_open = true;
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            app.ui(ctx);
+        });
+        if let Some(m) = app.session.machine.as_mut() {
+            m.step_once();
+        }
     }
 }

@@ -22,9 +22,20 @@ const CODE_ENTRY: u16 = 0x8000;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Z80testOutcome {
-    Passed { output: String, elapsed: Duration },
-    Failed { output: String, elapsed: Duration },
-    TimedOut { output: String, elapsed: Duration },
+    Passed {
+        output: String,
+        elapsed: Duration,
+    },
+    Failed {
+        output: String,
+        elapsed: Duration,
+        inspect: String,
+    },
+    TimedOut {
+        output: String,
+        elapsed: Duration,
+        inspect: String,
+    },
 }
 
 fn fixture_dir() -> PathBuf {
@@ -142,10 +153,21 @@ pub fn run_z80test_tap(
     let elapsed = start.elapsed();
     if output.contains("all tests passed.") {
         Ok(Z80testOutcome::Passed { output, elapsed })
-    } else if output.contains("tests failed.") {
-        Ok(Z80testOutcome::Failed { output, elapsed })
     } else {
-        Ok(Z80testOutcome::TimedOut { output, elapsed })
+        let inspect = machine.inspect().to_string();
+        if output.contains("tests failed.") {
+            Ok(Z80testOutcome::Failed {
+                output,
+                elapsed,
+                inspect,
+            })
+        } else {
+            Ok(Z80testOutcome::TimedOut {
+                output,
+                elapsed,
+                inspect,
+            })
+        }
     }
 }
 
@@ -180,12 +202,20 @@ mod tests {
             Z80testOutcome::Passed { output, elapsed } => {
                 eprintln!("z80doc passed in {elapsed:?}\n{output}");
             }
-            Z80testOutcome::Failed { output, elapsed } => {
-                panic!("z80doc FAILED in {elapsed:?}\n{output}");
+            Z80testOutcome::Failed {
+                output,
+                elapsed,
+                inspect,
+            } => {
+                panic!("z80doc FAILED in {elapsed:?}\n{inspect}\n{output}");
             }
-            Z80testOutcome::TimedOut { output, elapsed } => {
+            Z80testOutcome::TimedOut {
+                output,
+                elapsed,
+                inspect,
+            } => {
                 panic!(
-                    "z80doc timed out after {elapsed:?} ({} chars captured)\n{output}",
+                    "z80doc timed out after {elapsed:?} ({} chars captured)\n{inspect}\n{output}",
                     output.len()
                 );
             }
@@ -210,11 +240,19 @@ mod tests {
             Z80testOutcome::Passed { output, elapsed } => {
                 eprintln!("z80full passed in {elapsed:?}\n{output}");
             }
-            Z80testOutcome::Failed { output, elapsed } => {
-                panic!("z80full FAILED in {elapsed:?}\n{output}");
+            Z80testOutcome::Failed {
+                output,
+                elapsed,
+                inspect,
+            } => {
+                panic!("z80full FAILED in {elapsed:?}\n{inspect}\n{output}");
             }
-            Z80testOutcome::TimedOut { output, elapsed } => {
-                panic!("z80full timed out after {elapsed:?}\n{output}");
+            Z80testOutcome::TimedOut {
+                output,
+                elapsed,
+                inspect,
+            } => {
+                panic!("z80full timed out after {elapsed:?}\n{inspect}\n{output}");
             }
         }
     }

@@ -108,7 +108,7 @@ fn parse_in_file(path: &std::path::Path) -> Vec<TestIn> {
     out
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Expected {
     name: String,
     af: u16,
@@ -362,8 +362,55 @@ fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
     if errs.is_empty() {
         Ok(())
     } else {
-        Err(format!("{}: {}", tin.name, errs.join("; ")))
+        let dump = fuse_disasm_window(&tin.mem, tin.cpu.regs.pc, 8);
+        Err(format!("{}: {}\n{dump}", tin.name, errs.join("; ")))
     }
+}
+
+/// Disassemble `count` instructions from Fuse test memory at `pc` (start PC).
+fn fuse_disasm_window(mem: &FlatMem, pc: u16, count: usize) -> String {
+    let count = count.clamp(1, 16);
+    let mut out = format!("disasm @{pc:04X}:\n");
+    let mut addr = pc;
+    for _ in 0..count {
+        let mut buf = [0u8; 4];
+        for (i, b) in buf.iter_mut().enumerate() {
+            *b = mem.data[addr.wrapping_add(i as u16) as usize];
+        }
+        let d = crate::disasm_one(&buf);
+        let n = usize::from(d.len.max(1));
+        out.push_str(&format!("{addr:04X}  "));
+        for (i, b) in buf.iter().enumerate() {
+            if i < n {
+                out.push_str(&format!("{b:02X} "));
+            } else {
+                out.push_str("   ");
+            }
+        }
+        out.push_str(&d.text);
+        out.push('\n');
+        addr = addr.wrapping_add(d.len.max(1) as u16);
+    }
+    out
+}
+
+#[test]
+fn fuse_mismatch_includes_disasm_at_start_pc() {
+    let dir = fixtures_dir();
+    let tests = parse_in_file(&dir.join("tests.in"));
+    let expected = parse_expected(&dir.join("tests.expected"));
+    let (tin, exp) = tests
+        .iter()
+        .zip(expected.iter())
+        .find(|(t, _)| t.name == "00")
+        .expect("NOP test");
+    let mut exp = exp.clone();
+    exp.pc = exp.pc.wrapping_add(1);
+    let err = run_case(tin, &exp).expect_err("forced PC mismatch");
+    let start = tin.cpu.regs.pc;
+    assert!(err.contains("PC:"), "{err}");
+    assert!(err.contains(&format!("disasm @{start:04X}:")), "{err}");
+    assert!(err.contains("NOP"), "{err}");
 }
 
 #[test]

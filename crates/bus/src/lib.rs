@@ -437,10 +437,17 @@ impl Bus128 {
         // FFFD select / BFFD data
         if port & 0xc002 == 0xc000 {
             self.ay.select(value);
+            if trace::enabled(trace::Category::AY) {
+                trace::emit(trace::EventKind::AySelect { reg: value & 0x0f });
+            }
             return;
         }
         if port & 0xc002 == 0x8000 {
+            let reg = self.ay.selected;
             self.ay.write_data(value);
+            if trace::enabled(trace::Category::AY) {
+                trace::emit(trace::EventKind::AyWrite { reg, value });
+            }
         }
     }
 }

@@ -6,6 +6,14 @@
 #[cfg(all(test, feature = "slow-tests"))]
 mod z80test;
 
+mod debugger;
+mod inspect;
+
+pub use debugger::{BreakReason, Debugger, Watch};
+pub use inspect::{Inspect, Paging, TapeInspect};
+
+use std::cell::Cell;
+
 use bus::{Bus128, Bus48, BusPlus3, Kempston};
 use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot48};
 use tape::{
@@ -32,9 +40,26 @@ fn reg_snap(cpu: &Cpu) -> trace::RegSnap {
         ix: r.ix(),
         iy: r.iy(),
         af_: u16::from(r.a_) << 8 | u16::from(r.f_),
+        bc_: u16::from(r.b_) << 8 | u16::from(r.c_),
+        de_: u16::from(r.d_) << 8 | u16::from(r.e_),
+        hl_: u16::from(r.h_) << 8 | u16::from(r.l_),
+        i: r.i,
+        r: r.r,
+        im: r.im,
+        memptr: r.memptr,
         iff1: r.iff1,
+        iff2: r.iff2,
         halted: r.halted,
     }
+}
+
+fn peek_opcode(read: impl Fn(u16) -> u8, pc: u16) -> ([u8; 4], u8) {
+    let mut bytes = [0u8; 4];
+    for (i, b) in bytes.iter_mut().enumerate() {
+        *b = read(pc.wrapping_add(i as u16));
+    }
+    let len = z80::disasm_one(&bytes).len.clamp(1, 4);
+    (bytes, len)
 }
 
 /// Inserted tape image (TAP pulse player or TZX pulse player).
@@ -184,17 +209,31 @@ pub enum Model {
 #[derive(Debug)]
 pub struct MemIo48<'a> {
     pub bus: &'a mut Bus48,
+    pub(crate) watch: Option<debugger::WatchHook<'a>>,
 }
 
 impl Memory for MemIo48<'_> {
     fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
         let wait = self.bus.contend_at(addr);
-        (self.bus.read(addr), wait)
+        if wait > 0 && trace::enabled(trace::Category::BUS) {
+            emit_contend_sampled(addr, self.bus.frame_t, wait);
+        }
+        let v = self.bus.read(addr);
+        if let Some(w) = self.watch.as_ref() {
+            w.mem_access(addr, false, v);
+        }
+        (v, wait)
     }
 
     fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
         let wait = self.bus.contend_at(addr);
+        if wait > 0 && trace::enabled(trace::Category::BUS) {
+            emit_contend_sampled(addr, self.bus.frame_t, wait);
+        }
         self.bus.write(addr, value);
+        if let Some(w) = self.watch.as_ref() {
+            w.mem_access(addr, true, value);
+        }
         wait
     }
 }
@@ -206,7 +245,14 @@ impl Io for MemIo48<'_> {
         } else {
             0
         };
-        (self.bus.in_port(port), wait)
+        let v = self.bus.in_port(port);
+        if port & 1 != 0 && trace::enabled(trace::Category::BUS) {
+            emit_floating_sampled(port, self.bus.frame_t, v);
+        }
+        if let Some(w) = self.watch.as_ref() {
+            w.port_access(port, false, v);
+        }
+        (v, wait)
     }
 
     fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
@@ -216,6 +262,9 @@ impl Io for MemIo48<'_> {
             0
         };
         self.bus.out_port(port, value);
+        if let Some(w) = self.watch.as_ref() {
+            w.port_access(port, true, value);
+        }
         wait
     }
 }
@@ -223,17 +272,31 @@ impl Io for MemIo48<'_> {
 #[derive(Debug)]
 pub struct MemIo128<'a> {
     pub bus: &'a mut Bus128,
+    pub(crate) watch: Option<debugger::WatchHook<'a>>,
 }
 
 impl Memory for MemIo128<'_> {
     fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
         let wait = self.bus.contend_at(addr);
-        (self.bus.read(addr), wait)
+        if wait > 0 && trace::enabled(trace::Category::BUS) {
+            emit_contend_sampled(addr, self.bus.frame_t, wait);
+        }
+        let v = self.bus.read(addr);
+        if let Some(w) = self.watch.as_ref() {
+            w.mem_access(addr, false, v);
+        }
+        (v, wait)
     }
 
     fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
         let wait = self.bus.contend_at(addr);
+        if wait > 0 && trace::enabled(trace::Category::BUS) {
+            emit_contend_sampled(addr, self.bus.frame_t, wait);
+        }
         self.bus.write(addr, value);
+        if let Some(w) = self.watch.as_ref() {
+            w.mem_access(addr, true, value);
+        }
         wait
     }
 }
@@ -245,7 +308,14 @@ impl Io for MemIo128<'_> {
         } else {
             0
         };
-        (self.bus.in_port(port), wait)
+        let v = self.bus.in_port(port);
+        if port & 1 != 0 && trace::enabled(trace::Category::BUS) {
+            emit_floating_sampled(port, self.bus.frame_t, v);
+        }
+        if let Some(w) = self.watch.as_ref() {
+            w.port_access(port, false, v);
+        }
+        (v, wait)
     }
 
     fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
@@ -255,6 +325,9 @@ impl Io for MemIo128<'_> {
             0
         };
         self.bus.out_port(port, value);
+        if let Some(w) = self.watch.as_ref() {
+            w.port_access(port, true, value);
+        }
         wait
     }
 }
@@ -262,17 +335,31 @@ impl Io for MemIo128<'_> {
 #[derive(Debug)]
 pub struct MemIoPlus3<'a> {
     pub bus: &'a mut BusPlus3,
+    pub(crate) watch: Option<debugger::WatchHook<'a>>,
 }
 
 impl Memory for MemIoPlus3<'_> {
     fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
         let wait = self.bus.contend_at(addr);
-        (self.bus.read(addr), wait)
+        if wait > 0 && trace::enabled(trace::Category::BUS) {
+            emit_contend_sampled(addr, self.bus.frame_t, wait);
+        }
+        let v = self.bus.read(addr);
+        if let Some(w) = self.watch.as_ref() {
+            w.mem_access(addr, false, v);
+        }
+        (v, wait)
     }
 
     fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
         let wait = self.bus.contend_at(addr);
+        if wait > 0 && trace::enabled(trace::Category::BUS) {
+            emit_contend_sampled(addr, self.bus.frame_t, wait);
+        }
         self.bus.write(addr, value);
+        if let Some(w) = self.watch.as_ref() {
+            w.mem_access(addr, true, value);
+        }
         wait
     }
 }
@@ -284,7 +371,11 @@ impl Io for MemIoPlus3<'_> {
         } else {
             0
         };
-        (self.bus.in_port(port), wait)
+        let v = self.bus.in_port(port);
+        if let Some(w) = self.watch.as_ref() {
+            w.port_access(port, false, v);
+        }
+        (v, wait)
     }
 
     fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
@@ -294,7 +385,34 @@ impl Io for MemIoPlus3<'_> {
             0
         };
         self.bus.out_port(port, value);
+        if let Some(w) = self.watch.as_ref() {
+            w.port_access(port, true, value);
+        }
         wait
+    }
+}
+
+fn emit_contend_sampled(addr: u16, frame_t: u32, wait: u32) {
+    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if n.is_multiple_of(64) {
+        trace::emit(trace::EventKind::BusContend {
+            addr,
+            frame_t,
+            wait,
+        });
+    }
+}
+
+fn emit_floating_sampled(port: u16, frame_t: u32, value: u8) {
+    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if n.is_multiple_of(256) {
+        trace::emit(trace::EventKind::BusFloating {
+            port,
+            frame_t,
+            value,
+        });
     }
 }
 
@@ -307,6 +425,7 @@ pub enum Machine {
         tape: Option<TapeDeck>,
         tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
+        debugger: Debugger,
     },
     Spec128 {
         cpu: Cpu,
@@ -315,6 +434,7 @@ pub enum Machine {
         tape: Option<TapeDeck>,
         tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
+        debugger: Debugger,
     },
     SpecPlus3 {
         cpu: Cpu,
@@ -323,6 +443,7 @@ pub enum Machine {
         tape: Option<TapeDeck>,
         tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
+        debugger: Debugger,
     },
 }
 
@@ -346,6 +467,7 @@ impl Machine {
             tape: None,
             tape_opts: TapeLoadOptions::default(),
             rzx: None,
+            debugger: Debugger::default(),
         })
     }
 
@@ -360,6 +482,7 @@ impl Machine {
             tape: None,
             tape_opts: TapeLoadOptions::default(),
             rzx: None,
+            debugger: Debugger::default(),
         })
     }
 
@@ -374,6 +497,7 @@ impl Machine {
             tape: None,
             tape_opts: TapeLoadOptions::default(),
             rzx: None,
+            debugger: Debugger::default(),
         })
     }
 
@@ -688,10 +812,21 @@ impl Machine {
             bus.ula.border = snap.border;
             ula.border = snap.border;
         }
+        let cpu = self.cpu();
+        if trace::enabled(trace::Category::MACHINE) {
+            trace::emit(trace::EventKind::MachineSnapshot {
+                pc: cpu.regs.pc,
+                sp: cpu.regs.sp,
+                border: snap.border,
+            });
+        }
     }
 
     /// Run one video frame; returns beeper edges and AY samples for the frame.
     pub fn run_frame(&mut self) -> FrameAudio {
+        if self.debugger().paused {
+            return FrameAudio::default();
+        }
         self.apply_rzx_frame();
         match self {
             Self::Spec48 {
@@ -700,6 +835,7 @@ impl Machine {
                 ula,
                 tape,
                 tape_opts,
+                debugger,
                 ..
             } => {
                 bus.beeper_edges.clear();
@@ -714,6 +850,9 @@ impl Machine {
                 }
                 let mut last_t = cpu.t;
                 while bus.frame_t < FRAME_TSTATES_48 {
+                    if debugger.check_pc(cpu.regs.pc) {
+                        break;
+                    }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                         const HOLD_T: u32 = 4;
                         bus.frame_t += HOLD_T;
@@ -725,7 +864,10 @@ impl Machine {
                         continue;
                     }
                     if int_active_48(bus.frame_t) {
-                        let mut mio = MemIo48 { bus: bus.as_mut() };
+                        let mut mio = MemIo48 {
+                            bus: bus.as_mut(),
+                            watch: None,
+                        };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
                             Self::advance_tape_ear(
@@ -742,10 +884,31 @@ impl Machine {
                             continue;
                         }
                     }
-                    let mut mio = MemIo48 { bus: bus.as_mut() };
+                    let pc = cpu.regs.pc;
+                    let cpu_on = trace::enabled(trace::Category::CPU);
+                    let pre = cpu_on.then(|| {
+                        let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
+                        (bytes, len, reg_snap(cpu), cpu.regs.halted)
+                    });
+                    let mut mio = MemIo48 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                    };
                     cpu.step(&mut mio);
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
+                    if let Some((bytes, len, regs, was_halt)) = pre {
+                        if was_halt {
+                            trace::emit(trace::EventKind::CpuHalt { pc });
+                        }
+                        trace::emit(trace::EventKind::CpuStep {
+                            pc,
+                            bytes,
+                            len,
+                            dt: dt as u16,
+                            regs,
+                        });
+                    }
                     Self::advance_tape_ear(
                         tape,
                         &mut bus.ear,
@@ -773,6 +936,7 @@ impl Machine {
                 ula,
                 tape,
                 tape_opts,
+                debugger,
                 ..
             } => {
                 bus.beeper_edges.clear();
@@ -790,6 +954,9 @@ impl Machine {
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
                 let mut last_t = cpu.t;
                 while bus.frame_t < FRAME_TSTATES_128 {
+                    if debugger.check_pc(cpu.regs.pc) {
+                        break;
+                    }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                         const HOLD_T: u32 = 4;
                         bus.frame_t += HOLD_T;
@@ -801,7 +968,10 @@ impl Machine {
                         continue;
                     }
                     if bus.frame_t < INT_LENGTH_128 {
-                        let mut mio = MemIo128 { bus: bus.as_mut() };
+                        let mut mio = MemIo128 {
+                            bus: bus.as_mut(),
+                            watch: None,
+                        };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
                             Self::advance_tape_ear(
@@ -825,10 +995,31 @@ impl Machine {
                             continue;
                         }
                     }
-                    let mut mio = MemIo128 { bus: bus.as_mut() };
+                    let pc = cpu.regs.pc;
+                    let cpu_on = trace::enabled(trace::Category::CPU);
+                    let pre = cpu_on.then(|| {
+                        let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
+                        (bytes, len, reg_snap(cpu), cpu.regs.halted)
+                    });
+                    let mut mio = MemIo128 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                    };
                     cpu.step(&mut mio);
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
+                    if let Some((bytes, len, regs, was_halt)) = pre {
+                        if was_halt {
+                            trace::emit(trace::EventKind::CpuHalt { pc });
+                        }
+                        trace::emit(trace::EventKind::CpuStep {
+                            pc,
+                            bytes,
+                            len,
+                            dt: dt as u16,
+                            regs,
+                        });
+                    }
                     Self::advance_tape_ear(
                         tape,
                         &mut bus.ear,
@@ -865,6 +1056,7 @@ impl Machine {
                 ula,
                 tape,
                 tape_opts,
+                debugger,
                 ..
             } => {
                 bus.beeper_edges.clear();
@@ -882,6 +1074,9 @@ impl Machine {
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
                 let mut last_t = cpu.t;
                 while bus.frame_t < FRAME_TSTATES_128 {
+                    if debugger.check_pc(cpu.regs.pc) {
+                        break;
+                    }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                         const HOLD_T: u32 = 4;
                         bus.frame_t += HOLD_T;
@@ -893,7 +1088,10 @@ impl Machine {
                         continue;
                     }
                     if bus.frame_t < INT_LENGTH_128 {
-                        let mut mio = MemIoPlus3 { bus: bus.as_mut() };
+                        let mut mio = MemIoPlus3 {
+                            bus: bus.as_mut(),
+                            watch: None,
+                        };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
                             Self::advance_tape_ear(
@@ -917,10 +1115,31 @@ impl Machine {
                             continue;
                         }
                     }
-                    let mut mio = MemIoPlus3 { bus: bus.as_mut() };
+                    let pc = cpu.regs.pc;
+                    let cpu_on = trace::enabled(trace::Category::CPU);
+                    let pre = cpu_on.then(|| {
+                        let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
+                        (bytes, len, reg_snap(cpu), cpu.regs.halted)
+                    });
+                    let mut mio = MemIoPlus3 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                    };
                     cpu.step(&mut mio);
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
+                    if let Some((bytes, len, regs, was_halt)) = pre {
+                        if was_halt {
+                            trace::emit(trace::EventKind::CpuHalt { pc });
+                        }
+                        trace::emit(trace::EventKind::CpuStep {
+                            pc,
+                            bytes,
+                            len,
+                            dt: dt as u16,
+                            regs,
+                        });
+                    }
                     Self::advance_tape_ear(
                         tape,
                         &mut bus.ear,
@@ -1250,8 +1469,12 @@ impl Machine {
                 bus,
                 tape,
                 tape_opts,
+                debugger,
                 ..
             } => {
+                if debugger.check_pc(cpu.regs.pc) {
+                    return;
+                }
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -1271,9 +1494,23 @@ impl Machine {
                     return;
                 }
                 if int_active_48(bus.frame_t) {
-                    let mut mio = MemIo48 { bus: bus.as_mut() };
+                    let mut mio = MemIo48 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                    };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
+                        if trace::enabled(trace::Category::CPU) {
+                            trace::emit(trace::EventKind::CpuIrq {
+                                pc: cpu.regs.pc,
+                                im: cpu.regs.im,
+                            });
+                        }
+                        if trace::enabled(trace::Category::ULA) {
+                            trace::emit(trace::EventKind::UlaInt {
+                                frame_t: bus.frame_t,
+                            });
+                        }
                         Self::advance_tape_ear(
                             tape,
                             &mut bus.ear,
@@ -1287,10 +1524,53 @@ impl Machine {
                         return;
                     }
                 }
+                let pc = cpu.regs.pc;
+                let was_halt = cpu.regs.halted;
+                let cpu_on = trace::enabled(trace::Category::CPU);
+                let pre = cpu_on.then(|| {
+                    let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
+                    (bytes, len, reg_snap(cpu))
+                });
+                let mem_w = debugger.mem_watches.clone();
+                let port_w = debugger.port_watches.clone();
+                let hit = Cell::new(None);
+                let watch = if mem_w.is_empty() && port_w.is_empty() {
+                    None
+                } else {
+                    Some(debugger::WatchHook {
+                        mem: &mem_w,
+                        port: &port_w,
+                        hit: &hit,
+                    })
+                };
                 let last_t = cpu.t;
-                let mut mio = MemIo48 { bus: bus.as_mut() };
+                let mut mio = MemIo48 {
+                    bus: bus.as_mut(),
+                    watch,
+                };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
+                if let Some((bytes, len, regs)) = pre {
+                    if was_halt {
+                        trace::emit(trace::EventKind::CpuHalt { pc });
+                    }
+                    trace::emit(trace::EventKind::CpuStep {
+                        pc,
+                        bytes,
+                        len,
+                        dt: dt as u16,
+                        regs,
+                    });
+                }
+                if let Some(reason) = hit.get() {
+                    debugger.paused = true;
+                    debugger.last_hit = reason;
+                    if let BreakReason::Mem { addr, write, value } = reason {
+                        if trace::enabled(trace::Category::MEM) {
+                            trace::emit(trace::EventKind::MemWatch { addr, write, value });
+                        }
+                    }
+                }
                 Self::advance_tape_ear(
                     tape,
                     &mut bus.ear,
@@ -1307,8 +1587,12 @@ impl Machine {
                 bus,
                 tape,
                 tape_opts,
+                debugger,
                 ..
             } => {
+                if debugger.check_pc(cpu.regs.pc) {
+                    return;
+                }
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -1329,9 +1613,23 @@ impl Machine {
                     return;
                 }
                 if bus.frame_t < INT_LENGTH_128 {
-                    let mut mio = MemIo128 { bus: bus.as_mut() };
+                    let mut mio = MemIo128 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                    };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
+                        if trace::enabled(trace::Category::CPU) {
+                            trace::emit(trace::EventKind::CpuIrq {
+                                pc: cpu.regs.pc,
+                                im: cpu.regs.im,
+                            });
+                        }
+                        if trace::enabled(trace::Category::ULA) {
+                            trace::emit(trace::EventKind::UlaInt {
+                                frame_t: bus.frame_t,
+                            });
+                        }
                         Self::advance_tape_ear(
                             tape,
                             &mut bus.ear,
@@ -1346,10 +1644,48 @@ impl Machine {
                         return;
                     }
                 }
+                let pc = cpu.regs.pc;
+                let was_halt = cpu.regs.halted;
+                let cpu_on = trace::enabled(trace::Category::CPU);
+                let pre = cpu_on.then(|| {
+                    let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
+                    (bytes, len, reg_snap(cpu))
+                });
+                let mem_w = debugger.mem_watches.clone();
+                let port_w = debugger.port_watches.clone();
+                let hit = Cell::new(None);
+                let watch = if mem_w.is_empty() && port_w.is_empty() {
+                    None
+                } else {
+                    Some(debugger::WatchHook {
+                        mem: &mem_w,
+                        port: &port_w,
+                        hit: &hit,
+                    })
+                };
                 let last_t = cpu.t;
-                let mut mio = MemIo128 { bus: bus.as_mut() };
+                let mut mio = MemIo128 {
+                    bus: bus.as_mut(),
+                    watch,
+                };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
+                if let Some((bytes, len, regs)) = pre {
+                    if was_halt {
+                        trace::emit(trace::EventKind::CpuHalt { pc });
+                    }
+                    trace::emit(trace::EventKind::CpuStep {
+                        pc,
+                        bytes,
+                        len,
+                        dt: dt as u16,
+                        regs,
+                    });
+                }
+                if let Some(reason) = hit.get() {
+                    debugger.paused = true;
+                    debugger.last_hit = reason;
+                }
                 Self::advance_tape_ear(
                     tape,
                     &mut bus.ear,
@@ -1367,8 +1703,12 @@ impl Machine {
                 bus,
                 tape,
                 tape_opts,
+                debugger,
                 ..
             } => {
+                if debugger.check_pc(cpu.regs.pc) {
+                    return;
+                }
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -1389,9 +1729,23 @@ impl Machine {
                     return;
                 }
                 if bus.frame_t < INT_LENGTH_128 {
-                    let mut mio = MemIoPlus3 { bus: bus.as_mut() };
+                    let mut mio = MemIoPlus3 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                    };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
+                        if trace::enabled(trace::Category::CPU) {
+                            trace::emit(trace::EventKind::CpuIrq {
+                                pc: cpu.regs.pc,
+                                im: cpu.regs.im,
+                            });
+                        }
+                        if trace::enabled(trace::Category::ULA) {
+                            trace::emit(trace::EventKind::UlaInt {
+                                frame_t: bus.frame_t,
+                            });
+                        }
                         Self::advance_tape_ear(
                             tape,
                             &mut bus.ear,
@@ -1406,10 +1760,48 @@ impl Machine {
                         return;
                     }
                 }
+                let pc = cpu.regs.pc;
+                let was_halt = cpu.regs.halted;
+                let cpu_on = trace::enabled(trace::Category::CPU);
+                let pre = cpu_on.then(|| {
+                    let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
+                    (bytes, len, reg_snap(cpu))
+                });
+                let mem_w = debugger.mem_watches.clone();
+                let port_w = debugger.port_watches.clone();
+                let hit = Cell::new(None);
+                let watch = if mem_w.is_empty() && port_w.is_empty() {
+                    None
+                } else {
+                    Some(debugger::WatchHook {
+                        mem: &mem_w,
+                        port: &port_w,
+                        hit: &hit,
+                    })
+                };
                 let last_t = cpu.t;
-                let mut mio = MemIoPlus3 { bus: bus.as_mut() };
+                let mut mio = MemIoPlus3 {
+                    bus: bus.as_mut(),
+                    watch,
+                };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
+                if let Some((bytes, len, regs)) = pre {
+                    if was_halt {
+                        trace::emit(trace::EventKind::CpuHalt { pc });
+                    }
+                    trace::emit(trace::EventKind::CpuStep {
+                        pc,
+                        bytes,
+                        len,
+                        dt: dt as u16,
+                        regs,
+                    });
+                }
+                if let Some(reason) = hit.get() {
+                    debugger.paused = true;
+                    debugger.last_hit = reason;
+                }
                 Self::advance_tape_ear(
                     tape,
                     &mut bus.ear,
@@ -1436,7 +1828,10 @@ impl Machine {
                 ..
             } => {
                 let last_t = cpu.t;
-                let mut mio = MemIo48 { bus: bus.as_mut() };
+                let mut mio = MemIo48 {
+                    bus: bus.as_mut(),
+                    watch: None,
+                };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(
@@ -1458,7 +1853,10 @@ impl Machine {
                 ..
             } => {
                 let last_t = cpu.t;
-                let mut mio = MemIo128 { bus: bus.as_mut() };
+                let mut mio = MemIo128 {
+                    bus: bus.as_mut(),
+                    watch: None,
+                };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(
@@ -1481,7 +1879,10 @@ impl Machine {
                 ..
             } => {
                 let last_t = cpu.t;
-                let mut mio = MemIoPlus3 { bus: bus.as_mut() };
+                let mut mio = MemIoPlus3 {
+                    bus: bus.as_mut(),
+                    watch: None,
+                };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
                 Self::advance_tape_ear(
@@ -1590,6 +1991,79 @@ impl Machine {
             Self::Spec128 { bus, .. } => bus.read(addr),
             Self::SpecPlus3 { bus, .. } => bus.read(addr),
         }
+    }
+
+    /// Script `LOAD ""` [CODE] Enter for 48K keyword mode (ROM debounce included).
+    pub fn type_load_quotes_48k(&mut self, with_code: bool) {
+        const PRESS: u32 = 10;
+        const GAP: u32 = 5;
+        fn hold(m: &mut Machine, keys: &[(usize, u8)], frames: u32) {
+            for _ in 0..frames {
+                let kb = m.keyboard_mut();
+                kb.reset();
+                for &(row, bit) in keys {
+                    kb.set_key(row, bit, true);
+                }
+                let _ = m.run_frame();
+            }
+        }
+        hold(self, &[(6, 3)], PRESS);
+        hold(self, &[], GAP);
+        hold(self, &[(7, 1), (5, 0)], PRESS);
+        hold(self, &[], GAP);
+        hold(self, &[(7, 1), (5, 0)], PRESS);
+        hold(self, &[], GAP);
+        if with_code {
+            hold(self, &[(0, 0), (7, 1)], PRESS);
+            hold(self, &[], GAP);
+            hold(self, &[(5, 2)], PRESS);
+            hold(self, &[], GAP);
+        }
+        hold(self, &[(6, 0)], PRESS);
+        hold(self, &[], 15);
+        self.keyboard_mut().reset();
+    }
+
+    #[must_use]
+    pub fn debugger(&self) -> &Debugger {
+        match self {
+            Self::Spec48 { debugger, .. }
+            | Self::Spec128 { debugger, .. }
+            | Self::SpecPlus3 { debugger, .. } => debugger,
+        }
+    }
+
+    pub fn debugger_mut(&mut self) -> &mut Debugger {
+        match self {
+            Self::Spec48 { debugger, .. }
+            | Self::Spec128 { debugger, .. }
+            | Self::SpecPlus3 { debugger, .. } => debugger,
+        }
+    }
+
+    /// Run instructions until a breakpoint/watch, halt, or `max_insns`.
+    pub fn run_until_break(&mut self, max_insns: u64) -> BreakReason {
+        let pc = self.cpu().regs.pc;
+        if self.debugger().paused {
+            self.debugger_mut().continue_from_pc(pc);
+        }
+        for _ in 0..max_insns {
+            if self.debugger().paused {
+                return self.debugger().last_hit;
+            }
+            if self.cpu().regs.halted && !self.cpu().regs.iff1 {
+                self.debugger_mut().paused = true;
+                self.debugger_mut().last_hit = BreakReason::Halt;
+                return BreakReason::Halt;
+            }
+            self.step_once();
+            let hit = self.debugger().last_hit;
+            if hit.is_stop() {
+                return hit;
+            }
+        }
+        self.debugger_mut().last_hit = BreakReason::Budget;
+        BreakReason::Budget
     }
 }
 
@@ -2061,7 +2535,7 @@ mod tests {
         for _ in 0..200 {
             let _ = m.run_frame();
         }
-        type_load_48k(&mut m, false);
+        m.type_load_quotes_48k(false);
         assert_eq!(m.cpu().regs.pc, LD_BYTES_TRAP_PC);
         m.set_tape_playing(true);
         let mut progressed = false;
@@ -2162,43 +2636,6 @@ mod tests {
         }
     }
 
-    /// Hold a matrix chord for `frames` emulated frames (48K keyboard entry).
-    ///
-    /// ROM debounce needs ~8+ frames pressed and a clear gap; 6/3 dropped the
-    /// second `"` so `LOAD ""` never reached LD-BYTES (see #85).
-    fn hold_keys(m: &mut Machine, keys: &[(usize, u8)], frames: u32) {
-        for _ in 0..frames {
-            let kb = m.keyboard_mut();
-            kb.reset();
-            for &(row, bit) in keys {
-                kb.set_key(row, bit, true);
-            }
-            let _ = m.run_frame();
-        }
-    }
-
-    /// Script `LOAD ""` [CODE] Enter for 48K keyword mode.
-    fn type_load_48k(m: &mut Machine, with_code: bool) {
-        const PRESS: u32 = 10;
-        const GAP: u32 = 5;
-        hold_keys(m, &[(6, 3)], PRESS); // J = LOAD
-        hold_keys(m, &[], GAP);
-        hold_keys(m, &[(7, 1), (5, 0)], PRESS); // Sym+P = "
-        hold_keys(m, &[], GAP);
-        hold_keys(m, &[(7, 1), (5, 0)], PRESS); // "
-        hold_keys(m, &[], GAP);
-        if with_code {
-            // Caps+Sym → E mode, then I → CODE (token 0xAF).
-            hold_keys(m, &[(0, 0), (7, 1)], PRESS);
-            hold_keys(m, &[], GAP);
-            hold_keys(m, &[(5, 2)], PRESS);
-            hold_keys(m, &[], GAP);
-        }
-        hold_keys(m, &[(6, 0)], PRESS); // Enter
-        hold_keys(m, &[], 15);
-        m.keyboard_mut().reset();
-    }
-
     /// Shared `LOAD "" CODE` harness for `attr_mark.tap`. Returns whether CODE
     /// bytes landed at 0x8000. Caller must hold `trace::test_lock()` when tracing.
     fn run_attr_mark_load_path(rom: &[u8]) -> (Machine, bool) {
@@ -2215,7 +2652,7 @@ mod tests {
             let _ = m.run_frame();
         }
         // attr_mark is a CODE block — plain LOAD "" only accepts PROGRAM headers.
-        type_load_48k(&mut m, true);
+        m.type_load_quotes_48k(true);
         m.set_tape_playing(true);
         let mut loaded = false;
         for _ in 0..200 {
@@ -2341,7 +2778,7 @@ mod tests {
         for _ in 0..200 {
             let _ = m.run_frame();
         }
-        type_load_48k(&mut m, false);
+        m.type_load_quotes_48k(false);
         assert_eq!(
             m.cpu().regs.pc,
             LD_BYTES_TRAP_PC,
@@ -2412,6 +2849,133 @@ mod tests {
             dump.contains("wrong_flag") || dump.contains("tape.flash"),
             "dump=\n{dump}"
         );
+        trace::disable();
+        trace::clear();
+    }
+
+    #[test]
+    fn inspect_after_boot_steps() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        for _ in 0..8 {
+            m.step_once();
+        }
+        let i = m.inspect();
+        assert_eq!(i.model, Model::Spectrum48);
+        assert!(i.cpu_t > 0);
+        assert_eq!(i.frame_tstates, FRAME_TSTATES_48);
+        let hex = m.hexdump(0x0000, 16);
+        assert!(hex.contains("0000"));
+        let d = m.disasm_window(0x0000, 4);
+        assert!(d.contains("0000"));
+        let json = i.to_json();
+        assert!(json.contains("\"model\":\"48k\""));
+    }
+
+    #[test]
+    fn inspect_128k_paging() {
+        let Some(rom) = rom128() else {
+            eprintln!("skip: roms/128/spec128uk.rom missing");
+            return;
+        };
+        let m = Machine::new_128k(&rom).unwrap();
+        let i = m.inspect();
+        assert_eq!(i.model, Model::Spectrum128);
+        assert!(i.paging.page_7ffd.is_some());
+    }
+
+    #[test]
+    fn apply_sna48_sets_pc_ram_and_border() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut data = vec![0u8; 49179];
+        data[26] = 5; // border
+        data[23] = 0x00;
+        data[24] = 0x40; // SP = 0x4000 → pop PC from RAM[0x4000]
+        data[27] = 0x00;
+        data[28] = 0x80; // PC = 0x8000
+        data[27 + 0x4000] = 0xaa; // byte at 0x8000
+        let snap = Snapshot48::parse_sna(&data).expect("synthetic SNA48");
+
+        let _lock = trace::test_lock();
+        let dump = trace::with_trace(trace::Category::MACHINE, || {
+            let mut m = Machine::new_48k(&rom).unwrap();
+            m.apply_snapshot48(&snap);
+            let i = m.inspect();
+            assert_eq!(i.regs.pc, 0x8000);
+            assert_eq!(m.read_mem(0x8000), 0xaa);
+            assert_eq!(i.border, 5);
+            trace::dump_string()
+        });
+        assert!(
+            dump.contains("machine.snapshot"),
+            "expected machine.snapshot in dump:\n{dump}"
+        );
+    }
+
+    #[test]
+    fn until_pc_and_mem_watch() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.write_mem(0x8000, 0x18);
+        m.write_mem(0x8001, 0xfe); // JR $
+        m.cpu_mut().regs.pc = 0x8000;
+        m.debugger_mut().add_pc_break(0x8000);
+        let reason = m.run_until_break(8);
+        assert_eq!(reason, BreakReason::Pc(0x8000));
+        assert_eq!(m.cpu().regs.pc, 0x8000);
+
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.write_mem(0x8000, 0x77); // LD (HL),A
+        m.cpu_mut().regs.pc = 0x8000;
+        m.cpu_mut().regs.set_hl(0x4000);
+        m.cpu_mut().regs.a = 0xaa;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48; // avoid IRQ
+        }
+        m.debugger_mut().add_mem_watch(Watch {
+            addr: 0x4000,
+            read: false,
+            write: true,
+        });
+        m.step_once();
+        assert_eq!(m.read_mem(0x4000), 0xaa);
+        assert!(matches!(
+            m.debugger().last_hit,
+            BreakReason::Mem {
+                addr: 0x4000,
+                write: true,
+                value: 0xaa
+            }
+        ));
+    }
+
+    #[test]
+    fn cpu_step_appears_in_trace() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let _lock = trace::test_lock();
+        trace::clear();
+        trace::enable(trace::Category::CPU);
+        let mut m = Machine::new_48k(&rom).unwrap();
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        m.step_once();
+        let dump = trace::dump_string();
+        assert!(dump.contains("cpu.step"), "dump=\n{dump}");
+        let json = trace::dump_json();
+        assert!(json.contains("cpu"));
         trace::disable();
         trace::clear();
     }
