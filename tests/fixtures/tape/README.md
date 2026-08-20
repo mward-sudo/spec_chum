@@ -27,8 +27,10 @@ Do not add commercial game TAPs.
 
 | Fixture | Models | Instant | EAR speeds |
 | --- | --- | --- | --- |
-| `attr_mark.tap` | 48K, 128K, +3 | yes | 1/2/5/10/20 (48K); 2/5/10/20 (128K/+3; 1× skipped as slow) |
-| `custom_loader.tap` | 48K, 128K, +3 | yes | 10, 20 |
+| `attr_mark.tap` | 48K, 128K, +3 | yes | 1/2/5/10/20 (48K); 2/5/10/20 (128K/+3) |
+| `custom_loader.tap` | 48K, 128K, +3 | yes | 1 (48K) + 2/5/10/20 (all) |
+
+Set `SPEC_CHUM_FULL_TAPE_MATRIX=1` to also run EAR@1 on 128K/+3 (slow).
 
 ## Local repro (not in git)
 
@@ -36,7 +38,8 @@ Optional commercial tape for optional local tests (never commit):
 
 ```bash
 export SPEC_CHUM_BOGGIT_TZX="$HOME/Downloads/BoggitThe/The Boggit - Side 1.tzx"
-cargo test -p machine --lib boggit -- --nocapture
+# Instant + EAR@2/5/10/20 on 48K/128K/+3; add FULL for EAR@1
+SPEC_CHUM_FULL_TAPE_MATRIX=1 cargo test -p machine --lib boggit -- --nocapture
 ```
 
 ### How to load The Boggit on 128K at 1×

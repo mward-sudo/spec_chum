@@ -3380,12 +3380,13 @@ mod tests {
                 failed.push(format!("{label}/instant"));
             }
             let _ = m;
+            let full = std::env::var_os("SPEC_CHUM_FULL_TAPE_MATRIX").is_some();
             for speed in speeds {
-                // EAR@1 is slow (~minutes of Spectrum time); keep in CI with a
-                // generous budget only for 48K; 128K/+3 use speed≥2 in default CI.
-                if speed == 1 && *model != Model::Spectrum48 {
+                // EAR@1 is slow (~minutes of Spectrum time); default CI keeps it
+                // on 48K only. Set SPEC_CHUM_FULL_TAPE_MATRIX=1 for 128K/+3 @1×.
+                if speed == 1 && *model != Model::Spectrum48 && !full {
                     report.push_str(&format!(
-                        "  {label} ear@{speed}: SKIP (slow; covered by 48k)\n"
+                        "  {label} ear@{speed}: SKIP (set SPEC_CHUM_FULL_TAPE_MATRIX=1)\n"
                     ));
                     continue;
                 }
@@ -3457,11 +3458,25 @@ mod tests {
             } else {
                 250
             };
-            for (flash, speed, tag, max) in [
-                (true, 1u32, "instant", 800u32),
-                (false, 10, "ear@10", 4_000),
-                (false, 20, "ear@20", 2_500),
+            // Instant + EAR speeds matching CLI `--speed` presets.
+            let full = std::env::var_os("SPEC_CHUM_FULL_TAPE_MATRIX").is_some();
+            let mut modes: Vec<(bool, u32, &str, u32)> =
+                vec![(true, 1, "instant", 800), (false, 2, "ear@2", 12_000)];
+            for (speed, tag, max) in [
+                (5u32, "ear@5", 6_000u32),
+                (10, "ear@10", 4_000),
+                (20, "ear@20", 2_500),
             ] {
+                modes.push((false, speed, tag, max));
+            }
+            if *model == Model::Spectrum48 || full {
+                modes.insert(1, (false, 1, "ear@1", 25_000));
+            } else {
+                report.push_str(&format!(
+                    "  {label} ear@1: SKIP (set SPEC_CHUM_FULL_TAPE_MATRIX=1)\n"
+                ));
+            }
+            for (flash, speed, tag, max) in modes {
                 let mut m = match model {
                     Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
@@ -3537,7 +3552,10 @@ mod tests {
         );
     }
 
-    /// Optional: full Boggit Side 1 through custom `0xC8` loads on 48K/128K Instant + EAR@10.
+    /// Optional: Boggit Side 1 through custom `0xC8` loads (set `SPEC_CHUM_BOGGIT_TZX`).
+    ///
+    /// Default: Instant + EAR@2/5/10/20 on 48K/128K/+3. With
+    /// `SPEC_CHUM_FULL_TAPE_MATRIX=1`, also EAR@1.
     #[test]
     fn boggit_side1_matrix_when_present() {
         let Some(boggit) = std::env::var_os("SPEC_CHUM_BOGGIT_TZX").map(PathBuf::from) else {
@@ -3559,24 +3577,39 @@ mod tests {
                 || m.cpu().regs.pc == 0x5b00
         };
 
+        let full = std::env::var_os("SPEC_CHUM_FULL_TAPE_MATRIX").is_some();
         let mut report = String::from("boggit matrix:\n");
         let mut failed = Vec::new();
         for (rom, label, model) in [
             (rom48(), "48k", Model::Spectrum48),
             (rom128(), "128k", Model::Spectrum128),
+            (rom_plus3(), "plus3", Model::SpectrumPlus3),
         ] {
             let Some(rom) = rom else {
                 report.push_str(&format!("  {label}: SKIP (no ROM)\n"));
                 continue;
             };
-            for (flash, speed, tag, max) in [
-                (true, 1u32, "instant", 2_000u32),
-                (false, 10, "ear@10", 8_000),
+            let mut modes: Vec<(bool, u32, &str, u32)> = vec![(true, 1, "instant", 2_000)];
+            if full {
+                modes.push((false, 1, "ear@1", 40_000));
+            } else {
+                report.push_str(&format!(
+                    "  {label} ear@1: SKIP (set SPEC_CHUM_FULL_TAPE_MATRIX=1)\n"
+                ));
+            }
+            for (speed, tag, max) in [
+                (2u32, "ear@2", 20_000u32),
+                (5, "ear@5", 10_000),
+                (10, "ear@10", 8_000),
+                (20, "ear@20", 5_000),
             ] {
+                modes.push((false, speed, tag, max));
+            }
+            for (flash, speed, tag, max) in modes {
                 let m = match model {
                     Model::Spectrum48 => Machine::new_48k(&rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(&rom).unwrap(),
-                    Model::SpectrumPlus3 => unreachable!(),
+                    Model::SpectrumPlus3 => Machine::new_plus3(&rom).unwrap(),
                 };
                 let mut deck = TapPlayer::new(img.clone());
                 deck.set_block_pauses(img.pause_t.clone());
