@@ -186,7 +186,12 @@ impl TapeProgress {
         }
         let block = self.block_index.min(self.block_count) as f32;
         let within = if self.pulse_count == 0 {
-            0.0
+            // Consumed trailing zero-pulse block (e.g. 0x20 pause_ms=0): treat as done.
+            if self.block_index + 1 >= self.block_count {
+                1.0
+            } else {
+                0.0
+            }
         } else {
             self.pulse_index.min(self.pulse_count) as f32 / self.pulse_count as f32
         };
@@ -2448,6 +2453,26 @@ mod tests {
         assert_eq!(p.block_count, n);
         assert!(p.pulse_count > 0);
         assert!(p.fraction() < 1.0);
+    }
+
+    #[test]
+    fn tape_progress_trailing_empty_block_reports_complete() {
+        // Mirrors TZX ending in a consumed 0x20 pause_ms=0 (zero pulses on final block).
+        let p = TapeProgress {
+            block_index: 2,
+            block_count: 3,
+            pulse_index: 0,
+            pulse_count: 0,
+        };
+        assert_eq!(p.fraction(), 1.0);
+        // Non-final empty block stays at the block boundary (not complete).
+        let mid = TapeProgress {
+            block_index: 1,
+            block_count: 3,
+            pulse_index: 0,
+            pulse_count: 0,
+        };
+        assert!((mid.fraction() - 1.0 / 3.0).abs() < f32::EPSILON);
     }
 
     #[test]

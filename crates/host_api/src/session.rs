@@ -485,6 +485,17 @@ fn render_frame_pcm(
         *sample = (beep + ay).clamp(-1.0, 1.0);
         t += t_per;
     }
+    // Edges in the final sample interval (after the last sample instant) must
+    // still update the returned level so the next frame starts correctly.
+    while edge_i < audio.beeper_edges.len() {
+        let (edge_t, edge_level) = audio.beeper_edges[edge_i];
+        if edge_t < frame_tstates {
+            level = edge_level;
+            edge_i += 1;
+        } else {
+            break;
+        }
+    }
     level
 }
 
@@ -761,5 +772,21 @@ mod tests {
             .open_tape(Path::new("/tmp/spec_chum_definitely_missing.tap"))
             .expect_err("missing");
         assert!(matches!(err, HostError::Io(_) | HostError::Message(_)));
+    }
+
+    #[test]
+    fn render_frame_pcm_carries_late_edge_into_next_level() {
+        let frame_tstates = 69_888u32;
+        let audio = machine::FrameAudio {
+            beeper_edges: vec![(frame_tstates - 1, true)],
+            ay_samples: Vec::new(),
+        };
+        let mut out = Vec::new();
+        let level = render_frame_pcm(&audio, frame_tstates, false, &mut out);
+        assert!(
+            level,
+            "edge near end of frame must update returned speaker level"
+        );
+        assert_eq!(out.len(), AUDIO_SAMPLES_PER_FRAME);
     }
 }
