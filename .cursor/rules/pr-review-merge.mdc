@@ -21,7 +21,7 @@ Do not spam `@coderabbitai review` on every push. Prefer `@coderabbitai review` 
 
 A **ready / non-draft** PR is **not merge-ready** (agents must **not** merge or treat as finished) while **either**:
 
-1. **CodeRabbit has not completed a review on the latest HEAD** — status pending, in progress/queued, **rate-limited**, failed/errored, or missing. A green commit status with description `Review rate limited` is **not** a pass (no full re-review ran).
+1. **CodeRabbit has not completed a review on the latest HEAD** — status pending, in progress/queued, **rate-limited**, **skipped**, failed/errored, or missing. A green commit status with description `Review rate limited` or `Review skipped: …` is **not** a pass.
 2. **`./scripts/check_pr_reviews.sh` reports unresolved actionable bot threads** — unless the user **explicitly** waives.
 
 **Draft PRs:** the script skips CodeRabbit HEAD completeness (pass message: draft — CR not required yet) but still fails on unresolved bot threads if any exist. Do not merge drafts.
@@ -31,8 +31,8 @@ Ignoring the ready-PR conditions is a process failure. Prefer opening a follow-u
 ## Before merge / when asked to finish or merge a PR
 
 1. Confirm the PR is **ready** (not draft) and a CodeRabbit review was requested once it became merge-candidate (auto-review may be off by design).
-2. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**. On ready PRs the script hard-fails on rate-limited / pending / missing CodeRabbit **and** on unresolved bot threads.
-3. If CodeRabbit is pending, missing, or rate-limited on HEAD: **hold** — request review if needed, wait for a completed review (e.g. `Review completed`), then re-run the script. Do not merge on a rate-limited status.
+2. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**. On ready PRs the script hard-fails on rate-limited / skipped / pending / missing CodeRabbit **and** on unresolved bot threads.
+3. If CodeRabbit is pending, missing, skipped, or rate-limited on HEAD: **hold** — request review if needed, wait for a completed review (e.g. `Review completed`), then re-run the script. Do not merge on a rate-limited or skipped status.
 4. Treat bot comments as blocking when **actionable** (bugs, wrong behavior, clear maintainability fixes).
 5. Disposition each finding: fix in code, or reply with a short wontfix reason, then **resolve** the thread.
 6. Re-run the script (and re-run the CI check if it failed) after addressing feedback.

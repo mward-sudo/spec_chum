@@ -11,8 +11,9 @@
 #     Still fail on unresolved bot threads if any exist.
 #   - Ready / non-draft: hold until CodeRabbit completed on HEAD, then threads.
 #
-# Hold until clean (ready PRs): a green "Review rate limited" commit status is
-# NOT a pass — the gate can otherwise look clean while CR never re-reviewed HEAD.
+# Hold until clean (ready PRs): green "Review rate limited" or "Review skipped"
+# commit statuses are NOT a pass — the gate can otherwise look clean while CR
+# never actually reviewed HEAD.
 #
 # Usage:
 #   ./scripts/check_pr_reviews.sh [PR_NUMBER]
@@ -150,7 +151,7 @@ else
     echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}"
     apply_waiver_or_fail "$cr_hold_reason" \
       "Next steps:" \
-      "  1. Hold the PR — do not merge while CodeRabbit is pending, in progress, missing, or rate-limited." \
+      "  1. Hold the PR — do not merge while CodeRabbit is pending, in progress, missing, skipped, or rate-limited." \
       "  2. If reviews are on-demand: comment '@coderabbitai full review' (or add label coderabbit-review)." \
       "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
       "  4. Open a follow-up issue if rate-limited (e.g. \"Revisit CodeRabbit on PR #${PR}\")." \

@@ -48,7 +48,7 @@ If the YAML and CodeRabbit GitHub app UI disagree, keep **Automatic Reviews** of
 
 Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. For **ready** PRs, hold until a completed review on HEAD **and** unresolved actionable bot threads are dispositioned.
 
-**Hold policy (ready / non-draft):** Do not merge while CodeRabbit’s commit status on the PR head is pending, in progress/queued, **rate-limited**, failed, or missing (including when on-demand review was never requested). CodeRabbit may report `Review rate limited` with a green/success state — that is still a hold. Prefer a follow-up issue titled like `Revisit CodeRabbit on PR #N (rate-limited)` rather than merging.
+**Hold policy (ready / non-draft):** Do not merge while CodeRabbit’s commit status on the PR head is pending, in progress/queued, **rate-limited**, **skipped**, failed, or missing (including when on-demand review was never requested). CodeRabbit may report `Review rate limited` or `Review skipped: …` with a green/success state — that is still a hold. Prefer a follow-up issue titled like `Revisit CodeRabbit on PR #N (rate-limited)` rather than merging.
 
 **Drafts:** `./scripts/check_pr_reviews.sh` skips CodeRabbit HEAD completeness but still fails on unresolved bot threads. Do not merge drafts.
 
@@ -64,7 +64,7 @@ Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignor
 # Or add PR label: waive-bot-reviews
 ```
 
-The script (1) on ready PRs checks CodeRabbit on HEAD and **hard-fails** on pending / rate-limited / missing / error (drafts skip this step), then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
+The script (1) on ready PRs checks CodeRabbit on HEAD and **hard-fails** on pending / rate-limited / skipped / missing / error (drafts skip this step), then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
 
 ## TDD
 

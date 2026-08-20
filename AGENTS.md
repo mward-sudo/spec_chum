@@ -64,7 +64,7 @@ Iterate on **draft** PRs (CR completeness not required). When merge-candidate: m
 
 Any task to **finish, land, or merge a PR** must include this gate. A **ready** PR is **not merge-ready** while **either**:
 
-- CodeRabbit on the latest HEAD is **pending / in progress / rate-limited** (or missing / failed) — a green `Review rate limited` status is **not** a completed review; open a revisit issue and hold; or
+- CodeRabbit on the latest HEAD is **pending / in progress / rate-limited / skipped** (or missing / failed) — a green `Review rate limited` or `Review skipped` status is **not** a completed review; open a revisit issue and hold; or
 - CodeRabbit (or similar bots) have unresolved **actionable** review threads,
 
 unless the user **explicitly** waives. **Drafts** may skip CR completeness in the script but still fail on unresolved bot threads; do not merge drafts.

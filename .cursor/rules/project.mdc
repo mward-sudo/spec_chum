@@ -12,4 +12,4 @@ alwaysApply: true
 - Before finishing Rust work, run `./scripts/check.sh` (fmt + clippy `-D warnings` + tests).
 - Follow `AGENTS.md` and `CONTRIBUTING.md` for TDD and PR expectations.
 - Before implementing, check GitHub Issues (`gh issue list` / related `gh issue view`); see `github-issues.mdc`.
-- Before finish/merge of a PR: undraft if needed, ensure CodeRabbit completed on HEAD, run `./scripts/check_pr_reviews.sh`. Drafts skip CR completeness; ready PRs hold on pending / missing / **rate-limited** CR or unresolved actionable bot threads unless the user waives — see `pr-review-merge.mdc` (lesson #83).
+- Before finish/merge of a PR: undraft if needed, ensure CodeRabbit completed on HEAD, run `./scripts/check_pr_reviews.sh`. Drafts skip CR completeness; ready PRs hold on pending / missing / skipped / **rate-limited** CR or unresolved actionable bot threads unless the user waives — see `pr-review-merge.mdc` (lesson #83).
