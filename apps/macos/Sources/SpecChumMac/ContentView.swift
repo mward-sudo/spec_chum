@@ -52,6 +52,9 @@ struct ContentView: View {
             activateSpecChum()
             FocusSpectrumView.post()
         }
+        .sheet(isPresented: $host.showInspector) {
+            DebugInspectorView(host: host)
+        }
     }
 
     private var glassToolbar: some View {
@@ -133,6 +136,52 @@ struct ContentView: View {
         panel.title = "Open TAP / TZX"
         if panel.runModal() == .OK, let url = panel.url {
             host.openTape(at: url)
+        }
+    }
+}
+
+struct DebugInspectorView: View {
+    @ObservedObject var host: HostBridge
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Debug inspector")
+                    .font(.headline)
+                Spacer()
+                Button("Done") {
+                    host.showInspector = false
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            HStack(spacing: 16) {
+                Text(String(format: "PC %04X", host.debugPc))
+                Text(String(format: "SP %04X", host.debugSp))
+                Text(String(format: "AF %04X", host.debugAf))
+            }
+            .font(.system(.body, design: .monospaced))
+            HStack {
+                Button(host.paused ? "Continue" : "Pause") {
+                    host.setPaused(!host.paused)
+                }
+                Button("Step") {
+                    if !host.paused {
+                        host.setPaused(true)
+                    }
+                    host.step()
+                }
+            }
+            ScrollView {
+                Text(host.inspectJsonPreview)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding()
+        .frame(minWidth: 480, minHeight: 320)
+        .onAppear {
+            host.refreshInspector()
         }
     }
 }

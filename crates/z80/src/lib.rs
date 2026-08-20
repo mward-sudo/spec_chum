@@ -8,12 +8,14 @@
 
 mod bus;
 mod cpu;
+mod disasm;
 mod flags;
 mod opcodes;
 mod registers;
 
 pub use bus::{FlatMem, Io, Memory, NullIo};
 pub use cpu::Cpu;
+pub use disasm::{disasm_one, Disasm};
 pub use registers::{flag, Registers};
 
 #[cfg(test)]

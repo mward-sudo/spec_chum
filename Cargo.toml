@@ -10,6 +10,7 @@ members = [
     "crates/trace",
     "crates/host_api",
     "crates/app",
+    "crates/debug_cli",
 ]
 default-members = ["crates/app"]
 
@@ -33,6 +34,7 @@ egui = "0.31"
 cpal = "0.15"
 thiserror = "2"
 anyhow = "1"
+clap = { version = "4", features = ["derive"] }
 
 # Inherited by members via `lints.workspace = true`.
 # CI uses `-D warnings`, so `warn` here fails the build.

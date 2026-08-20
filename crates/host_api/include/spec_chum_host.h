@@ -59,7 +59,7 @@ char *sc_last_error(void);
 void sc_string_free(char *s);
 
 /* Debug / observability (see docs/DEBUGGING.md) */
-/* cats: bitmask — cpu=1 bus=2 tape=4 ula=8 machine=16; 0 disables */
+/* cats: bitmask — cpu=1 bus=2 tape=4 ula=8 machine=16 ay=32 disk=64 mem=128; 0 disables */
 void sc_debug_init_from_env(void);
 void sc_debug_set_categories(unsigned int cats);
 unsigned int sc_debug_get_categories(void);
@@ -68,6 +68,20 @@ void sc_debug_clear(void);
 char *sc_debug_dump(void);
 int sc_debug_dump_to_file(const char *path);
 unsigned int sc_debug_event_count(void);
+
+int sc_peek(void *handle, unsigned int addr, uint8_t *out);
+int sc_poke(void *handle, unsigned int addr, uint8_t value);
+/* Heap UTF-8 JSON of Inspect; free with sc_string_free. */
+char *sc_inspect_json(void *handle);
+/* Fill pc,sp,af,bc,de,hl,ix,iy (8 uint16). Returns 0 on success, -1 on error. */
+int sc_regs(void *handle, unsigned short *pc, unsigned short *sp, unsigned short *af, unsigned short *bc, unsigned short *de, unsigned short *hl, unsigned short *ix, unsigned short *iy);
+int sc_step(void *handle); /* one step_once; 0 ok, -1 no machine */
+void sc_set_paused(void *handle, int paused);
+int sc_add_breakpoint(void *handle, unsigned int pc);
+/* Returns break reason: 0 none, 1 pc, 2 mem, 3 port, 4 halt, 5 budget, -1 error */
+int sc_run_until_break(void *handle, unsigned int max_insns);
+/* Heap UTF-8 JSON of the trace ring; free with sc_string_free. */
+char *sc_debug_dump_json(void);
 
 #ifdef __cplusplus
 }

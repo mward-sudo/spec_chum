@@ -17,7 +17,7 @@ use std::sync::{Mutex, OnceLock};
 pub const DEFAULT_CAPACITY: usize = 8192;
 
 /// Trace categories (bitflags). Combine with `|`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Category(u64);
 
 impl Category {
@@ -27,10 +27,21 @@ impl Category {
     pub const TAPE: Self = Self(1 << 2);
     pub const ULA: Self = Self(1 << 3);
     pub const MACHINE: Self = Self(1 << 4);
-    /// Convenience: everything except high-volume CPU instruction stream.
+    pub const AY: Self = Self(1 << 5);
+    pub const DISK: Self = Self(1 << 6);
+    pub const MEM: Self = Self(1 << 7);
+    /// Convenience: BUS|TAPE|ULA|MACHINE (excludes high-volume CPU, AY, DISK, MEM).
     pub const DEFAULT: Self = Self(Self::BUS.0 | Self::TAPE.0 | Self::ULA.0 | Self::MACHINE.0);
-    pub const ALL: Self =
-        Self(Self::CPU.0 | Self::BUS.0 | Self::TAPE.0 | Self::ULA.0 | Self::MACHINE.0);
+    pub const ALL: Self = Self(
+        Self::CPU.0
+            | Self::BUS.0
+            | Self::TAPE.0
+            | Self::ULA.0
+            | Self::MACHINE.0
+            | Self::AY.0
+            | Self::DISK.0
+            | Self::MEM.0,
+    );
 
     #[must_use]
     pub const fn bits(self) -> u64 {
@@ -68,6 +79,9 @@ impl Category {
                 "tape" => Self::TAPE,
                 "ula" | "video" => Self::ULA,
                 "machine" | "mach" => Self::MACHINE,
+                "ay" | "psg" => Self::AY,
+                "disk" | "fdc" => Self::DISK,
+                "mem" | "memory" => Self::MEM,
                 _ => Self::NONE,
             });
         }
@@ -113,7 +127,7 @@ impl Display for FlashSkipReason {
     }
 }
 
-/// Compact Z80 register snapshot (primary set + IX/IY/SP/PC + AF').
+/// Compact Z80 register snapshot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegSnap {
     pub pc: u16,
@@ -125,7 +139,15 @@ pub struct RegSnap {
     pub ix: u16,
     pub iy: u16,
     pub af_: u16,
+    pub bc_: u16,
+    pub de_: u16,
+    pub hl_: u16,
+    pub i: u8,
+    pub r: u8,
+    pub im: u8,
+    pub memptr: u16,
     pub iff1: bool,
+    pub iff2: bool,
     pub halted: bool,
 }
 
@@ -133,7 +155,7 @@ impl Display for RegSnap {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(
             f,
-            "PC={:04X} SP={:04X} AF={:04X} BC={:04X} DE={:04X} HL={:04X} IX={:04X} IY={:04X} AF'={:04X} IFF1={} HALT={}",
+            "PC={:04X} SP={:04X} AF={:04X} BC={:04X} DE={:04X} HL={:04X} IX={:04X} IY={:04X} AF'={:04X} I={:02X} R={:02X} IM={} IFF1={} HALT={}",
             self.pc,
             self.sp,
             self.af,
@@ -143,6 +165,9 @@ impl Display for RegSnap {
             self.ix,
             self.iy,
             self.af_,
+            self.i,
+            self.r,
+            self.im,
             u8::from(self.iff1),
             u8::from(self.halted)
         )
@@ -154,7 +179,9 @@ impl Display for RegSnap {
 pub enum EventKind {
     CpuStep {
         pc: u16,
-        op: u8,
+        bytes: [u8; 4],
+        len: u8,
+        dt: u16,
         regs: RegSnap,
     },
     CpuIrq {
@@ -173,6 +200,33 @@ pub enum EventKind {
         value: u8,
     },
     BusPort1ffd {
+        value: u8,
+    },
+    BusContend {
+        addr: u16,
+        frame_t: u32,
+        wait: u32,
+    },
+    BusFloating {
+        port: u16,
+        frame_t: u32,
+        value: u8,
+    },
+    AySelect {
+        reg: u8,
+    },
+    AyWrite {
+        reg: u8,
+        value: u8,
+    },
+    DiskFdc {
+        port: u16,
+        write: bool,
+        value: u8,
+    },
+    MemWatch {
+        addr: u16,
+        write: bool,
         value: u8,
     },
     TapePlay {
@@ -235,6 +289,11 @@ pub enum EventKind {
         holding: bool,
         pc: u16,
     },
+    MachineSnapshot {
+        pc: u16,
+        sp: u16,
+        border: u8,
+    },
 }
 
 impl EventKind {
@@ -242,9 +301,14 @@ impl EventKind {
     pub fn category(self) -> Category {
         match self {
             Self::CpuStep { .. } | Self::CpuIrq { .. } | Self::CpuHalt { .. } => Category::CPU,
-            Self::BusPortFe { .. } | Self::BusPort7ffd { .. } | Self::BusPort1ffd { .. } => {
-                Category::BUS
-            }
+            Self::BusPortFe { .. }
+            | Self::BusPort7ffd { .. }
+            | Self::BusPort1ffd { .. }
+            | Self::BusContend { .. }
+            | Self::BusFloating { .. } => Category::BUS,
+            Self::AySelect { .. } | Self::AyWrite { .. } => Category::AY,
+            Self::DiskFdc { .. } => Category::DISK,
+            Self::MemWatch { .. } => Category::MEM,
             Self::TapePlay { .. }
             | Self::TapePause { .. }
             | Self::TapeRewind
@@ -256,7 +320,21 @@ impl EventKind {
             Self::UlaFrame { .. } | Self::UlaInt { .. } | Self::UlaBorder { .. } => Category::ULA,
             Self::MachineModel { .. }
             | Self::MachineLoadMode { .. }
-            | Self::MachineLdBytesHold { .. } => Category::MACHINE,
+            | Self::MachineLdBytesHold { .. }
+            | Self::MachineSnapshot { .. } => Category::MACHINE,
+        }
+    }
+
+    #[must_use]
+    pub fn pc(self) -> Option<u16> {
+        match self {
+            Self::CpuStep { pc, .. }
+            | Self::CpuIrq { pc, .. }
+            | Self::CpuHalt { pc }
+            | Self::MachineLdBytesHold { pc, .. }
+            | Self::MachineSnapshot { pc, .. } => Some(pc),
+            Self::FlashLoadEnter { regs, .. } | Self::FlashLoadExit { regs, .. } => Some(regs.pc),
+            _ => None,
         }
     }
 }
@@ -264,7 +342,23 @@ impl EventKind {
 impl Display for EventKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match *self {
-            Self::CpuStep { pc, op, regs } => write!(f, "cpu.step pc={pc:04X} op={op:02X} {regs}"),
+            Self::CpuStep {
+                pc,
+                bytes,
+                len,
+                dt,
+                regs,
+            } => {
+                let n = usize::from(len.clamp(1, 4));
+                write!(f, "cpu.step pc={pc:04X} dt={dt} bytes=")?;
+                for (i, b) in bytes.iter().take(n).enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{b:02X}")?;
+                }
+                write!(f, " {regs}")
+            }
             Self::CpuIrq { pc, im } => write!(f, "cpu.irq pc={pc:04X} im={im}"),
             Self::CpuHalt { pc } => write!(f, "cpu.halt pc={pc:04X}"),
             Self::BusPortFe { write, value, ear } => write!(
@@ -275,6 +369,28 @@ impl Display for EventKind {
             ),
             Self::BusPort7ffd { value } => write!(f, "bus.7ffd out={value:02X}"),
             Self::BusPort1ffd { value } => write!(f, "bus.1ffd out={value:02X}"),
+            Self::BusContend {
+                addr,
+                frame_t,
+                wait,
+            } => write!(f, "bus.contend addr={addr:04X} frame_t={frame_t} wait={wait}"),
+            Self::BusFloating {
+                port,
+                frame_t,
+                value,
+            } => write!(f, "bus.floating port={port:04X} frame_t={frame_t} val={value:02X}"),
+            Self::AySelect { reg } => write!(f, "ay.select reg={reg}"),
+            Self::AyWrite { reg, value } => write!(f, "ay.write reg={reg} val={value:02X}"),
+            Self::DiskFdc { port, write, value } => write!(
+                f,
+                "disk.fdc {} port={port:04X} val={value:02X}",
+                if write { "out" } else { "in" }
+            ),
+            Self::MemWatch { addr, write, value } => write!(
+                f,
+                "mem.watch {} addr={addr:04X} val={value:02X}",
+                if write { "wr" } else { "rd" }
+            ),
             Self::TapePlay { block, blocks } => write!(f, "tape.play block={block}/{blocks}"),
             Self::TapePause { block } => write!(f, "tape.pause block={block}"),
             Self::TapeRewind => write!(f, "tape.rewind"),
@@ -338,6 +454,9 @@ impl Display for EventKind {
                 "machine.ld_bytes_hold holding={} pc={pc:04X}",
                 u8::from(holding)
             ),
+            Self::MachineSnapshot { pc, sp, border } => {
+                write!(f, "machine.snapshot pc={pc:04X} sp={sp:04X} border={border}")
+            }
         }
     }
 }
@@ -372,7 +491,7 @@ impl Ring {
         }
     }
 
-    fn push(&mut self, t: u64, kind: EventKind) {
+    fn push(&mut self, t: u64, kind: EventKind) -> TraceEvent {
         let ev = TraceEvent {
             seq: self.next_seq,
             t,
@@ -383,6 +502,7 @@ impl Ring {
             self.events.pop_front();
         }
         self.events.push_back(ev);
+        ev
     }
 
     fn clear(&mut self) {
@@ -495,7 +615,9 @@ pub fn emit(kind: EventKind) {
     }
     let t = T_HINT.load(Ordering::Relaxed);
     if let Ok(mut g) = ring().lock() {
-        g.push(t, kind);
+        let ev = g.push(t, kind);
+        drop(g);
+        maybe_append(&ev);
     }
 }
 
@@ -515,7 +637,9 @@ pub fn emit_at(t: u64, kind: EventKind) {
     }
     T_HINT.store(t, Ordering::Relaxed);
     if let Ok(mut g) = ring().lock() {
-        g.push(t, kind);
+        let ev = g.push(t, kind);
+        drop(g);
+        maybe_append(&ev);
     }
 }
 
@@ -556,6 +680,15 @@ fn describe_categories(c: Category) -> String {
     if c.contains(Category::MACHINE) {
         parts.push("machine");
     }
+    if c.contains(Category::AY) {
+        parts.push("ay");
+    }
+    if c.contains(Category::DISK) {
+        parts.push("disk");
+    }
+    if c.contains(Category::MEM) {
+        parts.push("mem");
+    }
     if parts.is_empty() {
         "none".into()
     } else {
@@ -580,6 +713,141 @@ pub fn dump_string() -> String {
         out.push('\n');
     }
     out
+}
+
+/// Optional filters for [`dump_filtered`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DumpFilter {
+    /// If non-zero, keep events whose category intersects this mask.
+    pub category: Category,
+    pub t_min: Option<u64>,
+    pub t_max: Option<u64>,
+    pub pc_min: Option<u16>,
+    pub pc_max: Option<u16>,
+    pub last_n: Option<usize>,
+}
+
+#[must_use]
+pub fn dump_filtered(filter: DumpFilter) -> String {
+    let mut events = snapshot();
+    if filter.category.bits() != 0 {
+        events.retain(|e| e.kind.category().bits() & filter.category.bits() != 0);
+    }
+    if let Some(t0) = filter.t_min {
+        events.retain(|e| e.t >= t0);
+    }
+    if let Some(t1) = filter.t_max {
+        events.retain(|e| e.t <= t1);
+    }
+    if filter.pc_min.is_some() || filter.pc_max.is_some() {
+        events.retain(|e| {
+            let Some(pc) = e.kind.pc() else {
+                return false;
+            };
+            if filter.pc_min.is_some_and(|lo| pc < lo) {
+                return false;
+            }
+            if filter.pc_max.is_some_and(|hi| pc > hi) {
+                return false;
+            }
+            true
+        });
+    }
+    if let Some(n) = filter.last_n {
+        let skip = events.len().saturating_sub(n);
+        events.drain(..skip);
+    }
+    let mut out = String::with_capacity(events.len().saturating_mul(96) + 64);
+    out.push_str(&format!(
+        "# spec_chum trace dump events={} (filtered)\n",
+        events.len()
+    ));
+    for ev in &events {
+        out.push_str(&ev.to_string());
+        out.push('\n');
+    }
+    out
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c if c.is_control() => out.push_str(&format!("\\u{:04x}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn event_json(ev: &TraceEvent) -> String {
+    let cat = describe_categories(ev.kind.category());
+    let text = json_escape(&ev.kind.to_string());
+    let pc = ev.kind.pc().map_or("null".into(), |p| p.to_string());
+    format!(
+        "{{\"seq\":{},\"t\":{},\"cat\":\"{cat}\",\"pc\":{pc},\"text\":\"{text}\"}}",
+        ev.seq, ev.t
+    )
+}
+
+/// JSON array of ring events (hand-rolled, no serde).
+#[must_use]
+pub fn dump_json() -> String {
+    let events = snapshot();
+    let mut out = String::from("[\n");
+    for (i, ev) in events.iter().enumerate() {
+        if i > 0 {
+            out.push_str(",\n");
+        }
+        out.push_str(&event_json(ev));
+    }
+    out.push_str("\n]\n");
+    out
+}
+
+/// One JSON object per line.
+#[must_use]
+pub fn dump_ndjson() -> String {
+    let mut out = String::new();
+    for ev in snapshot() {
+        out.push_str(&event_json(&ev));
+        out.push('\n');
+    }
+    out
+}
+
+fn maybe_append(ev: &TraceEvent) {
+    static SINK: OnceLock<Option<Mutex<std::io::BufWriter<File>>>> = OnceLock::new();
+    let sink = SINK.get_or_init(|| {
+        let flag = std::env::var("SPEC_CHUM_TRACE_APPEND")
+            .map(|v| {
+                let t = v.trim();
+                t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
+            })
+            .unwrap_or(false);
+        if !flag {
+            return None;
+        }
+        let path = std::env::var("SPEC_CHUM_TRACE_FILE").ok()?;
+        if path.is_empty() {
+            return None;
+        }
+        let f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .ok()?;
+        Some(Mutex::new(std::io::BufWriter::new(f)))
+    });
+    let Some(lock) = sink.as_ref() else {
+        return;
+    };
+    if let Ok(mut w) = lock.lock() {
+        let _ = writeln!(w, "{ev}");
+    }
 }
 
 /// Write dump to `w`.
@@ -678,6 +946,7 @@ mod tests {
             Category::parse_list("default").bits(),
             Category::DEFAULT.bits()
         );
+        assert_eq!(Category::default(), Category::NONE);
     }
 
     #[test]
