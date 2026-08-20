@@ -889,11 +889,15 @@ impl Machine {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
                         (bytes, len, reg_snap(cpu), cpu.regs.halted)
                     });
-                    let mut mio = MemIo48 {
-                        bus: bus.as_mut(),
-                        watch: None,
-                    };
-                    cpu.step(&mut mio);
+                    let hit = Cell::new(None);
+                    {
+                        let watch = mem_port_watch(debugger, &hit);
+                        let mut mio = MemIo48 {
+                            bus: bus.as_mut(),
+                            watch,
+                        };
+                        cpu.step(&mut mio);
+                    }
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
                     if let Some((bytes, len, regs, was_halt)) = pre {
@@ -908,6 +912,10 @@ impl Machine {
                             regs,
                         });
                     }
+                    if let Some(reason) = hit.get() {
+                        debugger.apply_hit(reason);
+                        broke_on_pc = true;
+                    }
                     Self::advance_tape_ear(
                         tape,
                         &mut bus.ear,
@@ -918,7 +926,7 @@ impl Machine {
                         tape_opts.speed,
                     );
                     bus.frame_t += dt;
-                    if bus.frame_t >= FRAME_TSTATES_48 {
+                    if broke_on_pc || bus.frame_t >= FRAME_TSTATES_48 {
                         break;
                     }
                 }
@@ -1004,11 +1012,15 @@ impl Machine {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
                         (bytes, len, reg_snap(cpu), cpu.regs.halted)
                     });
-                    let mut mio = MemIo128 {
-                        bus: bus.as_mut(),
-                        watch: None,
-                    };
-                    cpu.step(&mut mio);
+                    let hit = Cell::new(None);
+                    {
+                        let watch = mem_port_watch(debugger, &hit);
+                        let mut mio = MemIo128 {
+                            bus: bus.as_mut(),
+                            watch,
+                        };
+                        cpu.step(&mut mio);
+                    }
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
                     if let Some((bytes, len, regs, was_halt)) = pre {
@@ -1022,6 +1034,10 @@ impl Machine {
                             dt: dt as u16,
                             regs,
                         });
+                    }
+                    if let Some(reason) = hit.get() {
+                        debugger.apply_hit(reason);
+                        broke_on_pc = true;
                     }
                     Self::advance_tape_ear(
                         tape,
@@ -1040,7 +1056,7 @@ impl Machine {
                     {
                         ay_samples.push(bus.ay.sample_mono());
                     }
-                    if bus.frame_t >= FRAME_TSTATES_128 {
+                    if broke_on_pc || bus.frame_t >= FRAME_TSTATES_128 {
                         break;
                     }
                 }
@@ -1128,11 +1144,15 @@ impl Machine {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
                         (bytes, len, reg_snap(cpu), cpu.regs.halted)
                     });
-                    let mut mio = MemIoPlus3 {
-                        bus: bus.as_mut(),
-                        watch: None,
-                    };
-                    cpu.step(&mut mio);
+                    let hit = Cell::new(None);
+                    {
+                        let watch = mem_port_watch(debugger, &hit);
+                        let mut mio = MemIoPlus3 {
+                            bus: bus.as_mut(),
+                            watch,
+                        };
+                        cpu.step(&mut mio);
+                    }
                     let dt = (cpu.t - last_t) as u32;
                     last_t = cpu.t;
                     if let Some((bytes, len, regs, was_halt)) = pre {
@@ -1146,6 +1166,10 @@ impl Machine {
                             dt: dt as u16,
                             regs,
                         });
+                    }
+                    if let Some(reason) = hit.get() {
+                        debugger.apply_hit(reason);
+                        broke_on_pc = true;
                     }
                     Self::advance_tape_ear(
                         tape,
@@ -1164,7 +1188,7 @@ impl Machine {
                     {
                         ay_samples.push(bus.ay.sample_mono());
                     }
-                    if bus.frame_t >= FRAME_TSTATES_128 {
+                    if broke_on_pc || bus.frame_t >= FRAME_TSTATES_128 {
                         break;
                     }
                 }
@@ -2951,6 +2975,29 @@ mod tests {
                 value: 0xaa
             }
         ));
+
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.write_mem(0x8000, 0x77); // LD (HL),A
+        m.cpu_mut().regs.pc = 0x8000;
+        m.cpu_mut().regs.set_hl(0x4000);
+        m.cpu_mut().regs.a = 0x55;
+        m.debugger_mut().add_mem_watch(Watch {
+            addr: 0x4000,
+            read: false,
+            write: true,
+        });
+        m.run_frame();
+        assert_eq!(m.read_mem(0x4000), 0x55);
+        assert!(m.debugger().paused);
+        assert!(matches!(
+            m.debugger().last_hit,
+            BreakReason::Mem {
+                addr: 0x4000,
+                write: true,
+                value: 0x55
+            }
+        ));
+        assert!(m.frame_t() > 0, "mid-frame watch must keep raster time");
     }
 
     #[test]
