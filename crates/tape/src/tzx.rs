@@ -122,8 +122,7 @@ impl TzxPlayer {
                     i += 4;
                     block_starts.push(pulses.len());
                     for _ in 0..count {
-                        level = !level;
-                        pulses.push((u32::from(len), level));
+                        crate::push_pulse(&mut pulses, &mut level, u32::from(len));
                     }
                 }
                 0x13 => {
@@ -139,8 +138,7 @@ impl TzxPlayer {
                     for _ in 0..n {
                         let len = u16::from_le_bytes([data[i], data[i + 1]]);
                         i += 2;
-                        level = !level;
-                        pulses.push((u32::from(len), level));
+                        crate::push_pulse(&mut pulses, &mut level, u32::from(len));
                     }
                 }
                 0x14 => {
@@ -490,18 +488,16 @@ fn append_standard_block(
     };
     *level = true;
     for _ in 0..pilot_count {
-        pulses.push((PILOT_PULSE_T, *level));
-        *level = !*level;
+        crate::push_pulse(pulses, level, PILOT_PULSE_T);
     }
-    pulses.push((SYNC1_T, true));
-    pulses.push((SYNC2_T, false));
-    *level = false;
+    crate::push_pulse(pulses, level, SYNC1_T);
+    crate::push_pulse(pulses, level, SYNC2_T);
     for &byte in block {
         for bit in (0..8).rev() {
             let one = byte & (1 << bit) != 0;
             let len = if one { BIT1_T } else { BIT0_T };
-            pulses.push((len, true));
-            pulses.push((len, false));
+            crate::push_pulse(pulses, level, len);
+            crate::push_pulse(pulses, level, len);
         }
     }
     let pause = if pause_ms == 0 {
@@ -509,8 +505,7 @@ fn append_standard_block(
     } else {
         ms_to_t(pause_ms)
     };
-    pulses.push((pause, false));
-    *level = false;
+    crate::push_pulse(pulses, level, pause);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -529,12 +524,10 @@ fn append_turbo_block(
 ) {
     *level = true;
     for _ in 0..pilot_pulses {
-        pulses.push((u32::from(pilot), *level));
-        *level = !*level;
+        crate::push_pulse(pulses, level, u32::from(pilot));
     }
-    pulses.push((u32::from(sync1), true));
-    pulses.push((u32::from(sync2), false));
-    *level = false;
+    crate::push_pulse(pulses, level, u32::from(sync1));
+    crate::push_pulse(pulses, level, u32::from(sync2));
     append_pure_data(pulses, level, block, zero, one, used_bits, pause_ms);
 }
 
@@ -557,15 +550,14 @@ fn append_pure_data(
         for bit in (0..bits).rev() {
             let is_one = byte & (1 << bit) != 0;
             let len = if is_one { one } else { zero };
-            pulses.push((u32::from(len), true));
-            pulses.push((u32::from(len), false));
+            crate::push_pulse(pulses, level, u32::from(len));
+            crate::push_pulse(pulses, level, u32::from(len));
         }
     }
     let pause = ms_to_t(pause_ms);
     if pause > 0 {
-        pulses.push((pause, false));
+        crate::push_pulse(pulses, level, pause);
     }
-    *level = false;
 }
 
 #[cfg(test)]
@@ -617,6 +609,48 @@ mod tests {
         v.extend_from_slice(&4u16.to_le_bytes());
         let p = TzxPlayer::parse(&v).unwrap();
         assert_eq!(p.scheduled_pulses(), 4);
+    }
+
+    #[test]
+    fn standard_then_pure_tone_keeps_alternating_levels() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x10);
+        v.extend_from_slice(&0u16.to_le_bytes()); // pause ms (no trailing silence block)
+        let payload = [0x00u8, 0x41, 0x00];
+        v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        v.extend_from_slice(&payload);
+        v.push(0x12);
+        v.extend_from_slice(&500u16.to_le_bytes());
+        v.extend_from_slice(&3u16.to_le_bytes());
+        let p = TzxPlayer::parse(&v).unwrap();
+        for w in p.pulses.windows(2) {
+            assert_ne!(
+                w[0].1, w[1].1,
+                "adjacent TZX pulses must toggle across 0x10→0x12"
+            );
+        }
+    }
+
+    #[test]
+    fn standard_then_pulse_sequence_keeps_alternating_levels() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x10);
+        v.extend_from_slice(&0u16.to_le_bytes());
+        let payload = [0xffu8, 1, 2, 0];
+        v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        v.extend_from_slice(&payload);
+        v.push(0x13);
+        v.push(2);
+        v.extend_from_slice(&400u16.to_le_bytes());
+        v.extend_from_slice(&500u16.to_le_bytes());
+        let p = TzxPlayer::parse(&v).unwrap();
+        for w in p.pulses.windows(2) {
+            assert_ne!(w[0].1, w[1].1, "0x10→0x13 must keep EAR edges");
+        }
     }
 
     #[test]
