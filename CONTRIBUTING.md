@@ -32,20 +32,25 @@ Local quality gate (same as CI intent):
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
-- **Before merge:** run `./scripts/check_pr_reviews.sh` (or pass the PR number). Do not merge with unresolved **actionable** CodeRabbit (or similar bot) comments unless the user explicitly waives them; fix or reply with a wontfix reason, then resolve threads.
+- **Before merge / finish PR:** run `./scripts/check_pr_reviews.sh` (or pass the PR number). Unresolved **actionable** CodeRabbit (or similar bot) threads **block merge** unless the user explicitly waives them; fix or reply with a wontfix reason, then resolve threads. See below.
 
 ## Review check before merge
 
-CodeRabbit is **not** a required GitHub status check. Agents must still run the local gate before merge:
+Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. Unresolved actionable bot threads block merge.
+
+**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs (and when reviews/comments arrive) using the default `GITHUB_TOKEN` (`pull-requests: read`). Treat a failing check as blocking for merge. After resolving threads, re-run that job if GitHub did not re-trigger it.
+
+**Agents / local (mandatory before merge):**
 
 ```bash
 ./scripts/check_pr_reviews.sh          # current branch PR
 ./scripts/check_pr_reviews.sh 87       # explicit PR
 # Explicit waiver only when the user asked for one:
 ./scripts/check_pr_reviews.sh 87 --waive "user waived nit: comma-only"
+# Or add PR label: waive-bot-reviews
 ```
 
-The script paginates GraphQL `reviewThreads`, lists unresolved bot comments, and exits non-zero unless waived.
+The script paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
 
 ## TDD
 

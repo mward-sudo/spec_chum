@@ -1,0 +1,50 @@
+# PR status check: fail when unresolved CodeRabbit/bot review threads remain.
+# Uses default GITHUB_TOKEN (pull-requests: read) — no extra secrets.
+# Re-runs when reviews/comments arrive (CodeRabbit often posts after the first push).
+# Resolving a thread does not always emit an event — re-run this job after fixing.
+name: Bot review threads
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number (required for manual runs outside a PR)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-bot-threads:
+    name: unresolved bot threads
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve PR number
+        id: pr
+        run: |
+          set -euo pipefail
+          n="${{ github.event.pull_request.number }}"
+          if [[ -z "$n" ]]; then
+            n="${{ inputs.pr_number }}"
+          fi
+          if [[ -z "${n:-}" ]]; then
+            echo "Could not determine PR number for event ${{ github.event_name }}" >&2
+            exit 2
+          fi
+          echo "number=$n" >> "$GITHUB_OUTPUT"
+          echo "Checking PR #$n"
+
+      - name: Check unresolved bot review threads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/check_pr_reviews.sh "${{ steps.pr.outputs.number }}"
