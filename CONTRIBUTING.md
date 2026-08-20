@@ -32,13 +32,25 @@ Local quality gate (same as CI intent):
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
-- **Before merge / finish PR:** run `./scripts/check_pr_reviews.sh` (or pass the PR number). **Hold until CodeRabbit is clean** on HEAD (not pending / rate-limited) **and** unresolved **actionable** bot threads are cleared, unless the user explicitly waives. See below.
+- **Before merge / finish PR:** mark ready if still draft, request one CodeRabbit pass when merge-candidate, then run `./scripts/check_pr_reviews.sh`. **Hold until CodeRabbit is clean** on HEAD (not pending / missing / rate-limited) **and** unresolved **actionable** bot threads are cleared, unless the user explicitly waives. See below.
+
+## CodeRabbit — review when ready (usage)
+
+When [`.coderabbit.yaml`](.coderabbit.yaml) is on the default branch (or the PR branch), automatic reviews are **off** so iteration pushes do not burn allowance. Workflow:
+
+1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
+2. When merge-candidate: mark **Ready for review**, then request **one** pass — `@coderabbitai full review` or label `coderabbit-review` (use `@coderabbitai review` only for a later incremental).
+3. Disposition actionable threads, then run the merge gate below.
+
+If the YAML and CodeRabbit GitHub app UI disagree, keep **Automatic Reviews** off in the app so committed config wins. Undraft alone may not trigger a review — always comment or label.
 
 ## Review check before merge
 
-Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. Hold until a completed review on HEAD **and** unresolved actionable bot threads are dispositioned.
+Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. For **ready** PRs, hold until a completed review on HEAD **and** unresolved actionable bot threads are dispositioned.
 
-**Hold policy:** Do not merge while CodeRabbit’s commit status on the PR head is pending, in progress/queued, **rate-limited**, failed, or missing. CodeRabbit may report `Review rate limited` with a green/success state — that is still a hold (no full re-review). Prefer a follow-up issue titled like `Revisit CodeRabbit on PR #N (rate-limited)` rather than merging.
+**Hold policy (ready / non-draft):** Do not merge while CodeRabbit’s commit status on the PR head is pending, in progress/queued, **rate-limited**, failed, or missing (including when on-demand review was never requested). CodeRabbit may report `Review rate limited` with a green/success state — that is still a hold. Prefer a follow-up issue titled like `Revisit CodeRabbit on PR #N (rate-limited)` rather than merging.
+
+**Drafts:** `./scripts/check_pr_reviews.sh` skips CodeRabbit HEAD completeness but still fails on unresolved bot threads. Do not merge drafts.
 
 **CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs (and when reviews/comments arrive) using the default `GITHUB_TOKEN` (`pull-requests: read`). Treat a failing check as blocking for merge. After resolving threads or when CodeRabbit finishes, re-run that job if GitHub did not re-trigger it.
 
@@ -52,7 +64,7 @@ Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignor
 # Or add PR label: waive-bot-reviews
 ```
 
-The script (1) checks the CodeRabbit commit status on HEAD and **hard-fails** on pending / rate-limited / missing / error, then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
+The script (1) on ready PRs checks CodeRabbit on HEAD and **hard-fails** on pending / rate-limited / missing / error (drafts skip this step), then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
 
 ## TDD
 

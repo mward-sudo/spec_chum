@@ -1,6 +1,7 @@
-# PR status check: fail when CodeRabbit has not completed a review on HEAD
-# (pending / in progress / rate-limited / missing / error) OR when unresolved
-# CodeRabbit/bot review threads remain.
+# PR status check: for ready PRs, fail when CodeRabbit has not completed a
+# review on HEAD (pending / in progress / rate-limited / missing / error);
+# drafts skip CR completeness. Always fail when unresolved CodeRabbit/bot
+# review threads remain.
 # Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
 #
 # Checkout uses the PR base (or default branch) so the checker script comes from a
@@ -115,4 +116,4 @@ jobs:
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=Fails when CodeRabbit is pending/rate-limited on HEAD or unresolved bot threads remain. See the Bot review threads workflow run for details.'
+            -f 'output[summary]=Ready PRs: fails when CodeRabbit is pending/missing/rate-limited on HEAD or unresolved bot threads remain. Drafts skip CR completeness but still fail on unresolved threads. See the workflow run for details.'
