@@ -196,7 +196,9 @@ fn print_reason(r: BreakReason, json: bool) {
 }
 
 fn exit_cli(code: i32) -> ! {
-    trace::flush_append();
+    if let Err(e) = trace::flush_append() {
+        eprintln!("trace append flush failed: {e}");
+    }
     std::process::exit(code);
 }
 
@@ -313,9 +315,9 @@ fn main() -> Result<()> {
                 }
             }
             if cli.json {
-                println!("{}", m.inspect().to_json());
                 println!(
-                    "{{\"load_ok\":{},\"attr_mark\":{}}}",
+                    "{{\"inspect\":{},\"load_ok\":{},\"attr_mark\":{}}}",
+                    m.inspect().to_json(),
                     loaded,
                     if code {
                         m.read_mem(0x5800) == 0xd7
@@ -354,7 +356,7 @@ fn main() -> Result<()> {
             }
         }
     }
-    trace::flush_append();
+    trace::flush_append().context("flush SPEC_CHUM_TRACE_APPEND")?;
     Ok(())
 }
 

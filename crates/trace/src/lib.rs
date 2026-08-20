@@ -822,11 +822,14 @@ pub fn dump_ndjson() -> String {
 struct AppendSink {
     writer: Option<std::io::BufWriter<File>>,
     decided: bool,
+    /// Last I/O error from append write/flush (cleared on successful flush).
+    last_error: Option<String>,
 }
 
 static APPEND: Mutex<AppendSink> = Mutex::new(AppendSink {
     writer: None,
     decided: false,
+    last_error: None,
 });
 
 fn maybe_append(ev: &TraceEvent) {
@@ -842,32 +845,45 @@ fn maybe_append(ev: &TraceEvent) {
             })
             .unwrap_or(false);
         if flag {
-            if let Ok(path) = std::env::var("SPEC_CHUM_TRACE_FILE") {
-                if !path.is_empty() {
-                    if let Ok(f) = std::fs::OpenOptions::new()
+            match std::env::var("SPEC_CHUM_TRACE_FILE") {
+                Ok(path) if !path.is_empty() => {
+                    match std::fs::OpenOptions::new()
                         .create(true)
                         .append(true)
                         .open(&path)
                     {
-                        sink.writer = Some(std::io::BufWriter::new(f));
+                        Ok(f) => sink.writer = Some(std::io::BufWriter::new(f)),
+                        Err(e) => {
+                            sink.last_error =
+                                Some(format!("open SPEC_CHUM_TRACE_FILE ({path}): {e}"));
+                        }
                     }
                 }
+                Ok(_) | Err(_) => {}
             }
         }
     }
     if let Some(w) = sink.writer.as_mut() {
-        let _ = writeln!(w, "{ev}");
-        let _ = w.flush();
+        if let Err(e) = writeln!(w, "{ev}").and_then(|()| w.flush()) {
+            sink.last_error = Some(format!("append write: {e}"));
+        }
     }
 }
 
 /// Flush append-mode output so short CLI runs are not left empty.
-pub fn flush_append() {
-    if let Ok(mut sink) = APPEND.lock() {
-        if let Some(w) = sink.writer.as_mut() {
-            let _ = w.flush();
-        }
+///
+/// Returns `Err` if an earlier append write failed or the final flush fails.
+pub fn flush_append() -> io::Result<()> {
+    let Ok(mut sink) = APPEND.lock() else {
+        return Err(io::Error::other("trace append lock poisoned"));
+    };
+    if let Some(err) = sink.last_error.take() {
+        return Err(io::Error::other(err));
     }
+    if let Some(w) = sink.writer.as_mut() {
+        w.flush()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -876,6 +892,7 @@ pub fn reset_append_sink_for_tests() {
         *sink = AppendSink {
             writer: None,
             decided: false,
+            last_error: None,
         };
     }
 }
@@ -1032,7 +1049,7 @@ mod tests {
         clear();
         enable(Category::TAPE);
         emit(EventKind::TapeRewind);
-        flush_append();
+        flush_append().expect("flush append");
         let body = std::fs::read_to_string(&path).unwrap_or_default();
         reset_append_sink_for_tests();
         let _ = std::fs::remove_file(&path);
