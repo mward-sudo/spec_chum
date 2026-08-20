@@ -85,8 +85,13 @@ cargo run -p debug_cli -- --tap tests/fixtures/tape/attr_mark.tap type-load --co
 # 128K / +3: 48 BASIC then LOAD "" CODE (not Tape Loader)
 cargo run -p debug_cli -- --model 128k --tap tests/fixtures/tape/attr_mark.tap type-load --code
 # EAR bitstream (ROM LD-BYTES; pause until typed). Speed shortens leader/pause only.
+# Models: 48k / 128k / plus3. Instant flash is default; `--ear-load` disables it.
 cargo run -p debug_cli -- --model 48k --tap tests/fixtures/tape/attr_mark.tap \
   --ear-load --speed 10 type-load --code --max 2000
+# Custom flag after CODE (Boggit-style): LOAD "" CODE then USR — see custom_loader.tap
+cargo run -p debug_cli -- --model 128k --tap tests/fixtures/tape/custom_loader.tap \
+  type-load --code
+
 # Same process: --trace plus append (file is flushed; dump-trace cannot see another PID)
 SPEC_CHUM_TRACE_FILE=/tmp/sc_append.txt SPEC_CHUM_TRACE_APPEND=1 \
   cargo run -p debug_cli -- --trace tape --tap tests/fixtures/tape/attr_mark.tap type-load --code

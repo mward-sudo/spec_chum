@@ -10,9 +10,12 @@ use std::path::Path;
 
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TapImage {
     pub blocks: Vec<Vec<u8>>,
+    /// Pause after each block in T-states. Empty or `0` → [`PAUSE_T`] (TAP default).
+    /// TZX `0x10` conversions store the real inter-block gap here.
+    pub pause_t: Vec<u32>,
 }
 
 #[derive(Debug, Error)]
@@ -43,8 +46,36 @@ impl TapImage {
             blocks.push(data[..len].to_vec());
             data = &data[len..];
         }
-        Ok(Self { blocks })
+        Ok(Self {
+            blocks,
+            pause_t: Vec::new(),
+        })
     }
+}
+
+/// `INC D / EX AF,AF' / DEC D / DI` at the ROM (and Boggit RAM-clone) LD-BYTES entry.
+pub const LD_BYTES_PROLOGUE: [u8; 4] = [0x14, 0x08, 0x15, 0xF3];
+/// Bytes from LD-BYTES entry (`0x0556`) to the first `CALL LD-EDGE-1` (`0x056C`).
+pub const LD_BYTES_EDGE_CALL_OFF: u16 = 0x16;
+
+/// True when `pc` is ROM `LD-BYTES` edge-detect or a RAM copy of the same routine.
+///
+/// The 128K editor ROM maps different bytes at `0x056C`; we require the `0x0556`
+/// prologue so flash-load does not fire in ROM 0. Relocated loaders (The Boggit
+/// at `0x8097`) match the prologue `LD_BYTES_EDGE_CALL_OFF` bytes before `pc`.
+#[must_use]
+pub fn is_ld_bytes_trap_pc(pc: u16, mut read: impl FnMut(u16) -> u8) -> bool {
+    if pc == LD_BYTES_TRAP_PC {
+        return (0..4).all(|i| read(0x0556 + i) == LD_BYTES_PROLOGUE[i as usize]);
+    }
+    if pc < 0x4000 || read(pc) != 0xCD {
+        return false;
+    }
+    let start = pc.wrapping_sub(LD_BYTES_EDGE_CALL_OFF);
+    if start < 0x4000 {
+        return false;
+    }
+    (0..4).all(|i| read(start.wrapping_add(i)) == LD_BYTES_PROLOGUE[i as usize])
 }
 
 /// Spectrum ROM LD-BYTES entry used for flash-load traps.
@@ -103,6 +134,8 @@ pub struct TapPlayer {
     level: bool,
     /// Turbo: fewer leader pulses and a shorter pause; bit/sync widths stay ROM-accurate.
     speed: u32,
+    /// Optional per-block pause override (TZX 0x10). Empty → [`pause_t_for_speed`].
+    block_pause_t: Vec<u32>,
 }
 
 impl TapPlayer {
@@ -117,9 +150,17 @@ impl TapPlayer {
             remain: 0,
             level: false,
             speed: 1,
+            block_pause_t: Vec::new(),
         };
+        p.block_pause_t = p.image.pause_t.clone();
         p.queue_block(0);
         p
+    }
+
+    /// TZX-derived pauses (T-states) aligned with [`TapImage::blocks`].
+    pub fn set_block_pauses(&mut self, pause_t: Vec<u32>) {
+        self.block_pause_t = pause_t;
+        self.queue_block(self.block);
     }
 
     pub fn set_playing(&mut self, playing: bool) {
@@ -211,7 +252,14 @@ impl TapPlayer {
                 push_pulse(&mut self.pulses, &mut level, len);
             }
         }
-        push_pulse(&mut self.pulses, &mut level, pause_t_for_speed(self.speed));
+        let pause = self
+            .block_pause_t
+            .get(idx)
+            .copied()
+            .filter(|&t| t > 0)
+            .map(|t| (t / self.speed.max(1)).max(3_500))
+            .unwrap_or_else(|| pause_t_for_speed(self.speed));
+        push_pulse(&mut self.pulses, &mut level, pause);
         if let Some(&(r, l)) = self.pulses.first() {
             self.remain = r;
             self.level = l;
@@ -281,7 +329,10 @@ pub enum TapeTrapResult {
     Failure,
 }
 
-/// Interpret CPU state at [`LD_BYTES_TRAP_PC`] and apply the next TAP block if present.
+/// Interpret CPU state at an LD-BYTES edge-detect PC and apply the next TAP block if present.
+///
+/// Callers must first validate `pc` with [`is_ld_bytes_trap_pc`] (ROM [`LD_BYTES_TRAP_PC`] or a
+/// relocated RAM clone such as The Boggit). This function does not re-check the prologue.
 ///
 /// The trap is ignored while the deck is paused (`playing == false`) so Tape → Play is required
 /// before flash-load or EAR bitstream progress.
@@ -297,16 +348,13 @@ pub enum TapeTrapResult {
 /// When the `tape` trace category is enabled, skip/fail reasons are recorded for debugging.
 #[must_use]
 pub fn evaluate_ld_bytes_trap(
-    pc: u16,
+    _pc: u16,
     flag_expected: u8,
     load: bool,
     addr: u16,
     len: u16,
     player: &mut TapPlayer,
 ) -> TapeTrapResult {
-    if pc != LD_BYTES_TRAP_PC {
-        return TapeTrapResult::Ignored;
-    }
     if !player.playing {
         trace::emit(trace::EventKind::FlashLoadSkip {
             reason: trace::FlashSkipReason::Paused,
@@ -425,6 +473,7 @@ mod tests {
     fn header_pilot_pulse_count_matches_rom() {
         let img = TapImage {
             blocks: vec![vec![0x00, 0x11, 0x22]],
+            ..Default::default()
         };
         let p = TapPlayer::new(img);
         // pilot + sync(2) + 3 bytes * 8 bits * 2 edges + pause
@@ -436,6 +485,7 @@ mod tests {
     fn data_pilot_pulse_count_matches_rom() {
         let img = TapImage {
             blocks: vec![vec![0xff, 0x00]],
+            ..Default::default()
         };
         let p = TapPlayer::new(img);
         let expected = PILOT_DATA_PULSES as usize + 2 + (2 * 8 * 2) + 1;
@@ -446,6 +496,7 @@ mod tests {
     fn ear_toggles_during_pilot() {
         let img = TapImage {
             blocks: vec![vec![0x00, 0x00]],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         let first = p.ear_level();
@@ -462,6 +513,7 @@ mod tests {
     fn tap_pulses_always_alternate_including_sync() {
         let img = TapImage {
             blocks: vec![vec![0x00, 0x11, 0x22]],
+            ..Default::default()
         };
         let p = TapPlayer::new(img);
         let pulses = p.pulses.clone();
@@ -482,6 +534,7 @@ mod tests {
     fn turbo_speed_shortens_leader_not_bit_widths() {
         let img = TapImage {
             blocks: vec![vec![0x00, 0x00]],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         let slow_n = p.scheduled_pulses();
@@ -502,6 +555,7 @@ mod tests {
     fn advances_to_next_block_after_pause() {
         let img = TapImage {
             blocks: vec![vec![0x00], vec![0xff, 0x00]],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         assert_eq!(p.block, 0);
@@ -550,6 +604,7 @@ mod tests {
     fn ld_bytes_trap_consumes_matching_block() {
         let img = TapImage {
             blocks: vec![vec![0xff, 0x42, 0xff ^ 0x42]],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         let r = evaluate_ld_bytes_trap(LD_BYTES_TRAP_PC, 0xff, true, 0x8000, 1, &mut p);
@@ -574,6 +629,7 @@ mod tests {
         };
         let img = TapImage {
             blocks: vec![data, header.clone()],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         // Expecting header flag 0 — first block is data, should be skipped.
@@ -592,6 +648,7 @@ mod tests {
     fn ld_bytes_trap_restores_position_when_flag_not_found() {
         let img = TapImage {
             blocks: vec![vec![0xff, 0x42, 0xff ^ 0x42]],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         let r = evaluate_ld_bytes_trap(LD_BYTES_TRAP_PC, 0x00, true, 0x5c00, 1, &mut p);
@@ -603,6 +660,7 @@ mod tests {
     fn ld_bytes_trap_ignored_while_paused() {
         let img = TapImage {
             blocks: vec![vec![0xff, 0x42, 0xff ^ 0x42]],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         p.set_playing(false);
@@ -624,6 +682,7 @@ mod tests {
     fn advance_does_not_consume_while_paused() {
         let img = TapImage {
             blocks: vec![vec![0x00, 0x00]],
+            ..Default::default()
         };
         let mut p = TapPlayer::new(img);
         p.set_playing(false);
@@ -633,5 +692,74 @@ mod tests {
         p.set_playing(true);
         assert!(p.advance(PILOT_PULSE_T / 2), "still in first pilot pulse");
         assert!(!p.advance(PILOT_PULSE_T), "cross into second pilot pulse");
+    }
+
+    #[test]
+    fn ld_bytes_trap_pc_requires_rom_prologue() {
+        let mut rom = [0u8; 0x600];
+        rom[0x0556] = 0x14;
+        rom[0x0557] = 0x08;
+        rom[0x0558] = 0x15;
+        rom[0x0559] = 0xF3;
+        assert!(is_ld_bytes_trap_pc(LD_BYTES_TRAP_PC, |a| rom
+            .get(a as usize)
+            .copied()
+            .unwrap_or(0)));
+        rom[0x0556] = 0x20; // 128K editor ROM 0
+        assert!(!is_ld_bytes_trap_pc(LD_BYTES_TRAP_PC, |a| rom
+            .get(a as usize)
+            .copied()
+            .unwrap_or(0)));
+    }
+
+    #[test]
+    fn ld_bytes_trap_pc_matches_relocated_boggit_style_loader() {
+        let mut mem = [0u8; 0x200];
+        // Fake RAM clone at 0x8097 mapped into this slice at 0.
+        mem[0] = 0x14;
+        mem[1] = 0x08;
+        mem[2] = 0x15;
+        mem[3] = 0xF3;
+        let call_pc = LD_BYTES_EDGE_CALL_OFF;
+        mem[call_pc as usize] = 0xCD;
+        let read = |a: u16| {
+            if a >= 0x8097 {
+                mem.get((a - 0x8097) as usize).copied().unwrap_or(0)
+            } else {
+                0
+            }
+        };
+        let trap = 0x8097 + LD_BYTES_EDGE_CALL_OFF;
+        assert!(is_ld_bytes_trap_pc(trap, read));
+        assert!(!is_ld_bytes_trap_pc(0x8097, read));
+        // Prologue match but not a CALL at pc → no trap.
+        let read_no_call = |a: u16| {
+            if a == trap {
+                0x00
+            } else if a >= 0x8097 {
+                mem.get((a - 0x8097) as usize).copied().unwrap_or(0)
+            } else {
+                0
+            }
+        };
+        assert!(!is_ld_bytes_trap_pc(trap, read_no_call));
+        // Candidate whose prologue start falls below 0x4000 → no trap.
+        assert!(!is_ld_bytes_trap_pc(
+            0x4000 + LD_BYTES_EDGE_CALL_OFF - 1,
+            |_| 0xCD
+        ));
+    }
+
+    #[test]
+    fn evaluate_ld_bytes_trap_accepts_relocated_pc() {
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x42, 0x42 ^ 0xff]],
+            ..Default::default()
+        };
+        let mut p = TapPlayer::new(img);
+        p.set_playing(true);
+        let r = evaluate_ld_bytes_trap(0x80AD, 0xff, true, 0x9000, 1, &mut p);
+        assert!(matches!(r, TapeTrapResult::Success { .. }));
+        assert_eq!(p.block, 1);
     }
 }

@@ -388,6 +388,7 @@ impl TzxPlayer {
             return Err(TzxError::Format("missing TZX signature".into()));
         }
         let mut blocks = Vec::new();
+        let mut pause_t = Vec::new();
         let mut i = 10usize;
         while i < data.len() {
             let id = data[i];
@@ -397,12 +398,14 @@ impl TzxPlayer {
                     if i + 4 > data.len() {
                         break;
                     }
+                    let pause_ms = u16::from_le_bytes([data[i], data[i + 1]]);
                     let len = u16::from_le_bytes([data[i + 2], data[i + 3]]) as usize;
                     i += 4;
                     if i + len > data.len() {
                         break;
                     }
                     blocks.push(data[i..i + len].to_vec());
+                    pause_t.push(ms_to_t(pause_ms).max(1));
                     i += len;
                 }
                 0x11 => {
@@ -465,7 +468,12 @@ impl TzxPlayer {
                 _ => break,
             }
         }
-        Ok(TapImage { blocks })
+        Ok(TapImage { blocks, pause_t })
+    }
+
+    /// Standard-speed TZX as a TAP deck, keeping per-block pause lengths.
+    pub fn to_tap_player(data: &[u8]) -> Result<crate::TapPlayer, TzxError> {
+        Ok(crate::TapPlayer::new(Self::to_tap_image(data)?))
     }
 }
 
@@ -597,6 +605,8 @@ mod tests {
         let tap = TzxPlayer::to_tap_image(&data).unwrap();
         assert_eq!(tap.blocks.len(), 1);
         assert_eq!(tap.blocks[0], payload);
+        assert_eq!(tap.pause_t.len(), 1);
+        assert_eq!(tap.pause_t[0], 1000 * 3500);
     }
 
     #[test]

@@ -230,17 +230,17 @@ impl HostSession {
             "tzx" => {
                 let data = std::fs::read(path)?;
                 if tape::TzxPlayer::is_standard_speed_only(&data) {
-                    match tape::TzxPlayer::to_tap_image(&data) {
-                        Ok(tap) if !tap.blocks.is_empty() => {
-                            let n = tap.blocks.len();
-                            m.insert_tape(tape::TapPlayer::new(tap));
+                    match tape::TzxPlayer::to_tap_player(&data) {
+                        Ok(player) if player.image.blocks.is_empty() => {}
+                        Ok(player) => {
+                            let n = player.image.blocks.len();
+                            m.insert_tape(player);
                             self.status = format!(
                                 "Inserted TZX {} as TAP ({n} blocks, paused)",
                                 path.display()
                             );
                             return Ok(());
                         }
-                        Ok(_) => {}
                         Err(e) => return Err(HostError::Message(e.to_string())),
                     }
                 }

@@ -211,19 +211,19 @@ impl EmulatorSession {
             self.status = "Load a machine ROM before inserting tape".into();
             return;
         };
-        // Standard-speed TZX → TAP deck so ROM LD-BYTES flash-load works (e.g. The Boggit).
+        // Standard-speed TZX → TAP deck so ROM/RAM LD-BYTES flash-load works (e.g. The Boggit).
         if tape::TzxPlayer::is_standard_speed_only(&data) {
-            match tape::TzxPlayer::to_tap_image(&data) {
-                Ok(tap) if !tap.blocks.is_empty() => {
-                    let n = tap.blocks.len();
-                    m.insert_tape(tape::TapPlayer::new(tap));
+            match tape::TzxPlayer::to_tap_player(&data) {
+                Ok(player) if player.image.blocks.is_empty() => {}
+                Ok(player) => {
+                    let n = player.image.blocks.len();
+                    m.insert_tape(player);
                     self.status = format!(
-                        "Inserted TZX {} as TAP ({n} blocks, paused). 48K: Tape→Type LOAD \"\" then Play. 128K: menu Tape Loader + Play.",
+                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" (PROGRAM) or LOAD \"\" CODE, then Play. 128K/+3: Tape Loader or 48 BASIC, then Play. Instant flash-load skips ROM gaps; custom loaders still use EAR.",
                         path.display()
                     );
                     return;
                 }
-                Ok(_) => {}
                 Err(e) => {
                     self.status = format!("TZX error: {e}");
                     return;
@@ -1103,6 +1103,11 @@ mod tests {
         }
         let tap = EmulatorSession::workspace_root().join("tests/fixtures/tape/minimal_code.tap");
         session.load_tap(&tap);
+        if let Some(m) = session.machine.as_mut() {
+            let mut opts = m.tape_load_options();
+            opts.flash_load = false;
+            m.set_tape_load_options(opts);
+        }
         assert!(!session.machine.as_ref().unwrap().tape_playing());
         for _ in 0..3 {
             session.tick_frame();
