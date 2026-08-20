@@ -283,6 +283,25 @@ impl TzxPlayer {
         self.pulse_i
     }
 
+    /// Pulse index within the active logical block (for UI progress).
+    #[must_use]
+    pub fn active_pulse_index(&self) -> usize {
+        let start = self.block_starts.get(self.block).copied().unwrap_or(0);
+        self.pulse_i.saturating_sub(start)
+    }
+
+    /// Pulse count for the active logical block (for UI progress).
+    #[must_use]
+    pub fn active_pulse_count(&self) -> usize {
+        let start = self.block_starts.get(self.block).copied().unwrap_or(0);
+        let end = self
+            .block_starts
+            .get(self.block + 1)
+            .copied()
+            .unwrap_or(self.pulses.len());
+        end.saturating_sub(start)
+    }
+
     #[must_use]
     pub fn block_count(&self) -> usize {
         self.block_starts.len().max(1)
@@ -688,5 +707,29 @@ mod tests {
         let _ = p.advance(1_000_000);
         assert_eq!(p.scheduled_pulses(), before);
         assert_eq!(p.block, 0);
+    }
+
+    #[test]
+    fn active_pulse_counters_are_block_relative() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x12);
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&4u16.to_le_bytes());
+        v.push(0x12);
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&6u16.to_le_bytes());
+        let mut p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(p.block_count(), 2);
+        assert_eq!(p.active_pulse_index(), 0);
+        assert_eq!(p.active_pulse_count(), 4);
+        assert_eq!(p.scheduled_pulses(), 10);
+        while p.block == 0 {
+            let _ = p.advance(10_000);
+        }
+        assert_eq!(p.block, 1);
+        assert_eq!(p.active_pulse_count(), 6);
+        assert!(p.active_pulse_index() < p.active_pulse_count());
     }
 }

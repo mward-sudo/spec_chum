@@ -98,7 +98,8 @@ impl TapeDeck {
     pub fn pulse_index(&self) -> usize {
         match self {
             Self::Tap(t) => t.pulse_index(),
-            Self::Tzx(t) => t.pulse_index(),
+            // TZX: progress is within the active block, not the whole schedule.
+            Self::Tzx(t) => t.active_pulse_index(),
         }
     }
 
@@ -106,7 +107,7 @@ impl TapeDeck {
     pub fn pulse_count(&self) -> usize {
         match self {
             Self::Tap(t) => t.scheduled_pulses(),
-            Self::Tzx(t) => t.scheduled_pulses(),
+            Self::Tzx(t) => t.active_pulse_count(),
         }
     }
 
@@ -2001,9 +2002,50 @@ impl Machine {
 
     pub fn set_ear(&mut self, level: bool) {
         match self {
-            Self::Spec48 { bus, .. } => bus.ear = level,
-            Self::Spec128 { bus, .. } => bus.ear = level,
-            Self::SpecPlus3 { bus, .. } => bus.ear = level,
+            Self::Spec48 { bus, .. } => {
+                Self::set_ear_mixed(
+                    &mut bus.ear,
+                    bus.beeper,
+                    bus.frame_t,
+                    &mut bus.beeper_edges,
+                    level,
+                );
+            }
+            Self::Spec128 { bus, .. } => {
+                Self::set_ear_mixed(
+                    &mut bus.ear,
+                    bus.beeper,
+                    bus.frame_t,
+                    &mut bus.beeper_edges,
+                    level,
+                );
+            }
+            Self::SpecPlus3 { bus, .. } => {
+                Self::set_ear_mixed(
+                    &mut bus.ear,
+                    bus.beeper,
+                    bus.frame_t,
+                    &mut bus.beeper_edges,
+                    level,
+                );
+            }
+        }
+    }
+
+    fn set_ear_mixed(
+        ear: &mut bool,
+        beeper: bool,
+        frame_t: u32,
+        edges: &mut Vec<(u32, bool)>,
+        level: bool,
+    ) {
+        if *ear == level {
+            return;
+        }
+        *ear = level;
+        let mixed = level || beeper;
+        if edges.last().map(|&(_, l)| l) != Some(mixed) {
+            edges.push((frame_t, mixed));
         }
     }
 

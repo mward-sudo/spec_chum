@@ -763,7 +763,11 @@ impl SpecChumApp {
                         );
                         ui.label(format!(
                             "tape {}/{}",
-                            p.block_index.saturating_add(1).min(p.block_count.max(1)),
+                            if p.block_count == 0 {
+                                0
+                            } else {
+                                p.block_index.saturating_add(1).min(p.block_count)
+                            },
                             p.block_count
                         ));
                     }
