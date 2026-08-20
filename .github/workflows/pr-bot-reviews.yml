@@ -1,10 +1,15 @@
 # PR status check: fail when unresolved CodeRabbit/bot review threads remain.
-# Uses default GITHUB_TOKEN (pull-requests: read) — no extra secrets.
-# Re-runs when reviews/comments arrive (CodeRabbit often posts after the first push).
-# Resolving a thread does not always emit an event — re-run this job after fixing.
+# Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
 #
 # Checkout uses the PR base (or default branch) so the checker script comes from a
 # trusted ref before GH_TOKEN is exposed — not the untrusted merge/head ref.
+#
+# Note: the workflow *definition* still comes from the merge commit on `pull_request`
+# events. Switching to `pull_request_target` is deferred until this file lives on
+# the default branch (otherwise the gate cannot run on the introducing PR).
+#
+# Re-runs when reviews/comments arrive (CodeRabbit often posts after the first push).
+# Resolving a thread does not always emit an event — re-run this job after fixing.
 name: Bot review threads
 
 on:
@@ -24,6 +29,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  checks: write
 
 jobs:
   check-bot-threads:
@@ -57,8 +63,54 @@ jobs:
           printf 'number=%s\n' "$n" >> "$GITHUB_OUTPUT"
           echo "Checking PR #$n"
 
+      - name: Resolve PR head SHA
+        id: head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          sha="${EVENT_HEAD:-}"
+          if [[ -z "$sha" ]]; then
+            sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
+          fi
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid head SHA: $sha" >&2
+            exit 2
+          fi
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
       - name: Check unresolved bot review threads
+        id: gate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: ./scripts/check_pr_reviews.sh "$PR_NUMBER"
+
+      # Required checks key off the PR head; review_comment runs may otherwise
+      # attach only to a merge-ref GITHUB_SHA and leave a stale head check green.
+      - name: Publish check on PR head
+        if: always() && steps.head.outputs.sha != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.head.outputs.sha }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+        run: |
+          set -euo pipefail
+          conclusion=failure
+          title='Unresolved bot review threads'
+          if [[ "${GATE_OUTCOME:-failure}" == "success" ]]; then
+            conclusion=success
+            title='No unresolved bot review threads'
+          elif [[ "${GATE_OUTCOME:-}" == "skipped" ]]; then
+            conclusion=neutral
+            title='Bot review gate skipped'
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='unresolved bot threads' \
+            -f head_sha="$HEAD_SHA" \
+            -f status=completed \
+            -f conclusion="$conclusion" \
+            -f 'output[title]='"$title" \
+            -f 'output[summary]=See the Bot review threads workflow run for details.'
