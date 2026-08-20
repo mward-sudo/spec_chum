@@ -11,7 +11,7 @@ verified against the SHA-256 digests below before the cache accepts them.
 
 Do not add commercial game TAPs.
 
-| Cached file | Program | License | Source | SHA-256 |
+| Cached file | Program | Licence | Source | SHA-256 |
 | --- | --- | --- | --- | --- |
 | `minfo.tap` | Minfo (frame / INT / first contended / line T) | GPL (author notice on tape) | [Jan Bobrowski](https://torinak.com/~jb/zx/minfo.tap) (2025-12-13) | `c1ff004f9a5cb66d99afadff618c59e255e19ad33bd87908e63977c864d4979d` |
 | `ulatest3.tap` | ULA test 3 (floating bus + contention grid) | GPL | [Jan Bobrowski](https://torinak.com/~jb/zx/ulatest3.tap) | `9445d3bd1661c2d5a62e2b3762ebd1ab00af9b319435ae7397bf6eb51462c6c9` |
