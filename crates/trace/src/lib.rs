@@ -864,7 +864,7 @@ fn maybe_append(ev: &TraceEvent) {
         }
     }
     if let Some(w) = sink.writer.as_mut() {
-        if let Err(e) = writeln!(w, "{ev}").and_then(|()| w.flush()) {
+        if let Err(e) = writeln!(w, "{ev}") {
             sink.last_error = Some(format!("append write: {e}"));
         }
     }
