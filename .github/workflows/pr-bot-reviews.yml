@@ -1,4 +1,6 @@
-# PR status check: fail when unresolved CodeRabbit/bot review threads remain.
+# PR status check: fail when CodeRabbit has not completed a review on HEAD
+# (pending / in progress / rate-limited / missing / error) OR when unresolved
+# CodeRabbit/bot review threads remain.
 # Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
 #
 # Checkout uses the PR base (or default branch) so the checker script comes from a
@@ -81,7 +83,7 @@ jobs:
           fi
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
-      - name: Check unresolved bot review threads
+      - name: Check CodeRabbit HEAD status + unresolved bot threads
         id: gate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,10 +101,10 @@ jobs:
         run: |
           set -euo pipefail
           conclusion=failure
-          title='Unresolved bot review threads'
+          title='CodeRabbit / bot review gate failed'
           if [[ "${GATE_OUTCOME:-failure}" == "success" ]]; then
             conclusion=success
-            title='No unresolved bot review threads'
+            title='CodeRabbit clean + no unresolved bot threads'
           elif [[ "${GATE_OUTCOME:-}" == "skipped" ]]; then
             conclusion=neutral
             title='Bot review gate skipped'
@@ -113,4 +115,4 @@ jobs:
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=See the Bot review threads workflow run for details.'
+            -f 'output[summary]=Fails when CodeRabbit is pending/rate-limited on HEAD or unresolved bot threads remain. See the Bot review threads workflow run for details.'

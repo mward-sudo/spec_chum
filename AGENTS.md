@@ -56,13 +56,19 @@ Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern)
 
 Before implementing: `gh issue list` / `gh issue view N` for related work. Prefer extending existing issues over duplicates. Link PRs with `Closes #N` / `Refs #N`. Do not close until acceptance criteria are truly met. When work discovers gaps, update or reopen the issue rather than silently diverging. Cursor rule: `.cursor/rules/github-issues.mdc`.
 
-### Before merge — bot review threads (hard gate)
+### Before merge — CodeRabbit clean + bot review threads (hard gate)
 
-Any task to **finish, land, or merge a PR** must include this gate. Do **not** merge while CodeRabbit (or similar bots) have unresolved **actionable** review comments, unless the user **explicitly** waives them.
+Any task to **finish, land, or merge a PR** must include this gate. Treat the PR as **not merge-ready** while **either**:
 
-1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>`.
-2. Fix or reply wontfix, then resolve each thread; re-run the script (and the **Bot review threads** CI check if red).
-3. Waiver only with user instruction: `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews` — document on the PR.
+- CodeRabbit on the latest HEAD is **pending / in progress / rate-limited** (or missing / failed) — a green `Review rate limited` status is **not** a completed review; open a revisit issue and hold; or
+- CodeRabbit (or similar bots) have unresolved **actionable** review threads,
+
+unless the user **explicitly** waives.
+
+1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — fails on rate-limited/pending CodeRabbit **and** on unresolved bot threads.
+2. If rate-limited: hold; wait for a completed CR pass on HEAD; do not merge.
+3. Fix or reply wontfix, then resolve each thread; re-run the script (and the **Bot review threads** CI check if red).
+4. Waiver only with user instruction: `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews` — document on the PR.
 
 CI: `.github/workflows/pr-bot-reviews.yml` (default `GITHUB_TOKEN`). Local/script remains mandatory for agents. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83)).
 

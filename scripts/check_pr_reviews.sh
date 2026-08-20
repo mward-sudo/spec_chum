@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Fail if unresolved bot review threads remain (CodeRabbit, etc.).
+# Fail if CodeRabbit has not completed a review on HEAD, or unresolved bot
+# review threads remain (CodeRabbit, etc.).
 #
 # Agents MUST run this before merging (and again after addressing feedback).
 # CI runs the same gate as a PR check (see .github/workflows/pr-bot-reviews.yml).
 # Lesson: https://github.com/mward-sudo/spec_chum/pull/83
+#
+# Hold until clean: a green "Review rate limited" commit status is NOT a pass —
+# the script gate can otherwise look clean while CodeRabbit never re-reviewed HEAD.
 #
 # Usage:
 #   ./scripts/check_pr_reviews.sh [PR_NUMBER]
@@ -58,6 +62,89 @@ OWNER_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 OWNER="${OWNER_REPO%/*}"
 REPO="${OWNER_REPO#*/}"
 
+# Label-based waiver (useful in CI when the user explicitly allowed merge).
+if [[ -z "$WAIVER" ]]; then
+  if gh pr view "$PR" --json labels -q '.labels[].name' 2>/dev/null | grep -Fxq 'waive-bot-reviews'; then
+    WAIVER="PR label waive-bot-reviews present"
+  fi
+fi
+
+apply_waiver_or_fail() {
+  local reason="$1"
+  shift
+  if [[ -n "$WAIVER" ]]; then
+    echo "==> WAIVED ($reason): $WAIVER"
+    echo "    (document this waiver on the PR if merging)"
+    return 0
+  fi
+  echo "MERGE BLOCKED (lesson: PR #83 — hold until CodeRabbit is clean)." >&2
+  echo "$reason" >&2
+  if [[ $# -gt 0 ]]; then
+    echo >&2
+    for line in "$@"; do
+      echo "$line" >&2
+    done
+  fi
+  echo >&2
+  echo "Only if the user explicitly waived:" >&2
+  echo "  ./scripts/check_pr_reviews.sh $PR --waive 'reason'" >&2
+  echo "  # or add PR label: waive-bot-reviews" >&2
+  echo >&2
+  echo "See: .cursor/rules/pr-review-merge.mdc" >&2
+  exit 1
+}
+
+# --- Gate 1: CodeRabbit must have completed a review on the PR head SHA ------
+HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
+if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{7,40}$ ]]; then
+  echo "Could not resolve head SHA for PR #$PR" >&2
+  exit 2
+fi
+
+# Combined status endpoint returns newest-first statuses for each context.
+CR_JSON="$(gh api "repos/${OWNER}/${REPO}/commits/${HEAD_SHA}/status" --jq '
+  [.statuses[] | select((.context // "") | test("^CodeRabbit$"; "i"))]
+  | if length == 0 then
+      {found:false}
+    else
+      .[0] | {found:true, state:(.state // ""), description:(.description // "")}
+    end
+')"
+
+CR_FOUND="$(echo "$CR_JSON" | jq -r .found)"
+CR_STATE="$(echo "$CR_JSON" | jq -r '.state // empty')"
+CR_DESC="$(echo "$CR_JSON" | jq -r '.description // empty')"
+CR_DESC_LC="$(printf '%s' "$CR_DESC" | tr '[:upper:]' '[:lower:]')"
+
+cr_hold_reason=""
+if [[ "$CR_FOUND" != "true" ]]; then
+  cr_hold_reason="CodeRabbit has not reported a commit status on HEAD ${HEAD_SHA:0:12} yet (pending / not started)."
+elif [[ "$CR_STATE" == "pending" ]]; then
+  cr_hold_reason="CodeRabbit is still pending on HEAD ${HEAD_SHA:0:12}: ${CR_DESC:-pending}"
+elif [[ "$CR_DESC_LC" == *rate*limit* ]]; then
+  # CodeRabbit often marks rate-limited as success — do not treat as a completed review.
+  cr_hold_reason="CodeRabbit is rate-limited on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). Full re-review did not run."
+elif [[ "$CR_STATE" == "failure" || "$CR_STATE" == "error" ]]; then
+  cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is ${CR_STATE}: ${CR_DESC:-no description}"
+elif [[ "$CR_STATE" != "success" ]]; then
+  cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is unexpected (${CR_STATE}: ${CR_DESC:-no description})."
+fi
+
+if [[ -n "$cr_hold_reason" ]]; then
+  echo "==> PR #$PR: CodeRabbit hold on HEAD ${HEAD_SHA:0:12}"
+  echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}"
+  apply_waiver_or_fail "$cr_hold_reason" \
+    "Next steps:" \
+    "  1. Hold the PR — do not merge while CodeRabbit is pending, in progress, or rate-limited." \
+    "  2. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
+    "  3. Open a follow-up issue if rate-limited (e.g. \"Revisit CodeRabbit on PR #${PR}\")." \
+    "  4. Re-run: ./scripts/check_pr_reviews.sh $PR" \
+    "     (or re-run the \"Bot review threads\" GitHub Actions check)"
+fi
+
+echo "==> PR #$PR: CodeRabbit completed on HEAD ${HEAD_SHA:0:12} (${CR_DESC:-success})"
+
+# --- Gate 2: unresolved bot review threads -----------------------------------
 QUERY='
 query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
   repository(owner:$owner, name:$name) {
@@ -140,31 +227,10 @@ while IFS= read -r line; do
   echo
 done <"$tmp"
 
-# Label-based waiver (useful in CI when the user explicitly allowed merge).
-if [[ -z "$WAIVER" ]]; then
-  if gh pr view "$PR" --json labels -q '.labels[].name' 2>/dev/null | grep -Fxq 'waive-bot-reviews'; then
-    WAIVER="PR label waive-bot-reviews present"
-  fi
-fi
-
-if [[ -n "$WAIVER" ]]; then
-  echo "==> WAIVED: $WAIVER"
-  echo "    (document this waiver on the PR if merging)"
-  exit 0
-fi
-
-echo "MERGE BLOCKED (lesson: PR #83 — do not ignore CodeRabbit)." >&2
-echo "Unresolved actionable bot threads must be fixed or resolved first." >&2
-echo >&2
-echo "Next steps:" >&2
-echo "  1. Open each URL above; fix in code or reply with a short wontfix reason." >&2
-echo "  2. Resolve the thread on GitHub when dispositioned." >&2
-echo "  3. Re-run: ./scripts/check_pr_reviews.sh $PR" >&2
-echo "     (or re-run the \"Bot review threads\" GitHub Actions check)" >&2
-echo >&2
-echo "Only if the user explicitly waived:" >&2
-echo "  ./scripts/check_pr_reviews.sh $PR --waive 'reason'" >&2
-echo "  # or add PR label: waive-bot-reviews" >&2
-echo >&2
-echo "See: .cursor/rules/pr-review-merge.mdc" >&2
-exit 1
+apply_waiver_or_fail \
+  "Unresolved actionable bot threads must be fixed or resolved first." \
+  "Next steps:" \
+  "  1. Open each URL above; fix in code or reply with a short wontfix reason." \
+  "  2. Resolve the thread on GitHub when dispositioned." \
+  "  3. Re-run: ./scripts/check_pr_reviews.sh $PR" \
+  "     (or re-run the \"Bot review threads\" GitHub Actions check)"

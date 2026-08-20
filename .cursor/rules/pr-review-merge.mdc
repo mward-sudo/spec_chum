@@ -7,17 +7,23 @@ alwaysApply: true
 
 Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unresolved CodeRabbit threads. **Do not repeat that.**
 
-## Hard rule
+## Hard rule — hold until CodeRabbit is clean
 
-Unresolved **actionable** CodeRabbit (or similar bot) threads **block merge** unless the user **explicitly** waives them. Ignoring or “finishing” a PR without this gate is a process failure.
+A PR is **not merge-ready** (agents must **not** merge or treat as finished) while **either**:
+
+1. **CodeRabbit has not completed a review on the latest HEAD** — status pending, in progress/queued, **rate-limited**, failed/errored, or missing. A green commit status with description `Review rate limited` is **not** a pass (no full re-review ran).
+2. **`./scripts/check_pr_reviews.sh` reports unresolved actionable bot threads** — unless the user **explicitly** waives.
+
+Ignoring either condition is a process failure. Prefer opening a follow-up issue (`Revisit CodeRabbit on PR #N (rate-limited)`) when rate-limited rather than merging.
 
 ## Before merge / when asked to finish or merge a PR
 
-1. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**.
-2. Treat bot comments as blocking when **actionable** (bugs, wrong behavior, clear maintainability fixes).
-3. Disposition each finding: fix in code, or reply with a short wontfix reason, then **resolve** the thread.
-4. Re-run the script (and re-run the CI check if it failed) after addressing feedback.
-5. Only waive with user instruction: `--waive "reason"`, `SPEC_CHUM_REVIEW_WAIVER`, or PR label `waive-bot-reviews` — and document the waiver on the PR.
+1. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**. The script hard-fails on rate-limited / pending CodeRabbit **and** on unresolved bot threads.
+2. If CodeRabbit is pending or rate-limited on HEAD: **hold** — wait for a completed review (e.g. `Review completed`), then re-run the script. Do not merge on a rate-limited status.
+3. Treat bot comments as blocking when **actionable** (bugs, wrong behavior, clear maintainability fixes).
+4. Disposition each finding: fix in code, or reply with a short wontfix reason, then **resolve** the thread.
+5. Re-run the script (and re-run the CI check if it failed) after addressing feedback.
+6. Only waive with user instruction: `--waive "reason"`, `SPEC_CHUM_REVIEW_WAIVER`, or PR label `waive-bot-reviews` — and document the waiver on the PR.
 
 Non-actionable nitpicks may be waived with a one-line reason; do **not** silently ignore Major/functional findings.
 

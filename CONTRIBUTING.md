@@ -32,13 +32,15 @@ Local quality gate (same as CI intent):
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
-- **Before merge / finish PR:** run `./scripts/check_pr_reviews.sh` (or pass the PR number). Unresolved **actionable** CodeRabbit (or similar bot) threads **block merge** unless the user explicitly waives them; fix or reply with a wontfix reason, then resolve threads. See below.
+- **Before merge / finish PR:** run `./scripts/check_pr_reviews.sh` (or pass the PR number). **Hold until CodeRabbit is clean** on HEAD (not pending / rate-limited) **and** unresolved **actionable** bot threads are cleared, unless the user explicitly waives. See below.
 
 ## Review check before merge
 
-Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. Unresolved actionable bot threads block merge.
+Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. Hold until a completed review on HEAD **and** unresolved actionable bot threads are dispositioned.
 
-**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs (and when reviews/comments arrive) using the default `GITHUB_TOKEN` (`pull-requests: read`). Treat a failing check as blocking for merge. After resolving threads, re-run that job if GitHub did not re-trigger it.
+**Hold policy:** Do not merge while CodeRabbit’s commit status on the PR head is pending, in progress/queued, **rate-limited**, failed, or missing. CodeRabbit may report `Review rate limited` with a green/success state — that is still a hold (no full re-review). Prefer a follow-up issue titled like `Revisit CodeRabbit on PR #N (rate-limited)` rather than merging.
+
+**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs (and when reviews/comments arrive) using the default `GITHUB_TOKEN` (`pull-requests: read`). Treat a failing check as blocking for merge. After resolving threads or when CodeRabbit finishes, re-run that job if GitHub did not re-trigger it.
 
 **Agents / local (mandatory before merge):**
 
@@ -50,7 +52,7 @@ Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignor
 # Or add PR label: waive-bot-reviews
 ```
 
-The script paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
+The script (1) checks the CodeRabbit commit status on HEAD and **hard-fails** on pending / rate-limited / missing / error, then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
 
 ## TDD
 
