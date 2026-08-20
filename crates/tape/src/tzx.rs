@@ -266,6 +266,17 @@ impl TzxPlayer {
             self.level = false;
             self.pulse_i = 0;
         }
+        self.sync_block();
+    }
+
+    /// Keep `block` aligned with `pulse_i`, including zero-pulse logical blocks
+    /// (pure tone with count 0, pause with duration 0) and trailing empty entries.
+    fn sync_block(&mut self) {
+        while self.block + 1 < self.block_starts.len()
+            && self.block_starts[self.block + 1] <= self.pulse_i
+        {
+            self.block += 1;
+        }
     }
 
     #[must_use]
@@ -304,7 +315,7 @@ impl TzxPlayer {
 
     #[must_use]
     pub fn block_count(&self) -> usize {
-        self.block_starts.len().max(1)
+        self.block_starts.len()
     }
 
     /// Advance `dt` T-states; returns current EAR level.
@@ -314,24 +325,21 @@ impl TzxPlayer {
         }
         while dt > 0 {
             if self.pulses.is_empty() {
+                self.sync_block();
                 self.level = false;
                 break;
             }
             if self.remain == 0 {
                 self.pulse_i += 1;
                 if self.pulse_i >= self.pulses.len() {
+                    self.sync_block();
                     self.level = false;
                     break;
                 }
                 let (r, l) = self.pulses[self.pulse_i];
                 self.remain = r;
                 self.level = l;
-                // Update logical block index
-                while self.block + 1 < self.block_starts.len()
-                    && self.block_starts[self.block + 1] <= self.pulse_i
-                {
-                    self.block += 1;
-                }
+                self.sync_block();
             }
             let step = dt.min(self.remain);
             self.remain -= step;
@@ -731,5 +739,44 @@ mod tests {
         assert_eq!(p.block, 1);
         assert_eq!(p.active_pulse_count(), 6);
         assert!(p.active_pulse_index() < p.active_pulse_count());
+    }
+
+    #[test]
+    fn empty_tzx_reports_zero_blocks() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        let p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(p.block_count(), 0);
+        assert_eq!(p.active_pulse_count(), 0);
+        assert_eq!(p.scheduled_pulses(), 0);
+    }
+
+    #[test]
+    fn zero_pulse_blocks_sync_logical_index() {
+        // 0x12 count=0, then a real tone, then 0x20 pause_ms=0 trailing.
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x12);
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&0u16.to_le_bytes());
+        v.push(0x12);
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&3u16.to_le_bytes());
+        v.push(0x20);
+        v.extend_from_slice(&0u16.to_le_bytes());
+        let mut p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(p.block_count(), 3);
+        // Leading zero-pulse tone shares pulse index 0 with the next block.
+        assert_eq!(p.block, 1);
+        assert_eq!(p.active_pulse_count(), 3);
+        assert_eq!(p.active_pulse_index(), 0);
+        while p.pulse_i < p.scheduled_pulses() {
+            let _ = p.advance(10_000);
+        }
+        // Trailing pause-with-zero-duration is reachable at end-of-schedule.
+        assert_eq!(p.block, 2);
+        assert_eq!(p.active_pulse_count(), 0);
     }
 }
