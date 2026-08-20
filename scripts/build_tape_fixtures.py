@@ -2,14 +2,17 @@
 """Rebuild hand-crafted TAP fixtures under tests/fixtures/tape/ (freely redistributable)."""
 from pathlib import Path
 
+
 def checksum(data: bytes) -> int:
     c = 0
     for b in data:
         c ^= b
     return c
 
+
 def tap_block(payload: bytes) -> bytes:
     return len(payload).to_bytes(2, "little") + payload
+
 
 def make_code_tap(name: bytes, addr: int, code: bytes) -> bytes:
     assert len(name) == 10
@@ -24,6 +27,37 @@ def make_code_tap(name: bytes, addr: int, code: bytes) -> bytes:
     data = bytes([0xFF]) + code
     data += bytes([checksum(data)])
     return tap_block(hdr) + tap_block(data)
+
+
+def custom_loader_tap() -> bytes:
+    """CODE that `CALL 0556` (ROM LD-BYTES) for a following flag-0xC8 block.
+
+    Models The Boggit's post-CODE custom-flag load without embedding a full
+    relocated LD-BYTES (EAR needs the real routine; Instant traps at 0x056C).
+    Load with `LOAD "" CODE`, then run USR 32768.
+    """
+    code = bytes(
+        [
+            0xDD,
+            0x21,
+            0x00,
+            0x90,  # LD IX,9000
+            0x11,
+            0x01,
+            0x00,  # LD DE,1
+            0x3E,
+            0xC8,  # LD A,C8
+            0x37,  # SCF
+            0xCD,
+            0x56,
+            0x05,  # CALL 0556
+            0xC9,  # RET
+        ]
+    )
+    custom = bytes([0xC8, 0xA5])
+    custom += bytes([checksum(custom)])
+    return make_code_tap(b"loader    ", 0x8000, code) + tap_block(custom)
+
 
 def main() -> None:
     root = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "tape"
@@ -49,7 +83,9 @@ def main() -> None:
     data = bytes([0xFF]) + line
     data += bytes([checksum(data)])
     (root / "print_ok.tap").write_bytes(tap_block(hdr) + tap_block(data))
+    (root / "custom_loader.tap").write_bytes(custom_loader_tap())
     print(f"wrote fixtures in {root}")
+
 
 if __name__ == "__main__":
     main()

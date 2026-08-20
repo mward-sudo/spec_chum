@@ -16,9 +16,10 @@ use std::cell::Cell;
 
 use bus::{Bus128, Bus48, BusPlus3, Kempston};
 use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot48};
+pub use tape::LD_BYTES_TRAP_PC;
 use tape::{
-    evaluate_ld_bytes_trap, flash_load_block, TapPlayer, TapeTrapResult, TzxPlayer,
-    LD_BYTES_TRAP_PC,
+    evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, TapPlayer, TapeTrapResult,
+    TzxPlayer,
 };
 use ula::{int_active_48, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48, INT_LENGTH_128};
 use z80::{flag, Cpu, Io, Memory};
@@ -865,7 +866,7 @@ impl Machine {
                         broke_on_pc = true;
                         break;
                     }
-                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
+                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
                         bus.frame_t += HOLD_T;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
@@ -890,6 +891,7 @@ impl Machine {
                                 bus.frame_t,
                                 irq_t,
                                 tape_opts.speed,
+                                tape_opts.flash_load,
                             );
                             bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_48;
                             last_t = cpu.t;
@@ -937,6 +939,7 @@ impl Machine {
                         bus.frame_t,
                         dt,
                         tape_opts.speed,
+                        tape_opts.flash_load,
                     );
                     bus.frame_t += dt;
                     if broke_on_pc || bus.frame_t >= FRAME_TSTATES_48 {
@@ -981,7 +984,7 @@ impl Machine {
                         broke_on_pc = true;
                         break;
                     }
-                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
+                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
                         bus.frame_t += HOLD_T;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
@@ -1006,6 +1009,7 @@ impl Machine {
                                 bus.frame_t,
                                 irq_t,
                                 tape_opts.speed,
+                                tape_opts.flash_load,
                             );
                             bus.ay.advance(irq_t);
                             bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -1060,6 +1064,7 @@ impl Machine {
                         bus.frame_t,
                         dt,
                         tape_opts.speed,
+                        tape_opts.flash_load,
                     );
                     bus.ay.advance(dt);
                     bus.frame_t += dt;
@@ -1113,7 +1118,7 @@ impl Machine {
                         broke_on_pc = true;
                         break;
                     }
-                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
+                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
                         bus.frame_t += HOLD_T;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
@@ -1138,6 +1143,7 @@ impl Machine {
                                 bus.frame_t,
                                 irq_t,
                                 tape_opts.speed,
+                                tape_opts.flash_load,
                             );
                             bus.ay.advance(irq_t);
                             bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -1192,6 +1198,7 @@ impl Machine {
                         bus.frame_t,
                         dt,
                         tape_opts.speed,
+                        tape_opts.flash_load,
                     );
                     bus.ay.advance(dt);
                     bus.frame_t += dt;
@@ -1219,6 +1226,12 @@ impl Machine {
         }
     }
 
+    /// Advance the tape EAR bitstream.
+    ///
+    /// Instant flash-load (`flash_load`) never plays TAP pulses: the LD-BYTES
+    /// trap consumes blocks, including RAM clones (The Boggit). Advancing EAR
+    /// while BASIC/`USR` runs would skip later TAP blocks. Pure TZX pulse decks
+    /// have no flash trap, so they still advance.
     fn advance_tape_ear(
         tape: &mut Option<TapeDeck>,
         ear: &mut bool,
@@ -1227,8 +1240,12 @@ impl Machine {
         frame_t: u32,
         dt: u32,
         _speed: u32,
+        flash_load: bool,
     ) {
         if dt == 0 {
+            return;
+        }
+        if flash_load && matches!(tape.as_ref(), Some(TapeDeck::Tap(_))) {
             return;
         }
         let Some(t) = tape.as_mut() else {
@@ -1267,8 +1284,12 @@ impl Machine {
 
     /// Tape inserted but paused at LD-BYTES: hold PC so Play can still flash-load / EAR-load.
     #[must_use]
-    fn hold_ld_bytes_until_play(pc: u16, tape: &Option<TapeDeck>) -> bool {
-        let holding = pc == LD_BYTES_TRAP_PC && tape.as_ref().is_some_and(|t| !t.playing());
+    fn hold_ld_bytes_until_play(
+        pc: u16,
+        tape: &Option<TapeDeck>,
+        read: impl Fn(u16) -> u8,
+    ) -> bool {
+        let holding = is_ld_bytes_trap_pc(pc, read) && tape.as_ref().is_some_and(|t| !t.playing());
         if holding && trace::enabled(trace::Category::MACHINE) {
             // Sampled: one event per hold check would flood; emit sparsely via counter.
             static HOLD_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -1292,7 +1313,7 @@ impl Machine {
     }
 
     fn try_flash_load_48(cpu: &mut Cpu, bus: &mut Bus48, tape: &mut Option<TapeDeck>) -> bool {
-        if cpu.regs.pc != LD_BYTES_TRAP_PC {
+        if !is_ld_bytes_trap_pc(cpu.regs.pc, |a| bus.read(a)) {
             return false;
         }
         let Some(deck) = tape.as_mut() else {
@@ -1358,7 +1379,7 @@ impl Machine {
     }
 
     fn try_flash_load_128(cpu: &mut Cpu, bus: &mut Bus128, tape: &mut Option<TapeDeck>) -> bool {
-        if cpu.regs.pc != LD_BYTES_TRAP_PC {
+        if !is_ld_bytes_trap_pc(cpu.regs.pc, |a| bus.read(a)) {
             return false;
         }
         let Some(deck) = tape.as_mut() else {
@@ -1427,7 +1448,7 @@ impl Machine {
         bus: &mut BusPlus3,
         tape: &mut Option<TapeDeck>,
     ) -> bool {
-        if cpu.regs.pc != LD_BYTES_TRAP_PC {
+        if !is_ld_bytes_trap_pc(cpu.regs.pc, |a| bus.read(a)) {
             return false;
         }
         let Some(deck) = tape.as_mut() else {
@@ -1521,7 +1542,7 @@ impl Machine {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
-                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
+                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
                         tape,
@@ -1531,6 +1552,7 @@ impl Machine {
                         bus.frame_t,
                         HOLD_T,
                         tape_opts.speed,
+                        tape_opts.flash_load,
                     );
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_48;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
@@ -1565,6 +1587,7 @@ impl Machine {
                             bus.frame_t,
                             irq_t,
                             tape_opts.speed,
+                            tape_opts.flash_load,
                         );
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_48;
                         return;
@@ -1611,6 +1634,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
+                    tape_opts.flash_load,
                 );
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_48;
             }
@@ -1625,7 +1649,7 @@ impl Machine {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
-                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
+                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
                         tape,
@@ -1635,6 +1659,7 @@ impl Machine {
                         bus.frame_t,
                         HOLD_T,
                         tape_opts.speed,
+                        tape_opts.flash_load,
                     );
                     bus.ay.advance(HOLD_T);
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_128;
@@ -1670,6 +1695,7 @@ impl Machine {
                             bus.frame_t,
                             irq_t,
                             tape_opts.speed,
+                            tape_opts.flash_load,
                         );
                         bus.ay.advance(irq_t);
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -1717,6 +1743,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
+                    tape_opts.flash_load,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -1732,7 +1759,7 @@ impl Machine {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
-                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape) {
+                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
                         tape,
@@ -1742,6 +1769,7 @@ impl Machine {
                         bus.frame_t,
                         HOLD_T,
                         tape_opts.speed,
+                        tape_opts.flash_load,
                     );
                     bus.ay.advance(HOLD_T);
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_128;
@@ -1777,6 +1805,7 @@ impl Machine {
                             bus.frame_t,
                             irq_t,
                             tape_opts.speed,
+                            tape_opts.flash_load,
                         );
                         bus.ay.advance(irq_t);
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -1824,6 +1853,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
+                    tape_opts.flash_load,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -1856,6 +1886,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
+                    tape_opts.flash_load,
                 );
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_48;
             }
@@ -1881,6 +1912,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
+                    tape_opts.flash_load,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -1907,6 +1939,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
+                    tape_opts.flash_load,
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -2177,6 +2210,10 @@ mod tests {
         };
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
         assert!(!m.ear(), "EAR idle without tape");
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
@@ -2206,8 +2243,13 @@ mod tests {
         };
         let img = TapImage {
             blocks: vec![vec![0x00]],
+            ..Default::default()
         };
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img.clone()));
         m.set_tape_playing(true);
         let mut probe = TapPlayer::new(img);
@@ -2230,6 +2272,10 @@ mod tests {
         };
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         assert!(!m.tape_playing());
         let block0 = m.tape_block();
@@ -2369,6 +2415,10 @@ mod tests {
         };
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
         let audio = m.run_frame();
@@ -3037,6 +3087,7 @@ mod tests {
         };
         let img = TapImage {
             blocks: vec![vec![0xff, 0x11, 0xff ^ 0x11], vec![0x00, 0x22, 0x22]],
+            ..Default::default()
         };
         let _lock = trace::test_lock();
         trace::clear();
@@ -3231,5 +3282,335 @@ mod tests {
         assert!(json.contains("cpu"));
         trace::disable();
         trace::clear();
+    }
+
+    fn custom_loader_tap() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/custom_loader.tap")
+    }
+
+    fn custom_loader_ok(m: &Machine) -> bool {
+        m.read_mem(0x9000) == 0xa5
+    }
+
+    fn run_typed_load(
+        mut m: Machine,
+        img: TapImage,
+        flash_load: bool,
+        speed: u32,
+        with_code: bool,
+        warmup: u32,
+        max_frames: u32,
+        done: impl Fn(&Machine) -> bool,
+    ) -> (Machine, bool) {
+        m.set_tape_load_options(TapeLoadOptions { flash_load, speed });
+        m.insert_tape(TapPlayer::new(img));
+        for _ in 0..warmup {
+            let _ = m.run_frame();
+        }
+        m.type_load_quotes(with_code);
+        m.set_tape_playing(true);
+        let mut loaded = false;
+        for _ in 0..max_frames {
+            let _ = m.run_frame();
+            if done(&m) {
+                loaded = true;
+                break;
+            }
+        }
+        (m, loaded)
+    }
+
+    /// `attr_mark` CODE across models × Instant + EAR speeds (CLI `--speed` 1..=64).
+    #[test]
+    fn attr_mark_load_matrix_models_and_speeds() {
+        let speeds = [1u32, 2, 5, 10, 20];
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark");
+
+        let mut cases: Vec<(Model, Vec<u8>, &str)> = Vec::new();
+        if let Some(r) = rom48() {
+            cases.push((Model::Spectrum48, r, "48k"));
+        }
+        if let Some(r) = rom128() {
+            cases.push((Model::Spectrum128, r, "128k"));
+        }
+        if let Some(r) = rom_plus3() {
+            cases.push((Model::SpectrumPlus3, r, "plus3"));
+        }
+        if cases.is_empty() {
+            eprintln!("skip: no ROMs for attr_mark matrix");
+            return;
+        }
+
+        let mut report = String::from("attr_mark matrix:\n");
+        let mut failed = Vec::new();
+        for (model, rom, label) in &cases {
+            let m = match model {
+                Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
+                Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+            };
+            let warmup = if *model == Model::Spectrum48 {
+                200
+            } else {
+                250
+            };
+            // Instant
+            let (_m, ok) = run_typed_load(
+                match model {
+                    Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
+                    Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                },
+                img.clone(),
+                true,
+                1,
+                true,
+                warmup,
+                500,
+                attr_mark_code_ok,
+            );
+            report.push_str(&format!(
+                "  {label} instant: {}\n",
+                if ok { "PASS" } else { "FAIL" }
+            ));
+            if !ok {
+                failed.push(format!("{label}/instant"));
+            }
+            let _ = m;
+            for speed in speeds {
+                // EAR@1 is slow (~minutes of Spectrum time); keep in CI with a
+                // generous budget only for 48K; 128K/+3 use speed≥2 in default CI.
+                if speed == 1 && *model != Model::Spectrum48 {
+                    report.push_str(&format!(
+                        "  {label} ear@{speed}: SKIP (slow; covered by 48k)\n"
+                    ));
+                    continue;
+                }
+                let max = match speed {
+                    1 => 25_000,
+                    2 => 15_000,
+                    5 => 6_000,
+                    10 => 3_000,
+                    _ => 2_000,
+                };
+                let (_m, ok) = run_typed_load(
+                    match model {
+                        Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
+                        Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                        Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                    },
+                    img.clone(),
+                    false,
+                    speed,
+                    true,
+                    warmup,
+                    max,
+                    attr_mark_code_ok,
+                );
+                report.push_str(&format!(
+                    "  {label} ear@{speed}: {}\n",
+                    if ok { "PASS" } else { "FAIL" }
+                ));
+                if !ok {
+                    failed.push(format!("{label}/ear@{speed}"));
+                }
+            }
+        }
+        eprintln!("{report}");
+        assert!(
+            failed.is_empty(),
+            "attr_mark failures: {}",
+            failed.join(", ")
+        );
+    }
+
+    /// Boggit-style PROGRAM + CODE + flag `0xC8` via RAM LD-BYTES clone.
+    #[test]
+    fn custom_loader_matrix_models_instant_and_ear() {
+        let path = custom_loader_tap();
+        let img = TapImage::load(&path).expect("custom_loader");
+        assert_eq!(img.blocks.len(), 3);
+
+        let mut cases: Vec<(Model, Vec<u8>, &str)> = Vec::new();
+        if let Some(r) = rom48() {
+            cases.push((Model::Spectrum48, r, "48k"));
+        }
+        if let Some(r) = rom128() {
+            cases.push((Model::Spectrum128, r, "128k"));
+        }
+        if let Some(r) = rom_plus3() {
+            cases.push((Model::SpectrumPlus3, r, "plus3"));
+        }
+        if cases.is_empty() {
+            eprintln!("skip: no ROMs for custom_loader matrix");
+            return;
+        }
+
+        let mut report = String::from("custom_loader matrix:\n");
+        let mut failed = Vec::new();
+        for (model, rom, label) in &cases {
+            let warmup = if *model == Model::Spectrum48 {
+                200
+            } else {
+                250
+            };
+            for (flash, speed, tag, max) in [
+                (true, 1u32, "instant", 800u32),
+                (false, 10, "ear@10", 4_000),
+                (false, 20, "ear@20", 2_500),
+            ] {
+                let mut m = match model {
+                    Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
+                    Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                };
+                m.set_tape_load_options(TapeLoadOptions {
+                    flash_load: flash,
+                    speed,
+                });
+                m.insert_tape(TapPlayer::new(img.clone()));
+                for _ in 0..warmup {
+                    let _ = m.run_frame();
+                }
+                m.type_load_quotes(true); // LOAD "" CODE
+                m.set_tape_playing(true);
+                let mut code_ready = false;
+                for _ in 0..max {
+                    let _ = m.run_frame();
+                    // Wait until CODE data has finished (block ≥ 2), not merely the first byte.
+                    if m.tape_block().is_some_and(|b| b >= 2)
+                        && m.read_mem(0x8000) == 0xdd
+                        && m.read_mem(0x800a) == 0xcd
+                    {
+                        code_ready = true;
+                        break;
+                    }
+                }
+                if code_ready {
+                    // EAR may have entered the post-CODE pause / next pilot while BASIC
+                    // returns; Instant does not advance TAP, so block stays put.
+                    if !flash {
+                        if let Some(TapeDeck::Tap(p)) = match &mut m {
+                            Machine::Spec48 { tape, .. }
+                            | Machine::Spec128 { tape, .. }
+                            | Machine::SpecPlus3 { tape, .. } => tape.as_mut(),
+                        } {
+                            p.rewind_to_block(2);
+                        }
+                        m.set_tape_playing(true);
+                    }
+                    // RANDOMIZE USR 32768 — enter the custom-flag loader.
+                    let ret = 0x15e6u16;
+                    m.cpu_mut().regs.sp = 0xfffd;
+                    m.write_mem(0xfffd, (ret & 0xff) as u8);
+                    m.write_mem(0xfffe, (ret >> 8) as u8);
+                    m.cpu_mut().regs.pc = 0x8000;
+                    for _ in 0..max {
+                        let _ = m.run_frame();
+                        if custom_loader_ok(&m) {
+                            break;
+                        }
+                    }
+                }
+                let ok = custom_loader_ok(&m);
+                report.push_str(&format!(
+                    "  {label} {tag}: {} code_ready={code_ready} PC={:04X} block={:?} 8000={:02X} 9000={:02X}\n",
+                    if ok { "PASS" } else { "FAIL" },
+                    m.cpu().regs.pc,
+                    m.tape_block(),
+                    m.read_mem(0x8000),
+                    m.read_mem(0x9000),
+                ));
+                if !ok {
+                    failed.push(format!("{label}/{tag}"));
+                }
+            }
+        }
+        eprintln!("{report}");
+        assert!(
+            failed.is_empty(),
+            "custom_loader failures: {}",
+            failed.join(", ")
+        );
+    }
+
+    /// Optional: full Boggit Side 1 through custom `0xC8` loads on 48K/128K Instant + EAR@10.
+    #[test]
+    fn boggit_side1_matrix_when_present() {
+        let Some(boggit) = std::env::var_os("SPEC_CHUM_BOGGIT_TZX").map(PathBuf::from) else {
+            eprintln!("skip: set SPEC_CHUM_BOGGIT_TZX for full Boggit matrix");
+            return;
+        };
+        if !boggit.is_file() {
+            eprintln!("skip: SPEC_CHUM_BOGGIT_TZX not a file");
+            return;
+        }
+        let data = std::fs::read(&boggit).expect("boggit");
+        let player = tape::TzxPlayer::to_tap_player(&data).expect("to tap");
+        let img = player.image.clone();
+        // After PROG+CODE flash, custom loader writes screen bank; treat progress
+        // as: tape past block 4 (first C8) or PC in RAM loader / game.
+        let done = |m: &Machine| {
+            m.tape_block().is_some_and(|b| b >= 4)
+                || m.read_mem(0x4000) != 0
+                || m.cpu().regs.pc == 0x5b00
+        };
+
+        let mut report = String::from("boggit matrix:\n");
+        let mut failed = Vec::new();
+        for (rom, label, model) in [
+            (rom48(), "48k", Model::Spectrum48),
+            (rom128(), "128k", Model::Spectrum128),
+        ] {
+            let Some(rom) = rom else {
+                report.push_str(&format!("  {label}: SKIP (no ROM)\n"));
+                continue;
+            };
+            for (flash, speed, tag, max) in [
+                (true, 1u32, "instant", 2_000u32),
+                (false, 10, "ear@10", 8_000),
+            ] {
+                let m = match model {
+                    Model::Spectrum48 => Machine::new_48k(&rom).unwrap(),
+                    Model::Spectrum128 => Machine::new_128k(&rom).unwrap(),
+                    Model::SpectrumPlus3 => unreachable!(),
+                };
+                let mut deck = TapPlayer::new(img.clone());
+                deck.set_block_pauses(img.pause_t.clone());
+                let mut machine = m;
+                machine.set_tape_load_options(TapeLoadOptions {
+                    flash_load: flash,
+                    speed,
+                });
+                machine.insert_tape(deck);
+                for _ in 0..200 {
+                    let _ = machine.run_frame();
+                }
+                machine.type_load_quotes(false);
+                machine.set_tape_playing(true);
+                let mut ok = false;
+                for _ in 0..max {
+                    let _ = machine.run_frame();
+                    if done(&machine) {
+                        ok = true;
+                        break;
+                    }
+                }
+                report.push_str(&format!(
+                    "  {label} {tag}: {} (PC={:04X} block={:?})\n",
+                    if ok { "PASS" } else { "FAIL" },
+                    machine.cpu().regs.pc,
+                    machine.tape_block()
+                ));
+                if !ok {
+                    failed.push(format!("{label}/{tag}"));
+                }
+            }
+        }
+        eprintln!("{report}");
+        assert!(failed.is_empty(), "boggit failures: {}", failed.join(", "));
     }
 }

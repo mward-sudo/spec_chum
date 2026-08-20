@@ -143,8 +143,14 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
     }
     if let Some(path) = &cli.tzx {
         let data = std::fs::read(path)?;
-        let player = TzxPlayer::parse(&data).map_err(|e| anyhow::anyhow!("{e}"))?;
-        m.insert_tzx(player);
+        if tape::TzxPlayer::is_standard_speed_only(&data) {
+            let player =
+                tape::TzxPlayer::to_tap_player(&data).map_err(|e| anyhow::anyhow!("{e}"))?;
+            m.insert_tape(player);
+        } else {
+            let player = TzxPlayer::parse(&data).map_err(|e| anyhow::anyhow!("{e}"))?;
+            m.insert_tzx(player);
+        }
         m.set_tape_playing(true);
     }
     m.set_tape_load_options(TapeLoadOptions {
