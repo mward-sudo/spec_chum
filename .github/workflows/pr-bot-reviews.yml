@@ -27,7 +27,9 @@ jobs:
     name: unresolved bot threads
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Resolve PR number
         id: pr
@@ -41,7 +43,11 @@ jobs:
             echo "Could not determine PR number for event ${{ github.event_name }}" >&2
             exit 2
           fi
-          echo "number=$n" >> "$GITHUB_OUTPUT"
+          if [[ ! "$n" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid PR number: $n" >&2
+            exit 2
+          fi
+          printf 'number=%s\n' "$n" >> "$GITHUB_OUTPUT"
           echo "Checking PR #$n"
 
       - name: Check unresolved bot review threads
