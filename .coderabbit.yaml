@@ -1,0 +1,41 @@
+# CodeRabbit — on-demand reviews (usage reduction)
+# Docs: https://docs.coderabbit.ai/configuration/auto-review
+#       https://docs.coderabbit.ai/reference/review-commands
+#
+# Goal: do not burn review allowance on every push while iterating.
+# Agents/humans: open draft PRs → when merge-candidate, undraft + request one review.
+#
+# Trigger a review (either works when auto_review.enabled is false):
+#   - Comment: @coderabbitai full review   (preferred first pass)
+#   - Comment: @coderabbitai review        (incremental after prior review)
+#   - Add PR label: coderabbit-review
+#
+# If UI settings disagree with this file, resolve via CodeRabbit GitHub app
+# (repo → Settings / Configuration). Prefer keeping Automatic Reviews off in
+# the UI so this YAML remains the source of truth after it lands on main.
+#
+# Note: YAML on the branch under review is what CodeRabbit applies to that PR.
+
+language: "en-US"
+
+reviews:
+  # Skip lockfile / plan noise (defaults already skip many binaries/media).
+  path_filters:
+    - "!**/Cargo.lock"
+    - "!**/.cursor/plans/**"
+
+  auto_review:
+    # No automatic review on open/push. Request explicitly when ready.
+    enabled: false
+    # Keep drafts quiet even if auto-review is re-enabled later.
+    drafts: false
+    # If auto-review is turned back on, do not re-review every push.
+    auto_incremental_review: false
+    # Early pause if incremental auto-review is ever re-enabled.
+    auto_pause_after_reviewed_commits: 1
+    ignore_title_keywords:
+      - "WIP"
+      - "[skip review]"
+    # Positive label opt-in while enabled: false (see docs).
+    labels:
+      - "coderabbit-review"

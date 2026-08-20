@@ -9,7 +9,7 @@ Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unres
 
 ## On-demand + hold-until-clean (unified)
 
-CodeRabbit may be **on-demand** (see `.coderabbit.yaml` when present; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Agents still get **one** completed CR pass before merge of a ready PR:
+CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Agents still get **one** completed CR pass before merge of a ready PR:
 
 1. Iterate on a **draft** PR (no CR required yet).
 2. When merge-candidate: mark ready → comment `@coderabbitai full review` (or label `coderabbit-review`).

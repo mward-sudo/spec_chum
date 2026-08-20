@@ -63,7 +63,7 @@ Before implementing: `gh issue list` / `gh issue view N` for related work. Prefe
 
 ### CodeRabbit — on-demand + merge gate
 
-Iterate on **draft** PRs (CR completeness not required). When merge-candidate: mark ready → one `@coderabbitai full review` (or label `coderabbit-review`) → disposition → `./scripts/check_pr_reviews.sh`. See `CONTRIBUTING.md` → “CodeRabbit — review when ready” when `.coderabbit.yaml` is present.
+`.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (CR completeness not required). When merge-candidate: mark ready → one `@coderabbitai full review` (or label `coderabbit-review`) → disposition → `./scripts/check_pr_reviews.sh`. See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
 
 ### Before merge — CodeRabbit clean + bot review threads (hard gate)
 
