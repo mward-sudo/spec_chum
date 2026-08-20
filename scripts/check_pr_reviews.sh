@@ -136,6 +136,9 @@ else
   elif [[ "$CR_DESC_LC" == *rate*limit* ]]; then
     # CodeRabbit often marks rate-limited as success — do not treat as a completed review.
     cr_hold_reason="CodeRabbit is rate-limited on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). Full re-review did not run."
+  elif [[ "$CR_DESC_LC" == *skip* ]]; then
+    # On-demand / label / draft skips can be green — still not a completed review on HEAD.
+    cr_hold_reason="CodeRabbit skipped review on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). Request @coderabbitai full review (or label coderabbit-review)."
   elif [[ "$CR_STATE" == "failure" || "$CR_STATE" == "error" ]]; then
     cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is ${CR_STATE}: ${CR_DESC:-no description}"
   elif [[ "$CR_STATE" != "success" ]]; then
