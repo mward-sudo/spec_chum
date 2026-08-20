@@ -57,11 +57,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for Rust practices, TDD expectations, and
 
 ```bash
 ./scripts/check.sh   # fmt + clippy -D warnings + tests
+./scripts/run_system_tests.sh   # optional: third-party ULA/ROM TAP suite (slow)
 ```
 
 ## Known limitations / follow-ups
 
 - **z80test** — `z80doc` is integrated ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed); keep slow-tests green. `z80full` is optional/`#[ignore]` via `./scripts/fetch_z80test.sh`.
+- **System tests** — optional third-party ULA/ROM TAP suite ([#108](https://github.com/mward-sudo/spec_chum/issues/108)): `./scripts/run_system_tests.sh`. Not part of default CI.
 - **AY** — mono PSG + beeper mix shipped ([#33](https://github.com/mward-sudo/spec_chum/issues/33)); stereo ACB/ABC pan is a possible follow-up.
 - **Disk** — +3 DSK sector read path is minimal ([#25](https://github.com/mward-sudo/spec_chum/issues/25)); full uPD765 command set / write support can deepen later.
 
