@@ -329,7 +329,10 @@ pub enum TapeTrapResult {
     Failure,
 }
 
-/// Interpret CPU state at [`LD_BYTES_TRAP_PC`] and apply the next TAP block if present.
+/// Interpret CPU state at an LD-BYTES edge-detect PC and apply the next TAP block if present.
+///
+/// Callers must first validate `pc` with [`is_ld_bytes_trap_pc`] (ROM [`LD_BYTES_TRAP_PC`] or a
+/// relocated RAM clone such as The Boggit). This function does not re-check the prologue.
 ///
 /// The trap is ignored while the deck is paused (`playing == false`) so Tape → Play is required
 /// before flash-load or EAR bitstream progress.
@@ -345,16 +348,13 @@ pub enum TapeTrapResult {
 /// When the `tape` trace category is enabled, skip/fail reasons are recorded for debugging.
 #[must_use]
 pub fn evaluate_ld_bytes_trap(
-    pc: u16,
+    _pc: u16,
     flag_expected: u8,
     load: bool,
     addr: u16,
     len: u16,
     player: &mut TapPlayer,
 ) -> TapeTrapResult {
-    if pc != LD_BYTES_TRAP_PC {
-        return TapeTrapResult::Ignored;
-    }
     if !player.playing {
         trace::emit(trace::EventKind::FlashLoadSkip {
             reason: trace::FlashSkipReason::Paused,
@@ -716,12 +716,11 @@ mod tests {
     fn ld_bytes_trap_pc_matches_relocated_boggit_style_loader() {
         let mut mem = [0u8; 0x200];
         // Fake RAM clone at 0x8097 mapped into this slice at 0.
-        let start = 0u16;
-        mem[start as usize] = 0x14;
+        mem[0] = 0x14;
         mem[1] = 0x08;
         mem[2] = 0x15;
         mem[3] = 0xF3;
-        let call_pc = start + LD_BYTES_EDGE_CALL_OFF;
+        let call_pc = LD_BYTES_EDGE_CALL_OFF;
         mem[call_pc as usize] = 0xCD;
         let read = |a: u16| {
             if a >= 0x8097 {
@@ -730,7 +729,37 @@ mod tests {
                 0
             }
         };
-        assert!(is_ld_bytes_trap_pc(0x8097 + LD_BYTES_EDGE_CALL_OFF, read));
+        let trap = 0x8097 + LD_BYTES_EDGE_CALL_OFF;
+        assert!(is_ld_bytes_trap_pc(trap, read));
         assert!(!is_ld_bytes_trap_pc(0x8097, read));
+        // Prologue match but not a CALL at pc → no trap.
+        let read_no_call = |a: u16| {
+            if a == trap {
+                0x00
+            } else if a >= 0x8097 {
+                mem.get((a - 0x8097) as usize).copied().unwrap_or(0)
+            } else {
+                0
+            }
+        };
+        assert!(!is_ld_bytes_trap_pc(trap, read_no_call));
+        // Candidate whose prologue start falls below 0x4000 → no trap.
+        assert!(!is_ld_bytes_trap_pc(
+            0x4000 + LD_BYTES_EDGE_CALL_OFF - 1,
+            |_| 0xCD
+        ));
+    }
+
+    #[test]
+    fn evaluate_ld_bytes_trap_accepts_relocated_pc() {
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x42, 0x42 ^ 0xff]],
+            ..Default::default()
+        };
+        let mut p = TapPlayer::new(img);
+        p.set_playing(true);
+        let r = evaluate_ld_bytes_trap(0x80AD, 0xff, true, 0x9000, 1, &mut p);
+        assert!(matches!(r, TapeTrapResult::Success { .. }));
+        assert_eq!(p.block, 1);
     }
 }

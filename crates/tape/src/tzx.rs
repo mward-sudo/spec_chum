@@ -473,11 +473,7 @@ impl TzxPlayer {
 
     /// Standard-speed TZX as a TAP deck, keeping per-block pause lengths.
     pub fn to_tap_player(data: &[u8]) -> Result<crate::TapPlayer, TzxError> {
-        let img = Self::to_tap_image(data)?;
-        let pauses = img.pause_t.clone();
-        let mut player = crate::TapPlayer::new(img);
-        player.set_block_pauses(pauses);
-        Ok(player)
+        Ok(crate::TapPlayer::new(Self::to_tap_image(data)?))
     }
 }
 

@@ -16,7 +16,7 @@ That script writes `minimal_code.tap`, `attr_mark.tap`, `print_ok.tap`, and
 | `minimal_code.tap` | CODE header + 6-byte routine at `0x8000`: `LD HL,4000 / LD (HL),42 / RET` |
 | `attr_mark.tap` | CODE at `0x8000`: writes `0xD7` to attribute `0x5800` then `RET` (visible load mark). Load with `LOAD "" CODE`. |
 | `print_ok.tap` | 1-line BASIC `10 PRINT "OK"` (header name `printok`). Load with `LOAD ""`. |
-| `custom_loader.tap` | CODE @`8000` calls ROM `LD-BYTES` for a following flag `0xC8` byte at `0x9000` (Boggit-style custom flag). Load with `LOAD "" CODE`, then `RANDOMIZE USR 32768`. |
+| `custom_loader.tap` | CODE @`8000` calls ROM `LD-BYTES` for a following `0xC8` flag block and loads byte `0xA5` at `0x9000` (Boggit-style custom flag). Load with `LOAD "" CODE`, then `RANDOMIZE USR 32768`. |
 | `minimal.tzx` | Minimal standard-speed TZX wrapper used by TZX unit tests (not rebuilt by the script above) |
 
 Do not add commercial game TAPs.
