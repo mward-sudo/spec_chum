@@ -34,6 +34,12 @@ permissions:
   pull-requests: read
   checks: write
 
+# One in-flight gate per PR so a cancelled/superseded run cannot publish a
+# stale success after a newer failure for the same head SHA.
+concurrency:
+  group: bot-review-threads-${{ github.event.pull_request.number || inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   check-bot-threads:
     name: unresolved bot threads
@@ -93,8 +99,9 @@ jobs:
 
       # Required checks key off the PR head; review_comment runs may otherwise
       # attach only to a merge-ref GITHUB_SHA and leave a stale head check green.
+      # !cancelled(): do not publish after concurrency cancel-in-progress.
       - name: Publish check on PR head
-        if: always() && steps.head.outputs.sha != ''
+        if: ${{ !cancelled() && steps.head.outputs.sha != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ steps.head.outputs.sha }}

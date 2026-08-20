@@ -163,6 +163,8 @@ else
 fi
 
 # --- Gate 2: unresolved bot review threads -----------------------------------
+# Inspect every comment in each unresolved thread (not only nodes[0]): a human
+# may open the thread and a bot reply later; first-comment-only would miss it.
 QUERY='
 query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
   repository(owner:$owner, name:$name) {
@@ -173,7 +175,8 @@ query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
           id
           isResolved
           isOutdated
-          comments(first:1) {
+          comments(first:100) {
+            pageInfo { hasNextPage endCursor }
             nodes {
               author { login }
               body
@@ -187,10 +190,42 @@ query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
   }
 }'
 
+COMMENTS_PAGE_QUERY='
+query($id:ID!, $cursor:String!) {
+  node(id:$id) {
+    ... on PullRequestReviewThread {
+      comments(first:100, after:$cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          author { login }
+          body
+          path
+          url
+        }
+      }
+    }
+  }
+}'
+
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 cursor=""
 : >"$tmp"
+
+append_bot_thread_from_comments() {
+  local comments_json="$1"
+  echo "$comments_json" | jq -c '
+    [.[] | select((.author.login // "") | test("coderabbit|bot"; "i"))]
+    | .[0] // empty
+    | select(.)
+    | {
+        path: (.path // "(no path)"),
+        author: (.author.login // "unknown"),
+        url: (.url // ""),
+        preview: (.body // "" | split("\n") | map(select(length > 0)) | .[0:2] | join(" "))
+      }
+  ' >>"$tmp"
+}
 
 while true; do
   if [[ -n "$cursor" ]]; then
@@ -203,18 +238,27 @@ while true; do
     echo "$page" | jq '.errors' >&2
     exit 2
   fi
-  echo "$page" | jq -c '
-    .data.repository.pullRequest.reviewThreads.nodes[]
-    | select(.isResolved == false)
-    | .comments.nodes[0] as $c
-    | select(($c.author.login // "") | test("coderabbit|bot"; "i"))
-    | {
-        path: ($c.path // "(no path)"),
-        author: ($c.author.login // "unknown"),
-        url: ($c.url // ""),
-        preview: ($c.body // "" | split("\n") | map(select(length > 0)) | .[0:2] | join(" "))
-      }
-  ' >>"$tmp"
+
+  while IFS= read -r thread_json; do
+    [[ -z "$thread_json" ]] && continue
+    thread_id="$(echo "$thread_json" | jq -r .id)"
+    comments_json="$(echo "$thread_json" | jq -c '.comments.nodes')"
+    c_has_next="$(echo "$thread_json" | jq -r '.comments.pageInfo.hasNextPage')"
+    c_cursor="$(echo "$thread_json" | jq -r '.comments.pageInfo.endCursor // empty')"
+    while [[ "$c_has_next" == "true" && -n "$c_cursor" ]]; do
+      cpage="$(gh api graphql -f query="$COMMENTS_PAGE_QUERY" -f id="$thread_id" -f cursor="$c_cursor")"
+      if echo "$cpage" | jq -e '.errors? | select(length > 0)' >/dev/null 2>&1; then
+        echo "GraphQL error paginating review-thread comments for PR #$PR:" >&2
+        echo "$cpage" | jq '.errors' >&2
+        exit 2
+      fi
+      comments_json="$(jq -c -n --argjson a "$comments_json" --argjson b "$(echo "$cpage" | jq -c '.data.node.comments.nodes')" '$a + $b')"
+      c_has_next="$(echo "$cpage" | jq -r '.data.node.comments.pageInfo.hasNextPage')"
+      c_cursor="$(echo "$cpage" | jq -r '.data.node.comments.pageInfo.endCursor // empty')"
+    done
+    append_bot_thread_from_comments "$comments_json"
+  done < <(echo "$page" | jq -c '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)')
+
   has_next="$(echo "$page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
   cursor="$(echo "$page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // empty')"
   [[ "$has_next" == "true" ]] || break
