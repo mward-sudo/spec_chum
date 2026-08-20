@@ -34,7 +34,8 @@ reviews:
     # Early pause if incremental auto-review is ever re-enabled.
     auto_pause_after_reviewed_commits: 1
     ignore_title_keywords:
-      - "WIP"
+      # Keep only explicit opt-out; "WIP" would skip label-triggered reviews
+      # on ready PRs and trip the merge gate.
       - "[skip review]"
     # Positive label opt-in while enabled: false (see docs).
     labels:
