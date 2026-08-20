@@ -66,7 +66,15 @@ jobs:
             fi
             echo "ref=refs/tags/${INPUT_TAG}" >> "$GITHUB_OUTPUT"
             echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ ! "$DEFAULT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "pushed tag must match vMAJOR.MINOR.PATCH, got: $DEFAULT_TAG" >&2
+              exit 1
+            fi
+            echo "ref=${DEFAULT_REF}" >> "$GITHUB_OUTPUT"
+            echo "tag=${DEFAULT_TAG}" >> "$GITHUB_OUTPUT"
           else
+            # Empty workflow_dispatch: build development artefacts from the current ref.
             echo "ref=${DEFAULT_REF}" >> "$GITHUB_OUTPUT"
             echo "tag=${DEFAULT_TAG}" >> "$GITHUB_OUTPUT"
           fi
@@ -83,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "tag=$REF" >> "$GITHUB_OUTPUT"
-          if [[ "$REF" == v*.*.* ]]; then
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
           else
             echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
@@ -217,7 +225,15 @@ jobs:
             fi
             echo "ref=refs/tags/${INPUT_TAG}" >> "$GITHUB_OUTPUT"
             echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ ! "$DEFAULT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "pushed tag must match vMAJOR.MINOR.PATCH, got: $DEFAULT_TAG" >&2
+              exit 1
+            fi
+            echo "ref=${DEFAULT_REF}" >> "$GITHUB_OUTPUT"
+            echo "tag=${DEFAULT_TAG}" >> "$GITHUB_OUTPUT"
           else
+            # Empty workflow_dispatch: build development artefacts from the current ref.
             echo "ref=${DEFAULT_REF}" >> "$GITHUB_OUTPUT"
             echo "tag=${DEFAULT_TAG}" >> "$GITHUB_OUTPUT"
           fi
