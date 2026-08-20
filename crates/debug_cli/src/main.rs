@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use formats::Snapshot48;
-use machine::{BreakReason, Machine, Model, Watch};
+use machine::{BreakReason, Machine, Model, TapeLoadOptions, Watch};
 use tape::{TapPlayer, TzxPlayer};
 use trace::DumpFilter;
 
@@ -28,6 +28,12 @@ struct Cli {
     trace: Option<String>,
     #[arg(long)]
     json: bool,
+    /// Use EAR bitstream loading instead of instant flash-load at LD-BYTES.
+    #[arg(long)]
+    ear_load: bool,
+    /// EAR bitstream speed multiplier (clamped 1..=64; ignored when flash-load is instant).
+    #[arg(long, default_value_t = 1)]
+    speed: u32,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -69,6 +75,12 @@ enum Cmd {
     TypeLoad {
         #[arg(long)]
         code: bool,
+        /// Frames to run after boot before typing LOAD (default 200).
+        #[arg(long, default_value_t = 200)]
+        warmup: u32,
+        /// Max frames after Enter before giving up (default 200 flash / use 200000 for EAR).
+        #[arg(long)]
+        max: Option<u32>,
     },
     WatchWrite {
         addr: String,
@@ -135,10 +147,47 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
         m.insert_tzx(player);
         m.set_tape_playing(true);
     }
+    m.set_tape_load_options(TapeLoadOptions {
+        flash_load: !cli.ear_load,
+        speed: cli.speed,
+    });
     if let Some(list) = &cli.trace {
         trace::enable(trace::Category::parse_list(list));
     }
     Ok(m)
+}
+
+fn enter_tape_loader_menu(m: &mut Machine) {
+    const PRESS: u32 = 10;
+    const GAP: u32 = 5;
+    for _ in 0..PRESS {
+        m.keyboard_mut().set_key(6, 0, true);
+        let _ = m.run_frame();
+    }
+    m.keyboard_mut().reset();
+    for _ in 0..GAP {
+        let _ = m.run_frame();
+    }
+}
+
+fn attr_mark_code_loaded(m: &Machine) -> bool {
+    m.read_mem(0x8000) == 0x21
+        && m.read_mem(0x8001) == 0x00
+        && m.read_mem(0x8002) == 0x58
+        && m.read_mem(0x8003) == 0x36
+        && m.read_mem(0x8004) == 0xd7
+        && m.read_mem(0x8005) == 0xc9
+}
+
+fn print_ok_loaded(m: &Machine) -> bool {
+    let prog = u16::from_le_bytes([m.read_mem(0x5C53), m.read_mem(0x5C54)]);
+    let eline = u16::from_le_bytes([m.read_mem(0x5C59), m.read_mem(0x5C5A)]);
+    for a in prog..eline {
+        if m.read_mem(a) == b'O' && m.read_mem(a.wrapping_add(1)) == b'K' {
+            return true;
+        }
+    }
+    false
 }
 
 fn load_snapshot(path: &Path) -> Result<Snapshot48> {
@@ -248,12 +297,52 @@ fn main() -> Result<()> {
                 std::process::exit(2);
             }
         }
-        Cmd::TypeLoad { code } => {
+        Cmd::TypeLoad { code, warmup, max } => {
+            if cli.tap.is_none() && cli.tzx.is_none() {
+                bail!("type-load requires --tap or --tzx");
+            }
+            for _ in 0..warmup {
+                let _ = m.run_frame();
+            }
+            if matches!(m.model(), Model::Spectrum128 | Model::SpectrumPlus3) {
+                enter_tape_loader_menu(&mut m);
+            }
             m.type_load_quotes_48k(code);
+            m.set_tape_playing(true);
+            let limit = max.unwrap_or(if cli.ear_load { 200_000 } else { 200 });
+            let mut loaded = false;
+            for _ in 0..limit {
+                let _ = m.run_frame();
+                loaded = if code {
+                    attr_mark_code_loaded(&m)
+                } else {
+                    print_ok_loaded(&m)
+                };
+                if loaded {
+                    break;
+                }
+            }
             if cli.json {
                 println!("{}", m.inspect().to_json());
+                println!(
+                    "{{\"load_ok\":{},\"attr_mark\":{}}}",
+                    loaded,
+                    if code {
+                        m.read_mem(0x5800) == 0xd7
+                    } else {
+                        false
+                    }
+                );
             } else {
                 print!("{}", m.inspect());
+                if code {
+                    println!("load_ok={loaded} attr_5800={:02X}", m.read_mem(0x5800));
+                } else {
+                    println!("load_ok={loaded}");
+                }
+            }
+            if !loaded {
+                std::process::exit(2);
             }
         }
         Cmd::WatchWrite { addr, max } => {
