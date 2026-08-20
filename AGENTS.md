@@ -47,6 +47,7 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.
 - z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` (fixture in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) is **done** (`z80doc`); `z80full` remains opt-in/`#[ignore]` — see `.cursor/rules/z80test-issue-17.mdc`.
+- System tests (optional, not default CI): `./scripts/run_system_tests.sh` — third-party ULA/ROM TAPs cached in `.rom-cache/system-tests/` (not git; [#108](https://github.com/mward-sudo/spec_chum/issues/108)).
 
 ## PR / stack
 

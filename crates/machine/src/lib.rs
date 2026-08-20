@@ -6,6 +6,9 @@
 #[cfg(all(test, feature = "slow-tests"))]
 mod z80test;
 
+#[cfg(all(test, feature = "system-tests"))]
+mod system_tests;
+
 mod debugger;
 mod inspect;
 
