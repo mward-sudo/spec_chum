@@ -26,7 +26,7 @@ Each `spec-chum-debug` invocation is a **new process** (fresh machine + empty tr
 
 ## Quick start
 
-```
+```text
 - [ ] ROMs present (`roms/…`); else `./scripts/fetch_roms.sh`
 - [ ] `cargo build -p debug_cli`
 - [ ] Prefer Read/Grep/Glob for source; Shell for cargo / binary / `./scripts/check.sh` / `gh`
