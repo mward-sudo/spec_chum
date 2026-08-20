@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to package (e.g. v0.1.0). Leave empty to use the current ref."
+        description: "Existing release tag to package (vX.Y.Z). Required for publishing; leave empty only to build unsigned-style dev artifacts from the current ref."
         required: false
         type: string
 
@@ -43,15 +43,45 @@ jobs:
             target: x86_64-apple-darwin
             archive: tar.gz
     steps:
-      - uses: actions/checkout@v4
+      - name: Resolve release ref
+        id: resolved
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          DEFAULT_REF: ${{ github.ref }}
+          DEFAULT_TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "${INPUT_TAG:-}" ]]; then
+            if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "manual tag must match vMAJOR.MINOR.PATCH, got: $INPUT_TAG" >&2
+              exit 1
+            fi
+            if ! gh api "repos/${REPO}/git/ref/tags/${INPUT_TAG}" >/dev/null; then
+              echo "tag does not exist on this repository: $INPUT_TAG" >&2
+              exit 1
+            fi
+            echo "ref=refs/tags/${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${DEFAULT_REF}" >> "$GITHUB_OUTPUT"
+            echo "tag=${DEFAULT_TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ steps.resolved.outputs.ref }}
 
       - name: Version
         id: version
         shell: bash
+        env:
+          REF: ${{ steps.resolved.outputs.tag }}
         run: |
-          REF="${{ inputs.tag || github.ref_name }}"
+          set -euo pipefail
           echo "tag=$REF" >> "$GITHUB_OUTPUT"
           if [[ "$REF" == v*.*.* ]]; then
             echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
@@ -64,12 +94,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libgtk-3-dev libglib2.0-dev pkg-config
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
         with:
           key: release-${{ matrix.target }}
 
@@ -124,13 +154,15 @@ jobs:
           APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
         run: |
           chmod +x scripts/ci/sign-macos.sh
           scripts/ci/sign-macos.sh \
-            "dist/spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}/spec_chum" \
-            "dist/spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}/spec-chum-debug"
+            "dist/spec-chum-${VERSION}-${TARGET}/spec_chum" \
+            "dist/spec-chum-${VERSION}-${TARGET}/spec-chum-debug"
           # Re-pack after signing (strip/archive happened before sign).
-          OUT="spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}"
+          OUT="spec-chum-${VERSION}-${TARGET}"
           tar -C dist -czf "packed/${OUT}.tar.gz" "$OUT"
 
       - name: Authenticode-sign Windows
@@ -139,15 +171,15 @@ jobs:
         env:
           WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
           WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
         run: |
-          $ver = "${{ steps.version.outputs.version }}"
-          $target = "${{ matrix.target }}"
-          $dir = "dist/spec-chum-$ver-$target"
+          $dir = "dist/spec-chum-$env:VERSION-$env:TARGET"
           ./scripts/ci/sign-windows.ps1 "$dir/spec_chum.exe" "$dir/spec-chum-debug.exe"
-          $out = "spec-chum-$ver-$target"
+          $out = "spec-chum-$env:VERSION-$env:TARGET"
           python -c "import shutil; shutil.make_archive('packed/$out', 'zip', 'dist', '$out')"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}
           path: ${{ steps.pack.outputs.asset }}
@@ -162,11 +194,39 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref }}
+      - name: Resolve release ref
+        id: resolved
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          DEFAULT_REF: ${{ github.ref }}
+          DEFAULT_TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "${INPUT_TAG:-}" ]]; then
+            if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "manual tag must match vMAJOR.MINOR.PATCH, got: $INPUT_TAG" >&2
+              exit 1
+            fi
+            if ! gh api "repos/${REPO}/git/ref/tags/${INPUT_TAG}" >/dev/null; then
+              echo "tag does not exist on this repository: $INPUT_TAG" >&2
+              exit 1
+            fi
+            echo "ref=refs/tags/${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${DEFAULT_REF}" >> "$GITHUB_OUTPUT"
+            echo "tag=${DEFAULT_TAG}" >> "$GITHUB_OUTPUT"
+          fi
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.resolved.outputs.ref }}
+
+      - uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
         with:
           path: artifacts
           merge-multiple: true
@@ -197,18 +257,18 @@ jobs:
           fi
           ls -la
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v2.2.3
         with:
           subject-path: dist/*
 
       - name: Publish GitHub Release
         if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.resolved.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
-          overwrite: true
+          overwrite_files: true
           files: dist/*
           body: |
             Cross-platform **egui** host (`spec_chum`) and headless debugger (`spec-chum-debug`).
@@ -218,5 +278,5 @@ jobs:
             Verify downloads with `SHA256SUMS` (and `SHA256SUMS.asc` when GPG signing is configured).
             GitHub Artifact Attestations are attached to this workflow run.
 
-            Linux runtime: GTK 3 and ALSA development libraries equivalent
+            Linux runtime: GTK 3 and ALSA runtime libraries
             (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).

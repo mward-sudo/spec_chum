@@ -36,11 +36,14 @@ SHA256SUMS
 SHA256SUMS.asc          # only if GPG_PRIVATE_KEY is set
 ```
 
-Each archive contains `spec_chum` / `spec_chum.exe`, `spec-chum-debug`,
-`LICENSE`, and a short `README.txt` (no `roms/`).
+Each archive contains `spec_chum` / `spec_chum.exe`, `spec-chum-debug` /
+`spec-chum-debug.exe`, `LICENSE`, and a short `README.txt` (no `roms/`).
 
-Linux hosts need GTK 3 and ALSA at runtime (`libgtk-3-0` and `libasound2` on
-Debian/Ubuntu).
+Linux hosts need GTK 3 and ALSA runtime libraries (`libgtk-3-0` and
+`libasound2` on Debian/Ubuntu).
+
+A `workflow_dispatch` rebuild must pass an existing `vX.Y.Z` tag to publish;
+an empty tag still builds `dev-<sha>` artifacts only.
 
 ## Signing (optional)
 
