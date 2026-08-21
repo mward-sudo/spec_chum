@@ -7,6 +7,7 @@ pub const T_LINE_48: u32 = 224;
 pub const LINES_48: u32 = 312;
 pub const FRAME_TSTATES_48: u32 = T_LINE_48 * LINES_48; // 69888
 pub const INT_LENGTH_48: u32 = 32;
+/// First ULA contended cycle after INT (48K PAL, early timing, INT low = T0).
 pub const PAPER_START_48: u32 = 14335;
 
 /// 128K / grey +2 PAL frame constants.

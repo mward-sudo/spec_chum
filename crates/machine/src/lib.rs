@@ -25,6 +25,21 @@ use tape::{
     TzxPlayer,
 };
 use ula::{int_active_48, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48, INT_LENGTH_128};
+
+/// Advance `frame_t` by `dt` and report whether a display frame boundary was crossed.
+///
+/// Carrying the remainder (instead of resetting to 0) keeps IRQ-to-IRQ spacing at
+/// `FRAME_TSTATES_*` on average — required by Minfo / Timing Test.
+#[inline]
+fn advance_frame_t(frame_t: &mut u32, dt: u32, frame_len: u32) -> bool {
+    *frame_t += dt;
+    if *frame_t >= frame_len {
+        *frame_t -= frame_len;
+        true
+    } else {
+        false
+    }
+}
 use z80::{flag, Cpu, Io, Memory};
 
 fn next_frame_n() -> u32 {
@@ -221,13 +236,27 @@ pub enum Model {
 pub struct MemIo48<'a> {
     pub bus: &'a mut Bus48,
     pub(crate) watch: Option<debugger::WatchHook<'a>>,
+    /// `cpu.t` at the start of the current instruction (for mid-instruction ULA time).
+    pub(crate) t_step_start: u64,
+}
+
+impl MemIo48<'_> {
+    #[inline]
+    fn ula_t(&self, t: u64) -> u32 {
+        let dt = t.wrapping_sub(self.t_step_start) as u32;
+        (self.bus.frame_t.wrapping_add(dt)) % FRAME_TSTATES_48
+    }
 }
 
 impl Memory for MemIo48<'_> {
-    fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
-        let wait = self.bus.contend_at(addr);
+    fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
+        let wait = if Bus48::is_contended(addr) {
+            ula::contention_delay_48(self.ula_t(t))
+        } else {
+            0
+        };
         if wait > 0 && trace::enabled(trace::Category::BUS) {
-            emit_contend_sampled(addr, self.bus.frame_t, wait);
+            emit_contend_sampled(addr, self.ula_t(t), wait);
         }
         let v = self.bus.read(addr);
         if let Some(w) = self.watch.as_ref() {
@@ -236,10 +265,14 @@ impl Memory for MemIo48<'_> {
         (v, wait)
     }
 
-    fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
-        let wait = self.bus.contend_at(addr);
+    fn write(&mut self, addr: u16, value: u8, t: u64) -> u32 {
+        let wait = if Bus48::is_contended(addr) {
+            ula::contention_delay_48(self.ula_t(t))
+        } else {
+            0
+        };
         if wait > 0 && trace::enabled(trace::Category::BUS) {
-            emit_contend_sampled(addr, self.bus.frame_t, wait);
+            emit_contend_sampled(addr, self.ula_t(t), wait);
         }
         self.bus.write(addr, value);
         if let Some(w) = self.watch.as_ref() {
@@ -250,9 +283,9 @@ impl Memory for MemIo48<'_> {
 }
 
 impl Io for MemIo48<'_> {
-    fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
+    fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
         let wait = if port & 1 == 0 {
-            self.bus.contend_at(0x4000)
+            ula::contention_delay_48(self.ula_t(t))
         } else {
             0
         };
@@ -263,9 +296,9 @@ impl Io for MemIo48<'_> {
         (v, wait)
     }
 
-    fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
+    fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
         let wait = if port & 1 == 0 {
-            self.bus.contend_at(0x4000)
+            ula::contention_delay_48(self.ula_t(t))
         } else {
             0
         };
@@ -281,13 +314,26 @@ impl Io for MemIo48<'_> {
 pub struct MemIo128<'a> {
     pub bus: &'a mut Bus128,
     pub(crate) watch: Option<debugger::WatchHook<'a>>,
+    pub(crate) t_step_start: u64,
+}
+
+impl MemIo128<'_> {
+    #[inline]
+    fn ula_t(&self, t: u64) -> u32 {
+        let dt = t.wrapping_sub(self.t_step_start) as u32;
+        (self.bus.frame_t.wrapping_add(dt)) % FRAME_TSTATES_128
+    }
 }
 
 impl Memory for MemIo128<'_> {
-    fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
+    fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
+        let ft = self.ula_t(t);
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         let wait = self.bus.contend_at(addr);
+        self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
-            emit_contend_sampled(addr, self.bus.frame_t, wait);
+            emit_contend_sampled(addr, ft, wait);
         }
         let v = self.bus.read(addr);
         if let Some(w) = self.watch.as_ref() {
@@ -296,10 +342,14 @@ impl Memory for MemIo128<'_> {
         (v, wait)
     }
 
-    fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
+    fn write(&mut self, addr: u16, value: u8, t: u64) -> u32 {
+        let ft = self.ula_t(t);
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         let wait = self.bus.contend_at(addr);
+        self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
-            emit_contend_sampled(addr, self.bus.frame_t, wait);
+            emit_contend_sampled(addr, ft, wait);
         }
         self.bus.write(addr, value);
         if let Some(w) = self.watch.as_ref() {
@@ -310,9 +360,14 @@ impl Memory for MemIo128<'_> {
 }
 
 impl Io for MemIo128<'_> {
-    fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
+    fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
         let wait = if port & 1 == 0 {
-            self.bus.contend_at(0x4000)
+            let ft = self.ula_t(t);
+            let saved = self.bus.frame_t;
+            self.bus.frame_t = ft;
+            let w = self.bus.contend_at(0x4000);
+            self.bus.frame_t = saved;
+            w
         } else {
             0
         };
@@ -323,9 +378,14 @@ impl Io for MemIo128<'_> {
         (v, wait)
     }
 
-    fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
+    fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
         let wait = if port & 1 == 0 {
-            self.bus.contend_at(0x4000)
+            let ft = self.ula_t(t);
+            let saved = self.bus.frame_t;
+            self.bus.frame_t = ft;
+            let w = self.bus.contend_at(0x4000);
+            self.bus.frame_t = saved;
+            w
         } else {
             0
         };
@@ -341,13 +401,26 @@ impl Io for MemIo128<'_> {
 pub struct MemIoPlus3<'a> {
     pub bus: &'a mut BusPlus3,
     pub(crate) watch: Option<debugger::WatchHook<'a>>,
+    pub(crate) t_step_start: u64,
+}
+
+impl MemIoPlus3<'_> {
+    #[inline]
+    fn ula_t(&self, t: u64) -> u32 {
+        let dt = t.wrapping_sub(self.t_step_start) as u32;
+        (self.bus.frame_t.wrapping_add(dt)) % FRAME_TSTATES_128
+    }
 }
 
 impl Memory for MemIoPlus3<'_> {
-    fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
+    fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
+        let ft = self.ula_t(t);
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         let wait = self.bus.contend_at(addr);
+        self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
-            emit_contend_sampled(addr, self.bus.frame_t, wait);
+            emit_contend_sampled(addr, ft, wait);
         }
         let v = self.bus.read(addr);
         if let Some(w) = self.watch.as_ref() {
@@ -356,10 +429,14 @@ impl Memory for MemIoPlus3<'_> {
         (v, wait)
     }
 
-    fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
+    fn write(&mut self, addr: u16, value: u8, t: u64) -> u32 {
+        let ft = self.ula_t(t);
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         let wait = self.bus.contend_at(addr);
+        self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
-            emit_contend_sampled(addr, self.bus.frame_t, wait);
+            emit_contend_sampled(addr, ft, wait);
         }
         self.bus.write(addr, value);
         if let Some(w) = self.watch.as_ref() {
@@ -370,9 +447,14 @@ impl Memory for MemIoPlus3<'_> {
 }
 
 impl Io for MemIoPlus3<'_> {
-    fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
+    fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
         let wait = if port & 1 == 0 {
-            self.bus.contend_at(0x4000)
+            let ft = self.ula_t(t);
+            let saved = self.bus.frame_t;
+            self.bus.frame_t = ft;
+            let w = self.bus.contend_at(0x4000);
+            self.bus.frame_t = saved;
+            w
         } else {
             0
         };
@@ -383,9 +465,14 @@ impl Io for MemIoPlus3<'_> {
         (v, wait)
     }
 
-    fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
+    fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
         let wait = if port & 1 == 0 {
-            self.bus.contend_at(0x4000)
+            let ft = self.ula_t(t);
+            let saved = self.bus.frame_t;
+            self.bus.frame_t = ft;
+            let w = self.bus.contend_at(0x4000);
+            self.bus.frame_t = saved;
+            w
         } else {
             0
         };
@@ -859,7 +946,7 @@ impl Machine {
                 ..
             } => {
                 bus.beeper_edges.clear();
-                bus.frame_t = 0;
+                // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
                 bus.ula.begin_frame();
                 ula.border = bus.border;
@@ -870,16 +957,16 @@ impl Machine {
                 }
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
-                while bus.frame_t < FRAME_TSTATES_48 {
+                let mut frame_done = false;
+                while !frame_done && !broke_on_pc {
                     if debugger.check_pc(cpu.regs.pc) {
-                        broke_on_pc = true;
                         break;
                     }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
-                        bus.frame_t += HOLD_T;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
+                        frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_48);
                         continue;
                     }
                     if tape_opts.flash_load && Self::try_flash_load_48(cpu, bus, tape) {
@@ -889,6 +976,7 @@ impl Machine {
                         let mut mio = MemIo48 {
                             bus: bus.as_mut(),
                             watch: None,
+                            t_step_start: cpu.t,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -902,7 +990,8 @@ impl Machine {
                                 tape_opts.speed,
                                 tape_opts.flash_load,
                             );
-                            bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_48;
+                            // INT only near t=0; wrap is vanishingly rare but keep carry semantics.
+                            frame_done = advance_frame_t(&mut bus.frame_t, irq_t, FRAME_TSTATES_48);
                             last_t = cpu.t;
                             continue;
                         }
@@ -919,6 +1008,7 @@ impl Machine {
                         let mut mio = MemIo48 {
                             bus: bus.as_mut(),
                             watch,
+                            t_step_start: cpu.t,
                         };
                         cpu.step(&mut mio);
                     }
@@ -950,15 +1040,9 @@ impl Machine {
                         tape_opts.speed,
                         tape_opts.flash_load,
                     );
-                    bus.frame_t += dt;
-                    if broke_on_pc || bus.frame_t >= FRAME_TSTATES_48 {
-                        break;
-                    }
+                    frame_done = advance_frame_t(&mut bus.frame_t, dt, FRAME_TSTATES_48);
                 }
                 // Keep border_events for render; next run_frame begin_frame clears them.
-                if !broke_on_pc {
-                    bus.frame_t = 0;
-                }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples: Vec::new(),
@@ -974,7 +1058,7 @@ impl Machine {
                 ..
             } => {
                 bus.beeper_edges.clear();
-                bus.frame_t = 0;
+                // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
                 bus.ula.begin_frame();
                 ula.border = bus.border;
@@ -986,18 +1070,20 @@ impl Machine {
                 const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_t = 0u32;
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
-                while bus.frame_t < FRAME_TSTATES_128 {
+                let mut frame_done = false;
+                while !frame_done && !broke_on_pc {
                     if debugger.check_pc(cpu.regs.pc) {
-                        broke_on_pc = true;
                         break;
                     }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
-                        bus.frame_t += HOLD_T;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
+                        ay_t = ay_t.saturating_add(HOLD_T);
+                        frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_128);
                         continue;
                     }
                     if tape_opts.flash_load && Self::try_flash_load_128(cpu, bus, tape) {
@@ -1007,6 +1093,7 @@ impl Machine {
                         let mut mio = MemIo128 {
                             bus: bus.as_mut(),
                             watch: None,
+                            t_step_start: cpu.t,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -1021,9 +1108,11 @@ impl Machine {
                                 tape_opts.flash_load,
                             );
                             bus.ay.advance(irq_t);
-                            bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
+                            ay_t = ay_t.saturating_add(irq_t);
+                            frame_done =
+                                advance_frame_t(&mut bus.frame_t, irq_t, FRAME_TSTATES_128);
                             while ay_samples.len() < AY_SAMPLES
-                                && f64::from(bus.frame_t)
+                                && f64::from(ay_t.min(FRAME_TSTATES_128))
                                     >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                             {
                                 ay_samples.push(bus.ay.sample_mono());
@@ -1044,6 +1133,7 @@ impl Machine {
                         let mut mio = MemIo128 {
                             bus: bus.as_mut(),
                             watch,
+                            t_step_start: cpu.t,
                         };
                         cpu.step(&mut mio);
                     }
@@ -1076,22 +1166,17 @@ impl Machine {
                         tape_opts.flash_load,
                     );
                     bus.ay.advance(dt);
-                    bus.frame_t += dt;
+                    ay_t = ay_t.saturating_add(dt);
+                    frame_done = advance_frame_t(&mut bus.frame_t, dt, FRAME_TSTATES_128);
                     while ay_samples.len() < AY_SAMPLES
-                        && f64::from(bus.frame_t.min(FRAME_TSTATES_128))
+                        && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
                         ay_samples.push(bus.ay.sample_mono());
                     }
-                    if broke_on_pc || bus.frame_t >= FRAME_TSTATES_128 {
-                        break;
-                    }
                 }
                 while ay_samples.len() < AY_SAMPLES {
                     ay_samples.push(bus.ay.sample_mono());
-                }
-                if !broke_on_pc {
-                    bus.frame_t = 0;
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
@@ -1108,7 +1193,7 @@ impl Machine {
                 ..
             } => {
                 bus.beeper_edges.clear();
-                bus.frame_t = 0;
+                // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
                 bus.ula.begin_frame();
                 ula.border = bus.border;
@@ -1120,18 +1205,20 @@ impl Machine {
                 const AY_SAMPLES: usize = 882;
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_t = 0u32;
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
-                while bus.frame_t < FRAME_TSTATES_128 {
+                let mut frame_done = false;
+                while !frame_done && !broke_on_pc {
                     if debugger.check_pc(cpu.regs.pc) {
-                        broke_on_pc = true;
                         break;
                     }
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
-                        bus.frame_t += HOLD_T;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
+                        ay_t = ay_t.saturating_add(HOLD_T);
+                        frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_128);
                         continue;
                     }
                     if tape_opts.flash_load && Self::try_flash_load_plus3(cpu, bus, tape) {
@@ -1141,6 +1228,7 @@ impl Machine {
                         let mut mio = MemIoPlus3 {
                             bus: bus.as_mut(),
                             watch: None,
+                            t_step_start: cpu.t,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -1155,9 +1243,11 @@ impl Machine {
                                 tape_opts.flash_load,
                             );
                             bus.ay.advance(irq_t);
-                            bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
+                            ay_t = ay_t.saturating_add(irq_t);
+                            frame_done =
+                                advance_frame_t(&mut bus.frame_t, irq_t, FRAME_TSTATES_128);
                             while ay_samples.len() < AY_SAMPLES
-                                && f64::from(bus.frame_t)
+                                && f64::from(ay_t.min(FRAME_TSTATES_128))
                                     >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                             {
                                 ay_samples.push(bus.ay.sample_mono());
@@ -1178,6 +1268,7 @@ impl Machine {
                         let mut mio = MemIoPlus3 {
                             bus: bus.as_mut(),
                             watch,
+                            t_step_start: cpu.t,
                         };
                         cpu.step(&mut mio);
                     }
@@ -1210,22 +1301,17 @@ impl Machine {
                         tape_opts.flash_load,
                     );
                     bus.ay.advance(dt);
-                    bus.frame_t += dt;
+                    ay_t = ay_t.saturating_add(dt);
+                    frame_done = advance_frame_t(&mut bus.frame_t, dt, FRAME_TSTATES_128);
                     while ay_samples.len() < AY_SAMPLES
-                        && f64::from(bus.frame_t.min(FRAME_TSTATES_128))
+                        && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
                         ay_samples.push(bus.ay.sample_mono());
                     }
-                    if broke_on_pc || bus.frame_t >= FRAME_TSTATES_128 {
-                        break;
-                    }
                 }
                 while ay_samples.len() < AY_SAMPLES {
                     ay_samples.push(bus.ay.sample_mono());
-                }
-                if !broke_on_pc {
-                    bus.frame_t = 0;
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
@@ -1575,6 +1661,7 @@ impl Machine {
                     let mut mio = MemIo48 {
                         bus: bus.as_mut(),
                         watch: None,
+                        t_step_start: cpu.t,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -1617,6 +1704,7 @@ impl Machine {
                     let mut mio = MemIo48 {
                         bus: bus.as_mut(),
                         watch,
+                        t_step_start: cpu.t,
                     };
                     cpu.step(&mut mio);
                 }
@@ -1683,6 +1771,7 @@ impl Machine {
                     let mut mio = MemIo128 {
                         bus: bus.as_mut(),
                         watch: None,
+                        t_step_start: cpu.t,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -1726,6 +1815,7 @@ impl Machine {
                     let mut mio = MemIo128 {
                         bus: bus.as_mut(),
                         watch,
+                        t_step_start: cpu.t,
                     };
                     cpu.step(&mut mio);
                 }
@@ -1793,6 +1883,7 @@ impl Machine {
                     let mut mio = MemIoPlus3 {
                         bus: bus.as_mut(),
                         watch: None,
+                        t_step_start: cpu.t,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -1836,6 +1927,7 @@ impl Machine {
                     let mut mio = MemIoPlus3 {
                         bus: bus.as_mut(),
                         watch,
+                        t_step_start: cpu.t,
                     };
                     cpu.step(&mut mio);
                 }
@@ -1885,6 +1977,7 @@ impl Machine {
                 let mut mio = MemIo48 {
                     bus: bus.as_mut(),
                     watch: None,
+                    t_step_start: cpu.t,
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -1911,6 +2004,7 @@ impl Machine {
                 let mut mio = MemIo128 {
                     bus: bus.as_mut(),
                     watch: None,
+                    t_step_start: cpu.t,
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -1938,6 +2032,7 @@ impl Machine {
                 let mut mio = MemIoPlus3 {
                     bus: bus.as_mut(),
                     watch: None,
+                    t_step_start: cpu.t,
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -3600,6 +3695,7 @@ mod tests {
                     m.cpu_mut().regs.sp = 0xfffd;
                     m.write_mem(0xfffd, (ret & 0xff) as u8);
                     m.write_mem(0xfffe, (ret >> 8) as u8);
+                    m.cpu_mut().regs.halted = false;
                     m.cpu_mut().regs.pc = 0x8000;
                     for _ in 0..max {
                         let _ = m.run_frame();

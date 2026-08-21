@@ -46,7 +46,17 @@ impl Cpu {
         if self.interrupt_deferred || !self.regs.iff1 {
             return 0;
         }
-        self.regs.halted = false;
+        // While halted, PC sits on the HALT opcode. Accepting INT advances PC onto the
+        // following instruction before the return address is pushed (Undocumented Z80).
+        // Only bump PC when it still addresses HALT — hosts may redirect PC while the
+        // halted flag is still set (test USR entry, debugger poke, etc.).
+        if self.regs.halted {
+            self.regs.halted = false;
+            let op = mem.read(self.regs.pc, self.t).0;
+            if op == 0x76 {
+                self.regs.pc = self.regs.pc.wrapping_add(1);
+            }
+        }
         self.regs.iff1 = false;
         self.regs.iff2 = false;
         self.regs.inc_r();
@@ -153,5 +163,53 @@ impl Cpu {
         let wait = io.out_port(port, value, self.t);
         self.add_t(4 + wait);
         self.regs.memptr = (port & 0xff00) | (port.wrapping_add(1) & 0x00ff);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bus::FlatMem;
+
+    #[test]
+    fn interrupt_while_halted_resumes_after_halt() {
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0x1000] = 0x76; // HALT
+        mem.data[0x1001] = 0x00; // NOP after HALT
+        cpu.regs.pc = 0x1000;
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 1;
+        cpu.step(&mut mem); // enter HALT (PC rewound to 0x1000)
+        assert!(cpu.regs.halted);
+        assert_eq!(cpu.regs.pc, 0x1000);
+        let t = cpu.interrupt(&mut mem);
+        assert!(t > 0);
+        assert!(!cpu.regs.halted);
+        // Return address on stack must be the instruction after HALT.
+        let ret = u16::from(mem.data[cpu.regs.sp as usize])
+            | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
+        assert_eq!(ret, 0x1001);
+    }
+
+    #[test]
+    fn interrupt_while_halted_does_not_skip_redirected_pc() {
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0x1000] = 0x76;
+        mem.data[0x8000] = 0xdd; // not HALT
+        cpu.regs.pc = 0x1000;
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 1;
+        cpu.step(&mut mem);
+        assert!(cpu.regs.halted);
+        // Host redirects PC while halted (debugger / test USR poke).
+        cpu.regs.pc = 0x8000;
+        let _ = cpu.interrupt(&mut mem);
+        let ret = u16::from(mem.data[cpu.regs.sp as usize])
+            | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
+        assert_eq!(ret, 0x8000);
     }
 }

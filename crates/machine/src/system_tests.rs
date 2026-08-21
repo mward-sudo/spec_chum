@@ -160,20 +160,23 @@ fn assert_screen_has(text: &str, needle: &str) {
     );
 }
 
-/// Classic ULA contended-NOP delay window: eight ordered columns `6 5 4 3 2 1 0 0`.
-fn assert_contended_nop_pattern(text: &str) {
-    const EXPECTED: [i32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
-    let found = text.lines().any(|line| {
+/// Contended-NOP totals (4T + delay): eight columns `10 9 8 7 6 5 4 4`.
+fn contended_nop_pattern_present(text: &str) -> bool {
+    const EXPECTED: [i32; 8] = [10, 9, 8, 7, 6, 5, 4, 4];
+    text.lines().any(|line| {
         let nums: Vec<i32> = line
             .split_whitespace()
             .filter_map(|tok| tok.parse().ok())
             .collect();
         nums.windows(EXPECTED.len())
             .any(|window| window == EXPECTED)
-    });
+    })
+}
+
+fn assert_contended_nop_pattern(text: &str) {
     assert!(
-        found,
-        "expected ordered contended-NOP pattern {EXPECTED:?} on one screen row\n{text}"
+        contended_nop_pattern_present(text),
+        "expected contended-NOP totals [10,9,8,7,6,5,4,4] on one screen row\n{text}"
     );
 }
 
@@ -299,10 +302,13 @@ fn minfo_48k_int_and_first_contended() {
         return;
     };
     load_program_tap(&mut machine, &tap);
-    let text = run_until_contains(&mut machine, "14335", AFTER_LOAD_FRAMES);
+    // Minfo’s INT-relative counter uses the “INT low = T1” numbering, so the
+    // FAQ early-timing first contended cycle (14335 when INT low = T0) prints
+    // as 14336 — matching Timing Test’s first contended-NOP row.
+    let text = run_until_contains(&mut machine, "14336", AFTER_LOAD_FRAMES);
     assert_screen_has(&text, "INT time:");
     assert_screen_has(&text, "32");
-    assert_screen_has(&text, "14335");
+    assert_screen_has(&text, "14336");
 }
 
 #[test]
@@ -316,6 +322,8 @@ fn timingtest_48k_frame_duration_69888() {
     load_program_tap(&mut machine, &tap);
     let text = run_until_contains(&mut machine, "Frame duration:", AFTER_LOAD_FRAMES);
     assert_screen_has(&text, "Frame duration:");
+    // Value is filled after the HALT-based measurement completes.
+    let text = run_until_contains(&mut machine, "69888", AFTER_LOAD_FRAMES);
     assert_screen_has(&text, "69888");
 }
 
@@ -337,6 +345,14 @@ fn timingtest_48k_contended_nop_shows_delay_pattern() {
     hold_keys(&mut machine, &[], 5);
     let text = run_until_contains(&mut machine, "contended NOP", AFTER_LOAD_FRAMES);
     assert_screen_has(&text, "contended NOP");
+    let mut text = String::new();
+    for _ in 0..AFTER_LOAD_FRAMES {
+        let _ = machine.run_frame();
+        text = screen_text(&machine);
+        if contended_nop_pattern_present(&text) {
+            break;
+        }
+    }
     assert_contended_nop_pattern(&text);
 }
 
@@ -354,18 +370,19 @@ fn ulatest3_48k_banner_frame_and_grid() {
     assert_screen_has(&text, "ULA test 3 by JB");
     let text = run_until_contains(&mut machine, "69888", AFTER_LOAD_FRAMES);
     assert_screen_has(&text, "69888");
-    // Grid cells are largely attribute-coloured; require a painted matrix region
-    // (rows below the title) rather than brittle glyph OCR of inverted cells.
-    let mut matrix_nz = 0usize;
+    // Grid cells are largely attribute-coloured (empty bitmap); require painted attrs
+    // in the matrix region rather than brittle glyph OCR of inverted cells.
+    let mut matrix_attr_nz = 0usize;
     for row in 2..22u8 {
         for col in 0..32u8 {
-            if glyph_at(&machine, col, row).iter().any(|&b| b != 0) {
-                matrix_nz += 1;
+            let attr_addr = 0x5800 + u16::from(row) * 32 + u16::from(col);
+            if machine.read_mem(attr_addr) != 0 {
+                matrix_attr_nz += 1;
             }
         }
     }
     assert!(
-        matrix_nz > 64,
-        "ULA test 3 floating-bus/contention grid should paint below the title, got {matrix_nz} nonzero cells\n{text}"
+        matrix_attr_nz > 64,
+        "ULA test 3 floating-bus/contention grid should paint attrs below the title, got {matrix_attr_nz} nonzero attr cells\n{text}"
     );
 }
