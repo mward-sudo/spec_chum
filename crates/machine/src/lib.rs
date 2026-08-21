@@ -2373,18 +2373,22 @@ mod tests {
                 t_step_start: 100,
             };
             let t = 100 + dt;
-            assert_eq!(mem.read(ADDR, t).1, expect, "48 mem R frame={frame_t} dt={dt}");
-            assert_eq!(mem.write(ADDR, 0, t), expect, "48 mem W frame={frame_t} dt={dt}");
+            assert_eq!(
+                mem.read(ADDR, t).1,
+                expect,
+                "48 mem R frame={frame_t} dt={dt}"
+            );
+            assert_eq!(
+                mem.write(ADDR, 0, t),
+                expect,
+                "48 mem W frame={frame_t} dt={dt}"
+            );
             assert_eq!(
                 mem.in_port(EVEN_PORT, t).1,
                 expect,
                 "48 even I/O frame={frame_t} dt={dt}"
             );
-            assert_eq!(
-                mem.in_port(ODD_PORT, t).1,
-                0,
-                "48 odd I/O never contends"
-            );
+            assert_eq!(mem.in_port(ODD_PORT, t).1, 0, "48 odd I/O never contends");
             // Uncontended high RAM
             assert_eq!(mem.read(0x8000, t).1, 0);
         }
@@ -2398,7 +2402,11 @@ mod tests {
                 t_step_start: 100,
             };
             let t = 100 + dt;
-            assert_eq!(mem.read(ADDR, t).1, expect, "128 mem R frame={frame_t} dt={dt}");
+            assert_eq!(
+                mem.read(ADDR, t).1,
+                expect,
+                "128 mem R frame={frame_t} dt={dt}"
+            );
             assert_eq!(
                 mem.in_port(EVEN_PORT, t).1,
                 expect,

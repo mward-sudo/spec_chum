@@ -305,11 +305,7 @@ mod tests {
         // Full early-timing 8-cycle window (FAQ / Sinclair wiki).
         const DELAYS: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
         for (i, &d) in DELAYS.iter().enumerate() {
-            assert_eq!(
-                contention_delay(t + i as u32),
-                d,
-                "48K delay at PAPER+{i}"
-            );
+            assert_eq!(contention_delay(t + i as u32), d, "48K delay at PAPER+{i}");
         }
         assert_eq!(contention_delay(t + 8), 6, "pattern repeats next window");
     }
