@@ -15,8 +15,11 @@ Follow-up [#122](https://github.com/mward-sudo/spec_chum/issues/122): `z80full` 
 
 1. **`z80doc`** — checked-in fixture; keep CI / opt-in slow-tests green:
    `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed`
-2. **`z80full`** — checked-in fixture; runs under `--features slow-tests` (not ignored). CI still selects `z80doc` by name only so default PR CI stays bounded:
+2. **`z80full`** — checked-in fixture; runs under `--features slow-tests` (not ignored).
+   CI still selects `z80doc` by name only so default PR CI stays bounded:
    `cargo test -p machine --features slow-tests --release z80full_all_tests_passed`
+   **Required before a `vX.Y.Z` release** (via `./scripts/run_slow_tests.sh` or
+   `SYSTEM_TESTS_Z80FULL=1 ./scripts/run_system_tests.sh`) — see `docs/RELEASE.md`.
 
 ## Agent guardrails
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Codesign macOS CLI binaries when Apple Developer ID secrets are present.
-# No-ops (exit 0) when APPLE_CERTIFICATE_P12_BASE64 is unset so unsigned
-# releases still publish.
+# Codesign macOS release payloads when Apple Developer ID secrets are present.
+# Accepts Mach-O binaries and/or .app bundles. No-ops (exit 0) when
+# APPLE_CERTIFICATE_P12_BASE64 is unset so unsigned releases still publish.
 set -euo pipefail
 
 if [[ -z "${APPLE_CERTIFICATE_P12_BASE64:-}" ]]; then
@@ -10,7 +10,7 @@ if [[ -z "${APPLE_CERTIFICATE_P12_BASE64:-}" ]]; then
 fi
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <file> [file...]" >&2
+  echo "usage: $0 <file-or-app> [file-or-app...]" >&2
   exit 2
 fi
 
@@ -49,10 +49,27 @@ security list-keychains -d user -s "$KEYCHAIN" "$LOGIN_KEYCHAIN"
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" \
   "$KEYCHAIN"
 
+sign_one() {
+  local path="$1"
+  echo "codesign $path"
+  if [[ -d "$path" && "$path" == *.app ]]; then
+    # Sign nested Mach-O first (no --deep), then the bundle itself.
+    local exe
+    exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$path/Contents/Info.plist" 2>/dev/null || true)"
+    if [[ -n "$exe" && -f "$path/Contents/MacOS/$exe" ]]; then
+      codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" \
+        "$path/Contents/MacOS/$exe"
+    fi
+    codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$path"
+    codesign --verify --verbose "$path"
+  else
+    codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$path"
+    codesign --verify --verbose "$path"
+  fi
+}
+
 for f in "$@"; do
-  echo "codesign $f"
-  codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$f"
-  codesign --verify --verbose "$f"
+  sign_one "$f"
 done
 
 echo "signed $*"

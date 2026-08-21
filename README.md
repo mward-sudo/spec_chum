@@ -37,9 +37,9 @@ See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 ## Releases
 
-Push a `vX.Y.Z` tag to build macOS, Linux, and Windows binaries and attach them
-to a GitHub Release (optional Apple/Windows/GPG signing). See
-[docs/RELEASE.md](docs/RELEASE.md).
+Push a `vX.Y.Z` tag to build release archives: macOS `.zip` with `Spec Chum.app`,
+Windows `.zip` with `.exe`s, Linux `.tar.gz` with binaries (optional
+Apple/Windows/GPG signing). See [docs/RELEASE.md](docs/RELEASE.md).
 
 ## ROMs
 
@@ -57,13 +57,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for Rust practices, TDD expectations, and
 
 ```bash
 ./scripts/check.sh   # fmt + clippy -D warnings + tests
-./scripts/run_system_tests.sh   # optional: third-party ULA/ROM TAP suite (slow)
+./scripts/run_system_tests.sh   # optional day-to-day: third-party ULA/ROM TAP suite (slow)
+./scripts/run_slow_tests.sh     # required before vX.Y.Z: z80doc + system-tests + z80full
 ```
 
 ## Known limitations / follow-ups
 
-- **z80test** — `z80doc` and `z80full` run under `--features slow-tests` ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed; [#122](https://github.com/mward-sudo/spec_chum/issues/122)). CI selects `z80doc` by name; run `z80full_all_tests_passed` for the full suite.
-- **System tests** — optional third-party ULA/ROM TAP suite ([#108](https://github.com/mward-sudo/spec_chum/issues/108)): `./scripts/run_system_tests.sh`. Not part of default CI.
+- **z80test** — `z80doc` and `z80full` run under `--features slow-tests` ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed; [#122](https://github.com/mward-sudo/spec_chum/issues/122)). CI selects `z80doc` by name; run `z80full_all_tests_passed` for the full suite. **Releases require** `./scripts/run_slow_tests.sh`.
+- **System tests** — third-party ULA/ROM TAP suite ([#108](https://github.com/mward-sudo/spec_chum/issues/108)): `./scripts/run_system_tests.sh`. Not part of default CI; **required before release**.
 - **AY** — mono PSG + beeper mix shipped ([#33](https://github.com/mward-sudo/spec_chum/issues/33)); stereo ACB/ABC pan is a possible follow-up.
 - **Disk** — +3 DSK sector read path is minimal ([#25](https://github.com/mward-sudo/spec_chum/issues/25)); full uPD765 command set / write support can deepen later.
 

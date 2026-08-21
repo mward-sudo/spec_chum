@@ -16,3 +16,9 @@ Other TAPs (`z80flags.tap`, `z80ccf.tap`, …): `./scripts/fetch_z80test.sh`.
 cargo test -p machine --features slow-tests --release z80doc_all_tests_passed -- --nocapture
 cargo test -p machine --features slow-tests --release z80full_all_tests_passed -- --nocapture
 ```
+
+Before a `vX.Y.Z` release, run the full slow suite (includes `z80doc` + `z80full`):
+
+```bash
+./scripts/run_slow_tests.sh
+```

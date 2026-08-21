@@ -33,9 +33,13 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 - Binary (`app`): `anyhow` is fine for top-level error context.
 - `unsafe` is denied workspace-wide; only introduce it with a documented `SAFETY` rationale and a narrowly scoped `#[allow(unsafe_code)]`.
 
-GitHub Release binaries (egui `spec_chum` + `spec-chum-debug`) are built by
+GitHub Release archives (egui `spec_chum` + `spec-chum-debug`) are built by
 `.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
-Do not attach ROMs. Native SwiftUI `.app` / DMG packaging, notarisation, and related CI are tracked in [#68](https://github.com/mward-sudo/spec_chum/issues/68) (out of scope for the CLI release workflow).
+Do not attach ROMs. macOS ships an egui-wrapped `Spec Chum.app` in a `.zip`;
+Windows a `.zip` of `.exe`s; Linux a `.tar.gz`. Native SwiftUI `.app` / DMG /
+notarisation remain [#68](https://github.com/mward-sudo/spec_chum/issues/68).
+**Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
+(z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
 
 ## Agent workflow (clippy-first)
 
@@ -52,8 +56,8 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.
-- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` and `… z80full_all_tests_passed` (fixtures in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) / [#122](https://github.com/mward-sudo/spec_chum/issues/122) — see `.cursor/rules/z80test-issue-17.mdc`.
-- System tests (optional, not default CI): `./scripts/run_system_tests.sh` — third-party ULA/ROM TAPs cached in `.rom-cache/system-tests/` (not git; [#108](https://github.com/mward-sudo/spec_chum/issues/108)).
+- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` and `… z80full_all_tests_passed` (fixtures in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) / [#122](https://github.com/mward-sudo/spec_chum/issues/122) — see `.cursor/rules/z80test-issue-17.mdc`. **Releases require** `./scripts/run_slow_tests.sh` (includes z80full).
+- System tests (not default CI): `./scripts/run_system_tests.sh` — third-party ULA/ROM TAPs cached in `.rom-cache/system-tests/` (not git; [#108](https://github.com/mward-sudo/spec_chum/issues/108)). Optional for routine PR work; **required before release** (included in `./scripts/run_slow_tests.sh`).
 
 ## PR / stack
 

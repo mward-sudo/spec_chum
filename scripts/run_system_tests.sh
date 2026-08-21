@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Optional, slow, third-party machine tests (ULA / ROM boot / 128K / +3).
+# Slow third-party machine tests (ULA / ROM boot / 128K / +3).
 # Not part of ./scripts/check.sh or default CI.
 # TAP fixtures are cached under .rom-cache/system-tests/ and are not in git.
+#
+# Day-to-day: optional accuracy check.
+# Before a vX.Y.Z release: use ./scripts/run_slow_tests.sh (runs z80doc,
+# this suite, and z80full via SYSTEM_TESTS_Z80FULL=1). See docs/RELEASE.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
