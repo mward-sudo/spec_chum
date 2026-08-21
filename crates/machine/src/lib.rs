@@ -2335,6 +2335,105 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/tape/minimal_code.tap")
     }
 
+    /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
+    #[test]
+    fn memio_mid_instruction_contention_table() {
+        // Contended screen address; even port for I/O contention.
+        const ADDR: u16 = 0x4000;
+        const EVEN_PORT: u16 = 0xFE;
+        const ODD_PORT: u16 = 0xFF;
+        // First paper cycle through a full 8-T window (early timing / FAQ).
+        const ROWS_48: &[(u32, u64, u32)] = &[
+            (ula::PAPER_START_48, 0, 6),
+            (ula::PAPER_START_48, 1, 5),
+            (ula::PAPER_START_48, 2, 4),
+            (ula::PAPER_START_48, 3, 3),
+            (ula::PAPER_START_48, 4, 2),
+            (ula::PAPER_START_48, 5, 1),
+            (ula::PAPER_START_48, 6, 0),
+            (ula::PAPER_START_48, 7, 0),
+        ];
+        const ROWS_128: &[(u32, u64, u32)] = &[
+            (ula::PAPER_START_128, 0, 6),
+            (ula::PAPER_START_128, 1, 5),
+            (ula::PAPER_START_128, 2, 4),
+            (ula::PAPER_START_128, 3, 3),
+            (ula::PAPER_START_128, 4, 2),
+            (ula::PAPER_START_128, 5, 1),
+            (ula::PAPER_START_128, 6, 0),
+            (ula::PAPER_START_128, 7, 0),
+        ];
+
+        for &(frame_t, dt, expect) in ROWS_48 {
+            let mut bus = Bus48::new();
+            bus.frame_t = frame_t;
+            let mut mem = MemIo48 {
+                bus: &mut bus,
+                watch: None,
+                t_step_start: 100,
+            };
+            let t = 100 + dt;
+            assert_eq!(mem.read(ADDR, t).1, expect, "48 mem R frame={frame_t} dt={dt}");
+            assert_eq!(mem.write(ADDR, 0, t), expect, "48 mem W frame={frame_t} dt={dt}");
+            assert_eq!(
+                mem.in_port(EVEN_PORT, t).1,
+                expect,
+                "48 even I/O frame={frame_t} dt={dt}"
+            );
+            assert_eq!(
+                mem.in_port(ODD_PORT, t).1,
+                0,
+                "48 odd I/O never contends"
+            );
+            // Uncontended high RAM
+            assert_eq!(mem.read(0x8000, t).1, 0);
+        }
+
+        for &(frame_t, dt, expect) in ROWS_128 {
+            let mut bus = Bus128::new();
+            bus.frame_t = frame_t;
+            let mut mem = MemIo128 {
+                bus: &mut bus,
+                watch: None,
+                t_step_start: 100,
+            };
+            let t = 100 + dt;
+            assert_eq!(mem.read(ADDR, t).1, expect, "128 mem R frame={frame_t} dt={dt}");
+            assert_eq!(
+                mem.in_port(EVEN_PORT, t).1,
+                expect,
+                "128 even I/O frame={frame_t} dt={dt}"
+            );
+
+            let mut bus3 = BusPlus3::new();
+            bus3.frame_t = frame_t;
+            let mut mem3 = MemIoPlus3 {
+                bus: &mut bus3,
+                watch: None,
+                t_step_start: 100,
+            };
+            assert_eq!(
+                mem3.read(ADDR, t).1,
+                expect,
+                "+3 mem R frame={frame_t} dt={dt}"
+            );
+        }
+
+        // Access after the instruction has already burned into the contended window.
+        let mut bus = Bus48::new();
+        bus.frame_t = ula::PAPER_START_48.wrapping_sub(3);
+        let mut mem = MemIo48 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 50,
+        };
+        assert_eq!(
+            mem.read(ADDR, 53).1,
+            6,
+            "ULA time = frame_t+3 lands on first contended cycle"
+        );
+    }
+
     #[test]
     fn boot_frames_advance() {
         let Some(rom) = rom48() else {

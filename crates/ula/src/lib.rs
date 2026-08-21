@@ -302,9 +302,16 @@ mod tests {
     fn contention_table() {
         assert_eq!(contention_delay(0), 0);
         let t = PAPER_START_48;
-        assert_eq!(contention_delay(t), 6);
-        assert_eq!(contention_delay(t + 1), 5);
-        assert_eq!(contention_delay(t + 7), 0);
+        // Full early-timing 8-cycle window (FAQ / Sinclair wiki).
+        const DELAYS: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
+        for (i, &d) in DELAYS.iter().enumerate() {
+            assert_eq!(
+                contention_delay(t + i as u32),
+                d,
+                "48K delay at PAPER+{i}"
+            );
+        }
+        assert_eq!(contention_delay(t + 8), 6, "pattern repeats next window");
     }
 
     #[test]
