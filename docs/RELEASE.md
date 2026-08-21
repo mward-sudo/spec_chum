@@ -1,11 +1,14 @@
 # Cutting a Spec Chum release
 
-GitHub Actions builds **macOS**, **Linux**, and **Windows** binaries and attaches
+GitHub Actions builds **macOS**, **Linux**, and **Windows** archives and attaches
 them to a GitHub Release when a version tag is pushed.
 
 The product binary is the egui host `spec_chum` (plus `spec-chum-debug`).
-System ROMs are never packaged. Native SwiftUI `.app` packaging is tracked
-separately ([#68](https://github.com/mward-sudo/spec_chum/issues/68)).
+System ROMs are never packaged.
+
+On macOS, release CI wraps the egui binary in a production **`Spec Chum.app`**
+bundle (double-clickable via Launch Services). The native SwiftUI shell, DMG,
+and notarisation remain separate ([#68](https://github.com/mward-sudo/spec_chum/issues/68)).
 
 ## Before tagging (required)
 
@@ -88,19 +91,24 @@ git push origin v0.1.0
    binaries; it does **not** re-run the slow suite — maintainers/agents must
    have already passed `./scripts/run_slow_tests.sh` before tagging.
 
-Archives look like:
+### Artifact layout
+
+| Platform | Archive | Contents |
+| --- | --- | --- |
+| Linux | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `spec-chum-debug`, `LICENSE`, `README.txt` |
+| Windows | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `spec-chum-debug.exe`, `LICENSE`, `README.txt` |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` | `Spec Chum.app/`, `spec-chum-debug`, `LICENSE`, `README.txt` |
+| macOS (Intel) | `spec-chum-<ver>-x86_64-apple-darwin.zip` | same as Apple silicon |
+
+Linux uses `.tar.gz` (common on Unix); Windows and macOS use `.zip`. No `roms/`
+are included.
+
+Checksums and optional signatures:
 
 ```text
-spec-chum-0.1.0-x86_64-unknown-linux-gnu.tar.gz
-spec-chum-0.1.0-x86_64-pc-windows-msvc.zip
-spec-chum-0.1.0-aarch64-apple-darwin.tar.gz
-spec-chum-0.1.0-x86_64-apple-darwin.tar.gz
 SHA256SUMS
 SHA256SUMS.asc          # only if GPG_PRIVATE_KEY is set
 ```
-
-Each archive contains `spec_chum` / `spec_chum.exe`, `spec-chum-debug` /
-`spec-chum-debug.exe`, `LICENSE`, and a short `README.txt` (no `roms/`).
 
 Linux hosts need GTK 3 and ALSA runtime libraries (`libgtk-3-0` and
 `libasound2` on Debian/Ubuntu).
@@ -117,7 +125,7 @@ is absent so a first release does not require certificates.
 | --- | --- | --- |
 | All | SHA-256 checksums | none |
 | All | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (Sigstore) | none (OIDC) |
-| macOS | Developer ID `codesign` (hardened runtime + timestamp) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
+| macOS | Developer ID `codesign` on `Spec Chum.app` + `spec-chum-debug` (hardened runtime + timestamp) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
 | Windows | Authenticode (`signtool`, SHA-256, DigiCert timestamp) | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` |
 | Checksums | Detached ASCII-armored GPG signature `SHA256SUMS.asc` | `GPG_PRIVATE_KEY`, optional `GPG_PASSPHRASE` |
 
@@ -126,8 +134,9 @@ is absent so a first release does not require certificates.
 Developer ID Application certificate, for example
 `Developer ID Application: Example Ltd (TEAMID)`.
 
-Notarizing a full `.app` / DMG is not part of this workflow (CLI tools only).
-That packaging is tracked in [#68](https://github.com/mward-sudo/spec_chum/issues/68).
+**Notarisation** of the `.app` / a DMG is not part of this workflow. Gatekeeper
+may still warn on first launch for unsigned or un-notarised builds. SwiftUI
+`.app`, DMG, and notarisation CI are tracked in [#68](https://github.com/mward-sudo/spec_chum/issues/68).
 
 Default PR CI (`.github/workflows/ci.yml`) is unchanged and does not use these
 secrets. A `workflow_dispatch` without a tag still builds archives as
@@ -144,6 +153,6 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 Attestations from the release workflow run:
 
 ```bash
-gh attestation verify spec-chum-0.1.0-aarch64-apple-darwin.tar.gz \
+gh attestation verify spec-chum-0.1.0-aarch64-apple-darwin.zip \
   --owner mward-sudo --repo spec_chum
 ```
