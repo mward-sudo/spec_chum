@@ -27,15 +27,17 @@ enum Idx {
 
 pub(crate) fn execute<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) -> u32 {
     let t0 = cpu.t;
-    // Q is cleared by default; flag-affecting ops assign `regs.q = f`.
+    // Preserve prior Q for SCF/CCF (Zilog: XY from `((Q^F)|A)`), then clear.
+    // Flag-affecting ops assign `regs.q = f`; others leave Q cleared.
+    let prev_q = cpu.regs.q;
     cpu.regs.q = 0;
     let op = cpu.fetch_opcode(bus);
     match op {
-        0xdd => exec_indexed(cpu, bus, Idx::Ix),
-        0xfd => exec_indexed(cpu, bus, Idx::Iy),
+        0xdd => exec_indexed(cpu, bus, Idx::Ix, prev_q),
+        0xfd => exec_indexed(cpu, bus, Idx::Iy, prev_q),
         0xcb => exec_cb(cpu, bus, Idx::Hl, 0),
         0xed => exec_ed(cpu, bus),
-        _ => exec_main(cpu, bus, op, Idx::Hl),
+        _ => exec_main(cpu, bus, op, Idx::Hl, prev_q),
     }
     (cpu.t - t0) as u32
 }
@@ -106,7 +108,7 @@ fn get_disp_addr<B: Memory>(cpu: &mut Cpu, bus: &mut B, idx: Idx) -> u16 {
     addr
 }
 
-fn exec_indexed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, idx: Idx) {
+fn exec_indexed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, idx: Idx, prev_q: u8) {
     let op = cpu.fetch_opcode(bus);
     match op {
         0xcb => {
@@ -123,14 +125,14 @@ fn exec_indexed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, idx: Idx) {
         0xdd | 0xfd => {
             // nested prefix: treat as new prefix (consume and restart)
             // Simpler: ignore and re-fetch — real Z80 redefines; Fuse rarely nests.
-            exec_indexed(cpu, bus, if op == 0xdd { Idx::Ix } else { Idx::Iy });
+            exec_indexed(cpu, bus, if op == 0xdd { Idx::Ix } else { Idx::Iy }, prev_q);
         }
-        _ => exec_main(cpu, bus, op, idx),
+        _ => exec_main(cpu, bus, op, idx, prev_q),
     }
 }
 
 #[allow(clippy::too_many_lines)]
-fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx) {
+fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_q: u8) {
     match op {
         0x00 => {} // NOP
         0x01 | 0x11 | 0x21 | 0x31 => {
@@ -374,19 +376,19 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx) {
             cpu.regs.q = cpu.regs.f;
         }
         0x37 => {
-            // SCF — XY from A|F (Fuse / NMOS)
+            // SCF — Zilog XY = ((Q ^ F) | A) & (X|Y)
             let old = cpu.regs.f;
-            cpu.regs.f = (old & (flag::S | flag::Z | flag::PV))
-                | flag::C
-                | ((cpu.regs.a | old) & (flag::X | flag::Y));
+            let xy = ((prev_q ^ old) | cpu.regs.a) & (flag::X | flag::Y);
+            cpu.regs.f = (old & (flag::S | flag::Z | flag::PV)) | flag::C | xy;
             cpu.regs.q = cpu.regs.f;
         }
         0x3f => {
-            // CCF — XY from A|F
+            // CCF — Zilog XY = ((Q ^ F) | A) & (X|Y); H = old C; C = !old C
             let old = cpu.regs.f;
             let c = old & flag::C;
+            let xy = ((prev_q ^ old) | cpu.regs.a) & (flag::X | flag::Y);
             cpu.regs.f = (old & (flag::S | flag::Z | flag::PV))
-                | ((cpu.regs.a | old) & (flag::X | flag::Y))
+                | xy
                 | if c != 0 { flag::H } else { 0 }
                 | if c == 0 { flag::C } else { 0 };
             cpu.regs.q = cpu.regs.f;
@@ -999,18 +1001,24 @@ fn block_ld<B: Memory>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
     if bc != 0 {
         f |= flag::PV;
     }
-    if n & 0x02 != 0 {
-        f |= flag::Y;
-    }
-    if n & 0x08 != 0 {
-        f |= flag::X;
-    }
-    cpu.regs.f = f;
-    cpu.regs.q = f;
+    // Repeat M-cycle: XY from PCh (insn addr). Final/LDI: XY from A+data.
     if repeat && bc != 0 {
+        let insn_pc = cpu.regs.pc.wrapping_sub(2);
+        f |= (insn_pc >> 8) as u8 & (flag::X | flag::Y);
+        cpu.regs.f = f;
+        cpu.regs.q = f;
         cpu.add_t(5);
-        cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
-        cpu.regs.memptr = cpu.regs.pc.wrapping_add(1);
+        cpu.regs.pc = insn_pc;
+        cpu.regs.memptr = insn_pc.wrapping_add(1);
+    } else {
+        if n & 0x02 != 0 {
+            f |= flag::Y;
+        }
+        if n & 0x08 != 0 {
+            f |= flag::X;
+        }
+        cpu.regs.f = f;
+        cpu.regs.q = f;
     }
 }
 
@@ -1034,18 +1042,52 @@ fn block_cp<B: Memory>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
     if f & flag::H != 0 {
         n = n.wrapping_sub(1);
     }
-    f |= n & flag::X;
-    if n & 0x02 != 0 {
-        f |= flag::Y;
-    }
-    cpu.regs.f = f;
-    cpu.regs.q = f;
-    cpu.regs.memptr = cpu.regs.memptr.wrapping_add(if inc { 1 } else { u16::MAX });
     if repeat && bc != 0 && f & flag::Z == 0 {
+        let insn_pc = cpu.regs.pc.wrapping_sub(2);
+        f |= (insn_pc >> 8) as u8 & (flag::X | flag::Y);
+        cpu.regs.f = f;
+        cpu.regs.q = f;
         cpu.add_t(5);
-        cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
-        cpu.regs.memptr = cpu.regs.pc.wrapping_add(1);
+        cpu.regs.pc = insn_pc;
+        cpu.regs.memptr = insn_pc.wrapping_add(1);
+    } else {
+        f |= n & flag::X;
+        if n & 0x02 != 0 {
+            f |= flag::Y;
+        }
+        cpu.regs.f = f;
+        cpu.regs.q = f;
+        cpu.regs.memptr = cpu.regs.memptr.wrapping_add(if inc { 1 } else { u16::MAX });
     }
+}
+
+/// Extra repeat-cycle flags for INIR/INDR/OTIR/OTDR (Banks / Ped7g).
+fn io_block_repeat_flags(b: u8, k: u16, v: u8, insn_pc: u16) -> u8 {
+    let nf = if v & 0x80 != 0 { flag::N } else { 0 };
+    let p = (k as u8 & 7) ^ b;
+    let hcf = k > 0xff;
+    let mut f = (b & flag::S) | ((insn_pc >> 8) as u8 & (flag::X | flag::Y)) | nf;
+    if hcf {
+        f |= flag::C;
+        if nf != 0 {
+            if b & 0x0f == 0 {
+                f |= flag::H;
+            }
+            if parity(p ^ (b.wrapping_sub(1) & 7)) {
+                f |= flag::PV;
+            }
+        } else {
+            if b & 0x0f == 0x0f {
+                f |= flag::H;
+            }
+            if parity(p ^ (b.wrapping_add(1) & 7)) {
+                f |= flag::PV;
+            }
+        }
+    } else if parity(p ^ (b & 7)) {
+        f |= flag::PV;
+    }
+    f
 }
 
 fn block_in<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
@@ -1070,21 +1112,27 @@ fn block_in<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool)
         (bc as u8).wrapping_sub(1)
     };
     let k = u16::from(v) + u16::from(c_side);
-    let mut f = sz53(b);
-    if k > 0xff {
-        f |= flag::C | flag::H;
-    }
-    if parity((k as u8 & 7) ^ b) {
-        f |= flag::PV;
-    }
-    if v & 0x80 != 0 {
-        f |= flag::N;
-    }
-    cpu.regs.f = f;
-    cpu.regs.q = f;
     if repeat && b != 0 {
+        let insn_pc = cpu.regs.pc.wrapping_sub(2);
+        let f = io_block_repeat_flags(b, k, v, insn_pc);
+        cpu.regs.f = f;
+        cpu.regs.q = f;
         cpu.add_t(5);
-        cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
+        cpu.regs.pc = insn_pc;
+        cpu.regs.memptr = insn_pc.wrapping_add(1);
+    } else {
+        let mut f = sz53(b);
+        if k > 0xff {
+            f |= flag::C | flag::H;
+        }
+        if parity((k as u8 & 7) ^ b) {
+            f |= flag::PV;
+        }
+        if v & 0x80 != 0 {
+            f |= flag::N;
+        }
+        cpu.regs.f = f;
+        cpu.regs.q = f;
     }
 }
 
@@ -1109,20 +1157,26 @@ fn block_out<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool
     };
     // OUTI/OUTD: k = value + L after HL update.
     let k = u16::from(v) + u16::from(hl2 as u8);
-    let mut f = sz53(b);
-    if k > 0xff {
-        f |= flag::C | flag::H;
-    }
-    if parity((k as u8 & 7) ^ b) {
-        f |= flag::PV;
-    }
-    if v & 0x80 != 0 {
-        f |= flag::N;
-    }
-    cpu.regs.f = f;
-    cpu.regs.q = f;
     if repeat && b != 0 {
+        let insn_pc = cpu.regs.pc.wrapping_sub(2);
+        let f = io_block_repeat_flags(b, k, v, insn_pc);
+        cpu.regs.f = f;
+        cpu.regs.q = f;
         cpu.add_t(5);
-        cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
+        cpu.regs.pc = insn_pc;
+        cpu.regs.memptr = insn_pc.wrapping_add(1);
+    } else {
+        let mut f = sz53(b);
+        if k > 0xff {
+            f |= flag::C | flag::H;
+        }
+        if parity((k as u8 & 7) ^ b) {
+            f |= flag::PV;
+        }
+        if v & 0x80 != 0 {
+            f |= flag::N;
+        }
+        cpu.regs.f = f;
+        cpu.regs.q = f;
     }
 }

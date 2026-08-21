@@ -1,5 +1,5 @@
 ---
-description: Issue #17 DONE — keep z80doc green; z80full opt-in/ignored
+description: Issue #17 DONE — keep z80doc + z80full green under slow-tests
 alwaysApply: true
 ---
 
@@ -9,11 +9,14 @@ Track: https://github.com/mward-sudo/spec_chum/issues/17 (closed)
 
 Real Patrik Rak [z80test](https://github.com/raxoft/z80test) TAP runner lives in `crates/machine/src/z80test.rs` under `--features slow-tests`. **Do not reopen #17** or treat the harness as a stub.
 
+Follow-up [#122](https://github.com/mward-sudo/spec_chum/issues/122): `z80full` passes and is **not** `#[ignore]`.
+
 ## Current expectations
 
 1. **`z80doc`** — checked-in fixture; keep CI / opt-in slow-tests green:
    `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed`
-2. **`z80full`** — still optional / `#[ignore]`; fetch with `./scripts/fetch_z80test.sh`, then run with `--ignored`. Not required to keep #17 closed.
+2. **`z80full`** — checked-in fixture; runs under `--features slow-tests` (not ignored). CI still selects `z80doc` by name only so default PR CI stays bounded:
+   `cargo test -p machine --features slow-tests --release z80full_all_tests_passed`
 
 ## Agent guardrails
 

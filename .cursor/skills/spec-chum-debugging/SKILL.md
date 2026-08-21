@@ -158,7 +158,7 @@ JSON: `--json dump-state` or `type-load --json` wraps `inspect` + `load_ok`.
 
 **Fuse** (`cargo test -p z80 fuse_all_vectors --offline -- --nocapture`): failed vector prints got/want regs/mem/T-states and a **start-PC** disasm window (no global `trace` crate).
 
-**z80test** (`--features slow-tests`): fail/timeout panics with RST10 capture + `Machine::inspect()` Display. Keep `z80doc` green; `z80full` is optional/`#[ignore]`.
+**z80test** (`--features slow-tests`): fail/timeout panics with RST10 capture + `Machine::inspect()` Display. Keep `z80doc` and `z80full` green under the feature (CI runs `z80doc` by name).
 
 **Contention / beam**: Inspect `frame_t`, line/`x`, `INT`, `contend_pc`; enable `bus` for contend/floating events.
 

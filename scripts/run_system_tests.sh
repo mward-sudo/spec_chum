@@ -12,7 +12,7 @@ echo "==> system-tests (release)"
 cargo test -p machine --features system-tests --release system_tests -- --nocapture
 
 if [[ "${SYSTEM_TESTS_Z80FULL:-0}" == 1 ]]; then
-  echo "==> z80full (optional CPU suite)"
+  echo "==> z80full (CPU suite under slow-tests)"
   ./scripts/fetch_z80test.sh
-  cargo test -p machine --features slow-tests --release z80full -- --nocapture --ignored
+  cargo test -p machine --features slow-tests --release z80full_all_tests_passed -- --nocapture
 fi

@@ -155,3 +155,44 @@ impl Cpu {
         self.regs.memptr = (port & 0xff00) | (port.wrapping_add(1) & 0x00ff);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bus::FlatMem;
+    use crate::registers::flag;
+
+    #[test]
+    fn scf_ccf_use_q_for_undocumented_xy() {
+        // After a flag-affecting op, Q == F, so SCF/CCF XY come from A only.
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0] = 0xaf; // XOR A → F=0x44 (Z|PV), Q=F
+        mem.data[1] = 0x37; // SCF
+        cpu.regs.a = 0x28; // has Y|X
+        cpu.regs.f = 0xff;
+        cpu.regs.pc = 0;
+        cpu.step(&mut mem);
+        assert_eq!(cpu.regs.q, cpu.regs.f);
+        cpu.regs.a = 0x00; // no XY in A
+        cpu.regs.f = flag::S | flag::Z | flag::PV | flag::X | flag::Y | flag::C;
+        // Force Q == F (as XOR left it matching F after we tweak F/A for the SCF case).
+        cpu.regs.q = cpu.regs.f;
+        cpu.step(&mut mem); // SCF
+                            // XY must be from A (0), not F|A, when Q == F.
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), 0);
+        assert_eq!(cpu.regs.f & flag::C, flag::C);
+
+        // After a non-flag op, Q == 0, so SCF XY = (F|A) & XY.
+        mem.data[2] = 0x00; // NOP clears Q
+        mem.data[3] = 0x37; // SCF
+        cpu.regs.pc = 2;
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::X | flag::Y;
+        cpu.regs.q = 0;
+        cpu.step(&mut mem); // NOP
+        assert_eq!(cpu.regs.q, 0);
+        cpu.step(&mut mem); // SCF
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), flag::X | flag::Y);
+    }
+}
