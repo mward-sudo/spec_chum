@@ -76,7 +76,9 @@ The script (1) on ready PRs checks CodeRabbit on HEAD and **hard-fails** on pend
 - Integration tests that need ROMs must skip cleanly when `roms/` is missing.
 - **z80test** (Patrik Rak): `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed -- --nocapture`.
   For `z80full`: `./scripts/fetch_z80test.sh` then `cargo test -p machine --features slow-tests --release z80full -- --nocapture --ignored`.
-- **System tests** (Bobrowski Minfo / ULA test 3, Rak Timing Test, Sinclair ROM boot): optional and slow; not in `./scripts/check.sh`. `./scripts/run_system_tests.sh` (see `tests/fixtures/system/README.md`). Failures are real accuracy misses — do not stub them.
+  Day-to-day `z80full` stays `#[ignore]`; **releases require it** (see below).
+- **System tests** (Bobrowski Minfo / ULA test 3, Rak Timing Test, Sinclair ROM boot): slow; not in `./scripts/check.sh`. `./scripts/run_system_tests.sh` (see `tests/fixtures/system/README.md`). Failures are real accuracy misses — do not stub them. Optional for routine PRs; **required before a `vX.Y.Z` release**.
+- **Before tagging a release:** run `./scripts/run_slow_tests.sh` (z80doc + system-tests + z80full). See [docs/RELEASE.md](docs/RELEASE.md).
 - **GUI**: logic lives in `app` as a library. Headless tests use `EmulatorSession` (no display) plus an egui `Context::run` smoke test — no xvfb required for CI.
 
 ## Stack commands (non-interactive)

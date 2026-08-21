@@ -35,3 +35,9 @@ rests on the committed digests.
 ```bash
 ./scripts/run_system_tests.sh
 ```
+
+Before a `vX.Y.Z` release, prefer the full slow suite (system-tests + z80doc + z80full):
+
+```bash
+./scripts/run_slow_tests.sh
+```

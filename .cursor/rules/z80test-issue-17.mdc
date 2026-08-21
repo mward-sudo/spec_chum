@@ -13,7 +13,10 @@ Real Patrik Rak [z80test](https://github.com/raxoft/z80test) TAP runner lives in
 
 1. **`z80doc`** — checked-in fixture; keep CI / opt-in slow-tests green:
    `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed`
-2. **`z80full`** — still optional / `#[ignore]`; fetch with `./scripts/fetch_z80test.sh`, then run with `--ignored`. Not required to keep #17 closed.
+2. **`z80full`** — opt-in / `#[ignore]` for day-to-day and default CI; fetch with
+   `./scripts/fetch_z80test.sh`, then run with `--ignored`. Not required to keep
+   #17 closed. **Required before a `vX.Y.Z` release** (via `./scripts/run_slow_tests.sh`
+   or `SYSTEM_TESTS_Z80FULL=1 ./scripts/run_system_tests.sh`) — see `docs/RELEASE.md`.
 
 ## Agent guardrails
 

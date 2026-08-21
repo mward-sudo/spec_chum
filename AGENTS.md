@@ -34,6 +34,8 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 GitHub Release binaries (egui `spec_chum` + `spec-chum-debug`) are built by
 `.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
 Do not attach ROMs. Native SwiftUI `.app` / DMG packaging, notarisation, and related CI are tracked in [#68](https://github.com/mward-sudo/spec_chum/issues/68) (out of scope for the CLI release workflow).
+**Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
+(z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
 
 ## Agent workflow (clippy-first)
 
@@ -50,8 +52,8 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.
-- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` (fixture in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) is **done** (`z80doc`); `z80full` remains opt-in/`#[ignore]` — see `.cursor/rules/z80test-issue-17.mdc`.
-- System tests (optional, not default CI): `./scripts/run_system_tests.sh` — third-party ULA/ROM TAPs cached in `.rom-cache/system-tests/` (not git; [#108](https://github.com/mward-sudo/spec_chum/issues/108)).
+- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` (fixture in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) is **done** (`z80doc`); day-to-day `z80full` remains opt-in/`#[ignore]` — see `.cursor/rules/z80test-issue-17.mdc`. **Releases require z80full** via `./scripts/run_slow_tests.sh`.
+- System tests (not default CI): `./scripts/run_system_tests.sh` — third-party ULA/ROM TAPs cached in `.rom-cache/system-tests/` (not git; [#108](https://github.com/mward-sudo/spec_chum/issues/108)). Optional for routine PR work; **required before release** (included in `./scripts/run_slow_tests.sh`).
 
 ## PR / stack
 
