@@ -42,10 +42,14 @@ impl Cpu {
     }
 
     /// Accept a maskable interrupt if enabled. Returns T-states of ACK sequence, or 0.
+    ///
+    /// The returned value includes contention waits from stack / IM2 vector accesses so
+    /// hosts can advance ULA/`frame_t` in lockstep with `cpu.t`.
     pub fn interrupt<M: Memory>(&mut self, mem: &mut M) -> u32 {
         if self.interrupt_deferred || !self.regs.iff1 {
             return 0;
         }
+        let t0 = self.t;
         // While halted, PC sits on the HALT opcode. Accepting INT advances PC onto the
         // following instruction before the return address is pushed (Undocumented Z80).
         // Only bump PC when it still addresses HALT — hosts may redirect PC while the
@@ -61,20 +65,14 @@ impl Cpu {
         self.regs.iff2 = false;
         self.regs.inc_r();
 
+        // Nominal breakdown (uncontended): IM0/1 = 7T ack + 6T push; IM2 adds 6T vector.
+        // `push` / `read_mem` already account for their memory cycles (+ contention).
         match self.regs.im {
-            0 => {
+            0 | 1 => {
                 self.push(mem, self.regs.pc);
                 self.regs.pc = 0x0038;
                 self.regs.memptr = 0x0038;
-                self.add_t(13);
-                13
-            }
-            1 => {
-                self.push(mem, self.regs.pc);
-                self.regs.pc = 0x0038;
-                self.regs.memptr = 0x0038;
-                self.add_t(13);
-                13
+                self.add_t(7);
             }
             _ => {
                 self.push(mem, self.regs.pc);
@@ -84,10 +82,10 @@ impl Cpu {
                 let addr = u16::from(hi) << 8 | u16::from(lo);
                 self.regs.pc = addr;
                 self.regs.memptr = addr;
-                self.add_t(19);
-                19
+                self.add_t(7);
             }
         }
+        (self.t.wrapping_sub(t0)) as u32
     }
 
     #[inline]
@@ -185,12 +183,29 @@ mod tests {
         assert!(cpu.regs.halted);
         assert_eq!(cpu.regs.pc, 0x1000);
         let t = cpu.interrupt(&mut mem);
-        assert!(t > 0);
+        assert_eq!(t, 13, "uncontended IM1 IRQ is 13 T");
         assert!(!cpu.regs.halted);
         // Return address on stack must be the instruction after HALT.
         let ret = u16::from(mem.data[cpu.regs.sp as usize])
             | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
         assert_eq!(ret, 0x1001);
+    }
+
+    #[test]
+    fn interrupt_im2_uncontended_is_19_t() {
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        // Spectrum INTACK data bus is 0xFF → vector at (I<<8)|0xFF.
+        mem.data[0xfeff] = 0x00;
+        mem.data[0xff00] = 0x40; // → 0x4000
+        cpu.regs.i = 0xfe;
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 2;
+        cpu.regs.pc = 0x0100;
+        let t = cpu.interrupt(&mut mem);
+        assert_eq!(t, 19);
+        assert_eq!(cpu.regs.pc, 0x4000);
     }
 
     #[test]
