@@ -82,8 +82,8 @@ Failures are real accuracy misses — do not stub them to ship.
 ```bash
 git checkout main
 git pull
-git tag -a v0.1.0 -m "Spec Chum 0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "Spec Chum 0.2.0"
+git push origin v0.2.0
 ```
 
 5. The [Release](../.github/workflows/release.yml) workflow runs on `v*.*.*`
@@ -154,6 +154,6 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 Attestations from the release workflow run:
 
 ```bash
-gh attestation verify spec-chum-0.1.0-aarch64-apple-darwin.zip \
+gh attestation verify spec-chum-0.2.0-aarch64-apple-darwin.zip \
   --owner mward-sudo --repo spec_chum
 ```
