@@ -8,7 +8,7 @@
 #   stage-macos-egui-app.sh <version> <spec_chum-binary> <dest-app-path>
 #
 # Example:
-#   stage-macos-egui-app.sh 0.1.0 target/release/spec_chum "dist/out/Spec Chum.app"
+#   stage-macos-egui-app.sh 0.2.0 target/release/spec_chum "dist/out/Spec Chum.app"
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
