@@ -63,6 +63,8 @@ impl Cpu {
         }
         self.regs.iff1 = false;
         self.regs.iff2 = false;
+        // IRQ ACK bypasses `execute`, which normally clears Q for non-flag ops.
+        self.regs.q = 0;
         self.regs.inc_r();
 
         // Nominal breakdown (uncontended): IM0/1 = 7T ack + 6T push; IM2 adds 6T vector.
@@ -168,6 +170,88 @@ impl Cpu {
 mod tests {
     use super::*;
     use crate::bus::FlatMem;
+    use crate::registers::flag;
+
+    #[test]
+    fn scf_ccf_use_q_for_undocumented_xy() {
+        // After a flag-affecting op, Q == F, so SCF/CCF XY come from A only.
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0] = 0xaf; // XOR A → F=0x44 (Z|PV), Q=F
+        mem.data[1] = 0x37; // SCF
+        mem.data[2] = 0x3f; // CCF
+        cpu.regs.a = 0x28; // has Y|X
+        cpu.regs.f = 0xff;
+        cpu.regs.pc = 0;
+        cpu.step(&mut mem);
+        assert_eq!(cpu.regs.q, cpu.regs.f);
+        cpu.regs.a = 0x00; // no XY in A
+                           // Carry clear so SCF's set-C assertion is meaningful.
+        cpu.regs.f = flag::S | flag::Z | flag::PV | flag::X | flag::Y | flag::H | flag::N;
+        cpu.regs.q = cpu.regs.f;
+        cpu.step(&mut mem); // SCF
+                            // XY must be from A (0), not F|A, when Q == F.
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), 0);
+        assert_eq!(cpu.regs.f & flag::C, flag::C);
+        assert_eq!(cpu.regs.f & (flag::H | flag::N), 0);
+
+        // CCF with Q == F: XY from A only; carry toggles; H copies prior C.
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::S | flag::Z | flag::PV | flag::X | flag::Y | flag::C;
+        cpu.regs.q = cpu.regs.f;
+        cpu.step(&mut mem); // CCF
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), 0);
+        assert_eq!(cpu.regs.f & flag::C, 0);
+        assert_eq!(cpu.regs.f & flag::H, flag::H);
+        assert_eq!(cpu.regs.f & flag::N, 0);
+
+        // After a non-flag op, Q == 0, so SCF XY = (F|A) & XY.
+        mem.data[3] = 0x00; // NOP clears Q
+        mem.data[4] = 0x37; // SCF
+        cpu.regs.pc = 3;
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::X | flag::Y;
+        cpu.regs.q = cpu.regs.f; // non-zero so NOP clear is observable
+        cpu.step(&mut mem); // NOP
+        assert_eq!(cpu.regs.q, 0);
+        cpu.step(&mut mem); // SCF
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), flag::X | flag::Y);
+        assert_eq!(cpu.regs.f & flag::C, flag::C);
+
+        // CCF with Q == 0: XY = (F|A) & XY; carry toggles.
+        mem.data[6] = 0x00; // NOP
+        mem.data[7] = 0x3f; // CCF
+        cpu.regs.pc = 6;
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::X | flag::Y | flag::C;
+        cpu.regs.q = cpu.regs.f;
+        cpu.step(&mut mem); // NOP
+        assert_eq!(cpu.regs.q, 0);
+        cpu.step(&mut mem); // CCF
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), flag::X | flag::Y);
+        assert_eq!(cpu.regs.f & flag::C, 0);
+    }
+
+    #[test]
+    fn interrupt_clears_q_before_scf() {
+        // IRQ acceptance bypasses execute(), so it must clear Q itself.
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0x0038] = 0x37; // SCF at IM1 vector
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 1;
+        cpu.regs.pc = 0x0100;
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::X | flag::Y;
+        cpu.regs.q = cpu.regs.f; // stale Q as if after a flag-affecting op
+        let t = cpu.interrupt(&mut mem);
+        assert_eq!(t, 13);
+        assert_eq!(cpu.regs.q, 0);
+        cpu.step(&mut mem); // SCF with Q==0 → XY from F|A
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), flag::X | flag::Y);
+        assert_eq!(cpu.regs.f & flag::C, flag::C);
+    }
 
     #[test]
     fn interrupt_while_halted_resumes_after_halt() {

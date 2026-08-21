@@ -41,14 +41,14 @@ That is exactly:
    ./scripts/run_system_tests.sh
    ```
 
-3. **z80full** — full Patrik Rak CPU suite (`#[ignore]` day-to-day / not default
-   CI; **required for release**). Included when you use `run_slow_tests.sh`, or:
+3. **z80full** — full Patrik Rak CPU suite under `--features slow-tests`
+   (fixture checked in at `tests/fixtures/z80test/z80full.tap`; **required for
+   release**). Included when you use `run_slow_tests.sh`, or:
 
    ```bash
    SYSTEM_TESTS_Z80FULL=1 ./scripts/run_system_tests.sh
    # equivalent:
-   ./scripts/fetch_z80test.sh
-   cargo test -p machine --features slow-tests --release z80full -- --nocapture --ignored
+   cargo test -p machine --features slow-tests --release z80full_all_tests_passed -- --nocapture
    ```
 
 Also run the usual fast gate on that same commit:
@@ -65,7 +65,8 @@ Distinguish cache vs fixture paths:
 - z80test release archive cache: `.rom-cache/z80test-1.2a.zip` (via
   `./scripts/fetch_z80test.sh`)
 - Extracted CPU fixtures used by the suite: `tests/fixtures/z80test/`
-  (`z80doc.tap` is in git; `z80full.tap` is extracted there when fetched)
+  (`z80doc.tap` and `z80full.tap` are in git; `./scripts/fetch_z80test.sh` can
+  refresh them from `.rom-cache/z80test-1.2a.zip` if needed)
 
 Failures are real accuracy misses — do not stub them to ship.
 

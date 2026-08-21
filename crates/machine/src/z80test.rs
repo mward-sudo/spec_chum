@@ -222,10 +222,9 @@ mod tests {
         }
     }
 
-    /// Full flag/register suite. Fetch with `./scripts/fetch_z80test.sh`, then:
-    /// `cargo test -p machine --features slow-tests --release z80full -- --nocapture --ignored`
+    /// Full flag/register suite (`z80full.tap`; also via `./scripts/fetch_z80test.sh`).
+    /// `cargo test -p machine --features slow-tests --release z80full_all_tests_passed -- --nocapture`
     #[test]
-    #[ignore = "opt-in: needs z80full.tap from fetch_z80test.sh; slower than z80doc"]
     fn z80full_all_tests_passed() {
         let tap = fixture_dir().join("z80full.tap");
         if !tap.exists() {

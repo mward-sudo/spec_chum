@@ -16,7 +16,10 @@ echo "==> system-tests (release)"
 cargo test -p machine --features system-tests --release system_tests -- --nocapture
 
 if [[ "${SYSTEM_TESTS_Z80FULL:-0}" == 1 ]]; then
-  echo "==> z80full (release / opt-in CPU suite; #[ignore] day-to-day)"
-  ./scripts/fetch_z80test.sh
-  cargo test -p machine --features slow-tests --release z80full -- --nocapture --ignored
+  echo "==> z80full (CPU suite under slow-tests)"
+  # z80full.tap is checked in under tests/fixtures/z80test/; only fetch if missing.
+  if [[ ! -f tests/fixtures/z80test/z80full.tap ]]; then
+    ./scripts/fetch_z80test.sh
+  fi
+  cargo test -p machine --features slow-tests --release z80full_all_tests_passed -- --nocapture
 fi

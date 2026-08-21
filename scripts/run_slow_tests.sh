@@ -5,7 +5,7 @@
 # Covers:
 #   1. z80doc     (--features slow-tests; fixture in git)
 #   2. system-tests (--features system-tests; fetched TAPs)
-#   3. z80full    (--features slow-tests, #[ignore]; fetched via fetch_z80test.sh)
+#   3. z80full    (--features slow-tests; fixture in tests/fixtures/z80test/)
 #
 # See docs/RELEASE.md.
 set -euo pipefail

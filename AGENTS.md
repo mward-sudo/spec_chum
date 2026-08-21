@@ -4,7 +4,9 @@ Cross-tool project facts for LLM-assisted work. Cursor-specific rules live in `.
 
 ## What this is
 
-From-scratch ZX Spectrum emulator in Rust + egui. Cycle-accurate Z80 and ULA timing are first-class goals. System ROMs are **not** in git — use `./scripts/fetch_roms.sh`.
+From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-accurate Z80 and ULA timing are first-class goals — prefer real accuracy fixes over weakening tests or leaving suites ignored. System ROMs are **not** in git — use `./scripts/fetch_roms.sh`.
+
+**Convenience exceptions** (flash-load / turbo tape speed, UI helpers) intentionally diverge from real EAR timing but must still **load correctly**. Do not “fix” those paths to match hardware T-states; do not weaken hardware-path assertions to accommodate them. Accuracy tests stay on the real-timing path.
 
 ## Crate map
 
@@ -54,7 +56,7 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.
-- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` (fixture in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) is **done** (`z80doc`); day-to-day `z80full` remains opt-in/`#[ignore]` — see `.cursor/rules/z80test-issue-17.mdc`. **Releases require z80full** via `./scripts/run_slow_tests.sh`.
+- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` and `… z80full_all_tests_passed` (fixtures in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) / [#122](https://github.com/mward-sudo/spec_chum/issues/122) — see `.cursor/rules/z80test-issue-17.mdc`. **Releases require** `./scripts/run_slow_tests.sh` (includes z80full).
 - System tests (not default CI): `./scripts/run_system_tests.sh` — third-party ULA/ROM TAPs cached in `.rom-cache/system-tests/` (not git; [#108](https://github.com/mward-sudo/spec_chum/issues/108)). Optional for routine PR work; **required before release** (included in `./scripts/run_slow_tests.sh`).
 
 ## PR / stack
