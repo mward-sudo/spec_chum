@@ -10,12 +10,73 @@ On macOS, release CI wraps the egui binary in a production **`Spec Chum.app`**
 bundle (double-clickable via Launch Services). The native SwiftUI shell, DMG,
 and notarisation remain separate ([#68](https://github.com/mward-sudo/spec_chum/issues/68)).
 
+## Before tagging (required)
+
+Do **not** push a `vX.Y.Z` tag (and do not treat merge-then-tag as done) until
+the **full slow test suite** passes on the commit you intend to release.
+Default PR CI and `./scripts/check.sh` are not enough.
+
+### Full slow test suite
+
+One command (preferred):
+
+```bash
+./scripts/run_slow_tests.sh
+```
+
+That is exactly:
+
+1. **z80doc** — Patrik Rak z80test documented suite (`--features slow-tests`;
+   fixture in `tests/fixtures/z80test/`):
+
+   ```bash
+   ./scripts/fetch_roms.sh
+   cargo test -p machine --features slow-tests --release z80doc_all_tests_passed -- --nocapture
+   ```
+
+2. **system-tests** — third-party ULA/ROM TAP suite (`--features system-tests`;
+   fixtures fetched into `.rom-cache/system-tests/`):
+
+   ```bash
+   ./scripts/run_system_tests.sh
+   ```
+
+3. **z80full** — full Patrik Rak CPU suite (`#[ignore]` day-to-day / not default
+   CI; **required for release**). Included when you use `run_slow_tests.sh`, or:
+
+   ```bash
+   SYSTEM_TESTS_Z80FULL=1 ./scripts/run_system_tests.sh
+   # equivalent:
+   ./scripts/fetch_z80test.sh
+   cargo test -p machine --features slow-tests --release z80full -- --nocapture --ignored
+   ```
+
+Also run the usual fast gate on that same commit:
+
+```bash
+./scripts/check.sh
+```
+
+Needs network once for ROMs, system TAPs, and (if missing) the z80test archive.
+Distinguish cache vs fixture paths:
+
+- ROM images: `roms/` (via `./scripts/fetch_roms.sh`)
+- System-test TAPs: `.rom-cache/system-tests/`
+- z80test release archive cache: `.rom-cache/z80test-1.2a.zip` (via
+  `./scripts/fetch_z80test.sh`)
+- Extracted CPU fixtures used by the suite: `tests/fixtures/z80test/`
+  (`z80doc.tap` is in git; `z80full.tap` is extracted there when fetched)
+
+Failures are real accuracy misses — do not stub them to ship.
+
 ## Cut a release
 
 1. Version is `[workspace.package] version` in the root `Cargo.toml` (currently
    inherited by every crate).
 2. Commit any version bump on `main`.
-3. Tag and push (annotated tags preferred):
+3. Confirm `./scripts/check.sh` and `./scripts/run_slow_tests.sh` are green on
+   that commit (see above).
+4. Tag and push (annotated tags preferred):
 
 ```bash
 git checkout main
@@ -24,9 +85,11 @@ git tag -a v0.1.0 -m "Spec Chum 0.1.0"
 git push origin v0.1.0
 ```
 
-1. The [Release](../.github/workflows/release.yml) workflow runs on `v*.*.*`
+5. The [Release](../.github/workflows/release.yml) workflow runs on `v*.*.*`
    tags. It also supports **Actions → Release → Run workflow** with an existing
-   tag if you need to rebuild assets.
+   tag if you need to rebuild assets. The workflow builds and publishes
+   binaries; it does **not** re-run the slow suite — maintainers/agents must
+   have already passed `./scripts/run_slow_tests.sh` before tagging.
 
 ### Artifact layout
 
