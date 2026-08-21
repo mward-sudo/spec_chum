@@ -37,9 +37,9 @@ See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 ## Releases
 
-Push a `vX.Y.Z` tag to build macOS, Linux, and Windows binaries and attach them
-to a GitHub Release (optional Apple/Windows/GPG signing). See
-[docs/RELEASE.md](docs/RELEASE.md).
+Push a `vX.Y.Z` tag to build release archives: macOS `.zip` with `Spec Chum.app`,
+Windows `.zip` with `.exe`s, Linux `.tar.gz` with binaries (optional
+Apple/Windows/GPG signing). See [docs/RELEASE.md](docs/RELEASE.md).
 
 ## ROMs
 

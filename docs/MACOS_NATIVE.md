@@ -129,8 +129,12 @@ not a rapid flicker.
 
 - Kempston joystick mirroring in the native shell
 - Snapshots (SNA/Z80), RZX, DSK
-- Signed / notarized distribution bundle (dev launch uses a staged `.app` via `open`)
+- Signed / notarized SwiftUI distribution bundle (dev launch uses a staged `.app` via `open`)
 - CI job that compiles the Swift shell (Linux CI stays Rust-only)
+
+GitHub Releases currently ship an **egui**-wrapped `Spec Chum.app` (see
+[RELEASE.md](RELEASE.md)). This SwiftUI shell is not yet a release artifact;
+optional CI build + DMG/notarisation: [#68](https://github.com/mward-sudo/spec_chum/issues/68).
 
 ## Layout
 
