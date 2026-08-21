@@ -395,7 +395,8 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
         }
         0x76 => {
             cpu.regs.halted = true;
-            // PC points at HALT so interrupt resumes it
+            // After fetch, PC points past HALT; rewind so idle re-fetches HALT.
+            // `Cpu::interrupt` advances PC again before pushing the return address.
             cpu.regs.pc = cpu.regs.pc.wrapping_sub(1);
         }
         // LD r,r' / ALU / etc.
@@ -1090,6 +1091,21 @@ fn io_block_repeat_flags(b: u8, k: u16, v: u8, insn_pc: u16) -> u8 {
     f
 }
 
+/// Final / non-repeat flags for INI/IND/OUTI/OUTD (and last iteration of *IR/*DR).
+fn io_block_final_flags(b: u8, k: u16, v: u8) -> u8 {
+    let mut f = sz53(b);
+    if k > 0xff {
+        f |= flag::C | flag::H;
+    }
+    if parity((k as u8 & 7) ^ b) {
+        f |= flag::PV;
+    }
+    if v & 0x80 != 0 {
+        f |= flag::N;
+    }
+    f
+}
+
 fn block_in<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
     cpu.add_t(1);
     let bc = cpu.regs.bc();
@@ -1121,16 +1137,7 @@ fn block_in<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool)
         cpu.regs.pc = insn_pc;
         cpu.regs.memptr = insn_pc.wrapping_add(1);
     } else {
-        let mut f = sz53(b);
-        if k > 0xff {
-            f |= flag::C | flag::H;
-        }
-        if parity((k as u8 & 7) ^ b) {
-            f |= flag::PV;
-        }
-        if v & 0x80 != 0 {
-            f |= flag::N;
-        }
+        let f = io_block_final_flags(b, k, v);
         cpu.regs.f = f;
         cpu.regs.q = f;
     }
@@ -1166,16 +1173,7 @@ fn block_out<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool
         cpu.regs.pc = insn_pc;
         cpu.regs.memptr = insn_pc.wrapping_add(1);
     } else {
-        let mut f = sz53(b);
-        if k > 0xff {
-            f |= flag::C | flag::H;
-        }
-        if parity((k as u8 & 7) ^ b) {
-            f |= flag::PV;
-        }
-        if v & 0x80 != 0 {
-            f |= flag::N;
-        }
+        let f = io_block_final_flags(b, k, v);
         cpu.regs.f = f;
         cpu.regs.q = f;
     }

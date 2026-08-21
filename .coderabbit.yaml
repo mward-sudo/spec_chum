@@ -5,10 +5,13 @@
 # Goal: do not burn review allowance on every push while iterating.
 # Agents/humans: open draft PRs → when merge-candidate, undraft + request one review.
 #
-# Trigger a review (either works when auto_review.enabled is false):
-#   - Comment: @coderabbitai full review   (preferred first pass)
-#   - Comment: @coderabbitai review        (incremental after prior review)
+# Trigger a review (when auto_review.enabled is false):
+#   - Comment: @coderabbitai full review   (use this for merge-candidate and
+#     post-fix HEAD — required while auto_incremental_review is false)
 #   - Add PR label: coderabbit-review
+# Do NOT comment @coderabbitai review while auto_incremental_review is false:
+# CodeRabbit skips it ("incremental reviews are disabled"). To allow that
+# incremental command later, set auto_incremental_review: true.
 #
 # If UI settings disagree with this file, resolve via CodeRabbit GitHub app
 # (repo → Settings / Configuration). Prefer keeping Automatic Reviews off in

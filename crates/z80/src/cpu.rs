@@ -42,29 +42,39 @@ impl Cpu {
     }
 
     /// Accept a maskable interrupt if enabled. Returns T-states of ACK sequence, or 0.
+    ///
+    /// The returned value includes contention waits from stack / IM2 vector accesses so
+    /// hosts can advance ULA/`frame_t` in lockstep with `cpu.t`.
     pub fn interrupt<M: Memory>(&mut self, mem: &mut M) -> u32 {
         if self.interrupt_deferred || !self.regs.iff1 {
             return 0;
         }
-        self.regs.halted = false;
+        let t0 = self.t;
+        // While halted, PC sits on the HALT opcode. Accepting INT advances PC onto the
+        // following instruction before the return address is pushed (Undocumented Z80).
+        // Only bump PC when it still addresses HALT — hosts may redirect PC while the
+        // halted flag is still set (test USR entry, debugger poke, etc.).
+        if self.regs.halted {
+            self.regs.halted = false;
+            let op = mem.read(self.regs.pc, self.t).0;
+            if op == 0x76 {
+                self.regs.pc = self.regs.pc.wrapping_add(1);
+            }
+        }
         self.regs.iff1 = false;
         self.regs.iff2 = false;
+        // IRQ ACK bypasses `execute`, which normally clears Q for non-flag ops.
+        self.regs.q = 0;
         self.regs.inc_r();
 
+        // Nominal breakdown (uncontended): IM0/1 = 7T ack + 6T push; IM2 adds 6T vector.
+        // `push` / `read_mem` already account for their memory cycles (+ contention).
         match self.regs.im {
-            0 => {
+            0 | 1 => {
                 self.push(mem, self.regs.pc);
                 self.regs.pc = 0x0038;
                 self.regs.memptr = 0x0038;
-                self.add_t(13);
-                13
-            }
-            1 => {
-                self.push(mem, self.regs.pc);
-                self.regs.pc = 0x0038;
-                self.regs.memptr = 0x0038;
-                self.add_t(13);
-                13
+                self.add_t(7);
             }
             _ => {
                 self.push(mem, self.regs.pc);
@@ -74,10 +84,10 @@ impl Cpu {
                 let addr = u16::from(hi) << 8 | u16::from(lo);
                 self.regs.pc = addr;
                 self.regs.memptr = addr;
-                self.add_t(19);
-                19
+                self.add_t(7);
             }
         }
+        (self.t.wrapping_sub(t0)) as u32
     }
 
     #[inline]
@@ -169,30 +179,136 @@ mod tests {
         let mut mem = FlatMem::new();
         mem.data[0] = 0xaf; // XOR A → F=0x44 (Z|PV), Q=F
         mem.data[1] = 0x37; // SCF
+        mem.data[2] = 0x3f; // CCF
         cpu.regs.a = 0x28; // has Y|X
         cpu.regs.f = 0xff;
         cpu.regs.pc = 0;
         cpu.step(&mut mem);
         assert_eq!(cpu.regs.q, cpu.regs.f);
         cpu.regs.a = 0x00; // no XY in A
-        cpu.regs.f = flag::S | flag::Z | flag::PV | flag::X | flag::Y | flag::C;
-        // Force Q == F (as XOR left it matching F after we tweak F/A for the SCF case).
+        // Carry clear so SCF's set-C assertion is meaningful.
+        cpu.regs.f = flag::S | flag::Z | flag::PV | flag::X | flag::Y | flag::H | flag::N;
         cpu.regs.q = cpu.regs.f;
         cpu.step(&mut mem); // SCF
-                            // XY must be from A (0), not F|A, when Q == F.
+        // XY must be from A (0), not F|A, when Q == F.
         assert_eq!(cpu.regs.f & (flag::X | flag::Y), 0);
         assert_eq!(cpu.regs.f & flag::C, flag::C);
+        assert_eq!(cpu.regs.f & (flag::H | flag::N), 0);
+
+        // CCF with Q == F: XY from A only; carry toggles; H copies prior C.
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::S | flag::Z | flag::PV | flag::X | flag::Y | flag::C;
+        cpu.regs.q = cpu.regs.f;
+        cpu.step(&mut mem); // CCF
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), 0);
+        assert_eq!(cpu.regs.f & flag::C, 0);
+        assert_eq!(cpu.regs.f & flag::H, flag::H);
+        assert_eq!(cpu.regs.f & flag::N, 0);
 
         // After a non-flag op, Q == 0, so SCF XY = (F|A) & XY.
-        mem.data[2] = 0x00; // NOP clears Q
-        mem.data[3] = 0x37; // SCF
-        cpu.regs.pc = 2;
+        mem.data[3] = 0x00; // NOP clears Q
+        mem.data[4] = 0x37; // SCF
+        cpu.regs.pc = 3;
         cpu.regs.a = 0x00;
         cpu.regs.f = flag::X | flag::Y;
-        cpu.regs.q = 0;
+        cpu.regs.q = cpu.regs.f; // non-zero so NOP clear is observable
         cpu.step(&mut mem); // NOP
         assert_eq!(cpu.regs.q, 0);
         cpu.step(&mut mem); // SCF
         assert_eq!(cpu.regs.f & (flag::X | flag::Y), flag::X | flag::Y);
+        assert_eq!(cpu.regs.f & flag::C, flag::C);
+
+        // CCF with Q == 0: XY = (F|A) & XY; carry toggles.
+        mem.data[6] = 0x00; // NOP
+        mem.data[7] = 0x3f; // CCF
+        cpu.regs.pc = 6;
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::X | flag::Y | flag::C;
+        cpu.regs.q = cpu.regs.f;
+        cpu.step(&mut mem); // NOP
+        assert_eq!(cpu.regs.q, 0);
+        cpu.step(&mut mem); // CCF
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), flag::X | flag::Y);
+        assert_eq!(cpu.regs.f & flag::C, 0);
+    }
+
+    #[test]
+    fn interrupt_clears_q_before_scf() {
+        // IRQ acceptance bypasses execute(), so it must clear Q itself.
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0x0038] = 0x37; // SCF at IM1 vector
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 1;
+        cpu.regs.pc = 0x0100;
+        cpu.regs.a = 0x00;
+        cpu.regs.f = flag::X | flag::Y;
+        cpu.regs.q = cpu.regs.f; // stale Q as if after a flag-affecting op
+        let t = cpu.interrupt(&mut mem);
+        assert_eq!(t, 13);
+        assert_eq!(cpu.regs.q, 0);
+        cpu.step(&mut mem); // SCF with Q==0 → XY from F|A
+        assert_eq!(cpu.regs.f & (flag::X | flag::Y), flag::X | flag::Y);
+        assert_eq!(cpu.regs.f & flag::C, flag::C);
+    }
+
+    #[test]
+    fn interrupt_while_halted_resumes_after_halt() {
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0x1000] = 0x76; // HALT
+        mem.data[0x1001] = 0x00; // NOP after HALT
+        cpu.regs.pc = 0x1000;
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 1;
+        cpu.step(&mut mem); // enter HALT (PC rewound to 0x1000)
+        assert!(cpu.regs.halted);
+        assert_eq!(cpu.regs.pc, 0x1000);
+        let t = cpu.interrupt(&mut mem);
+        assert_eq!(t, 13, "uncontended IM1 IRQ is 13 T");
+        assert!(!cpu.regs.halted);
+        // Return address on stack must be the instruction after HALT.
+        let ret = u16::from(mem.data[cpu.regs.sp as usize])
+            | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
+        assert_eq!(ret, 0x1001);
+    }
+
+    #[test]
+    fn interrupt_im2_uncontended_is_19_t() {
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        // Spectrum INTACK data bus is 0xFF → vector at (I<<8)|0xFF.
+        mem.data[0xfeff] = 0x00;
+        mem.data[0xff00] = 0x40; // → 0x4000
+        cpu.regs.i = 0xfe;
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 2;
+        cpu.regs.pc = 0x0100;
+        let t = cpu.interrupt(&mut mem);
+        assert_eq!(t, 19);
+        assert_eq!(cpu.regs.pc, 0x4000);
+    }
+
+    #[test]
+    fn interrupt_while_halted_does_not_skip_redirected_pc() {
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        mem.data[0x1000] = 0x76;
+        mem.data[0x8000] = 0xdd; // not HALT
+        cpu.regs.pc = 0x1000;
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 1;
+        cpu.step(&mut mem);
+        assert!(cpu.regs.halted);
+        // Host redirects PC while halted (debugger / test USR poke).
+        cpu.regs.pc = 0x8000;
+        let _ = cpu.interrupt(&mut mem);
+        let ret = u16::from(mem.data[cpu.regs.sp as usize])
+            | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
+        assert_eq!(ret, 0x8000);
     }
 }
