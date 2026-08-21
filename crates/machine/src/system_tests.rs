@@ -306,8 +306,11 @@ fn minfo_48k_int_and_first_contended() {
     // FAQ early-timing first contended cycle (14335 when INT low = T0) prints
     // as 14336 — matching Timing Test’s first contended-NOP row.
     let text = run_until_contains(&mut machine, "14336", AFTER_LOAD_FRAMES);
-    assert_screen_has(&text, "INT time:");
-    assert_screen_has(&text, "32");
+    assert!(
+        text.lines()
+            .any(|line| line.contains("INT time:") && line.contains("32")),
+        "expected \"INT time:\" and 32 on one screen row\n{text}"
+    );
     assert_screen_has(&text, "14336");
 }
 
