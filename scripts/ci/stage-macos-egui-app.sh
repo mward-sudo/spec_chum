@@ -43,7 +43,13 @@ strip "$MACOS_DIR/spec_chum" 2>/dev/null || true
 plist_escape() {
   printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }
-VERSION_XML="$(plist_escape "$VERSION")"
+# CFBundleShortVersionString / CFBundleVersion must be numeric (digits + dots).
+# Untagged workflow_dispatch builds use `dev-<sha>`; map those to 0.0.0.
+BUNDLE_VERSION="$VERSION"
+if [[ ! "$BUNDLE_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+  BUNDLE_VERSION="0.0.0"
+fi
+VERSION_XML="$(plist_escape "$BUNDLE_VERSION")"
 
 cat > "$APP_DST/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
