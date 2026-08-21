@@ -186,11 +186,11 @@ mod tests {
         cpu.step(&mut mem);
         assert_eq!(cpu.regs.q, cpu.regs.f);
         cpu.regs.a = 0x00; // no XY in A
-        // Carry clear so SCF's set-C assertion is meaningful.
+                           // Carry clear so SCF's set-C assertion is meaningful.
         cpu.regs.f = flag::S | flag::Z | flag::PV | flag::X | flag::Y | flag::H | flag::N;
         cpu.regs.q = cpu.regs.f;
         cpu.step(&mut mem); // SCF
-        // XY must be from A (0), not F|A, when Q == F.
+                            // XY must be from A (0), not F|A, when Q == F.
         assert_eq!(cpu.regs.f & (flag::X | flag::Y), 0);
         assert_eq!(cpu.regs.f & flag::C, flag::C);
         assert_eq!(cpu.regs.f & (flag::H | flag::N), 0);
