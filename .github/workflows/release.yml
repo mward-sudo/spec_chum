@@ -79,18 +79,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux: .tar.gz is the usual Unix distribution form.
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
+          # macOS: .zip of Spec Chum.app (+ debugger CLI); see docs/RELEASE.md.
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive: tar.gz
+            archive: zip
           - os: macos-latest
             target: x86_64-apple-darwin
-            archive: tar.gz
+            archive: zip
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -142,12 +144,11 @@ jobs:
         shell: bash
         run: cargo build --release -p app -p debug_cli --target ${{ matrix.target }}
 
-      - name: Stage and pack
-        id: pack
+      - name: Stage release tree
+        id: stage
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
-          ARCHIVE: ${{ matrix.archive }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
@@ -157,6 +158,14 @@ jobs:
           if [[ "$TARGET" == *windows* ]]; then
             cp "$BIN_DIR/spec_chum.exe" "dist/$OUT/"
             cp "$BIN_DIR/spec-chum-debug.exe" "dist/$OUT/"
+          elif [[ "$TARGET" == *apple-darwin* ]]; then
+            chmod +x scripts/ci/stage-macos-egui-app.sh
+            scripts/ci/stage-macos-egui-app.sh \
+              "$VERSION" \
+              "$BIN_DIR/spec_chum" \
+              "dist/$OUT/Spec Chum.app"
+            cp "$BIN_DIR/spec-chum-debug" "dist/$OUT/"
+            strip "dist/$OUT/spec-chum-debug" || true
           else
             cp "$BIN_DIR/spec_chum" "dist/$OUT/"
             cp "$BIN_DIR/spec-chum-debug" "dist/$OUT/"
@@ -167,12 +176,79 @@ jobs:
             echo "error: ROM files must not be packaged" >&2
             exit 1
           fi
-          printf '%s\n' \
-            "Spec Chum ${VERSION} (${TARGET})" \
-            "" \
-            "System ROMs are not included. Fetch them with ./scripts/fetch_roms.sh" \
-            "from a source checkout, or see README.md." \
-            > "dist/$OUT/README.txt"
+          {
+            echo "Spec Chum ${VERSION} (${TARGET})"
+            echo ""
+            if [[ "$TARGET" == *apple-darwin* ]]; then
+              echo "Contents:"
+              echo "  Spec Chum.app/   — egui host (open the .app, or drag to Applications)"
+              echo "  spec-chum-debug  — headless debugger CLI"
+              echo ""
+              echo "This is the egui app wrapped as a macOS bundle. The native SwiftUI"
+              echo "shell / DMG / notarisation are tracked separately (GitHub issue #68)."
+              echo ""
+            elif [[ "$TARGET" == *windows* ]]; then
+              echo "Contents: spec_chum.exe, spec-chum-debug.exe"
+              echo ""
+            else
+              echo "Contents: spec_chum, spec-chum-debug"
+              echo "Runtime: GTK 3 + ALSA (e.g. libgtk-3-0, libasound2 on Debian/Ubuntu)."
+              echo ""
+            fi
+            echo "System ROMs are not included. Fetch them with ./scripts/fetch_roms.sh"
+            echo "from a source checkout, or see README.md."
+          } > "dist/$OUT/README.txt"
+          echo "dir=dist/$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Codesign macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          chmod +x .trusted-ci/scripts/ci/sign-macos.sh
+          .trusted-ci/scripts/ci/sign-macos.sh \
+            "${STAGE_DIR}/Spec Chum.app" \
+            "${STAGE_DIR}/spec-chum-debug"
+
+      - name: Authenticode-sign Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          & ".trusted-ci/scripts/ci/sign-windows.ps1" `
+            "$env:STAGE_DIR/spec_chum.exe" `
+            "$env:STAGE_DIR/spec-chum-debug.exe"
+
+      - name: Pack archive
+        id: pack
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCHIVE: ${{ matrix.archive }}
+          VERSION: ${{ steps.version.outputs.version }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          set -euo pipefail
+          OUT="spec-chum-${VERSION}-${TARGET}"
+          # Sanity: macOS must ship a .app; Windows must ship .exe files.
+          if [[ "$TARGET" == *apple-darwin* ]]; then
+            test -d "${STAGE_DIR}/Spec Chum.app/Contents/MacOS"
+            test -x "${STAGE_DIR}/Spec Chum.app/Contents/MacOS/spec_chum"
+            test -x "${STAGE_DIR}/spec-chum-debug"
+          elif [[ "$TARGET" == *windows* ]]; then
+            test -f "${STAGE_DIR}/spec_chum.exe"
+            test -f "${STAGE_DIR}/spec-chum-debug.exe"
+          else
+            test -x "${STAGE_DIR}/spec_chum"
+            test -x "${STAGE_DIR}/spec-chum-debug"
+          fi
           mkdir -p packed
           if [[ "$ARCHIVE" == zip ]]; then
             (cd dist && python -c "import shutil; shutil.make_archive('../packed/${OUT}', 'zip', '.', '${OUT}')")
@@ -182,44 +258,11 @@ jobs:
             echo "asset=packed/${OUT}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Codesign macOS
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          VERSION: ${{ steps.version.outputs.version }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          chmod +x .trusted-ci/scripts/ci/sign-macos.sh
-          .trusted-ci/scripts/ci/sign-macos.sh \
-            "dist/spec-chum-${VERSION}-${TARGET}/spec_chum" \
-            "dist/spec-chum-${VERSION}-${TARGET}/spec-chum-debug"
-          # Re-pack after signing (strip/archive happened before sign).
-          OUT="spec-chum-${VERSION}-${TARGET}"
-          tar -C dist -czf "packed/${OUT}.tar.gz" "$OUT"
-
-      - name: Authenticode-sign Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
-          VERSION: ${{ steps.version.outputs.version }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          $dir = "dist/spec-chum-$env:VERSION-$env:TARGET"
-          & ".trusted-ci/scripts/ci/sign-windows.ps1" "$dir/spec_chum.exe" "$dir/spec-chum-debug.exe"
-          $out = "spec-chum-$env:VERSION-$env:TARGET"
-          python -c "import shutil; shutil.make_archive('packed/$out', 'zip', 'dist', '$out')"
-
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}
           path: ${{ steps.pack.outputs.asset }}
           if-no-files-found: error
-
   publish:
     name: checksums, attest, GitHub Release
     needs: [resolve, build]
@@ -274,12 +317,18 @@ jobs:
           overwrite_files: true
           files: dist/*
           body: |
-            Cross-platform **egui** host (`spec_chum`) and headless debugger (`spec-chum-debug`).
+            Cross-platform **egui** host and headless debugger (`spec-chum-debug`).
+
+            | Platform | Archive contents |
+            | --- | --- |
+            | **macOS** | `Spec Chum.app` (egui) + `spec-chum-debug` in a `.zip` |
+            | **Windows** | `spec_chum.exe` + `spec-chum-debug.exe` in a `.zip` |
+            | **Linux** | `spec_chum` + `spec-chum-debug` in a `.tar.gz` |
 
             System ROMs are **not** included — fetch with `./scripts/fetch_roms.sh`.
 
             Verify downloads with `SHA256SUMS` (and `SHA256SUMS.asc` when GPG signing is configured).
             GitHub Artifact Attestations are attached to this workflow run.
 
-            Linux runtime: GTK 3 and ALSA runtime libraries
-            (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).
+            Linux runtime: GTK 3 and ALSA (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).
+            Native SwiftUI `.app` / DMG / notarisation: tracked in issue #68.
