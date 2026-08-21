@@ -252,7 +252,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "cpal",
@@ -652,7 +652,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bus"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "formats",
  "trace",
@@ -1022,7 +1022,7 @@ checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
 
 [[package]]
 name = "debug_cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1410,7 +1410,7 @@ dependencies = [
 
 [[package]]
 name = "formats"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "futures-channel"
@@ -1725,7 +1725,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "host_api"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "formats",
  "machine",
@@ -2075,7 +2075,7 @@ dependencies = [
 
 [[package]]
 name = "machine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bus",
  "formats",
@@ -3399,7 +3399,7 @@ dependencies = [
 
 [[package]]
 name = "tape"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "thiserror 2.0.20",
  "trace",
@@ -3548,7 +3548,7 @@ dependencies = [
 
 [[package]]
 name = "trace"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "tracing"
@@ -3616,7 +3616,7 @@ dependencies = [
 
 [[package]]
 name = "ula"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "unicode-ident"
@@ -4582,7 +4582,7 @@ dependencies = [
 
 [[package]]
 name = "z80"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "zbus"
