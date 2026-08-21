@@ -54,8 +54,17 @@ Also run the usual fast gate on that same commit:
 ./scripts/check.sh
 ```
 
-Needs network once for ROMs / system TAPs / `z80full.tap` (cached under `roms/`
-and `.rom-cache/`). Failures are real accuracy misses — do not stub them to ship.
+Needs network once for ROMs, system TAPs, and (if missing) the z80test archive.
+Distinguish cache vs fixture paths:
+
+- ROM images: `roms/` (via `./scripts/fetch_roms.sh`)
+- System-test TAPs: `.rom-cache/system-tests/`
+- z80test release archive cache: `.rom-cache/z80test-1.2a.zip` (via
+  `./scripts/fetch_z80test.sh`)
+- Extracted CPU fixtures used by the suite: `tests/fixtures/z80test/`
+  (`z80doc.tap` is in git; `z80full.tap` is extracted there when fetched)
+
+Failures are real accuracy misses — do not stub them to ship.
 
 ## Cut a release
 

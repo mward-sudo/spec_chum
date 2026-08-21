@@ -39,8 +39,12 @@ rests on the committed digests.
 ./scripts/run_system_tests.sh
 ```
 
-Before a `vX.Y.Z` release, prefer the full slow suite (system-tests + z80doc + z80full):
+Before a `vX.Y.Z` release, the full slow suite is **required** (system-tests +
+z80doc + z80full) — not optional:
 
 ```bash
 ./scripts/run_slow_tests.sh
 ```
+
+See `docs/RELEASE.md` for cache vs fixture paths (`.rom-cache/` archives vs
+`tests/fixtures/z80test/` extracted TAPs).
