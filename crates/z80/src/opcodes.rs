@@ -393,7 +393,8 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx) {
         }
         0x76 => {
             cpu.regs.halted = true;
-            // PC points at HALT so interrupt resumes it
+            // After fetch, PC points past HALT; rewind so idle re-fetches HALT.
+            // `Cpu::interrupt` advances PC again before pushing the return address.
             cpu.regs.pc = cpu.regs.pc.wrapping_sub(1);
         }
         // LD r,r' / ALU / etc.

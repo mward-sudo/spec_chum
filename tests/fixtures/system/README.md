@@ -25,8 +25,11 @@ rests on the committed digests.
 ## Published 48K PAL numbers these programs display
 
 - Frame length: **69888** T
-- First contended memory cycle: **14335** T (Minfo “First contended”)
+- First contended memory cycle: FAQ / ULA table **14335** T (INT low = T0,
+  early timing). Minfo and Timing Test print **14336** under the common
+  INT-low-as-T1 numbering (same physical edge).
 - INT pulse: **32** T (Minfo “INT time”, ULA 48K)
+- Contended-NOP totals (4T + delay): **10 9 8 7 6 5 4 4** (Timing Test)
 
 128K / grey +2 / +2A / +3 PAL frame length: **70908** T.
 
