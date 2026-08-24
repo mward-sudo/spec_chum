@@ -71,6 +71,18 @@ enum SpectrumKeymap {
         }
     }
 
+    /// Kempston mask from held ANSI key codes (egui: arrows + Tab fire).
+    /// Bits: 0=right, 1=left, 2=down, 3=up, 4=fire.
+    static func kempstonMask(held: Set<UInt16>) -> UInt32 {
+        var mask: UInt32 = 0
+        if held.contains(124) { mask |= 1 << 0 } // right
+        if held.contains(123) { mask |= 1 << 1 } // left
+        if held.contains(125) { mask |= 1 << 2 } // down
+        if held.contains(126) { mask |= 1 << 3 } // up
+        if held.contains(48) { mask |= 1 << 4 } // Tab fire
+        return mask
+    }
+
     // MARK: - Private
 
     private static func letterDigit(keyCode: UInt16) -> (UInt32, UInt32)? {

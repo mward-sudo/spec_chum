@@ -53,6 +53,12 @@ unsigned int sc_audio_sample_rate(void *handle);
 int sc_set_key(void *handle, unsigned int row, unsigned int bit, int pressed);
 int sc_clear_keys(void *handle);
 
+/* Joystick — mode: 0=Kempston, 1=SinclairLeft, 2=SinclairRight, 3=Cursor.
+ * mask bits: 0=right, 1=left, 2=down, 3=up, 4=fire (active-high). */
+int sc_set_joystick_mode(void *handle, unsigned int mode);
+int sc_set_joystick(void *handle, unsigned int mask);
+int sc_clear_joystick(void *handle);
+
 /* Heap strings — free with sc_string_free */
 char *sc_status(void *handle);
 char *sc_last_error(void);

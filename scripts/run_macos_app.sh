@@ -72,6 +72,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Spec Chum uses Bluetooth to discover wireless game controllers.</string>
 </dict>
 </plist>
 PLIST

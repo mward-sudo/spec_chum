@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use machine::{Machine, Model};
+use machine::{JoystickMode, JoystickState, Machine, Model};
 use thiserror::Error;
 
 /// Model identifiers for the C ABI (stable numeric values).
@@ -75,6 +75,10 @@ pub struct HostSession {
     audio_pcm: Vec<f32>,
     /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
     last_speaker_level: bool,
+    /// Host joystick presentation mode.
+    joystick_mode: JoystickMode,
+    /// Last applied host joystick mask state.
+    joystick_state: JoystickState,
 }
 
 impl HostSession {
@@ -93,6 +97,8 @@ impl HostSession {
             status: "No ROM loaded".into(),
             audio_pcm: Vec::new(),
             last_speaker_level: false,
+            joystick_mode: JoystickMode::Kempston,
+            joystick_state: JoystickState::empty(),
         }
     }
 
@@ -334,6 +340,42 @@ impl HostSession {
         };
         m.keyboard_mut().reset();
         Ok(())
+    }
+
+    pub fn set_joystick_mode(&mut self, mode: JoystickMode) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        // Drop Sinclair/Cursor matrix leftovers before switching presentation.
+        m.clear_joystick_state();
+        self.joystick_mode = mode;
+        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        Ok(())
+    }
+
+    pub fn set_joystick(&mut self, mask: u8) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        self.joystick_state = JoystickState::from_mask(mask);
+        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        Ok(())
+    }
+
+    pub fn clear_joystick(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        self.joystick_state = JoystickState::empty();
+        m.clear_joystick_state();
+        // Re-apply empty under current mode so Sinclair/Cursor matrix clears too.
+        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn joystick_mode(&self) -> JoystickMode {
+        self.joystick_mode
     }
 
     /// Peek one byte of machine memory.
@@ -639,6 +681,21 @@ mod tests {
     }
 
     #[test]
+    fn joystick_kempston_mask_reaches_port() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick(0x11).unwrap();
+        assert_eq!(s.machine.as_mut().unwrap().kempston_mut().read(), 0x11);
+        s.clear_joystick().unwrap();
+        assert_eq!(s.machine.as_mut().unwrap().kempston_mut().read(), 0);
+    }
+
+    #[test]
     fn open_fixture_tap_progress_and_audio_pcm() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -780,6 +837,8 @@ mod tests {
         let audio = machine::FrameAudio {
             beeper_edges: vec![(frame_tstates - 1, true)],
             ay_samples: Vec::new(),
+            ay_left: Vec::new(),
+            ay_right: Vec::new(),
         };
         let mut out = Vec::new();
         let level = render_frame_pcm(&audio, frame_tstates, false, &mut out);

@@ -1,10 +1,21 @@
 import AppKit
 import CSpecChumHost
 import Foundation
+import GameController
 import UniformTypeIdentifiers
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
+    /// Joystick presentation — matches `sc_set_joystick_mode` (default Kempston).
+    enum JoystickMode: UInt32 {
+        case kempston = 0
+        case sinclairLeft = 1
+        case sinclairRight = 2
+        case cursor = 3
+    }
+
+    /// Digital stick threshold for left thumbstick axes (~egui gilrs parity).
+    private static let stickThreshold: Float = 0.5
     enum Model: UInt32, CaseIterable, Identifiable {
         case spectrum48 = 0
         case spectrum128 = 1
@@ -66,6 +77,11 @@ final class HostBridge: ObservableObject {
     private let audio = TapeAudioPlayer()
     /// Publish progress at most ~4 Hz to avoid SwiftUI churn.
     private var progressPublishCounter: UInt32 = 0
+    /// Arrows + Tab → Kempston bits (egui parity); OR’d with gamepad each frame.
+    private(set) var keyboardJoystickMask: UInt32 = 0
+    private var joystickModeApplied = false
+    private var connectObserver: NSObjectProtocol?
+    private var disconnectObserver: NSObjectProtocol?
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
@@ -78,11 +94,20 @@ final class HostBridge: ObservableObject {
         tryAutoloadRom()
         refreshStatus()
         syncTapeLoadOptionsFromHost()
+        applyJoystickMode(.kempston)
+        startGamepadDiscovery()
         let rate = Double(sc_audio_sample_rate(handle))
         audio.ensureStarted(sampleRate: rate > 0 ? rate : 44100)
     }
 
     deinit {
+        if let connectObserver {
+            NotificationCenter.default.removeObserver(connectObserver)
+        }
+        if let disconnectObserver {
+            NotificationCenter.default.removeObserver(disconnectObserver)
+        }
+        GCController.stopWirelessControllerDiscovery()
         audio.stop()
         if let handle {
             sc_destroy(handle)
@@ -97,6 +122,7 @@ final class HostBridge: ObservableObject {
         let now = ProcessInfo.processInfo.systemUptime
         if lastFrameUptime == 0 {
             lastFrameUptime = now
+            pushJoystick()
             sc_run_frame(handle)
             syncTapePublished()
             enqueueAudio()
@@ -105,6 +131,7 @@ final class HostBridge: ObservableObject {
 
         var ran = 0
         while now - lastFrameUptime >= Self.framePeriod, ran < Self.maxCatchUpFrames {
+            pushJoystick()
             sc_run_frame(handle)
             lastFrameUptime += Self.framePeriod
             ran += 1
@@ -285,6 +312,75 @@ final class HostBridge: ObservableObject {
     func clearKeys() {
         guard let handle else { return }
         _ = sc_clear_keys(handle)
+    }
+
+    /// Update arrow/Tab → Kempston mask from the Spectrum key view (`held` set).
+    func setKeyboardJoystickMask(_ mask: UInt32) {
+        keyboardJoystickMask = mask
+    }
+
+    @discardableResult
+    func applyJoystickMode(_ mode: JoystickMode) -> Bool {
+        guard let handle else { return false }
+        let ok = sc_set_joystick_mode(handle, mode.rawValue) == 0
+        if ok {
+            joystickModeApplied = true
+        }
+        return ok
+    }
+
+    @discardableResult
+    func setJoystick(mask: UInt32) -> Bool {
+        guard let handle else { return false }
+        return sc_set_joystick(handle, mask) == 0
+    }
+
+    @discardableResult
+    func clearJoystick() -> Bool {
+        guard let handle else { return false }
+        keyboardJoystickMask = 0
+        return sc_clear_joystick(handle) == 0
+    }
+
+    /// OR keyboard Kempston bits with GCController digital stick + A fire.
+    private func pushJoystick() {
+        guard let handle else { return }
+        if !joystickModeApplied {
+            _ = sc_set_joystick_mode(handle, JoystickMode.kempston.rawValue)
+            joystickModeApplied = true
+        }
+        let mask = keyboardJoystickMask | Self.gamepadMask()
+        _ = sc_set_joystick(handle, mask)
+    }
+
+    private func startGamepadDiscovery() {
+        GCController.startWirelessControllerDiscovery(completionHandler: nil)
+        connectObserver = NotificationCenter.default.addObserver(
+            forName: .GCControllerDidConnect,
+            object: nil,
+            queue: .main
+        ) { _ in }
+        disconnectObserver = NotificationCenter.default.addObserver(
+            forName: .GCControllerDidDisconnect,
+            object: nil,
+            queue: .main
+        ) { _ in }
+    }
+
+    /// Bits: 0=right, 1=left, 2=down, 3=up, 4=fire (matches `sc_set_joystick`).
+    private static func gamepadMask() -> UInt32 {
+        var mask: UInt32 = 0
+        for controller in GCController.controllers() {
+            guard let pad = controller.extendedGamepad else { continue }
+            let x = pad.leftThumbstick.xAxis.value
+            let y = pad.leftThumbstick.yAxis.value
+            if pad.dpad.right.isPressed || x >= stickThreshold { mask |= 1 << 0 }
+            if pad.dpad.left.isPressed || x <= -stickThreshold { mask |= 1 << 1 }
+            if pad.dpad.down.isPressed || y <= -stickThreshold { mask |= 1 << 2 }
+            if pad.dpad.up.isPressed || y >= stickThreshold { mask |= 1 << 3 }
+            if pad.buttonA.isPressed { mask |= 1 << 4 }
+        }
+        return mask
     }
 
     /// Default categories: bus|tape|ula|machine (bits 2|4|8|16 = 30).

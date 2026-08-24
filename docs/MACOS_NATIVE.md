@@ -46,6 +46,7 @@ Environment:
 - **Audio:** mono PCM from `sc_audio_*` each frame via `AVAudioEngine` (beeper + EAR mix + AY)
 - **Tape progress:** `ProgressView` from `sc_tape_progress` (block / pulse position)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)
+- **Joystick:** `GCController` (USB/Bluetooth) + keyboard Kempston mirror via `sc_set_joystick` (see below)
 
 ## Tape loading (Play / LD-BYTES)
 
@@ -100,7 +101,25 @@ key is already held are also ignored so the matrix does not flicker.
 **Verify:** after `./scripts/run_macos_app.sh`, typing must **not** appear in Terminal;
 after 48K BASIC boots, letters should appear in BASIC; one short `j` → one `LOAD`.
 
-Not yet: Kempston mirroring (egui still maps Tab/arrows to joystick).
+## Joystick (Mac native shell)
+
+Wired to `host_api` (`sc_set_joystick_mode` / `sc_set_joystick` / `sc_clear_joystick`).
+Default mode is **Kempston** (0); Sinclair L/R and Cursor modes exist in the ABI for a
+later menu.
+
+**GameController (USB / Bluetooth):** each `runFrame` polls `GCController.controllers()`.
+For `extendedGamepad`: d-pad and left thumbstick (digital threshold ≈ 0.5) map to
+directions; **button A** is fire. Bits match Kempston / `sc_set_joystick`
+(0=right, 1=left, 2=down, 3=up, 4=fire). Wireless discovery starts at launch
+(`GCController.startWirelessControllerDiscovery`). Pair Bluetooth pads in System
+Settings; the staged `.app` Info.plist includes a Bluetooth usage string for
+discovery prompts.
+
+**Keyboard Kempston (egui parity):** arrows and **Tab** (fire) OR into the same
+joystick mask while still injecting cursor matrix chords (Caps+5/6/7/8).
+
+**Verify:** with a USB/BT pad or arrows+Tab, Kempston-aware software should see
+directions/fire on port `0x1F`.
 
 ## Frame pacing (~50 Hz)
 
@@ -127,7 +146,7 @@ not a rapid flicker.
 
 ## Not in this slice (still egui-only or follow-ups)
 
-- Kempston joystick mirroring in the native shell
+- Joystick mode picker UI (ABI supports Sinclair L/R + Cursor; shell defaults to Kempston)
 - Snapshots (SNA/Z80), RZX, DSK
 - Signed / notarized SwiftUI distribution bundle (dev launch uses a staged `.app` via `open`)
 - CI job that compiles the Swift shell (Linux CI stays Rust-only)

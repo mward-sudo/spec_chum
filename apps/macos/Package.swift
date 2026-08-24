@@ -25,6 +25,7 @@ let package = Package(
                 .swiftLanguageMode(.v5),
             ],
             linkerSettings: [
+                .linkedFramework("GameController"),
                 .linkedLibrary("spec_chum_host"),
                 .unsafeFlags([
                     "-L\(hostLibDir)",

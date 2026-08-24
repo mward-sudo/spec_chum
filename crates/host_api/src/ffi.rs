@@ -414,6 +414,58 @@ pub extern "C" fn sc_clear_keys(handle: *mut c_void) -> c_int {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn sc_set_joystick_mode(handle: *mut c_void, mode: c_uint) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    let Some(mode) = machine::JoystickMode::from_u8(mode as u8) else {
+        set_last_error("invalid joystick mode");
+        return -1;
+    };
+    match s.set_joystick_mode(mode) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_set_joystick(handle: *mut c_void, mask: c_uint) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.set_joystick(mask as u8) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_clear_joystick(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.clear_joystick() {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
 /// Heap-allocated UTF-8 C string; free with [`sc_string_free`].
 #[no_mangle]
 pub extern "C" fn sc_status(handle: *mut c_void) -> *mut c_char {
