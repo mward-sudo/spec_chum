@@ -69,22 +69,33 @@ fn floating_bus_params(frame_t: u32, screen: &[u8], paper_start: u32, t_line: u3
         return None;
     }
     let x = t % t_line;
-    if x >= 128 {
+    // Contention starts at `paper_start`; first display fetch is 3T later (wiki:
+    // 48K early-timing bitmap at 14338 when paper/contention starts at 14335).
+    if !(3..131).contains(&x) {
         return None;
     }
-    let col = (x / 4) as usize;
+    let xf = x - 3;
+    // 8T window: bm, at, bm+1, at+1, idle×4 — two character columns per window.
+    let phase = xf % 8;
+    if phase >= 4 {
+        return None;
+    }
+    let col = ((xf / 8) * 2 + phase / 2) as usize;
+    if col > 31 {
+        return None;
+    }
     let row = line as usize;
-    let phase = x % 8;
     let y = row;
     let third = y / 64;
     let yb = y % 8;
     let yo = (y / 8) % 8;
-    let bitmap_off = (third * 2048) + (yo * 32) + (yb * 256) + col.min(31);
-    let attr_off = 6144 + (row / 8) * 32 + col.min(31);
-    match phase {
-        0 | 1 => Some(screen[bitmap_off.min(6143)]),
-        2 | 3 => Some(screen[attr_off.min(6911)]),
-        _ => None,
+    let is_attr = phase % 2 == 1;
+    if is_attr {
+        let attr_off = 6144 + (row / 8) * 32 + col;
+        Some(screen[attr_off.min(6911)])
+    } else {
+        let bitmap_off = (third * 2048) + (yo * 32) + (yb * 256) + col;
+        Some(screen[bitmap_off.min(6143)])
     }
 }
 
@@ -103,6 +114,91 @@ pub fn floating_bus_byte_48(frame_t: u32, screen: &[u8]) -> Option<u8> {
 #[must_use]
 pub fn floating_bus_byte_128(frame_t: u32, screen: &[u8]) -> Option<u8> {
     floating_bus_params(frame_t, screen, PAPER_START_128, T_LINE_128)
+}
+
+/// True when a port high byte falls in the 48K contended RAM window (`0x40xx`–`0x7Fxx`).
+#[must_use]
+#[inline]
+pub fn port_high_contended_48(port: u16) -> bool {
+    (0x4000..0x8000).contains(&(port & 0xff00))
+}
+
+/// True when a 128K/grey-+2 port high byte is contended.
+///
+/// High bytes `0x40`–`0x7F` always contend. High bytes `0xC0`–`0xFF` contend only
+/// when a contended RAM bank (1/3/5/7) is paged at `0xC000`.
+#[must_use]
+#[inline]
+pub fn port_high_contended_128(port: u16, c000_bank_contended: bool) -> bool {
+    let hi = port & 0xff00;
+    if (0x4000..0x8000).contains(&hi) {
+        true
+    } else if hi >= 0xc000 {
+        c000_bank_contended
+    } else {
+        false
+    }
+}
+
+/// Extra T-states from 48K ULA I/O contention (excluding the base 4T of IN/OUT).
+///
+/// Sinclair FAQ Contended I/O patterns:
+/// - high not contended, ULA (`A0=0`): `N:1, C:3`
+/// - high not contended, not ULA: `N:4`
+/// - high contended, ULA: `C:1, C:3`
+/// - high contended, not ULA: `C:1` × 4
+#[must_use]
+pub fn io_contention_extra_48(frame_t: u32, port: u16) -> u32 {
+    io_contention_extra(
+        frame_t,
+        port,
+        port_high_contended_48(port),
+        contention_delay_48,
+    )
+}
+
+/// 128K / grey +2 I/O contention extra (same FAQ patterns; `c000_bank_contended`
+/// enables high-byte `0xC0`–`0xFF` contention when bank 1/3/5/7 is at `C000`).
+#[must_use]
+pub fn io_contention_extra_128(frame_t: u32, port: u16, c000_bank_contended: bool) -> u32 {
+    io_contention_extra(
+        frame_t,
+        port,
+        port_high_contended_128(port, c000_bank_contended),
+        contention_delay_128,
+    )
+}
+
+fn io_contention_extra(
+    mut frame_t: u32,
+    port: u16,
+    high_contended: bool,
+    delay: fn(u32) -> u32,
+) -> u32 {
+    let ula_port = port & 1 == 0;
+    let mut extra = 0u32;
+    let contend_then = |steps: u32, ft: &mut u32, extra: &mut u32| {
+        let d = delay(*ft);
+        *extra += d;
+        *ft = ft.wrapping_add(d).wrapping_add(steps);
+    };
+    match (high_contended, ula_port) {
+        (false, true) => {
+            frame_t = frame_t.wrapping_add(1);
+            contend_then(3, &mut frame_t, &mut extra);
+        }
+        (false, false) => {}
+        (true, true) => {
+            contend_then(1, &mut frame_t, &mut extra);
+            contend_then(3, &mut frame_t, &mut extra);
+        }
+        (true, false) => {
+            for _ in 0..4 {
+                contend_then(1, &mut frame_t, &mut extra);
+            }
+        }
+    }
+    extra
 }
 
 /// Spectrum RGB for ink/paper (bright).
@@ -328,11 +424,57 @@ mod tests {
     }
 
     #[test]
+    fn floating_bus_48_fetch_pairs() {
+        let mut screen = vec![0u8; 6912];
+        screen[0] = 0x10;
+        screen[1] = 0x11;
+        screen[6144] = 0xA0;
+        screen[6145] = 0xA1;
+        // First fetch is paper_start+3: bm0, at0, bm1, at1, then idle.
+        let t0 = PAPER_START_48 + 3;
+        assert_eq!(floating_bus_byte_48(t0, &screen), Some(0x10));
+        assert_eq!(floating_bus_byte_48(t0 + 1, &screen), Some(0xA0));
+        assert_eq!(floating_bus_byte_48(t0 + 2, &screen), Some(0x11));
+        assert_eq!(floating_bus_byte_48(t0 + 3, &screen), Some(0xA1));
+        assert_eq!(floating_bus_byte_48(t0 + 4, &screen), None);
+        assert_eq!(floating_bus_byte_48(PAPER_START_48, &screen), None);
+    }
+
+    #[test]
     fn floating_bus_128_active_in_paper() {
         let mut screen = vec![0u8; 6912];
         screen[0] = 0xA5;
-        assert_eq!(floating_bus_byte_128(PAPER_START_128, &screen), Some(0xA5));
+        assert_eq!(
+            floating_bus_byte_128(PAPER_START_128 + 3, &screen),
+            Some(0xA5)
+        );
         assert_eq!(floating_bus_byte_128(0, &screen), None);
+    }
+
+    #[test]
+    fn io_contention_patterns_48() {
+        let t = PAPER_START_48;
+        assert_eq!(io_contention_extra_48(t, 0x00fe), 5);
+        assert_eq!(io_contention_extra_48(t, 0x00ff), 0);
+        assert_eq!(io_contention_extra_48(t, 0x40fe), 6);
+        let mut expect = 0u32;
+        let mut ft = t;
+        for _ in 0..4 {
+            let d = contention_delay_48(ft);
+            expect += d;
+            ft = ft.wrapping_add(d).wrapping_add(1);
+        }
+        assert_eq!(io_contention_extra_48(t, 0x40ff), expect);
+    }
+
+    #[test]
+    fn io_contention_128_c000_depends_on_bank() {
+        let t = PAPER_START_128;
+        assert!(!port_high_contended_128(0xc0fe, false));
+        assert!(port_high_contended_128(0xc0fe, true));
+        assert_eq!(io_contention_extra_128(t, 0xc0fe, false), 5);
+        assert_eq!(io_contention_extra_128(t, 0xc0fe, true), 6);
+        assert_eq!(io_contention_extra_128(t, 0x40fe, false), 6);
     }
 
     #[test]

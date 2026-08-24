@@ -69,7 +69,7 @@ Before implementing: `gh issue list` / `gh issue view N` for related work. Prefe
 
 ### CodeRabbit — on-demand + merge gate
 
-`.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label `coderabbit-review`) → disposition → `./scripts/check_pr_reviews.sh`. After follow-up commits, request **full review** again (not `@coderabbitai review` — skipped while `auto_incremental_review: false`). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
+`.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label `coderabbit-review`) → disposition → `./scripts/check_pr_reviews.sh`. After fix commits that move HEAD, request **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
 
 ### Before merge — CodeRabbit clean + bot review threads (hard gate)
 
@@ -81,7 +81,7 @@ Any task to **finish, land, or merge a PR** must include this gate. A **ready** 
 unless the user **explicitly** waives. **Drafts** may skip CR completeness in the script but still fail on unresolved bot threads; do not merge drafts.
 
 1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — on ready PRs fails on rate-limited/pending/missing CodeRabbit **and** on unresolved bot threads.
-2. If missing/pending/skipped: request `@coderabbitai full review` (or label `coderabbit-review`) if on-demand — not `@coderabbitai review` while incremental is disabled; if rate-limited: hold; wait for a completed CR pass on HEAD; do not merge.
+2. If missing/pending/skipped: first pass → `@coderabbitai full review` (or label `coderabbit-review`); after prior full review + fixes → `@coderabbitai review` (incremental); if rate-limited: hold; wait for a completed CR pass on HEAD; do not merge.
 3. Fix or reply wontfix, then resolve each thread; re-run the script (and the **Bot review threads** CI check if red).
 4. Waiver only with user instruction: `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews` — document on the PR.
 

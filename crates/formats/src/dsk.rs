@@ -236,4 +236,59 @@ mod tests {
         assert_eq!(fdc.read_data_byte(), 0x42);
         assert_eq!(fdc.read_data_byte(), 0x43);
     }
+
+    /// Two 256-byte sectors on track 0 for FDC sector-lookup goldens.
+    ///
+    /// Note: the machine µPD765 command stream is still stubbed — port `3FFD`
+    /// ignores command bytes — so +3DOS boot is out of scope. This golden only
+    /// covers DSK parse + `Plus3Fdc::read_sector` data path.
+    fn synthetic_dsk_two_sectors() -> Vec<u8> {
+        let mut data = vec![0u8; 0x100];
+        data[0..8].copy_from_slice(b"MV - CPC");
+        data[0x30] = 1; // tracks
+        data[0x31] = 1; // sides
+        let track_size: u16 = 0x100 + 256 * 2;
+        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+
+        let mut track = vec![0u8; track_size as usize];
+        track[0..12].copy_from_slice(b"Track-Info\r\n");
+        track[0x10] = 0;
+        track[0x11] = 0;
+        track[0x14] = 1; // N=1 → 256 bytes
+        track[0x15] = 2; // two sectors
+        track[0x18] = 0;
+        track[0x19] = 0;
+        track[0x1a] = 0xc1;
+        track[0x1b] = 1;
+        track[0x20] = 0;
+        track[0x21] = 0;
+        track[0x22] = 0xc2;
+        track[0x23] = 1;
+        track[0x100] = 0xa1;
+        track[0x101] = 0xa2;
+        track[0x200] = 0xb1;
+        track[0x201] = 0xb2;
+        data.extend_from_slice(&track);
+        data
+    }
+
+    #[test]
+    fn multi_sector_dsk_read_two_sectors() {
+        let img = DskImage::parse(&synthetic_dsk_two_sectors()).unwrap();
+        let s1 = img.find_sector(0, 0, 0xc1).unwrap();
+        let s2 = img.find_sector(0, 0, 0xc2).unwrap();
+        assert_eq!([s1.data[0], s1.data[1]], [0xa1, 0xa2]);
+        assert_eq!([s2.data[0], s2.data[1]], [0xb1, 0xb2]);
+
+        let mut fdc = Plus3Fdc::new();
+        fdc.insert(img);
+        assert!(fdc.read_sector(0, 0, 0xc1));
+        assert_eq!(fdc.read_data_byte(), 0xa1);
+        assert_eq!(fdc.read_data_byte(), 0xa2);
+        assert!(fdc.read_sector(0, 0, 0xc2));
+        assert_eq!(fdc.read_data_byte(), 0xb1);
+        assert_eq!(fdc.read_data_byte(), 0xb2);
+        assert!(!fdc.read_sector(0, 0, 0xc3), "missing sector id");
+        assert_eq!(fdc.status, 0x10);
+    }
 }

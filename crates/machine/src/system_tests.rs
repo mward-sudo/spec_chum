@@ -162,14 +162,17 @@ fn assert_screen_has(text: &str, needle: &str) {
 
 /// Contended-NOP totals (4T + delay): eight columns `10 9 8 7 6 5 4 4`.
 fn contended_nop_pattern_present(text: &str) -> bool {
-    const EXPECTED: [i32; 8] = [10, 9, 8, 7, 6, 5, 4, 4];
+    row_has_pattern(text, &[10, 9, 8, 7, 6, 5, 4, 4])
+}
+
+fn row_has_pattern(text: &str, expected: &[i32]) -> bool {
     text.lines().any(|line| {
         let nums: Vec<i32> = line
             .split_whitespace()
             .filter_map(|tok| tok.parse().ok())
             .collect();
-        nums.windows(EXPECTED.len())
-            .any(|window| window == EXPECTED)
+        nums.windows(expected.len())
+            .any(|window| window == expected)
     })
 }
 
@@ -178,6 +181,67 @@ fn assert_contended_nop_pattern(text: &str) {
         contended_nop_pattern_present(text),
         "expected contended-NOP totals [10,9,8,7,6,5,4,4] on one screen row\n{text}"
     );
+}
+
+fn assert_pattern(text: &str, expected: &[i32], label: &str) {
+    assert!(
+        row_has_pattern(text, expected),
+        "expected {label} pattern {expected:?} on one screen row\n{text}"
+    );
+}
+
+/// Spectrum digit keys 0–9 → (row, bit).
+fn digit_key(d: u8) -> (usize, u8) {
+    match d {
+        0 => (4, 0),
+        1 => (3, 0),
+        2 => (3, 1),
+        3 => (3, 2),
+        4 => (3, 3),
+        5 => (3, 4),
+        6 => (4, 4),
+        7 => (4, 3),
+        8 => (4, 2),
+        9 => (4, 1),
+        _ => panic!("digit 0-9 only"),
+    }
+}
+
+fn choose_timingtest_menu(machine: &mut Machine, digit: u8) {
+    let text = run_until_contains(machine, "Choose test:", AFTER_LOAD_FRAMES);
+    assert_screen_has(&text, "Choose test:");
+    hold_keys(machine, &[digit_key(digit)], 10);
+    hold_keys(machine, &[], 5);
+    hold_keys(machine, &[(6, 0)], 10); // Enter
+    hold_keys(machine, &[], 5);
+}
+
+/// Wait until Timing Test's first paper row is fully painted.
+const TIMING_GRID_FRAMES: u32 = 12_000;
+
+fn run_timingtest_case(
+    model: Model,
+    digit: u8,
+    title: &str,
+    expect: Option<&[i32]>,
+) -> Option<String> {
+    let mut machine = skip_no_rom(model)?;
+    let tap = tap_path("timingtest.tap")?;
+    load_program_tap(&mut machine, &tap);
+    choose_timingtest_menu(&mut machine, digit);
+    let text = run_until_contains(&mut machine, title, AFTER_LOAD_FRAMES);
+    assert_screen_has(&text, title);
+    let mut text = String::new();
+    for _ in 0..TIMING_GRID_FRAMES {
+        let _ = machine.run_frame();
+        text = screen_text(&machine);
+        if let Some(pat) = expect {
+            if row_has_pattern(&text, pat) {
+                break;
+            }
+        }
+    }
+    Some(text)
 }
 
 fn new_model(model: Model) -> Option<Machine> {
@@ -332,31 +396,89 @@ fn timingtest_48k_frame_duration_69888() {
 
 #[test]
 fn timingtest_48k_contended_nop_shows_delay_pattern() {
-    let Some(mut machine) = skip_no_rom(Model::Spectrum48) else {
+    let pat = [10, 9, 8, 7, 6, 5, 4, 4];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 0, "contended NOP", Some(&pat)) else {
         return;
     };
-    let Some(tap) = tap_path("timingtest.tap") else {
-        return;
-    };
-    load_program_tap(&mut machine, &tap);
-    let text = run_until_contains(&mut machine, "Choose test:", AFTER_LOAD_FRAMES);
-    assert_screen_has(&text, "Choose test:");
-    // Digit 0, then Enter (Spectrum matrix).
-    hold_keys(&mut machine, &[(4, 0)], 10);
-    hold_keys(&mut machine, &[], 5);
-    hold_keys(&mut machine, &[(6, 0)], 10);
-    hold_keys(&mut machine, &[], 5);
-    let text = run_until_contains(&mut machine, "contended NOP", AFTER_LOAD_FRAMES);
-    assert_screen_has(&text, "contended NOP");
-    let mut text = String::new();
-    for _ in 0..AFTER_LOAD_FRAMES {
-        let _ = machine.run_frame();
-        text = screen_text(&machine);
-        if contended_nop_pattern_present(&text) {
-            break;
-        }
-    }
     assert_contended_nop_pattern(&text);
+}
+
+/// Snow-effect NOP at uncontended `$8000` with `I=0x7F`: timings stay 4T.
+#[test]
+fn timingtest_48k_snow_effect_nop_uncontended() {
+    let pat = [4, 4, 4, 4, 4, 4, 4, 4];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 1, "snow effect NOP", Some(&pat))
+    else {
+        return;
+    };
+    assert_pattern(&text, &pat, "snow-effect NOP");
+}
+
+/// Timing Test IN menus: `LD A,n`+`IN A,(n)` at `$8000`, report `dur-pre(14)-RET(10)`
+/// ⇒ uncontended baseline **4** (+ I/O wait). ULA/`N:1,C:3` first paper row:
+/// `9 8 7 6 5 4 4 10`.
+#[test]
+fn timingtest_48k_in_00fe_io_pattern() {
+    let pat = [9, 8, 7, 6, 5, 4, 4, 10];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 2, "IN #00FE IO", Some(&pat)) else {
+        return;
+    };
+    assert_pattern(&text, &pat, "IN #00FE");
+}
+
+#[test]
+fn timingtest_48k_in_00ff_io_uncontended() {
+    let pat = [4, 4, 4, 4, 4, 4, 4, 4];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 3, "IN #00FF IO", Some(&pat)) else {
+        return;
+    };
+    assert_pattern(&text, &pat, "IN #00FF");
+}
+
+#[test]
+fn timingtest_48k_in_7ffe_io_pattern() {
+    let pat = [10, 9, 8, 7, 6, 5, 4, 10];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 4, "IN #7FFE IO", Some(&pat)) else {
+        return;
+    };
+    assert_pattern(&text, &pat, "IN #7FFE");
+}
+
+#[test]
+fn timingtest_48k_in_7fff_io_pattern() {
+    let pat = [16, 15, 14, 13, 12, 11, 10, 16];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 5, "IN #7FFF IO", Some(&pat)) else {
+        return;
+    };
+    assert_pattern(&text, &pat, "IN #7FFF");
+}
+
+#[test]
+fn timingtest_48k_in_fffe_io_pattern() {
+    let pat = [9, 8, 7, 6, 5, 4, 4, 10];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 6, "IN #FFFE IO", Some(&pat)) else {
+        return;
+    };
+    assert_pattern(&text, &pat, "IN #FFFE");
+}
+
+#[test]
+fn timingtest_48k_in_ffff_io_uncontended() {
+    let pat = [4, 4, 4, 4, 4, 4, 4, 4];
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 7, "IN #FFFF IO", Some(&pat)) else {
+        return;
+    };
+    assert_pattern(&text, &pat, "IN #FFFF");
+}
+
+/// Lone `RET` at `$C000`; CODETIME subtracts 10T ⇒ uncontended bank paints zeros.
+#[test]
+fn timingtest_128k_page_ret_runs() {
+    let pat = [0, 0, 0, 0, 0, 0, 0, 0];
+    let Some(text) = run_timingtest_case(Model::Spectrum128, 8, "128k page RET", Some(&pat)) else {
+        return;
+    };
+    assert_pattern(&text, &pat, "128k page RET");
 }
 
 #[test]
@@ -388,4 +510,89 @@ fn ulatest3_48k_banner_frame_and_grid() {
         matrix_attr_nz > 64,
         "ULA test 3 floating-bus/contention grid should paint attrs below the title, got {matrix_attr_nz} nonzero attr cells\n{text}"
     );
+}
+
+/// Ramsoft Floating Spy self-test (`T`) prints `Floating bus OK` on a correct 48K ULA.
+#[test]
+fn floating_spy_48k_self_test_ok() {
+    let Some(mut machine) = skip_no_rom(Model::Spectrum48) else {
+        return;
+    };
+    let Some(tap) = tap_path("floatspy.tap") else {
+        return;
+    };
+    load_program_tap(&mut machine, &tap);
+    // Banner + auto-detect first; key loop starts after IN() BYTE is printed.
+    let text = run_until_contains(&mut machine, "IN() BYTE:", AFTER_LOAD_FRAMES);
+    assert_screen_has(&text, "ULA TYPE: 48K");
+    assert_screen_has(&text, "14347");
+    assert_screen_has(&text, "self test");
+    // Letter T (matrix row 2 bit 4) → INKEY$ "t" → self-test.
+    for _ in 0..8 {
+        hold_keys(&mut machine, &[(2, 4)], 25);
+        hold_keys(&mut machine, &[], 8);
+        let t = screen_text(&machine);
+        if t.contains("SELF TEST") || t.contains("BURST") || t.contains("Floating bus OK") {
+            break;
+        }
+    }
+    // Burst self-test is slow (many timed USR INs across the paper).
+    // FLASH attributes make OCR see "Floating bus  OK" (extra spaces).
+    let mut text = String::new();
+    for _ in 0..80_000 {
+        let _ = machine.run_frame();
+        text = screen_text(&machine);
+        if text.contains("Floating bus") && text.contains("OK") && text.contains("ULA 48K") {
+            break;
+        }
+        if text.contains("Floating bus errors") {
+            break;
+        }
+    }
+    assert!(
+        text.contains("Floating bus") && text.contains("OK") && !text.contains("errors:"),
+        "expected Floating Spy self-test pass\n{text}"
+    );
+}
+
+fn azesmbog_loads_and_paints(model: Model, tap_name: &str, label: &str) {
+    let Some(mut machine) = skip_no_rom(model) else {
+        return;
+    };
+    let Some(tap) = tap_path(tap_name) else {
+        return;
+    };
+    load_program_tap(&mut machine, &tap);
+    let mut best = 0usize;
+    let mut text = String::new();
+    for _ in 0..AFTER_LOAD_FRAMES {
+        let _ = machine.run_frame();
+        text = screen_text(&machine);
+        let nz = screen_nonzero(&machine);
+        if nz > best {
+            best = nz;
+        }
+        if best > 200 {
+            break;
+        }
+    }
+    assert!(
+        best > 200,
+        "{label} should paint the screen after load, got {best} nonzero pixels\n{text}"
+    );
+}
+
+#[test]
+fn azesmbog_ula48_simple_paints() {
+    azesmbog_loads_and_paints(Model::Spectrum48, "ula48_simple.tap", "ULA 48 Simple");
+}
+
+#[test]
+fn azesmbog_ula128_timing_paints() {
+    azesmbog_loads_and_paints(Model::Spectrum128, "ula128_timing.tap", "ULA 128 Timing");
+}
+
+#[test]
+fn azesmbog_ula128e_plus3_paints() {
+    azesmbog_loads_and_paints(Model::SpectrumPlus3, "ula128e_plus3.tap", "ULA 128E +3");
 }

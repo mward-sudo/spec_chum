@@ -9,13 +9,16 @@ Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unres
 
 ## On-demand + hold-until-clean (unified)
 
-CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Agents still get **one** completed CR pass before merge of a ready PR:
+CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Agents still need a completed CR pass on the latest HEAD before merge of a ready PR:
 
 1. Iterate on a **draft** PR (no CR required yet).
-2. When merge-candidate: mark ready → comment `@coderabbitai full review` (or label `coderabbit-review`). Use **full review** again after follow-up commits that move HEAD — the merge gate needs a completed review on the latest commit.
-3. Disposition threads → `./scripts/check_pr_reviews.sh` → merge.
+2. When merge-candidate: mark ready → comment `@coderabbitai full review` (or label `coderabbit-review`).
+3. After fix commits that move HEAD: comment `@coderabbitai review` (**incremental**) — do not request another full review for routine post-fix HEAD. The merge gate still needs a completed review on the latest commit.
+4. Disposition threads **and** actionable outside-diff / summary findings → `./scripts/check_pr_reviews.sh` → merge.
 
-Do **not** request `@coderabbitai review` while `.coderabbit.yaml` has `auto_incremental_review: false` — CodeRabbit skips it (`Review skipped: incremental reviews are disabled`). Always use `@coderabbitai full review` (or the label). Incremental can be re-enabled later via `auto_incremental_review: true` if desired.
+Prefer a **human** `@coderabbitai …` comment when requesting reviews: CodeRabbit may ignore other bots (`Skipped: comment is from another GitHub bot`). Label `coderabbit-review` is a backup.
+
+`auto_incremental_review: true` keeps automatic/label follow-up reviews incremental; it is not a prerequisite for the manual `@coderabbitai review` command (per CodeRabbit docs).
 
 ## Hard rule — hold until CodeRabbit is clean (ready PRs)
 
@@ -32,7 +35,7 @@ Ignoring the ready-PR conditions is a process failure. Prefer opening a follow-u
 
 1. Confirm the PR is **ready** (not draft) and a CodeRabbit review was requested once it became merge-candidate (auto-review may be off by design).
 2. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**. On ready PRs the script hard-fails on rate-limited / skipped / pending / missing CodeRabbit **and** on unresolved bot threads.
-3. If CodeRabbit is pending, missing, skipped, or rate-limited on HEAD: **hold** — request `@coderabbitai full review` (or label `coderabbit-review`) if needed, wait for a completed review (e.g. `Review completed`), then re-run the script. Do not merge on a rate-limited or skipped status. Do not use `@coderabbitai review` while incremental reviews are disabled.
+3. If CodeRabbit is pending, missing, skipped, or rate-limited on HEAD: **hold** — for a first pass request `@coderabbitai full review` (or label `coderabbit-review`); after a prior full review and fix commits, request `@coderabbitai review` (incremental). Wait for a completed review (e.g. `Review completed`), then re-run the script. Do not merge on a rate-limited or skipped status.
 4. Treat bot comments as blocking when **actionable** (bugs, wrong behavior, clear maintainability fixes).
 5. Disposition each finding: fix in code, or reply with a short wontfix reason, then **resolve** the thread.
 6. Re-run the script (and re-run the CI check if it failed) after addressing feedback.

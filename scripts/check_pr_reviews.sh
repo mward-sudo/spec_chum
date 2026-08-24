@@ -112,7 +112,7 @@ fi
 if [[ "$IS_DRAFT" == "true" ]]; then
   echo "==> PR #$PR: draft — CodeRabbit HEAD completeness not required yet"
   echo "    (still checking unresolved bot threads; when merge-candidate: mark ready,"
-  echo "     request @coderabbitai full review or label coderabbit-review, then re-run)"
+  echo "     request @coderabbitai full review (or label), then after fixes @coderabbitai review)"
 else
   # Combined status endpoint returns newest-first statuses for each context.
   CR_JSON="$(gh api "repos/${OWNER}/${REPO}/commits/${HEAD_SHA}/status" --jq '
@@ -139,7 +139,7 @@ else
     cr_hold_reason="CodeRabbit is rate-limited on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). Full re-review did not run."
   elif [[ "$CR_DESC_LC" == *skip* ]]; then
     # On-demand / label / draft skips can be green — still not a completed review on HEAD.
-    cr_hold_reason="CodeRabbit skipped review on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). Request @coderabbitai full review (or label coderabbit-review)."
+    cr_hold_reason="CodeRabbit skipped review on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). First pass: @coderabbitai full review (or label); after fixes: @coderabbitai review."
   elif [[ "$CR_STATE" == "failure" || "$CR_STATE" == "error" ]]; then
     cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is ${CR_STATE}: ${CR_DESC:-no description}"
   elif [[ "$CR_STATE" != "success" ]]; then
@@ -155,7 +155,7 @@ else
     apply_waiver_or_fail "$cr_hold_reason" \
       "Next steps:" \
       "  1. Hold the PR — do not merge while CodeRabbit is pending, in progress, missing, skipped, or rate-limited." \
-      "  2. If reviews are on-demand: comment '@coderabbitai full review' (or add label coderabbit-review)." \
+      "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label); after fixes '@coderabbitai review'." \
       "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
       "  4. Open a follow-up issue if rate-limited (e.g. \"Revisit CodeRabbit on PR #${PR}\")." \
       "  5. Re-run: ./scripts/check_pr_reviews.sh $PR" \

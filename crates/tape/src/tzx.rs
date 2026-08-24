@@ -77,7 +77,8 @@ impl TzxPlayer {
                     append_standard_block(&mut pulses, &mut level, block, pause_ms);
                 }
                 0x11 => {
-                    if i + 19 > data.len() {
+                    // 18-byte turbo header (pilot…length); need indices i..i+17.
+                    if i + 18 > data.len() {
                         return Err(TzxError::Format("truncated 0x11".into()));
                     }
                     let pilot = u16::from_le_bytes([data[i], data[i + 1]]);
@@ -750,6 +751,54 @@ mod tests {
         assert_eq!(p.block_count(), 0);
         assert_eq!(p.active_pulse_count(), 0);
         assert_eq!(p.scheduled_pulses(), 0);
+    }
+
+    /// Minimal ID 0x11 turbo block (custom pilot/sync/bit widths).
+    fn minimal_tzx_turbo(payload: &[u8]) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x11);
+        v.extend_from_slice(&800u16.to_le_bytes()); // pilot
+        v.extend_from_slice(&400u16.to_le_bytes()); // sync1
+        v.extend_from_slice(&400u16.to_le_bytes()); // sync2
+        v.extend_from_slice(&300u16.to_le_bytes()); // zero
+        v.extend_from_slice(&600u16.to_le_bytes()); // one
+        v.extend_from_slice(&10u16.to_le_bytes()); // pilot pulse count
+        v.push(8); // used bits
+        v.extend_from_slice(&100u16.to_le_bytes()); // pause ms
+        let len = payload.len() as u32;
+        v.push((len & 0xff) as u8);
+        v.push(((len >> 8) & 0xff) as u8);
+        v.push(((len >> 16) & 0xff) as u8);
+        v.extend_from_slice(payload);
+        v
+    }
+
+    #[test]
+    fn turbo_block_schedules_custom_pulse_widths() {
+        let payload = [0xffu8, 0x00]; // one byte of 1-bits, one of 0-bits
+        let data = minimal_tzx_turbo(&payload);
+        let p = TzxPlayer::parse(&data).unwrap();
+        // 10 pilot + sync1 + sync2 + 8*2 bits * 2 bytes + pause = 45
+        assert_eq!(p.scheduled_pulses(), 45);
+        assert_eq!(p.pulses[0].0, 800);
+        assert_eq!(p.pulses[9].0, 800);
+        assert_eq!(p.pulses[10].0, 400); // sync1
+        assert_eq!(p.pulses[11].0, 400); // sync2
+        assert_eq!(p.pulses[12].0, 600); // first 1-bit half
+        assert_eq!(p.pulses[12 + 16].0, 300);
+        assert!(!TzxPlayer::is_standard_speed_only(&data));
+    }
+
+    #[test]
+    fn to_tap_image_skips_turbo_blocks() {
+        let data = minimal_tzx_turbo(&[0xff, 1, 2, 0]);
+        let tap = TzxPlayer::to_tap_image(&data).unwrap();
+        assert!(
+            tap.blocks.is_empty(),
+            "flash/TAP path must not extract ID 0x11 payloads"
+        );
     }
 
     #[test]

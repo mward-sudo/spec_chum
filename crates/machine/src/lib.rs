@@ -284,12 +284,15 @@ impl Memory for MemIo48<'_> {
 
 impl Io for MemIo48<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = if port & 1 == 0 {
-            ula::contention_delay_48(self.ula_t(t))
-        } else {
-            0
-        };
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_48(ft, port);
+        // Z80 latches the data bus on the last T of the I/O cycle. Odd ports are
+        // `N:4` (no I/O wait); even ports add FAQ waits before that last T.
+        let sample = ft.wrapping_add(3).wrapping_add(wait) % FRAME_TSTATES_48;
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = sample;
         let v = self.bus.in_port(port);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
@@ -297,12 +300,12 @@ impl Io for MemIo48<'_> {
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = if port & 1 == 0 {
-            ula::contention_delay_48(self.ula_t(t))
-        } else {
-            0
-        };
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_48(ft, port);
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         self.bus.out_port(port, value);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
         }
@@ -361,17 +364,13 @@ impl Memory for MemIo128<'_> {
 
 impl Io for MemIo128<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_128(ft, port, self.bus.c000_contended());
+        let sample = ft.wrapping_add(3).wrapping_add(wait) % FRAME_TSTATES_128;
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = sample;
         let v = self.bus.in_port(port);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
@@ -379,17 +378,12 @@ impl Io for MemIo128<'_> {
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_128(ft, port, self.bus.c000_contended());
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         self.bus.out_port(port, value);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
         }
@@ -448,39 +442,22 @@ impl Memory for MemIoPlus3<'_> {
 
 impl Io for MemIoPlus3<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        // +2A/+3 gate array: no Sinclair-style ULA I/O contention.
+        let _ = (port, t);
         let v = self.bus.in_port(port);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
-        (v, wait)
+        (v, 0)
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        let _ = t;
         self.bus.out_port(port, value);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
         }
-        wait
+        0
     }
 }
 
@@ -2338,33 +2315,38 @@ mod tests {
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
     #[test]
     fn memio_mid_instruction_contention_table() {
-        // Contended screen address; even port for I/O contention.
+        // Contended screen address; FAQ Contended I/O ports.
         const ADDR: u16 = 0x4000;
-        const EVEN_PORT: u16 = 0xFE;
-        const ODD_PORT: u16 = 0xFF;
-        // First paper cycle through a full 8-T window (early timing / FAQ).
-        const ROWS_48: &[(u32, u64, u32)] = &[
-            (ula::PAPER_START_48, 0, 6),
-            (ula::PAPER_START_48, 1, 5),
-            (ula::PAPER_START_48, 2, 4),
-            (ula::PAPER_START_48, 3, 3),
-            (ula::PAPER_START_48, 4, 2),
-            (ula::PAPER_START_48, 5, 1),
-            (ula::PAPER_START_48, 6, 0),
-            (ula::PAPER_START_48, 7, 0),
+        const FE: u16 = 0x00FE;
+        const FF: u16 = 0x00FF;
+        const HI_FE: u16 = 0x40FE;
+        const HI_FF: u16 = 0x40FF;
+        const C0_FE: u16 = 0xC0FE;
+        // (frame_t, dt, mem_wait, io_FE, io_40FE, io_40FF)
+        const ROWS_48: &[(u32, u64, u32, u32, u32, u32)] = &[
+            (ula::PAPER_START_48, 0, 6, 5, 6, 12),
+            (ula::PAPER_START_48, 1, 5, 4, 5, 11),
+            (ula::PAPER_START_48, 2, 4, 3, 4, 10),
+            (ula::PAPER_START_48, 3, 3, 2, 3, 9),
+            (ula::PAPER_START_48, 4, 2, 1, 2, 8),
+            (ula::PAPER_START_48, 5, 1, 0, 1, 7),
+            (ula::PAPER_START_48, 6, 0, 0, 0, 6),
+            (ula::PAPER_START_48, 7, 0, 6, 6, 12),
         ];
-        const ROWS_128: &[(u32, u64, u32)] = &[
-            (ula::PAPER_START_128, 0, 6),
-            (ula::PAPER_START_128, 1, 5),
-            (ula::PAPER_START_128, 2, 4),
-            (ula::PAPER_START_128, 3, 3),
-            (ula::PAPER_START_128, 4, 2),
-            (ula::PAPER_START_128, 5, 1),
-            (ula::PAPER_START_128, 6, 0),
-            (ula::PAPER_START_128, 7, 0),
+        const ROWS_128: &[(u32, u64, u32, u32)] = &[
+            (ula::PAPER_START_128, 0, 6, 5),
+            (ula::PAPER_START_128, 1, 5, 4),
+            (ula::PAPER_START_128, 2, 4, 3),
+            (ula::PAPER_START_128, 3, 3, 2),
+            (ula::PAPER_START_128, 4, 2, 1),
+            (ula::PAPER_START_128, 5, 1, 0),
+            (ula::PAPER_START_128, 6, 0, 0),
+            (ula::PAPER_START_128, 7, 0, 6),
         ];
+        // C:1,C:3 totals when high byte contends at paper start + dt.
+        const C0_CONTENDED: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 6];
 
-        for &(frame_t, dt, expect) in ROWS_48 {
+        for &(frame_t, dt, expect, io_fe, io_hife, io_hiff) in ROWS_48 {
             let mut bus = Bus48::new();
             bus.frame_t = frame_t;
             let mut mem = MemIo48 {
@@ -2384,18 +2366,29 @@ mod tests {
                 "48 mem W frame={frame_t} dt={dt}"
             );
             assert_eq!(
-                mem.in_port(EVEN_PORT, t).1,
-                expect,
-                "48 even I/O frame={frame_t} dt={dt}"
+                mem.in_port(FE, t).1,
+                io_fe,
+                "48 IN FE frame={frame_t} dt={dt}"
             );
-            assert_eq!(mem.in_port(ODD_PORT, t).1, 0, "48 odd I/O never contends");
+            assert_eq!(mem.in_port(FF, t).1, 0, "48 IN FF never contends");
+            assert_eq!(
+                mem.in_port(HI_FE, t).1,
+                io_hife,
+                "48 IN 40FE frame={frame_t} dt={dt}"
+            );
+            assert_eq!(
+                mem.in_port(HI_FF, t).1,
+                io_hiff,
+                "48 IN 40FF frame={frame_t} dt={dt}"
+            );
             // Uncontended high RAM
             assert_eq!(mem.read(0x8000, t).1, 0);
         }
 
-        for &(frame_t, dt, expect) in ROWS_128 {
+        for &(frame_t, dt, expect, io_fe) in ROWS_128 {
             let mut bus = Bus128::new();
             bus.frame_t = frame_t;
+            // Default page = bank 0 at C000 (uncontended).
             let mut mem = MemIo128 {
                 bus: &mut bus,
                 watch: None,
@@ -2408,10 +2401,27 @@ mod tests {
                 "128 mem R frame={frame_t} dt={dt}"
             );
             assert_eq!(
-                mem.in_port(EVEN_PORT, t).1,
-                expect,
-                "128 even I/O frame={frame_t} dt={dt}"
+                mem.in_port(FE, t).1,
+                io_fe,
+                "128 IN FE frame={frame_t} dt={dt}"
             );
+            // High 0xC0 with uncontended bank 0: same as FE (N:1,C:3).
+            assert_eq!(
+                mem.in_port(C0_FE, t).1,
+                io_fe,
+                "128 IN C0FE bank0 frame={frame_t} dt={dt}"
+            );
+
+            // Page contended bank 1 at C000 → C0FE uses C:1,C:3 (same totals as 40FE).
+            mem.bus.out_7ffd(1);
+            assert_eq!(
+                mem.in_port(C0_FE, t).1,
+                C0_CONTENDED[dt as usize],
+                "128 IN C0FE bank1 frame={frame_t} dt={dt}"
+            );
+            // Reset page for next iteration clarity
+            mem.bus.page = 0;
+            mem.bus.locked = false;
 
             let mut bus3 = BusPlus3::new();
             bus3.frame_t = frame_t;
@@ -2425,6 +2435,8 @@ mod tests {
                 expect,
                 "+3 mem R frame={frame_t} dt={dt}"
             );
+            assert_eq!(mem3.in_port(FE, t).1, 0, "+3 I/O never contends");
+            assert_eq!(mem3.in_port(HI_FF, t).1, 0, "+3 I/O never contends");
         }
 
         // Access after the instruction has already burned into the contended window.
@@ -3461,6 +3473,160 @@ mod tests {
         assert!(
             dump.contains("machine.snapshot"),
             "expected machine.snapshot in dump:\n{dump}"
+        );
+    }
+
+    /// Minimal uncompressed Z80 v1 for apply_snapshot48 golden.
+    fn synthetic_z80_v1_for_machine() -> Vec<u8> {
+        let mut data = vec![0u8; 30 + 49152];
+        data[0] = 0x11; // A
+        data[1] = 0x22; // F
+        data[6] = 0x00;
+        data[7] = 0x81; // PC = 0x8100
+        data[8] = 0x00;
+        data[9] = 0x70; // SP = 0x7000
+        data[12] = (6 << 1) & 0x0e; // border 6, uncompressed
+        data[30] = 0xbe; // RAM @ Spectrum 0x4000
+        data[31] = 0xef;
+        data[30 + 0x1000] = 0x42; // Spectrum 0x5000
+        data
+    }
+
+    #[test]
+    fn apply_z80_snapshot48_sets_pc_ram_and_border() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let snap = Snapshot48::parse_z80(&synthetic_z80_v1_for_machine()).expect("z80 v1");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.apply_snapshot48(&snap);
+        let i = m.inspect();
+        assert_eq!(i.regs.pc, 0x8100);
+        assert_eq!(i.regs.sp, 0x7000);
+        assert_eq!(i.border, 6);
+        assert_eq!(m.read_mem(0x4000), 0xbe);
+        assert_eq!(m.read_mem(0x4001), 0xef);
+        assert_eq!(m.read_mem(0x5000), 0x42);
+    }
+
+    /// Uncompressed RZX input block (same layout as formats::rzx tests).
+    fn minimal_rzx(frames: &[(u16, &[u8])]) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"RZX!");
+        v.extend_from_slice(&[0x00, 0x0d]);
+        v.extend_from_slice(&[0, 0, 0, 0]);
+        let mut body = Vec::new();
+        body.extend_from_slice(&[0, 0, 0, 0]);
+        body.push(0); // uncompressed
+        for &(fetch, inputs) in frames {
+            body.extend_from_slice(&fetch.to_le_bytes());
+            body.extend_from_slice(&(inputs.len() as u16).to_le_bytes());
+            body.extend_from_slice(inputs);
+        }
+        let block_len = (5 + body.len()) as u32;
+        v.push(0x80);
+        v.extend_from_slice(&block_len.to_le_bytes());
+        v.extend_from_slice(&body);
+        v
+    }
+
+    #[test]
+    fn rzx_replay_applies_keyboard_and_kempston() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        // Frame 0: row 1 keys=0x01 (byte 0x21). Frame 1: Kempston 0x15 (byte 0x95).
+        // Frame 2: row 0 keys=0x10 (byte 0x10).
+        let data = minimal_rzx(&[(100, &[0x21]), (100, &[0x95]), (100, &[0x10])]);
+        let rec = RzxRecording::parse(&data).expect("rzx");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.insert_rzx(rec);
+
+        m.run_frame();
+        assert_eq!(m.keyboard_mut().rows[1], 0x01);
+
+        m.run_frame();
+        assert_eq!(m.kempston_mut().read(), 0x15);
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            assert_eq!(bus.in_port(0x001f), 0x15);
+        }
+
+        m.run_frame();
+        assert_eq!(m.keyboard_mut().rows[0], 0x10);
+    }
+
+    fn minimal_tzx_turbo_machine(payload: &[u8]) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x11);
+        v.extend_from_slice(&800u16.to_le_bytes());
+        v.extend_from_slice(&400u16.to_le_bytes());
+        v.extend_from_slice(&400u16.to_le_bytes());
+        v.extend_from_slice(&300u16.to_le_bytes());
+        v.extend_from_slice(&600u16.to_le_bytes());
+        v.extend_from_slice(&20u16.to_le_bytes());
+        v.push(8);
+        v.extend_from_slice(&50u16.to_le_bytes());
+        let len = payload.len() as u32;
+        v.push((len & 0xff) as u8);
+        v.push(((len >> 8) & 0xff) as u8);
+        v.push(((len >> 16) & 0xff) as u8);
+        v.extend_from_slice(payload);
+        v
+    }
+
+    #[test]
+    fn turbo_tzx_ear_advances_without_flash_path() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let data = minimal_tzx_turbo_machine(&[0xff, 0x00, 0xaa]);
+        assert!(
+            !tape::TzxPlayer::is_standard_speed_only(&data),
+            "turbo must not be treated as standard-speed TAP"
+        );
+        let tap = tape::TzxPlayer::to_tap_image(&data).expect("to_tap");
+        assert!(
+            tap.blocks.is_empty(),
+            "flash/TAP extraction must skip ID 0x11"
+        );
+
+        let player = TzxPlayer::parse(&data).expect("tzx");
+        assert!(player.scheduled_pulses() > 20);
+
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 1,
+        });
+        m.insert_tzx(player);
+        m.set_tape_playing(true);
+        assert!(!m.ear(), "EAR idle before pulse advance");
+
+        let mut saw_high = false;
+        let mut saw_progress = false;
+        let mut last_pulse = 0u32;
+        for _ in 0..8 {
+            m.run_frame();
+            if m.ear() {
+                saw_high = true;
+            }
+            if let Some(p) = m.tape_progress() {
+                if p.pulse_index > last_pulse {
+                    saw_progress = true;
+                    last_pulse = p.pulse_index;
+                }
+            }
+        }
+        assert!(saw_high, "turbo pilot must drive EAR high");
+        assert!(saw_progress, "pulse index must advance under EAR path");
+        assert!(
+            m.tape_progress().map(|p| p.pulse_count).unwrap_or(0) > 0,
+            "turbo deck reports scheduled pulses"
         );
     }
 

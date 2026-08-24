@@ -99,12 +99,13 @@ fn condition(cpu: &Cpu, cc: u8) -> bool {
 }
 
 fn get_disp_addr<B: Memory>(cpu: &mut Cpu, bus: &mut B, idx: Idx) -> u16 {
+    let disp_addr = cpu.regs.pc;
     let d = cpu.fetch8(bus) as i8 as i16;
     let base = idx_addr(cpu, idx);
     let addr = (base as i16).wrapping_add(d) as u16;
     cpu.regs.memptr = addr;
-    // 5 T internal for indexed address calculation
-    cpu.add_t(5);
+    // Fuse: 5× contend_read_no_mreq at displacement address
+    cpu.contend_cycles(disp_addr, 5);
     addr
 }
 
@@ -113,13 +114,13 @@ fn exec_indexed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, idx: Idx, prev_q: u8
     match op {
         0xcb => {
             let d = cpu.fetch8(bus) as i8 as i16;
+            let op_addr = cpu.regs.pc;
             let op2 = cpu.fetch8(bus);
-            // Displacement timing: 2 bytes already fetched as data (3+3), plus 2 IR waits?
-            // Fuse: after DD CB d op — total timing baked into mem accesses + 5+5 for index
             let base = idx_addr(cpu, idx);
             let addr = (base as i16).wrapping_add(d) as u16;
             cpu.regs.memptr = addr;
-            cpu.add_t(2); // additional internal
+            // Fuse DDFDCB: 2× contend at CB opcode byte address before PC++
+            cpu.contend_cycles(op_addr, 2);
             exec_cb_addr(cpu, bus, op2, addr);
         }
         0xdd | 0xfd => {
@@ -190,7 +191,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             cpu.regs.memptr = a.wrapping_add(1);
         }
         0x03 | 0x13 | 0x23 | 0x33 => {
-            cpu.add_t(2);
+            cpu.contend_ir_cycles(2);
             match (op >> 4) & 3 {
                 0 => cpu.regs.set_bc(cpu.regs.bc().wrapping_add(1)),
                 1 => cpu.regs.set_de(cpu.regs.de().wrapping_add(1)),
@@ -200,7 +201,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             }
         }
         0x0b | 0x1b | 0x2b | 0x3b => {
-            cpu.add_t(2);
+            cpu.contend_ir_cycles(2);
             match (op >> 4) & 3 {
                 0 => cpu.regs.set_bc(cpu.regs.bc().wrapping_sub(1)),
                 1 => cpu.regs.set_de(cpu.regs.de().wrapping_sub(1)),
@@ -215,6 +216,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let v = old.wrapping_add(1);
             write_r_idx(cpu, r, idx, v);
             cpu.regs.f = inc8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x34 => {
             let addr = if matches!(idx, Idx::Hl) {
@@ -223,10 +225,11 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
                 get_disp_addr(cpu, bus, idx)
             };
             let old = cpu.read_mem(bus, addr);
-            cpu.add_t(1);
+            cpu.contend_cycles(addr, 1);
             let v = old.wrapping_add(1);
             cpu.write_mem(bus, addr, v);
             cpu.regs.f = inc8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x05 | 0x0d | 0x15 | 0x1d | 0x25 | 0x2d | 0x3d => {
             let r = (op >> 3) & 7;
@@ -234,6 +237,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let v = old.wrapping_sub(1);
             write_r_idx(cpu, r, idx, v);
             cpu.regs.f = dec8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x35 => {
             let addr = if matches!(idx, Idx::Hl) {
@@ -242,10 +246,11 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
                 get_disp_addr(cpu, bus, idx)
             };
             let old = cpu.read_mem(bus, addr);
-            cpu.add_t(1);
+            cpu.contend_cycles(addr, 1);
             let v = old.wrapping_sub(1);
             cpu.write_mem(bus, addr, v);
             cpu.regs.f = dec8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x06 | 0x0e | 0x16 | 0x1e | 0x26 | 0x2e | 0x3e => {
             let r = (op >> 3) & 7;
@@ -259,11 +264,13 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
                 (a, v)
             } else {
                 let d = cpu.fetch8(bus) as i8 as i16;
+                let val_addr = cpu.regs.pc;
                 let v = cpu.fetch8(bus);
                 let base = idx_addr(cpu, idx);
                 let addr = (base as i16).wrapping_add(d) as u16;
                 cpu.regs.memptr = addr;
-                cpu.add_t(2);
+                // Fuse LD (IX+d),n: 2× contend at immediate byte address
+                cpu.contend_cycles(val_addr, 2);
                 (addr, v)
             };
             cpu.write_mem(bus, addr.0, addr.1);
@@ -319,7 +326,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             cpu.regs.f_ = af as u8;
         }
         0x09 | 0x19 | 0x29 | 0x39 => {
-            cpu.add_t(7);
+            cpu.contend_ir_cycles(7);
             let a = idx_addr(cpu, idx);
             let b = match (op >> 4) & 3 {
                 0 => cpu.regs.bc(),
@@ -336,34 +343,45 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
         }
         0x10 => {
             // DJNZ
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             cpu.regs.b = cpu.regs.b.wrapping_sub(1);
-            let d = cpu.fetch8(bus) as i8 as i16;
             if cpu.regs.b != 0 {
-                cpu.add_t(5);
+                let disp_addr = cpu.regs.pc;
+                let d = cpu.fetch8(bus) as i8 as i16;
+                cpu.contend_cycles(disp_addr, 5);
                 let dest = (cpu.regs.pc as i16).wrapping_add(d) as u16;
                 cpu.regs.pc = dest;
                 cpu.regs.memptr = dest;
+            } else {
+                // Fuse: contend_read(PC, 3); PC++ — no MR of displacement
+                cpu.contend_read_timing(bus, cpu.regs.pc, 3);
+                cpu.regs.pc = cpu.regs.pc.wrapping_add(1);
             }
         }
         0x18 => {
+            let disp_addr = cpu.regs.pc;
             let d = cpu.fetch8(bus) as i8 as i16;
-            cpu.add_t(5);
+            cpu.contend_cycles(disp_addr, 5);
             let dest = (cpu.regs.pc as i16).wrapping_add(d) as u16;
             cpu.regs.pc = dest;
             cpu.regs.memptr = dest;
         }
         0x20 | 0x28 | 0x30 | 0x38 => {
-            let d = cpu.fetch8(bus) as i8 as i16;
+            let disp_addr = cpu.regs.pc;
             let cc = (op >> 3) & 3;
             // NZ Z NC C — encoding uses 4..7 style via bits; 0x20=NZ(4?); actually:
             // 0x20 NZ, 0x28 Z, 0x30 NC, 0x38 C → cc = (op>>3)&3 maps to 0..3 but condition() uses 0=NZ
             let taken = condition(cpu, cc);
             if taken {
-                cpu.add_t(5);
+                let d = cpu.fetch8(bus) as i8 as i16;
+                cpu.contend_cycles(disp_addr, 5);
                 let dest = (cpu.regs.pc as i16).wrapping_add(d) as u16;
                 cpu.regs.pc = dest;
                 cpu.regs.memptr = dest;
+            } else {
+                // Fuse: contend_read(PC, 3); PC++ — skip unread displacement
+                cpu.contend_read_timing(bus, disp_addr, 3);
+                cpu.regs.pc = cpu.regs.pc.wrapping_add(1);
             }
         }
         0x27 => daa(cpu),
@@ -461,14 +479,15 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let a = cpu.fetch16(bus);
             cpu.regs.memptr = a;
             if condition(cpu, (op >> 3) & 7) {
-                cpu.add_t(1);
+                // Fuse CALL: contend at high-byte address (PC-1 after fetch16)
+                cpu.contend_cycles(cpu.regs.pc.wrapping_sub(1), 1);
                 cpu.push(bus, cpu.regs.pc);
                 cpu.regs.pc = a;
             }
         }
         0xcd => {
             let a = cpu.fetch16(bus);
-            cpu.add_t(1);
+            cpu.contend_cycles(cpu.regs.pc.wrapping_sub(1), 1);
             cpu.push(bus, cpu.regs.pc);
             cpu.regs.pc = a;
             cpu.regs.memptr = a;
@@ -479,7 +498,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             cpu.regs.memptr = a;
         }
         0xc0 | 0xc8 | 0xd0 | 0xd8 | 0xe0 | 0xe8 | 0xf0 | 0xf8 => {
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             if condition(cpu, (op >> 3) & 7) {
                 let a = cpu.pop(bus);
                 cpu.regs.pc = a;
@@ -497,7 +516,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             }
         }
         0xc5 | 0xd5 | 0xe5 | 0xf5 => {
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             let v = match (op >> 4) & 3 {
                 0 => cpu.regs.bc(),
                 1 => cpu.regs.de(),
@@ -508,7 +527,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             cpu.push(bus, v);
         }
         0xc7 | 0xcf | 0xd7 | 0xdf | 0xe7 | 0xef | 0xf7 | 0xff => {
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             let a = u16::from(op & 0x38);
             cpu.push(bus, cpu.regs.pc);
             cpu.regs.pc = a;
@@ -546,11 +565,11 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let sp = cpu.regs.sp;
             let lo = cpu.read_mem(bus, sp);
             let hi = cpu.read_mem(bus, sp.wrapping_add(1));
-            cpu.add_t(1);
+            cpu.contend_cycles(sp.wrapping_add(1), 1);
             let hl = idx_addr(cpu, idx);
             cpu.write_mem(bus, sp.wrapping_add(1), (hl >> 8) as u8);
             cpu.write_mem(bus, sp, hl as u8);
-            cpu.add_t(2);
+            cpu.contend_cycles(sp, 2);
             set_idx(cpu, idx, u16::from(hi) << 8 | u16::from(lo));
             cpu.regs.memptr = idx_addr(cpu, idx);
         }
@@ -570,7 +589,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             cpu.interrupt_deferred = true;
         }
         0xf9 => {
-            cpu.add_t(2);
+            cpu.contend_ir_cycles(2);
             cpu.regs.sp = idx_addr(cpu, idx);
         }
         _ => {}
@@ -674,20 +693,20 @@ fn exec_cb_op<B: Memory>(cpu: &mut Cpu, bus: &mut B, op: u8, addr: Option<u16>) 
         0 => {
             let (out, f) = rot_shift(y, v, cpu.regs.f & flag::C != 0);
             if let Some(a) = addr {
+                cpu.contend_cycles(a, 1);
                 cpu.write_mem(bus, a, out);
                 if r != 6 {
                     write_r(cpu, r, out);
                 }
             } else if r == 6 {
-                cpu.write_mem(bus, cpu.regs.hl(), out);
+                let hl = cpu.regs.hl();
+                cpu.contend_cycles(hl, 1);
+                cpu.write_mem(bus, hl, out);
             } else {
                 write_r(cpu, r, out);
             }
             cpu.regs.f = f;
             cpu.regs.q = f;
-            if addr.is_some() || r == 6 {
-                cpu.add_t(1);
-            }
         }
         1 => {
             let bit = 1 << y;
@@ -698,7 +717,8 @@ fn exec_cb_op<B: Memory>(cpu: &mut Cpu, bus: &mut B, op: u8, addr: Option<u16>) 
             if addr.is_some() || r == 6 {
                 f = (f & !(flag::X | flag::Y))
                     | ((cpu.regs.memptr >> 8) as u8 & (flag::X | flag::Y));
-                cpu.add_t(1);
+                let a = addr.unwrap_or_else(|| cpu.regs.hl());
+                cpu.contend_cycles(a, 1);
             } else {
                 f = (f & !(flag::X | flag::Y)) | (v & (flag::X | flag::Y));
             }
@@ -715,18 +735,19 @@ fn exec_cb_op<B: Memory>(cpu: &mut Cpu, bus: &mut B, op: u8, addr: Option<u16>) 
                 v | (1 << y)
             };
             if let Some(a) = addr {
+                cpu.contend_cycles(a, 1);
                 cpu.write_mem(bus, a, out);
                 if r != 6 {
                     write_r(cpu, r, out);
                 }
             } else if r == 6 {
-                cpu.write_mem(bus, cpu.regs.hl(), out);
+                let hl = cpu.regs.hl();
+                cpu.contend_cycles(hl, 1);
+                cpu.write_mem(bus, hl, out);
             } else {
                 write_r(cpu, r, out);
             }
-            if addr.is_some() || r == 6 {
-                cpu.add_t(1);
-            }
+            // flags unchanged for RES/SET
         }
         _ => {}
     }
@@ -785,7 +806,7 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
             cpu.out_port(bus, cpu.regs.bc(), v);
         }
         0x42 | 0x52 | 0x62 | 0x72 => {
-            cpu.add_t(7);
+            cpu.contend_ir_cycles(7);
             let a = cpu.regs.hl();
             let b = match (op >> 4) & 3 {
                 0 => cpu.regs.bc(),
@@ -801,7 +822,7 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
             cpu.regs.q = f;
         }
         0x4a | 0x5a | 0x6a | 0x7a => {
-            cpu.add_t(7);
+            cpu.contend_ir_cycles(7);
             let a = cpu.regs.hl();
             let b = match (op >> 4) & 3 {
                 0 => cpu.regs.bc(),
@@ -860,15 +881,15 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
         0x56 | 0x76 => cpu.regs.im = 1,
         0x5e | 0x7e => cpu.regs.im = 2,
         0x47 => {
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             cpu.regs.i = cpu.regs.a;
         }
         0x4f => {
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             cpu.regs.r = cpu.regs.a;
         }
         0x57 => {
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             cpu.regs.a = cpu.regs.i;
             cpu.regs.f = (cpu.regs.f & flag::C) | sz53(cpu.regs.a);
             if cpu.regs.iff2 {
@@ -877,7 +898,7 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
             cpu.regs.q = cpu.regs.f;
         }
         0x5f => {
-            cpu.add_t(1);
+            cpu.contend_ir_cycles(1);
             cpu.regs.a = cpu.regs.r;
             cpu.regs.f = (cpu.regs.f & flag::C) | sz53(cpu.regs.a);
             if cpu.regs.iff2 {
@@ -962,8 +983,8 @@ fn rrd<B: Memory>(cpu: &mut Cpu, bus: &mut B) {
     let addr = cpu.regs.hl();
     let m = cpu.read_mem(bus, addr);
     let a = cpu.regs.a;
+    cpu.contend_cycles(addr, 4);
     cpu.write_mem(bus, addr, (a << 4) | (m >> 4));
-    cpu.add_t(4);
     cpu.regs.a = (a & 0xf0) | (m & 0x0f);
     cpu.regs.f = (cpu.regs.f & flag::C) | szp(cpu.regs.a);
     cpu.regs.memptr = addr.wrapping_add(1);
@@ -974,8 +995,8 @@ fn rld<B: Memory>(cpu: &mut Cpu, bus: &mut B) {
     let addr = cpu.regs.hl();
     let m = cpu.read_mem(bus, addr);
     let a = cpu.regs.a;
+    cpu.contend_cycles(addr, 4);
     cpu.write_mem(bus, addr, (m << 4) | (a & 0x0f));
-    cpu.add_t(4);
     cpu.regs.a = (a & 0xf0) | (m >> 4);
     cpu.regs.f = (cpu.regs.f & flag::C) | szp(cpu.regs.a);
     cpu.regs.memptr = addr.wrapping_add(1);
@@ -987,7 +1008,7 @@ fn block_ld<B: Memory>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
     let de = cpu.regs.de();
     let v = cpu.read_mem(bus, hl);
     cpu.write_mem(bus, de, v);
-    cpu.add_t(2);
+    cpu.contend_cycles(de, 2);
     if inc {
         cpu.regs.set_hl(hl.wrapping_add(1));
         cpu.regs.set_de(de.wrapping_add(1));
@@ -1008,7 +1029,7 @@ fn block_ld<B: Memory>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
         f |= (insn_pc >> 8) as u8 & (flag::X | flag::Y);
         cpu.regs.f = f;
         cpu.regs.q = f;
-        cpu.add_t(5);
+        cpu.contend_cycles(de, 5);
         cpu.regs.pc = insn_pc;
         cpu.regs.memptr = insn_pc.wrapping_add(1);
     } else {
@@ -1026,7 +1047,7 @@ fn block_ld<B: Memory>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
 fn block_cp<B: Memory>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
     let hl = cpu.regs.hl();
     let v = cpu.read_mem(bus, hl);
-    cpu.add_t(5);
+    cpu.contend_cycles(hl, 5);
     let (_, mut f) = sub8(cpu.regs.a, v);
     f = (f & !(flag::C | flag::PV | flag::X | flag::Y)) | (cpu.regs.f & flag::C);
     if inc {
@@ -1048,7 +1069,7 @@ fn block_cp<B: Memory>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
         f |= (insn_pc >> 8) as u8 & (flag::X | flag::Y);
         cpu.regs.f = f;
         cpu.regs.q = f;
-        cpu.add_t(5);
+        cpu.contend_cycles(hl, 5);
         cpu.regs.pc = insn_pc;
         cpu.regs.memptr = insn_pc.wrapping_add(1);
     } else {
@@ -1107,7 +1128,7 @@ fn io_block_final_flags(b: u8, k: u16, v: u8) -> u8 {
 }
 
 fn block_in<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
-    cpu.add_t(1);
+    cpu.contend_ir_cycles(1);
     let bc = cpu.regs.bc();
     let v = cpu.in_port(bus, bc);
     let hl = cpu.regs.hl();
@@ -1133,7 +1154,8 @@ fn block_in<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool)
         let f = io_block_repeat_flags(b, k, v, insn_pc);
         cpu.regs.f = f;
         cpu.regs.q = f;
-        cpu.add_t(5);
+        // Fuse INIR: contend at HL before the post-increment (write address)
+        cpu.contend_cycles(hl, 5);
         cpu.regs.pc = insn_pc;
         cpu.regs.memptr = insn_pc.wrapping_add(1);
     } else {
@@ -1144,7 +1166,7 @@ fn block_in<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool)
 }
 
 fn block_out<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool) {
-    cpu.add_t(1);
+    cpu.contend_ir_cycles(1);
     let hl = cpu.regs.hl();
     let v = cpu.read_mem(bus, hl);
     cpu.regs.b = cpu.regs.b.wrapping_sub(1);
@@ -1169,7 +1191,8 @@ fn block_out<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, inc: bool, repeat: bool
         let f = io_block_repeat_flags(b, k, v, insn_pc);
         cpu.regs.f = f;
         cpu.regs.q = f;
-        cpu.add_t(5);
+        // Fuse OTIR: contend at BC after B--
+        cpu.contend_cycles(bc, 5);
         cpu.regs.pc = insn_pc;
         cpu.regs.memptr = insn_pc.wrapping_add(1);
     } else {

@@ -3,15 +3,19 @@
 #       https://docs.coderabbit.ai/reference/review-commands
 #
 # Goal: do not burn review allowance on every push while iterating.
-# Agents/humans: open draft PRs → when merge-candidate, undraft + request one review.
+# Agents/humans: open draft PRs → when merge-candidate, undraft + request one full review.
 #
 # Trigger a review (when auto_review.enabled is false):
-#   - Comment: @coderabbitai full review   (use this for merge-candidate and
-#     post-fix HEAD — required while auto_incremental_review is false)
-#   - Add PR label: coderabbit-review
-# Do NOT comment @coderabbitai review while auto_incremental_review is false:
-# CodeRabbit skips it ("incremental reviews are disabled"). To allow that
-# incremental command later, set auto_incremental_review: true.
+#   - First pass (merge-candidate): @coderabbitai full review
+#     or label: coderabbit-review
+#   - After fixes that move HEAD: @coderabbitai review (incremental)
+# Prefer a *human* PR comment for those commands — CodeRabbit may ignore
+# other bots ("Skipped: comment is from another GitHub bot").
+#
+# auto_incremental_review: controls automatic re-review on later pushes when
+# auto-review / positive labels apply — not a prerequisite for the manual
+# @coderabbitai review command (per CodeRabbit docs). Keep true so
+# label-triggered / future auto-review stays incremental-friendly.
 #
 # If UI settings disagree with this file, resolve via CodeRabbit GitHub app
 # (repo → Settings / Configuration). Prefer keeping Automatic Reviews off in
@@ -32,9 +36,10 @@ reviews:
     enabled: false
     # Keep drafts quiet even if auto-review is re-enabled later.
     drafts: false
-    # If auto-review is turned back on, do not re-review every push.
-    auto_incremental_review: false
-    # Early pause if incremental auto-review is ever re-enabled.
+    # Automatic re-review on later pushes when auto-review/labels apply.
+    # Manual @coderabbitai review / full review do not require this flag.
+    auto_incremental_review: true
+    # Early pause if automatic incremental review is ever re-enabled with auto_review.
     auto_pause_after_reviewed_commits: 1
     ignore_title_keywords:
       # Keep only explicit opt-out; "WIP" would skip label-triggered reviews

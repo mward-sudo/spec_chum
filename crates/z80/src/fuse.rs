@@ -12,7 +12,7 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use crate::bus::FlatMem;
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, FuseEvent, FuseEventKind};
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/fuse")
@@ -132,6 +132,47 @@ struct Expected {
     halted: bool,
     tstates: u64,
     mem: Vec<(u16, u8)>,
+    events: Vec<FuseEvent>,
+}
+
+fn parse_fuse_event_line(line: &str) -> Option<FuseEvent> {
+    let mut parts = line.split_whitespace();
+    let t: u64 = parts.next()?.parse().ok()?;
+    let kind = match parts.next()? {
+        "MC" => FuseEventKind::Mc,
+        "MR" => FuseEventKind::Mr,
+        "MW" => FuseEventKind::Mw,
+        "PC" => FuseEventKind::Pc,
+        "PR" => FuseEventKind::Pr,
+        "PW" => FuseEventKind::Pw,
+        _ => return None,
+    };
+    // Fallible hex so parse_expected can panic with test name + full line.
+    let addr = u16::from_str_radix(parts.next()?, 16).ok()?;
+    let value = match (kind, parts.next()) {
+        (FuseEventKind::Mc | FuseEventKind::Pc, None) => None,
+        (
+            FuseEventKind::Mr | FuseEventKind::Mw | FuseEventKind::Pr | FuseEventKind::Pw,
+            Some(v),
+        ) => Some(u8::from_str_radix(v, 16).ok()?),
+        _ => return None,
+    };
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(FuseEvent {
+        t,
+        kind,
+        addr,
+        value,
+    })
+}
+
+fn format_fuse_event(e: &FuseEvent) -> String {
+    match e.value {
+        Some(v) => format!("{:5} {} {:04x} {:02x}", e.t, e.kind.as_str(), e.addr, v),
+        None => format!("{:5} {} {:04x}", e.t, e.kind.as_str(), e.addr),
+    }
 }
 
 fn parse_expected(path: &std::path::Path) -> Vec<Expected> {
@@ -143,12 +184,15 @@ fn parse_expected(path: &std::path::Path) -> Vec<Expected> {
         if name.is_empty() {
             continue;
         }
-        // skip event lines (start with spaces)
+        let mut events = Vec::new();
         while lines
             .peek()
             .is_some_and(|l| l.starts_with(' ') || l.starts_with('\t'))
         {
-            lines.next();
+            let line = lines.next().unwrap();
+            let ev = parse_fuse_event_line(&line)
+                .unwrap_or_else(|| panic!("{name}: unparsable event line: {line:?}"));
+            events.push(ev);
         }
         let regs = lines.next().expect("exp regs");
         let mut parts = regs.split_whitespace();
@@ -177,12 +221,6 @@ fn parse_expected(path: &std::path::Path) -> Vec<Expected> {
         let tstates = mp.next().unwrap().parse().unwrap();
 
         let mut mem = Vec::new();
-        if lines
-            .peek()
-            .is_some_and(|l| !l.trim().is_empty() && !l.starts_with(char::is_alphanumeric))
-        {
-            // no — mem lines are hex
-        }
         while let Some(line) = lines.peek() {
             let t = line.trim();
             if t.is_empty() {
@@ -249,6 +287,7 @@ fn parse_expected(path: &std::path::Path) -> Vec<Expected> {
             halted,
             tstates,
             mem,
+            events,
         });
     }
     out
@@ -279,6 +318,7 @@ impl crate::bus::Io for FuseBus {
 
 fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
     let mut cpu = tin.cpu.clone();
+    cpu.fuse_log = Some(Vec::new());
     let mut bus = FuseBus {
         mem: tin.mem.clone(),
     };
@@ -359,6 +399,41 @@ fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
             errs.push(format!("mem[{a:04X}]: got {got:02X} want {v:02X}"));
         }
     }
+
+    let got_events: Vec<FuseEvent> = cpu
+        .fuse_log
+        .take()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|e| FuseEvent {
+            t: e.t.wrapping_sub(start),
+            ..e
+        })
+        .collect();
+    if got_events != exp.events {
+        let mut diff = String::from("events mismatch:\n");
+        let n = got_events.len().max(exp.events.len());
+        for i in 0..n {
+            let g = got_events.get(i).map(format_fuse_event);
+            let w = exp.events.get(i).map(format_fuse_event);
+            if g != w {
+                diff.push_str(&format!(
+                    "  [{i}] got {} want {}\n",
+                    g.as_deref().unwrap_or("<missing>"),
+                    w.as_deref().unwrap_or("<missing>")
+                ));
+            }
+        }
+        if got_events.len() != exp.events.len() {
+            diff.push_str(&format!(
+                "  (len got {} want {})\n",
+                got_events.len(),
+                exp.events.len()
+            ));
+        }
+        errs.push(diff);
+    }
+
     if errs.is_empty() {
         Ok(())
     } else {

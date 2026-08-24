@@ -1,9 +1,9 @@
 //! Patrik Rak z80test TAP runner (feature `slow-tests`).
 //!
-//! Requires `roms/spec48.rom` and `tests/fixtures/z80test/z80doc.tap`
+//! Requires `roms/spec48.rom` and fixtures under `tests/fixtures/z80test/`
 //! (see that directory’s README, or `./scripts/fetch_z80test.sh`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use tape::{flash_load_block, TapImage};
@@ -69,10 +69,7 @@ fn code_block(image: &TapImage) -> Result<(u16, &[u8]), String> {
 }
 
 /// Run a z80test TAP under the 48K machine with RST10 print capture.
-pub fn run_z80test_tap(
-    tap_path: &std::path::Path,
-    max_instructions: u64,
-) -> Result<Z80testOutcome, String> {
+pub fn run_z80test_tap(tap_path: &Path, max_instructions: u64) -> Result<Z80testOutcome, String> {
     let rom = std::fs::read(rom48_path()).map_err(|e| {
         format!(
             "missing 48K ROM ({}): run ./scripts/fetch_roms.sh ({e})",
@@ -175,17 +172,12 @@ pub fn run_z80test_tap(
 mod tests {
     use super::*;
 
-    fn z80doc_tap() -> PathBuf {
-        fixture_dir().join("z80doc.tap")
-    }
-
-    /// Instruction budget for z80doc on a correct CPU (debug builds are slow).
+    /// Instruction budget for z80test on a correct CPU (debug builds are slow).
     /// Real hardware finishes in well under this many ops; inflate for CI debug.
-    const Z80DOC_MAX_INSNS: u64 = 5_000_000_000;
+    const Z80TEST_MAX_INSNS: u64 = 5_000_000_000;
 
-    #[test]
-    fn z80doc_all_tests_passed() {
-        let tap = z80doc_tap();
+    fn assert_z80test_passed(name: &str, tap_name: &str) {
+        let tap = fixture_dir().join(tap_name);
         if !tap.exists() {
             panic!(
                 "missing {} — copy from z80test v1.2a or run ./scripts/fetch_z80test.sh",
@@ -197,17 +189,17 @@ mod tests {
             return;
         }
 
-        let outcome = run_z80test_tap(&tap, Z80DOC_MAX_INSNS).expect("harness error");
+        let outcome = run_z80test_tap(&tap, Z80TEST_MAX_INSNS).expect("harness error");
         match outcome {
             Z80testOutcome::Passed { output, elapsed } => {
-                eprintln!("z80doc passed in {elapsed:?}\n{output}");
+                eprintln!("{name} passed in {elapsed:?}\n{output}");
             }
             Z80testOutcome::Failed {
                 output,
                 elapsed,
                 inspect,
             } => {
-                panic!("z80doc FAILED in {elapsed:?}\n{inspect}\n{output}");
+                panic!("{name} FAILED in {elapsed:?}\n{inspect}\n{output}");
             }
             Z80testOutcome::TimedOut {
                 output,
@@ -215,44 +207,46 @@ mod tests {
                 inspect,
             } => {
                 panic!(
-                    "z80doc timed out after {elapsed:?} ({} chars captured)\n{inspect}\n{output}",
+                    "{name} timed out after {elapsed:?} ({} chars captured)\n{inspect}\n{output}",
                     output.len()
                 );
             }
         }
     }
 
+    #[test]
+    fn z80doc_all_tests_passed() {
+        assert_z80test_passed("z80doc", "z80doc.tap");
+    }
+
     /// Full flag/register suite (`z80full.tap`; also via `./scripts/fetch_z80test.sh`).
     /// `cargo test -p machine --features slow-tests --release z80full_all_tests_passed -- --nocapture`
     #[test]
     fn z80full_all_tests_passed() {
-        let tap = fixture_dir().join("z80full.tap");
-        if !tap.exists() {
-            panic!("missing {} — run ./scripts/fetch_z80test.sh", tap.display());
-        }
-        if !rom48_path().exists() {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        }
-        let outcome = run_z80test_tap(&tap, Z80DOC_MAX_INSNS).expect("harness error");
-        match outcome {
-            Z80testOutcome::Passed { output, elapsed } => {
-                eprintln!("z80full passed in {elapsed:?}\n{output}");
-            }
-            Z80testOutcome::Failed {
-                output,
-                elapsed,
-                inspect,
-            } => {
-                panic!("z80full FAILED in {elapsed:?}\n{inspect}\n{output}");
-            }
-            Z80testOutcome::TimedOut {
-                output,
-                elapsed,
-                inspect,
-            } => {
-                panic!("z80full timed out after {elapsed:?}\n{inspect}\n{output}");
-            }
-        }
+        assert_z80test_passed("z80full", "z80full.tap");
+    }
+
+    /// All flags, ignore GPRs (`z80flags.tap`).
+    #[test]
+    fn z80flags_all_tests_passed() {
+        assert_z80test_passed("z80flags", "z80flags.tap");
+    }
+
+    /// Documented flags only, ignore GPRs (`z80docflags.tap`).
+    #[test]
+    fn z80docflags_all_tests_passed() {
+        assert_z80test_passed("z80docflags", "z80docflags.tap");
+    }
+
+    /// SCF/CCF after every instruction — Q-sensitive Zilog behaviour (`z80ccf.tap`).
+    #[test]
+    fn z80ccf_all_tests_passed() {
+        assert_z80test_passed("z80ccf", "z80ccf.tap");
+    }
+
+    /// MEMPTR via `BIT n,(HL)` after each instruction (`z80memptr.tap`).
+    #[test]
+    fn z80memptr_all_tests_passed() {
+        assert_z80test_passed("z80memptr", "z80memptr.tap");
     }
 }

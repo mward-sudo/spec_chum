@@ -83,5 +83,55 @@ elif ! verify_sha "$DEST/timingtest.tap" "$SHA_TIMINGTEST_TAP"; then
   exit 1
 fi
 
+# Floating Spy v0.33 (Ramsoft) — zip contains floatspy.tap
+SHA_FLOATSPY_ZIP="3663cfc76b0733491c69faf088dfacda9294aa76e828600070380086138747ed"
+SHA_FLOATSPY_TAP="dc4a3ba0b0b74396919e0a67f0984aaa5762a3bdd3e0afb4bc38ac72fa7bef34"
+FLOAT_ZIP=.rom-cache/floating-spy-0.33.zip
+fetch "https://zxe.io/depot/software/ZX%20Spectrum/Floating%20Spy%20v0.33%20%282002-04%29%28Ramsoft%29%5B%21%5D.zip" \
+  "$FLOAT_ZIP" "$SHA_FLOATSPY_ZIP"
+if [[ ! -f "$DEST/floatspy.tap" || "$FORCE" == 1 ]]; then
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$FLOAT_ZIP" -d "$TMP"
+  cp -f "$TMP"/floatspy.tap "$DEST/floatspy.tap.tmp.$$"
+  if ! verify_sha "$DEST/floatspy.tap.tmp.$$" "$SHA_FLOATSPY_TAP"; then
+    rm -f "$DEST/floatspy.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/floatspy.tap.tmp.$$" "$DEST/floatspy.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+elif ! verify_sha "$DEST/floatspy.tap" "$SHA_FLOATSPY_TAP"; then
+  echo "cached floatspy.tap failed digest check; re-extracting from zip"
+  rm -f "$DEST/floatspy.tap"
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$FLOAT_ZIP" -d "$TMP"
+  cp -f "$TMP"/floatspy.tap "$DEST/floatspy.tap.tmp.$$"
+  if ! verify_sha "$DEST/floatspy.tap.tmp.$$" "$SHA_FLOATSPY_TAP"; then
+    rm -f "$DEST/floatspy.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/floatspy.tap.tmp.$$" "$DEST/floatspy.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+fi
+
+# azesmbog ULA TAP suite (visual / timing — load + paint smoke)
+SHA_ULA48_SIMPLE="1bcd04d0dda815eb8ae49014b828752288551f596a82c7ffd46662d6f82f2c4e"
+SHA_ULA128_TIMING="59578bae6352d6a92b1887b392ee786aa9f162624a1ddef9541037b517b0c90f"
+SHA_ULA128E_PLUS3="60b3aaeca5b9d45c712d874fafa136c97d373c1569964cb87703ddf53911a8d5"
+ZXE="https://zxe.io/depot/software/ZX%20Spectrum"
+fetch "$ZXE/ULA%2048%20Simple%20Test%20%282012-10-06%29%28azesmbog%29%5B%21%5D.tap" \
+  "$DEST/ula48_simple.tap" "$SHA_ULA48_SIMPLE"
+fetch "$ZXE/ULA%20128%20Timing%20Test%20%282012-10-06%29%28azesmbog%29%5B%21%5D.tap" \
+  "$DEST/ula128_timing.tap" "$SHA_ULA128_TIMING"
+fetch "$ZXE/ULA%20128E%20%2B3%20Test%20%282012-10-10%29%28azesmbog%29%5B%21%5D.tap" \
+  "$DEST/ula128e_plus3.tap" "$SHA_ULA128E_PLUS3"
+
 echo "System-test TAPs in $DEST (gitignored via .rom-cache/)"
 ls -la "$DEST"/*.tap

@@ -360,6 +360,12 @@ impl Bus128 {
         matches!(bank, 1 | 3 | 5 | 7)
     }
 
+    /// True when the RAM bank currently at `0xC000` is contended (1/3/5/7).
+    #[must_use]
+    pub fn c000_contended(&self) -> bool {
+        Self::is_contended_bank(self.paged_bank())
+    }
+
     #[must_use]
     pub fn contend_at(&self, addr: u16) -> u32 {
         let contended = match addr {
