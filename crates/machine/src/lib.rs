@@ -11,14 +11,17 @@ mod system_tests;
 
 mod debugger;
 mod inspect;
+mod joystick;
 
 pub use debugger::{BreakReason, Debugger, Watch};
 pub use inspect::{Inspect, Paging, TapeInspect};
+pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 
 use std::cell::Cell;
 
-use bus::{Bus128, Bus48, BusPlus3, Kempston};
-use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot48};
+use bus::{Bus128, Bus48, BusPlus3, Kempston, KempstonMouse, StereoMode};
+pub use bus::StereoMode as AyStereoMode;
+use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot128, Snapshot48};
 pub use tape::LD_BYTES_TRAP_PC;
 use tape::{
     evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, TapPlayer, TapeTrapResult,
@@ -525,6 +528,22 @@ pub struct FrameAudio {
     pub beeper_edges: Vec<(u32, bool)>,
     /// Mono AY samples for this frame (empty on 48K). Amplitude roughly 0..1.
     pub ay_samples: Vec<f32>,
+    /// Left AY channel (same length as `ay_samples`; empty on 48K).
+    pub ay_left: Vec<f32>,
+    /// Right AY channel (same length as `ay_samples`; empty on 48K).
+    pub ay_right: Vec<f32>,
+}
+
+fn push_ay_frame_sample(
+    ay: &bus::Ay8912,
+    mono: &mut Vec<f32>,
+    left: &mut Vec<f32>,
+    right: &mut Vec<f32>,
+) {
+    let (l, r) = ay.sample_stereo();
+    left.push(l);
+    right.push(r);
+    mono.push(ay.sample_mono());
 }
 
 impl Machine {
@@ -597,6 +616,7 @@ impl Machine {
                 bus.frame_t = 0;
                 bus.beeper_edges.clear();
                 bus.kempston.reset();
+                bus.mouse.reset();
                 *ula = Ula48::new();
                 *tape = None;
                 *rzx = None;
@@ -617,6 +637,7 @@ impl Machine {
                 bus.beeper_edges.clear();
                 bus.ay.reset();
                 bus.kempston.reset();
+                bus.mouse.reset();
                 *ula = Ula48::new();
                 *tape = None;
                 *rzx = None;
@@ -638,6 +659,7 @@ impl Machine {
                 bus.beeper_edges.clear();
                 bus.ay.reset();
                 bus.kempston.reset();
+                bus.mouse.reset();
                 *ula = Ula48::new();
                 *tape = None;
                 *rzx = None;
@@ -779,6 +801,57 @@ impl Machine {
         }
     }
 
+    pub fn mouse_mut(&mut self) -> &mut KempstonMouse {
+        match self {
+            Self::Spec48 { bus, .. } => &mut bus.mouse,
+            Self::Spec128 { bus, .. } => &mut bus.mouse,
+            Self::SpecPlus3 { bus, .. } => &mut bus.mouse,
+        }
+    }
+
+    /// Set AY stereo pan mode (no-op on 48K).
+    pub fn set_ay_stereo_mode(&mut self, mode: bus::StereoMode) {
+        match self {
+            Self::Spec48 { .. } => {}
+            Self::Spec128 { bus, .. } => {
+                bus.ay.stereo_mode = mode;
+            }
+            Self::SpecPlus3 { bus, .. } => {
+                bus.ay.stereo_mode = mode;
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn ay_stereo_mode(&self) -> bus::StereoMode {
+        match self {
+            Self::Spec48 { .. } => bus::StereoMode::Mono,
+            Self::Spec128 { bus, .. } => bus.ay.stereo_mode,
+            Self::SpecPlus3 { bus, .. } => bus.ay.stereo_mode,
+        }
+    }
+
+    /// Apply a host joystick under `mode` (clears prior joystick matrix/Kempston first).
+    pub fn apply_joystick_state(&mut self, mode: JoystickMode, state: JoystickState) {
+        let (k, kb) = match self {
+            Self::Spec48 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::Spec128 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::SpecPlus3 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+        };
+        apply_joystick(mode, state, k, kb);
+    }
+
+    /// Clear Kempston and all matrix keys used by joystick modes.
+    pub fn clear_joystick_state(&mut self) {
+        let (k, kb) = match self {
+            Self::Spec48 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::Spec128 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::SpecPlus3 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+        };
+        k.reset();
+        clear_joystick_matrix(kb);
+    }
+
     fn apply_rzx_frame(&mut self) {
         let inputs = {
             let rzx = match self {
@@ -891,10 +964,126 @@ impl Machine {
         for (i, b) in snap.ram.iter().enumerate() {
             self.write_mem(0x4000 + i as u16, *b);
         }
-        if let Self::Spec48 { bus, ula, .. } = self {
-            bus.border = snap.border;
-            bus.ula.border = snap.border;
-            ula.border = snap.border;
+        match self {
+            Self::Spec48 { bus, ula, .. } => {
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::Spec128 { bus, ula, .. } => {
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::SpecPlus3 { bus, ula, .. } => {
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+        }
+        let cpu = self.cpu();
+        if trace::enabled(trace::Category::MACHINE) {
+            trace::emit(trace::EventKind::MachineSnapshot {
+                pc: cpu.regs.pc,
+                sp: cpu.regs.sp,
+                border: snap.border,
+            });
+        }
+    }
+
+    /// Attach Multiface 1 with an 8 KiB ROM image (48K only).
+    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), String> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.attach_multiface(rom),
+            _ => Err("Multiface 1 is only supported on Spectrum 48K".into()),
+        }
+    }
+
+    /// Page Multiface 1 (if attached) and raise NMI. Returns NMI T-states, or `None` if MF absent.
+    pub fn multiface_nmi(&mut self) -> Option<u32> {
+        match self {
+            Self::Spec48 { cpu, bus, .. } => {
+                bus.multiface.as_mut()?.nmi();
+                let t_step_start = cpu.t;
+                let mut mio = MemIo48 {
+                    bus,
+                    watch: None,
+                    t_step_start,
+                };
+                let dt = cpu.nmi(&mut mio);
+                drop(mio);
+                bus.advance_frame_t(dt);
+                Some(dt)
+            }
+            _ => None,
+        }
+    }
+
+    /// Apply a 128K / +2A/+3 banked snapshot (SNA128 or Z80 v2/v3).
+    ///
+    /// On `Spec48`, maps banks 5/2/`page_7ffd&7` into the 48K address space.
+    /// On `SpecPlus3`, also restores `0x1FFD` when present in the snapshot.
+    pub fn apply_snapshot128(&mut self, snap: &Snapshot128) {
+        {
+            let cpu = self.cpu_mut();
+            cpu.regs.set_af(snap.af);
+            cpu.regs.set_bc(snap.bc);
+            cpu.regs.set_de(snap.de);
+            cpu.regs.set_hl(snap.hl);
+            cpu.regs.set_ix(snap.ix);
+            cpu.regs.set_iy(snap.iy);
+            cpu.regs.sp = snap.sp;
+            cpu.regs.pc = snap.pc;
+            cpu.regs.i = snap.i;
+            cpu.regs.r = snap.r;
+            cpu.regs.im = snap.im;
+            cpu.regs.iff1 = snap.iff2;
+            cpu.regs.iff2 = snap.iff2;
+            cpu.regs.a_ = (snap.af_ >> 8) as u8;
+            cpu.regs.f_ = snap.af_ as u8;
+            cpu.regs.b_ = (snap.bc_ >> 8) as u8;
+            cpu.regs.c_ = snap.bc_ as u8;
+            cpu.regs.d_ = (snap.de_ >> 8) as u8;
+            cpu.regs.e_ = snap.de_ as u8;
+            cpu.regs.h_ = (snap.hl_ >> 8) as u8;
+            cpu.regs.l_ = snap.hl_ as u8;
+        }
+        match self {
+            Self::Spec48 { bus, ula, .. } => {
+                let paged = usize::from(snap.page_7ffd & 7);
+                bus.ram[..16384].copy_from_slice(&snap.banks[5]);
+                bus.ram[16384..32768].copy_from_slice(&snap.banks[2]);
+                bus.ram[32768..49152].copy_from_slice(&snap.banks[paged]);
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::Spec128 { bus, ula, .. } => {
+                for (i, bank) in snap.banks.iter().enumerate() {
+                    bus.banks[i].copy_from_slice(bank);
+                }
+                bus.locked = false;
+                bus.out_7ffd(snap.page_7ffd);
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::SpecPlus3 { bus, ula, .. } => {
+                for (i, bank) in snap.banks.iter().enumerate() {
+                    bus.banks[i].copy_from_slice(bank);
+                }
+                bus.locked = false;
+                // Apply 1FFD before 7FFD so a paging-lock bit cannot block it.
+                if let Some(p) = snap.page_1ffd {
+                    bus.out_1ffd(p);
+                } else {
+                    bus.out_1ffd(0);
+                }
+                bus.out_7ffd(snap.page_7ffd);
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
         }
         let cpu = self.cpu();
         if trace::enabled(trace::Category::MACHINE) {
@@ -1023,6 +1212,8 @@ impl Machine {
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples: Vec::new(),
+                    ay_left: Vec::new(),
+                    ay_right: Vec::new(),
                 }
             }
             Self::Spec128 {
@@ -1047,6 +1238,8 @@ impl Machine {
                 const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_left = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_right = Vec::with_capacity(AY_SAMPLES);
                 let mut ay_t = 0u32;
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
@@ -1092,7 +1285,12 @@ impl Machine {
                                 && f64::from(ay_t.min(FRAME_TSTATES_128))
                                     >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                             {
-                                ay_samples.push(bus.ay.sample_mono());
+                                push_ay_frame_sample(
+                                    &bus.ay,
+                                    &mut ay_samples,
+                                    &mut ay_left,
+                                    &mut ay_right,
+                                );
                             }
                             last_t = cpu.t;
                             continue;
@@ -1149,15 +1347,27 @@ impl Machine {
                         && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
-                        ay_samples.push(bus.ay.sample_mono());
+                        push_ay_frame_sample(
+                            &bus.ay,
+                            &mut ay_samples,
+                            &mut ay_left,
+                            &mut ay_right,
+                        );
                     }
                 }
                 while ay_samples.len() < AY_SAMPLES {
-                    ay_samples.push(bus.ay.sample_mono());
+                    push_ay_frame_sample(
+                        &bus.ay,
+                        &mut ay_samples,
+                        &mut ay_left,
+                        &mut ay_right,
+                    );
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples,
+                    ay_left,
+                    ay_right,
                 }
             }
             Self::SpecPlus3 {
@@ -1182,6 +1392,8 @@ impl Machine {
                 const AY_SAMPLES: usize = 882;
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_left = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_right = Vec::with_capacity(AY_SAMPLES);
                 let mut ay_t = 0u32;
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
@@ -1227,7 +1439,12 @@ impl Machine {
                                 && f64::from(ay_t.min(FRAME_TSTATES_128))
                                     >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                             {
-                                ay_samples.push(bus.ay.sample_mono());
+                                push_ay_frame_sample(
+                                    &bus.ay,
+                                    &mut ay_samples,
+                                    &mut ay_left,
+                                    &mut ay_right,
+                                );
                             }
                             last_t = cpu.t;
                             continue;
@@ -1284,15 +1501,27 @@ impl Machine {
                         && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
-                        ay_samples.push(bus.ay.sample_mono());
+                        push_ay_frame_sample(
+                            &bus.ay,
+                            &mut ay_samples,
+                            &mut ay_left,
+                            &mut ay_right,
+                        );
                     }
                 }
                 while ay_samples.len() < AY_SAMPLES {
-                    ay_samples.push(bus.ay.sample_mono());
+                    push_ay_frame_sample(
+                        &bus.ay,
+                        &mut ay_samples,
+                        &mut ay_left,
+                        &mut ay_right,
+                    );
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples,
+                    ay_left,
+                    ay_right,
                 }
             }
         }
@@ -2310,6 +2539,50 @@ mod tests {
 
     fn fixture_tap() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/tape/minimal_code.tap")
+    }
+
+    /// Synthetic MF ROM: at NMI vector, `LD A,42h / LD (2000h),A / HALT` — flag in MF RAM.
+    #[test]
+    fn multiface_nmi_executes_attached_rom() {
+        let mut rom = [0u8; bus::MULTIFACE1_SIZE];
+        // 0066: 3E 42       LD A,42h
+        // 0068: 32 00 20    LD (2000h),A
+        // 006B: 76          HALT
+        rom[0x66] = 0x3e;
+        rom[0x67] = 0x42;
+        rom[0x68] = 0x32;
+        rom[0x69] = 0x00;
+        rom[0x6a] = 0x20;
+        rom[0x6b] = 0x76;
+
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        m.attach_multiface(&rom).unwrap();
+        m.cpu_mut().regs.sp = 0xfffd;
+        m.cpu_mut().regs.pc = 0x8000;
+
+        let t = m.multiface_nmi().expect("MF attached");
+        assert_eq!(t, 11);
+        assert_eq!(m.cpu().regs.pc, 0x0066);
+        match &m {
+            Machine::Spec48 { bus, .. } => {
+                assert!(bus.multiface.as_ref().unwrap().paged);
+            }
+            _ => unreachable!(),
+        }
+
+        // Run until HALT stores the flag.
+        for _ in 0..8 {
+            if m.cpu().regs.halted {
+                break;
+            }
+            m.step_once();
+        }
+        assert!(m.cpu().regs.halted);
+        assert_eq!(
+            m.read_mem(0x2000),
+            0x42,
+            "NMI handler should have written flag to MF RAM"
+        );
     }
 
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
@@ -3508,6 +3781,105 @@ mod tests {
         assert_eq!(m.read_mem(0x4000), 0xbe);
         assert_eq!(m.read_mem(0x4001), 0xef);
         assert_eq!(m.read_mem(0x5000), 0x42);
+    }
+
+    fn synthetic_z80_v2_128_for_machine() -> Vec<u8> {
+        let mut data = vec![0u8; 55];
+        data[0] = 0x11;
+        data[1] = 0x22;
+        data[6] = 0;
+        data[7] = 0;
+        data[8] = 0x00;
+        data[9] = 0x70; // SP
+        data[12] = (3 << 1) & 0x0e; // border 3
+        data[30] = 23;
+        data[31] = 0;
+        data[32] = 0x00;
+        data[33] = 0x90; // PC = 0x9000
+        data[34] = 3; // v2 128K
+        data[35] = 0x04; // 7FFD: bank 4 at C000
+        for page in 3u8..=10 {
+            let bank = page - 3;
+            data.extend_from_slice(&0xffffu16.to_le_bytes());
+            data.push(page);
+            let mut page_ram = vec![0u8; 16384];
+            page_ram[0] = 0xf0 | bank;
+            page_ram[1] = bank;
+            data.extend_from_slice(&page_ram);
+        }
+        data
+    }
+
+    fn synthetic_z80_v3_plus3_for_machine() -> Vec<u8> {
+        let mut data = vec![0u8; 87];
+        data[6] = 0;
+        data[7] = 0;
+        data[8] = 0xfe;
+        data[9] = 0xff;
+        data[12] = (7 << 1) & 0x0e;
+        data[30] = 55;
+        data[31] = 0;
+        data[32] = 0x00;
+        data[33] = 0xc0; // PC in paged bank window
+        data[34] = 7; // +3
+        data[35] = 0x01; // bank 1 at C000
+        data[86] = 0x04; // 1FFD ROM high
+        for page in 3u8..=10 {
+            let bank = page - 3;
+            data.extend_from_slice(&0xffffu16.to_le_bytes());
+            data.push(page);
+            let mut page_ram = vec![0u8; 16384];
+            page_ram[0] = 0xa0 | bank;
+            data.extend_from_slice(&page_ram);
+        }
+        data
+    }
+
+    #[test]
+    fn apply_snapshot128_z80_pages_and_7ffd() {
+        let Some(rom) = rom128() else {
+            eprintln!("skip: roms/128/spec128uk.rom missing");
+            return;
+        };
+        let snap = Snapshot128::parse_z80(&synthetic_z80_v2_128_for_machine()).expect("z80 128");
+        let mut m = Machine::new_128k(&rom).unwrap();
+        m.apply_snapshot128(&snap);
+        let i = m.inspect();
+        assert_eq!(i.regs.pc, 0x9000);
+        assert_eq!(i.border, 3);
+        assert_eq!(i.paging.page_7ffd, Some(0x04));
+        assert_eq!(m.read_mem(0x4000), 0xf5); // bank 5
+        assert_eq!(m.read_mem(0x8000), 0xf2); // bank 2
+        assert_eq!(m.read_mem(0xc000), 0xf4); // bank 4 via 7FFD
+        if let Machine::Spec128 { bus, .. } = &m {
+            assert_eq!(bus.banks[0][0], 0xf0);
+            assert_eq!(bus.banks[7][0], 0xf7);
+            assert_eq!(bus.page, 0x04);
+        } else {
+            panic!("expected Spec128");
+        }
+    }
+
+    #[test]
+    fn apply_snapshot128_plus3_applies_1ffd() {
+        let Some(rom) = rom_plus3() else {
+            eprintln!("skip: plus3/plus2a ROM missing");
+            return;
+        };
+        let snap = Snapshot128::parse_z80(&synthetic_z80_v3_plus3_for_machine()).expect("z80 +3");
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        m.apply_snapshot128(&snap);
+        let i = m.inspect();
+        assert_eq!(i.regs.pc, 0xc000);
+        assert_eq!(i.paging.page_7ffd, Some(0x01));
+        assert_eq!(i.paging.page_1ffd, Some(0x04));
+        assert_eq!(m.read_mem(0xc000), 0xa1); // bank 1
+        if let Machine::SpecPlus3 { bus, .. } = &m {
+            assert_eq!(bus.page_1ffd, 0x04);
+            assert_eq!(bus.banks[6][0], 0xa6);
+        } else {
+            panic!("expected SpecPlus3");
+        }
     }
 
     /// Uncompressed RZX input block (same layout as formats::rzx tests).

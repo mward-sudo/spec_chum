@@ -4,10 +4,17 @@
 
 mod ay;
 mod kempston;
+mod kempston_mouse;
+mod multiface;
 mod plus3;
 
-pub use ay::Ay8912;
+pub use ay::{Ay8912, StereoMode};
 pub use kempston::Kempston;
+pub use kempston_mouse::{
+    KempstonMouse, PORT_BUTTONS as MOUSE_PORT_BUTTONS, PORT_X as MOUSE_PORT_X,
+    PORT_Y as MOUSE_PORT_Y,
+};
+pub use multiface::{Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 
 use ula::{
@@ -93,6 +100,9 @@ pub struct Bus48 {
     /// Timestamped beeper edges: (frame_t, level).
     pub beeper_edges: Vec<(u32, bool)>,
     pub kempston: Kempston,
+    pub mouse: KempstonMouse,
+    /// Optional Multiface 1 (ROM attached separately).
+    pub multiface: Option<Multiface1>,
 }
 
 impl Default for Bus48 {
@@ -116,6 +126,8 @@ impl Bus48 {
             ula: Ula48::new(),
             beeper_edges: Vec::new(),
             kempston: Kempston::new(),
+            mouse: KempstonMouse::new(),
+            multiface: None,
         }
     }
 
@@ -124,6 +136,14 @@ impl Bus48 {
             return Err(format!("48K ROM must be 16384 bytes, got {}", data.len()));
         }
         self.rom.copy_from_slice(data);
+        Ok(())
+    }
+
+    /// Attach Multiface 1 with an 8 KiB ROM image (creates the peripheral if absent).
+    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), String> {
+        let mut mf = Multiface1::new();
+        mf.load_rom(rom)?;
+        self.multiface = Some(mf);
         Ok(())
     }
 
@@ -146,6 +166,11 @@ impl Bus48 {
     #[inline]
     #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
+        if let Some(mf) = self.multiface.as_ref() {
+            if let Some(v) = mf.read(addr) {
+                return v;
+            }
+        }
         if addr < 0x4000 {
             self.rom[addr as usize]
         } else {
@@ -155,6 +180,11 @@ impl Bus48 {
 
     #[inline]
     pub fn write(&mut self, addr: u16, value: u8) {
+        if let Some(mf) = self.multiface.as_mut() {
+            if mf.write(addr, value) {
+                return;
+            }
+        }
         if addr >= 0x4000 {
             self.ram[addr as usize - 0x4000] = value;
         }
@@ -226,6 +256,9 @@ impl Bus48 {
         if port & 0xff == 0x1f {
             return self.kempston.read();
         }
+        if let Some(v) = self.mouse.read_port(port) {
+            return v;
+        }
         if port & 1 == 0 {
             return self.in_fe(port);
         }
@@ -236,6 +269,11 @@ impl Bus48 {
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
+        if let Some(mf) = self.multiface.as_mut() {
+            if mf.out_port(port, value) {
+                return;
+            }
+        }
         if port & 1 == 0 {
             self.out_fe(value);
         }
@@ -262,6 +300,7 @@ pub struct Bus128 {
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
     pub kempston: Kempston,
+    pub mouse: KempstonMouse,
 }
 
 impl Default for Bus128 {
@@ -287,6 +326,7 @@ impl Bus128 {
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
             kempston: Kempston::new(),
+            mouse: KempstonMouse::new(),
         }
     }
 
@@ -396,6 +436,9 @@ impl Bus128 {
     pub fn in_port(&mut self, port: u16) -> u8 {
         if port & 0xff == 0x1f {
             return self.kempston.read();
+        }
+        if let Some(v) = self.mouse.read_port(port) {
+            return v;
         }
         if port & 1 == 0 {
             let keys = self.keyboard.read((port >> 8) as u8);
@@ -527,5 +570,31 @@ mod tests {
         b.kempston.fire = true;
         b.kempston.right = true;
         assert_eq!(b.in_port(0x001f), 0x11);
+    }
+
+    #[test]
+    fn kempston_mouse_ports_after_delta_and_buttons() {
+        let mut b = Bus48::new();
+        b.mouse.set_delta(20, -4);
+        b.mouse.set_buttons(true, true, false);
+        assert_eq!(b.in_port(MOUSE_PORT_X), 20);
+        assert_eq!(b.in_port(MOUSE_PORT_Y), 4);
+        assert_eq!(b.in_port(MOUSE_PORT_BUTTONS), 0xfc); // D0+D1 clear
+    }
+
+    #[test]
+    fn multiface_nmi_overlays_synthetic_rom() {
+        let mut b = Bus48::new();
+        b.rom[0x66] = 0x11; // Spectrum ROM at NMI vector
+        let mut mf_rom = [0u8; MULTIFACE1_SIZE];
+        mf_rom[0x66] = 0xc3; // JP …
+        b.attach_multiface(&mf_rom).unwrap();
+        assert_eq!(b.read(0x0066), 0x11);
+        b.multiface.as_mut().unwrap().nmi();
+        assert_eq!(b.read(0x0066), 0xc3);
+        b.write(0x2000, 0x5a);
+        assert_eq!(b.read(0x2000), 0x5a);
+        b.out_port(0x003f, 0);
+        assert_eq!(b.read(0x0066), 0x11, "OUT 3Fh hides Multiface");
     }
 }

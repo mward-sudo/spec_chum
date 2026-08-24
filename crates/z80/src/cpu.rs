@@ -133,6 +133,29 @@ impl Cpu {
         (self.t.wrapping_sub(t0)) as u32
     }
 
+    /// Accept a non-maskable interrupt. Always taken; returns T-states of the NMI sequence.
+    ///
+    /// Clears IFF1 only (IFF2 preserved for `RETN`). Vector is `0x0066`.
+    pub fn nmi<M: Memory>(&mut self, mem: &mut M) -> u32 {
+        let t0 = self.t;
+        if self.regs.halted {
+            self.regs.halted = false;
+            let op = mem.read(self.regs.pc, self.t).0;
+            if op == 0x76 {
+                self.regs.pc = self.regs.pc.wrapping_add(1);
+            }
+        }
+        self.regs.iff1 = false;
+        self.regs.q = 0;
+        self.regs.inc_r();
+        // Nominal uncontended NMI is 11T (5T ack + 6T push); `push` accounts for stack writes.
+        self.push(mem, self.regs.pc);
+        self.regs.pc = 0x0066;
+        self.regs.memptr = 0x0066;
+        self.add_t(5);
+        (self.t.wrapping_sub(t0)) as u32
+    }
+
     #[inline]
     pub(crate) fn add_t(&mut self, dt: u32) {
         self.t = self.t.wrapping_add(u64::from(dt));
@@ -418,6 +441,24 @@ mod tests {
         let ret = u16::from(mem.data[cpu.regs.sp as usize])
             | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
         assert_eq!(ret, 0x1001);
+    }
+
+    #[test]
+    fn nmi_vectors_to_0066_and_preserves_iff2() {
+        let mut cpu = Cpu::new();
+        let mut mem = FlatMem::new();
+        cpu.regs.sp = 0xfffd;
+        cpu.regs.pc = 0x1234;
+        cpu.regs.iff1 = true;
+        cpu.regs.iff2 = true;
+        let t = cpu.nmi(&mut mem);
+        assert_eq!(t, 11, "uncontended NMI is 11 T");
+        assert_eq!(cpu.regs.pc, 0x0066);
+        assert!(!cpu.regs.iff1);
+        assert!(cpu.regs.iff2);
+        let ret = u16::from(mem.data[cpu.regs.sp as usize])
+            | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
+        assert_eq!(ret, 0x1234);
     }
 
     #[test]
