@@ -149,10 +149,17 @@ fn parse_fuse_event_line(line: &str) -> Option<FuseEvent> {
     };
     // Fallible hex so parse_expected can panic with test name + full line.
     let addr = u16::from_str_radix(parts.next()?, 16).ok()?;
-    let value = match parts.next() {
-        Some(v) => Some(u8::from_str_radix(v, 16).ok()?),
-        None => None,
+    let value = match (kind, parts.next()) {
+        (FuseEventKind::Mc | FuseEventKind::Pc, None) => None,
+        (
+            FuseEventKind::Mr | FuseEventKind::Mw | FuseEventKind::Pr | FuseEventKind::Pw,
+            Some(v),
+        ) => Some(u8::from_str_radix(v, 16).ok()?),
+        _ => return None,
     };
+    if parts.next().is_some() {
+        return None;
+    }
     Some(FuseEvent {
         t,
         kind,
