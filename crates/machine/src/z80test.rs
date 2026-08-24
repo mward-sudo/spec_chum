@@ -69,10 +69,7 @@ fn code_block(image: &TapImage) -> Result<(u16, &[u8]), String> {
 }
 
 /// Run a z80test TAP under the 48K machine with RST10 print capture.
-pub fn run_z80test_tap(
-    tap_path: &Path,
-    max_instructions: u64,
-) -> Result<Z80testOutcome, String> {
+pub fn run_z80test_tap(tap_path: &Path, max_instructions: u64) -> Result<Z80testOutcome, String> {
     let rom = std::fs::read(rom48_path()).map_err(|e| {
         format!(
             "missing 48K ROM ({}): run ./scripts/fetch_roms.sh ({e})",
