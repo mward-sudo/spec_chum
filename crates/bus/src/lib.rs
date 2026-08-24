@@ -13,7 +13,10 @@ mod plus3;
 
 pub use ay::{Ay8912, StereoMode};
 pub use beta_disk::BetaDisk;
-pub use divmmc::{DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL};
+pub use divmmc::{
+    DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
+    PORT_SPI_DATA as DIVMMC_PORT_SPI_DATA,
+};
 pub use interface1::{Interface1, IF1_ROM_SIZE};
 pub use kempston::Kempston;
 pub use kempston_mouse::{
@@ -164,26 +167,17 @@ impl Bus48 {
 
     /// Attach a DivMMC (creates default peripheral if absent).
     pub fn attach_divmmc(&mut self) -> &mut DivMmc {
-        if self.divmmc.is_none() {
-            self.divmmc = Some(DivMmc::new());
-        }
-        self.divmmc.as_mut().unwrap()
+        self.divmmc.get_or_insert_with(DivMmc::new)
     }
 
     /// Attach Interface 1 (creates default peripheral if absent).
     pub fn attach_interface1(&mut self) -> &mut Interface1 {
-        if self.interface1.is_none() {
-            self.interface1 = Some(Interface1::new());
-        }
-        self.interface1.as_mut().unwrap()
+        self.interface1.get_or_insert_with(Interface1::new)
     }
 
     /// Attach Beta Disk / TR-DOS (creates default peripheral if absent).
     pub fn attach_beta(&mut self) -> &mut BetaDisk {
-        if self.beta.is_none() {
-            self.beta = Some(BetaDisk::new());
-        }
-        self.beta.as_mut().unwrap()
+        self.beta.get_or_insert_with(BetaDisk::new)
     }
 
     #[inline]
@@ -332,7 +326,7 @@ impl Bus48 {
         v
     }
 
-        pub fn out_port(&mut self, port: u16, value: u8) {
+    pub fn out_port(&mut self, port: u16, value: u8) {
         if let Some(mf) = self.multiface.as_mut() {
             if mf.out_port(port, value) {
                 return;
@@ -412,24 +406,15 @@ impl Bus128 {
 
     /// Attach a DivMMC (creates default peripheral if absent).
     pub fn attach_divmmc(&mut self) -> &mut DivMmc {
-        if self.divmmc.is_none() {
-            self.divmmc = Some(DivMmc::new());
-        }
-        self.divmmc.as_mut().unwrap()
+        self.divmmc.get_or_insert_with(DivMmc::new)
     }
 
     pub fn attach_interface1(&mut self) -> &mut Interface1 {
-        if self.interface1.is_none() {
-            self.interface1 = Some(Interface1::new());
-        }
-        self.interface1.as_mut().unwrap()
+        self.interface1.get_or_insert_with(Interface1::new)
     }
 
     pub fn attach_beta(&mut self) -> &mut BetaDisk {
-        if self.beta.is_none() {
-            self.beta = Some(BetaDisk::new());
-        }
-        self.beta.as_mut().unwrap()
+        self.beta.get_or_insert_with(BetaDisk::new)
     }
 
     /// Compatibility: selected AY register index.
@@ -492,7 +477,7 @@ impl Bus128 {
         }
     }
 
-        pub fn write(&mut self, addr: u16, value: u8) {
+    pub fn write(&mut self, addr: u16, value: u8) {
         if let Some(d) = self.divmmc.as_mut() {
             if d.write_overlay(addr, value) {
                 return;

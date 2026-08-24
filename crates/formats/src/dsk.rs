@@ -148,7 +148,9 @@ pub struct Plus3Fdc {
     pub status: u8,
     last_data: Vec<u8>,
     data_index: usize,
+    /// Command-phase bytes for READ DATA (`0x06` / `0x46`) then C/H/R/N…
     cmd: Vec<u8>,
+    /// After a successful READ DATA: main status reports data ready.
     data_ready: bool,
 }
 
@@ -167,6 +169,7 @@ impl Plus3Fdc {
         self.data_index = 0;
     }
 
+    /// Seek and prepare sector buffer; returns true if found.
     pub fn read_sector(&mut self, track: u8, side: u8, sector: u8) -> bool {
         self.track = track;
         self.side = side;
@@ -186,7 +189,9 @@ impl Plus3Fdc {
         false
     }
 
-    /// Accepts READ DATA (`0x06`/`0x46`/…) + C, H, R, N (5 bytes).
+    /// Write a command/parameter byte (port `3FFD` data).
+    ///
+    /// Accepts READ DATA (`0x06`/`0x46`) followed by C, H, R, N.
     pub fn write_command_byte(&mut self, value: u8) {
         if self.cmd.is_empty() {
             if value & 0x1f == 0x06 {
@@ -199,11 +204,13 @@ impl Plus3Fdc {
             let c = self.cmd[1];
             let h = self.cmd[2];
             let r = self.cmd[3];
+            let _n = self.cmd[4];
             let _ = self.read_sector(c, h, r);
             self.cmd.clear();
         }
     }
 
+    /// Main status register (`2FFD`): bit7 RQM, bit6 DIO (1=FDC→CPU), bit4 busy.
     #[must_use]
     pub fn main_status(&self) -> u8 {
         let mut s = 0x80;
@@ -275,11 +282,27 @@ mod tests {
         assert_eq!(fdc.read_data_byte(), 0x43);
     }
 
+    #[test]
+    fn read_data_command_stream_loads_sector() {
+        let img = DskImage::parse(&synthetic_dsk()).unwrap();
+        let mut fdc = Plus3Fdc::new();
+        fdc.insert(img);
+        fdc.write_command_byte(0x46);
+        fdc.write_command_byte(0);
+        fdc.write_command_byte(0);
+        fdc.write_command_byte(0xc1);
+        fdc.write_command_byte(1);
+        assert!(fdc.data_remaining() > 0);
+        assert_eq!(fdc.main_status() & 0xc0, 0xc0);
+        assert_eq!(fdc.read_data_byte(), 0x42);
+        assert_eq!(fdc.read_data_byte(), 0x43);
+    }
+
     /// Two 256-byte sectors on track 0 for FDC sector-lookup goldens.
     ///
-    /// Note: the machine µPD765 command stream is still stubbed — port `3FFD`
-    /// ignores command bytes — so +3DOS boot is out of scope. This golden only
-    /// covers DSK parse + `Plus3Fdc::read_sector` data path.
+    /// `Plus3Fdc::write_command_byte` accepts READ DATA (`0x06`/`0x46`) + C/H/R/N;
+    /// BusPlus3 routes ports `3FFD`/`2FFD` to that path. Full +3DOS boot still needs
+    /// more µPD765 commands ([#141](https://github.com/mward-sudo/spec_chum/issues/141)).
     fn synthetic_dsk_two_sectors() -> Vec<u8> {
         let mut data = vec![0u8; 0x100];
         data[0..8].copy_from_slice(b"MV - CPC");

@@ -19,8 +19,8 @@ pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, Joystick
 
 use std::cell::Cell;
 
-use bus::{Bus128, Bus48, BusPlus3, Kempston, KempstonMouse, StereoMode};
 pub use bus::StereoMode as AyStereoMode;
+use bus::{Bus128, Bus48, BusPlus3, Kempston, KempstonMouse};
 use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot128, Snapshot48};
 pub use tape::LD_BYTES_TRAP_PC;
 use tape::{
@@ -1005,17 +1005,69 @@ impl Machine {
             Self::Spec48 { cpu, bus, .. } => {
                 bus.multiface.as_mut()?.nmi();
                 let t_step_start = cpu.t;
-                let mut mio = MemIo48 {
-                    bus,
-                    watch: None,
-                    t_step_start,
+                let dt = {
+                    let mut mio = MemIo48 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                        t_step_start,
+                    };
+                    cpu.nmi(&mut mio)
                 };
-                let dt = cpu.nmi(&mut mio);
-                drop(mio);
                 bus.advance_frame_t(dt);
                 Some(dt)
             }
             _ => None,
+        }
+    }
+
+    /// Attach DivMMC on 48K/128K (creates the peripheral if absent).
+    pub fn attach_divmmc(&mut self) -> Result<&mut bus::DivMmc, String> {
+        match self {
+            Self::Spec48 { bus, .. } => Ok(bus.attach_divmmc()),
+            Self::Spec128 { bus, .. } => Ok(bus.attach_divmmc()),
+            Self::SpecPlus3 { .. } => Err("DivMMC is not supported on Spectrum +3".into()),
+        }
+    }
+
+    pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.divmmc.as_mut(),
+            Self::Spec128 { bus, .. } => bus.divmmc.as_mut(),
+            Self::SpecPlus3 { .. } => None,
+        }
+    }
+
+    /// Attach Interface 1 on 48K/128K.
+    pub fn attach_interface1(&mut self) -> Result<&mut bus::Interface1, String> {
+        match self {
+            Self::Spec48 { bus, .. } => Ok(bus.attach_interface1()),
+            Self::Spec128 { bus, .. } => Ok(bus.attach_interface1()),
+            Self::SpecPlus3 { .. } => Err("Interface 1 is not supported on Spectrum +3".into()),
+        }
+    }
+
+    pub fn interface1_mut(&mut self) -> Option<&mut bus::Interface1> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.interface1.as_mut(),
+            Self::Spec128 { bus, .. } => bus.interface1.as_mut(),
+            Self::SpecPlus3 { .. } => None,
+        }
+    }
+
+    /// Attach Beta Disk / TR-DOS on 48K/128K.
+    pub fn attach_beta(&mut self) -> Result<&mut bus::BetaDisk, String> {
+        match self {
+            Self::Spec48 { bus, .. } => Ok(bus.attach_beta()),
+            Self::Spec128 { bus, .. } => Ok(bus.attach_beta()),
+            Self::SpecPlus3 { .. } => Err("Beta Disk is not supported on Spectrum +3".into()),
+        }
+    }
+
+    pub fn beta_mut(&mut self) -> Option<&mut bus::BetaDisk> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.beta.as_mut(),
+            Self::Spec128 { bus, .. } => bus.beta.as_mut(),
+            Self::SpecPlus3 { .. } => None,
         }
     }
 
@@ -1347,21 +1399,11 @@ impl Machine {
                         && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
-                        push_ay_frame_sample(
-                            &bus.ay,
-                            &mut ay_samples,
-                            &mut ay_left,
-                            &mut ay_right,
-                        );
+                        push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                     }
                 }
                 while ay_samples.len() < AY_SAMPLES {
-                    push_ay_frame_sample(
-                        &bus.ay,
-                        &mut ay_samples,
-                        &mut ay_left,
-                        &mut ay_right,
-                    );
+                    push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
@@ -1501,21 +1543,11 @@ impl Machine {
                         && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
-                        push_ay_frame_sample(
-                            &bus.ay,
-                            &mut ay_samples,
-                            &mut ay_left,
-                            &mut ay_right,
-                        );
+                        push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                     }
                 }
                 while ay_samples.len() < AY_SAMPLES {
-                    push_ay_frame_sample(
-                        &bus.ay,
-                        &mut ay_samples,
-                        &mut ay_left,
-                        &mut ay_right,
-                    );
+                    push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
@@ -3816,7 +3848,7 @@ mod tests {
         data[7] = 0;
         data[8] = 0xfe;
         data[9] = 0xff;
-        data[12] = (7 << 1) & 0x0e;
+        data[12] = 7 << 1; // bits 1–3: last OUT to 7FFD bank select (bank 7)
         data[30] = 55;
         data[31] = 0;
         data[32] = 0x00;

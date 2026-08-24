@@ -88,7 +88,7 @@ impl DivMmc {
                 self.control = value;
                 true
             }
-            0xe7 => {
+            PORT_SPI_CS => {
                 self.spi_cs = value;
                 if value & 1 != 0 {
                     // CS released — reset cursor for next transfer (test convenience).
@@ -96,7 +96,7 @@ impl DivMmc {
                 }
                 true
             }
-            0xeb => {
+            PORT_SPI_DATA => {
                 // Write byte into SD image at cursor (no-op past EOF).
                 if self.sd_cursor < self.sd.len() {
                     self.sd[self.sd_cursor] = value;
@@ -111,8 +111,8 @@ impl DivMmc {
     pub fn in_port(&mut self, port: u16) -> Option<u8> {
         match port & 0xff {
             0xe3 => Some(self.control),
-            0xe7 => Some(self.spi_cs),
-            0xeb => {
+            PORT_SPI_CS => Some(self.spi_cs),
+            PORT_SPI_DATA => {
                 let v = self.sd.get(self.sd_cursor).copied().unwrap_or(0xff);
                 self.sd_cursor = self.sd_cursor.saturating_add(1);
                 Some(v)
@@ -169,13 +169,13 @@ mod tests {
     #[test]
     fn control_port_conmem_shows_ram_page() {
         let mut d = DivMmc::new();
-        d.ram[1 * PAGE_SIZE] = 0x5a;
+        d.ram[PAGE_SIZE] = 0x5a;
         d.out_port(PORT_CONTROL, 0x80 | 1); // CONMEM + page 1
         assert!(d.conmem());
         assert_eq!(d.ram_page(), 1);
         assert_eq!(d.read_overlay(0x2000), Some(0x5a));
         assert!(d.write_overlay(0x2001, 0x42));
-        assert_eq!(d.ram[1 * PAGE_SIZE + 1], 0x42);
+        assert_eq!(d.ram[PAGE_SIZE + 1], 0x42);
     }
 
     #[test]

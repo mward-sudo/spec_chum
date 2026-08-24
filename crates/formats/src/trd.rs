@@ -51,7 +51,7 @@ impl TrdImage {
             0x18 => (80, 1),
             0x19 => (40, 1),
             _ => {
-                let tracks = ((have / TRD_SECTORS_PER_TRACK).max(1).min(80)) as u8;
+                let tracks = (have / TRD_SECTORS_PER_TRACK).clamp(1, 80) as u8;
                 (tracks, 1u8)
             }
         };

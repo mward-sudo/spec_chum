@@ -437,5 +437,4 @@ mod tests {
         assert_eq!(b.in_port(0x3ffd), 0x42);
         assert_eq!(b.in_port(0x3ffd), 0x43);
     }
-
 }
