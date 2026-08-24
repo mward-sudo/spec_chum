@@ -14,9 +14,11 @@ CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRa
 1. Iterate on a **draft** PR (no CR required yet).
 2. When merge-candidate: mark ready → comment `@coderabbitai full review` (or label `coderabbit-review`).
 3. After fix commits that move HEAD: comment `@coderabbitai review` (**incremental**) — do not request another full review for routine post-fix HEAD. The merge gate still needs a completed review on the latest commit.
-4. Disposition threads → `./scripts/check_pr_reviews.sh` → merge.
+4. Disposition threads **and** actionable outside-diff / summary findings → `./scripts/check_pr_reviews.sh` → merge.
 
-Keep `auto_incremental_review: true` in `.coderabbit.yaml` so `@coderabbitai review` is not skipped (observed skip when false: `incremental reviews are disabled`).
+Prefer a **human** `@coderabbitai …` comment when requesting reviews: CodeRabbit may ignore other bots (`Skipped: comment is from another GitHub bot`). Label `coderabbit-review` is a backup.
+
+`auto_incremental_review: true` keeps automatic/label follow-up reviews incremental; it is not a prerequisite for the manual `@coderabbitai review` command (per CodeRabbit docs).
 
 ## Hard rule — hold until CodeRabbit is clean (ready PRs)
 

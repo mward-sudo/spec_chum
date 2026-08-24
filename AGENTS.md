@@ -69,7 +69,7 @@ Before implementing: `gh issue list` / `gh issue view N` for related work. Prefe
 
 ### CodeRabbit — on-demand + merge gate
 
-`.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label `coderabbit-review`) → disposition → `./scripts/check_pr_reviews.sh`. After fix commits that move HEAD, request **`@coderabbitai review`** (incremental; `auto_incremental_review: true`). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
+`.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label `coderabbit-review`) → disposition → `./scripts/check_pr_reviews.sh`. After fix commits that move HEAD, request **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
 
 ### Before merge — CodeRabbit clean + bot review threads (hard gate)
 
