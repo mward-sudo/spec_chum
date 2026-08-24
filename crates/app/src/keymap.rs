@@ -263,7 +263,8 @@ pub const MAPPING_DOC: &str = "\
 Mac → Spectrum keyboard
 • Letters/digits: direct matrix; Shift = Caps Shift; Option/Alt = Symbol Shift
 • \" (Shift+Quote) = Symbol + P    ' (Quote) = Symbol + 7
-• Arrows = Caps + 5/6/7/8 (cursor); also Kempston in the app
+• Arrows + Tab fire = host joystick (Machine menu: Kempston / Sinclair / Cursor)
+• USB/Bluetooth gamepads via gilrs (same stick + South/A fire)
 • Backspace = Caps + 0 (DELETE)
 • ; , . / - = = Symbol + O N M V J L (Shift variants for : < > ? _ +)
 • 48K LOAD \"\": type J then Shift+Quote twice, or use Tape → Type LOAD \"\"

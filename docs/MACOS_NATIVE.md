@@ -39,10 +39,12 @@ Environment:
 
 ## What this vertical slice includes
 
-- Native `MenuBar` / `Commands` (File → Open Tape / Open ROM, Tape Play/Pause/Rewind, Machine Reset + model, Debug trace dump)
+- Native `MenuBar` / `Commands` (File → Open Tape / Snapshot / RZX / Disk / ROM; Tape Play/Pause/Rewind + Type LOAD; Machine Reset + model; Debug trace dump)
 - Toolbar / status chrome via SwiftUI **`glassEffect`** on macOS 26+; fallback **`.ultraThinMaterial`**
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`
+- **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, +2A/+3) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
+- **Type LOAD ""** / **Type LOAD "" CODE** (Tape + Machine menus): 48K keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 shows a Tape Loader hint
 - **Audio:** mono PCM from `sc_audio_*` each frame via `AVAudioEngine` (beeper + EAR mix + AY)
 - **Tape progress:** `ProgressView` from `sc_tape_progress` (block / pulse position)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)
@@ -60,13 +62,19 @@ Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (d
 
 1. `./scripts/fetch_roms.sh` then `./scripts/run_macos_app.sh`
 2. Model **48K**. Open `tests/fixtures/tape/attr_mark.tap` (or `print_ok.tap` / `minimal_code.tap`).
-3. Leave **Instant** on. For PROGRAM loaders type `LOAD ""` + Enter (egui **Type LOAD ""**). For CODE blocks type `LOAD "" CODE` (egui **Type LOAD "" CODE**). Press **Play**.
+3. Leave **Instant** on. For PROGRAM loaders use **Tape → Type LOAD ""** (or type `LOAD ""` + Enter). For CODE blocks use **Type LOAD "" CODE**. Press **Play**.
 4. Expect program name in the border/ROM print path, then a quick data load. For `attr_mark.tap`, `RANDOMIZE USR 32768` should paint the top-left attribute.
 5. Optional: local Boggit TZX (not in git) — same flow; first header should show `BOGGIT pt1`. Later custom-loader blocks (`flag 0xC8`) need Instant off / EAR (or game’s own loader).
 
+### Snapshots / RZX / disk
+
+1. **File → Open Snapshot…** — `.sna` / `.z80` (48K or banked 128K/+3; host may switch model and autoload ROM).
+2. **File → Open RZX…** — requires a machine/ROM already loaded.
+3. **File → Open Disk…** — `.dsk` on **Spectrum +2A/+3** only (`sc_load_dsk`).
+
 ### Experience ~20s load
 
-Abbreviated “feel of loading” that always finishes in about 20 seconds is tracked separately (follow-up to #82); ship Instant + Speed first.
+Abbreviated “feel of loading” that always finishes in about 20 seconds is still a follow-up ([#82](https://github.com/mward-sudo/spec_chum/issues/82)); ship Instant + Speed first.
 
 ## Keyboard (Mac native shell)
 
@@ -147,13 +155,16 @@ not a rapid flicker.
 ## Not in this slice (still egui-only or follow-ups)
 
 - Joystick mode picker UI (ABI supports Sinclair L/R + Cursor; shell defaults to Kempston)
-- Snapshots (SNA/Z80), RZX, DSK
 - Signed / notarized SwiftUI distribution bundle (dev launch uses a staged `.app` via `open`)
-- CI job that compiles the Swift shell (Linux CI stays Rust-only)
+- ~20s “experience” tape mode ([#82](https://github.com/mward-sudo/spec_chum/issues/82))
+
+## CI (`macos-shell` — [#68](https://github.com/mward-sudo/spec_chum/issues/68))
+
+Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) has a separate **`macos-shell`** job on `macos-latest` (push to `main` + pull requests). It installs Rust, caches Cargo, and runs `./scripts/build_macos_app.sh` (`host_api` release + SwiftPM). It does **not** gate the Linux `check` job — that job stays independent so a Swift/Xcode failure does not fail Rust CI. Treat `macos-shell` as the optional compile check for this shell; Linux `check` remains the primary gate.
 
 GitHub Releases currently ship an **egui**-wrapped `Spec Chum.app` (see
 [RELEASE.md](RELEASE.md)). This SwiftUI shell is not yet a release artifact;
-optional CI build + DMG/notarisation: [#68](https://github.com/mward-sudo/spec_chum/issues/68).
+DMG/notarisation remain follow-ups under [#68](https://github.com/mward-sudo/spec_chum/issues/68).
 
 ## Layout
 

@@ -21,6 +21,19 @@ struct SpecChumMacApp: App {
                 }
                 .keyboardShortcut("o", modifiers: .command)
 
+                Button("Open Snapshot…") {
+                    openSnapshot()
+                }
+                .keyboardShortcut("o", modifiers: [.command, .option])
+
+                Button("Open RZX…") {
+                    openRzx()
+                }
+
+                Button("Open Disk…") {
+                    openDsk()
+                }
+
                 Button("Open ROM…") {
                     openRom()
                 }
@@ -32,11 +45,25 @@ struct SpecChumMacApp: App {
                     .keyboardShortcut("p", modifiers: [.command, .shift])
                 Button("Pause") { host.pauseTape() }
                 Button("Rewind") { host.rewindTape() }
+                Divider()
+                Button("Type LOAD \"\"") {
+                    host.typeLoadQuotes(withCode: false)
+                }
+                Button("Type LOAD \"\" CODE") {
+                    host.typeLoadQuotes(withCode: true)
+                }
             }
 
             CommandMenu("Machine") {
                 Button("Reset") { host.reset() }
                     .keyboardShortcut("r", modifiers: .command)
+                Divider()
+                Button("Type LOAD \"\"") {
+                    host.typeLoadQuotes(withCode: false)
+                }
+                Button("Type LOAD \"\" CODE") {
+                    host.typeLoadQuotes(withCode: true)
+                }
                 Divider()
                 ForEach(HostBridge.Model.allCases) { model in
                     Button(model.title) {
@@ -95,8 +122,49 @@ struct SpecChumMacApp: App {
             UTType(filenameExtension: "tap") ?? .data,
             UTType(filenameExtension: "tzx") ?? .data,
         ]
+        panel.title = "Open TAP / TZX"
         if panel.runModal() == .OK, let url = panel.url {
             host.openTape(at: url)
+        }
+    }
+
+    private func openSnapshot() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "sna") ?? .data,
+            UTType(filenameExtension: "z80") ?? .data,
+        ]
+        panel.title = "Open SNA / Z80 Snapshot"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.openSnapshot(at: url)
+        }
+    }
+
+    private func openRzx() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rzx") ?? .data,
+        ]
+        panel.title = "Open RZX"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.openRzx(at: url)
+        }
+    }
+
+    private func openDsk() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "dsk") ?? .data,
+        ]
+        panel.title = "Open Disk (DSK)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.openDsk(at: url)
         }
     }
 
@@ -105,6 +173,7 @@ struct SpecChumMacApp: App {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [UTType(filenameExtension: "rom") ?? .data]
+        panel.title = "Open ROM"
         if panel.runModal() == .OK, let url = panel.url {
             host.loadRom(at: url)
         }

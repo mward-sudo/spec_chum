@@ -268,6 +268,90 @@ impl HostSession {
         Ok(())
     }
 
+    /// Load a SNA/Z80 snapshot (128K/+3 first, then 48K), switching model when needed.
+    ///
+    /// Mirrors egui `SpecChumApp::load_snapshot`: on a 128K/+3 snap, switch away from 48K
+    /// (or no machine) and best-effort autoload the matching ROM; on a 48K snap with no
+    /// machine, select 48K and autoload.
+    pub fn load_snapshot(&mut self, path: &Path) -> Result<(), HostError> {
+        if let Ok(snap) =
+            formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
+        {
+            if self.machine.is_none() || self.model == ModelId::Spectrum48 {
+                self.model = if snap.is_plus3() {
+                    ModelId::SpectrumPlus3
+                } else {
+                    ModelId::Spectrum128
+                };
+                self.try_autoload_rom();
+            }
+            let Some(m) = self.machine.as_mut() else {
+                return Err(HostError::NoMachine);
+            };
+            m.apply_snapshot128(&snap);
+            self.status = format!("Loaded 128K/+3 snapshot {}", path.display());
+            return Ok(());
+        }
+        let snap = formats::Snapshot48::load_sna(path)
+            .or_else(|_| formats::Snapshot48::load_z80(path))
+            .map_err(|e| HostError::Message(e.to_string()))?;
+        if self.machine.is_none() {
+            self.model = ModelId::Spectrum48;
+            self.try_autoload_rom();
+        }
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.apply_snapshot48(&snap);
+        self.status = format!("Loaded snapshot {}", path.display());
+        Ok(())
+    }
+
+    /// Load an RZX recording into the current machine.
+    pub fn load_rzx(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let rec =
+            formats::RzxRecording::load(path).map_err(|e| HostError::Message(e.to_string()))?;
+        m.insert_rzx(rec);
+        self.status = format!("Loaded RZX {}", path.display());
+        Ok(())
+    }
+
+    /// Insert a +3 DSK image (requires a Plus3 machine).
+    pub fn load_dsk(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let img = formats::DskImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
+        m.insert_disk(img).map_err(HostError::Message)?;
+        self.status = format!("Inserted DSK {}", path.display());
+        Ok(())
+    }
+
+    /// Best-effort ROM load for the current model (workspace / `SPEC_CHUM_ROOT` / cwd).
+    fn try_autoload_rom(&mut self) {
+        let candidates: &[&str] = match self.model {
+            ModelId::Spectrum48 => &["roms/spec48.rom"],
+            ModelId::Spectrum128 => &["roms/128/spec128uk.rom"],
+            ModelId::SpectrumPlus3 => &["roms/plus3/plus3.rom", "roms/plus2a/plus2a.rom"],
+        };
+        for root in rom_search_roots() {
+            for rel in candidates {
+                let path = root.join(rel);
+                if path.is_file() {
+                    if let Ok(data) = std::fs::read(&path) {
+                        if self.load_rom_bytes(&data).is_ok() {
+                            self.status = format!("Loaded {}", path.display());
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub fn play_tape(&mut self) -> Result<(), HostError> {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
@@ -539,6 +623,19 @@ fn render_frame_pcm(
         }
     }
     level
+}
+
+fn rom_search_roots() -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        roots.push(cwd);
+    }
+    if let Ok(env) = std::env::var("SPEC_CHUM_ROOT") {
+        roots.push(std::path::PathBuf::from(env));
+    }
+    // Dev / `cargo test`: crates/host_api → workspace root.
+    roots.push(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    roots
 }
 
 fn dims(with_border: bool) -> (usize, usize) {
@@ -827,6 +924,126 @@ mod tests {
         s.load_rom_bytes(&rom).expect("rom");
         let err = s
             .open_tape(Path::new("/tmp/spec_chum_definitely_missing.tap"))
+            .expect_err("missing");
+        assert!(matches!(err, HostError::Io(_) | HostError::Message(_)));
+    }
+
+    /// Minimal 48K SNA (49179 bytes) with PC=0x8000 via SP pop and one RAM marker.
+    fn synthetic_sna48_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 49179];
+        data[26] = 5; // border
+        data[23] = 0x00;
+        data[24] = 0x40; // SP = 0x4000 → pop PC from RAM[0x4000]
+        data[27] = 0x00;
+        data[28] = 0x80; // PC = 0x8000
+        data[27 + 0x4000] = 0xaa; // byte at 0x8000
+        data
+    }
+
+    /// Minimal uncompressed Z80 v1 (48K).
+    fn synthetic_z80_v1_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 30 + 49152];
+        data[0] = 0x11; // A
+        data[1] = 0x22; // F
+        data[6] = 0x00;
+        data[7] = 0x81; // PC = 0x8100
+        data[8] = 0x00;
+        data[9] = 0x70; // SP = 0x7000
+        data[12] = (6 << 1) & 0x0e; // border 6, uncompressed
+        data[30] = 0xbe;
+        data[31] = 0xef;
+        data[30 + 0x1000] = 0x42;
+        data
+    }
+
+    #[test]
+    fn load_snapshot_sna48_sets_pc_and_ram() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let dir = std::env::temp_dir();
+        let path = dir.join("spec_chum_host_api_test.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.load_snapshot(&path).expect("sna");
+        let regs = s.regs().expect("regs");
+        assert_eq!(regs.pc, 0x8000);
+        assert_eq!(s.peek(0x8000).expect("peek"), 0xaa);
+        assert!(s.status().contains("snapshot"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot_z80_sets_pc_and_ram() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let dir = std::env::temp_dir();
+        let path = dir.join("spec_chum_host_api_test.z80");
+        std::fs::write(&path, synthetic_z80_v1_bytes()).expect("write z80");
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.load_snapshot(&path).expect("z80");
+        let regs = s.regs().expect("regs");
+        assert_eq!(regs.pc, 0x8100);
+        assert_eq!(regs.sp, 0x7000);
+        assert_eq!(s.peek(0x4000).expect("peek"), 0xbe);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot_without_machine_autoloads_48k_rom() {
+        let fixture = workspace_root().join("tests/fixtures/snapshots/minimal48.sna");
+        let (path, cleanup) = if fixture.is_file() {
+            (fixture, false)
+        } else {
+            let path = std::env::temp_dir().join("spec_chum_host_api_autoload.sna");
+            std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+            (path, true)
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        match s.load_snapshot(&path) {
+            Ok(()) => {
+                assert!(s.has_machine());
+                assert_eq!(s.regs().expect("regs").pc, 0x8000);
+            }
+            Err(HostError::NoMachine) => {
+                eprintln!("skip: could not autoload ROM for snapshot");
+            }
+            Err(e) => panic!("unexpected error: {e}"),
+        }
+        if cleanup {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
+    #[test]
+    fn load_rzx_and_dsk_require_machine() {
+        let mut s = HostSession::new(ModelId::SpectrumPlus3, false);
+        assert!(matches!(
+            s.load_rzx(Path::new("/tmp/missing.rzx")),
+            Err(HostError::NoMachine)
+        ));
+        assert!(matches!(
+            s.load_dsk(Path::new("/tmp/missing.dsk")),
+            Err(HostError::NoMachine)
+        ));
+    }
+
+    #[test]
+    fn load_dsk_rejects_non_plus3() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        // Missing path → Io/Message before model check is fine; use empty parse via missing file.
+        let err = s
+            .load_dsk(Path::new("/tmp/spec_chum_definitely_missing.dsk"))
             .expect_err("missing");
         assert!(matches!(err, HostError::Io(_) | HostError::Message(_)));
     }

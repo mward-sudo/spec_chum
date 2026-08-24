@@ -82,6 +82,8 @@ final class HostBridge: ObservableObject {
     private var joystickModeApplied = false
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
+    /// Frame-scripted `LOAD ""` [CODE] (egui KeyScript parity); advanced in `runFrame`.
+    private var keyScript: LoadKeyScript?
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
@@ -123,6 +125,7 @@ final class HostBridge: ObservableObject {
         if lastFrameUptime == 0 {
             lastFrameUptime = now
             pushJoystick()
+            tickKeyScript()
             sc_run_frame(handle)
             syncTapePublished()
             enqueueAudio()
@@ -132,6 +135,7 @@ final class HostBridge: ObservableObject {
         var ran = 0
         while now - lastFrameUptime >= Self.framePeriod, ran < Self.maxCatchUpFrames {
             pushJoystick()
+            tickKeyScript()
             sc_run_frame(handle)
             lastFrameUptime += Self.framePeriod
             ran += 1
@@ -248,6 +252,51 @@ final class HostBridge: ObservableObject {
             hasTape = true
             tapePlaying = false
             refreshTapeProgress()
+        }
+    }
+
+    func openSnapshot(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_snapshot(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "Snapshot load failed"
+        } else {
+            pushTapeLoadOptions()
+            refreshStatus()
+        }
+    }
+
+    func openRzx(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_rzx(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "RZX load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func openDsk(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_dsk(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "DSK load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    /// Queue egui-parity `LOAD ""` [CODE] via `sc_set_key` (48K keyword mode).
+    /// 128K/+3: status hint only (select Tape Loader / 48 BASIC manually), matching egui.
+    func typeLoadQuotes(withCode: Bool = false) {
+        switch model {
+        case .spectrum48:
+            keyScript = LoadKeyScript.loadQuotes48k(withCode: withCode)
+            status = withCode
+                ? "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                : "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan"
+        case .spectrum128, .spectrumPlus3:
+            status = "128K/+2A: select Tape Loader on the menu (ENTER), then Tape → Play"
         }
     }
 
@@ -575,6 +624,33 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    /// Apply one frame of the Type LOAD script (clear + chord), egui `tick_key_script` parity.
+    private func tickKeyScript() {
+        guard let handle, var script = keyScript else { return }
+        if script.stepIndex >= script.steps.count {
+            keyScript = nil
+            clearKeys()
+            return
+        }
+        if script.framesLeft == 0 {
+            script.framesLeft = max(1, script.steps[script.stepIndex].frames)
+        }
+        let chord = script.steps[script.stepIndex].keys
+        clearKeys()
+        for (row, bit) in chord {
+            _ = sc_set_key(handle, row, bit, 1)
+        }
+        script.framesLeft -= 1
+        if script.framesLeft == 0 {
+            script.stepIndex += 1
+        }
+        if script.stepIndex >= script.steps.count {
+            keyScript = nil
+        } else {
+            keyScript = script
+        }
+    }
+
     private static func takeLastError() -> String? {
         guard let cstr = sc_last_error() else { return nil }
         let s = String(cString: cstr)
@@ -600,5 +676,48 @@ final class HostBridge: ObservableObject {
             }
         }
         return roots
+    }
+}
+
+/// 48K keyword-mode `LOAD ""` [CODE] Enter — mirrors egui `KeyScript` / ROM debounce.
+private struct LoadKeyScript {
+    struct Step {
+        let keys: [(UInt32, UInt32)]
+        let frames: UInt32
+    }
+
+    var steps: [Step]
+    var stepIndex: Int = 0
+    var framesLeft: UInt32 = 0
+
+    private static let press: UInt32 = 10
+    private static let gap: UInt32 = 5
+    private static let caps: (UInt32, UInt32) = (0, 0)
+    private static let sym: (UInt32, UInt32) = (7, 1)
+
+    static func loadQuotes48k(withCode: Bool) -> LoadKeyScript {
+        let j: [(UInt32, UInt32)] = [(6, 3)]
+        let quote: [(UInt32, UInt32)] = [sym, (5, 0)]
+        let extend: [(UInt32, UInt32)] = [caps, sym]
+        let codeI: [(UInt32, UInt32)] = [(5, 2)]
+        let enter: [(UInt32, UInt32)] = [(6, 0)]
+        let empty: [(UInt32, UInt32)] = []
+        var steps: [Step] = [
+            Step(keys: j, frames: press),
+            Step(keys: empty, frames: gap),
+            Step(keys: quote, frames: press),
+            Step(keys: empty, frames: gap),
+            Step(keys: quote, frames: press),
+            Step(keys: empty, frames: gap),
+        ]
+        if withCode {
+            steps.append(Step(keys: extend, frames: press))
+            steps.append(Step(keys: empty, frames: gap))
+            steps.append(Step(keys: codeI, frames: press))
+            steps.append(Step(keys: empty, frames: gap))
+        }
+        steps.append(Step(keys: enter, frames: press))
+        steps.append(Step(keys: empty, frames: 15))
+        return LoadKeyScript(steps: steps)
     }
 }

@@ -32,6 +32,10 @@ unsigned int sc_framebuffer_width(void *handle);
 unsigned int sc_framebuffer_height(void *handle);
 
 int sc_open_tape(void *handle, const char *path);
+/* SNA/Z80 snapshot, RZX recording, +3 DSK — path is UTF-8 filesystem path */
+int sc_load_snapshot(void *handle, const char *path);
+int sc_load_rzx(void *handle, const char *path);
+int sc_load_dsk(void *handle, const char *path);
 int sc_tape_play(void *handle);
 int sc_tape_pause(void *handle);
 int sc_tape_rewind(void *handle);

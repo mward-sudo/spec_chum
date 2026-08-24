@@ -74,3 +74,23 @@ jobs:
 
       - name: z80doc
         run: cargo test -p machine --features slow-tests --release z80doc_all_tests_passed -- --nocapture
+
+  # Optional SwiftUI shell compile (#68). Independent of Linux `check` — does not block Rust CI.
+  macos-shell:
+    name: macos-shell (host_api + Swift)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            apps/macos
+
+      - name: Build macOS shell
+        run: ./scripts/build_macos_app.sh
