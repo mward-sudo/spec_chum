@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use formats::Snapshot48;
+use formats::{Snapshot128, Snapshot48};
 use machine::{BreakReason, Machine, Model, TapeLoadOptions, Watch};
 use tape::{TapPlayer, TzxPlayer};
 use trace::DumpFilter;
@@ -133,8 +133,7 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
     }
     .map_err(|e| anyhow::anyhow!(e))?;
     if let Some(path) = &cli.snapshot {
-        let snap = load_snapshot(path)?;
-        m.apply_snapshot48(&snap);
+        load_and_apply_snapshot(&mut m, path)?;
     }
     if let Some(path) = &cli.tap {
         let img = tape::TapImage::load(path).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -180,16 +179,27 @@ fn print_ok_loaded(m: &Machine) -> bool {
     false
 }
 
-fn load_snapshot(path: &Path) -> Result<Snapshot48> {
+fn load_and_apply_snapshot(m: &mut Machine, path: &Path) -> Result<()> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
     if ext == "z80" {
-        Snapshot48::load_z80(path).map_err(|e| anyhow::anyhow!("{e}"))
+        if let Ok(snap) = Snapshot128::load_z80(path) {
+            m.apply_snapshot128(&snap);
+            return Ok(());
+        }
+        let snap = Snapshot48::load_z80(path).map_err(|e| anyhow::anyhow!("{e}"))?;
+        m.apply_snapshot48(&snap);
+        Ok(())
+    } else if let Ok(snap) = Snapshot128::load_sna(path) {
+        m.apply_snapshot128(&snap);
+        Ok(())
     } else {
-        Snapshot48::load_sna(path).map_err(|e| anyhow::anyhow!("{e}"))
+        let snap = Snapshot48::load_sna(path).map_err(|e| anyhow::anyhow!("{e}"))?;
+        m.apply_snapshot48(&snap);
+        Ok(())
     }
 }
 

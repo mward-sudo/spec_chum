@@ -167,6 +167,23 @@ impl EmulatorSession {
     }
 
     pub fn load_snapshot(&mut self, path: &Path) {
+        if let Ok(snap) =
+            formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
+        {
+            if self.machine.is_none() || matches!(self.model, Model::Spectrum48) {
+                self.model = if snap.is_plus3() {
+                    Model::SpectrumPlus3
+                } else {
+                    Model::Spectrum128
+                };
+                self.try_autoload_rom();
+            }
+            if let Some(m) = self.machine.as_mut() {
+                m.apply_snapshot128(&snap);
+                self.status = format!("Loaded 128K/+3 snapshot {}", path.display());
+            }
+            return;
+        }
         match formats::Snapshot48::load_sna(path).or_else(|_| formats::Snapshot48::load_z80(path)) {
             Ok(snap) => {
                 if self.machine.is_none() {

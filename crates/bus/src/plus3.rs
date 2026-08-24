@@ -33,6 +33,7 @@ pub struct BusPlus3 {
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
     pub kempston: crate::Kempston,
+    pub mouse: crate::KempstonMouse,
     pub fdc: formats::Plus3Fdc,
 }
 
@@ -60,6 +61,7 @@ impl BusPlus3 {
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
             kempston: crate::Kempston::new(),
+            mouse: crate::KempstonMouse::new(),
             fdc: formats::Plus3Fdc::new(),
         }
     }
@@ -193,6 +195,9 @@ impl BusPlus3 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        if let Some(v) = self.mouse.read_port(port) {
+            return v;
+        }
         if port & 0xff == 0x1f {
             return self.kempston.read();
         }
