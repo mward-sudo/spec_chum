@@ -354,7 +354,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
                 cpu.regs.memptr = dest;
             } else {
                 // Fuse: contend_read(PC, 3); PC++ — no MR of displacement
-                cpu.contend_read_timing(cpu.regs.pc, 3);
+                cpu.contend_read_timing(bus, cpu.regs.pc, 3);
                 cpu.regs.pc = cpu.regs.pc.wrapping_add(1);
             }
         }
@@ -380,7 +380,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
                 cpu.regs.memptr = dest;
             } else {
                 // Fuse: contend_read(PC, 3); PC++ — skip unread displacement
-                cpu.contend_read_timing(disp_addr, 3);
+                cpu.contend_read_timing(bus, disp_addr, 3);
                 cpu.regs.pc = cpu.regs.pc.wrapping_add(1);
             }
         }

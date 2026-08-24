@@ -6,7 +6,7 @@ use crate::registers::Registers;
 
 /// Fuse `tests.expected` bus-event kinds (`MC`/`MR`/`MW`/`PC`/`PR`/`PW`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FuseEventKind {
+pub(crate) enum FuseEventKind {
     /// Memory contend probe (start of mem cycle or internal IR/addr cycle).
     Mc,
     /// Memory read completes.
@@ -23,6 +23,7 @@ pub enum FuseEventKind {
 
 impl FuseEventKind {
     #[must_use]
+    #[allow(dead_code)] // used by `fuse` test harness formatters
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Mc => "MC",
@@ -37,7 +38,7 @@ impl FuseEventKind {
 
 /// One Fuse bus event (absolute `t`; compare with `t - start`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FuseEvent {
+pub(crate) struct FuseEvent {
     pub t: u64,
     pub kind: FuseEventKind,
     pub addr: u16,
@@ -53,7 +54,7 @@ pub struct Cpu {
     /// When true, maskable interrupts are not accepted (between EI and end of following insn).
     pub(crate) interrupt_deferred: bool,
     /// Optional Fuse bus-event log (None in normal emulation — zero overhead beyond one check).
-    pub fuse_log: Option<Vec<FuseEvent>>,
+    pub(crate) fuse_log: Option<Vec<FuseEvent>>,
 }
 
 impl Cpu {
@@ -169,12 +170,14 @@ impl Cpu {
         }
     }
 
-    /// Fuse `contend_read(addr, time)`: one MC then advance `time` (no MR).
-    /// Used when skipping an unread immediate (JR/DJNZ not taken).
+    /// Fuse `contend_read(addr, time)`: MC, then a real memory access for wait
+    /// (value discarded — no MR). Used when skipping an unread immediate
+    /// (JR/DJNZ not taken).
     #[inline]
-    pub(crate) fn contend_read_timing(&mut self, addr: u16, time: u32) {
+    pub(crate) fn contend_read_timing<M: Memory>(&mut self, mem: &mut M, addr: u16, time: u32) {
         self.fuse_push(FuseEventKind::Mc, addr, None);
-        self.add_t(time);
+        let (_v, wait) = mem.read(addr, self.t);
+        self.add_t(time + wait);
     }
 
     /// Internal cycles that put IR on the bus (`contend_read_no_mreq(IR, n)`).
@@ -452,5 +455,42 @@ mod tests {
         let ret = u16::from(mem.data[cpu.regs.sp as usize])
             | (u16::from(mem.data[cpu.regs.sp.wrapping_add(1) as usize]) << 8);
         assert_eq!(ret, 0x8000);
+    }
+
+    /// Skipped displacement probe must call Memory::read (for wait) but emit only MC.
+    #[test]
+    fn contend_read_timing_adds_wait_without_mr() {
+        struct WaitMem {
+            wait: u32,
+            reads: u32,
+        }
+        impl crate::bus::Memory for WaitMem {
+            fn read(&mut self, _addr: u16, _t: u64) -> (u8, u32) {
+                self.reads += 1;
+                (0xAB, self.wait)
+            }
+            fn write(&mut self, _addr: u16, _value: u8, _t: u64) -> u32 {
+                0
+            }
+        }
+        impl crate::bus::Io for WaitMem {
+            fn in_port(&mut self, _port: u16, _t: u64) -> (u8, u32) {
+                (0xff, 0)
+            }
+            fn out_port(&mut self, _port: u16, _value: u8, _t: u64) -> u32 {
+                0
+            }
+        }
+
+        let mut mem = WaitMem { wait: 6, reads: 0 };
+        let mut cpu = Cpu::new();
+        cpu.fuse_log = Some(Vec::new());
+        cpu.contend_read_timing(&mut mem, 0x4000, 3);
+        assert_eq!(mem.reads, 1, "must probe memory for wait");
+        assert_eq!(cpu.t, 9, "base 3T + wait 6");
+        let log = cpu.fuse_log.as_ref().unwrap();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].kind, FuseEventKind::Mc);
+        assert_eq!(log[0].addr, 0x4000);
     }
 }

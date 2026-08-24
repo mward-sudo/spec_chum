@@ -104,8 +104,21 @@ if [[ ! -f "$DEST/floatspy.tap" || "$FORCE" == 1 ]]; then
   rm -rf "$TMP"
   trap - EXIT
 elif ! verify_sha "$DEST/floatspy.tap" "$SHA_FLOATSPY_TAP"; then
-  echo "cached floatspy.tap failed digest check; re-run with FORCE_SYSTEM_TESTS=1" >&2
-  exit 1
+  echo "cached floatspy.tap failed digest check; re-extracting from zip"
+  rm -f "$DEST/floatspy.tap"
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$FLOAT_ZIP" -d "$TMP"
+  cp -f "$TMP"/floatspy.tap "$DEST/floatspy.tap.tmp.$$"
+  if ! verify_sha "$DEST/floatspy.tap.tmp.$$" "$SHA_FLOATSPY_TAP"; then
+    rm -f "$DEST/floatspy.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/floatspy.tap.tmp.$$" "$DEST/floatspy.tap"
+  rm -rf "$TMP"
+  trap - EXIT
 fi
 
 # azesmbog ULA TAP suite (visual / timing — load + paint smoke)

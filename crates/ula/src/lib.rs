@@ -123,6 +123,23 @@ pub fn port_high_contended_48(port: u16) -> bool {
     (0x4000..0x8000).contains(&(port & 0xff00))
 }
 
+/// True when a 128K/grey-+2 port high byte is contended.
+///
+/// High bytes `0x40`–`0x7F` always contend. High bytes `0xC0`–`0xFF` contend only
+/// when a contended RAM bank (1/3/5/7) is paged at `0xC000`.
+#[must_use]
+#[inline]
+pub fn port_high_contended_128(port: u16, c000_bank_contended: bool) -> bool {
+    let hi = port & 0xff00;
+    if (0x4000..0x8000).contains(&hi) {
+        true
+    } else if hi >= 0xc000 {
+        c000_bank_contended
+    } else {
+        false
+    }
+}
+
 /// Extra T-states from 48K ULA I/O contention (excluding the base 4T of IN/OUT).
 ///
 /// Sinclair FAQ Contended I/O patterns:
@@ -132,18 +149,33 @@ pub fn port_high_contended_48(port: u16) -> bool {
 /// - high contended, not ULA: `C:1` × 4
 #[must_use]
 pub fn io_contention_extra_48(frame_t: u32, port: u16) -> u32 {
-    io_contention_extra(frame_t, port, contention_delay_48)
+    io_contention_extra(
+        frame_t,
+        port,
+        port_high_contended_48(port),
+        contention_delay_48,
+    )
 }
 
-/// 128K / grey +2 I/O contention extra (same rules, 228 T/line paper start).
+/// 128K / grey +2 I/O contention extra (same FAQ patterns; `c000_bank_contended`
+/// enables high-byte `0xC0`–`0xFF` contention when bank 1/3/5/7 is at `C000`).
 #[must_use]
-pub fn io_contention_extra_128(frame_t: u32, port: u16) -> u32 {
-    io_contention_extra(frame_t, port, contention_delay_128)
+pub fn io_contention_extra_128(frame_t: u32, port: u16, c000_bank_contended: bool) -> u32 {
+    io_contention_extra(
+        frame_t,
+        port,
+        port_high_contended_128(port, c000_bank_contended),
+        contention_delay_128,
+    )
 }
 
-fn io_contention_extra(mut frame_t: u32, port: u16, delay: fn(u32) -> u32) -> u32 {
+fn io_contention_extra(
+    mut frame_t: u32,
+    port: u16,
+    high_contended: bool,
+    delay: fn(u32) -> u32,
+) -> u32 {
     let ula_port = port & 1 == 0;
-    let high_contended = port_high_contended_48(port);
     let mut extra = 0u32;
     let contend_then = |steps: u32, ft: &mut u32, extra: &mut u32| {
         let d = delay(*ft);
@@ -433,6 +465,16 @@ mod tests {
             ft = ft.wrapping_add(d).wrapping_add(1);
         }
         assert_eq!(io_contention_extra_48(t, 0x40ff), expect);
+    }
+
+    #[test]
+    fn io_contention_128_c000_depends_on_bank() {
+        let t = PAPER_START_128;
+        assert!(!port_high_contended_128(0xc0fe, false));
+        assert!(port_high_contended_128(0xc0fe, true));
+        assert_eq!(io_contention_extra_128(t, 0xc0fe, false), 5);
+        assert_eq!(io_contention_extra_128(t, 0xc0fe, true), 6);
+        assert_eq!(io_contention_extra_128(t, 0x40fe, false), 6);
     }
 
     #[test]

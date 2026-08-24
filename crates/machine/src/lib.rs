@@ -365,7 +365,7 @@ impl Memory for MemIo128<'_> {
 impl Io for MemIo128<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
         let ft = self.ula_t(t);
-        let wait = ula::io_contention_extra_128(ft, port);
+        let wait = ula::io_contention_extra_128(ft, port, self.bus.c000_contended());
         let sample = ft.wrapping_add(3).wrapping_add(wait) % FRAME_TSTATES_128;
         let saved = self.bus.frame_t;
         self.bus.frame_t = sample;
@@ -379,7 +379,7 @@ impl Io for MemIo128<'_> {
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
         let ft = self.ula_t(t);
-        let wait = ula::io_contention_extra_128(ft, port);
+        let wait = ula::io_contention_extra_128(ft, port, self.bus.c000_contended());
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
         self.bus.out_port(port, value);
@@ -2321,29 +2321,32 @@ mod tests {
         const FF: u16 = 0x00FF;
         const HI_FE: u16 = 0x40FE;
         const HI_FF: u16 = 0x40FF;
-        // First paper cycle through a full 8-T window (early timing / FAQ).
-        const ROWS_48: &[(u32, u64, u32)] = &[
-            (ula::PAPER_START_48, 0, 6),
-            (ula::PAPER_START_48, 1, 5),
-            (ula::PAPER_START_48, 2, 4),
-            (ula::PAPER_START_48, 3, 3),
-            (ula::PAPER_START_48, 4, 2),
-            (ula::PAPER_START_48, 5, 1),
-            (ula::PAPER_START_48, 6, 0),
-            (ula::PAPER_START_48, 7, 0),
+        const C0_FE: u16 = 0xC0FE;
+        // (frame_t, dt, mem_wait, io_FE, io_40FE, io_40FF)
+        const ROWS_48: &[(u32, u64, u32, u32, u32, u32)] = &[
+            (ula::PAPER_START_48, 0, 6, 5, 6, 12),
+            (ula::PAPER_START_48, 1, 5, 4, 5, 11),
+            (ula::PAPER_START_48, 2, 4, 3, 4, 10),
+            (ula::PAPER_START_48, 3, 3, 2, 3, 9),
+            (ula::PAPER_START_48, 4, 2, 1, 2, 8),
+            (ula::PAPER_START_48, 5, 1, 0, 1, 7),
+            (ula::PAPER_START_48, 6, 0, 0, 0, 6),
+            (ula::PAPER_START_48, 7, 0, 6, 6, 12),
         ];
-        const ROWS_128: &[(u32, u64, u32)] = &[
-            (ula::PAPER_START_128, 0, 6),
-            (ula::PAPER_START_128, 1, 5),
-            (ula::PAPER_START_128, 2, 4),
-            (ula::PAPER_START_128, 3, 3),
-            (ula::PAPER_START_128, 4, 2),
-            (ula::PAPER_START_128, 5, 1),
-            (ula::PAPER_START_128, 6, 0),
-            (ula::PAPER_START_128, 7, 0),
+        const ROWS_128: &[(u32, u64, u32, u32)] = &[
+            (ula::PAPER_START_128, 0, 6, 5),
+            (ula::PAPER_START_128, 1, 5, 4),
+            (ula::PAPER_START_128, 2, 4, 3),
+            (ula::PAPER_START_128, 3, 3, 2),
+            (ula::PAPER_START_128, 4, 2, 1),
+            (ula::PAPER_START_128, 5, 1, 0),
+            (ula::PAPER_START_128, 6, 0, 0),
+            (ula::PAPER_START_128, 7, 0, 6),
         ];
+        // C:1,C:3 totals when high byte contends at paper start + dt.
+        const C0_CONTENDED: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 6];
 
-        for &(frame_t, dt, expect) in ROWS_48 {
+        for &(frame_t, dt, expect, io_fe, io_hife, io_hiff) in ROWS_48 {
             let mut bus = Bus48::new();
             bus.frame_t = frame_t;
             let mut mem = MemIo48 {
@@ -2362,30 +2365,30 @@ mod tests {
                 expect,
                 "48 mem W frame={frame_t} dt={dt}"
             );
-            let ft = frame_t.wrapping_add(dt as u32);
             assert_eq!(
                 mem.in_port(FE, t).1,
-                ula::io_contention_extra_48(ft, FE),
+                io_fe,
                 "48 IN FE frame={frame_t} dt={dt}"
             );
             assert_eq!(mem.in_port(FF, t).1, 0, "48 IN FF never contends");
             assert_eq!(
                 mem.in_port(HI_FE, t).1,
-                ula::io_contention_extra_48(ft, HI_FE),
+                io_hife,
                 "48 IN 40FE frame={frame_t} dt={dt}"
             );
             assert_eq!(
                 mem.in_port(HI_FF, t).1,
-                ula::io_contention_extra_48(ft, HI_FF),
+                io_hiff,
                 "48 IN 40FF frame={frame_t} dt={dt}"
             );
             // Uncontended high RAM
             assert_eq!(mem.read(0x8000, t).1, 0);
         }
 
-        for &(frame_t, dt, expect) in ROWS_128 {
+        for &(frame_t, dt, expect, io_fe) in ROWS_128 {
             let mut bus = Bus128::new();
             bus.frame_t = frame_t;
+            // Default page = bank 0 at C000 (uncontended).
             let mut mem = MemIo128 {
                 bus: &mut bus,
                 watch: None,
@@ -2397,12 +2400,28 @@ mod tests {
                 expect,
                 "128 mem R frame={frame_t} dt={dt}"
             );
-            let ft = frame_t.wrapping_add(dt as u32);
             assert_eq!(
                 mem.in_port(FE, t).1,
-                ula::io_contention_extra_128(ft, FE),
+                io_fe,
                 "128 IN FE frame={frame_t} dt={dt}"
             );
+            // High 0xC0 with uncontended bank 0: same as FE (N:1,C:3).
+            assert_eq!(
+                mem.in_port(C0_FE, t).1,
+                io_fe,
+                "128 IN C0FE bank0 frame={frame_t} dt={dt}"
+            );
+
+            // Page contended bank 1 at C000 → C0FE uses C:1,C:3 (same totals as 40FE).
+            mem.bus.out_7ffd(1);
+            assert_eq!(
+                mem.in_port(C0_FE, t).1,
+                C0_CONTENDED[dt as usize],
+                "128 IN C0FE bank1 frame={frame_t} dt={dt}"
+            );
+            // Reset page for next iteration clarity
+            mem.bus.page = 0;
+            mem.bus.locked = false;
 
             let mut bus3 = BusPlus3::new();
             bus3.frame_t = frame_t;

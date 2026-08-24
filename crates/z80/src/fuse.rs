@@ -179,9 +179,9 @@ fn parse_expected(path: &std::path::Path) -> Vec<Expected> {
             .is_some_and(|l| l.starts_with(' ') || l.starts_with('\t'))
         {
             let line = lines.next().unwrap();
-            if let Some(ev) = parse_fuse_event_line(&line) {
-                events.push(ev);
-            }
+            let ev = parse_fuse_event_line(&line)
+                .unwrap_or_else(|| panic!("{name}: unparsable event line: {line:?}"));
+            events.push(ev);
         }
         let regs = lines.next().expect("exp regs");
         let mut parts = regs.split_whitespace();
