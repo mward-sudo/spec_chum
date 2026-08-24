@@ -105,6 +105,59 @@ pub fn floating_bus_byte_128(frame_t: u32, screen: &[u8]) -> Option<u8> {
     floating_bus_params(frame_t, screen, PAPER_START_128, T_LINE_128)
 }
 
+/// True when a port high byte falls in the 48K contended RAM window (`0x40xx`–`0x7Fxx`).
+#[must_use]
+#[inline]
+pub fn port_high_contended_48(port: u16) -> bool {
+    (0x4000..0x8000).contains(&(port & 0xff00))
+}
+
+/// Extra T-states from 48K ULA I/O contention (excluding the base 4T of IN/OUT).
+///
+/// Sinclair FAQ Contended I/O patterns:
+/// - high not contended, ULA (`A0=0`): `N:1, C:3`
+/// - high not contended, not ULA: `N:4`
+/// - high contended, ULA: `C:1, C:3`
+/// - high contended, not ULA: `C:1` × 4
+#[must_use]
+pub fn io_contention_extra_48(frame_t: u32, port: u16) -> u32 {
+    io_contention_extra(frame_t, port, contention_delay_48)
+}
+
+/// 128K / grey +2 I/O contention extra (same rules, 228 T/line paper start).
+#[must_use]
+pub fn io_contention_extra_128(frame_t: u32, port: u16) -> u32 {
+    io_contention_extra(frame_t, port, contention_delay_128)
+}
+
+fn io_contention_extra(mut frame_t: u32, port: u16, delay: fn(u32) -> u32) -> u32 {
+    let ula_port = port & 1 == 0;
+    let high_contended = port_high_contended_48(port);
+    let mut extra = 0u32;
+    let contend_then = |steps: u32, ft: &mut u32, extra: &mut u32| {
+        let d = delay(*ft);
+        *extra += d;
+        *ft = ft.wrapping_add(d).wrapping_add(steps);
+    };
+    match (high_contended, ula_port) {
+        (false, true) => {
+            frame_t = frame_t.wrapping_add(1);
+            contend_then(3, &mut frame_t, &mut extra);
+        }
+        (false, false) => {}
+        (true, true) => {
+            contend_then(1, &mut frame_t, &mut extra);
+            contend_then(3, &mut frame_t, &mut extra);
+        }
+        (true, false) => {
+            for _ in 0..4 {
+                contend_then(1, &mut frame_t, &mut extra);
+            }
+        }
+    }
+    extra
+}
+
 /// Spectrum RGB for ink/paper (bright).
 #[must_use]
 pub fn palette_rgb(color: u8, bright: bool) -> [u8; 3] {
@@ -333,6 +386,22 @@ mod tests {
         screen[0] = 0xA5;
         assert_eq!(floating_bus_byte_128(PAPER_START_128, &screen), Some(0xA5));
         assert_eq!(floating_bus_byte_128(0, &screen), None);
+    }
+
+    #[test]
+    fn io_contention_patterns_48() {
+        let t = PAPER_START_48;
+        assert_eq!(io_contention_extra_48(t, 0x00fe), 5);
+        assert_eq!(io_contention_extra_48(t, 0x00ff), 0);
+        assert_eq!(io_contention_extra_48(t, 0x40fe), 6);
+        let mut expect = 0u32;
+        let mut ft = t;
+        for _ in 0..4 {
+            let d = contention_delay_48(ft);
+            expect += d;
+            ft = ft.wrapping_add(d).wrapping_add(1);
+        }
+        assert_eq!(io_contention_extra_48(t, 0x40ff), expect);
     }
 
     #[test]

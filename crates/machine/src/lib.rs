@@ -284,11 +284,7 @@ impl Memory for MemIo48<'_> {
 
 impl Io for MemIo48<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = if port & 1 == 0 {
-            ula::contention_delay_48(self.ula_t(t))
-        } else {
-            0
-        };
+        let wait = ula::io_contention_extra_48(self.ula_t(t), port);
         let v = self.bus.in_port(port);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
@@ -297,11 +293,7 @@ impl Io for MemIo48<'_> {
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = if port & 1 == 0 {
-            ula::contention_delay_48(self.ula_t(t))
-        } else {
-            0
-        };
+        let wait = ula::io_contention_extra_48(self.ula_t(t), port);
         self.bus.out_port(port, value);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
@@ -361,16 +353,7 @@ impl Memory for MemIo128<'_> {
 
 impl Io for MemIo128<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        let wait = ula::io_contention_extra_128(self.ula_t(t), port);
         let v = self.bus.in_port(port);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
@@ -379,16 +362,7 @@ impl Io for MemIo128<'_> {
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        let wait = ula::io_contention_extra_128(self.ula_t(t), port);
         self.bus.out_port(port, value);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
@@ -448,39 +422,22 @@ impl Memory for MemIoPlus3<'_> {
 
 impl Io for MemIoPlus3<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        // +2A/+3 gate array: no Sinclair-style ULA I/O contention.
+        let _ = (port, t);
         let v = self.bus.in_port(port);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
-        (v, wait)
+        (v, 0)
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = if port & 1 == 0 {
-            let ft = self.ula_t(t);
-            let saved = self.bus.frame_t;
-            self.bus.frame_t = ft;
-            let w = self.bus.contend_at(0x4000);
-            self.bus.frame_t = saved;
-            w
-        } else {
-            0
-        };
+        let _ = t;
         self.bus.out_port(port, value);
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
         }
-        wait
+        0
     }
 }
 
@@ -2338,10 +2295,12 @@ mod tests {
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
     #[test]
     fn memio_mid_instruction_contention_table() {
-        // Contended screen address; even port for I/O contention.
+        // Contended screen address; FAQ Contended I/O ports.
         const ADDR: u16 = 0x4000;
-        const EVEN_PORT: u16 = 0xFE;
-        const ODD_PORT: u16 = 0xFF;
+        const FE: u16 = 0x00FE;
+        const FF: u16 = 0x00FF;
+        const HI_FE: u16 = 0x40FE;
+        const HI_FF: u16 = 0x40FF;
         // First paper cycle through a full 8-T window (early timing / FAQ).
         const ROWS_48: &[(u32, u64, u32)] = &[
             (ula::PAPER_START_48, 0, 6),
@@ -2383,12 +2342,23 @@ mod tests {
                 expect,
                 "48 mem W frame={frame_t} dt={dt}"
             );
+            let ft = frame_t.wrapping_add(dt as u32);
             assert_eq!(
-                mem.in_port(EVEN_PORT, t).1,
-                expect,
-                "48 even I/O frame={frame_t} dt={dt}"
+                mem.in_port(FE, t).1,
+                ula::io_contention_extra_48(ft, FE),
+                "48 IN FE frame={frame_t} dt={dt}"
             );
-            assert_eq!(mem.in_port(ODD_PORT, t).1, 0, "48 odd I/O never contends");
+            assert_eq!(mem.in_port(FF, t).1, 0, "48 IN FF never contends");
+            assert_eq!(
+                mem.in_port(HI_FE, t).1,
+                ula::io_contention_extra_48(ft, HI_FE),
+                "48 IN 40FE frame={frame_t} dt={dt}"
+            );
+            assert_eq!(
+                mem.in_port(HI_FF, t).1,
+                ula::io_contention_extra_48(ft, HI_FF),
+                "48 IN 40FF frame={frame_t} dt={dt}"
+            );
             // Uncontended high RAM
             assert_eq!(mem.read(0x8000, t).1, 0);
         }
@@ -2407,10 +2377,11 @@ mod tests {
                 expect,
                 "128 mem R frame={frame_t} dt={dt}"
             );
+            let ft = frame_t.wrapping_add(dt as u32);
             assert_eq!(
-                mem.in_port(EVEN_PORT, t).1,
-                expect,
-                "128 even I/O frame={frame_t} dt={dt}"
+                mem.in_port(FE, t).1,
+                ula::io_contention_extra_128(ft, FE),
+                "128 IN FE frame={frame_t} dt={dt}"
             );
 
             let mut bus3 = BusPlus3::new();
@@ -2425,6 +2396,8 @@ mod tests {
                 expect,
                 "+3 mem R frame={frame_t} dt={dt}"
             );
+            assert_eq!(mem3.in_port(FE, t).1, 0, "+3 I/O never contends");
+            assert_eq!(mem3.in_port(HI_FF, t).1, 0, "+3 I/O never contends");
         }
 
         // Access after the instruction has already burned into the contended window.
