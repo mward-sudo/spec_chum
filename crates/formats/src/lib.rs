@@ -701,8 +701,8 @@ mod tests {
         data[49_181] = paged as u8; // 7FFD
         data[49_182] = 0; // TR-DOS
         let mut off = 49_183;
-        for b in 0..8 {
-            if !present[b] {
+        for (b, &is_present) in present.iter().enumerate() {
+            if !is_present {
                 data[off] = 0x40 | b as u8;
                 off += 16384;
             }
