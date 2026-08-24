@@ -215,6 +215,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let v = old.wrapping_add(1);
             write_r_idx(cpu, r, idx, v);
             cpu.regs.f = inc8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x34 => {
             let addr = if matches!(idx, Idx::Hl) {
@@ -227,6 +228,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let v = old.wrapping_add(1);
             cpu.write_mem(bus, addr, v);
             cpu.regs.f = inc8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x05 | 0x0d | 0x15 | 0x1d | 0x25 | 0x2d | 0x3d => {
             let r = (op >> 3) & 7;
@@ -234,6 +236,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let v = old.wrapping_sub(1);
             write_r_idx(cpu, r, idx, v);
             cpu.regs.f = dec8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x35 => {
             let addr = if matches!(idx, Idx::Hl) {
@@ -246,6 +249,7 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             let v = old.wrapping_sub(1);
             cpu.write_mem(bus, addr, v);
             cpu.regs.f = dec8_flags(old, cpu.regs.f);
+            cpu.regs.q = cpu.regs.f;
         }
         0x06 | 0x0e | 0x16 | 0x1e | 0x26 | 0x2e | 0x3e => {
             let r = (op >> 3) & 7;
