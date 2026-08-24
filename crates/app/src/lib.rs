@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
-use machine::{Machine, Model};
+use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model};
 
 /// Session state shared by the GUI and headless tests.
 #[derive(Debug)]
@@ -28,6 +28,10 @@ pub struct EmulatorSession {
     pub debug_open: bool,
     pub debug_mem_addr: u16,
     pub debug_break_pc: u16,
+    /// Host joystick presentation (Kempston / Sinclair / Cursor).
+    pub joystick_mode: JoystickMode,
+    /// When true, accumulate egui pointer delta into the Kempston mouse each frame.
+    pub kempston_mouse: bool,
     /// Scripted matrix keys (e.g. auto-type `LOAD ""`).
     key_script: Option<KeyScript>,
 }
@@ -105,6 +109,8 @@ impl EmulatorSession {
             debug_open: false,
             debug_mem_addr: 0,
             debug_break_pc: 0,
+            joystick_mode: JoystickMode::Kempston,
+            kempston_mouse: false,
             key_script: None,
         }
     }
@@ -379,10 +385,14 @@ impl EmulatorSession {
     }
 
     /// Rebuild the Spectrum matrix from currently held egui keys (macOS-friendly).
+    ///
+    /// `pad` is ORed with arrow/Tab keyboard stick. Precedence: both sources active
+    /// together (either can hold a direction). Joystick mode selects Kempston vs matrix.
     pub fn sync_keyboard(
         &mut self,
         keys_down: &std::collections::HashSet<egui::Key>,
         modifiers: egui::Modifiers,
+        pad: JoystickState,
     ) {
         let Some(machine) = self.machine.as_mut() else {
             return;
@@ -396,19 +406,30 @@ impl EmulatorSession {
             kb.set_key(row, bit, true);
         }
         for key in keys_down {
+            // Arrow cursor chords are applied via joystick mode instead.
+            if matches!(
+                key,
+                egui::Key::ArrowLeft
+                    | egui::Key::ArrowRight
+                    | egui::Key::ArrowUp
+                    | egui::Key::ArrowDown
+                    | egui::Key::Tab
+            ) {
+                continue;
+            }
             if let Some(chord) = keymap::chord_for(*key, modifiers) {
                 for (row, bit) in chord.keys {
                     kb.set_key(row, bit, true);
                 }
             }
         }
-        // Kempston: arrows + Tab fire (alongside cursor matrix chords).
-        let k = machine.kempston_mut();
-        k.left = keys_down.contains(&egui::Key::ArrowLeft);
-        k.right = keys_down.contains(&egui::Key::ArrowRight);
-        k.up = keys_down.contains(&egui::Key::ArrowUp);
-        k.down = keys_down.contains(&egui::Key::ArrowDown);
-        k.fire = keys_down.contains(&egui::Key::Tab);
+        let mut stick = pad;
+        stick.left |= keys_down.contains(&egui::Key::ArrowLeft);
+        stick.right |= keys_down.contains(&egui::Key::ArrowRight);
+        stick.up |= keys_down.contains(&egui::Key::ArrowUp);
+        stick.down |= keys_down.contains(&egui::Key::ArrowDown);
+        stick.fire |= keys_down.contains(&egui::Key::Tab);
+        machine.apply_joystick_state(self.joystick_mode, stick);
     }
 
     /// Apply a single egui key edge (tests / scripted input).
@@ -465,6 +486,8 @@ pub struct SpecChumApp {
     beeper: Arc<Mutex<BeeperState>>,
     _stream: Option<cpal::Stream>,
     theme_applied: bool,
+    /// Optional gamepad (USB/Bluetooth via gilrs). `None` if init failed.
+    gilrs: Option<gilrs::Gilrs>,
 }
 
 impl std::fmt::Debug for SpecChumApp {
@@ -480,9 +503,12 @@ impl std::fmt::Debug for SpecChumApp {
 struct BeeperState {
     edges: Vec<(u32, bool)>,
     ay_samples: Vec<f32>,
+    ay_left: Vec<f32>,
+    ay_right: Vec<f32>,
     ay_index: usize,
     level: bool,
     sample_rate: u32,
+    channels: u16,
     frame_t_per_sample: f32,
     t: f32,
     muted: bool,
@@ -493,9 +519,12 @@ impl Default for BeeperState {
         Self {
             edges: Vec::new(),
             ay_samples: Vec::new(),
+            ay_left: Vec::new(),
+            ay_right: Vec::new(),
             ay_index: 0,
             level: false,
             sample_rate: 44100,
+            channels: 2,
             frame_t_per_sample: 69888.0 / 44100.0,
             t: 0.0,
             muted: false,
@@ -523,13 +552,44 @@ impl SpecChumApp {
         };
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
+        let gilrs = gilrs::Gilrs::new().ok();
         Self {
             session,
             texture: None,
             beeper,
             _stream: stream,
             theme_applied: false,
+            gilrs,
         }
+    }
+
+    fn poll_gamepad(&mut self) -> JoystickState {
+        let Some(gilrs) = self.gilrs.as_mut() else {
+            return JoystickState::empty();
+        };
+        while gilrs.next_event().is_some() {}
+        let mut stick = JoystickState::empty();
+        for (_, gamepad) in gilrs.gamepads() {
+            const DEAD: f32 = 0.5;
+            let axis = |a: gilrs::Axis| gamepad.value(a);
+            let left = gamepad.is_pressed(gilrs::Button::DPadLeft)
+                || axis(gilrs::Axis::LeftStickX) < -DEAD;
+            let right = gamepad.is_pressed(gilrs::Button::DPadRight)
+                || axis(gilrs::Axis::LeftStickX) > DEAD;
+            let up =
+                gamepad.is_pressed(gilrs::Button::DPadUp) || axis(gilrs::Axis::LeftStickY) > DEAD;
+            let down = gamepad.is_pressed(gilrs::Button::DPadDown)
+                || axis(gilrs::Axis::LeftStickY) < -DEAD;
+            stick.left |= left;
+            stick.right |= right;
+            stick.up |= up;
+            stick.down |= down;
+            stick.fire |= gamepad.is_pressed(gilrs::Button::South)
+                || gamepad.is_pressed(gilrs::Button::East)
+                || gamepad.is_pressed(gilrs::Button::West)
+                || gamepad.is_pressed(gilrs::Button::North);
+        }
+        stick
     }
 
     /// egui UI body — callable from `App::update` or headless `Context::run`.
@@ -634,6 +694,47 @@ impl SpecChumApp {
                         }
                         ui.checkbox(&mut self.session.running, "Running");
                         ui.checkbox(&mut self.session.throttle, "Throttle ~50Hz");
+                        ui.separator();
+                        ui.label("Joystick");
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::Kempston,
+                            "Kempston",
+                        );
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::SinclairLeft,
+                            "Sinclair left (1–5)",
+                        );
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::SinclairRight,
+                            "Sinclair right (6–0)",
+                        );
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::Cursor,
+                            "Cursor",
+                        );
+                        ui.checkbox(&mut self.session.kempston_mouse, "Kempston mouse");
+                        if matches!(
+                            self.session.model,
+                            Model::Spectrum128 | Model::SpectrumPlus3
+                        ) {
+                            ui.separator();
+                            ui.label("AY stereo");
+                            let mut mode = self
+                                .session
+                                .machine
+                                .as_ref()
+                                .map_or(AyStereoMode::Mono, Machine::ay_stereo_mode);
+                            ui.radio_value(&mut mode, AyStereoMode::Mono, "Mono");
+                            ui.radio_value(&mut mode, AyStereoMode::Acb, "ACB");
+                            ui.radio_value(&mut mode, AyStereoMode::Abc, "ABC");
+                            if let Some(m) = self.session.machine.as_mut() {
+                                m.set_ay_stereo_mode(mode);
+                            }
+                        }
                         ui.checkbox(&mut self.session.muted, "Mute");
                     });
                     ui.menu_button("Tape", |ui| {
@@ -682,6 +783,19 @@ impl SpecChumApp {
                                         format!("Tape: EAR load at {speed}x")
                                     };
                                 }
+                            }
+                            if ui
+                                .button("Experience (~20s EAR)")
+                                .on_hover_text(
+                                    "EAR path at 16x (issue #82 interim; abbreviate tones later)",
+                                )
+                                .clicked()
+                            {
+                                opts.flash_load = false;
+                                opts.speed = 16;
+                                m.set_tape_load_options(opts);
+                                self.session.status =
+                                    "Tape: experience EAR load at 16x (~20s-class)".into();
                             }
                         }
                     });
@@ -802,7 +916,32 @@ impl SpecChumApp {
 
         if !self.session.tick_key_script() {
             let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
-            self.session.sync_keyboard(&keys_down, modifiers);
+            let pad = self.poll_gamepad();
+            self.session.sync_keyboard(&keys_down, modifiers, pad);
+        }
+
+        if self.session.kempston_mouse {
+            if let Some(machine) = self.session.machine.as_mut() {
+                let (dx, dy, primary, secondary, middle) = ctx.input(|i| {
+                    let d = i.pointer.delta();
+                    (
+                        d.x.round() as i32,
+                        d.y.round() as i32,
+                        i.pointer.primary_down(),
+                        i.pointer.secondary_down(),
+                        i.pointer.middle_down(),
+                    )
+                });
+                let mouse = machine.mouse_mut();
+                // Clamp per-frame motion into i8 range for the 8-bit counters.
+                let dx = dx.clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8;
+                let dy = dy.clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8;
+                if dx != 0 || dy != 0 {
+                    mouse.set_delta(dx, dy);
+                }
+                // Host primary = left; Kempston D0=right, D1=left.
+                mouse.set_buttons(primary, secondary, middle);
+            }
         }
 
         let audio = self.session.tick_frame();
@@ -811,6 +950,8 @@ impl SpecChumApp {
             if !self.session.muted {
                 b.edges = audio.beeper_edges;
                 b.ay_samples = audio.ay_samples;
+                b.ay_left = audio.ay_left;
+                b.ay_right = audio.ay_right;
                 b.ay_index = 0;
                 b.t = 0.0;
             }
@@ -965,9 +1106,11 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
     let device = host.default_output_device()?;
     let config = device.default_output_config().ok()?;
     let sample_rate = config.sample_rate().0;
+    let channels = config.channels();
     {
         let mut s = state.lock().ok()?;
         s.sample_rate = sample_rate;
+        s.channels = channels;
         s.frame_t_per_sample = 69888.0 / (sample_rate as f32 / 50.0);
     }
     let stream = device
@@ -983,7 +1126,8 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
                     }
                     return;
                 }
-                for sample in data.iter_mut() {
+                let ch = usize::from(st.channels.max(1));
+                for frame in data.chunks_mut(ch) {
                     while let Some(&(edge_t, level)) = st.edges.first() {
                         if st.t >= edge_t as f32 {
                             st.level = level;
@@ -993,17 +1137,35 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
                         }
                     }
                     let beep = if st.level { 0.15 } else { -0.15 };
-                    let ay = if st.ay_index < st.ay_samples.len() {
+                    let (ay_l, ay_r) = if st.ay_index < st.ay_left.len()
+                        && st.ay_index < st.ay_right.len()
+                    {
+                        let l = st.ay_left[st.ay_index];
+                        let r = st.ay_right[st.ay_index];
+                        st.ay_index += 1;
+                        ((l - 0.5) * 0.5, (r - 0.5) * 0.5)
+                    } else if st.ay_index < st.ay_samples.len() {
                         let v = st.ay_samples[st.ay_index];
                         st.ay_index += 1;
-                        // AY samples are 0..1; center and scale for mix.
-                        (v - 0.5) * 0.5
+                        let m = (v - 0.5) * 0.5;
+                        (m, m)
+                    } else if let (Some(&l), Some(&r)) = (st.ay_left.last(), st.ay_right.last()) {
+                        ((l - 0.5) * 0.5, (r - 0.5) * 0.5)
                     } else if let Some(&last) = st.ay_samples.last() {
-                        (last - 0.5) * 0.5
+                        let m = (last - 0.5) * 0.5;
+                        (m, m)
                     } else {
-                        0.0
+                        (0.0, 0.0)
                     };
-                    *sample = (beep + ay).clamp(-1.0, 1.0);
+                    let left = (beep + ay_l).clamp(-1.0, 1.0);
+                    let right = (beep + ay_r).clamp(-1.0, 1.0);
+                    frame[0] = left;
+                    if ch > 1 {
+                        frame[1] = right;
+                    }
+                    for s in frame.iter_mut().skip(2) {
+                        *s = 0.0;
+                    }
                     st.t += st.frame_t_per_sample;
                 }
             },
@@ -1033,7 +1195,7 @@ mod tests {
             shift: true,
             ..Default::default()
         };
-        session.sync_keyboard(&keys, mods);
+        session.sync_keyboard(&keys, mods, JoystickState::empty());
         let kb = session.machine.as_mut().unwrap().keyboard_mut();
         // Symbol (row7 bit1) and P (row5 bit0) active-low
         assert_eq!(kb.rows[7] & (1 << 1), 0);
@@ -1043,7 +1205,7 @@ mod tests {
     }
 
     #[test]
-    fn arrow_left_maps_caps_5() {
+    fn arrow_left_maps_joystick_kempston_and_cursor_mode() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
         if session.machine.is_none() {
@@ -1051,12 +1213,17 @@ mod tests {
         }
         let mut keys = std::collections::HashSet::new();
         keys.insert(egui::Key::ArrowLeft);
-        session.sync_keyboard(&keys, egui::Modifiers::default());
+        session.joystick_mode = JoystickMode::Kempston;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
+        assert!(session.machine.as_mut().unwrap().kempston_mut().left);
+
+        session.joystick_mode = JoystickMode::Cursor;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let m = session.machine.as_mut().unwrap();
         let rows = m.keyboard_mut().rows;
         assert_eq!(rows[0] & 1, 0); // Caps
         assert_eq!(rows[3] & (1 << 4), 0); // 5
-        assert!(m.kempston_mut().left);
+        assert!(!m.kempston_mut().left);
     }
 
     #[test]
