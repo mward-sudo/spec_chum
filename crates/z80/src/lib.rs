@@ -14,7 +14,7 @@ mod opcodes;
 mod registers;
 
 pub use bus::{FlatMem, Io, Memory, NullIo};
-pub use cpu::Cpu;
+pub use cpu::{Cpu, FuseEvent, FuseEventKind};
 pub use disasm::{disasm_one, Disasm};
 pub use registers::{flag, Registers};
 
