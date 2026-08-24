@@ -284,8 +284,15 @@ impl Memory for MemIo48<'_> {
 
 impl Io for MemIo48<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = ula::io_contention_extra_48(self.ula_t(t), port);
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_48(ft, port);
+        // Z80 latches the data bus on the last T of the I/O cycle. Odd ports are
+        // `N:4` (no I/O wait); even ports add FAQ waits before that last T.
+        let sample = ft.wrapping_add(3).wrapping_add(wait) % FRAME_TSTATES_48;
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = sample;
         let v = self.bus.in_port(port);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
@@ -293,8 +300,12 @@ impl Io for MemIo48<'_> {
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = ula::io_contention_extra_48(self.ula_t(t), port);
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_48(ft, port);
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         self.bus.out_port(port, value);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
         }
@@ -353,8 +364,13 @@ impl Memory for MemIo128<'_> {
 
 impl Io for MemIo128<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        let wait = ula::io_contention_extra_128(self.ula_t(t), port);
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_128(ft, port);
+        let sample = ft.wrapping_add(3).wrapping_add(wait) % FRAME_TSTATES_128;
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = sample;
         let v = self.bus.in_port(port);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, false, v);
         }
@@ -362,8 +378,12 @@ impl Io for MemIo128<'_> {
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let wait = ula::io_contention_extra_128(self.ula_t(t), port);
+        let ft = self.ula_t(t);
+        let wait = ula::io_contention_extra_128(ft, port);
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = ft;
         self.bus.out_port(port, value);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.port_access(port, true, value);
         }

@@ -407,7 +407,8 @@ fn timingtest_48k_contended_nop_shows_delay_pattern() {
 #[test]
 fn timingtest_48k_snow_effect_nop_uncontended() {
     let pat = [4, 4, 4, 4, 4, 4, 4, 4];
-    let Some(text) = run_timingtest_case(Model::Spectrum48, 1, "snow effect NOP", Some(&pat)) else {
+    let Some(text) = run_timingtest_case(Model::Spectrum48, 1, "snow effect NOP", Some(&pat))
+    else {
         return;
     };
     assert_pattern(&text, &pat, "snow-effect NOP");
@@ -521,16 +522,37 @@ fn floating_spy_48k_self_test_ok() {
         return;
     };
     load_program_tap(&mut machine, &tap);
-    let text = run_until_contains(&mut machine, "FLOATING BUS", AFTER_LOAD_FRAMES);
+    // Banner + auto-detect first; key loop starts after IN() BYTE is printed.
+    let text = run_until_contains(&mut machine, "IN() BYTE:", AFTER_LOAD_FRAMES);
+    assert_screen_has(&text, "ULA TYPE: 48K");
+    assert_screen_has(&text, "14347");
+    assert_screen_has(&text, "self test");
+    // Letter T (matrix row 2 bit 4) → INKEY$ "t" → self-test.
+    for _ in 0..8 {
+        hold_keys(&mut machine, &[(2, 4)], 25);
+        hold_keys(&mut machine, &[], 8);
+        let t = screen_text(&machine);
+        if t.contains("SELF TEST") || t.contains("BURST") || t.contains("Floating bus OK") {
+            break;
+        }
+    }
+    // Burst self-test is slow (many timed USR INs across the paper).
+    // FLASH attributes make OCR see "Floating bus  OK" (extra spaces).
+    let mut text = String::new();
+    for _ in 0..80_000 {
+        let _ = machine.run_frame();
+        text = screen_text(&machine);
+        if text.contains("Floating bus") && text.contains("OK") && text.contains("ULA 48K") {
+            break;
+        }
+        if text.contains("Floating bus errors") {
+            break;
+        }
+    }
     assert!(
-        text.contains("FLOATING BUS") || text.contains("Float Spy") || text.contains("self test"),
-        "expected Floating Spy banner\n{text}"
+        text.contains("Floating bus") && text.contains("OK") && !text.contains("errors:"),
+        "expected Floating Spy self-test pass\n{text}"
     );
-    // Letter T (matrix row 2 bit 4) starts the self-test.
-    hold_keys(&mut machine, &[(2, 4)], 15);
-    hold_keys(&mut machine, &[], 5);
-    let text = run_until_contains(&mut machine, "Floating bus OK", AFTER_LOAD_FRAMES * 2);
-    assert_screen_has(&text, "Floating bus OK");
 }
 
 fn azesmbog_loads_and_paints(model: Model, tap_name: &str, label: &str) {

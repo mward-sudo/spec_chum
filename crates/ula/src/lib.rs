@@ -69,22 +69,33 @@ fn floating_bus_params(frame_t: u32, screen: &[u8], paper_start: u32, t_line: u3
         return None;
     }
     let x = t % t_line;
-    if x >= 128 {
+    // Contention starts at `paper_start`; first display fetch is 3T later (wiki:
+    // 48K early-timing bitmap at 14338 when paper/contention starts at 14335).
+    if !(3..131).contains(&x) {
         return None;
     }
-    let col = (x / 4) as usize;
+    let xf = x - 3;
+    // 8T window: bm, at, bm+1, at+1, idle×4 — two character columns per window.
+    let phase = xf % 8;
+    if phase >= 4 {
+        return None;
+    }
+    let col = ((xf / 8) * 2 + phase / 2) as usize;
+    if col > 31 {
+        return None;
+    }
     let row = line as usize;
-    let phase = x % 8;
     let y = row;
     let third = y / 64;
     let yb = y % 8;
     let yo = (y / 8) % 8;
-    let bitmap_off = (third * 2048) + (yo * 32) + (yb * 256) + col.min(31);
-    let attr_off = 6144 + (row / 8) * 32 + col.min(31);
-    match phase {
-        0 | 1 => Some(screen[bitmap_off.min(6143)]),
-        2 | 3 => Some(screen[attr_off.min(6911)]),
-        _ => None,
+    let is_attr = phase % 2 == 1;
+    if is_attr {
+        let attr_off = 6144 + (row / 8) * 32 + col;
+        Some(screen[attr_off.min(6911)])
+    } else {
+        let bitmap_off = (third * 2048) + (yo * 32) + (yb * 256) + col;
+        Some(screen[bitmap_off.min(6143)])
     }
 }
 
@@ -381,10 +392,30 @@ mod tests {
     }
 
     #[test]
+    fn floating_bus_48_fetch_pairs() {
+        let mut screen = vec![0u8; 6912];
+        screen[0] = 0x10;
+        screen[1] = 0x11;
+        screen[6144] = 0xA0;
+        screen[6145] = 0xA1;
+        // First fetch is paper_start+3: bm0, at0, bm1, at1, then idle.
+        let t0 = PAPER_START_48 + 3;
+        assert_eq!(floating_bus_byte_48(t0, &screen), Some(0x10));
+        assert_eq!(floating_bus_byte_48(t0 + 1, &screen), Some(0xA0));
+        assert_eq!(floating_bus_byte_48(t0 + 2, &screen), Some(0x11));
+        assert_eq!(floating_bus_byte_48(t0 + 3, &screen), Some(0xA1));
+        assert_eq!(floating_bus_byte_48(t0 + 4, &screen), None);
+        assert_eq!(floating_bus_byte_48(PAPER_START_48, &screen), None);
+    }
+
+    #[test]
     fn floating_bus_128_active_in_paper() {
         let mut screen = vec![0u8; 6912];
         screen[0] = 0xA5;
-        assert_eq!(floating_bus_byte_128(PAPER_START_128, &screen), Some(0xA5));
+        assert_eq!(
+            floating_bus_byte_128(PAPER_START_128 + 3, &screen),
+            Some(0xA5)
+        );
         assert_eq!(floating_bus_byte_128(0, &screen), None);
     }
 
