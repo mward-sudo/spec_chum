@@ -2,18 +2,30 @@
 //!
 //! Driven from register writes plus a CPU T-state timebase. On the 128K the chip
 //! is clocked at CPU/2; tone/noise/envelope counters advance every 16 AY clocks
-//! (32 CPU T-states). Mono mix only (stereo ACB/ABC deferred).
+//! (32 CPU T-states). Stereo pan modes: mono, ACB, and ABC.
 //!
 //! Shortcuts:
 //! - Fixed 16-step logarithmic volume table (no DC blocking filter).
 //! - Envelope resolution follows the classic 16-step saw/triangle shapes.
-//! - Output is a simple average of the three channels (no non-linear DAC mix).
+//! - Output is a simple average / pan of the three channels (no non-linear DAC mix).
 
 /// Logarithmic volume levels approximating the AY DAC (0..1).
 const VOL_TABLE: [f32; 16] = [
     0.0000, 0.0137, 0.0205, 0.0291, 0.0426, 0.0562, 0.0811, 0.1078, 0.1580, 0.2100, 0.2960, 0.3800,
     0.5400, 0.7000, 0.9100, 1.0000,
 ];
+
+/// AY channel pan layout for stereo output.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StereoMode {
+    /// Same sample on L and R (equal mix of A/B/C).
+    #[default]
+    Mono,
+    /// A left, C center, B right (common East-European / Russian wiring).
+    Acb,
+    /// A left, B center, C right (Melodik / Western wiring).
+    Abc,
+}
 
 /// Envelope shape lookup: `step` is 0..31 (two 16-step halves).
 fn envelope_level(shape: u8, step: u8) -> u8 {
@@ -52,10 +64,18 @@ fn envelope_level(shape: u8, step: u8) -> u8 {
     }
 }
 
+/// Mix left / center / right channel amplitudes into stereo (center split 50/50).
+fn pan_mix(left: f32, center: f32, right: f32) -> (f32, f32) {
+    let l = left + center * 0.5;
+    let r = right + center * 0.5;
+    (l / 1.5, r / 1.5)
+}
+
 #[derive(Clone, Debug)]
 pub struct Ay8912 {
     pub regs: [u8; 16],
     pub selected: u8,
+    pub stereo_mode: StereoMode,
     tone_count: [u16; 3],
     tone_out: [bool; 3],
     noise_count: u16,
@@ -80,6 +100,7 @@ impl Ay8912 {
         Self {
             regs: [0; 16],
             selected: 0,
+            stereo_mode: StereoMode::Mono,
             tone_count: [0; 3],
             tone_out: [false; 3],
             noise_count: 0,
@@ -93,7 +114,9 @@ impl Ay8912 {
     }
 
     pub fn reset(&mut self) {
+        let mode = self.stereo_mode;
         *self = Self::new();
+        self.stereo_mode = mode;
     }
 
     pub fn select(&mut self, reg: u8) {
@@ -166,6 +189,28 @@ impl Ay8912 {
         VOL_TABLE[usize::from(level)]
     }
 
+    /// Per-channel instantaneous amplitudes (mixer applied), roughly `0.0..1.0`.
+    #[must_use]
+    pub fn channel_levels(&self) -> [f32; 3] {
+        let mixer = self.regs[7];
+        let mut levels = [0.0f32; 3];
+        for (ch, level) in levels.iter_mut().enumerate() {
+            let tone_off = mixer & (1 << ch) != 0;
+            let noise_off = mixer & (1 << (ch + 3)) != 0;
+            let tone = self.tone_out[ch];
+            let noise = self.noise_out;
+            let enabled = match (tone_off, noise_off) {
+                (true, true) => false,
+                (false, true) => tone,
+                (true, false) => noise,
+                (false, false) => tone && noise,
+            };
+            let vol = self.channel_volume(ch);
+            *level = if enabled { vol } else { 0.0 };
+        }
+        levels
+    }
+
     /// Advance synthesis by `tstates` CPU T-states.
     pub fn advance(&mut self, tstates: u32) {
         if tstates == 0 {
@@ -224,23 +269,30 @@ impl Ay8912 {
     /// Current mono mix sample in roughly `0.0..1.0` (uncentered channel sum / 3).
     #[must_use]
     pub fn sample_mono(&self) -> f32 {
-        let mixer = self.regs[7];
-        let mut sum = 0.0f32;
-        for ch in 0..3 {
-            let tone_off = mixer & (1 << ch) != 0;
-            let noise_off = mixer & (1 << (ch + 3)) != 0;
-            let tone = self.tone_out[ch];
-            let noise = self.noise_out;
-            let enabled = match (tone_off, noise_off) {
-                (true, true) => false,
-                (false, true) => tone,
-                (true, false) => noise,
-                (false, false) => tone && noise,
-            };
-            let vol = self.channel_volume(ch);
-            sum += if enabled { vol } else { 0.0 };
+        let levels = self.channel_levels();
+        (levels[0] + levels[1] + levels[2]) / 3.0
+    }
+
+    /// Stereo sample using [`Self::stereo_mode`]. Amplitudes roughly `0.0..1.0`.
+    #[must_use]
+    pub fn sample_stereo(&self) -> (f32, f32) {
+        self.sample_stereo_mode(self.stereo_mode)
+    }
+
+    /// Stereo sample for an explicit pan mode.
+    #[must_use]
+    pub fn sample_stereo_mode(&self, mode: StereoMode) -> (f32, f32) {
+        let levels = self.channel_levels();
+        match mode {
+            StereoMode::Mono => {
+                let m = (levels[0] + levels[1] + levels[2]) / 3.0;
+                (m, m)
+            }
+            // A left, C center, B right
+            StereoMode::Acb => pan_mix(levels[0], levels[2], levels[1]),
+            // A left, B center, C right
+            StereoMode::Abc => pan_mix(levels[0], levels[1], levels[2]),
         }
-        sum / 3.0
     }
 
     /// Render `sample_count` mono samples spanning `frame_tstates` CPU T-states.
@@ -294,6 +346,36 @@ mod tests {
     }
 
     #[test]
+    fn acb_vs_abc_pan_differs() {
+        let mut ay = Ay8912::new();
+        // Enable only channel A (tone) at full volume.
+        ay.select(0);
+        ay.write_data(1);
+        ay.select(8);
+        ay.write_data(0x0f);
+        ay.select(7);
+        ay.write_data(0x38); // tone A on, B/C off, noise off
+        ay.tone_out = [true, false, false];
+        ay.stereo_mode = StereoMode::Acb;
+        let (l_acb, r_acb) = ay.sample_stereo();
+        ay.stereo_mode = StereoMode::Abc;
+        let (l_abc, r_abc) = ay.sample_stereo();
+        assert!(l_acb > r_acb, "ACB: A should favour left");
+        assert!(l_abc > r_abc, "ABC: A should favour left");
+        // With only A, ACB and ABC left should match; differ when B vs C.
+        ay.tone_out = [false, true, false];
+        ay.select(9);
+        ay.write_data(0x0f);
+        ay.select(8);
+        ay.write_data(0);
+        ay.stereo_mode = StereoMode::Acb;
+        let (_, r_b) = ay.sample_stereo();
+        ay.stereo_mode = StereoMode::Abc;
+        let (l_b, _) = ay.sample_stereo();
+        assert!(r_b > 0.01 && l_b > 0.01);
+    }
+
+    #[test]
     fn tone_produces_nonzero_energy() {
         let mut ay = Ay8912::new();
         ay.select(0);
@@ -327,5 +409,67 @@ mod tests {
         assert_eq!(envelope_level(0x0e, 15), 15);
         assert_eq!(envelope_level(0x0e, 16), 15);
         assert_eq!(envelope_level(0x0e, 31), 0);
+    }
+
+    /// Force channel B (index 1) full-on with tone stuck high for pan checks.
+    fn ay_channel_b_only() -> Ay8912 {
+        let mut ay = Ay8912::new();
+        ay.tone_out = [false, true, false];
+        ay.select(9); // volume B
+        ay.write_data(0x0f);
+        ay.select(7);
+        ay.write_data(0x3d); // tone off A+C, tone on B; noise off all
+        ay
+    }
+
+    #[test]
+    fn acb_vs_abc_swap_b_and_c_pans() {
+        let ay = ay_channel_b_only();
+        let (acb_l, acb_r) = ay.sample_stereo_mode(StereoMode::Acb);
+        let (abc_l, abc_r) = ay.sample_stereo_mode(StereoMode::Abc);
+        // ACB: B is right → more energy on R than L.
+        assert!(
+            acb_r > acb_l + 0.1,
+            "ACB should pan B right: L={acb_l} R={acb_r}"
+        );
+        // ABC: B is center → equal L/R.
+        assert!(
+            (abc_l - abc_r).abs() < 1e-4,
+            "ABC should center B: L={abc_l} R={abc_r}"
+        );
+
+        // Channel C only: ACB centers C, ABC pans C right.
+        let mut ay_c = Ay8912::new();
+        ay_c.tone_out = [false, false, true];
+        ay_c.select(10);
+        ay_c.write_data(0x0f);
+        ay_c.select(7);
+        ay_c.write_data(0x3b); // tone on C only
+        let (acb_l, acb_r) = ay_c.sample_stereo_mode(StereoMode::Acb);
+        let (abc_l, abc_r) = ay_c.sample_stereo_mode(StereoMode::Abc);
+        assert!(
+            (acb_l - acb_r).abs() < 1e-4,
+            "ACB should center C: L={acb_l} R={acb_r}"
+        );
+        assert!(
+            abc_r > abc_l + 0.1,
+            "ABC should pan C right: L={abc_l} R={abc_r}"
+        );
+    }
+
+    #[test]
+    fn mono_stereo_matches_sample_mono() {
+        let mut ay = Ay8912::new();
+        ay.select(0);
+        ay.write_data(8);
+        ay.select(8);
+        ay.write_data(0x0f);
+        ay.select(7);
+        ay.write_data(0x38);
+        ay.advance(32 * 50);
+        ay.stereo_mode = StereoMode::Mono;
+        let m = ay.sample_mono();
+        let (l, r) = ay.sample_stereo();
+        assert!((l - m).abs() < 1e-6 && (r - m).abs() < 1e-6);
     }
 }
