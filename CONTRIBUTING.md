@@ -42,8 +42,9 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://docs.coderabbit.ai/configuration/auto-review), [review commands](https://docs.coderabbit.ai/reference/review-commands)). Automatic reviews are **off** so iteration pushes do not burn allowance. Workflow:
 
 1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
-2. When merge-candidate (and again after follow-up commits that move HEAD): mark **Ready for review**, then request a pass with `@coderabbitai full review` or label `coderabbit-review`. Do **not** use `@coderabbitai review` while `.coderabbit.yaml` has `auto_incremental_review: false` — CodeRabbit skips that command (`Review skipped: incremental reviews are disabled`). Incremental can be re-enabled later via `auto_incremental_review: true` if desired.
-3. Disposition actionable threads, then run the merge gate below.
+2. When merge-candidate: mark **Ready for review**, then request a first pass with `@coderabbitai full review` or label `coderabbit-review`.
+3. After fixing review findings (commits that move HEAD): request an **incremental** pass with `@coderabbitai review` (requires `auto_incremental_review: true` in `.coderabbit.yaml`). Do not burn another full review for post-fix HEAD unless the prior full review never completed or CodeRabbit asks for one.
+4. Disposition actionable threads, then run the merge gate below.
 
 If the YAML and CodeRabbit GitHub app UI disagree, keep **Automatic Reviews** off in the app so committed config wins. Undraft alone may not trigger a review — always comment or label.
 
