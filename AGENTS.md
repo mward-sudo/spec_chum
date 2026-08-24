@@ -89,3 +89,15 @@ CI: `.github/workflows/pr-bot-reviews.yml` (default `GITHUB_TOKEN`). Local/scrip
 
 Recently closed accuracy/feature issues: [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
 
+## Cursor Cloud specific instructions
+
+The startup update script already runs `cargo fetch` and `./scripts/fetch_roms.sh`, and the base image already has the audio/GUI system libraries (`libasound2-dev`, `libgtk-3-dev`, `libglib2.0-dev`, plus Mesa/X11 runtime libs). So on a fresh cloud agent you can go straight to building, testing, and running.
+
+Standard commands are in `README.md` and the "Agent workflow" / "Testing expectations" sections above (`./scripts/check.sh`, `cargo test --workspace`, `cargo run -p app --release`). Non-obvious cloud caveats only:
+
+- **ROMs are required to run anything, and are not in git.** They live under `roms/` (gitignored) and are fetched by `./scripts/fetch_roms.sh` (already run by the update script). Without them the `app` / `spec-chum-debug` binaries error at ROM load, and ROM-dependent integration tests skip. Re-run the script if `roms/` is missing.
+- **Running the egui app (`spec_chum`) needs an X display.** In the cloud VM the desktop is on `DISPLAY=:1` with software GL (llvmpipe), which works fine. Launch with `DISPLAY=:1 ./target/release/spec_chum` (build release first for smooth interaction). Keep it in a tmux session so it survives.
+- **ALSA "cannot find card '0'" / "Unknown PCM default" warnings are harmless.** The VM has no sound card; the app (and `cpal`) degrade gracefully and keep running — do not treat these as failures.
+- **Headless emulator driving:** prefer the `spec-chum-debug` CLI (e.g. `./target/debug/spec-chum-debug --model 48k run --frames 100`, plus `dump-state`, `disasm`, `peek`, `until-pc`, `break-pc`, `type-load`) to exercise the core without a GUI. See `.cursor/skills/spec-chum-debugging/SKILL.md`.
+- **Driving the GUI keyboard (computer-use):** the Spectrum uses single-key keyword entry — pressing `p` at the `K` cursor inserts the whole `PRINT ` keyword (do not type the word letter-by-letter). Symbol-layer chars via computer-use are flaky (`"` is Shift+apostrophe and often mis-types stray apostrophes); prefer digit-only commands like `PRINT 2+2` for reliable smoke tests. Host→matrix mapping lives in `crates/app/src/keymap.rs`.
+
