@@ -345,13 +345,17 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
             // DJNZ
             cpu.contend_ir_cycles(1);
             cpu.regs.b = cpu.regs.b.wrapping_sub(1);
-            let disp_addr = cpu.regs.pc;
-            let d = cpu.fetch8(bus) as i8 as i16;
             if cpu.regs.b != 0 {
+                let disp_addr = cpu.regs.pc;
+                let d = cpu.fetch8(bus) as i8 as i16;
                 cpu.contend_cycles(disp_addr, 5);
                 let dest = (cpu.regs.pc as i16).wrapping_add(d) as u16;
                 cpu.regs.pc = dest;
                 cpu.regs.memptr = dest;
+            } else {
+                // Fuse: contend_read(PC, 3); PC++ — no MR of displacement
+                cpu.contend_read_timing(cpu.regs.pc, 3);
+                cpu.regs.pc = cpu.regs.pc.wrapping_add(1);
             }
         }
         0x18 => {
@@ -364,16 +368,20 @@ fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_
         }
         0x20 | 0x28 | 0x30 | 0x38 => {
             let disp_addr = cpu.regs.pc;
-            let d = cpu.fetch8(bus) as i8 as i16;
             let cc = (op >> 3) & 3;
             // NZ Z NC C — encoding uses 4..7 style via bits; 0x20=NZ(4?); actually:
             // 0x20 NZ, 0x28 Z, 0x30 NC, 0x38 C → cc = (op>>3)&3 maps to 0..3 but condition() uses 0=NZ
             let taken = condition(cpu, cc);
             if taken {
+                let d = cpu.fetch8(bus) as i8 as i16;
                 cpu.contend_cycles(disp_addr, 5);
                 let dest = (cpu.regs.pc as i16).wrapping_add(d) as u16;
                 cpu.regs.pc = dest;
                 cpu.regs.memptr = dest;
+            } else {
+                // Fuse: contend_read(PC, 3); PC++ — skip unread displacement
+                cpu.contend_read_timing(disp_addr, 3);
+                cpu.regs.pc = cpu.regs.pc.wrapping_add(1);
             }
         }
         0x27 => daa(cpu),

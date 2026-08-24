@@ -169,6 +169,14 @@ impl Cpu {
         }
     }
 
+    /// Fuse `contend_read(addr, time)`: one MC then advance `time` (no MR).
+    /// Used when skipping an unread immediate (JR/DJNZ not taken).
+    #[inline]
+    pub(crate) fn contend_read_timing(&mut self, addr: u16, time: u32) {
+        self.fuse_push(FuseEventKind::Mc, addr, None);
+        self.add_t(time);
+    }
+
     /// Internal cycles that put IR on the bus (`contend_read_no_mreq(IR, n)`).
     #[inline]
     pub(crate) fn contend_ir_cycles(&mut self, n: u32) {
