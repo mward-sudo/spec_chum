@@ -147,8 +147,12 @@ fn parse_fuse_event_line(line: &str) -> Option<FuseEvent> {
         "PW" => FuseEventKind::Pw,
         _ => return None,
     };
-    let addr = parse_u16(parts.next()?);
-    let value = parts.next().map(parse_u8);
+    // Fallible hex so parse_expected can panic with test name + full line.
+    let addr = u16::from_str_radix(parts.next()?, 16).ok()?;
+    let value = match parts.next() {
+        Some(v) => Some(u8::from_str_radix(v, 16).ok()?),
+        None => None,
+    };
     Some(FuseEvent {
         t,
         kind,

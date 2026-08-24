@@ -43,7 +43,7 @@ Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://
 
 1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
 2. When merge-candidate: mark **Ready for review**, then request a first pass with `@coderabbitai full review` or label `coderabbit-review`.
-3. After fixing review findings (commits that move HEAD): request an **incremental** pass with `@coderabbitai review` (requires `auto_incremental_review: true` in `.coderabbit.yaml`). Do not burn another full review for post-fix HEAD unless the prior full review never completed or CodeRabbit asks for one.
+3. After fixing review findings (commits that move HEAD): request an **incremental** pass with `@coderabbitai review`. Keep `auto_incremental_review: true` in `.coderabbit.yaml` — with it false, CodeRabbit has skipped that command (`incremental reviews are disabled`). Do not burn another full review for post-fix HEAD unless the prior full review never completed or CodeRabbit asks for one.
 4. Disposition actionable threads, then run the merge gate below.
 
 If the YAML and CodeRabbit GitHub app UI disagree, keep **Automatic Reviews** off in the app so committed config wins. Undraft alone may not trigger a review — always comment or label.

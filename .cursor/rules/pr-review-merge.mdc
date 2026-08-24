@@ -16,7 +16,7 @@ CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRa
 3. After fix commits that move HEAD: comment `@coderabbitai review` (**incremental**) — do not request another full review for routine post-fix HEAD. The merge gate still needs a completed review on the latest commit.
 4. Disposition threads → `./scripts/check_pr_reviews.sh` → merge.
 
-Requires `auto_incremental_review: true` in `.coderabbit.yaml` so `@coderabbitai review` is not skipped.
+Keep `auto_incremental_review: true` in `.coderabbit.yaml` so `@coderabbitai review` is not skipped (observed skip when false: `incremental reviews are disabled`).
 
 ## Hard rule — hold until CodeRabbit is clean (ready PRs)
 
