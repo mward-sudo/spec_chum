@@ -3,10 +3,14 @@
 #![allow(clippy::pedantic)]
 
 mod dsk;
+mod mdr;
 mod rzx;
+mod trd;
 
 pub use dsk::{DskImage, Plus3Fdc, Sector};
+pub use mdr::{MdrImage, MDR_IMAGE_SIZE, MDR_SECTORS, MDR_SECTOR_SIZE};
 pub use rzx::{apply_input_byte, RzxFrame, RzxRecording};
+pub use trd::{TrdImage, TRD_SECTOR_SIZE, TRD_SECTORS_PER_TRACK};
 
 use std::path::Path;
 
