@@ -1081,6 +1081,11 @@ mod tests {
             Err(HostError::NoMachine) => {
                 eprintln!("skip: could not autoload ROM for snapshot");
             }
+            Err(HostError::Message(msg))
+                if msg.contains("ROM required") || msg.contains("fetch_roms") =>
+            {
+                eprintln!("skip: {msg}");
+            }
             Err(e) => panic!("unexpected error: {e}"),
         }
         if cleanup {

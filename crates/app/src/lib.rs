@@ -1286,6 +1286,11 @@ mod tests {
 
     #[test]
     fn load_snapshot48_switches_from_128k() {
+        let rom48 = EmulatorSession::workspace_root().join("roms/spec48.rom");
+        if !rom48.is_file() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
         let mut session = EmulatorSession::new(Model::Spectrum128, true);
         session.try_autoload_rom();
         if session.machine.is_none() {
@@ -1305,6 +1310,11 @@ mod tests {
 
     #[test]
     fn load_snapshot48_switches_from_plus3() {
+        let rom48 = EmulatorSession::workspace_root().join("roms/spec48.rom");
+        if !rom48.is_file() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
         let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
         session.try_autoload_rom();
         if session.machine.is_none() {
