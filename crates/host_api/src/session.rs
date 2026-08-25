@@ -12,6 +12,8 @@ pub enum ModelId {
     Spectrum48 = 0,
     Spectrum128 = 1,
     SpectrumPlus3 = 2,
+    /// Amstrad +2A (no disk interface). Added after Plus3; keep numeric id stable.
+    SpectrumPlus2A = 3,
 }
 
 impl ModelId {
@@ -21,6 +23,7 @@ impl ModelId {
             0 => Some(Self::Spectrum48),
             1 => Some(Self::Spectrum128),
             2 => Some(Self::SpectrumPlus3),
+            3 => Some(Self::SpectrumPlus2A),
             _ => None,
         }
     }
@@ -31,6 +34,7 @@ impl ModelId {
             Self::Spectrum48 => Model::Spectrum48,
             Self::Spectrum128 => Model::Spectrum128,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
+            Self::SpectrumPlus2A => Model::SpectrumPlus2A,
         }
     }
 }
@@ -194,6 +198,7 @@ impl HostSession {
             ModelId::Spectrum48 => Machine::new_48k(rom),
             ModelId::Spectrum128 => Machine::new_128k(rom),
             ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
+            ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
@@ -349,7 +354,8 @@ impl HostSession {
         let candidates: &[&str] = match self.model {
             ModelId::Spectrum48 => &["roms/spec48.rom"],
             ModelId::Spectrum128 => &["roms/128/spec128uk.rom"],
-            ModelId::SpectrumPlus3 => &["roms/plus3/plus3.rom", "roms/plus2a/plus2a.rom"],
+            ModelId::SpectrumPlus3 => &["roms/plus3/plus3.rom"],
+            ModelId::SpectrumPlus2A => &["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"],
         };
         for root in rom_search_roots() {
             for rel in candidates {
@@ -471,6 +477,38 @@ impl HostSession {
         Ok(())
     }
 
+    /// Attach Multiface 1 (48K only) from an 8 KiB ROM image path.
+    pub fn attach_multiface(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        m.attach_multiface(&data).map_err(HostError::Message)?;
+        self.status = format!("Attached Multiface 1 from {}", path.display());
+        Ok(())
+    }
+
+    /// Raise Multiface NMI if attached.
+    pub fn multiface_nmi(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        match m.multiface_nmi() {
+            Some(_) => {
+                self.status = "Multiface NMI".into();
+                Ok(())
+            }
+            None => Err(HostError::Message(
+                "Multiface not attached (48K + 8K MF ROM)".into(),
+            )),
+        }
+    }
+
+    #[must_use]
+    pub fn has_multiface(&self) -> bool {
+        self.machine.as_ref().is_some_and(Machine::has_multiface)
+    }
+
     #[must_use]
     pub fn joystick_mode(&self) -> JoystickMode {
         self.joystick_mode
@@ -572,7 +610,9 @@ impl HostSession {
         let audio = m.run_frame();
         let frame_t = match m.model() {
             machine::Model::Spectrum48 => 69_888,
-            machine::Model::Spectrum128 | machine::Model::SpectrumPlus3 => 70_908,
+            machine::Model::Spectrum128
+            | machine::Model::SpectrumPlus2A
+            | machine::Model::SpectrumPlus3 => 70_908,
         };
         self.last_speaker_level = render_frame_pcm(
             &audio,
@@ -868,8 +908,10 @@ mod tests {
         assert_eq!(ModelId::from_u32(0), Some(ModelId::Spectrum48));
         assert_eq!(ModelId::from_u32(1), Some(ModelId::Spectrum128));
         assert_eq!(ModelId::from_u32(2), Some(ModelId::SpectrumPlus3));
+        assert_eq!(ModelId::from_u32(3), Some(ModelId::SpectrumPlus2A));
         assert_eq!(ModelId::from_u32(9), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
+        assert_eq!(ModelId::SpectrumPlus2A.to_model(), Model::SpectrumPlus2A);
     }
 
     #[test]

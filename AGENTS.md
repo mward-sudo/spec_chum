@@ -23,7 +23,7 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 | `host_api` | C ABI host surface for native shells / future cores |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 
-Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`).
+Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`). Models include distinct **+2A** (tape Loader) and **+3** (disk Loader).
 
 ## Hard constraints
 

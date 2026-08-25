@@ -12,7 +12,8 @@ extern "C" {
 enum {
     SC_MODEL_48K = 0,
     SC_MODEL_128K = 1,
-    SC_MODEL_PLUS3 = 2
+    SC_MODEL_PLUS3 = 2,
+    SC_MODEL_PLUS2A = 3
 };
 
 void *sc_create(unsigned int model, int with_border);
@@ -64,6 +65,11 @@ int sc_clear_keys(void *handle);
 int sc_set_joystick_mode(void *handle, unsigned int mode);
 int sc_set_joystick(void *handle, unsigned int mask);
 int sc_clear_joystick(void *handle);
+
+/* Multiface 1 (48K): attach 8 KiB ROM, then NMI. Returns 0 ok, -1 error. */
+int sc_attach_multiface(void *handle, const char *path);
+int sc_multiface_nmi(void *handle);
+int sc_has_multiface(void *handle);
 
 /* Heap strings — free with sc_string_free */
 char *sc_status(void *handle);

@@ -39,12 +39,13 @@ Environment:
 
 ## What this vertical slice includes
 
-- Native `MenuBar` / `Commands` (File → Open Tape / Snapshot / RZX / Disk / ROM; Tape Play/Pause/Rewind + Type LOAD; Machine Reset + model; Debug trace dump)
+- Native `MenuBar` / `Commands` (File → Open Tape / Snapshot / RZX / Disk / ROM; Tape Play/Pause/Rewind + Type LOAD; Machine Reset + model; **Hardware** Multiface; Debug trace dump)
 - Toolbar / status chrome via SwiftUI **`glassEffect`** on macOS 26+; fallback **`.ultraThinMaterial`**
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`
-- **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, +2A/+3) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
-- **Type LOAD ""** / **Type LOAD "" CODE** (Tape + Machine menus): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only)
+- **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, **+3 only**) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
+- **Type LOAD ""** / **Type LOAD "" CODE** (Tape + Machine menus): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only); **+2A** selects tape **Loader** for PROGRAM
+- **Hardware:** Multiface 1 attach + NMI (`sc_attach_multiface` / `sc_multiface_nmi`, 48K). DivMMC / IF1 / Beta stubs are exposed in the **egui** Hardware menu first.
 - **Audio:** mono PCM from `sc_audio_*` each frame via `AVAudioEngine` (beeper + EAR mix + AY)
 - **Tape progress:** `ProgressView` from `sc_tape_progress` (block / pulse position)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)
@@ -52,7 +53,7 @@ Environment:
 
 ## Tape loading (Play / LD-BYTES)
 
-Insert starts **paused**. Use **Type LOAD ""** / **Type LOAD "" CODE** (or type keywords by hand in 48 BASIC), then **Tape → Play**. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk.
+Insert starts **paused**. Use **Type LOAD ""** / **Type LOAD "" CODE** (or type keywords by hand in 48 BASIC), then **Tape → Play**. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk. On +2A, menu **Loader** *is* tape.
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm flash-load / EAR. Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 
@@ -70,7 +71,7 @@ Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (d
 
 1. **File → Open Snapshot…** — `.sna` / `.z80` (48K or banked 128K/+3; host may switch model and autoload ROM).
 2. **File → Open RZX…** — requires a machine/ROM already loaded.
-3. **File → Open Disk…** — `.dsk` on **Spectrum +2A/+3** only (`sc_load_dsk`).
+3. **File → Open Disk…** — `.dsk` on **Spectrum +3** only (`sc_load_dsk`; +2A has no floppy).
 
 ### Experience ~20s load
 

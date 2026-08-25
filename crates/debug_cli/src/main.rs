@@ -12,7 +12,7 @@ use trace::DumpFilter;
 #[derive(Parser, Debug)]
 #[command(name = "spec-chum-debug", about = "Headless Spec Chum debugger")]
 struct Cli {
-    /// 48k, 128k, or plus3
+    /// 48k, 128k, plus2a, or plus3
     #[arg(long, default_value = "48k")]
     model: String,
     #[arg(long)]
@@ -109,6 +109,7 @@ fn default_rom(model: Model) -> PathBuf {
     match model {
         Model::Spectrum48 => PathBuf::from("roms/spec48.rom"),
         Model::Spectrum128 => PathBuf::from("roms/128/spec128uk.rom"),
+        Model::SpectrumPlus2A => PathBuf::from("roms/plus2a/plus2a.rom"),
         Model::SpectrumPlus3 => PathBuf::from("roms/plus3/plus3.rom"),
     }
 }
@@ -117,7 +118,8 @@ fn parse_model(s: &str) -> Result<Model> {
     Ok(match s.to_ascii_lowercase().as_str() {
         "48" | "48k" => Model::Spectrum48,
         "128" | "128k" => Model::Spectrum128,
-        "plus3" | "+3" | "plus2a" => Model::SpectrumPlus3,
+        "plus2a" | "+2a" => Model::SpectrumPlus2A,
+        "plus3" | "+3" => Model::SpectrumPlus3,
         other => bail!("unknown model {other}"),
     })
 }
@@ -129,6 +131,7 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
     let mut m = match model {
         Model::Spectrum48 => Machine::new_48k(&rom),
         Model::Spectrum128 => Machine::new_128k(&rom),
+        Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
         Model::SpectrumPlus3 => Machine::new_plus3(&rom),
     }
     .map_err(|e| anyhow::anyhow!(e))?;

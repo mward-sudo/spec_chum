@@ -170,7 +170,11 @@ impl Machine {
             } => {
                 let frame_t = bus.frame_t;
                 Inspect {
-                    model: Model::SpectrumPlus3,
+                    model: if bus.disk_interface {
+                        Model::SpectrumPlus3
+                    } else {
+                        Model::SpectrumPlus2A
+                    },
                     regs,
                     cpu_t,
                     frame_t,
@@ -303,6 +307,7 @@ impl Inspect {
         let model = match self.model {
             Model::Spectrum48 => "48k",
             Model::Spectrum128 => "128k",
+            Model::SpectrumPlus2A => "plus2a",
             Model::SpectrumPlus3 => "plus3",
         };
         let tape = self.tape.as_ref().map_or("null".into(), tape_json);

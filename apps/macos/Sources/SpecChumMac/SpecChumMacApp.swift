@@ -72,6 +72,18 @@ struct SpecChumMacApp: App {
                 }
             }
 
+            CommandMenu("Hardware") {
+                Button("Attach Multiface 1 ROM…") {
+                    openMultifaceRom()
+                }
+                Button("Multiface NMI") {
+                    host.multifaceNmi()
+                }
+                Divider()
+                Button("DivMMC / IF1 / Beta: use egui (stubs)") {}
+                    .disabled(true)
+            }
+
             CommandMenu("Debug") {
                 Button(host.paused ? "Continue" : "Pause") {
                     host.setPaused(!host.paused)
@@ -165,6 +177,20 @@ struct SpecChumMacApp: App {
         panel.title = "Open Disk (DSK)"
         if panel.runModal() == .OK, let url = panel.url {
             host.openDsk(at: url)
+        }
+    }
+
+    private func openMultifaceRom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+        ]
+        panel.title = "Attach Multiface 1 ROM (8 KiB, 48K)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.attachMultiface(at: url)
         }
     }
 

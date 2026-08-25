@@ -7,11 +7,22 @@ import UniformTypeIdentifiers
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
     /// Joystick presentation — matches `sc_set_joystick_mode` (default Kempston).
-    enum JoystickMode: UInt32 {
+    enum JoystickMode: UInt32, CaseIterable, Identifiable {
         case kempston = 0
         case sinclairLeft = 1
         case sinclairRight = 2
         case cursor = 3
+
+        var id: UInt32 { rawValue }
+
+        var title: String {
+            switch self {
+            case .kempston: "Kempston"
+            case .sinclairLeft: "Sinclair left (1–5)"
+            case .sinclairRight: "Sinclair right (6–0)"
+            case .cursor: "Cursor"
+            }
+        }
     }
 
     /// Digital stick threshold for left thumbstick axes (~egui gilrs parity).
@@ -20,6 +31,7 @@ final class HostBridge: ObservableObject {
         case spectrum48 = 0
         case spectrum128 = 1
         case spectrumPlus3 = 2
+        case spectrumPlus2A = 3
 
         var id: UInt32 { rawValue }
 
@@ -27,7 +39,18 @@ final class HostBridge: ObservableObject {
             switch self {
             case .spectrum48: "Spectrum 48K"
             case .spectrum128: "Spectrum 128K"
-            case .spectrumPlus3: "Spectrum +2A/+3"
+            case .spectrumPlus3: "Spectrum +3"
+            case .spectrumPlus2A: "Spectrum +2A"
+            }
+        }
+
+        /// Short label for window titles.
+        var shortTitle: String {
+            switch self {
+            case .spectrum48: "48K"
+            case .spectrum128: "128K"
+            case .spectrumPlus3: "+3"
+            case .spectrumPlus2A: "+2A"
             }
         }
     }
@@ -35,6 +58,8 @@ final class HostBridge: ObservableObject {
     @Published private(set) var status: String = "Starting…"
     @Published private(set) var tapePlaying: Bool = false
     @Published private(set) var hasTape: Bool = false
+    /// Last opened media filename for the window title (tape / snapshot / RZX / disk / ROM).
+    @Published private(set) var mediaTitle: String?
     /// Instant flash-load when true; EAR bitstream when false.
     @Published var instantLoad: Bool = true {
         didSet { pushTapeLoadOptions() }
@@ -57,6 +82,12 @@ final class HostBridge: ObservableObject {
     @Published private(set) var debugSp: UInt16 = 0
     @Published private(set) var debugAf: UInt16 = 0
     @Published private(set) var inspectJsonPreview: String = ""
+    @Published var joystickMode: JoystickMode = .kempston {
+        didSet {
+            guard oldValue != joystickMode else { return }
+            _ = applyJoystickMode(joystickMode)
+        }
+    }
     @Published var model: Model = .spectrum48 {
         didSet {
             guard let handle, oldValue != model, !suppressModelPush else { return }
@@ -65,6 +96,14 @@ final class HostBridge: ObservableObject {
             pushTapeLoadOptions()
             refreshStatus()
         }
+    }
+
+    /// Document-style window title: media + machine (HIG).
+    var windowTitle: String {
+        if let mediaTitle, !mediaTitle.isEmpty {
+            return "\(mediaTitle) — \(model.shortTitle)"
+        }
+        return "Spec Chum — \(model.shortTitle)"
     }
 
     private var handle: UnsafeMutableRawPointer?
@@ -98,7 +137,7 @@ final class HostBridge: ObservableObject {
         tryAutoloadRom()
         refreshStatus()
         syncTapeLoadOptionsFromHost()
-        applyJoystickMode(.kempston)
+        _ = applyJoystickMode(joystickMode)
         startGamepadDiscovery()
         let rate = Double(sc_audio_sample_rate(handle))
         audio.ensureStarted(sampleRate: rate > 0 ? rate : 44100)
@@ -239,6 +278,7 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "ROM load failed"
         } else {
+            mediaTitle = url.lastPathComponent
             pushTapeLoadOptions()
             refreshStatus()
         }
@@ -250,6 +290,7 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "Tape open failed"
         } else {
+            mediaTitle = url.lastPathComponent
             refreshStatus()
             hasTape = true
             tapePlaying = false
@@ -263,6 +304,7 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "Snapshot load failed"
         } else {
+            mediaTitle = url.lastPathComponent
             syncModelFromHost()
             pushTapeLoadOptions()
             refreshStatus()
@@ -300,7 +342,8 @@ final class HostBridge: ObservableObject {
     }
 
     /// Queue egui-parity `LOAD ""` [CODE] via `sc_set_key`.
-    /// 128K/+3: menu → 48 BASIC then keywords (+3 "Loader" is disk-only — do not Enter alone).
+    /// 128K/+3: menu → 48 BASIC (+3 disk Loader — do not Enter alone).
+    /// +2A: menu Loader is tape — Enter alone for PROGRAM.
     func typeLoadQuotes(withCode: Bool = false) {
         switch model {
         case .spectrum48:
@@ -308,6 +351,11 @@ final class HostBridge: ObservableObject {
             status = withCode
                 ? "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
                 : "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan"
+        case .spectrumPlus2A:
+            keyScript = LoadKeyScript.loadQuotesPlus2A(withCode: withCode)
+            status = withCode
+                ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                : "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan"
         case .spectrum128, .spectrumPlus3:
             keyScript = LoadKeyScript.loadQuotes128OrPlus3(withCode: withCode)
             status = withCode
@@ -405,6 +453,25 @@ final class HostBridge: ObservableObject {
         guard let handle else { return false }
         keyboardJoystickMask = 0
         return sc_clear_joystick(handle) == 0
+    }
+
+    func attachMultiface(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_attach_multiface(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "Multiface attach failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func multifaceNmi() {
+        guard let handle else { return }
+        if sc_multiface_nmi(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Multiface NMI failed"
+        } else {
+            refreshStatus()
+        }
     }
 
     /// OR keyboard Kempston bits with GCController digital stick + A fire.
@@ -617,7 +684,9 @@ final class HostBridge: ObservableObject {
             case .spectrum128:
                 return ["roms/128/spec128uk.rom"]
             case .spectrumPlus3:
-                return ["roms/plus3/plus3.rom", "roms/plus2a/plus2a.rom"]
+                return ["roms/plus3/plus3.rom"]
+            case .spectrumPlus2A:
+                return ["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"]
             }
         }()
         for root in romSearchRoots {
@@ -731,6 +800,19 @@ private struct LoadKeyScript {
         steps.append(Step(keys: empty, frames: menuTo48BasicWait))
         steps.append(contentsOf: loadQuotes48kSteps(withCode: withCode))
         return LoadKeyScript(steps: steps)
+    }
+
+    /// +2A: menu Loader is tape — Enter alone for PROGRAM; CODE via 48 BASIC (#145).
+    static func loadQuotesPlus2A(withCode: Bool) -> LoadKeyScript {
+        if withCode {
+            return loadQuotes128OrPlus3(withCode: true)
+        }
+        let empty: [(UInt32, UInt32)] = []
+        let enter: [(UInt32, UInt32)] = [(6, 0)]
+        return LoadKeyScript(steps: [
+            Step(keys: enter, frames: press),
+            Step(keys: empty, frames: menuTo48BasicWait),
+        ])
     }
 
     private static func loadQuotes48kSteps(withCode: Bool) -> [Step] {

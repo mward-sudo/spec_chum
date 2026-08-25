@@ -2,6 +2,11 @@
 //!
 //! Floating bus is inactive on these machines (unattached reads return `0xFF`).
 //! Frame timing matches 128K (228 T/line, 70908 T/frame).
+//!
+//! +2A and +3 share this gate array. The ROM detects a disk interface by probing
+//! FDC ports (`2FFD`/`3FFD`); when [`BusPlus3::disk_interface`] is false those
+//! ports read as `0xFF` so menu **Loader** uses tape (real +2A). When true, the
+//! µPD765 path is present and **Loader** is +3DOS disk (real +3).
 
 use ula::{contention_delay_128, Ula48, FRAME_TSTATES_128};
 
@@ -35,6 +40,8 @@ pub struct BusPlus3 {
     pub kempston: crate::Kempston,
     pub mouse: crate::KempstonMouse,
     pub fdc: formats::Plus3Fdc,
+    /// When false (+2A), FDC ports float at `0xFF` so the ROM treats disk as absent.
+    pub disk_interface: bool,
 }
 
 impl Default for BusPlus3 {
@@ -46,6 +53,12 @@ impl Default for BusPlus3 {
 impl BusPlus3 {
     #[must_use]
     pub fn new() -> Self {
+        Self::new_with_disk(true)
+    }
+
+    /// +3-class bus; `disk_interface` enables µPD765 ports (`true` = +3, `false` = +2A).
+    #[must_use]
+    pub fn new_with_disk(disk_interface: bool) -> Self {
         Self {
             rom: [[0; 16384]; 4],
             banks: [[0; 16384]; 8],
@@ -63,6 +76,7 @@ impl BusPlus3 {
             kempston: crate::Kempston::new(),
             mouse: crate::KempstonMouse::new(),
             fdc: formats::Plus3Fdc::new(),
+            disk_interface,
         }
     }
 
@@ -226,6 +240,9 @@ impl BusPlus3 {
         }
         // FDC data 3FFD — A15=0, A14=0, A13=1, A12=1, A1=0
         if port & 0xf002 == 0x3000 {
+            if !self.disk_interface {
+                return 0xff;
+            }
             let v = self.fdc.read_data_byte();
             if trace::enabled(trace::Category::DISK) {
                 trace::emit(trace::EventKind::DiskFdc {
@@ -238,6 +255,9 @@ impl BusPlus3 {
         }
         // FDC status 2FFD — A15=0, A14=0, A13=1, A12=0, A1=0
         if port & 0xf002 == 0x2000 {
+            if !self.disk_interface {
+                return 0xff;
+            }
             return self.fdc.main_status();
         }
         // No floating bus on +2A/+3
@@ -287,6 +307,9 @@ impl BusPlus3 {
         }
         // FDC data 3FFD — command / parameter bytes
         if port & 0xf002 == 0x3000 {
+            if !self.disk_interface {
+                return;
+            }
             self.fdc.write_command_byte(value);
             if trace::enabled(trace::Category::DISK) {
                 trace::emit(trace::EventKind::DiskFdc {
@@ -435,5 +458,22 @@ mod tests {
         assert_eq!(b.in_port(0x2ffd) & 0xc0, 0xc0);
         assert_eq!(b.in_port(0x3ffd), 0x42);
         assert_eq!(b.in_port(0x3ffd), 0x43);
+    }
+
+    #[test]
+    fn plus2a_fdc_ports_float() {
+        let mut b = BusPlus3::new_with_disk(false);
+        assert!(!b.disk_interface);
+        assert_eq!(b.in_port(0x2ffd), 0xff);
+        assert_eq!(b.in_port(0x3ffd), 0xff);
+        b.out_port(0x3ffd, 0x06);
+        assert_eq!(b.in_port(0x2ffd), 0xff);
+    }
+
+    #[test]
+    fn plus3_fdc_status_rqm_when_present() {
+        let mut b = BusPlus3::new_with_disk(true);
+        assert!(b.disk_interface);
+        assert_eq!(b.in_port(0x2ffd) & 0x80, 0x80);
     }
 }

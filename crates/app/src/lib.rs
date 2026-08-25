@@ -86,6 +86,20 @@ impl KeyScript {
         }
     }
 
+    /// +2A: menu **Loader** is tape — Enter alone for PROGRAM; CODE via 48 BASIC.
+    fn load_quotes_plus2a(with_code: bool) -> Self {
+        if with_code {
+            return Self::load_quotes_128_or_plus3(true);
+        }
+        let enter = vec![(6, 0)];
+        let gap = Vec::new();
+        Self {
+            steps: vec![(enter, Self::PRESS), (gap, Self::MENU_TO_48_BASIC_WAIT)],
+            step_i: 0,
+            frames_left: 0,
+        }
+    }
+
     fn load_quotes_48k_inner(with_code: bool) -> Self {
         let j = vec![(6, 3)];
         let quote = vec![keymap::SYM, (5, 0)];
@@ -181,10 +195,24 @@ impl EmulatorSession {
             }
             Model::SpectrumPlus3 => {
                 let rom = root.join("roms/plus3/plus3.rom");
-                let rom_alt = root.join("roms/plus2a/plus2a.rom");
+                if let Ok(data) = std::fs::read(&rom) {
+                    match Machine::new_plus3(&data) {
+                        Ok(m) => {
+                            self.machine = Some(m);
+                            self.status = format!("Loaded {}", rom.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Missing +3 ROM. Run ./scripts/fetch_roms.sh".to_string();
+                }
+            }
+            Model::SpectrumPlus2A => {
+                let rom = root.join("roms/plus2a/plus2a.rom");
+                let rom_alt = root.join("roms/plus3/plus3.rom");
                 let path = if rom.exists() { rom } else { rom_alt };
                 if let Ok(data) = std::fs::read(&path) {
-                    match Machine::new_plus3(&data) {
+                    match Machine::new_plus2a(&data) {
                         Ok(m) => {
                             self.machine = Some(m);
                             self.status = format!("Loaded {}", path.display());
@@ -192,7 +220,7 @@ impl EmulatorSession {
                         Err(e) => self.status = e,
                     }
                 } else {
-                    self.status = "Missing +2A/+3 ROM. Run ./scripts/fetch_roms.sh".to_string();
+                    self.status = "Missing +2A ROM. Run ./scripts/fetch_roms.sh".to_string();
                 }
             }
         }
@@ -271,7 +299,7 @@ impl EmulatorSession {
                     let n = player.image.blocks.len();
                     m.insert_tape(player);
                     self.status = format!(
-                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" (PROGRAM) or LOAD \"\" CODE, then Play. 128K/+3: Type LOAD enters 48 BASIC (not +3 disk Loader). Instant flash-load skips ROM gaps; custom loaders still use EAR.",
+                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" (PROGRAM) or LOAD \"\" CODE, then Play. 128K/+3: Type LOAD enters 48 BASIC (+3 disk Loader is not tape). +2A: Type LOAD uses menu Loader (tape). Instant flash-load skips ROM gaps; custom loaders still use EAR.",
                         path.display()
                     );
                     return;
@@ -331,6 +359,7 @@ impl EmulatorSession {
 
     fn type_load_quotes_inner(&mut self, with_code: bool) {
         // +3 menu "Loader" is +3DOS disk — never Enter alone for tape (#144).
+        // +2A menu Loader is tape — Enter alone for PROGRAM (#145).
         // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
         self.key_script = Some(match self.model {
             Model::Spectrum48 => {
@@ -340,6 +369,7 @@ impl EmulatorSession {
                     KeyScript::load_quotes_48k()
                 }
             }
+            Model::SpectrumPlus2A => KeyScript::load_quotes_plus2a(with_code),
             Model::Spectrum128 | Model::SpectrumPlus3 => {
                 KeyScript::load_quotes_128_or_plus3(with_code)
             }
@@ -350,6 +380,9 @@ impl EmulatorSession {
             }
             (Model::Spectrum48, false) => {
                 "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
+            }
+            (Model::SpectrumPlus2A, false) => {
+                "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan".into()
             }
             (_, true) => {
                 "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
@@ -417,10 +450,129 @@ impl EmulatorSession {
                         Err(e) => self.status = e,
                     }
                 } else {
-                    self.status = "Load +2A/+3 ROM before inserting disk".into();
+                    self.status = "Load +3 ROM before inserting disk".into();
                 }
             }
             Err(e) => self.status = format!("DSK error: {e}"),
+        }
+    }
+
+    pub fn attach_multiface(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.attach_multiface(&data) {
+                        Ok(()) => self.status = format!("Attached Multiface 1 {}", path.display()),
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a 48K ROM before Multiface".into();
+                }
+            }
+            Err(e) => self.status = format!("Multiface ROM error: {e}"),
+        }
+    }
+
+    pub fn multiface_nmi(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            if m.multiface_nmi().is_some() {
+                self.status = "Multiface NMI".into();
+            } else {
+                self.status = "Multiface not attached".into();
+            }
+        }
+    }
+
+    pub fn attach_divmmc_stub(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            match m.attach_divmmc() {
+                Ok(_) => self.status = "DivMMC attached (stub)".into(),
+                Err(e) => self.status = e,
+            }
+        } else {
+            self.status = "Load a machine ROM first".into();
+        }
+    }
+
+    pub fn attach_divmmc_sd(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.attach_divmmc() {
+                        Ok(div) => {
+                            div.attach_sd(data);
+                            self.status = format!("DivMMC SD {}", path.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a machine ROM first".into();
+                }
+            }
+            Err(e) => self.status = format!("SD image error: {e}"),
+        }
+    }
+
+    pub fn attach_interface1_stub(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            match m.attach_interface1() {
+                Ok(_) => self.status = "Interface 1 attached (stub)".into(),
+                Err(e) => self.status = e,
+            }
+        } else {
+            self.status = "Load a machine ROM first".into();
+        }
+    }
+
+    pub fn insert_mdr(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => match formats::MdrImage::parse(&data) {
+                Ok(cart) => {
+                    if let Some(m) = self.machine.as_mut() {
+                        match m.attach_interface1() {
+                            Ok(if1) => {
+                                if1.insert_mdr(cart);
+                                self.status = format!("Inserted MDR {}", path.display());
+                            }
+                            Err(e) => self.status = e,
+                        }
+                    } else {
+                        self.status = "Load a machine ROM first".into();
+                    }
+                }
+                Err(e) => self.status = format!("MDR error: {e}"),
+            },
+            Err(e) => self.status = format!("MDR error: {e}"),
+        }
+    }
+
+    pub fn attach_beta_stub(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            match m.attach_beta() {
+                Ok(_) => self.status = "Beta Disk attached (stub)".into(),
+                Err(e) => self.status = e,
+            }
+        } else {
+            self.status = "Load a machine ROM first".into();
+        }
+    }
+
+    pub fn insert_trd(&mut self, path: &Path) {
+        match formats::TrdImage::load(path) {
+            Ok(img) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.attach_beta() {
+                        Ok(beta) => {
+                            beta.insert(img);
+                            self.status = format!("Inserted TRD {}", path.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a machine ROM first".into();
+                }
+            }
+            Err(e) => self.status = format!("TRD error: {e}"),
         }
     }
 
@@ -727,8 +879,18 @@ impl SpecChumApp {
                         if ui
                             .radio_value(
                                 &mut self.session.model,
+                                Model::SpectrumPlus2A,
+                                "Spectrum +2A",
+                            )
+                            .clicked()
+                        {
+                            self.session.try_autoload_rom();
+                        }
+                        if ui
+                            .radio_value(
+                                &mut self.session.model,
                                 Model::SpectrumPlus3,
-                                "Spectrum +2A/+3",
+                                "Spectrum +3",
                             )
                             .clicked()
                         {
@@ -768,7 +930,7 @@ impl SpecChumApp {
                         ui.checkbox(&mut self.session.kempston_mouse, "Kempston mouse");
                         if matches!(
                             self.session.model,
-                            Model::Spectrum128 | Model::SpectrumPlus3
+                            Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
                         ) {
                             ui.separator();
                             ui.label("AY stereo");
@@ -785,6 +947,133 @@ impl SpecChumApp {
                             }
                         }
                         ui.checkbox(&mut self.session.muted, "Mute");
+                    });
+                    ui.menu_button("Hardware", |ui| {
+                        let model = self.session.model;
+                        let has_mf = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_multiface);
+                        let has_div = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_divmmc);
+                        let has_if1 = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_interface1);
+                        let has_beta = self.session.machine.as_ref().is_some_and(Machine::has_beta);
+
+                        ui.label("Peripherals (stubs where noted)");
+                        ui.separator();
+
+                        if model == Model::Spectrum48 {
+                            if ui.button("Attach Multiface 1 ROM…").clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("Multiface ROM", &["rom", "bin"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_multiface(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_mf, egui::Button::new("Multiface NMI"))
+                                .clicked()
+                            {
+                                self.session.multiface_nmi();
+                                ui.close_menu();
+                            }
+                            if has_mf {
+                                ui.label("Multiface: attached");
+                            }
+                        } else {
+                            ui.label("Multiface 1: 48K only");
+                        }
+
+                        ui.separator();
+                        if matches!(model, Model::Spectrum48 | Model::Spectrum128) {
+                            if ui.button("Attach DivMMC (stub)").clicked() {
+                                self.session.attach_divmmc_stub();
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_div, egui::Button::new("Open DivMMC SD image…"))
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("SD image", &["img", "bin", "mmc", "sd"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_divmmc_sd(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_div {
+                                "DivMMC: attached (paging/SPI stub; no ESXDOS boot)"
+                            } else {
+                                "DivMMC: not attached"
+                            });
+
+                            ui.separator();
+                            if ui.button("Attach Interface 1 (stub)").clicked() {
+                                self.session.attach_interface1_stub();
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_if1, egui::Button::new("Open Microdrive MDR…"))
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("MDR", &["mdr"])
+                                    .pick_file()
+                                {
+                                    self.session.insert_mdr(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_if1 {
+                                "IF1: attached (shadow ROM / MDR slot stub)"
+                            } else {
+                                "IF1: not attached"
+                            });
+
+                            ui.separator();
+                            if ui.button("Attach Beta Disk (stub)").clicked() {
+                                self.session.attach_beta_stub();
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_beta, egui::Button::new("Open TRD…"))
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("TRD", &["trd"])
+                                    .pick_file()
+                                {
+                                    self.session.insert_trd(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_beta {
+                                "Beta: attached (VG93 read-sector stub)"
+                            } else {
+                                "Beta: not attached"
+                            });
+                        } else {
+                            ui.label("DivMMC / IF1 / Beta: not on +2A/+3");
+                        }
+
+                        if model == Model::SpectrumPlus3 {
+                            ui.separator();
+                            ui.label("+3 disk: File → Open DSK…");
+                        } else if model == Model::SpectrumPlus2A {
+                            ui.separator();
+                            ui.label("+2A: no floppy (tape Loader)");
+                        }
                     });
                     ui.menu_button("Tape", |ui| {
                         if ui.button("Play tape").clicked() {

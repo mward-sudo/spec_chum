@@ -269,6 +269,7 @@ Mac → Spectrum keyboard
 • ; , . / - = = Symbol + O N M V J L (Shift variants for : < > ? _ +)
 • LOAD \"\": Tape → Type LOAD \"\" / Type LOAD \"\" CODE (all models)
 • 128K/+3: Type LOAD selects 48 BASIC then keywords — +3 menu Loader is disk, not tape
+• +2A: Type LOAD selects menu Loader (tape) for PROGRAM; CODE uses 48 BASIC
 ";
 
 #[cfg(test)]

@@ -30,6 +30,11 @@ fn rom_plus3() -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
 
+fn rom_plus2a() -> Option<Vec<u8>> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus2a/plus2a.rom");
+    std::fs::read(path).ok()
+}
+
 fn tap_path(name: &str) -> Option<PathBuf> {
     let path = fixture_dir().join(name);
     if path.exists() {
@@ -131,7 +136,7 @@ fn load_program_tap(machine: &mut Machine, tap: &Path) {
     machine.insert_tape(TapPlayer::new(image));
     match machine.model() {
         Model::Spectrum48 => wait_48_basic_prompt(machine, 500),
-        Model::Spectrum128 | Model::SpectrumPlus3 => {
+        Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3 => {
             for _ in 0..200 {
                 let _ = machine.run_frame();
             }
@@ -257,6 +262,10 @@ fn new_model(model: Model) -> Option<Machine> {
         Model::SpectrumPlus3 => {
             let rom = rom_plus3()?;
             Machine::new_plus3(&rom).ok()
+        }
+        Model::SpectrumPlus2A => {
+            let rom = rom_plus2a().or_else(rom_plus3)?;
+            Machine::new_plus2a(&rom).ok()
         }
     }
 }

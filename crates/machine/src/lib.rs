@@ -230,8 +230,18 @@ pub struct RzxPlayer {
 pub enum Model {
     Spectrum48,
     Spectrum128,
-    /// Amstrad +2A / +3 gate array (port `1FFD`, no floating bus).
+    /// Amstrad +2A (gate array `1FFD`, no disk interface — menu Loader is tape).
+    SpectrumPlus2A,
+    /// Amstrad +3 (same gate array with µPD765 — menu Loader is +3DOS disk).
     SpectrumPlus3,
+}
+
+impl Model {
+    /// +2A or +3 (shared Amstrad gate array).
+    #[must_use]
+    pub fn is_amstrad_plus(self) -> bool {
+        matches!(self, Self::SpectrumPlus2A | Self::SpectrumPlus3)
+    }
 }
 
 /// Memory+Io adapter for 48K.
@@ -578,9 +588,19 @@ impl Machine {
     }
 
     pub fn new_plus3(rom: &[u8]) -> Result<Self, String> {
-        let mut bus = BusPlus3::new();
+        Self::new_amstrad_plus(rom, true)
+    }
+
+    /// Spectrum +2A: same gate array as +3 but FDC ports float (`disk_interface = false`).
+    pub fn new_plus2a(rom: &[u8]) -> Result<Self, String> {
+        Self::new_amstrad_plus(rom, false)
+    }
+
+    fn new_amstrad_plus(rom: &[u8], disk_interface: bool) -> Result<Self, String> {
+        let mut bus = BusPlus3::new_with_disk(disk_interface);
         bus.load_rom64(rom)?;
-        trace::emit(trace::EventKind::MachineModel { model: 2 });
+        let model_id = if disk_interface { 2 } else { 3 };
+        trace::emit(trace::EventKind::MachineModel { model: model_id });
         Ok(Self::SpecPlus3 {
             cpu: Cpu::new(),
             bus: Box::new(bus),
@@ -597,7 +617,13 @@ impl Machine {
         match self {
             Self::Spec48 { .. } => Model::Spectrum48,
             Self::Spec128 { .. } => Model::Spectrum128,
-            Self::SpecPlus3 { .. } => Model::SpectrumPlus3,
+            Self::SpecPlus3 { bus, .. } => {
+                if bus.disk_interface {
+                    Model::SpectrumPlus3
+                } else {
+                    Model::SpectrumPlus2A
+                }
+            }
         }
     }
 
@@ -800,9 +826,12 @@ impl Machine {
 
     pub fn insert_disk(&mut self, image: DskImage) -> Result<(), String> {
         match self {
-            Self::SpecPlus3 { bus, .. } => {
+            Self::SpecPlus3 { bus, .. } if bus.disk_interface => {
                 bus.fdc.insert(image);
                 Ok(())
+            }
+            Self::SpecPlus3 { .. } => {
+                Err("+2A has no disk interface — use Spectrum +3 for DSK".into())
             }
             _ => Err("+3 disk requires SpectrumPlus3 model".into()),
         }
@@ -1040,7 +1069,7 @@ impl Machine {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_divmmc()),
             Self::Spec128 { bus, .. } => Ok(bus.attach_divmmc()),
-            Self::SpecPlus3 { .. } => Err("DivMMC is not supported on Spectrum +3".into()),
+            Self::SpecPlus3 { .. } => Err("DivMMC is not supported on Spectrum +2A/+3".into()),
         }
     }
 
@@ -1052,12 +1081,21 @@ impl Machine {
         }
     }
 
+    #[must_use]
+    pub fn has_divmmc(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.divmmc.is_some(),
+            Self::Spec128 { bus, .. } => bus.divmmc.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
     /// Attach Interface 1 on 48K/128K.
     pub fn attach_interface1(&mut self) -> Result<&mut bus::Interface1, String> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_interface1()),
             Self::Spec128 { bus, .. } => Ok(bus.attach_interface1()),
-            Self::SpecPlus3 { .. } => Err("Interface 1 is not supported on Spectrum +3".into()),
+            Self::SpecPlus3 { .. } => Err("Interface 1 is not supported on Spectrum +2A/+3".into()),
         }
     }
 
@@ -1069,12 +1107,21 @@ impl Machine {
         }
     }
 
+    #[must_use]
+    pub fn has_interface1(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.interface1.is_some(),
+            Self::Spec128 { bus, .. } => bus.interface1.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
     /// Attach Beta Disk / TR-DOS on 48K/128K.
     pub fn attach_beta(&mut self) -> Result<&mut bus::BetaDisk, String> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_beta()),
             Self::Spec128 { bus, .. } => Ok(bus.attach_beta()),
-            Self::SpecPlus3 { .. } => Err("Beta Disk is not supported on Spectrum +3".into()),
+            Self::SpecPlus3 { .. } => Err("Beta Disk is not supported on Spectrum +2A/+3".into()),
         }
     }
 
@@ -1083,6 +1130,23 @@ impl Machine {
             Self::Spec48 { bus, .. } => bus.beta.as_mut(),
             Self::Spec128 { bus, .. } => bus.beta.as_mut(),
             Self::SpecPlus3 { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn has_beta(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.beta.is_some(),
+            Self::Spec128 { bus, .. } => bus.beta.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
+    #[must_use]
+    pub fn has_multiface(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.multiface.is_some(),
+            _ => false,
         }
     }
 
@@ -2504,6 +2568,8 @@ impl Machine {
     }
 
     /// +3 menu: cursor-down to 48 BASIC, Enter, then keyword `LOAD ""` [CODE].
+    ///
+    /// Do **not** use menu **Loader** here — that is +3DOS disk.
     pub fn type_load_quotes_plus3(&mut self, with_code: bool) {
         const PRESS: u32 = 10;
         const GAP: u32 = 5;
@@ -2518,11 +2584,24 @@ impl Machine {
         self.type_load_quotes_48k(with_code);
     }
 
-    /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +3 48 BASIC).
+    /// +2A menu: **Loader** is tape (no disk interface). Enter alone for PROGRAM;
+    /// `LOAD "" CODE` still goes via 48 BASIC.
+    pub fn type_load_quotes_plus2a(&mut self, with_code: bool) {
+        if with_code {
+            self.type_load_quotes_plus3(true);
+            return;
+        }
+        const PRESS: u32 = 10;
+        self.hold_keys(&[(6, 0)], PRESS);
+        self.hold_keys(&[], 10);
+    }
+
+    /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +2A Loader / +3 48 BASIC).
     pub fn type_load_quotes(&mut self, with_code: bool) {
         match self.model() {
             Model::Spectrum48 => self.type_load_quotes_48k(with_code),
             Model::Spectrum128 => self.type_load_quotes_128k(with_code),
+            Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
             Model::SpectrumPlus3 => self.type_load_quotes_plus3(with_code),
         }
     }
@@ -3392,6 +3471,66 @@ mod tests {
         None
     }
 
+    fn rom_plus2a_only() -> Option<Vec<u8>> {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus2a/plus2a.rom");
+        std::fs::read(p).ok()
+    }
+
+    fn rom_plus3_only() -> Option<Vec<u8>> {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus3/plus3.rom");
+        std::fs::read(p).ok()
+    }
+
+    #[test]
+    fn plus2a_model_has_no_disk_and_rejects_dsk() {
+        let Some(rom) = rom_plus2a_only().or_else(rom_plus3_only) else {
+            eprintln!("skip: plus2a/plus3 ROM missing");
+            return;
+        };
+        let mut m = Machine::new_plus2a(&rom).unwrap();
+        assert_eq!(m.model(), Model::SpectrumPlus2A);
+        {
+            let Machine::SpecPlus3 { bus, .. } = &mut m else {
+                panic!("expected SpecPlus3");
+            };
+            assert!(!bus.disk_interface);
+            assert_eq!(bus.in_port(0x2ffd), 0xff);
+        }
+        let data = {
+            let mut data = vec![0u8; 0x100];
+            data[0..8].copy_from_slice(b"MV - CPC");
+            data[0x30] = 1;
+            data[0x31] = 1;
+            let track_size: u16 = 0x100;
+            data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+            let mut track = vec![0u8; track_size as usize];
+            track[0..12].copy_from_slice(b"Track-Info\r\n");
+            data.extend_from_slice(&track);
+            data
+        };
+        let img = formats::DskImage::parse(&data).expect("minimal dsk");
+        let err = m.insert_disk(img).unwrap_err();
+        assert!(
+            err.contains("+2A") || err.contains("disk"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn plus3_model_keeps_disk_interface() {
+        let Some(rom) = rom_plus3_only().or_else(rom_plus2a_only) else {
+            eprintln!("skip: plus3 ROM missing");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        assert_eq!(m.model(), Model::SpectrumPlus3);
+        let Machine::SpecPlus3 { bus, .. } = &mut m else {
+            panic!("expected SpecPlus3");
+        };
+        assert!(bus.disk_interface);
+        assert_eq!(bus.in_port(0x2ffd) & 0x80, 0x80);
+    }
+
     #[test]
     fn plus3_boots_and_1ffd_special_maps() {
         let Some(rom) = rom_plus3() else {
@@ -4223,6 +4362,7 @@ mod tests {
                 match model {
                     Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                 },
                 img.clone(),
@@ -4261,6 +4401,7 @@ mod tests {
                     match model {
                         Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                         Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                        Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                         Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                     },
                     img.clone(),
@@ -4340,6 +4481,7 @@ mod tests {
                 let mut m = match model {
                     Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                 };
                 m.set_tape_load_options(TapeLoadOptions {
@@ -4480,6 +4622,7 @@ mod tests {
                 let m = match model {
                     Model::Spectrum48 => Machine::new_48k(&rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(&rom).unwrap(),
+                    Model::SpectrumPlus2A => Machine::new_plus2a(&rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(&rom).unwrap(),
                 };
                 let deck = TapPlayer::new(img.clone());
