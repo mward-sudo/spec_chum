@@ -92,9 +92,8 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            .
-            apps/macos
+          # Root Cargo workspace only — apps/macos is SwiftPM (no Cargo.toml).
+          workspaces: .
 
       - name: Build macOS shell
         run: ./scripts/build_macos_app.sh

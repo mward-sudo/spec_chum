@@ -83,6 +83,8 @@ pub struct HostSession {
     joystick_mode: JoystickMode,
     /// Last applied host joystick mask state.
     joystick_state: JoystickState,
+    /// Host-held Spectrum matrix keys so Sinclair/Cursor joystick clears do not drop them.
+    host_keys: [[bool; 5]; 8],
 }
 
 impl HostSession {
@@ -103,6 +105,7 @@ impl HostSession {
             last_speaker_level: false,
             joystick_mode: JoystickMode::Kempston,
             joystick_state: JoystickState::empty(),
+            host_keys: [[false; 5]; 8],
         }
     }
 
@@ -305,6 +308,9 @@ impl HostSession {
                 return Err(HostError::NoMachine);
             };
             m.apply_snapshot128(&snap);
+            // Model switch builds a fresh Machine — restore retained host joystick.
+            m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+            self.reapply_host_keys();
             self.status = format!("Loaded 128K/+3 snapshot {}", path.display());
             return Ok(());
         }
@@ -326,6 +332,8 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         m.apply_snapshot48(&snap);
+        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        self.reapply_host_keys();
         self.status = format!("Loaded snapshot {}", path.display());
         Ok(())
     }
@@ -438,6 +446,7 @@ impl HostSession {
         if row > 7 || bit > 4 {
             return Err(HostError::Message("key row/bit out of range".into()));
         }
+        self.host_keys[row][bit as usize] = pressed;
         m.keyboard_mut().set_key(row, bit, pressed);
         Ok(())
     }
@@ -446,6 +455,7 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
+        self.host_keys = [[false; 5]; 8];
         m.keyboard_mut().reset();
         Ok(())
     }
@@ -458,6 +468,7 @@ impl HostSession {
         m.clear_joystick_state();
         self.joystick_mode = mode;
         m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        Self::reapply_host_keys_to(m, &self.host_keys);
         Ok(())
     }
 
@@ -467,6 +478,7 @@ impl HostSession {
         };
         self.joystick_state = JoystickState::from_mask(mask);
         m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        Self::reapply_host_keys_to(m, &self.host_keys);
         Ok(())
     }
 
@@ -478,7 +490,26 @@ impl HostSession {
         m.clear_joystick_state();
         // Re-apply empty under current mode so Sinclair/Cursor matrix clears too.
         m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        Self::reapply_host_keys_to(m, &self.host_keys);
         Ok(())
+    }
+
+    fn reapply_host_keys(&mut self) {
+        let Some(m) = self.machine.as_mut() else {
+            return;
+        };
+        Self::reapply_host_keys_to(m, &self.host_keys);
+    }
+
+    fn reapply_host_keys_to(m: &mut Machine, host_keys: &[[bool; 5]; 8]) {
+        let kb = m.keyboard_mut();
+        for (row, bits) in host_keys.iter().enumerate() {
+            for (bit, pressed) in bits.iter().enumerate() {
+                if *pressed {
+                    kb.set_key(row, bit as u8, true);
+                }
+            }
+        }
     }
 
     /// Attach Multiface 1 (48K only) from an 8 KiB ROM image path.
@@ -851,6 +882,38 @@ mod tests {
     }
 
     #[test]
+    fn physical_num1_survives_sinclair_left_joystick_update() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::SinclairLeft).unwrap();
+        // Num1 = row 3 bit 0 (also Sinclair-left left).
+        s.set_key(3, 0, true).unwrap();
+        s.set_joystick(0).unwrap(); // would clear Sinclair matrix without reapply
+        let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+        assert_eq!(rows[3] & (1 << 0), 0, "Num1 must stay pressed");
+    }
+
+    #[test]
+    fn physical_num5_survives_cursor_joystick_update() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::Cursor).unwrap();
+        // Num5 = row 3 bit 4 (also Cursor left).
+        s.set_key(3, 4, true).unwrap();
+        s.set_joystick(0).unwrap();
+        let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+        assert_eq!(rows[3] & (1 << 4), 0, "Num5 must stay pressed");
+    }
+
+    #[test]
     fn open_fixture_tap_progress_and_audio_pcm() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -1053,6 +1116,8 @@ mod tests {
             return;
         }
         assert_eq!(s.model(), ModelId::Spectrum128);
+        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick(0x11).unwrap();
         let path = std::env::temp_dir().join("spec_chum_host_api_128_to_48.sna");
         std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
         s.load_snapshot(&path).expect("48k sna on 128");
@@ -1062,6 +1127,11 @@ mod tests {
             Some(Model::Spectrum48)
         );
         assert_eq!(s.regs().expect("regs").pc, 0x8000);
+        assert_eq!(
+            s.machine.as_mut().unwrap().kempston_mut().read(),
+            0x11,
+            "held joystick must survive model-switching snapshot load"
+        );
         let _ = std::fs::remove_file(&path);
     }
 

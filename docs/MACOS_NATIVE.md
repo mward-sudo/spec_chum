@@ -124,8 +124,8 @@ after 48K BASIC boots, letters should appear in BASIC; one short `j` → one `LO
 ## Joystick (Mac native shell)
 
 Wired to `host_api` (`sc_set_joystick_mode` / `sc_set_joystick` / `sc_clear_joystick`).
-Default mode is **Kempston** (0); Sinclair L/R and Cursor modes exist in the ABI for a
-later menu.
+Default mode is **Kempston** (0). **Settings → Input** exposes Kempston, Sinclair left
+(1–5), Sinclair right (6–0), and Cursor — matching the ABI mode values.
 
 **GameController (USB / Bluetooth):** each `runFrame` polls `GCController.controllers()`.
 For `extendedGamepad`: d-pad and left thumbstick (digital threshold ≈ 0.5) map to

@@ -31,11 +31,10 @@ struct SpecChumSettingsView: View {
                 Section("Audio") {
                     Toggle("Mute", isOn: $host.outputMuted)
                         .help("Silence host PCM output only (not EAR fidelity)")
-                    HStack {
+                    Slider(value: $host.outputVolume, in: 0 ... 1) {
                         Text("Volume")
-                        Slider(value: $host.outputVolume, in: 0 ... 1)
-                            .disabled(host.outputMuted)
                     }
+                    .disabled(host.outputMuted)
                     Text("Host mixer gain for beeper / EAR mix / AY. Does not change tape bitstream timing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

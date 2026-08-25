@@ -136,7 +136,7 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
     }
     .map_err(|e| anyhow::anyhow!(e))?;
     if let Some(path) = &cli.snapshot {
-        load_and_apply_snapshot(&mut m, path)?;
+        m = load_and_apply_snapshot(m, path)?;
     }
     if let Some(path) = &cli.tap {
         let img = tape::TapImage::load(path).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -182,7 +182,7 @@ fn print_ok_loaded(m: &Machine) -> bool {
     false
 }
 
-fn load_and_apply_snapshot(m: &mut Machine, path: &Path) -> Result<()> {
+fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
@@ -191,27 +191,47 @@ fn load_and_apply_snapshot(m: &mut Machine, path: &Path) -> Result<()> {
     if ext == "z80" {
         match Snapshot128::load_z80(path) {
             Ok(snap) => {
+                // Z80 v3 can encode +3 via page_1ffd — switch machine so 1FFD/FDC apply.
+                if snap.is_plus3() && m.model() != Model::SpectrumPlus3 {
+                    let rom_path = default_rom(Model::SpectrumPlus3);
+                    let rom = std::fs::read(&rom_path)
+                        .with_context(|| format!("ROM {}", rom_path.display()))?;
+                    m = Machine::new_plus3(&rom).map_err(|e| anyhow::anyhow!(e))?;
+                }
                 m.apply_snapshot128(&snap);
-                Ok(())
+                Ok(m)
             }
             Err(e128) => match Snapshot48::load_z80(path) {
                 Ok(snap) => {
+                    if m.model() != Model::Spectrum48 {
+                        let rom_path = default_rom(Model::Spectrum48);
+                        let rom = std::fs::read(&rom_path)
+                            .with_context(|| format!("ROM {}", rom_path.display()))?;
+                        m = Machine::new_48k(&rom).map_err(|e| anyhow::anyhow!(e))?;
+                    }
                     m.apply_snapshot48(&snap);
-                    Ok(())
+                    Ok(m)
                 }
                 Err(_) => Err(anyhow::anyhow!("{e128}")),
             },
         }
     } else {
+        // SNA128 has no 1FFD field — keep the CLI `--model` (cannot auto-detect +3).
         match Snapshot128::load_sna(path) {
             Ok(snap) => {
                 m.apply_snapshot128(&snap);
-                Ok(())
+                Ok(m)
             }
             Err(e128) => match Snapshot48::load_sna(path) {
                 Ok(snap) => {
+                    if m.model() != Model::Spectrum48 {
+                        let rom_path = default_rom(Model::Spectrum48);
+                        let rom = std::fs::read(&rom_path)
+                            .with_context(|| format!("ROM {}", rom_path.display()))?;
+                        m = Machine::new_48k(&rom).map_err(|e| anyhow::anyhow!(e))?;
+                    }
                     m.apply_snapshot48(&snap);
-                    Ok(())
+                    Ok(m)
                 }
                 Err(_) => Err(anyhow::anyhow!("{e128}")),
             },

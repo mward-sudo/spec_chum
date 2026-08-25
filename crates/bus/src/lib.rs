@@ -199,6 +199,12 @@ impl Bus48 {
     #[inline]
     #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
+        // Multiface NMI overlay wins over DivMMC / IF1 when paged (button press).
+        if let Some(mf) = self.multiface.as_ref() {
+            if let Some(v) = mf.read(addr) {
+                return v;
+            }
+        }
         if let Some(d) = self.divmmc.as_ref() {
             if let Some(v) = d.read_overlay(addr) {
                 return v;
@@ -206,11 +212,6 @@ impl Bus48 {
         }
         if let Some(if1) = self.interface1.as_ref() {
             if let Some(v) = if1.read_rom(addr) {
-                return v;
-            }
-        }
-        if let Some(mf) = self.multiface.as_ref() {
-            if let Some(v) = mf.read(addr) {
                 return v;
             }
         }
@@ -223,13 +224,13 @@ impl Bus48 {
 
     #[inline]
     pub fn write(&mut self, addr: u16, value: u8) {
-        if let Some(d) = self.divmmc.as_mut() {
-            if d.write_overlay(addr, value) {
+        if let Some(mf) = self.multiface.as_mut() {
+            if mf.write(addr, value) {
                 return;
             }
         }
-        if let Some(mf) = self.multiface.as_mut() {
-            if mf.write(addr, value) {
+        if let Some(d) = self.divmmc.as_mut() {
+            if d.write_overlay(addr, value) {
                 return;
             }
         }
@@ -718,6 +719,24 @@ mod tests {
         assert_eq!(b.read(0x2000), 0x5a);
         b.out_port(0x003f, 0);
         assert_eq!(b.read(0x0066), 0x11, "OUT 3Fh hides Multiface");
+    }
+
+    #[test]
+    fn multiface_nmi_beats_divmmc_conmem() {
+        let mut b = Bus48::new();
+        b.rom[0x66] = 0x11;
+        let d = b.attach_divmmc();
+        d.eeprom[0x66] = 0x77;
+        d.out_port(DIVMMC_PORT_CONTROL, 0x80); // CONMEM
+        let mut mf_rom = [0u8; MULTIFACE1_SIZE];
+        mf_rom[0x66] = 0xc3;
+        b.attach_multiface(&mf_rom).unwrap();
+        b.multiface.as_mut().unwrap().nmi();
+        assert_eq!(
+            b.read(0x0066),
+            0xc3,
+            "Multiface NMI must win over DivMMC CONMEM"
+        );
     }
 
     #[test]

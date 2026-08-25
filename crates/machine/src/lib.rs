@@ -657,6 +657,9 @@ impl Machine {
                 if let Some(beta) = bus.beta.as_mut() {
                     beta.page_trdos(false);
                 }
+                if let Some(div) = bus.divmmc.as_mut() {
+                    div.control = 0;
+                }
                 *ula = Ula48::new();
                 // Keep inserted tape/disk media across reset; pause the deck at its
                 // current position. RZX input playback is cleared (machine state diverges).
@@ -687,6 +690,9 @@ impl Machine {
                 }
                 if let Some(beta) = bus.beta.as_mut() {
                     beta.page_trdos(false);
+                }
+                if let Some(div) = bus.divmmc.as_mut() {
+                    div.control = 0;
                 }
                 *ula = Ula48::new();
                 if let Some(t) = tape.as_mut() {

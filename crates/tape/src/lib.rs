@@ -91,32 +91,11 @@ pub const BIT0_T: u32 = 855;
 pub const BIT1_T: u32 = 1710;
 /// Inter-block pause (~1s at 3.5 MHz).
 pub const PAUSE_T: u32 = 3_500_000;
-/// Fewest leader pulses still accepted by the 48K ROM LD-LEADER loop.
-const MIN_PILOT_PULSES: u32 = 2_560;
 
 /// Append one edge-to-edge pulse and toggle the EAR level.
 pub(crate) fn push_pulse(pulses: &mut Vec<(u32, bool)>, level: &mut bool, duration: u32) {
     pulses.push((duration, *level));
     *level = !*level;
-}
-
-/// Pilot count for a TAP flag byte, optionally shortened for turbo (`speed` ≥ 2).
-#[must_use]
-pub fn pilot_pulses_for_speed(flag: u8, speed: u32) -> u32 {
-    let full = if flag == 0 {
-        PILOT_HEADER_PULSES
-    } else {
-        PILOT_DATA_PULSES
-    };
-    let speed = speed.max(1);
-    (full / speed).max(MIN_PILOT_PULSES).min(full)
-}
-
-/// Inter-block pause T-states at the given turbo multiplier.
-#[must_use]
-pub fn pause_t_for_speed(speed: u32) -> u32 {
-    let speed = speed.max(1);
-    (PAUSE_T / speed).max(3_500)
 }
 
 /// Generates EAR levels for a TAP block (ROM timing).
