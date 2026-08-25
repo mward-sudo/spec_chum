@@ -617,6 +617,15 @@ impl Machine {
                 bus.beeper_edges.clear();
                 bus.kempston.reset();
                 bus.mouse.reset();
+                if let Some(mf) = bus.multiface.as_mut() {
+                    mf.hide();
+                }
+                if let Some(if1) = bus.interface1.as_mut() {
+                    if1.page_rom(false);
+                }
+                if let Some(beta) = bus.beta.as_mut() {
+                    beta.page_trdos(false);
+                }
                 *ula = Ula48::new();
                 *tape = None;
                 *rzx = None;
@@ -638,6 +647,12 @@ impl Machine {
                 bus.ay.reset();
                 bus.kempston.reset();
                 bus.mouse.reset();
+                if let Some(if1) = bus.interface1.as_mut() {
+                    if1.page_rom(false);
+                }
+                if let Some(beta) = bus.beta.as_mut() {
+                    beta.page_trdos(false);
+                }
                 *ula = Ula48::new();
                 *tape = None;
                 *rzx = None;

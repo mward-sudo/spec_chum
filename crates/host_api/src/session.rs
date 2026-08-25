@@ -270,20 +270,27 @@ impl HostSession {
 
     /// Load a SNA/Z80 snapshot (128K/+3 first, then 48K), switching model when needed.
     ///
-    /// Mirrors egui `SpecChumApp::load_snapshot`: on a 128K/+3 snap, switch away from 48K
-    /// (or no machine) and best-effort autoload the matching ROM; on a 48K snap with no
-    /// machine, select 48K and autoload.
+    /// Mirrors egui `SpecChumApp::load_snapshot`: on a 128K/+3 snap, select the matching
+    /// model (including 128K↔Plus3 transitions) and require ROM autoload before apply;
+    /// on a 48K snap with no machine, select 48K and autoload.
     pub fn load_snapshot(&mut self, path: &Path) -> Result<(), HostError> {
         if let Ok(snap) =
             formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
         {
-            if self.machine.is_none() || self.model == ModelId::Spectrum48 {
-                self.model = if snap.is_plus3() {
-                    ModelId::SpectrumPlus3
-                } else {
-                    ModelId::Spectrum128
-                };
+            let required = if snap.is_plus3() {
+                ModelId::SpectrumPlus3
+            } else {
+                ModelId::Spectrum128
+            };
+            if self.machine.is_none() || self.model != required {
+                self.model = required;
+                self.machine = None;
                 self.try_autoload_rom();
+                if self.machine.is_none() {
+                    return Err(HostError::Message(format!(
+                        "ROM required for {required:?} snapshot not found; run ./scripts/fetch_roms.sh"
+                    )));
+                }
             }
             let Some(m) = self.machine.as_mut() else {
                 return Err(HostError::NoMachine);
@@ -1041,11 +1048,33 @@ mod tests {
         };
         let mut s = HostSession::new(ModelId::Spectrum48, false);
         s.load_rom_bytes(&rom).expect("rom");
-        // Missing path → Io/Message before model check is fine; use empty parse via missing file.
-        let err = s
-            .load_dsk(Path::new("/tmp/spec_chum_definitely_missing.dsk"))
-            .expect_err("missing");
-        assert!(matches!(err, HostError::Io(_) | HostError::Message(_)));
+
+        // Minimal parseable MV-CPC DSK (one empty track header) so load reaches insert_disk.
+        let mut dsk = vec![0u8; 0x100];
+        dsk[0..8].copy_from_slice(b"MV - CPC");
+        dsk[0x30] = 1;
+        dsk[0x31] = 1;
+        let track_size: u16 = 0x100;
+        dsk[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+        let mut track = vec![0u8; track_size as usize];
+        track[0..12].copy_from_slice(b"Track-Info\r\n");
+        dsk.extend_from_slice(&track);
+
+        let dir = std::env::temp_dir().join("spec_chum_host_api_dsk_reject");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("reject.dsk");
+        std::fs::write(&path, &dsk).expect("write dsk");
+
+        let err = s.load_dsk(&path).expect_err("48K must reject DSK");
+        match err {
+            HostError::Message(msg) => {
+                assert!(
+                    msg.contains("+3") || msg.contains("Plus3") || msg.contains("plus3"),
+                    "expected model-rejection message, got {msg}"
+                );
+            }
+            other => panic!("expected Message rejection, got {other:?}"),
+        }
     }
 
     #[test]

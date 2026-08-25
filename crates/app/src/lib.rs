@@ -176,12 +176,14 @@ impl EmulatorSession {
         if let Ok(snap) =
             formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
         {
-            if self.machine.is_none() || matches!(self.model, Model::Spectrum48) {
-                self.model = if snap.is_plus3() {
-                    Model::SpectrumPlus3
-                } else {
-                    Model::Spectrum128
-                };
+            let target = if snap.is_plus3() {
+                Model::SpectrumPlus3
+            } else {
+                Model::Spectrum128
+            };
+            if self.machine.is_none() || self.model != target {
+                self.model = target;
+                self.machine = None;
                 self.try_autoload_rom();
             }
             if let Some(m) = self.machine.as_mut() {
@@ -386,8 +388,9 @@ impl EmulatorSession {
 
     /// Rebuild the Spectrum matrix from currently held egui keys (macOS-friendly).
     ///
-    /// `pad` is ORed with arrow/Tab keyboard stick. Precedence: both sources active
-    /// together (either can hold a direction). Joystick mode selects Kempston vs matrix.
+    /// `pad` is ORed with arrow/Tab keyboard stick. Joystick modes that touch the
+    /// matrix run first; physical key chords are restored afterward so held digits
+    /// (e.g. Num1–Num5 in Sinclair-left) are not cleared by joystick routing.
     pub fn sync_keyboard(
         &mut self,
         keys_down: &std::collections::HashSet<egui::Key>,
@@ -397,8 +400,16 @@ impl EmulatorSession {
         let Some(machine) = self.machine.as_mut() else {
             return;
         };
+        machine.keyboard_mut().reset();
+        let mut stick = pad;
+        stick.left |= keys_down.contains(&egui::Key::ArrowLeft);
+        stick.right |= keys_down.contains(&egui::Key::ArrowRight);
+        stick.up |= keys_down.contains(&egui::Key::ArrowUp);
+        stick.down |= keys_down.contains(&egui::Key::ArrowDown);
+        stick.fire |= keys_down.contains(&egui::Key::Tab);
+        machine.apply_joystick_state(self.joystick_mode, stick);
+
         let kb = machine.keyboard_mut();
-        kb.reset();
         let suppress_caps = keys_down
             .iter()
             .any(|k| keymap::suppresses_modifier_caps(*k));
@@ -423,13 +434,6 @@ impl EmulatorSession {
                 }
             }
         }
-        let mut stick = pad;
-        stick.left |= keys_down.contains(&egui::Key::ArrowLeft);
-        stick.right |= keys_down.contains(&egui::Key::ArrowRight);
-        stick.up |= keys_down.contains(&egui::Key::ArrowUp);
-        stick.down |= keys_down.contains(&egui::Key::ArrowDown);
-        stick.fire |= keys_down.contains(&egui::Key::Tab);
-        machine.apply_joystick_state(self.joystick_mode, stick);
     }
 
     /// Apply a single egui key edge (tests / scripted input).
@@ -552,7 +556,14 @@ impl SpecChumApp {
         };
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        let gilrs = gilrs::Gilrs::new().ok();
+        let gilrs = match gilrs::Gilrs::new() {
+            Ok(g) => Some(g),
+            Err(gilrs::Error::NotImplemented(g)) => Some(g),
+            Err(e) => {
+                session.status = format!("{} (gamepad unavailable: {e})", session.status);
+                None
+            }
+        };
         Self {
             session,
             texture: None,
@@ -942,6 +953,9 @@ impl SpecChumApp {
                 // Host primary = left; Kempston D0=right, D1=left.
                 mouse.set_buttons(primary, secondary, middle);
             }
+        } else if let Some(machine) = self.session.machine.as_mut() {
+            // Drop guest button state when host mouse input is toggled off mid-press.
+            machine.mouse_mut().set_buttons(false, false, false);
         }
 
         let audio = self.session.tick_frame();
@@ -1224,6 +1238,38 @@ mod tests {
         assert_eq!(rows[0] & 1, 0); // Caps
         assert_eq!(rows[3] & (1 << 4), 0); // 5
         assert!(!m.kempston_mut().left);
+    }
+
+    #[test]
+    fn physical_num1_survives_sinclair_left_joystick_clear() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            return;
+        }
+        let mut keys = std::collections::HashSet::new();
+        keys.insert(egui::Key::Num1);
+        session.joystick_mode = JoystickMode::SinclairLeft;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
+        let rows = session.machine.as_mut().unwrap().keyboard_mut().rows;
+        // Num1 = row 3 bit 0 must stay pressed even though Sinclair clears that row first.
+        assert_eq!(rows[3] & (1 << 0), 0);
+    }
+
+    #[test]
+    fn physical_num5_survives_cursor_joystick_clear() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            return;
+        }
+        let mut keys = std::collections::HashSet::new();
+        keys.insert(egui::Key::Num5);
+        session.joystick_mode = JoystickMode::Cursor;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
+        let rows = session.machine.as_mut().unwrap().keyboard_mut().rows;
+        // Num5 = row 3 bit 4 (also used as Cursor left); physical hold must remain.
+        assert_eq!(rows[3] & (1 << 4), 0);
     }
 
     #[test]

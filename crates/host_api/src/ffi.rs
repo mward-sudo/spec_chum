@@ -88,6 +88,17 @@ pub extern "C" fn sc_set_model(handle: *mut c_void, model: c_uint) -> c_int {
     0
 }
 
+/// Active model id (`SC_MODEL_*`). Returns `UINT_MAX` on a null handle.
+#[no_mangle]
+pub extern "C" fn sc_get_model(handle: *mut c_void) -> c_uint {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return c_uint::MAX;
+    };
+    s.model() as c_uint
+}
+
 #[no_mangle]
 pub extern "C" fn sc_load_rom(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
@@ -499,6 +510,11 @@ pub extern "C" fn sc_set_joystick_mode(handle: *mut c_void, mode: c_uint) -> c_i
         set_last_error("null handle");
         return -1;
     };
+    // Validate before truncating c_uint → u8 (e.g. 256 must not become Kempston).
+    if mode > u8::MAX as c_uint {
+        set_last_error("invalid joystick mode");
+        return -1;
+    }
     let Some(mode) = machine::JoystickMode::from_u8(mode as u8) else {
         set_last_error("invalid joystick mode");
         return -1;
@@ -890,6 +906,18 @@ mod tests {
         let err = sc_last_error();
         assert!(!err.is_null());
         sc_string_free(err);
+    }
+
+    #[test]
+    fn ffi_joystick_mode_rejects_truncated_overflow() {
+        let h = sc_create(0, 1);
+        assert!(!h.is_null());
+        assert_eq!(sc_set_joystick_mode(h, 256), -1);
+        let err = sc_last_error();
+        assert!(!err.is_null());
+        sc_string_free(err);
+        assert_eq!(sc_get_model(h), 0);
+        sc_destroy(h);
     }
 
     #[test]

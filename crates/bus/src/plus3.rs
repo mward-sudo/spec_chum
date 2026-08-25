@@ -428,11 +428,10 @@ mod tests {
         .unwrap();
         let mut b = BusPlus3::new();
         b.fdc.insert(img);
-        b.out_port(0x3ffd, 0x06);
-        b.out_port(0x3ffd, 0x00);
-        b.out_port(0x3ffd, 0x00);
-        b.out_port(0x3ffd, 0xc1);
-        b.out_port(0x3ffd, 0x01);
+        // µPD765 READ DATA: opcode, HD/US, C, H, R, N, EOT, GPL, DTL
+        for byte in [0x06u8, 0x00, 0x00, 0x00, 0xc1, 0x01, 0x09, 0x2a, 0xff] {
+            b.out_port(0x3ffd, byte);
+        }
         assert_eq!(b.in_port(0x2ffd) & 0xc0, 0xc0);
         assert_eq!(b.in_port(0x3ffd), 0x42);
         assert_eq!(b.in_port(0x3ffd), 0x43);

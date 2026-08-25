@@ -59,7 +59,7 @@ final class HostBridge: ObservableObject {
     @Published private(set) var inspectJsonPreview: String = ""
     @Published var model: Model = .spectrum48 {
         didSet {
-            guard let handle, oldValue != model else { return }
+            guard let handle, oldValue != model, !suppressModelPush else { return }
             _ = sc_set_model(handle, model.rawValue)
             tryAutoloadRom()
             pushTapeLoadOptions()
@@ -84,6 +84,8 @@ final class HostBridge: ObservableObject {
     private var disconnectObserver: NSObjectProtocol?
     /// Frame-scripted `LOAD ""` [CODE] (egui KeyScript parity); advanced in `runFrame`.
     private var keyScript: LoadKeyScript?
+    /// When syncing `model` from `sc_get_model` after snapshot load, skip `sc_set_model`.
+    private var suppressModelPush = false
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
@@ -261,9 +263,20 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "Snapshot load failed"
         } else {
+            syncModelFromHost()
             pushTapeLoadOptions()
             refreshStatus()
         }
+    }
+
+    /// Read host model after snapshot load without calling `sc_set_model` again.
+    private func syncModelFromHost() {
+        guard let handle else { return }
+        let raw = sc_get_model(handle)
+        guard raw != UInt32.max, let m = Model(rawValue: raw), m != model else { return }
+        suppressModelPush = true
+        model = m
+        suppressModelPush = false
     }
 
     func openRzx(at url: URL) {

@@ -191,7 +191,8 @@ impl Plus3Fdc {
 
     /// Write a command/parameter byte (port `3FFD` data).
     ///
-    /// Accepts READ DATA (`0x06`/`0x46`) followed by C, H, R, N.
+    /// Accepts µPD765 READ DATA (`0x06`/`0x46`) and its full 9-byte command phase:
+    /// opcode, HD/US, C, H, R, N, EOT, GPL, DTL.
     pub fn write_command_byte(&mut self, value: u8) {
         if self.cmd.is_empty() {
             if value & 0x1f == 0x06 {
@@ -200,11 +201,10 @@ impl Plus3Fdc {
             return;
         }
         self.cmd.push(value);
-        if self.cmd.len() >= 5 {
-            let c = self.cmd[1];
-            let h = self.cmd[2];
-            let r = self.cmd[3];
-            let _n = self.cmd[4];
+        if self.cmd.len() >= 9 {
+            let c = self.cmd[2];
+            let h = self.cmd[3];
+            let r = self.cmd[4];
             let _ = self.read_sector(c, h, r);
             self.cmd.clear();
         }
@@ -282,16 +282,19 @@ mod tests {
         assert_eq!(fdc.read_data_byte(), 0x43);
     }
 
+    fn feed_read_data(fdc: &mut Plus3Fdc, c: u8, h: u8, r: u8) {
+        // opcode, HD/US, C, H, R, N, EOT, GPL, DTL
+        for b in [0x46, 0, c, h, r, 1, 0x09, 0x2a, 0xff] {
+            fdc.write_command_byte(b);
+        }
+    }
+
     #[test]
     fn read_data_command_stream_loads_sector() {
         let img = DskImage::parse(&synthetic_dsk()).unwrap();
         let mut fdc = Plus3Fdc::new();
         fdc.insert(img);
-        fdc.write_command_byte(0x46);
-        fdc.write_command_byte(0);
-        fdc.write_command_byte(0);
-        fdc.write_command_byte(0xc1);
-        fdc.write_command_byte(1);
+        feed_read_data(&mut fdc, 0, 0, 0xc1);
         assert!(fdc.data_remaining() > 0);
         assert_eq!(fdc.main_status() & 0xc0, 0xc0);
         assert_eq!(fdc.read_data_byte(), 0x42);
@@ -300,7 +303,7 @@ mod tests {
 
     /// Two 256-byte sectors on track 0 for FDC sector-lookup goldens.
     ///
-    /// `Plus3Fdc::write_command_byte` accepts READ DATA (`0x06`/`0x46`) + C/H/R/N;
+    /// `Plus3Fdc::write_command_byte` accepts the full 9-byte µPD765 READ DATA phase;
     /// BusPlus3 routes ports `3FFD`/`2FFD` to that path. Full +3DOS boot still needs
     /// more µPD765 commands ([#141](https://github.com/mward-sudo/spec_chum/issues/141)).
     fn synthetic_dsk_two_sectors() -> Vec<u8> {
@@ -358,13 +361,23 @@ mod tests {
         let img = DskImage::parse(&synthetic_dsk()).unwrap();
         let mut fdc = Plus3Fdc::new();
         fdc.insert(img);
-        fdc.write_command_byte(0x06);
-        fdc.write_command_byte(0);
-        fdc.write_command_byte(0);
-        fdc.write_command_byte(0xc1);
-        fdc.write_command_byte(1);
+        // Same 9-byte phase with MT/MF clear (opcode 0x06).
+        for b in [0x06u8, 0, 0, 0, 0xc1, 1, 0x09, 0x2a, 0xff] {
+            fdc.write_command_byte(b);
+        }
         assert_eq!(fdc.main_status() & 0xc0, 0xc0);
         assert_eq!(fdc.read_data_byte(), 0x42);
         assert_eq!(fdc.read_data_byte(), 0x43);
+    }
+
+    #[test]
+    fn read_data_nine_byte_phase_selects_correct_sector() {
+        let img = DskImage::parse(&synthetic_dsk_two_sectors()).unwrap();
+        let mut fdc = Plus3Fdc::new();
+        fdc.insert(img);
+        // Five-byte mistaken parse would treat HD/US,C,H as C,H,R and miss 0xc2.
+        feed_read_data(&mut fdc, 0, 0, 0xc2);
+        assert_eq!(fdc.read_data_byte(), 0xb1);
+        assert_eq!(fdc.read_data_byte(), 0xb2);
     }
 }

@@ -162,6 +162,13 @@ fn parse_z80_header(data: &[u8]) -> Result<Z80HeaderInfo, FormatError> {
         return Err(FormatError::Format("Z80 v2 header truncated".into()));
     }
     let extra = u16::from_le_bytes([data[30], data[31]]) as usize;
+    // Legal v2 extended header is at least 23 bytes (total header_len >= 55), so
+    // hw at [34] and optional page_7ffd at [35] are always in range.
+    if extra < 23 {
+        return Err(FormatError::Format(format!(
+            "Z80 v2 extended header length {extra} too small"
+        )));
+    }
     let header_len = 32 + extra;
     if data.len() < header_len {
         return Err(FormatError::Format("Z80 v2 truncated".into()));
@@ -610,6 +617,16 @@ mod tests {
         assert!(s.iff2);
         assert_eq!(s.ram[0], 0xaa);
         assert_eq!(s.ram[1], 0x55);
+    }
+
+    #[test]
+    fn parse_z80_rejects_undersized_extended_header() {
+        let mut data = vec![0u8; 34];
+        // PC=0 → v2 path; extra=0 would previously panic on data[34].
+        data[30] = 0;
+        data[31] = 0;
+        let err = Snapshot48::parse_z80(&data).unwrap_err();
+        assert!(err.to_string().contains("too small"), "got {err}");
     }
 
     #[test]

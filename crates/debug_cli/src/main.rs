@@ -186,20 +186,33 @@ fn load_and_apply_snapshot(m: &mut Machine, path: &Path) -> Result<()> {
         .unwrap_or("")
         .to_ascii_lowercase();
     if ext == "z80" {
-        if let Ok(snap) = Snapshot128::load_z80(path) {
-            m.apply_snapshot128(&snap);
-            return Ok(());
+        match Snapshot128::load_z80(path) {
+            Ok(snap) => {
+                m.apply_snapshot128(&snap);
+                Ok(())
+            }
+            Err(e128) => match Snapshot48::load_z80(path) {
+                Ok(snap) => {
+                    m.apply_snapshot48(&snap);
+                    Ok(())
+                }
+                Err(_) => Err(anyhow::anyhow!("{e128}")),
+            },
         }
-        let snap = Snapshot48::load_z80(path).map_err(|e| anyhow::anyhow!("{e}"))?;
-        m.apply_snapshot48(&snap);
-        Ok(())
-    } else if let Ok(snap) = Snapshot128::load_sna(path) {
-        m.apply_snapshot128(&snap);
-        Ok(())
     } else {
-        let snap = Snapshot48::load_sna(path).map_err(|e| anyhow::anyhow!("{e}"))?;
-        m.apply_snapshot48(&snap);
-        Ok(())
+        match Snapshot128::load_sna(path) {
+            Ok(snap) => {
+                m.apply_snapshot128(&snap);
+                Ok(())
+            }
+            Err(e128) => match Snapshot48::load_sna(path) {
+                Ok(snap) => {
+                    m.apply_snapshot48(&snap);
+                    Ok(())
+                }
+                Err(_) => Err(anyhow::anyhow!("{e128}")),
+            },
+        }
     }
 }
 
