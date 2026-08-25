@@ -205,6 +205,7 @@ impl HostSession {
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
+        self.reapply_host_keys();
         self.last_speaker_level = false;
         self.status = "ROM loaded".into();
         Ok(())

@@ -427,7 +427,6 @@ impl EmulatorSession {
         match ext.as_str() {
             "dsk" => {
                 self.load_dsk(path);
-                self.status = "DSK inserted — use +3 Loader / +3DOS".into();
             }
             "tzx" => {
                 self.load_tzx(path);
