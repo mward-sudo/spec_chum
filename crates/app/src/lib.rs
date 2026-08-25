@@ -194,8 +194,9 @@ impl EmulatorSession {
         }
         match formats::Snapshot48::load_sna(path).or_else(|_| formats::Snapshot48::load_z80(path)) {
             Ok(snap) => {
-                if self.machine.is_none() {
+                if self.machine.is_none() || self.model != Model::Spectrum48 {
                     self.model = Model::Spectrum48;
+                    self.machine = None;
                     self.try_autoload_rom();
                 }
                 if let Some(m) = self.machine.as_mut() {
@@ -1270,6 +1271,55 @@ mod tests {
         let rows = session.machine.as_mut().unwrap().keyboard_mut().rows;
         // Num5 = row 3 bit 4 (also used as Cursor left); physical hold must remain.
         assert_eq!(rows[3] & (1 << 4), 0);
+    }
+
+    fn synthetic_sna48_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 49179];
+        data[26] = 5;
+        data[23] = 0x00;
+        data[24] = 0x40;
+        data[27] = 0x00;
+        data[28] = 0x80;
+        data[27 + 0x4000] = 0xaa;
+        data
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_128k() {
+        let mut session = EmulatorSession::new(Model::Spectrum128, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: 128K ROM missing");
+            return;
+        }
+        let path = std::env::temp_dir().join("spec_chum_app_128_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        session.load_snapshot(&path);
+        assert_eq!(session.model, Model::Spectrum48);
+        assert_eq!(
+            session.machine.as_ref().map(Machine::model),
+            Some(Model::Spectrum48)
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_plus3() {
+        let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: +3 ROM missing");
+            return;
+        }
+        let path = std::env::temp_dir().join("spec_chum_app_plus3_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        session.load_snapshot(&path);
+        assert_eq!(session.model, Model::Spectrum48);
+        assert_eq!(
+            session.machine.as_ref().map(Machine::model),
+            Some(Model::Spectrum48)
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

@@ -270,9 +270,9 @@ impl HostSession {
 
     /// Load a SNA/Z80 snapshot (128K/+3 first, then 48K), switching model when needed.
     ///
-    /// Mirrors egui `SpecChumApp::load_snapshot`: on a 128K/+3 snap, select the matching
-    /// model (including 128K↔Plus3 transitions) and require ROM autoload before apply;
-    /// on a 48K snap with no machine, select 48K and autoload.
+    /// Mirrors egui `SpecChumApp::load_snapshot`: selects the matching model for 128K/+3
+    /// (including 128K↔Plus3) and for 48K snapshots loaded onto a non-48K machine; requires
+    /// ROM autoload before apply.
     pub fn load_snapshot(&mut self, path: &Path) -> Result<(), HostError> {
         if let Ok(snap) =
             formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
@@ -302,9 +302,16 @@ impl HostSession {
         let snap = formats::Snapshot48::load_sna(path)
             .or_else(|_| formats::Snapshot48::load_z80(path))
             .map_err(|e| HostError::Message(e.to_string()))?;
-        if self.machine.is_none() {
+        if self.machine.is_none() || self.model != ModelId::Spectrum48 {
             self.model = ModelId::Spectrum48;
+            self.machine = None;
             self.try_autoload_rom();
+            if self.machine.is_none() {
+                return Err(HostError::Message(
+                    "ROM required for Spectrum48 snapshot not found; run ./scripts/fetch_roms.sh"
+                        .into(),
+                ));
+            }
         }
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
@@ -979,6 +986,60 @@ mod tests {
         assert_eq!(regs.pc, 0x8000);
         assert_eq!(s.peek(0x8000).expect("peek"), 0xaa);
         assert!(s.status().contains("snapshot"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn load_128_or_plus3_rom(s: &mut HostSession, model: ModelId) -> bool {
+        s.set_model(model);
+        s.try_autoload_rom();
+        s.has_machine()
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_128k() {
+        if rom48().is_none() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum128, false);
+        if !load_128_or_plus3_rom(&mut s, ModelId::Spectrum128) {
+            eprintln!("skip: 128K ROM missing");
+            return;
+        }
+        assert_eq!(s.model(), ModelId::Spectrum128);
+        let path = std::env::temp_dir().join("spec_chum_host_api_128_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        s.load_snapshot(&path).expect("48k sna on 128");
+        assert_eq!(s.model(), ModelId::Spectrum48);
+        assert_eq!(
+            s.machine.as_ref().map(machine::Machine::model),
+            Some(Model::Spectrum48)
+        );
+        assert_eq!(s.regs().expect("regs").pc, 0x8000);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_plus3() {
+        if rom48().is_none() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::SpectrumPlus3, false);
+        if !load_128_or_plus3_rom(&mut s, ModelId::SpectrumPlus3) {
+            eprintln!("skip: +3 ROM missing");
+            return;
+        }
+        assert_eq!(s.model(), ModelId::SpectrumPlus3);
+        let path = std::env::temp_dir().join("spec_chum_host_api_plus3_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        s.load_snapshot(&path).expect("48k sna on +3");
+        assert_eq!(s.model(), ModelId::Spectrum48);
+        assert_eq!(
+            s.machine.as_ref().map(machine::Machine::model),
+            Some(Model::Spectrum48)
+        );
+        assert_eq!(s.regs().expect("regs").pc, 0x8000);
         let _ = std::fs::remove_file(&path);
     }
 
