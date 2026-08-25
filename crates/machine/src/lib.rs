@@ -11,14 +11,17 @@ mod system_tests;
 
 mod debugger;
 mod inspect;
+mod joystick;
 
 pub use debugger::{BreakReason, Debugger, Watch};
 pub use inspect::{Inspect, Paging, TapeInspect};
+pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 
 use std::cell::Cell;
 
-use bus::{Bus128, Bus48, BusPlus3, Kempston};
-use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot48};
+pub use bus::StereoMode as AyStereoMode;
+use bus::{Bus128, Bus48, BusPlus3, Kempston, KempstonMouse};
+use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot128, Snapshot48};
 pub use tape::LD_BYTES_TRAP_PC;
 use tape::{
     evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, TapPlayer, TapeTrapResult,
@@ -165,14 +168,19 @@ pub struct TapeLoadOptions {
     /// When true, TAP decks trap at LD-BYTES and poke bytes immediately.
     pub flash_load: bool,
     /// EAR bitstream speed multiplier (`1` = realtime). Clamped to `1..=64`.
-    /// Shortens TAP leader/pause; data pulse widths stay ROM-accurate so LD-BYTES can lock.
+    ///
+    /// While a tape is **playing** on the EAR path (flash-load off), each
+    /// [`Machine::run_frame`] executes this many Spectrum frames so wall-clock
+    /// load time ≈ realtime / speed. Pulse widths stay ROM-accurate (CPU↔tape
+    /// 1:1); Instant/flash-load is unchanged (single frame per call).
     pub speed: u32,
 }
 
 impl Default for TapeLoadOptions {
     fn default() -> Self {
+        // EAR path by default; UI Instant actions enable flash-load ephemerally.
         Self {
-            flash_load: true,
+            flash_load: false,
             speed: 1,
         }
     }
@@ -227,8 +235,18 @@ pub struct RzxPlayer {
 pub enum Model {
     Spectrum48,
     Spectrum128,
-    /// Amstrad +2A / +3 gate array (port `1FFD`, no floating bus).
+    /// Amstrad +2A (gate array `1FFD`, no disk interface — menu Loader is tape).
+    SpectrumPlus2A,
+    /// Amstrad +3 (same gate array with µPD765 — menu Loader is +3DOS disk).
     SpectrumPlus3,
+}
+
+impl Model {
+    /// +2A or +3 (shared Amstrad gate array).
+    #[must_use]
+    pub fn is_amstrad_plus(self) -> bool {
+        matches!(self, Self::SpectrumPlus2A | Self::SpectrumPlus3)
+    }
 }
 
 /// Memory+Io adapter for 48K.
@@ -525,6 +543,22 @@ pub struct FrameAudio {
     pub beeper_edges: Vec<(u32, bool)>,
     /// Mono AY samples for this frame (empty on 48K). Amplitude roughly 0..1.
     pub ay_samples: Vec<f32>,
+    /// Left AY channel (same length as `ay_samples`; empty on 48K).
+    pub ay_left: Vec<f32>,
+    /// Right AY channel (same length as `ay_samples`; empty on 48K).
+    pub ay_right: Vec<f32>,
+}
+
+fn push_ay_frame_sample(
+    ay: &bus::Ay8912,
+    mono: &mut Vec<f32>,
+    left: &mut Vec<f32>,
+    right: &mut Vec<f32>,
+) {
+    let (l, r) = ay.sample_stereo();
+    left.push(l);
+    right.push(r);
+    mono.push(ay.sample_mono());
 }
 
 impl Machine {
@@ -559,9 +593,19 @@ impl Machine {
     }
 
     pub fn new_plus3(rom: &[u8]) -> Result<Self, String> {
-        let mut bus = BusPlus3::new();
+        Self::new_amstrad_plus(rom, true)
+    }
+
+    /// Spectrum +2A: same gate array as +3 but FDC ports float (`disk_interface = false`).
+    pub fn new_plus2a(rom: &[u8]) -> Result<Self, String> {
+        Self::new_amstrad_plus(rom, false)
+    }
+
+    fn new_amstrad_plus(rom: &[u8], disk_interface: bool) -> Result<Self, String> {
+        let mut bus = BusPlus3::new_with_disk(disk_interface);
         bus.load_rom64(rom)?;
-        trace::emit(trace::EventKind::MachineModel { model: 2 });
+        let model_id = if disk_interface { 2 } else { 3 };
+        trace::emit(trace::EventKind::MachineModel { model: model_id });
         Ok(Self::SpecPlus3 {
             cpu: Cpu::new(),
             bus: Box::new(bus),
@@ -578,7 +622,13 @@ impl Machine {
         match self {
             Self::Spec48 { .. } => Model::Spectrum48,
             Self::Spec128 { .. } => Model::Spectrum128,
-            Self::SpecPlus3 { .. } => Model::SpectrumPlus3,
+            Self::SpecPlus3 { bus, .. } => {
+                if bus.disk_interface {
+                    Model::SpectrumPlus3
+                } else {
+                    Model::SpectrumPlus2A
+                }
+            }
         }
     }
 
@@ -597,8 +647,25 @@ impl Machine {
                 bus.frame_t = 0;
                 bus.beeper_edges.clear();
                 bus.kempston.reset();
+                bus.mouse.reset();
+                if let Some(mf) = bus.multiface.as_mut() {
+                    mf.hide();
+                }
+                if let Some(if1) = bus.interface1.as_mut() {
+                    if1.page_rom(false);
+                }
+                if let Some(beta) = bus.beta.as_mut() {
+                    beta.page_trdos(false);
+                }
+                if let Some(div) = bus.divmmc.as_mut() {
+                    div.control = 0;
+                }
                 *ula = Ula48::new();
-                *tape = None;
+                // Keep inserted tape/disk media across reset; pause the deck at its
+                // current position. RZX input playback is cleared (machine state diverges).
+                if let Some(t) = tape.as_mut() {
+                    t.set_playing(false);
+                }
                 *rzx = None;
             }
             Self::Spec128 {
@@ -617,8 +684,20 @@ impl Machine {
                 bus.beeper_edges.clear();
                 bus.ay.reset();
                 bus.kempston.reset();
+                bus.mouse.reset();
+                if let Some(if1) = bus.interface1.as_mut() {
+                    if1.page_rom(false);
+                }
+                if let Some(beta) = bus.beta.as_mut() {
+                    beta.page_trdos(false);
+                }
+                if let Some(div) = bus.divmmc.as_mut() {
+                    div.control = 0;
+                }
                 *ula = Ula48::new();
-                *tape = None;
+                if let Some(t) = tape.as_mut() {
+                    t.set_playing(false);
+                }
                 *rzx = None;
             }
             Self::SpecPlus3 {
@@ -638,8 +717,12 @@ impl Machine {
                 bus.beeper_edges.clear();
                 bus.ay.reset();
                 bus.kempston.reset();
+                bus.mouse.reset();
                 *ula = Ula48::new();
-                *tape = None;
+                // +3 DSK stays in `bus.fdc.image`; only pause any inserted tape.
+                if let Some(t) = tape.as_mut() {
+                    t.set_playing(false);
+                }
                 *rzx = None;
             }
         }
@@ -763,9 +846,12 @@ impl Machine {
 
     pub fn insert_disk(&mut self, image: DskImage) -> Result<(), String> {
         match self {
-            Self::SpecPlus3 { bus, .. } => {
+            Self::SpecPlus3 { bus, .. } if bus.disk_interface => {
                 bus.fdc.insert(image);
                 Ok(())
+            }
+            Self::SpecPlus3 { .. } => {
+                Err("+2A has no disk interface — use Spectrum +3 for DSK".into())
             }
             _ => Err("+3 disk requires SpectrumPlus3 model".into()),
         }
@@ -777,6 +863,57 @@ impl Machine {
             Self::Spec128 { bus, .. } => &mut bus.kempston,
             Self::SpecPlus3 { bus, .. } => &mut bus.kempston,
         }
+    }
+
+    pub fn mouse_mut(&mut self) -> &mut KempstonMouse {
+        match self {
+            Self::Spec48 { bus, .. } => &mut bus.mouse,
+            Self::Spec128 { bus, .. } => &mut bus.mouse,
+            Self::SpecPlus3 { bus, .. } => &mut bus.mouse,
+        }
+    }
+
+    /// Set AY stereo pan mode (no-op on 48K).
+    pub fn set_ay_stereo_mode(&mut self, mode: bus::StereoMode) {
+        match self {
+            Self::Spec48 { .. } => {}
+            Self::Spec128 { bus, .. } => {
+                bus.ay.stereo_mode = mode;
+            }
+            Self::SpecPlus3 { bus, .. } => {
+                bus.ay.stereo_mode = mode;
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn ay_stereo_mode(&self) -> bus::StereoMode {
+        match self {
+            Self::Spec48 { .. } => bus::StereoMode::Mono,
+            Self::Spec128 { bus, .. } => bus.ay.stereo_mode,
+            Self::SpecPlus3 { bus, .. } => bus.ay.stereo_mode,
+        }
+    }
+
+    /// Apply a host joystick under `mode` (clears prior joystick matrix/Kempston first).
+    pub fn apply_joystick_state(&mut self, mode: JoystickMode, state: JoystickState) {
+        let (k, kb) = match self {
+            Self::Spec48 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::Spec128 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::SpecPlus3 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+        };
+        apply_joystick(mode, state, k, kb);
+    }
+
+    /// Clear Kempston and all matrix keys used by joystick modes.
+    pub fn clear_joystick_state(&mut self) {
+        let (k, kb) = match self {
+            Self::Spec48 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::Spec128 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+            Self::SpecPlus3 { bus, .. } => (&mut bus.kempston, &mut bus.keyboard),
+        };
+        k.reset();
+        clear_joystick_matrix(kb);
     }
 
     fn apply_rzx_frame(&mut self) {
@@ -891,10 +1028,213 @@ impl Machine {
         for (i, b) in snap.ram.iter().enumerate() {
             self.write_mem(0x4000 + i as u16, *b);
         }
-        if let Self::Spec48 { bus, ula, .. } = self {
-            bus.border = snap.border;
-            bus.ula.border = snap.border;
-            ula.border = snap.border;
+        match self {
+            Self::Spec48 { bus, ula, .. } => {
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::Spec128 { bus, ula, .. } => {
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::SpecPlus3 { bus, ula, .. } => {
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+        }
+        let cpu = self.cpu();
+        if trace::enabled(trace::Category::MACHINE) {
+            trace::emit(trace::EventKind::MachineSnapshot {
+                pc: cpu.regs.pc,
+                sp: cpu.regs.sp,
+                border: snap.border,
+            });
+        }
+    }
+
+    /// Attach Multiface 1 with an 8 KiB ROM image (48K only).
+    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), String> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.attach_multiface(rom),
+            _ => Err("Multiface 1 is only supported on Spectrum 48K".into()),
+        }
+    }
+
+    /// Page Multiface 1 (if attached) and raise NMI. Returns NMI T-states, or `None` if MF absent.
+    pub fn multiface_nmi(&mut self) -> Option<u32> {
+        match self {
+            Self::Spec48 { cpu, bus, .. } => {
+                bus.multiface.as_mut()?.nmi();
+                let t_step_start = cpu.t;
+                let dt = {
+                    let mut mio = MemIo48 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                        t_step_start,
+                    };
+                    cpu.nmi(&mut mio)
+                };
+                bus.advance_frame_t(dt);
+                Some(dt)
+            }
+            _ => None,
+        }
+    }
+
+    /// Attach DivMMC on 48K/128K (creates the peripheral if absent).
+    pub fn attach_divmmc(&mut self) -> Result<&mut bus::DivMmc, String> {
+        match self {
+            Self::Spec48 { bus, .. } => Ok(bus.attach_divmmc()),
+            Self::Spec128 { bus, .. } => Ok(bus.attach_divmmc()),
+            Self::SpecPlus3 { .. } => Err("DivMMC is not supported on Spectrum +2A/+3".into()),
+        }
+    }
+
+    pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.divmmc.as_mut(),
+            Self::Spec128 { bus, .. } => bus.divmmc.as_mut(),
+            Self::SpecPlus3 { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn has_divmmc(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.divmmc.is_some(),
+            Self::Spec128 { bus, .. } => bus.divmmc.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
+    /// Attach Interface 1 on 48K/128K.
+    pub fn attach_interface1(&mut self) -> Result<&mut bus::Interface1, String> {
+        match self {
+            Self::Spec48 { bus, .. } => Ok(bus.attach_interface1()),
+            Self::Spec128 { bus, .. } => Ok(bus.attach_interface1()),
+            Self::SpecPlus3 { .. } => Err("Interface 1 is not supported on Spectrum +2A/+3".into()),
+        }
+    }
+
+    pub fn interface1_mut(&mut self) -> Option<&mut bus::Interface1> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.interface1.as_mut(),
+            Self::Spec128 { bus, .. } => bus.interface1.as_mut(),
+            Self::SpecPlus3 { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn has_interface1(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.interface1.is_some(),
+            Self::Spec128 { bus, .. } => bus.interface1.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
+    /// Attach Beta Disk / TR-DOS on 48K/128K.
+    pub fn attach_beta(&mut self) -> Result<&mut bus::BetaDisk, String> {
+        match self {
+            Self::Spec48 { bus, .. } => Ok(bus.attach_beta()),
+            Self::Spec128 { bus, .. } => Ok(bus.attach_beta()),
+            Self::SpecPlus3 { .. } => Err("Beta Disk is not supported on Spectrum +2A/+3".into()),
+        }
+    }
+
+    pub fn beta_mut(&mut self) -> Option<&mut bus::BetaDisk> {
+        match self {
+            Self::Spec48 { bus, .. } => bus.beta.as_mut(),
+            Self::Spec128 { bus, .. } => bus.beta.as_mut(),
+            Self::SpecPlus3 { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn has_beta(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.beta.is_some(),
+            Self::Spec128 { bus, .. } => bus.beta.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
+    #[must_use]
+    pub fn has_multiface(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.multiface.is_some(),
+            _ => false,
+        }
+    }
+
+    /// Apply a 128K / +2A/+3 banked snapshot (SNA128 or Z80 v2/v3).
+    ///
+    /// On `Spec48`, maps banks 5/2/`page_7ffd&7` into the 48K address space.
+    /// On `SpecPlus3`, also restores `0x1FFD` when present in the snapshot.
+    pub fn apply_snapshot128(&mut self, snap: &Snapshot128) {
+        {
+            let cpu = self.cpu_mut();
+            cpu.regs.set_af(snap.af);
+            cpu.regs.set_bc(snap.bc);
+            cpu.regs.set_de(snap.de);
+            cpu.regs.set_hl(snap.hl);
+            cpu.regs.set_ix(snap.ix);
+            cpu.regs.set_iy(snap.iy);
+            cpu.regs.sp = snap.sp;
+            cpu.regs.pc = snap.pc;
+            cpu.regs.i = snap.i;
+            cpu.regs.r = snap.r;
+            cpu.regs.im = snap.im;
+            cpu.regs.iff1 = snap.iff2;
+            cpu.regs.iff2 = snap.iff2;
+            cpu.regs.a_ = (snap.af_ >> 8) as u8;
+            cpu.regs.f_ = snap.af_ as u8;
+            cpu.regs.b_ = (snap.bc_ >> 8) as u8;
+            cpu.regs.c_ = snap.bc_ as u8;
+            cpu.regs.d_ = (snap.de_ >> 8) as u8;
+            cpu.regs.e_ = snap.de_ as u8;
+            cpu.regs.h_ = (snap.hl_ >> 8) as u8;
+            cpu.regs.l_ = snap.hl_ as u8;
+        }
+        match self {
+            Self::Spec48 { bus, ula, .. } => {
+                let paged = usize::from(snap.page_7ffd & 7);
+                bus.ram[..16384].copy_from_slice(&snap.banks[5]);
+                bus.ram[16384..32768].copy_from_slice(&snap.banks[2]);
+                bus.ram[32768..49152].copy_from_slice(&snap.banks[paged]);
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::Spec128 { bus, ula, .. } => {
+                for (i, bank) in snap.banks.iter().enumerate() {
+                    bus.banks[i].copy_from_slice(bank);
+                }
+                bus.locked = false;
+                bus.out_7ffd(snap.page_7ffd);
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
+            Self::SpecPlus3 { bus, ula, .. } => {
+                for (i, bank) in snap.banks.iter().enumerate() {
+                    bus.banks[i].copy_from_slice(bank);
+                }
+                bus.locked = false;
+                // Apply 1FFD before 7FFD so a paging-lock bit cannot block it.
+                if let Some(p) = snap.page_1ffd {
+                    bus.out_1ffd(p);
+                } else {
+                    bus.out_1ffd(0);
+                }
+                bus.out_7ffd(snap.page_7ffd);
+                bus.border = snap.border;
+                bus.ula.border = snap.border;
+                ula.border = snap.border;
+            }
         }
         let cpu = self.cpu();
         if trace::enabled(trace::Category::MACHINE) {
@@ -907,7 +1247,38 @@ impl Machine {
     }
 
     /// Run one video frame; returns beeper edges and AY samples for the frame.
+    /// Spectrum frames to run per [`Self::run_frame`] while EAR tape is playing.
+    ///
+    /// Speed multiplies wall-clock progress with CPU↔tape still 1:1 (ROM LD-BYTES
+    /// stays locked). Flash-load / Instant keeps a single frame so traps stay snappy.
+    /// At `speed == 1` this is always 1 — hardware-accurate path unchanged.
+    #[must_use]
+    fn ear_play_frame_reps(&self) -> u32 {
+        let opts = self.tape_load_options();
+        if opts.flash_load || !self.tape_playing() {
+            1
+        } else {
+            opts.speed.clamp(1, 64)
+        }
+    }
+
+    /// Run one or more Spectrum frames. While an EAR deck is playing, runs
+    /// [`TapeLoadOptions::speed`] frames so wall-clock ≈ realtime / speed.
+    /// Only the last inner frame's PCM/edges are returned (hosts should not try
+    /// to play S seconds of audio in one tick).
     pub fn run_frame(&mut self) -> FrameAudio {
+        let reps = self.ear_play_frame_reps();
+        let mut audio = self.run_one_frame();
+        for _ in 1..reps {
+            if self.debugger().paused || !self.tape_playing() {
+                break;
+            }
+            audio = self.run_one_frame();
+        }
+        audio
+    }
+
+    fn run_one_frame(&mut self) -> FrameAudio {
         if self.debugger().paused {
             return FrameAudio::default();
         }
@@ -1023,6 +1394,8 @@ impl Machine {
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples: Vec::new(),
+                    ay_left: Vec::new(),
+                    ay_right: Vec::new(),
                 }
             }
             Self::Spec128 {
@@ -1047,6 +1420,8 @@ impl Machine {
                 const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_left = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_right = Vec::with_capacity(AY_SAMPLES);
                 let mut ay_t = 0u32;
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
@@ -1092,7 +1467,12 @@ impl Machine {
                                 && f64::from(ay_t.min(FRAME_TSTATES_128))
                                     >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                             {
-                                ay_samples.push(bus.ay.sample_mono());
+                                push_ay_frame_sample(
+                                    &bus.ay,
+                                    &mut ay_samples,
+                                    &mut ay_left,
+                                    &mut ay_right,
+                                );
                             }
                             last_t = cpu.t;
                             continue;
@@ -1149,15 +1529,17 @@ impl Machine {
                         && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
-                        ay_samples.push(bus.ay.sample_mono());
+                        push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                     }
                 }
                 while ay_samples.len() < AY_SAMPLES {
-                    ay_samples.push(bus.ay.sample_mono());
+                    push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples,
+                    ay_left,
+                    ay_right,
                 }
             }
             Self::SpecPlus3 {
@@ -1182,6 +1564,8 @@ impl Machine {
                 const AY_SAMPLES: usize = 882;
                 let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_left = Vec::with_capacity(AY_SAMPLES);
+                let mut ay_right = Vec::with_capacity(AY_SAMPLES);
                 let mut ay_t = 0u32;
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
@@ -1227,7 +1611,12 @@ impl Machine {
                                 && f64::from(ay_t.min(FRAME_TSTATES_128))
                                     >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                             {
-                                ay_samples.push(bus.ay.sample_mono());
+                                push_ay_frame_sample(
+                                    &bus.ay,
+                                    &mut ay_samples,
+                                    &mut ay_left,
+                                    &mut ay_right,
+                                );
                             }
                             last_t = cpu.t;
                             continue;
@@ -1284,15 +1673,17 @@ impl Machine {
                         && f64::from(ay_t.min(FRAME_TSTATES_128))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
-                        ay_samples.push(bus.ay.sample_mono());
+                        push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                     }
                 }
                 while ay_samples.len() < AY_SAMPLES {
-                    ay_samples.push(bus.ay.sample_mono());
+                    push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples,
+                    ay_left,
+                    ay_right,
                 }
             }
         }
@@ -1328,7 +1719,8 @@ impl Machine {
         if !t.playing() {
             return;
         }
-        // TAP turbo shortens leader/pause when the block is queued; keep CPU:tape 1:1 here.
+        // CPU↔tape 1:1 with ROM-accurate pulse widths. Wall-clock turbo is
+        // [`Machine::ear_play_frame_reps`] (multiple Spectrum frames per host tick).
         let new_ear = t.advance(dt);
         if new_ear != *ear {
             *ear = new_ear;
@@ -2228,6 +2620,8 @@ impl Machine {
     }
 
     /// +3 menu: cursor-down to 48 BASIC, Enter, then keyword `LOAD ""` [CODE].
+    ///
+    /// Do **not** use menu **Loader** here — that is +3DOS disk.
     pub fn type_load_quotes_plus3(&mut self, with_code: bool) {
         const PRESS: u32 = 10;
         const GAP: u32 = 5;
@@ -2242,11 +2636,24 @@ impl Machine {
         self.type_load_quotes_48k(with_code);
     }
 
-    /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +3 48 BASIC).
+    /// +2A menu: **Loader** is tape (no disk interface). Enter alone for PROGRAM;
+    /// `LOAD "" CODE` still goes via 48 BASIC.
+    pub fn type_load_quotes_plus2a(&mut self, with_code: bool) {
+        if with_code {
+            self.type_load_quotes_plus3(true);
+            return;
+        }
+        const PRESS: u32 = 10;
+        self.hold_keys(&[(6, 0)], PRESS);
+        self.hold_keys(&[], 10);
+    }
+
+    /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +2A Loader / +3 48 BASIC).
     pub fn type_load_quotes(&mut self, with_code: bool) {
         match self.model() {
             Model::Spectrum48 => self.type_load_quotes_48k(with_code),
             Model::Spectrum128 => self.type_load_quotes_128k(with_code),
+            Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
             Model::SpectrumPlus3 => self.type_load_quotes_plus3(with_code),
         }
     }
@@ -2310,6 +2717,50 @@ mod tests {
 
     fn fixture_tap() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/tape/minimal_code.tap")
+    }
+
+    /// Synthetic MF ROM: at NMI vector, `LD A,42h / LD (2000h),A / HALT` — flag in MF RAM.
+    #[test]
+    fn multiface_nmi_executes_attached_rom() {
+        let mut rom = [0u8; bus::MULTIFACE1_SIZE];
+        // 0066: 3E 42       LD A,42h
+        // 0068: 32 00 20    LD (2000h),A
+        // 006B: 76          HALT
+        rom[0x66] = 0x3e;
+        rom[0x67] = 0x42;
+        rom[0x68] = 0x32;
+        rom[0x69] = 0x00;
+        rom[0x6a] = 0x20;
+        rom[0x6b] = 0x76;
+
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        m.attach_multiface(&rom).unwrap();
+        m.cpu_mut().regs.sp = 0xfffd;
+        m.cpu_mut().regs.pc = 0x8000;
+
+        let t = m.multiface_nmi().expect("MF attached");
+        assert_eq!(t, 11);
+        assert_eq!(m.cpu().regs.pc, 0x0066);
+        match &m {
+            Machine::Spec48 { bus, .. } => {
+                assert!(bus.multiface.as_ref().unwrap().paged);
+            }
+            _ => unreachable!(),
+        }
+
+        // Run until HALT stores the flag.
+        for _ in 0..8 {
+            if m.cpu().regs.halted {
+                break;
+            }
+            m.step_once();
+        }
+        assert!(m.cpu().regs.halted);
+        assert_eq!(
+            m.read_mem(0x2000),
+            0x42,
+            "NMI handler should have written flag to MF RAM"
+        );
     }
 
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
@@ -2574,6 +3025,10 @@ mod tests {
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let data = img.blocks[1].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         // Skip header block so trap sees the data block.
         let mut player = TapPlayer::new(img);
         player.consume_block();
@@ -2619,6 +3074,10 @@ mod tests {
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let header = img.blocks[0].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         assert!(!m.tape_playing());
 
@@ -2730,6 +3189,10 @@ mod tests {
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let header = img.blocks[0].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
 
@@ -2774,6 +3237,10 @@ mod tests {
         let img = TapImage::load(&path).expect("attr_mark");
         let data = img.blocks[1].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         let mut player = TapPlayer::new(img);
         player.consume_block();
         m.insert_tape(player);
@@ -2896,33 +3363,165 @@ mod tests {
     }
 
     #[test]
-    fn tape_speed_multiplier_advances_pulses_faster() {
+    fn ear_speed_finishes_block_in_fewer_run_frames() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x00]],
+            ..Default::default()
+        };
+        let frames_until_block1 = |speed: u32| -> u32 {
+            let mut m = Machine::new_48k(&rom).unwrap();
+            m.set_tape_load_options(TapeLoadOptions {
+                flash_load: false,
+                speed,
+            });
+            m.insert_tape(TapPlayer::new(img.clone()));
+            m.set_tape_playing(true);
+            for n in 1..=50_000u32 {
+                let _ = m.run_frame();
+                if m.tape_block() == Some(1) {
+                    return n;
+                }
+            }
+            panic!("speed {speed}: did not reach block 1");
+        };
+        let slow = frames_until_block1(1);
+        let fast = frames_until_block1(10);
+        assert!(
+            fast * 7 < slow,
+            "EAR speed 10 should finish in ~1/10 host run_frames (1x={slow}, 10x={fast})"
+        );
+    }
+
+    #[test]
+    fn reset_keeps_tape_inserted_and_paused_at_position() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         };
         let img = TapImage::load(&fixture_tap()).expect("fixture");
-        let mut slow = Machine::new_48k(&rom).unwrap();
-        let mut fast = Machine::new_48k(&rom).unwrap();
-        slow.set_tape_load_options(TapeLoadOptions {
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
         });
-        fast.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 10,
-        });
-        slow.insert_tape(TapPlayer::new(img.clone()));
-        fast.insert_tape(TapPlayer::new(img));
-        slow.set_tape_playing(true);
-        fast.set_tape_playing(true);
-        let sp = slow.tape_progress().unwrap();
-        let fp = fast.tape_progress().unwrap();
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        for _ in 0..3 {
+            let _ = m.run_frame();
+        }
+        let block_before = m.tape_block();
+        let pulse_before = m.tape_progress().map(|p| p.pulse_index);
+        assert!(m.has_tape());
+        assert!(m.tape_playing());
+        m.reset();
+        assert!(m.has_tape(), "reset must not eject the tape");
+        assert!(!m.tape_playing(), "reset should pause the deck");
+        assert_eq!(
+            m.tape_block(),
+            block_before,
+            "reset should keep tape position"
+        );
+        assert_eq!(
+            m.tape_progress().map(|p| p.pulse_index),
+            pulse_before,
+            "reset should keep pulse position"
+        );
+    }
+
+    #[test]
+    fn reset_keeps_plus3_disk_inserted() {
+        let Some(rom) = rom_plus3_only().or_else(rom_plus2a_only) else {
+            eprintln!("skip: plus3 ROM missing");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        let data = {
+            let mut data = vec![0u8; 0x100];
+            data[0..8].copy_from_slice(b"MV - CPC");
+            data[0x30] = 1;
+            data[0x31] = 1;
+            let track_size: u16 = 0x100;
+            data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+            let mut track = vec![0u8; track_size as usize];
+            track[0..12].copy_from_slice(b"Track-Info\r\n");
+            data.extend_from_slice(&track);
+            data
+        };
+        let img = formats::DskImage::parse(&data).expect("minimal dsk");
+        m.insert_disk(img).expect("insert");
+        {
+            let Machine::SpecPlus3 { bus, .. } = &m else {
+                panic!("expected SpecPlus3");
+            };
+            assert!(bus.fdc.image.is_some());
+        }
+        m.reset();
+        let Machine::SpecPlus3 { bus, .. } = &m else {
+            panic!("expected SpecPlus3");
+        };
         assert!(
-            fp.pulse_count < sp.pulse_count,
-            "10x should schedule a shorter leader (slow {} pulses, fast {})",
-            sp.pulse_count,
-            fp.pulse_count
+            bus.fdc.image.is_some(),
+            "reset must not eject the +3 disk image"
+        );
+    }
+
+    #[test]
+    fn rom_ld_bytes_ear_survives_mid_load_speed_change() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark");
+        let data = img.blocks[1].clone();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 5,
+        });
+        let mut player = TapPlayer::new(img);
+        player.consume_block();
+        m.insert_tape(player);
+        m.set_tape_playing(true);
+
+        let ret = 0x1234u16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.a = 0xff;
+        m.cpu_mut().regs.f = flag::C;
+        m.cpu_mut().regs.set_ix(0x8000);
+        m.cpu_mut().regs.set_de((data.len() - 2) as u16);
+        m.cpu_mut().regs.pc = 0x0556;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        // Into the leader/data, then raise EAR turbo — must not restart the block.
+        for _ in 0..40 {
+            let _ = m.run_frame();
+        }
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 15,
+        });
+        let mut ok = false;
+        for _ in 0..400 {
+            let _ = m.run_frame();
+            if attr_mark_code_ok(&m) {
+                ok = true;
+                break;
+            }
+        }
+        assert!(
+            ok,
+            "ROM LD-BYTES EAR path should complete after mid-load speed change (PC={:04X} block={:?})",
+            m.cpu().regs.pc,
+            m.tape_block()
         );
     }
 
@@ -2948,6 +3547,10 @@ mod tests {
         let img = tape::TzxPlayer::to_tap_image(&data).expect("to tap");
         let header = img.blocks[0].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
 
@@ -3072,6 +3675,66 @@ mod tests {
         None
     }
 
+    fn rom_plus2a_only() -> Option<Vec<u8>> {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus2a/plus2a.rom");
+        std::fs::read(p).ok()
+    }
+
+    fn rom_plus3_only() -> Option<Vec<u8>> {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus3/plus3.rom");
+        std::fs::read(p).ok()
+    }
+
+    #[test]
+    fn plus2a_model_has_no_disk_and_rejects_dsk() {
+        let Some(rom) = rom_plus2a_only().or_else(rom_plus3_only) else {
+            eprintln!("skip: plus2a/plus3 ROM missing");
+            return;
+        };
+        let mut m = Machine::new_plus2a(&rom).unwrap();
+        assert_eq!(m.model(), Model::SpectrumPlus2A);
+        {
+            let Machine::SpecPlus3 { bus, .. } = &mut m else {
+                panic!("expected SpecPlus3");
+            };
+            assert!(!bus.disk_interface);
+            assert_eq!(bus.in_port(0x2ffd), 0xff);
+        }
+        let data = {
+            let mut data = vec![0u8; 0x100];
+            data[0..8].copy_from_slice(b"MV - CPC");
+            data[0x30] = 1;
+            data[0x31] = 1;
+            let track_size: u16 = 0x100;
+            data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+            let mut track = vec![0u8; track_size as usize];
+            track[0..12].copy_from_slice(b"Track-Info\r\n");
+            data.extend_from_slice(&track);
+            data
+        };
+        let img = formats::DskImage::parse(&data).expect("minimal dsk");
+        let err = m.insert_disk(img).unwrap_err();
+        assert!(
+            err.contains("+2A") || err.contains("disk"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn plus3_model_keeps_disk_interface() {
+        let Some(rom) = rom_plus3_only().or_else(rom_plus2a_only) else {
+            eprintln!("skip: plus3 ROM missing");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        assert_eq!(m.model(), Model::SpectrumPlus3);
+        let Machine::SpecPlus3 { bus, .. } = &mut m else {
+            panic!("expected SpecPlus3");
+        };
+        assert!(bus.disk_interface);
+        assert_eq!(bus.in_port(0x2ffd) & 0x80, 0x80);
+    }
+
     #[test]
     fn plus3_boots_and_1ffd_special_maps() {
         let Some(rom) = rom_plus3() else {
@@ -3185,8 +3848,7 @@ mod tests {
             .join("../../tests/fixtures/tape/attr_mark.tap");
         let img = TapImage::load(&path).expect("attr_mark.tap");
         let m = Machine::new_48k(&rom).unwrap();
-        // Speed 10 keeps ROM-accurate bit widths (leader/pause only); ~hundreds of frames.
-        // Speed 10 floors the leader so LD-LEADER's 1045-edge wait still fits; pause is /10.
+        // Speed N runs N Spectrum frames per run_frame while EAR playing.
         let (_m, loaded) = run_attr_mark_typed(m, img, false, 10, 200, 2_000);
         assert!(
             loaded,
@@ -3386,6 +4048,10 @@ mod tests {
         trace::clear();
         trace::enable(trace::Category::TAPE);
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
         // Expect header flag 0x00 but first block is data 0xff → skip then load.
@@ -3508,6 +4174,105 @@ mod tests {
         assert_eq!(m.read_mem(0x4000), 0xbe);
         assert_eq!(m.read_mem(0x4001), 0xef);
         assert_eq!(m.read_mem(0x5000), 0x42);
+    }
+
+    fn synthetic_z80_v2_128_for_machine() -> Vec<u8> {
+        let mut data = vec![0u8; 55];
+        data[0] = 0x11;
+        data[1] = 0x22;
+        data[6] = 0;
+        data[7] = 0;
+        data[8] = 0x00;
+        data[9] = 0x70; // SP
+        data[12] = (3 << 1) & 0x0e; // border 3
+        data[30] = 23;
+        data[31] = 0;
+        data[32] = 0x00;
+        data[33] = 0x90; // PC = 0x9000
+        data[34] = 3; // v2 128K
+        data[35] = 0x04; // 7FFD: bank 4 at C000
+        for page in 3u8..=10 {
+            let bank = page - 3;
+            data.extend_from_slice(&0xffffu16.to_le_bytes());
+            data.push(page);
+            let mut page_ram = vec![0u8; 16384];
+            page_ram[0] = 0xf0 | bank;
+            page_ram[1] = bank;
+            data.extend_from_slice(&page_ram);
+        }
+        data
+    }
+
+    fn synthetic_z80_v3_plus3_for_machine() -> Vec<u8> {
+        let mut data = vec![0u8; 87];
+        data[6] = 0;
+        data[7] = 0;
+        data[8] = 0xfe;
+        data[9] = 0xff;
+        data[12] = 7 << 1; // bits 1–3: last OUT to 7FFD bank select (bank 7)
+        data[30] = 55;
+        data[31] = 0;
+        data[32] = 0x00;
+        data[33] = 0xc0; // PC in paged bank window
+        data[34] = 7; // +3
+        data[35] = 0x01; // bank 1 at C000
+        data[86] = 0x04; // 1FFD ROM high
+        for page in 3u8..=10 {
+            let bank = page - 3;
+            data.extend_from_slice(&0xffffu16.to_le_bytes());
+            data.push(page);
+            let mut page_ram = vec![0u8; 16384];
+            page_ram[0] = 0xa0 | bank;
+            data.extend_from_slice(&page_ram);
+        }
+        data
+    }
+
+    #[test]
+    fn apply_snapshot128_z80_pages_and_7ffd() {
+        let Some(rom) = rom128() else {
+            eprintln!("skip: roms/128/spec128uk.rom missing");
+            return;
+        };
+        let snap = Snapshot128::parse_z80(&synthetic_z80_v2_128_for_machine()).expect("z80 128");
+        let mut m = Machine::new_128k(&rom).unwrap();
+        m.apply_snapshot128(&snap);
+        let i = m.inspect();
+        assert_eq!(i.regs.pc, 0x9000);
+        assert_eq!(i.border, 3);
+        assert_eq!(i.paging.page_7ffd, Some(0x04));
+        assert_eq!(m.read_mem(0x4000), 0xf5); // bank 5
+        assert_eq!(m.read_mem(0x8000), 0xf2); // bank 2
+        assert_eq!(m.read_mem(0xc000), 0xf4); // bank 4 via 7FFD
+        if let Machine::Spec128 { bus, .. } = &m {
+            assert_eq!(bus.banks[0][0], 0xf0);
+            assert_eq!(bus.banks[7][0], 0xf7);
+            assert_eq!(bus.page, 0x04);
+        } else {
+            panic!("expected Spec128");
+        }
+    }
+
+    #[test]
+    fn apply_snapshot128_plus3_applies_1ffd() {
+        let Some(rom) = rom_plus3() else {
+            eprintln!("skip: plus3/plus2a ROM missing");
+            return;
+        };
+        let snap = Snapshot128::parse_z80(&synthetic_z80_v3_plus3_for_machine()).expect("z80 +3");
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        m.apply_snapshot128(&snap);
+        let i = m.inspect();
+        assert_eq!(i.regs.pc, 0xc000);
+        assert_eq!(i.paging.page_7ffd, Some(0x01));
+        assert_eq!(i.paging.page_1ffd, Some(0x04));
+        assert_eq!(m.read_mem(0xc000), 0xa1); // bank 1
+        if let Machine::SpecPlus3 { bus, .. } = &m {
+            assert_eq!(bus.page_1ffd, 0x04);
+            assert_eq!(bus.banks[6][0], 0xa6);
+        } else {
+            panic!("expected SpecPlus3");
+        }
     }
 
     /// Uncompressed RZX input block (same layout as formats::rzx tests).
@@ -3804,6 +4569,7 @@ mod tests {
                 match model {
                     Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                 },
                 img.clone(),
@@ -3842,6 +4608,7 @@ mod tests {
                     match model {
                         Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                         Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                        Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                         Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                     },
                     img.clone(),
@@ -3870,6 +4637,7 @@ mod tests {
     }
 
     /// Boggit-style PROGRAM + CODE + flag `0xC8` via RAM LD-BYTES clone.
+
     #[test]
     fn custom_loader_matrix_models_instant_and_ear() {
         let path = custom_loader_tap();
@@ -3921,6 +4689,7 @@ mod tests {
                 let mut m = match model {
                     Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                 };
                 m.set_tape_load_options(TapeLoadOptions {
@@ -3955,13 +4724,17 @@ mod tests {
                             Some(2),
                             "{label} instant must not advance past CODE into C8 before USR"
                         );
-                    } else if let Some(TapeDeck::Tap(p)) = match &mut m {
-                        Machine::Spec48 { tape, .. }
-                        | Machine::Spec128 { tape, .. }
-                        | Machine::SpecPlus3 { tape, .. } => tape.as_mut(),
-                    } {
-                        p.rewind_to_block(2);
-                        m.set_tape_playing(true);
+                    } else {
+                        // Pause while rewinding/arming USR so multi-frame turbo cannot
+                        // burn C8 pilot before the RAM loader starts edge-detect.
+                        m.set_tape_playing(false);
+                        if let Some(TapeDeck::Tap(p)) = match &mut m {
+                            Machine::Spec48 { tape, .. }
+                            | Machine::Spec128 { tape, .. }
+                            | Machine::SpecPlus3 { tape, .. } => tape.as_mut(),
+                        } {
+                            p.rewind_to_block(2);
+                        }
                     }
                     // RANDOMIZE USR 32768 — enter the custom-flag loader.
                     let ret = 0x15e6u16;
@@ -3970,6 +4743,17 @@ mod tests {
                     m.write_mem(0xfffe, (ret >> 8) as u8);
                     m.cpu_mut().regs.halted = false;
                     m.cpu_mut().regs.pc = 0x8000;
+                    // Fake USR return (0x15E6) is not a real BASIC continuation: the
+                    // C8 byte at 0x9000 is visible for only ~15 frames then cleared.
+                    // Poll at 1× so warp-S host ticks cannot skip that window; the
+                    // earlier LOAD "" CODE phase still used full EAR warp.
+                    if !flash {
+                        m.set_tape_load_options(TapeLoadOptions {
+                            flash_load: false,
+                            speed: 1,
+                        });
+                    }
+                    m.set_tape_playing(true);
                     for _ in 0..max {
                         let _ = m.run_frame();
                         if custom_loader_ok(&m) {
@@ -4061,6 +4845,7 @@ mod tests {
                 let m = match model {
                     Model::Spectrum48 => Machine::new_48k(&rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(&rom).unwrap(),
+                    Model::SpectrumPlus2A => Machine::new_plus2a(&rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(&rom).unwrap(),
                 };
                 let deck = TapPlayer::new(img.clone());

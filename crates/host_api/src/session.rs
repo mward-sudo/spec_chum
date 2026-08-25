@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use machine::{Machine, Model};
+use machine::{JoystickMode, JoystickState, Machine, Model};
 use thiserror::Error;
 
 /// Model identifiers for the C ABI (stable numeric values).
@@ -12,6 +12,8 @@ pub enum ModelId {
     Spectrum48 = 0,
     Spectrum128 = 1,
     SpectrumPlus3 = 2,
+    /// Amstrad +2A (no disk interface). Added after Plus3; keep numeric id stable.
+    SpectrumPlus2A = 3,
 }
 
 impl ModelId {
@@ -21,6 +23,7 @@ impl ModelId {
             0 => Some(Self::Spectrum48),
             1 => Some(Self::Spectrum128),
             2 => Some(Self::SpectrumPlus3),
+            3 => Some(Self::SpectrumPlus2A),
             _ => None,
         }
     }
@@ -31,6 +34,7 @@ impl ModelId {
             Self::Spectrum48 => Model::Spectrum48,
             Self::Spectrum128 => Model::Spectrum128,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
+            Self::SpectrumPlus2A => Model::SpectrumPlus2A,
         }
     }
 }
@@ -75,6 +79,12 @@ pub struct HostSession {
     audio_pcm: Vec<f32>,
     /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
     last_speaker_level: bool,
+    /// Host joystick presentation mode.
+    joystick_mode: JoystickMode,
+    /// Last applied host joystick mask state.
+    joystick_state: JoystickState,
+    /// Host-held Spectrum matrix keys so Sinclair/Cursor joystick clears do not drop them.
+    host_keys: [[bool; 5]; 8],
 }
 
 impl HostSession {
@@ -93,6 +103,9 @@ impl HostSession {
             status: "No ROM loaded".into(),
             audio_pcm: Vec::new(),
             last_speaker_level: false,
+            joystick_mode: JoystickMode::Kempston,
+            joystick_state: JoystickState::empty(),
+            host_keys: [[false; 5]; 8],
         }
     }
 
@@ -188,9 +201,11 @@ impl HostSession {
             ModelId::Spectrum48 => Machine::new_48k(rom),
             ModelId::Spectrum128 => Machine::new_128k(rom),
             ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
+            ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
+        self.reapply_host_keys();
         self.last_speaker_level = false;
         self.status = "ROM loaded".into();
         Ok(())
@@ -207,8 +222,16 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
+        let mode = self.joystick_mode;
+        let state = self.joystick_state;
+        let keys = self.host_keys;
         m.reset();
-        self.status = "Reset".into();
+        Self::recompose_input(m, mode, state, &keys);
+        self.status = if m.has_tape() {
+            "Reset (tape still inserted, paused)".into()
+        } else {
+            "Reset".into()
+        };
         Ok(())
     }
 
@@ -260,6 +283,110 @@ impl HostSession {
             }
         }
         Ok(())
+    }
+
+    /// Load a SNA/Z80 snapshot (128K/+3 first, then 48K), switching model when needed.
+    ///
+    /// Mirrors egui `SpecChumApp::load_snapshot`: selects the matching model for 128K/+3
+    /// (including 128K↔Plus3) and for 48K snapshots loaded onto a non-48K machine; requires
+    /// ROM autoload before apply.
+    pub fn load_snapshot(&mut self, path: &Path) -> Result<(), HostError> {
+        if let Ok(snap) =
+            formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
+        {
+            let required = match snap.model {
+                formats::Snapshot128Model::SpectrumPlus3 => ModelId::SpectrumPlus3,
+                formats::Snapshot128Model::SpectrumPlus2A => ModelId::SpectrumPlus2A,
+                formats::Snapshot128Model::Spectrum128 => ModelId::Spectrum128,
+            };
+            if self.machine.is_none() || self.model != required {
+                self.model = required;
+                self.machine = None;
+                self.try_autoload_rom();
+                if self.machine.is_none() {
+                    return Err(HostError::Message(format!(
+                        "ROM required for {required:?} snapshot not found; run ./scripts/fetch_roms.sh"
+                    )));
+                }
+            }
+            let Some(m) = self.machine.as_mut() else {
+                return Err(HostError::NoMachine);
+            };
+            m.apply_snapshot128(&snap);
+            // Model switch builds a fresh Machine — restore retained host joystick.
+            m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+            self.reapply_host_keys();
+            self.status = format!("Loaded {required:?} snapshot {}", path.display());
+            return Ok(());
+        }
+        let snap = formats::Snapshot48::load_sna(path)
+            .or_else(|_| formats::Snapshot48::load_z80(path))
+            .map_err(|e| HostError::Message(e.to_string()))?;
+        if self.machine.is_none() || self.model != ModelId::Spectrum48 {
+            self.model = ModelId::Spectrum48;
+            self.machine = None;
+            self.try_autoload_rom();
+            if self.machine.is_none() {
+                return Err(HostError::Message(
+                    "ROM required for Spectrum48 snapshot not found; run ./scripts/fetch_roms.sh"
+                        .into(),
+                ));
+            }
+        }
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.apply_snapshot48(&snap);
+        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        self.reapply_host_keys();
+        self.status = format!("Loaded snapshot {}", path.display());
+        Ok(())
+    }
+
+    /// Load an RZX recording into the current machine.
+    pub fn load_rzx(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let rec =
+            formats::RzxRecording::load(path).map_err(|e| HostError::Message(e.to_string()))?;
+        m.insert_rzx(rec);
+        self.status = format!("Loaded RZX {}", path.display());
+        Ok(())
+    }
+
+    /// Insert a +3 DSK image (requires a Plus3 machine).
+    pub fn load_dsk(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let img = formats::DskImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
+        m.insert_disk(img).map_err(HostError::Message)?;
+        self.status = format!("Inserted DSK {}", path.display());
+        Ok(())
+    }
+
+    /// Best-effort ROM load for the current model (workspace / `SPEC_CHUM_ROOT` / cwd).
+    fn try_autoload_rom(&mut self) {
+        let candidates: &[&str] = match self.model {
+            ModelId::Spectrum48 => &["roms/spec48.rom"],
+            ModelId::Spectrum128 => &["roms/128/spec128uk.rom"],
+            ModelId::SpectrumPlus3 => &["roms/plus3/plus3.rom"],
+            ModelId::SpectrumPlus2A => &["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"],
+        };
+        for root in rom_search_roots() {
+            for rel in candidates {
+                let path = root.join(rel);
+                if path.is_file() {
+                    if let Ok(data) = std::fs::read(&path) {
+                        if self.load_rom_bytes(&data).is_ok() {
+                            self.status = format!("Loaded {}", path.display());
+                            return;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn play_tape(&mut self) -> Result<(), HostError> {
@@ -324,7 +451,8 @@ impl HostSession {
         if row > 7 || bit > 4 {
             return Err(HostError::Message("key row/bit out of range".into()));
         }
-        m.keyboard_mut().set_key(row, bit, pressed);
+        self.host_keys[row][bit as usize] = pressed;
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         Ok(())
     }
 
@@ -332,8 +460,99 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
-        m.keyboard_mut().reset();
+        self.host_keys = [[false; 5]; 8];
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         Ok(())
+    }
+
+    pub fn set_joystick_mode(&mut self, mode: JoystickMode) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        self.joystick_mode = mode;
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        Ok(())
+    }
+
+    pub fn set_joystick(&mut self, mask: u8) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        self.joystick_state = JoystickState::from_mask(mask);
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        Ok(())
+    }
+
+    pub fn clear_joystick(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        self.joystick_state = JoystickState::empty();
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        Ok(())
+    }
+
+    fn reapply_host_keys(&mut self) {
+        let Some(m) = self.machine.as_mut() else {
+            return;
+        };
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+    }
+
+    /// Reset matrix, apply joystick routing, then overlay retained host keys.
+    fn recompose_input(
+        m: &mut Machine,
+        mode: JoystickMode,
+        state: JoystickState,
+        host_keys: &[[bool; 5]; 8],
+    ) {
+        m.keyboard_mut().reset();
+        m.apply_joystick_state(mode, state);
+        let kb = m.keyboard_mut();
+        for (row, bits) in host_keys.iter().enumerate() {
+            for (bit, pressed) in bits.iter().enumerate() {
+                if *pressed {
+                    kb.set_key(row, bit as u8, true);
+                }
+            }
+        }
+    }
+
+    /// Attach Multiface 1 (48K only) from an 8 KiB ROM image path.
+    pub fn attach_multiface(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        m.attach_multiface(&data).map_err(HostError::Message)?;
+        self.status = format!("Attached Multiface 1 from {}", path.display());
+        Ok(())
+    }
+
+    /// Raise Multiface NMI if attached.
+    pub fn multiface_nmi(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        match m.multiface_nmi() {
+            Some(_) => {
+                self.status = "Multiface NMI".into();
+                Ok(())
+            }
+            None => Err(HostError::Message(
+                "Multiface not attached (48K + 8K MF ROM)".into(),
+            )),
+        }
+    }
+
+    #[must_use]
+    pub fn has_multiface(&self) -> bool {
+        self.machine.as_ref().is_some_and(Machine::has_multiface)
+    }
+
+    #[must_use]
+    pub fn joystick_mode(&self) -> JoystickMode {
+        self.joystick_mode
     }
 
     /// Peek one byte of machine memory.
@@ -432,7 +651,9 @@ impl HostSession {
         let audio = m.run_frame();
         let frame_t = match m.model() {
             machine::Model::Spectrum48 => 69_888,
-            machine::Model::Spectrum128 | machine::Model::SpectrumPlus3 => 70_908,
+            machine::Model::Spectrum128
+            | machine::Model::SpectrumPlus2A
+            | machine::Model::SpectrumPlus3 => 70_908,
         };
         self.last_speaker_level = render_frame_pcm(
             &audio,
@@ -497,6 +718,19 @@ fn render_frame_pcm(
         }
     }
     level
+}
+
+fn rom_search_roots() -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        roots.push(cwd);
+    }
+    if let Ok(env) = std::env::var("SPEC_CHUM_ROOT") {
+        roots.push(std::path::PathBuf::from(env));
+    }
+    // Dev / `cargo test`: crates/host_api → workspace root.
+    roots.push(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    roots
 }
 
 fn dims(with_border: bool) -> (usize, usize) {
@@ -639,6 +873,53 @@ mod tests {
     }
 
     #[test]
+    fn joystick_kempston_mask_reaches_port() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick(0x11).unwrap();
+        assert_eq!(s.machine.as_mut().unwrap().kempston_mut().read(), 0x11);
+        s.clear_joystick().unwrap();
+        assert_eq!(s.machine.as_mut().unwrap().kempston_mut().read(), 0);
+    }
+
+    #[test]
+    fn physical_num1_survives_sinclair_left_joystick_update() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::SinclairLeft).unwrap();
+        // Num1 = row 3 bit 0 (also Sinclair-left left).
+        s.set_key(3, 0, true).unwrap();
+        s.set_joystick(0).unwrap(); // would clear Sinclair matrix without reapply
+        let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+        assert_eq!(rows[3] & (1 << 0), 0, "Num1 must stay pressed");
+    }
+
+    #[test]
+    fn physical_num5_survives_cursor_joystick_update() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::Cursor).unwrap();
+        // Num5 = row 3 bit 4 (also Cursor left).
+        s.set_key(3, 4, true).unwrap();
+        s.set_joystick(0).unwrap();
+        let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+        assert_eq!(rows[3] & (1 << 4), 0, "Num5 must stay pressed");
+    }
+
+    #[test]
     fn open_fixture_tap_progress_and_audio_pcm() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -700,8 +981,10 @@ mod tests {
         assert_eq!(ModelId::from_u32(0), Some(ModelId::Spectrum48));
         assert_eq!(ModelId::from_u32(1), Some(ModelId::Spectrum128));
         assert_eq!(ModelId::from_u32(2), Some(ModelId::SpectrumPlus3));
+        assert_eq!(ModelId::from_u32(3), Some(ModelId::SpectrumPlus2A));
         assert_eq!(ModelId::from_u32(9), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
+        assert_eq!(ModelId::SpectrumPlus2A.to_model(), Model::SpectrumPlus2A);
     }
 
     #[test]
@@ -774,12 +1057,222 @@ mod tests {
         assert!(matches!(err, HostError::Io(_) | HostError::Message(_)));
     }
 
+    /// Minimal 48K SNA (49179 bytes) with PC=0x8000 via SP pop and one RAM marker.
+    fn synthetic_sna48_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 49179];
+        data[26] = 5; // border
+        data[23] = 0x00;
+        data[24] = 0x40; // SP = 0x4000 → pop PC from RAM[0x4000]
+        data[27] = 0x00;
+        data[28] = 0x80; // PC = 0x8000
+        data[27 + 0x4000] = 0xaa; // byte at 0x8000
+        data
+    }
+
+    /// Minimal uncompressed Z80 v1 (48K).
+    fn synthetic_z80_v1_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 30 + 49152];
+        data[0] = 0x11; // A
+        data[1] = 0x22; // F
+        data[6] = 0x00;
+        data[7] = 0x81; // PC = 0x8100
+        data[8] = 0x00;
+        data[9] = 0x70; // SP = 0x7000
+        data[12] = (6 << 1) & 0x0e; // border 6, uncompressed
+        data[30] = 0xbe;
+        data[31] = 0xef;
+        data[30 + 0x1000] = 0x42;
+        data
+    }
+
+    #[test]
+    fn load_snapshot_sna48_sets_pc_and_ram() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let dir = std::env::temp_dir();
+        let path = dir.join("spec_chum_host_api_test.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.load_snapshot(&path).expect("sna");
+        let regs = s.regs().expect("regs");
+        assert_eq!(regs.pc, 0x8000);
+        assert_eq!(s.peek(0x8000).expect("peek"), 0xaa);
+        assert!(s.status().contains("snapshot"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn load_128_or_plus3_rom(s: &mut HostSession, model: ModelId) -> bool {
+        s.set_model(model);
+        s.try_autoload_rom();
+        s.has_machine()
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_128k() {
+        if rom48().is_none() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum128, false);
+        if !load_128_or_plus3_rom(&mut s, ModelId::Spectrum128) {
+            eprintln!("skip: 128K ROM missing");
+            return;
+        }
+        assert_eq!(s.model(), ModelId::Spectrum128);
+        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick(0x11).unwrap();
+        let path = std::env::temp_dir().join("spec_chum_host_api_128_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        s.load_snapshot(&path).expect("48k sna on 128");
+        assert_eq!(s.model(), ModelId::Spectrum48);
+        assert_eq!(
+            s.machine.as_ref().map(machine::Machine::model),
+            Some(Model::Spectrum48)
+        );
+        assert_eq!(s.regs().expect("regs").pc, 0x8000);
+        assert_eq!(
+            s.machine.as_mut().unwrap().kempston_mut().read(),
+            0x11,
+            "held joystick must survive model-switching snapshot load"
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_plus3() {
+        if rom48().is_none() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::SpectrumPlus3, false);
+        if !load_128_or_plus3_rom(&mut s, ModelId::SpectrumPlus3) {
+            eprintln!("skip: +3 ROM missing");
+            return;
+        }
+        assert_eq!(s.model(), ModelId::SpectrumPlus3);
+        let path = std::env::temp_dir().join("spec_chum_host_api_plus3_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        s.load_snapshot(&path).expect("48k sna on +3");
+        assert_eq!(s.model(), ModelId::Spectrum48);
+        assert_eq!(
+            s.machine.as_ref().map(machine::Machine::model),
+            Some(Model::Spectrum48)
+        );
+        assert_eq!(s.regs().expect("regs").pc, 0x8000);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot_z80_sets_pc_and_ram() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let dir = std::env::temp_dir();
+        let path = dir.join("spec_chum_host_api_test.z80");
+        std::fs::write(&path, synthetic_z80_v1_bytes()).expect("write z80");
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.load_snapshot(&path).expect("z80");
+        let regs = s.regs().expect("regs");
+        assert_eq!(regs.pc, 0x8100);
+        assert_eq!(regs.sp, 0x7000);
+        assert_eq!(s.peek(0x4000).expect("peek"), 0xbe);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot_without_machine_autoloads_48k_rom() {
+        let fixture = workspace_root().join("tests/fixtures/snapshots/minimal48.sna");
+        let (path, cleanup) = if fixture.is_file() {
+            (fixture, false)
+        } else {
+            let path = std::env::temp_dir().join("spec_chum_host_api_autoload.sna");
+            std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+            (path, true)
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        match s.load_snapshot(&path) {
+            Ok(()) => {
+                assert!(s.has_machine());
+                assert_eq!(s.regs().expect("regs").pc, 0x8000);
+            }
+            Err(HostError::NoMachine) => {
+                eprintln!("skip: could not autoload ROM for snapshot");
+            }
+            Err(HostError::Message(msg))
+                if msg.contains("ROM required") || msg.contains("fetch_roms") =>
+            {
+                eprintln!("skip: {msg}");
+            }
+            Err(e) => panic!("unexpected error: {e}"),
+        }
+        if cleanup {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
+    #[test]
+    fn load_rzx_and_dsk_require_machine() {
+        let mut s = HostSession::new(ModelId::SpectrumPlus3, false);
+        assert!(matches!(
+            s.load_rzx(Path::new("/tmp/missing.rzx")),
+            Err(HostError::NoMachine)
+        ));
+        assert!(matches!(
+            s.load_dsk(Path::new("/tmp/missing.dsk")),
+            Err(HostError::NoMachine)
+        ));
+    }
+
+    #[test]
+    fn load_dsk_rejects_non_plus3() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+
+        // Minimal parseable MV-CPC DSK (one empty track header) so load reaches insert_disk.
+        let mut dsk = vec![0u8; 0x100];
+        dsk[0..8].copy_from_slice(b"MV - CPC");
+        dsk[0x30] = 1;
+        dsk[0x31] = 1;
+        let track_size: u16 = 0x100;
+        dsk[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+        let mut track = vec![0u8; track_size as usize];
+        track[0..12].copy_from_slice(b"Track-Info\r\n");
+        dsk.extend_from_slice(&track);
+
+        let dir = std::env::temp_dir().join("spec_chum_host_api_dsk_reject");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("reject.dsk");
+        std::fs::write(&path, &dsk).expect("write dsk");
+
+        let err = s.load_dsk(&path).expect_err("48K must reject DSK");
+        match err {
+            HostError::Message(msg) => {
+                assert!(
+                    msg.contains("+3") || msg.contains("Plus3") || msg.contains("plus3"),
+                    "expected model-rejection message, got {msg}"
+                );
+            }
+            other => panic!("expected Message rejection, got {other:?}"),
+        }
+    }
+
     #[test]
     fn render_frame_pcm_carries_late_edge_into_next_level() {
         let frame_tstates = 69_888u32;
         let audio = machine::FrameAudio {
             beeper_edges: vec![(frame_tstates - 1, true)],
             ay_samples: Vec::new(),
+            ay_left: Vec::new(),
+            ay_right: Vec::new(),
         };
         let mut out = Vec::new();
         let level = render_frame_pcm(&audio, frame_tstates, false, &mut out);

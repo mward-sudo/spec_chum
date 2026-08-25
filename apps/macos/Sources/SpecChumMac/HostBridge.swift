@@ -1,14 +1,37 @@
 import AppKit
 import CSpecChumHost
 import Foundation
+import GameController
 import UniformTypeIdentifiers
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
+    /// Joystick presentation — matches `sc_set_joystick_mode` (default Kempston).
+    enum JoystickMode: UInt32, CaseIterable, Identifiable {
+        case kempston = 0
+        case sinclairLeft = 1
+        case sinclairRight = 2
+        case cursor = 3
+
+        var id: UInt32 { rawValue }
+
+        var title: String {
+            switch self {
+            case .kempston: "Kempston"
+            case .sinclairLeft: "Sinclair left (1–5)"
+            case .sinclairRight: "Sinclair right (6–0)"
+            case .cursor: "Cursor"
+            }
+        }
+    }
+
+    /// Digital stick threshold for left thumbstick axes (~egui gilrs parity).
+    private static let stickThreshold: Float = 0.5
     enum Model: UInt32, CaseIterable, Identifiable {
         case spectrum48 = 0
         case spectrum128 = 1
         case spectrumPlus3 = 2
+        case spectrumPlus2A = 3
 
         var id: UInt32 { rawValue }
 
@@ -16,21 +39,56 @@ final class HostBridge: ObservableObject {
             switch self {
             case .spectrum48: "Spectrum 48K"
             case .spectrum128: "Spectrum 128K"
-            case .spectrumPlus3: "Spectrum +2A/+3"
+            case .spectrumPlus3: "Spectrum +3"
+            case .spectrumPlus2A: "Spectrum +2A"
             }
         }
+
+        /// Short label for window titles.
+        var shortTitle: String {
+            switch self {
+            case .spectrum48: "48K"
+            case .spectrum128: "128K"
+            case .spectrumPlus3: "+3"
+            case .spectrumPlus2A: "+2A"
+            }
+        }
+
+        /// +3 has floppy; toolbar/File Open may include `.dsk`.
+        var supportsDisk: Bool { self == .spectrumPlus3 }
     }
 
     @Published private(set) var status: String = "Starting…"
     @Published private(set) var tapePlaying: Bool = false
     @Published private(set) var hasTape: Bool = false
-    /// Instant flash-load when true; EAR bitstream when false.
-    @Published var instantLoad: Bool = true {
+    /// Last opened media filename for the window title (tape / snapshot / RZX / disk / ROM).
+    @Published private(set) var mediaTitle: String?
+    /// Flash-load mirror of host options. Instant turns this on ephemerally; Play forces it off.
+    @Published var instantLoad: Bool = false {
         didSet { pushTapeLoadOptions() }
     }
-    /// EAR speed multiplier presets (also applied when instant is off).
+    /// EAR speed (1x…20x): while Play is active, that many Spectrum frames per host tick.
     @Published var tapeSpeed: UInt32 = 1 {
         didSet { pushTapeLoadOptions() }
+    }
+    /// Host PCM output gain 0…1 (what the user hears). Does not affect EAR / flash-load.
+    @Published var outputVolume: Float = HostBridge.loadPersistedVolume() {
+        didSet {
+            let clamped = max(0, min(1, outputVolume))
+            if clamped != outputVolume {
+                outputVolume = clamped
+                return
+            }
+            audio.volume = clamped
+            UserDefaults.standard.set(Double(clamped), forKey: Self.volumeDefaultsKey)
+        }
+    }
+    /// Host output mute (mixer gain 0). Independent of Spectrum EAR bit.
+    @Published var outputMuted: Bool = HostBridge.loadPersistedMuted() {
+        didSet {
+            audio.muted = outputMuted
+            UserDefaults.standard.set(outputMuted, forKey: Self.mutedDefaultsKey)
+        }
     }
     /// 0...1 tape position for ProgressView; nil when no tape.
     @Published private(set) var tapeFraction: Double?
@@ -46,14 +104,28 @@ final class HostBridge: ObservableObject {
     @Published private(set) var debugSp: UInt16 = 0
     @Published private(set) var debugAf: UInt16 = 0
     @Published private(set) var inspectJsonPreview: String = ""
+    @Published var joystickMode: JoystickMode = .kempston {
+        didSet {
+            guard oldValue != joystickMode else { return }
+            _ = applyJoystickMode(joystickMode)
+        }
+    }
     @Published var model: Model = .spectrum48 {
         didSet {
-            guard let handle, oldValue != model else { return }
+            guard let handle, oldValue != model, !suppressModelPush else { return }
             _ = sc_set_model(handle, model.rawValue)
             tryAutoloadRom()
             pushTapeLoadOptions()
             refreshStatus()
         }
+    }
+
+    /// Document-style window title: media + machine (HIG).
+    var windowTitle: String {
+        if let mediaTitle, !mediaTitle.isEmpty {
+            return "\(mediaTitle) — \(model.shortTitle)"
+        }
+        return "Spec Chum — \(model.shortTitle)"
     }
 
     private var handle: UnsafeMutableRawPointer?
@@ -66,6 +138,27 @@ final class HostBridge: ObservableObject {
     private let audio = TapeAudioPlayer()
     /// Publish progress at most ~4 Hz to avoid SwiftUI churn.
     private var progressPublishCounter: UInt32 = 0
+    /// Arrows + Tab → Kempston bits (egui parity); OR’d with gamepad each frame.
+    private(set) var keyboardJoystickMask: UInt32 = 0
+    private var joystickModeApplied = false
+    private var connectObserver: NSObjectProtocol?
+    private var disconnectObserver: NSObjectProtocol?
+    /// Frame-scripted `LOAD ""` [CODE] (egui KeyScript parity); advanced in `runFrame`.
+    private var keyScript: LoadKeyScript?
+    /// After Instant Type LOAD finishes, auto-Play with flash-load still on.
+    private var pendingInstantPlay = false
+    /// Instant left flash-load on; clear it when the deck next stops (or Pause/Play/Rewind).
+    private var instantFlashActive = false
+    /// When syncing `model` from `sc_get_model` after snapshot load, skip `sc_set_model`.
+    private var suppressModelPush = false
+
+    /// Toolbar / File label: include Disk only on +3.
+    var openMediaTitle: String {
+        model.supportsDisk ? "Open Tape / Disk" : "Open Tape"
+    }
+
+    /// Menu item with ellipsis.
+    var openMediaMenuTitle: String { "\(openMediaTitle)…" }
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
@@ -78,11 +171,37 @@ final class HostBridge: ObservableObject {
         tryAutoloadRom()
         refreshStatus()
         syncTapeLoadOptionsFromHost()
+        _ = applyJoystickMode(joystickMode)
+        startGamepadDiscovery()
         let rate = Double(sc_audio_sample_rate(handle))
+        audio.volume = outputVolume
+        audio.muted = outputMuted
         audio.ensureStarted(sampleRate: rate > 0 ? rate : 44100)
     }
 
+    private static let volumeDefaultsKey = "specChum.outputVolume"
+    private static let mutedDefaultsKey = "specChum.outputMuted"
+
+    private static func loadPersistedVolume() -> Float {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: volumeDefaultsKey) == nil {
+            return 1.0
+        }
+        return max(0, min(1, Float(defaults.double(forKey: volumeDefaultsKey))))
+    }
+
+    private static func loadPersistedMuted() -> Bool {
+        UserDefaults.standard.bool(forKey: mutedDefaultsKey)
+    }
+
     deinit {
+        if let connectObserver {
+            NotificationCenter.default.removeObserver(connectObserver)
+        }
+        if let disconnectObserver {
+            NotificationCenter.default.removeObserver(disconnectObserver)
+        }
+        GCController.stopWirelessControllerDiscovery()
         audio.stop()
         if let handle {
             sc_destroy(handle)
@@ -97,6 +216,8 @@ final class HostBridge: ObservableObject {
         let now = ProcessInfo.processInfo.systemUptime
         if lastFrameUptime == 0 {
             lastFrameUptime = now
+            pushJoystick()
+            tickKeyScript()
             sc_run_frame(handle)
             syncTapePublished()
             enqueueAudio()
@@ -105,6 +226,8 @@ final class HostBridge: ObservableObject {
 
         var ran = 0
         while now - lastFrameUptime >= Self.framePeriod, ran < Self.maxCatchUpFrames {
+            pushJoystick()
+            tickKeyScript()
             sc_run_frame(handle)
             lastFrameUptime += Self.framePeriod
             ran += 1
@@ -135,6 +258,10 @@ final class HostBridge: ObservableObject {
         // Avoid @Published writes every tick — they re-enter SwiftUI and can
         // reset TimelineView(.periodic(from: .now)) into a turbo frame loop.
         if playing != tapePlaying {
+            if tapePlaying && !playing && instantFlashActive {
+                instantFlashActive = false
+                setFlashLoad(false)
+            }
             tapePlaying = playing
         }
         if tape != hasTape {
@@ -206,6 +333,7 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "ROM load failed"
         } else {
+            mediaTitle = url.lastPathComponent
             pushTapeLoadOptions()
             refreshStatus()
         }
@@ -217,6 +345,10 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "Tape open failed"
         } else {
+            mediaTitle = url.lastPathComponent
+            // Insert always leaves flash-load off; Instant turns it on ephemerally.
+            instantFlashActive = false
+            setFlashLoad(false)
             refreshStatus()
             hasTape = true
             tapePlaying = false
@@ -224,7 +356,169 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    func openSnapshot(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_snapshot(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "Snapshot load failed"
+        } else {
+            mediaTitle = url.lastPathComponent
+            syncModelFromHost()
+            pushTapeLoadOptions()
+            refreshStatus()
+        }
+    }
+
+    /// Read host model after snapshot load without calling `sc_set_model` again.
+    private func syncModelFromHost() {
+        guard let handle else { return }
+        let raw = sc_get_model(handle)
+        guard raw != UInt32.max, let m = Model(rawValue: raw), m != model else { return }
+        suppressModelPush = true
+        model = m
+        suppressModelPush = false
+    }
+
+    func openRzx(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_rzx(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "RZX load failed"
+        } else {
+            mediaTitle = url.lastPathComponent
+            refreshStatus()
+        }
+    }
+
+    func openDsk(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_dsk(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "DSK load failed"
+        } else {
+            mediaTitle = url.lastPathComponent
+            // Prefer a clear +3DOS hint over the raw host status string.
+            status = "DSK inserted — use +3 Loader / +3DOS"
+        }
+    }
+
+    /// Queue egui-parity `LOAD ""` [CODE] via `sc_set_key`.
+    /// 128K/+3: menu → 48 BASIC (+3 disk Loader — do not Enter alone).
+    /// +2A: menu Loader is tape — Enter alone for PROGRAM.
+    func typeLoadQuotes(withCode: Bool = false) {
+        beginTypeLoadQuotes(withCode: withCode, pendingPlay: false)
+    }
+
+    /// Instant: always prompt for an image, then flash-load + Type LOAD "" + Play.
+    /// Never silently reuses the currently inserted tape. Play alone stays EAR-only.
+    func instantLoadTape() {
+        presentInstantMediaPanel()
+    }
+
+    /// Tape-only filters; Instant is flash Type LOAD. Use Open Tape / Disk for `.dsk`.
+    private func presentInstantMediaPanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "tap") ?? .data,
+            UTType(filenameExtension: "tzx") ?? .data,
+        ]
+        panel.title = "Instant — Open TAP / TZX"
+        guard panel.runModal() == .OK, let url = panel.url else {
+            status = "Instant cancelled"
+            return
+        }
+        // Defensive: Instant is tape-oriented; never fake Type LOAD for disks.
+        if url.pathExtension.lowercased() == "dsk" {
+            openDsk(at: url)
+            status = "DSK inserted — use +3 Loader / +3DOS"
+            return
+        }
+        openTape(at: url)
+        guard hasTape else { return }
+        beginInstantLoadAfterInsert()
+    }
+
+    /// Flash on → Type LOAD "" → Play (flash cleared when deck stops / Pause / Play).
+    private func beginInstantLoadAfterInsert() {
+        instantFlashActive = true
+        setFlashLoad(true)
+
+        if let r = regs(), r.pc == 0x056C {
+            pendingInstantPlay = false
+            playTapeKeepingFlash()
+            status = "Instant: flash-loading at LD-BYTES"
+            return
+        }
+
+        beginTypeLoadQuotes(withCode: false, pendingPlay: true)
+        status = "Instant: typing LOAD \"\" then flash-load Play"
+    }
+
+    private func beginTypeLoadQuotes(withCode: Bool, pendingPlay: Bool) {
+        pendingInstantPlay = pendingPlay
+        switch model {
+        case .spectrum48:
+            keyScript = LoadKeyScript.loadQuotes48k(withCode: withCode)
+            status = withCode
+                ? "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                : "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan"
+        case .spectrumPlus2A:
+            keyScript = LoadKeyScript.loadQuotesPlus2A(withCode: withCode)
+            status = withCode
+                ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                : "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan"
+        case .spectrum128, .spectrumPlus3:
+            keyScript = LoadKeyScript.loadQuotes128OrPlus3(withCode: withCode)
+            status = withCode
+                ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                : "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan"
+        }
+    }
+
+    /// NSOpenPanel for tape (and `.dsk` on +3). Snapshots/RZX stay separate File items.
+    func presentOpenMediaPanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        var types: [UTType] = [
+            UTType(filenameExtension: "tap") ?? .data,
+            UTType(filenameExtension: "tzx") ?? .data,
+        ]
+        if model.supportsDisk {
+            types.append(UTType(filenameExtension: "dsk") ?? .data)
+            panel.title = "Open TAP / TZX / DSK"
+        } else {
+            panel.title = "Open TAP / TZX"
+        }
+        panel.allowedContentTypes = types
+        if panel.runModal() == .OK, let url = panel.url {
+            openMedia(at: url)
+        }
+    }
+
+    /// Route by extension: `.dsk` → disk (+3), else tape.
+    func openMedia(at url: URL) {
+        if url.pathExtension.lowercased() == "dsk" {
+            openDsk(at: url)
+        } else {
+            openTape(at: url)
+        }
+    }
+
+    /// Play always forces flash-load off (EAR path at the selected speed).
     func playTape() {
+        instantFlashActive = false
+        setFlashLoad(false)
+        playTapeKeepingFlash()
+        if tapePlaying {
+            status = "Tape playing (EAR)"
+        }
+    }
+
+    /// Start the deck without clearing flash-load (Instant only).
+    private func playTapeKeepingFlash() {
         guard let handle else { return }
         if sc_tape_play(handle) != 0 {
             status = HostBridge.takeLastError() ?? "Play failed"
@@ -237,6 +531,8 @@ final class HostBridge: ObservableObject {
     func pauseTape() {
         guard let handle else { return }
         _ = sc_tape_pause(handle)
+        instantFlashActive = false
+        setFlashLoad(false)
         refreshStatus()
         tapePlaying = false
     }
@@ -244,6 +540,8 @@ final class HostBridge: ObservableObject {
     func rewindTape() {
         guard let handle else { return }
         _ = sc_tape_rewind(handle)
+        instantFlashActive = false
+        setFlashLoad(false)
         refreshStatus()
         tapePlaying = false
     }
@@ -253,13 +551,21 @@ final class HostBridge: ObservableObject {
 
     func syncTapeLoadOptionsFromHost() {
         guard let handle else { return }
-        var flash: Int32 = 1
+        var flash: Int32 = 0
         var speed: UInt32 = 1
         guard sc_tape_get_load_options(handle, &flash, &speed) == 0 else { return }
         suppressTapeOptsPush = true
         instantLoad = flash != 0
         tapeSpeed = max(1, min(speed, 64))
         suppressTapeOptsPush = false
+    }
+
+    private func setFlashLoad(_ on: Bool) {
+        guard instantLoad != on else {
+            pushTapeLoadOptions()
+            return
+        }
+        instantLoad = on
     }
 
     private func pushTapeLoadOptions() {
@@ -285,6 +591,97 @@ final class HostBridge: ObservableObject {
     func clearKeys() {
         guard let handle else { return }
         _ = sc_clear_keys(handle)
+    }
+
+    /// Update arrow/Tab → Kempston mask from the Spectrum key view (`held` set).
+    func setKeyboardJoystickMask(_ mask: UInt32) {
+        keyboardJoystickMask = mask
+    }
+
+    @discardableResult
+    func applyJoystickMode(_ mode: JoystickMode) -> Bool {
+        guard let handle else { return false }
+        let ok = sc_set_joystick_mode(handle, mode.rawValue) == 0
+        if ok {
+            joystickModeApplied = true
+            if joystickMode != mode {
+                joystickMode = mode
+            }
+        }
+        return ok
+    }
+
+    @discardableResult
+    func setJoystick(mask: UInt32) -> Bool {
+        guard let handle else { return false }
+        return sc_set_joystick(handle, mask) == 0
+    }
+
+    @discardableResult
+    func clearJoystick() -> Bool {
+        guard let handle else { return false }
+        keyboardJoystickMask = 0
+        return sc_clear_joystick(handle) == 0
+    }
+
+    func attachMultiface(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_attach_multiface(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "Multiface attach failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func multifaceNmi() {
+        guard let handle else { return }
+        if sc_multiface_nmi(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Multiface NMI failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    /// OR keyboard Kempston bits with GCController digital stick + A fire.
+    private func pushJoystick() {
+        guard let handle else { return }
+        if !joystickModeApplied {
+            _ = sc_set_joystick_mode(handle, JoystickMode.kempston.rawValue)
+            joystickModeApplied = true
+        }
+        let mask = keyboardJoystickMask | Self.gamepadMask()
+        _ = sc_set_joystick(handle, mask)
+    }
+
+    private func startGamepadDiscovery() {
+        GCController.startWirelessControllerDiscovery(completionHandler: nil)
+        connectObserver = NotificationCenter.default.addObserver(
+            forName: .GCControllerDidConnect,
+            object: nil,
+            queue: .main
+        ) { _ in }
+        disconnectObserver = NotificationCenter.default.addObserver(
+            forName: .GCControllerDidDisconnect,
+            object: nil,
+            queue: .main
+        ) { _ in }
+    }
+
+    /// Bits: 0=right, 1=left, 2=down, 3=up, 4=fire (matches `sc_set_joystick`).
+    private static func gamepadMask() -> UInt32 {
+        var mask: UInt32 = 0
+        for controller in GCController.controllers() {
+            guard let pad = controller.extendedGamepad else { continue }
+            let x = pad.leftThumbstick.xAxis.value
+            let y = pad.leftThumbstick.yAxis.value
+            if pad.dpad.right.isPressed || x >= stickThreshold { mask |= 1 << 0 }
+            if pad.dpad.left.isPressed || x <= -stickThreshold { mask |= 1 << 1 }
+            if pad.dpad.down.isPressed || y <= -stickThreshold { mask |= 1 << 2 }
+            if pad.dpad.up.isPressed || y >= stickThreshold { mask |= 1 << 3 }
+            if pad.buttonA.isPressed { mask |= 1 << 4 }
+        }
+        return mask
     }
 
     /// Default categories: bus|tape|ula|machine (bits 2|4|8|16 = 30).
@@ -456,7 +853,9 @@ final class HostBridge: ObservableObject {
             case .spectrum128:
                 return ["roms/128/spec128uk.rom"]
             case .spectrumPlus3:
-                return ["roms/plus3/plus3.rom", "roms/plus2a/plus2a.rom"]
+                return ["roms/plus3/plus3.rom"]
+            case .spectrumPlus2A:
+                return ["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"]
             }
         }()
         for root in romSearchRoots {
@@ -477,6 +876,42 @@ final class HostBridge: ObservableObject {
             status = String(cString: cstr)
             sc_string_free(cstr)
         }
+    }
+
+    /// Apply one frame of the Type LOAD script (clear + chord), egui `tick_key_script` parity.
+    private func tickKeyScript() {
+        guard let handle, var script = keyScript else { return }
+        if script.stepIndex >= script.steps.count {
+            keyScript = nil
+            clearKeys()
+            finishInstantPlayIfPending()
+            return
+        }
+        if script.framesLeft == 0 {
+            script.framesLeft = max(1, script.steps[script.stepIndex].frames)
+        }
+        let chord = script.steps[script.stepIndex].keys
+        clearKeys()
+        for (row, bit) in chord {
+            _ = sc_set_key(handle, row, bit, 1)
+        }
+        script.framesLeft -= 1
+        if script.framesLeft == 0 {
+            script.stepIndex += 1
+        }
+        if script.stepIndex >= script.steps.count {
+            keyScript = nil
+            finishInstantPlayIfPending()
+        } else {
+            keyScript = script
+        }
+    }
+
+    private func finishInstantPlayIfPending() {
+        guard pendingInstantPlay else { return }
+        pendingInstantPlay = false
+        playTapeKeepingFlash()
+        status = "Instant: flash-loading after LOAD \"\""
     }
 
     private static func takeLastError() -> String? {
@@ -504,5 +939,83 @@ final class HostBridge: ObservableObject {
             }
         }
         return roots
+    }
+}
+
+/// Keyword-mode `LOAD ""` [CODE] — mirrors egui `KeyScript` / ROM debounce.
+private struct LoadKeyScript {
+    struct Step {
+        let keys: [(UInt32, UInt32)]
+        let frames: UInt32
+    }
+
+    var steps: [Step]
+    var stepIndex: Int = 0
+    var framesLeft: UInt32 = 0
+
+    private static let press: UInt32 = 10
+    private static let gap: UInt32 = 5
+    /// Idle after menu → 48 BASIC Enter (egui `MENU_TO_48_BASIC_WAIT`).
+    private static let menuTo48BasicWait: UInt32 = 120
+    private static let caps: (UInt32, UInt32) = (0, 0)
+    private static let sym: (UInt32, UInt32) = (7, 1)
+
+    static func loadQuotes48k(withCode: Bool) -> LoadKeyScript {
+        LoadKeyScript(steps: loadQuotes48kSteps(withCode: withCode))
+    }
+
+    /// 128K / +3 boot menu → 48 BASIC, then keyword LOAD (egui parity; #144).
+    static func loadQuotes128OrPlus3(withCode: Bool) -> LoadKeyScript {
+        let empty: [(UInt32, UInt32)] = []
+        let cursorDown: [(UInt32, UInt32)] = [caps, (4, 4)]
+        let enter: [(UInt32, UInt32)] = [(6, 0)]
+        var steps: [Step] = []
+        for _ in 0..<3 {
+            steps.append(Step(keys: cursorDown, frames: press))
+            steps.append(Step(keys: empty, frames: gap))
+        }
+        steps.append(Step(keys: enter, frames: press))
+        steps.append(Step(keys: empty, frames: menuTo48BasicWait))
+        steps.append(contentsOf: loadQuotes48kSteps(withCode: withCode))
+        return LoadKeyScript(steps: steps)
+    }
+
+    /// +2A: menu Loader is tape — Enter alone for PROGRAM; CODE via 48 BASIC (#145).
+    static func loadQuotesPlus2A(withCode: Bool) -> LoadKeyScript {
+        if withCode {
+            return loadQuotes128OrPlus3(withCode: true)
+        }
+        let empty: [(UInt32, UInt32)] = []
+        let enter: [(UInt32, UInt32)] = [(6, 0)]
+        return LoadKeyScript(steps: [
+            Step(keys: enter, frames: press),
+            Step(keys: empty, frames: menuTo48BasicWait),
+        ])
+    }
+
+    private static func loadQuotes48kSteps(withCode: Bool) -> [Step] {
+        let j: [(UInt32, UInt32)] = [(6, 3)]
+        let quote: [(UInt32, UInt32)] = [sym, (5, 0)]
+        let extend: [(UInt32, UInt32)] = [caps, sym]
+        let codeI: [(UInt32, UInt32)] = [(5, 2)]
+        let enter: [(UInt32, UInt32)] = [(6, 0)]
+        let empty: [(UInt32, UInt32)] = []
+        var steps: [Step] = [
+            Step(keys: j, frames: press),
+            Step(keys: empty, frames: gap),
+            Step(keys: quote, frames: press),
+            Step(keys: empty, frames: gap),
+            Step(keys: quote, frames: press),
+            Step(keys: empty, frames: gap),
+        ]
+        if withCode {
+            steps.append(Step(keys: extend, frames: press))
+            steps.append(Step(keys: empty, frames: gap))
+            steps.append(Step(keys: codeI, frames: press))
+            steps.append(Step(keys: empty, frames: gap))
+        }
+        steps.append(Step(keys: enter, frames: press))
+        steps.append(Step(keys: empty, frames: 15))
+        return steps
     }
 }

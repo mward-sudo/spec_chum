@@ -24,6 +24,8 @@ Local quality gate (same as CI intent):
 ./scripts/check.sh
 ```
 
+Optional native macOS SwiftUI shell compile ([#68](https://github.com/mward-sudo/spec_chum/issues/68)): CI job **`macos-shell`** on `macos-latest` runs `./scripts/build_macos_app.sh`. It is a separate job from Linux **`check`** (does not block Rust fmt/clippy/test). See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
+
 GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 `vX.Y.Z`. See [docs/RELEASE.md](docs/RELEASE.md).
 

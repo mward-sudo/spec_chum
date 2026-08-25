@@ -91,32 +91,11 @@ pub const BIT0_T: u32 = 855;
 pub const BIT1_T: u32 = 1710;
 /// Inter-block pause (~1s at 3.5 MHz).
 pub const PAUSE_T: u32 = 3_500_000;
-/// Fewest leader pulses still accepted by the 48K ROM LD-LEADER loop.
-const MIN_PILOT_PULSES: u32 = 2_560;
 
 /// Append one edge-to-edge pulse and toggle the EAR level.
 pub(crate) fn push_pulse(pulses: &mut Vec<(u32, bool)>, level: &mut bool, duration: u32) {
     pulses.push((duration, *level));
     *level = !*level;
-}
-
-/// Pilot count for a TAP flag byte, optionally shortened for turbo (`speed` ≥ 2).
-#[must_use]
-pub fn pilot_pulses_for_speed(flag: u8, speed: u32) -> u32 {
-    let full = if flag == 0 {
-        PILOT_HEADER_PULSES
-    } else {
-        PILOT_DATA_PULSES
-    };
-    let speed = speed.max(1);
-    (full / speed).max(MIN_PILOT_PULSES).min(full)
-}
-
-/// Inter-block pause T-states at the given turbo multiplier.
-#[must_use]
-pub fn pause_t_for_speed(speed: u32) -> u32 {
-    let speed = speed.max(1);
-    (PAUSE_T / speed).max(3_500)
 }
 
 /// Generates EAR levels for a TAP block (ROM timing).
@@ -132,9 +111,10 @@ pub struct TapPlayer {
     pulse_i: usize,
     remain: u32,
     level: bool,
-    /// Turbo: fewer leader pulses and a shorter pause; bit/sync widths stay ROM-accurate.
+    /// Turbo: inspect/host field only — pulse schedule is always ROM-accurate.
+    /// Wall-clock turbo is applied by the machine frame loop while playing.
     speed: u32,
-    /// Optional per-block pause override (TZX 0x10). Empty → [`pause_t_for_speed`].
+    /// Optional per-block pause override (TZX 0x10). Empty → [`PAUSE_T`].
     block_pause_t: Vec<u32>,
 }
 
@@ -167,10 +147,14 @@ impl TapPlayer {
         self.playing = playing;
     }
 
-    /// EAR turbo (`1` = realtime). Rebuilds the current block's pulse schedule.
+    /// EAR turbo multiplier (`1` = realtime). Kept for inspect / host sync.
+    ///
+    /// Pulse schedules are always ROM-accurate; wall-clock speed is applied by
+    /// [`machine::Machine::run_frame`] (multiple Spectrum frames while playing).
+    /// Mid-load changes take effect on the next host frame without restarting
+    /// the current block's EAR schedule.
     pub fn set_speed(&mut self, speed: u32) {
         self.speed = speed.clamp(1, 64);
-        self.queue_block(self.block);
     }
 
     #[must_use]
@@ -234,12 +218,16 @@ impl TapPlayer {
             self.level = false;
             return;
         };
-        // Pilot: `N` alternating edges of 2168 T. Sync/data must continue toggling —
-        // a hardcoded SYNC1 high after an odd leader merges the last pilot with sync
-        // and the 48K ROM never locks onto the block.
+        // Pilot: full ROM counts. Wall-clock turbo is machine multi-frame while playing
+        // (see Machine::ear_play_frame_reps) — do not shrink bit/sync widths here.
         let flag = block.first().copied().unwrap_or(0);
         let mut level = true;
-        for _ in 0..pilot_pulses_for_speed(flag, self.speed) {
+        let pilots = if flag == 0 {
+            PILOT_HEADER_PULSES
+        } else {
+            PILOT_DATA_PULSES
+        };
+        for _ in 0..pilots {
             push_pulse(&mut self.pulses, &mut level, PILOT_PULSE_T);
         }
         push_pulse(&mut self.pulses, &mut level, SYNC1_T);
@@ -257,8 +245,7 @@ impl TapPlayer {
             .get(idx)
             .copied()
             .filter(|&t| t > 0)
-            .map(|t| (t / self.speed.max(1)).max(3_500))
-            .unwrap_or_else(|| pause_t_for_speed(self.speed));
+            .unwrap_or(PAUSE_T);
         push_pulse(&mut self.pulses, &mut level, pause);
         if let Some(&(r, l)) = self.pulses.first() {
             self.remain = r;
@@ -531,24 +518,44 @@ mod tests {
     }
 
     #[test]
-    fn turbo_speed_shortens_leader_not_bit_widths() {
+    fn set_speed_does_not_rebuild_or_shorten_schedule() {
         let img = TapImage {
             blocks: vec![vec![0x00, 0x00]],
             ..Default::default()
         };
         let mut p = TapPlayer::new(img);
-        let slow_n = p.scheduled_pulses();
+        let n = p.scheduled_pulses();
+        let first = p.pulses[0].0;
         p.set_speed(10);
-        let fast_n = p.scheduled_pulses();
-        assert!(
-            fast_n < slow_n,
-            "10x should drop leader pulses ({slow_n} vs {fast_n})"
-        );
+        assert_eq!(p.speed(), 10);
         assert_eq!(
-            pilot_pulses_for_speed(0, 10),
-            (PILOT_HEADER_PULSES / 10).max(2_560)
+            p.scheduled_pulses(),
+            n,
+            "speed must not alter ROM-accurate pulse schedule"
         );
-        assert_eq!(p.pulses[0].0, PILOT_PULSE_T);
+        assert_eq!(p.pulses[0].0, first);
+        assert_eq!(first, PILOT_PULSE_T);
+    }
+
+    #[test]
+    fn set_speed_mid_block_keeps_pulse_position() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0xaa, 0xaa]],
+            ..Default::default()
+        };
+        let mut p = TapPlayer::new(img);
+        p.set_playing(true);
+        let _ = p.advance(PILOT_PULSE_T * 10);
+        let pulse_i = p.pulse_index();
+        let n = p.scheduled_pulses();
+        p.set_speed(10);
+        assert_eq!(p.speed(), 10);
+        assert_eq!(
+            p.pulse_index(),
+            pulse_i,
+            "mid-load set_speed must not restart the EAR schedule"
+        );
+        assert_eq!(p.scheduled_pulses(), n);
     }
 
     #[test]

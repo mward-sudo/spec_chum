@@ -2,14 +2,26 @@ import AVFoundation
 import Foundation
 
 /// Plays mono PCM frames from `host_api` (`sc_audio_*`) via AVAudioEngine.
+/// Gain / mute affect **host output only** — not EAR bit fidelity or flash-load.
 final class TapeAudioPlayer {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private var format: AVAudioFormat?
     private var started = false
 
+    /// Linear gain 0…1 applied to the mixer (persisted by HostBridge).
+    var volume: Float = 1.0 {
+        didSet { applyOutputGain() }
+    }
+
+    /// When true, mixer output is silent regardless of `volume`.
+    var muted: Bool = false {
+        didSet { applyOutputGain() }
+    }
+
     func ensureStarted(sampleRate: Double) {
         if started, format?.sampleRate == sampleRate {
+            applyOutputGain()
             return
         }
         stop()
@@ -19,7 +31,7 @@ final class TapeAudioPlayer {
         format = fmt
         engine.attach(player)
         engine.connect(player, to: engine.mainMixerNode, format: fmt)
-        engine.mainMixerNode.outputVolume = 1.0
+        applyOutputGain()
         do {
             try engine.start()
             player.play()
@@ -52,5 +64,10 @@ final class TapeAudioPlayer {
             dst.update(from: samples, count: count)
         }
         player.scheduleBuffer(buffer, completionHandler: nil)
+    }
+
+    private func applyOutputGain() {
+        let gain = muted ? 0 : max(0, min(1, volume))
+        engine.mainMixerNode.outputVolume = gain
     }
 }

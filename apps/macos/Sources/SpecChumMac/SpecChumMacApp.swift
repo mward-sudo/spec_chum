@@ -8,18 +8,35 @@ struct SpecChumMacApp: App {
     @StateObject private var host = HostBridge()
 
     var body: some Scene {
-        WindowGroup("Spec Chum") {
+        WindowGroup {
             ContentView(host: host)
                 .frame(minWidth: 640, minHeight: 520)
         }
         .defaultSize(width: 780, height: 640)
         .commands {
+            // File — Open… counterparts to toolbar (standard once); other media kinds here only
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
-                Button("Open Tape…") {
-                    openTape()
+                Button(host.openMediaMenuTitle) {
+                    host.presentOpenMediaPanel()
                 }
                 .keyboardShortcut("o", modifiers: .command)
+
+                Button("Open Snapshot…") {
+                    openSnapshot()
+                }
+                .keyboardShortcut("o", modifiers: [.command, .option])
+
+                Divider()
+
+                Button("Open RZX…") {
+                    openRzx()
+                }
+
+                Button("Open Disk…") {
+                    openDsk()
+                }
+                .disabled(!host.model.supportsDisk)
 
                 Button("Open ROM…") {
                     openRom()
@@ -27,22 +44,42 @@ struct SpecChumMacApp: App {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             }
 
-            CommandMenu("Tape") {
-                Button("Play") { host.playTape() }
-                    .keyboardShortcut("p", modifiers: [.command, .shift])
-                Button("Pause") { host.pauseTape() }
-                Button("Rewind") { host.rewindTape() }
+            // View — inspector (system View menu also keeps toolbar / full screen)
+            CommandGroup(after: .toolbar) {
+                Button("Show Inspector") {
+                    host.showInspector = true
+                    host.refreshInspector()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
             }
 
+            // Tape — Type LOAD only; Play / Instant / Rewind / speed live on the toolbar
+            CommandMenu("Tape") {
+                Button("Type LOAD \"\"") {
+                    host.typeLoadQuotes(withCode: false)
+                }
+                Button("Type LOAD \"\" CODE") {
+                    host.typeLoadQuotes(withCode: true)
+                }
+            }
+
+            // Machine — Reset (+ model in Settings)
             CommandMenu("Machine") {
                 Button("Reset") { host.reset() }
                     .keyboardShortcut("r", modifiers: .command)
-                Divider()
-                ForEach(HostBridge.Model.allCases) { model in
-                    Button(model.title) {
-                        host.model = model
-                    }
+            }
+
+            // Hardware — Multiface; Joystick mode lives in Settings
+            CommandMenu("Hardware") {
+                Button("Attach Multiface 1 ROM…") {
+                    openMultifaceRom()
                 }
+                Button("Multiface NMI") {
+                    host.multifaceNmi()
+                }
+                Divider()
+                Button("DivMMC / IF1 / Beta: use egui (stubs)") {}
+                    .disabled(true)
             }
 
             CommandMenu("Debug") {
@@ -57,46 +94,99 @@ struct SpecChumMacApp: App {
                     host.step()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
-                Button("Add breakpoint at PC") {
+                Button("Add Breakpoint at PC") {
                     host.addBreakpointAtPc()
                 }
                 Button("Dump JSON to Desktop") {
                     host.dumpTraceJsonToDesktop()
                 }
-                Button("Show inspector") {
+                Button("Show Inspector") {
                     host.showInspector = true
                     host.refreshInspector()
                 }
                 Divider()
-                Button("Enable default trace") {
+                Button("Enable Default Trace") {
                     host.enableDefaultTrace()
                 }
-                Button("Dump trace to Desktop…") {
+                Button("Dump Trace to Desktop…") {
                     host.dumpTraceToDesktop()
                 }
-                Button("Dump trace to file…") {
+                Button("Dump Trace to File…") {
                     host.dumpTracePanel()
                 }
-                Button("Clear trace ring") {
+                Button("Clear Trace Ring") {
                     host.clearTrace()
                 }
                 Divider()
                 Button("Env: SPEC_CHUM_DEBUG=1 or SPEC_CHUM_TRACE=tape,cpu") {}
                     .disabled(true)
             }
+
+            CommandGroup(replacing: .help) {
+                Button("Spec Chum Help") {
+                    if let url = URL(string: "https://github.com/mward-sudo/spec_chum/blob/main/docs/MACOS_NATIVE.md") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+
+        Settings {
+            SpecChumSettingsView(host: host)
         }
     }
 
-    private func openTape() {
+    private func openSnapshot() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [
-            UTType(filenameExtension: "tap") ?? .data,
-            UTType(filenameExtension: "tzx") ?? .data,
+            UTType(filenameExtension: "sna") ?? .data,
+            UTType(filenameExtension: "z80") ?? .data,
         ]
+        panel.title = "Open SNA / Z80 Snapshot"
         if panel.runModal() == .OK, let url = panel.url {
-            host.openTape(at: url)
+            host.openSnapshot(at: url)
+        }
+    }
+
+    private func openRzx() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rzx") ?? .data,
+        ]
+        panel.title = "Open RZX"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.openRzx(at: url)
+        }
+    }
+
+    private func openDsk() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "dsk") ?? .data,
+        ]
+        panel.title = "Open Disk (DSK)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.openDsk(at: url)
+        }
+    }
+
+    private func openMultifaceRom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+        ]
+        panel.title = "Attach Multiface 1 ROM (8 KiB, 48K)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.attachMultiface(at: url)
         }
     }
 
@@ -105,6 +195,7 @@ struct SpecChumMacApp: App {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [UTType(filenameExtension: "rom") ?? .data]
+        panel.title = "Open ROM"
         if panel.runModal() == .OK, let url = panel.url {
             host.loadRom(at: url)
         }

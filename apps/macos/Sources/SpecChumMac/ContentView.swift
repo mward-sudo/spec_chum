@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ContentView: View {
     @ObservedObject var host: HostBridge
@@ -15,15 +14,12 @@ struct ContentView: View {
     var body: some View {
         TimelineView(Self.frameTimeline) { timeline in
             VStack(spacing: 0) {
-                glassToolbar
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-
                 SpectrumDisplayView(host: host, tick: UInt64(timeline.date.timeIntervalSinceReferenceDate * 1000))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.horizontal, 12)
+                    .padding(.top, 8)
                     .padding(.bottom, 8)
                     // No SwiftUI `.focusable()` — that drew a blue ring without making us key.
                     .onTapGesture {
@@ -31,15 +27,7 @@ struct ContentView: View {
                         FocusSpectrumView.post()
                     }
 
-                Text(host.status)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .glassBarBackground()
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
+                statusFooter
             }
             .onChange(of: timeline.date) { _, _ in
                 // HostBridge also wall-clock gates to ~50 Hz.
@@ -47,6 +35,125 @@ struct ContentView: View {
             }
         }
         .background(WindowBackground())
+        .background(WindowTitleBinder(title: host.windowTitle))
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Button {
+                    chromeAction { host.presentOpenMediaPanel() }
+                } label: {
+                    Label(host.openMediaTitle, systemImage: "opticaldiscdrive")
+                }
+                .help(host.openMediaMenuTitle)
+                .accessibilityLabel(host.openMediaTitle)
+
+                Button {
+                    chromeAction { host.instantLoadTape() }
+                } label: {
+                    Label("Instant", systemImage: "bolt.fill")
+                }
+                .help("Always asks for a tape image, then flash-loads (Type LOAD \"\" + Play)")
+                .accessibilityLabel("Instant load")
+            }
+
+            // Tape deck chrome — only when a tape is inserted (Open / Instant always available).
+            if host.hasTape || host.tapePlaying {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        chromeAction {
+                            if host.tapePlaying {
+                                host.pauseTape()
+                            } else {
+                                host.playTape()
+                            }
+                        }
+                    } label: {
+                        Label(
+                            host.tapePlaying ? "Pause" : "Play",
+                            systemImage: host.tapePlaying ? "pause.fill" : "play.fill"
+                        )
+                    }
+                    .help(host.tapePlaying ? "Pause tape" : "Play tape (EAR path; Instant is flash-load)")
+                    .accessibilityLabel(host.tapePlaying ? "Pause tape" : "Play tape")
+
+                    Button {
+                        chromeAction { host.rewindTape() }
+                    } label: {
+                        Label("Rewind", systemImage: "backward.end.fill")
+                    }
+                    .help("Rewind tape")
+                    .accessibilityLabel("Rewind tape")
+
+                    Picker("Speed", selection: $host.tapeSpeed) {
+                        Text("1x").tag(UInt32(1))
+                        Text("2x").tag(UInt32(2))
+                        Text("5x").tag(UInt32(5))
+                        Text("10x").tag(UInt32(10))
+                        Text("20x").tag(UInt32(20))
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 72)
+                    .help("EAR speed while Play: N Spectrum frames/tick (wall-clock ≈ realtime/N)")
+                    .accessibilityLabel("EAR speed")
+                    .onChange(of: host.tapeSpeed) { _, _ in
+                        FocusSpectrumView.post()
+                    }
+                }
+
+                ToolbarItem(placement: .automatic) {
+                    if let frac = host.tapeFraction {
+                        VStack(alignment: .leading, spacing: 1) {
+                            ProgressView(value: frac)
+                                .controlSize(.small)
+                                .frame(minWidth: 100, maxWidth: 160)
+                            Text(host.tapeBlockLabel)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Tape progress")
+                        .accessibilityValue(host.tapeBlockLabel)
+                    }
+                }
+            }
+
+            ToolbarItemGroup(placement: .automatic) {
+                HStack(spacing: 6) {
+                    Button {
+                        host.outputMuted.toggle()
+                        FocusSpectrumView.post()
+                    } label: {
+                        Image(
+                            systemName: host.outputMuted || host.outputVolume <= 0.001
+                                ? "speaker.slash.fill"
+                                : "speaker.wave.2.fill"
+                        )
+                        .imageScale(.medium)
+                        .frame(width: 28, height: 22)
+                        .contentShape(Rectangle())
+                    }
+                    .help("Mute host audio output (does not change EAR / flash-load)")
+                    .accessibilityLabel(host.outputMuted ? "Unmute" : "Mute")
+
+                    Slider(value: $host.outputVolume, in: 0 ... 1)
+                        .frame(width: 88)
+                        .disabled(host.outputMuted)
+                        .help("Host output volume (PCM gain only)")
+                        .accessibilityLabel("Volume")
+                        .onChange(of: host.outputVolume) { _, _ in
+                            FocusSpectrumView.post()
+                        }
+                }
+
+                Button {
+                    chromeAction { host.reset() }
+                } label: {
+                    Label("Reset", systemImage: "arrow.counterclockwise")
+                }
+                .help("Reset machine")
+                .accessibilityLabel("Reset machine")
+            }
+        }
         .onAppear {
             host.runFrame()
             activateSpecChum()
@@ -55,88 +162,33 @@ struct ContentView: View {
         .sheet(isPresented: $host.showInspector) {
             DebugInspectorView(host: host)
         }
-    }
-
-    private var glassToolbar: some View {
-        HStack(spacing: 10) {
-            GlassToolbarButton(title: "Open Tape", systemImage: "opticaldiscdrive") {
-                openTapePanel()
-            }
-            GlassToolbarButton(
-                title: host.tapePlaying ? "Pause" : "Play",
-                systemImage: host.tapePlaying ? "pause.fill" : "play.fill"
-            ) {
-                if host.tapePlaying {
-                    host.pauseTape()
-                } else {
-                    host.playTape()
-                }
-            }
-            .disabled(!host.hasTape && !host.tapePlaying)
-
-            GlassToolbarButton(title: "Rewind", systemImage: "backward.end.fill") {
-                host.rewindTape()
-            }
-            .disabled(!host.hasTape)
-
-            if let frac = host.tapeFraction {
-                VStack(alignment: .leading, spacing: 2) {
-                    ProgressView(value: frac)
-                        .progressViewStyle(.linear)
-                        .frame(minWidth: 120, maxWidth: 180)
-                    Text(host.tapeBlockLabel)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityLabel("Tape progress")
-            }
-
-            Toggle("Instant", isOn: $host.instantLoad)
-                .toggleStyle(.checkbox)
-                .help("Flash-load TAP/standard TZX at LD-BYTES (near-instant)")
-
-            Picker("Speed", selection: $host.tapeSpeed) {
-                Text("1x").tag(UInt32(1))
-                Text("2x").tag(UInt32(2))
-                Text("5x").tag(UInt32(5))
-                Text("10x").tag(UInt32(10))
-                Text("20x").tag(UInt32(20))
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: 90)
-            // Keep enabled while Instant is on: pulse / non-standard TZX still uses EAR + speed.
-            .help("EAR bitstream speed (also speeds pulse TZX; Instant flash-loads TAP + standard-speed TZX)")
-
-            Spacer()
-
-            Picker("Model", selection: $host.model) {
-                ForEach(HostBridge.Model.allCases) { m in
-                    Text(m.title).tag(m)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: 180)
-
-            GlassToolbarButton(title: "Reset", systemImage: "arrow.counterclockwise") {
-                host.reset()
+        .onChange(of: host.showInspector) { _, showing in
+            if !showing {
+                FocusSpectrumView.post()
             }
         }
-        .padding(8)
-        .glassBarBackground()
     }
 
-    private func openTapePanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "tap") ?? .data,
-            UTType(filenameExtension: "tzx") ?? .data,
-        ]
-        panel.title = "Open TAP / TZX"
-        if panel.runModal() == .OK, let url = panel.url {
-            host.openTape(at: url)
-        }
+    /// Secondary status — caption style so it does not compete with the display.
+    private var statusFooter: some View {
+        Text(host.status)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .glassBarBackground()
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+            .accessibilityLabel("Status")
+            .accessibilityValue(host.status)
+    }
+
+    /// After chrome clicks, return key focus to the Spectrum view.
+    private func chromeAction(_ work: () -> Void) {
+        work()
+        FocusSpectrumView.post()
     }
 }
 
@@ -146,7 +198,7 @@ struct DebugInspectorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Debug inspector")
+                Text("Debug Inspector")
                     .font(.headline)
                 Spacer()
                 Button("Done") {
@@ -192,6 +244,28 @@ enum FocusSpectrumView {
 
     static func post() {
         NotificationCenter.default.post(name: name, object: nil)
+    }
+}
+
+/// Keep the NSWindow title in sync with media + machine (document-style HIG).
+private struct WindowTitleBinder: NSViewRepresentable {
+    var title: String
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { apply(to: view) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        apply(to: nsView)
+    }
+
+    private func apply(to view: NSView) {
+        guard let window = view.window else { return }
+        if window.title != title {
+            window.title = title
+        }
     }
 }
 

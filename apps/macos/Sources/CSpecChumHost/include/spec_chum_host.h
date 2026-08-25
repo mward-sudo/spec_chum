@@ -12,13 +12,16 @@ extern "C" {
 enum {
     SC_MODEL_48K = 0,
     SC_MODEL_128K = 1,
-    SC_MODEL_PLUS3 = 2
+    SC_MODEL_PLUS3 = 2,
+    SC_MODEL_PLUS2A = 3
 };
 
 void *sc_create(unsigned int model, int with_border);
 void sc_destroy(void *handle);
 
 int sc_set_model(void *handle, unsigned int model);
+/* Active model id (SC_MODEL_*). Returns UINT_MAX on null handle. */
+unsigned int sc_get_model(void *handle);
 int sc_load_rom(void *handle, const char *path);
 int sc_load_rom_bytes(void *handle, const uint8_t *data, size_t len);
 int sc_reset(void *handle);
@@ -32,6 +35,10 @@ unsigned int sc_framebuffer_width(void *handle);
 unsigned int sc_framebuffer_height(void *handle);
 
 int sc_open_tape(void *handle, const char *path);
+/* SNA/Z80 snapshot, RZX recording, +3 DSK — path is UTF-8 filesystem path */
+int sc_load_snapshot(void *handle, const char *path);
+int sc_load_rzx(void *handle, const char *path);
+int sc_load_dsk(void *handle, const char *path);
 int sc_tape_play(void *handle);
 int sc_tape_pause(void *handle);
 int sc_tape_rewind(void *handle);
@@ -52,6 +59,17 @@ unsigned int sc_audio_sample_rate(void *handle);
 
 int sc_set_key(void *handle, unsigned int row, unsigned int bit, int pressed);
 int sc_clear_keys(void *handle);
+
+/* Joystick — mode: 0=Kempston, 1=SinclairLeft, 2=SinclairRight, 3=Cursor.
+ * mask bits: 0=right, 1=left, 2=down, 3=up, 4=fire (active-high). */
+int sc_set_joystick_mode(void *handle, unsigned int mode);
+int sc_set_joystick(void *handle, unsigned int mask);
+int sc_clear_joystick(void *handle);
+
+/* Multiface 1 (48K): attach 8 KiB ROM, then NMI. Returns 0 ok, -1 error. */
+int sc_attach_multiface(void *handle, const char *path);
+int sc_multiface_nmi(void *handle);
+int sc_has_multiface(void *handle);
 
 /* Heap strings — free with sc_string_free */
 char *sc_status(void *handle);

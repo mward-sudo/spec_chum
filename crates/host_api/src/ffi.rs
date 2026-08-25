@@ -88,6 +88,17 @@ pub extern "C" fn sc_set_model(handle: *mut c_void, model: c_uint) -> c_int {
     0
 }
 
+/// Active model id (`SC_MODEL_*`). Returns `UINT_MAX` on a null handle.
+#[no_mangle]
+pub extern "C" fn sc_get_model(handle: *mut c_void) -> c_uint {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return c_uint::MAX;
+    };
+    s.model() as c_uint
+}
+
 #[no_mangle]
 pub extern "C" fn sc_load_rom(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
@@ -207,6 +218,84 @@ pub extern "C" fn sc_open_tape(handle: *mut c_void, path: *const c_char) -> c_in
         return -1;
     };
     match s.open_tape(Path::new(path)) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_load_snapshot(handle: *mut c_void, path: *const c_char) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    if path.is_null() {
+        set_last_error("null path");
+        return -1;
+    }
+    // SAFETY: valid NUL-terminated C string from caller.
+    let cstr = unsafe { CStr::from_ptr(path) };
+    let Ok(path) = cstr.to_str() else {
+        set_last_error("path not utf-8");
+        return -1;
+    };
+    match s.load_snapshot(Path::new(path)) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_load_rzx(handle: *mut c_void, path: *const c_char) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    if path.is_null() {
+        set_last_error("null path");
+        return -1;
+    }
+    // SAFETY: valid NUL-terminated C string from caller.
+    let cstr = unsafe { CStr::from_ptr(path) };
+    let Ok(path) = cstr.to_str() else {
+        set_last_error("path not utf-8");
+        return -1;
+    };
+    match s.load_rzx(Path::new(path)) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_load_dsk(handle: *mut c_void, path: *const c_char) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    if path.is_null() {
+        set_last_error("null path");
+        return -1;
+    }
+    // SAFETY: valid NUL-terminated C string from caller.
+    let cstr = unsafe { CStr::from_ptr(path) };
+    let Ok(path) = cstr.to_str() else {
+        set_last_error("path not utf-8");
+        return -1;
+    };
+    match s.load_dsk(Path::new(path)) {
         Ok(()) => 0,
         Err(e) => {
             set_last_error(e.to_string());
@@ -412,6 +501,113 @@ pub extern "C" fn sc_clear_keys(handle: *mut c_void) -> c_int {
             -1
         }
     }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_set_joystick_mode(handle: *mut c_void, mode: c_uint) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    // Validate before truncating c_uint → u8 (e.g. 256 must not become Kempston).
+    if mode > u8::MAX as c_uint {
+        set_last_error("invalid joystick mode");
+        return -1;
+    }
+    let Some(mode) = machine::JoystickMode::from_u8(mode as u8) else {
+        set_last_error("invalid joystick mode");
+        return -1;
+    };
+    match s.set_joystick_mode(mode) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_set_joystick(handle: *mut c_void, mask: c_uint) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.set_joystick(mask as u8) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_clear_joystick(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.clear_joystick() {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_attach_multiface(handle: *mut c_void, path: *const c_char) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    if path.is_null() {
+        set_last_error("null path");
+        return -1;
+    }
+    // SAFETY: caller provides a valid NUL-terminated C string.
+    let cstr = unsafe { CStr::from_ptr(path) };
+    let Ok(path) = cstr.to_str() else {
+        set_last_error("path not utf-8");
+        return -1;
+    };
+    match s.attach_multiface(Path::new(path)) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_multiface_nmi(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.multiface_nmi() {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_has_multiface(handle: *mut c_void) -> c_int {
+    let Some(s) = session_mut(handle) else {
+        return 0;
+    };
+    i32::from(s.has_multiface())
 }
 
 /// Heap-allocated UTF-8 C string; free with [`sc_string_free`].
@@ -760,6 +956,18 @@ mod tests {
         let err = sc_last_error();
         assert!(!err.is_null());
         sc_string_free(err);
+    }
+
+    #[test]
+    fn ffi_joystick_mode_rejects_truncated_overflow() {
+        let h = sc_create(0, 1);
+        assert!(!h.is_null());
+        assert_eq!(sc_set_joystick_mode(h, 256), -1);
+        let err = sc_last_error();
+        assert!(!err.is_null());
+        sc_string_free(err);
+        assert_eq!(sc_get_model(h), 0);
+        sc_destroy(h);
     }
 
     #[test]

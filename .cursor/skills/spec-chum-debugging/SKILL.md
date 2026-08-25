@@ -79,7 +79,7 @@ Global flags (before subcommand): `--model 48k|128k|plus3`, `--rom PATH`, `--tap
 
 ## Tape debugging
 
-Default load mode is **instant flash-load** at ROM `LD-BYTES` (`0x056C`). `--ear-load` disables the trap and uses the EAR bitstream; `--speed N` shortens leader/pause only (bit widths stay ROM-accurate).
+Default load mode is **instant flash-load** at ROM `LD-BYTES` (`0x056C`). `--ear-load` disables the trap and uses the EAR bitstream; `--speed N` runs N Spectrum frames per `run_frame` while the deck is playing (wall-clock ≈ realtime/N; pulse widths stay ROM-accurate).
 
 ### Recipes
 

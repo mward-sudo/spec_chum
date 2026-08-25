@@ -22,6 +22,7 @@ trace = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
 cpal = { workspace = true }
+gilrs = { workspace = true }
 rfd = "0.15"
 anyhow = { workspace = true }
 

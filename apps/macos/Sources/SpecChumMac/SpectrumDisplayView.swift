@@ -241,6 +241,7 @@ final class SpectrumNSView: NSView {
     private func releaseAllKeys() {
         held.removeAll()
         host?.clearKeys()
+        host?.setKeyboardJoystickMask(0)
     }
 
     // MARK: - Matrix sync
@@ -277,5 +278,7 @@ final class SpectrumNSView: NSView {
                 }
             }
         }
+        // Kempston mirror (egui: arrows + Tab fire) — OR’d with GCController in HostBridge.
+        host?.setKeyboardJoystickMask(SpectrumKeymap.kempstonMask(held: held))
     }
 }

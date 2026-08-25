@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
-use machine::{Machine, Model};
+use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model};
 
 /// Session state shared by the GUI and headless tests.
 #[derive(Debug)]
@@ -23,13 +23,21 @@ pub struct EmulatorSession {
     pub running: bool,
     pub throttle: bool,
     pub muted: bool,
+    /// Host PCM gain 0…1 (what the user hears). Does not affect EAR / flash-load.
+    pub volume: f32,
     pub status: String,
     pub model: Model,
     pub debug_open: bool,
     pub debug_mem_addr: u16,
     pub debug_break_pc: u16,
+    /// Host joystick presentation (Kempston / Sinclair / Cursor).
+    pub joystick_mode: JoystickMode,
+    /// When true, accumulate egui pointer delta into the Kempston mouse each frame.
+    pub kempston_mouse: bool,
     /// Scripted matrix keys (e.g. auto-type `LOAD ""`).
     key_script: Option<KeyScript>,
+    /// After Instant Type LOAD finishes, auto-Play with flash-load on.
+    pending_instant_play: bool,
 }
 
 /// Hold a chord for `frames` emulated frames, then advance.
@@ -45,6 +53,8 @@ impl KeyScript {
     /// Shorter (6/3) drops the second `"` so `LOAD ""` never reaches LD-BYTES (#85).
     const PRESS: u32 = 10;
     const GAP: u32 = 5;
+    /// Idle frames after menu → 48 BASIC Enter so MAIN-EXEC settles (machine waits on PC).
+    const MENU_TO_48_BASIC_WAIT: u32 = 120;
 
     /// 48K keyword mode: J (`LOAD`) then `""` then Enter (PROGRAM tapes).
     fn load_quotes_48k() -> Self {
@@ -54,6 +64,44 @@ impl KeyScript {
     /// 48K: `LOAD "" CODE` Enter (CODE tapes such as `attr_mark.tap`).
     fn load_quotes_code_48k() -> Self {
         Self::load_quotes_48k_inner(true)
+    }
+
+    /// 128K / +3 boot menu → 48 BASIC, then keyword `LOAD ""` [CODE].
+    ///
+    /// +3's first item is disk **Loader**, not a tape loader — do not press Enter alone.
+    fn load_quotes_128_or_plus3(with_code: bool) -> Self {
+        let gap = Vec::new();
+        let cursor_down = vec![keymap::CAPS, (4, 4)]; // Caps+6
+        let enter = vec![(6, 0)];
+        let mut steps = Vec::new();
+        // Loader/Tape Loader → BASIC → Calculator → 48 BASIC (three downs).
+        for _ in 0..3 {
+            steps.push((cursor_down.clone(), Self::PRESS));
+            steps.push((gap.clone(), Self::GAP));
+        }
+        steps.push((enter, Self::PRESS));
+        steps.push((gap, Self::MENU_TO_48_BASIC_WAIT));
+        let mut load = Self::load_quotes_48k_inner(with_code);
+        steps.append(&mut load.steps);
+        Self {
+            steps,
+            step_i: 0,
+            frames_left: 0,
+        }
+    }
+
+    /// +2A: menu **Loader** is tape — Enter alone for PROGRAM; CODE via 48 BASIC.
+    fn load_quotes_plus2a(with_code: bool) -> Self {
+        if with_code {
+            return Self::load_quotes_128_or_plus3(true);
+        }
+        let enter = vec![(6, 0)];
+        let gap = Vec::new();
+        Self {
+            steps: vec![(enter, Self::PRESS), (gap, Self::MENU_TO_48_BASIC_WAIT)],
+            step_i: 0,
+            frames_left: 0,
+        }
     }
 
     fn load_quotes_48k_inner(with_code: bool) -> Self {
@@ -100,12 +148,16 @@ impl EmulatorSession {
             running: true,
             throttle: true,
             muted: false,
+            volume: 1.0,
             status: "Load a ROM via Machine menu (or auto-detect roms/)".into(),
             model,
             debug_open: false,
             debug_mem_addr: 0,
             debug_break_pc: 0,
+            joystick_mode: JoystickMode::Kempston,
+            kempston_mouse: false,
             key_script: None,
+            pending_instant_play: false,
         }
     }
 
@@ -149,10 +201,24 @@ impl EmulatorSession {
             }
             Model::SpectrumPlus3 => {
                 let rom = root.join("roms/plus3/plus3.rom");
-                let rom_alt = root.join("roms/plus2a/plus2a.rom");
+                if let Ok(data) = std::fs::read(&rom) {
+                    match Machine::new_plus3(&data) {
+                        Ok(m) => {
+                            self.machine = Some(m);
+                            self.status = format!("Loaded {}", rom.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Missing +3 ROM. Run ./scripts/fetch_roms.sh".to_string();
+                }
+            }
+            Model::SpectrumPlus2A => {
+                let rom = root.join("roms/plus2a/plus2a.rom");
+                let rom_alt = root.join("roms/plus3/plus3.rom");
                 let path = if rom.exists() { rom } else { rom_alt };
                 if let Ok(data) = std::fs::read(&path) {
-                    match Machine::new_plus3(&data) {
+                    match Machine::new_plus2a(&data) {
                         Ok(m) => {
                             self.machine = Some(m);
                             self.status = format!("Loaded {}", path.display());
@@ -160,17 +226,37 @@ impl EmulatorSession {
                         Err(e) => self.status = e,
                     }
                 } else {
-                    self.status = "Missing +2A/+3 ROM. Run ./scripts/fetch_roms.sh".to_string();
+                    self.status = "Missing +2A ROM. Run ./scripts/fetch_roms.sh".to_string();
                 }
             }
         }
     }
 
     pub fn load_snapshot(&mut self, path: &Path) {
+        if let Ok(snap) =
+            formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
+        {
+            let target = match snap.model {
+                formats::Snapshot128Model::SpectrumPlus3 => Model::SpectrumPlus3,
+                formats::Snapshot128Model::SpectrumPlus2A => Model::SpectrumPlus2A,
+                formats::Snapshot128Model::Spectrum128 => Model::Spectrum128,
+            };
+            if self.machine.is_none() || self.model != target {
+                self.model = target;
+                self.machine = None;
+                self.try_autoload_rom();
+            }
+            if let Some(m) = self.machine.as_mut() {
+                m.apply_snapshot128(&snap);
+                self.status = format!("Loaded 128K/+2A/+3 snapshot {}", path.display());
+            }
+            return;
+        }
         match formats::Snapshot48::load_sna(path).or_else(|_| formats::Snapshot48::load_z80(path)) {
             Ok(snap) => {
-                if self.machine.is_none() {
+                if self.machine.is_none() || self.model != Model::Spectrum48 {
                     self.model = Model::Spectrum48;
+                    self.machine = None;
                     self.try_autoload_rom();
                 }
                 if let Some(m) = self.machine.as_mut() {
@@ -187,8 +273,9 @@ impl EmulatorSession {
             Ok(img) => {
                 if let Some(m) = self.machine.as_mut() {
                     m.insert_tape(tape::TapPlayer::new(img));
+                    self.force_flash_load(false);
                     self.status = format!(
-                        "Inserted TAP {} (paused — Tape → Play, or Type LOAD \"\")",
+                        "Inserted TAP {} (paused — Tape → Play for EAR, or Instant)",
                         path.display()
                     );
                 } else {
@@ -207,19 +294,22 @@ impl EmulatorSession {
                 return;
             }
         };
-        let Some(m) = self.machine.as_mut() else {
+        if self.machine.is_none() {
             self.status = "Load a machine ROM before inserting tape".into();
             return;
-        };
+        }
         // Standard-speed TZX → TAP deck so ROM/RAM LD-BYTES flash-load works (e.g. The Boggit).
         if tape::TzxPlayer::is_standard_speed_only(&data) {
             match tape::TzxPlayer::to_tap_player(&data) {
                 Ok(player) if player.image.blocks.is_empty() => {}
                 Ok(player) => {
                     let n = player.image.blocks.len();
-                    m.insert_tape(player);
+                    if let Some(m) = self.machine.as_mut() {
+                        m.insert_tape(player);
+                    }
+                    self.force_flash_load(false);
                     self.status = format!(
-                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" (PROGRAM) or LOAD \"\" CODE, then Play. 128K/+3: Tape Loader or 48 BASIC, then Play. Instant flash-load skips ROM gaps; custom loaders still use EAR.",
+                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" then Play (EAR), or Instant. 128K/+3: Type LOAD enters 48 BASIC (+3 disk Loader is not tape). +2A: Type LOAD uses menu Loader (tape).",
                         path.display()
                     );
                     return;
@@ -232,7 +322,10 @@ impl EmulatorSession {
         }
         match tape::TzxPlayer::parse(&data) {
             Ok(player) => {
-                m.insert_tzx(player);
+                if let Some(m) = self.machine.as_mut() {
+                    m.insert_tzx(player);
+                }
+                self.force_flash_load(false);
                 self.status = format!(
                     "Inserted TZX {} (pulse playback, paused — Play when loader is ready)",
                     path.display()
@@ -242,7 +335,14 @@ impl EmulatorSession {
         }
     }
 
+    /// Play always uses the EAR path (flash-load off), respecting the EAR speed multiplier.
     pub fn play_tape(&mut self) {
+        self.force_flash_load(false);
+        self.play_tape_keeping_options();
+    }
+
+    /// Start the deck without changing flash-load (used by Instant while flash is temporarily on).
+    fn play_tape_keeping_options(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             if m.has_tape() {
                 m.set_tape_playing(true);
@@ -256,6 +356,7 @@ impl EmulatorSession {
     pub fn pause_tape(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             m.set_tape_playing(false);
+            self.force_flash_load(false);
             self.status = "Tape paused".into();
         }
     }
@@ -263,39 +364,124 @@ impl EmulatorSession {
     pub fn rewind_tape(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             m.rewind_tape();
+            self.force_flash_load(false);
             self.status = "Tape rewound (paused)".into();
+        }
+    }
+
+    fn force_flash_load(&mut self, on: bool) {
+        if let Some(m) = self.machine.as_mut() {
+            let mut opts = m.tape_load_options();
+            if opts.flash_load == on {
+                return;
+            }
+            opts.flash_load = on;
+            m.set_tape_load_options(opts);
         }
     }
 
     /// Queue `LOAD ""` + Enter for 48K keyword mode; press Play separately when LD-BYTES waits.
     pub fn type_load_quotes(&mut self) {
-        self.type_load_quotes_inner(false);
+        self.type_load_quotes_inner(false, false);
     }
 
     /// Queue `LOAD "" CODE` + Enter (48K) for CODE blocks.
     pub fn type_load_quotes_code(&mut self) {
-        self.type_load_quotes_inner(true);
+        self.type_load_quotes_inner(true, false);
     }
 
-    fn type_load_quotes_inner(&mut self, with_code: bool) {
-        match self.model {
+    /// Instant load: open a tape image, enable flash-load, Type LOAD "" (PROGRAM), then Play.
+    /// UI always prompts for a path first (`instant_load_path`). If already at LD-BYTES, Play immediately.
+    pub fn instant_load_tape(&mut self) {
+        let at_ld_bytes = {
+            let Some(m) = self.machine.as_ref() else {
+                self.status = "Instant: no machine".into();
+                return;
+            };
+            if !m.has_tape() {
+                self.status = "Instant: insert a tape first".into();
+                return;
+            }
+            m.cpu().regs.pc == tape::LD_BYTES_TRAP_PC
+        };
+        self.force_flash_load(true);
+        if at_ld_bytes {
+            self.pending_instant_play = false;
+            self.play_tape_keeping_options();
+            self.status = "Instant: flash-loading at LD-BYTES".into();
+            return;
+        }
+
+        self.type_load_quotes_inner(false, true);
+        self.status = "Instant: typing LOAD \"\" then flash-load Play".into();
+    }
+
+    /// Always-prompt Instant: insert the chosen image, then flash + Type LOAD + Play.
+    /// Does not reuse a previously inserted tape without selecting a path.
+    pub fn instant_load_path(&mut self, path: &Path) {
+        let ext = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "dsk" => {
+                self.load_dsk(path);
+            }
+            "tzx" => {
+                self.load_tzx(path);
+                if self.machine.as_ref().is_some_and(Machine::has_tape) {
+                    self.instant_load_tape();
+                }
+            }
+            _ => {
+                self.load_tap(path);
+                if self.machine.as_ref().is_some_and(Machine::has_tape) {
+                    self.instant_load_tape();
+                }
+            }
+        }
+    }
+
+    fn type_load_quotes_inner(&mut self, with_code: bool, pending_play: bool) {
+        // +3 menu "Loader" is +3DOS disk — never Enter alone for tape (#144).
+        // +2A menu Loader is tape — Enter alone for PROGRAM (#145).
+        // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
+        self.pending_instant_play = pending_play;
+        self.key_script = Some(match self.model {
             Model::Spectrum48 => {
-                self.key_script = Some(if with_code {
+                if with_code {
                     KeyScript::load_quotes_code_48k()
                 } else {
                     KeyScript::load_quotes_48k()
-                });
-                self.status = if with_code {
-                    "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
-                } else {
-                    "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
-                };
+                }
             }
+            Model::SpectrumPlus2A => KeyScript::load_quotes_plus2a(with_code),
             Model::Spectrum128 | Model::SpectrumPlus3 => {
-                self.status =
-                    "128K/+2A: select Tape Loader on the menu (ENTER), then Tape → Play".into();
+                KeyScript::load_quotes_128_or_plus3(with_code)
             }
+        });
+        if pending_play {
+            return;
         }
+        self.status = match (self.model, with_code) {
+            (Model::Spectrum48, true) => {
+                "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
+            }
+            (Model::Spectrum48, false) => {
+                "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
+            }
+            (Model::SpectrumPlus2A, false) => {
+                "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan".into()
+            }
+            (_, true) => {
+                "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                    .into()
+            }
+            (_, false) => {
+                "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
+            }
+        };
     }
 
     /// Advance scripted keys if any; returns true when a script consumed input this frame.
@@ -308,6 +494,7 @@ impl EmulatorSession {
         };
         if script.step_i >= script.steps.len() {
             self.key_script = None;
+            self.finish_instant_play_if_pending();
             return false;
         }
         if script.frames_left == 0 {
@@ -320,6 +507,7 @@ impl EmulatorSession {
         }
         if script.step_i >= script.steps.len() {
             self.key_script = None;
+            self.finish_instant_play_if_pending();
         }
         if let Some(machine) = self.machine.as_mut() {
             let kb = machine.keyboard_mut();
@@ -329,6 +517,15 @@ impl EmulatorSession {
             }
         }
         true
+    }
+
+    fn finish_instant_play_if_pending(&mut self) {
+        if !self.pending_instant_play {
+            return;
+        }
+        self.pending_instant_play = false;
+        self.play_tape_keeping_options();
+        self.status = "Instant: flash-loading after LOAD \"\"".into();
     }
 
     pub fn load_rzx(&mut self, path: &Path) {
@@ -350,28 +547,165 @@ impl EmulatorSession {
             Ok(img) => {
                 if let Some(m) = self.machine.as_mut() {
                     match m.insert_disk(img) {
-                        Ok(()) => self.status = format!("Inserted DSK {}", path.display()),
+                        Ok(()) => {
+                            self.status = format!(
+                                "DSK inserted ({}) — use +3 Loader / +3DOS",
+                                path.display()
+                            );
+                        }
                         Err(e) => self.status = e,
                     }
                 } else {
-                    self.status = "Load +2A/+3 ROM before inserting disk".into();
+                    self.status = "Load +3 ROM before inserting disk".into();
                 }
             }
             Err(e) => self.status = format!("DSK error: {e}"),
         }
     }
 
+    pub fn attach_multiface(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.attach_multiface(&data) {
+                        Ok(()) => self.status = format!("Attached Multiface 1 {}", path.display()),
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a 48K ROM before Multiface".into();
+                }
+            }
+            Err(e) => self.status = format!("Multiface ROM error: {e}"),
+        }
+    }
+
+    pub fn multiface_nmi(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            if m.multiface_nmi().is_some() {
+                self.status = "Multiface NMI".into();
+            } else {
+                self.status = "Multiface not attached".into();
+            }
+        }
+    }
+
+    pub fn attach_divmmc_stub(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            match m.attach_divmmc() {
+                Ok(_) => self.status = "DivMMC attached (stub)".into(),
+                Err(e) => self.status = e,
+            }
+        } else {
+            self.status = "Load a machine ROM first".into();
+        }
+    }
+
+    pub fn attach_divmmc_sd(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.attach_divmmc() {
+                        Ok(div) => {
+                            div.attach_sd(data);
+                            self.status = format!("DivMMC SD {}", path.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a machine ROM first".into();
+                }
+            }
+            Err(e) => self.status = format!("SD image error: {e}"),
+        }
+    }
+
+    pub fn attach_interface1_stub(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            match m.attach_interface1() {
+                Ok(_) => self.status = "Interface 1 attached (stub)".into(),
+                Err(e) => self.status = e,
+            }
+        } else {
+            self.status = "Load a machine ROM first".into();
+        }
+    }
+
+    pub fn insert_mdr(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => match formats::MdrImage::parse(&data) {
+                Ok(cart) => {
+                    if let Some(m) = self.machine.as_mut() {
+                        match m.attach_interface1() {
+                            Ok(if1) => {
+                                if1.insert_mdr(cart);
+                                self.status = format!("Inserted MDR {}", path.display());
+                            }
+                            Err(e) => self.status = e,
+                        }
+                    } else {
+                        self.status = "Load a machine ROM first".into();
+                    }
+                }
+                Err(e) => self.status = format!("MDR error: {e}"),
+            },
+            Err(e) => self.status = format!("MDR error: {e}"),
+        }
+    }
+
+    pub fn attach_beta_stub(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            match m.attach_beta() {
+                Ok(_) => self.status = "Beta Disk attached (stub)".into(),
+                Err(e) => self.status = e,
+            }
+        } else {
+            self.status = "Load a machine ROM first".into();
+        }
+    }
+
+    pub fn insert_trd(&mut self, path: &Path) {
+        match formats::TrdImage::load(path) {
+            Ok(img) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.attach_beta() {
+                        Ok(beta) => {
+                            beta.insert(img);
+                            self.status = format!("Inserted TRD {}", path.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a machine ROM first".into();
+                }
+            }
+            Err(e) => self.status = format!("TRD error: {e}"),
+        }
+    }
+
     /// Rebuild the Spectrum matrix from currently held egui keys (macOS-friendly).
+    ///
+    /// `pad` is ORed with arrow/Tab keyboard stick. Joystick modes that touch the
+    /// matrix run first; physical key chords are restored afterward so held digits
+    /// (e.g. Num1–Num5 in Sinclair-left) are not cleared by joystick routing.
     pub fn sync_keyboard(
         &mut self,
         keys_down: &std::collections::HashSet<egui::Key>,
         modifiers: egui::Modifiers,
+        pad: JoystickState,
     ) {
         let Some(machine) = self.machine.as_mut() else {
             return;
         };
+        machine.keyboard_mut().reset();
+        let mut stick = pad;
+        stick.left |= keys_down.contains(&egui::Key::ArrowLeft);
+        stick.right |= keys_down.contains(&egui::Key::ArrowRight);
+        stick.up |= keys_down.contains(&egui::Key::ArrowUp);
+        stick.down |= keys_down.contains(&egui::Key::ArrowDown);
+        stick.fire |= keys_down.contains(&egui::Key::Tab);
+        machine.apply_joystick_state(self.joystick_mode, stick);
+
         let kb = machine.keyboard_mut();
-        kb.reset();
         let suppress_caps = keys_down
             .iter()
             .any(|k| keymap::suppresses_modifier_caps(*k));
@@ -379,19 +713,23 @@ impl EmulatorSession {
             kb.set_key(row, bit, true);
         }
         for key in keys_down {
+            // Arrow cursor chords are applied via joystick mode instead.
+            if matches!(
+                key,
+                egui::Key::ArrowLeft
+                    | egui::Key::ArrowRight
+                    | egui::Key::ArrowUp
+                    | egui::Key::ArrowDown
+                    | egui::Key::Tab
+            ) {
+                continue;
+            }
             if let Some(chord) = keymap::chord_for(*key, modifiers) {
                 for (row, bit) in chord.keys {
                     kb.set_key(row, bit, true);
                 }
             }
         }
-        // Kempston: arrows + Tab fire (alongside cursor matrix chords).
-        let k = machine.kempston_mut();
-        k.left = keys_down.contains(&egui::Key::ArrowLeft);
-        k.right = keys_down.contains(&egui::Key::ArrowRight);
-        k.up = keys_down.contains(&egui::Key::ArrowUp);
-        k.down = keys_down.contains(&egui::Key::ArrowDown);
-        k.fire = keys_down.contains(&egui::Key::Tab);
     }
 
     /// Apply a single egui key edge (tests / scripted input).
@@ -448,6 +786,8 @@ pub struct SpecChumApp {
     beeper: Arc<Mutex<BeeperState>>,
     _stream: Option<cpal::Stream>,
     theme_applied: bool,
+    /// Optional gamepad (USB/Bluetooth via gilrs). `None` if init failed.
+    gilrs: Option<gilrs::Gilrs>,
 }
 
 impl std::fmt::Debug for SpecChumApp {
@@ -463,12 +803,17 @@ impl std::fmt::Debug for SpecChumApp {
 struct BeeperState {
     edges: Vec<(u32, bool)>,
     ay_samples: Vec<f32>,
+    ay_left: Vec<f32>,
+    ay_right: Vec<f32>,
     ay_index: usize,
     level: bool,
     sample_rate: u32,
+    channels: u16,
     frame_t_per_sample: f32,
     t: f32,
     muted: bool,
+    /// Linear host output gain 0…1.
+    volume: f32,
 }
 
 impl Default for BeeperState {
@@ -476,12 +821,16 @@ impl Default for BeeperState {
         Self {
             edges: Vec::new(),
             ay_samples: Vec::new(),
+            ay_left: Vec::new(),
+            ay_right: Vec::new(),
             ay_index: 0,
             level: false,
             sample_rate: 44100,
+            channels: 2,
             frame_t_per_sample: 69888.0 / 44100.0,
             t: 0.0,
             muted: false,
+            volume: 1.0,
         }
     }
 }
@@ -506,13 +855,51 @@ impl SpecChumApp {
         };
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
+        let gilrs = match gilrs::Gilrs::new() {
+            Ok(g) => Some(g),
+            Err(gilrs::Error::NotImplemented(g)) => Some(g),
+            Err(e) => {
+                session.status = format!("{} (gamepad unavailable: {e})", session.status);
+                None
+            }
+        };
         Self {
             session,
             texture: None,
             beeper,
             _stream: stream,
             theme_applied: false,
+            gilrs,
         }
+    }
+
+    fn poll_gamepad(&mut self) -> JoystickState {
+        let Some(gilrs) = self.gilrs.as_mut() else {
+            return JoystickState::empty();
+        };
+        while gilrs.next_event().is_some() {}
+        let mut stick = JoystickState::empty();
+        for (_, gamepad) in gilrs.gamepads() {
+            const DEAD: f32 = 0.5;
+            let axis = |a: gilrs::Axis| gamepad.value(a);
+            let left = gamepad.is_pressed(gilrs::Button::DPadLeft)
+                || axis(gilrs::Axis::LeftStickX) < -DEAD;
+            let right = gamepad.is_pressed(gilrs::Button::DPadRight)
+                || axis(gilrs::Axis::LeftStickX) > DEAD;
+            let up =
+                gamepad.is_pressed(gilrs::Button::DPadUp) || axis(gilrs::Axis::LeftStickY) > DEAD;
+            let down = gamepad.is_pressed(gilrs::Button::DPadDown)
+                || axis(gilrs::Axis::LeftStickY) < -DEAD;
+            stick.left |= left;
+            stick.right |= right;
+            stick.up |= up;
+            stick.down |= down;
+            stick.fire |= gamepad.is_pressed(gilrs::Button::South)
+                || gamepad.is_pressed(gilrs::Button::East)
+                || gamepad.is_pressed(gilrs::Button::West)
+                || gamepad.is_pressed(gilrs::Button::North);
+        }
+        stick
     }
 
     /// egui UI body — callable from `App::update` or headless `Context::run`.
@@ -601,8 +988,18 @@ impl SpecChumApp {
                         if ui
                             .radio_value(
                                 &mut self.session.model,
+                                Model::SpectrumPlus2A,
+                                "Spectrum +2A",
+                            )
+                            .clicked()
+                        {
+                            self.session.try_autoload_rom();
+                        }
+                        if ui
+                            .radio_value(
+                                &mut self.session.model,
                                 Model::SpectrumPlus3,
-                                "Spectrum +2A/+3",
+                                "Spectrum +3",
                             )
                             .clicked()
                         {
@@ -611,59 +1008,262 @@ impl SpecChumApp {
                         if ui.button("Reset").clicked() {
                             if let Some(m) = self.session.machine.as_mut() {
                                 m.reset();
-                                self.session.status = "Reset".into();
+                                self.session.status = if m.has_tape() {
+                                    "Reset (tape still inserted, paused)".into()
+                                } else {
+                                    "Reset".into()
+                                };
                             }
                             ui.close_menu();
                         }
                         ui.checkbox(&mut self.session.running, "Running");
                         ui.checkbox(&mut self.session.throttle, "Throttle ~50Hz");
+                        ui.separator();
+                        ui.label("Joystick");
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::Kempston,
+                            "Kempston",
+                        );
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::SinclairLeft,
+                            "Sinclair left (1–5)",
+                        );
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::SinclairRight,
+                            "Sinclair right (6–0)",
+                        );
+                        ui.radio_value(
+                            &mut self.session.joystick_mode,
+                            JoystickMode::Cursor,
+                            "Cursor",
+                        );
+                        ui.checkbox(&mut self.session.kempston_mouse, "Kempston mouse");
+                        if matches!(
+                            self.session.model,
+                            Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
+                        ) {
+                            ui.separator();
+                            ui.label("AY stereo");
+                            let mut mode = self
+                                .session
+                                .machine
+                                .as_ref()
+                                .map_or(AyStereoMode::Mono, Machine::ay_stereo_mode);
+                            ui.radio_value(&mut mode, AyStereoMode::Mono, "Mono");
+                            ui.radio_value(&mut mode, AyStereoMode::Acb, "ACB");
+                            ui.radio_value(&mut mode, AyStereoMode::Abc, "ABC");
+                            if let Some(m) = self.session.machine.as_mut() {
+                                m.set_ay_stereo_mode(mode);
+                            }
+                        }
                         ui.checkbox(&mut self.session.muted, "Mute");
+                        ui.add_enabled(
+                            !self.session.muted,
+                            egui::Slider::new(&mut self.session.volume, 0.0..=1.0).text("Volume"),
+                        );
+                    });
+                    ui.menu_button("Hardware", |ui| {
+                        let model = self.session.model;
+                        let has_mf = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_multiface);
+                        let has_div = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_divmmc);
+                        let has_if1 = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_interface1);
+                        let has_beta = self.session.machine.as_ref().is_some_and(Machine::has_beta);
+
+                        ui.label("Peripherals (stubs where noted)");
+                        ui.separator();
+
+                        if model == Model::Spectrum48 {
+                            if ui.button("Attach Multiface 1 ROM…").clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("Multiface ROM", &["rom", "bin"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_multiface(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_mf, egui::Button::new("Multiface NMI"))
+                                .clicked()
+                            {
+                                self.session.multiface_nmi();
+                                ui.close_menu();
+                            }
+                            if has_mf {
+                                ui.label("Multiface: attached");
+                            }
+                        } else {
+                            ui.label("Multiface 1: 48K only");
+                        }
+
+                        ui.separator();
+                        if matches!(model, Model::Spectrum48 | Model::Spectrum128) {
+                            if ui.button("Attach DivMMC (stub)").clicked() {
+                                self.session.attach_divmmc_stub();
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_div, egui::Button::new("Open DivMMC SD image…"))
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("SD image", &["img", "bin", "mmc", "sd"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_divmmc_sd(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_div {
+                                "DivMMC: attached (paging/SPI stub; no ESXDOS boot)"
+                            } else {
+                                "DivMMC: not attached"
+                            });
+
+                            ui.separator();
+                            if ui.button("Attach Interface 1 (stub)").clicked() {
+                                self.session.attach_interface1_stub();
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_if1, egui::Button::new("Open Microdrive MDR…"))
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("MDR", &["mdr"])
+                                    .pick_file()
+                                {
+                                    self.session.insert_mdr(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_if1 {
+                                "IF1: attached (shadow ROM / MDR slot stub)"
+                            } else {
+                                "IF1: not attached"
+                            });
+
+                            ui.separator();
+                            if ui.button("Attach Beta Disk (stub)").clicked() {
+                                self.session.attach_beta_stub();
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_beta, egui::Button::new("Open TRD…"))
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("TRD", &["trd"])
+                                    .pick_file()
+                                {
+                                    self.session.insert_trd(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_beta {
+                                "Beta: attached (VG93 read-sector stub)"
+                            } else {
+                                "Beta: not attached"
+                            });
+                        } else {
+                            ui.label("DivMMC / IF1 / Beta: not on +2A/+3");
+                        }
+
+                        if model == Model::SpectrumPlus3 {
+                            ui.separator();
+                            ui.label("+3 disk: File → Open DSK…");
+                        } else if model == Model::SpectrumPlus2A {
+                            ui.separator();
+                            ui.label("+2A: no floppy (tape Loader)");
+                        }
                     });
                     ui.menu_button("Tape", |ui| {
-                        if ui.button("Play tape").clicked() {
-                            self.session.play_tape();
-                            ui.close_menu();
+                        let has_tape = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_tape);
+                        if has_tape {
+                            if ui.button("Play tape").clicked() {
+                                self.session.play_tape();
+                                ui.close_menu();
+                            }
+                            if ui.button("Pause tape").clicked() {
+                                self.session.pause_tape();
+                                ui.close_menu();
+                            }
+                            if ui.button("Rewind tape").clicked() {
+                                self.session.rewind_tape();
+                                ui.close_menu();
+                            }
+                            ui.separator();
                         }
-                        if ui.button("Pause tape").clicked() {
-                            self.session.pause_tape();
-                            ui.close_menu();
-                        }
-                        if ui.button("Rewind tape").clicked() {
-                            self.session.rewind_tape();
-                            ui.close_menu();
-                        }
-                        if ui.button("Type LOAD \"\" (48K)").clicked() {
+                        if ui.button("Type LOAD \"\"").clicked() {
                             self.session.type_load_quotes();
                             ui.close_menu();
                         }
-                        if ui.button("Type LOAD \"\" CODE (48K)").clicked() {
+                        if ui.button("Type LOAD \"\" CODE").clicked() {
                             self.session.type_load_quotes_code();
                             ui.close_menu();
                         }
                         ui.separator();
-                        if let Some(m) = self.session.machine.as_mut() {
-                            let mut opts = m.tape_load_options();
-                            let mut instant = opts.flash_load;
-                            if ui.checkbox(&mut instant, "Instant flash-load").changed() {
-                                opts.flash_load = instant;
-                                m.set_tape_load_options(opts);
-                                self.session.status = if instant {
-                                    "Tape: instant flash-load".into()
-                                } else {
-                                    format!("Tape: EAR load at {}x", opts.speed)
-                                };
+                        if ui
+                            .button("Instant…")
+                            .on_hover_text(
+                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Play alone stays EAR-only. Use File → Open DSK for disks.",
+                            )
+                            .clicked()
+                        {
+                            // Tape-only: Instant never fakes Type LOAD for DSK.
+                            let dialog =
+                                rfd::FileDialog::new().add_filter("Tape", &["tap", "tzx"]);
+                            if let Some(path) = dialog.pick_file() {
+                                self.session.instant_load_path(&path);
                             }
-                            ui.label("EAR speed:");
-                            for speed in [1u32, 2, 5, 10, 20] {
-                                let selected = opts.speed == speed;
-                                if ui.selectable_label(selected, format!("{speed}x")).clicked() {
-                                    opts.speed = speed;
+                            ui.close_menu();
+                        }
+                        if has_tape {
+                            if let Some(m) = self.session.machine.as_mut() {
+                                let mut opts = m.tape_load_options();
+                                ui.label("EAR speed:");
+                                for speed in [1u32, 2, 5, 10, 20] {
+                                    let selected = opts.speed == speed;
+                                    if ui.selectable_label(selected, format!("{speed}x")).clicked()
+                                    {
+                                        opts.speed = speed;
+                                        // Keep flash_load as-is (Play forces it off; Instant turns it on).
+                                        m.set_tape_load_options(opts);
+                                        self.session.status =
+                                            format!("Tape: EAR speed {speed}x");
+                                    }
+                                }
+                                if ui
+                                    .button("Experience (~20s EAR)")
+                                    .on_hover_text(
+                                        "EAR path at 16x (issue #82 interim; abbreviate tones later)",
+                                    )
+                                    .clicked()
+                                {
+                                    opts.flash_load = false;
+                                    opts.speed = 16;
                                     m.set_tape_load_options(opts);
-                                    self.session.status = if opts.flash_load {
-                                        format!("Tape: instant flash-load, EAR speed {speed}x")
-                                    } else {
-                                        format!("Tape: EAR load at {speed}x")
-                                    };
+                                    self.session.status =
+                                        "Tape: experience EAR load at 16x (~20s-class)".into();
                                 }
                             }
                         }
@@ -785,15 +1385,46 @@ impl SpecChumApp {
 
         if !self.session.tick_key_script() {
             let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
-            self.session.sync_keyboard(&keys_down, modifiers);
+            let pad = self.poll_gamepad();
+            self.session.sync_keyboard(&keys_down, modifiers, pad);
+        }
+
+        if self.session.kempston_mouse {
+            if let Some(machine) = self.session.machine.as_mut() {
+                let (dx, dy, primary, secondary, middle) = ctx.input(|i| {
+                    let d = i.pointer.delta();
+                    (
+                        d.x.round() as i32,
+                        d.y.round() as i32,
+                        i.pointer.primary_down(),
+                        i.pointer.secondary_down(),
+                        i.pointer.middle_down(),
+                    )
+                });
+                let mouse = machine.mouse_mut();
+                // Clamp per-frame motion into i8 range for the 8-bit counters.
+                let dx = dx.clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8;
+                let dy = dy.clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8;
+                if dx != 0 || dy != 0 {
+                    mouse.set_delta(dx, dy);
+                }
+                // Host primary = left; Kempston D0=right, D1=left.
+                mouse.set_buttons(primary, secondary, middle);
+            }
+        } else if let Some(machine) = self.session.machine.as_mut() {
+            // Drop guest button state when host mouse input is toggled off mid-press.
+            machine.mouse_mut().set_buttons(false, false, false);
         }
 
         let audio = self.session.tick_frame();
         if let Ok(mut b) = self.beeper.lock() {
             b.muted = self.session.muted;
+            b.volume = self.session.volume.clamp(0.0, 1.0);
             if !self.session.muted {
                 b.edges = audio.beeper_edges;
                 b.ay_samples = audio.ay_samples;
+                b.ay_left = audio.ay_left;
+                b.ay_right = audio.ay_right;
                 b.ay_index = 0;
                 b.t = 0.0;
             }
@@ -948,9 +1579,11 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
     let device = host.default_output_device()?;
     let config = device.default_output_config().ok()?;
     let sample_rate = config.sample_rate().0;
+    let channels = config.channels();
     {
         let mut s = state.lock().ok()?;
         s.sample_rate = sample_rate;
+        s.channels = channels;
         s.frame_t_per_sample = 69888.0 / (sample_rate as f32 / 50.0);
     }
     let stream = device
@@ -966,7 +1599,8 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
                     }
                     return;
                 }
-                for sample in data.iter_mut() {
+                let ch = usize::from(st.channels.max(1));
+                for frame in data.chunks_mut(ch) {
                     while let Some(&(edge_t, level)) = st.edges.first() {
                         if st.t >= edge_t as f32 {
                             st.level = level;
@@ -976,17 +1610,36 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
                         }
                     }
                     let beep = if st.level { 0.15 } else { -0.15 };
-                    let ay = if st.ay_index < st.ay_samples.len() {
+                    let (ay_l, ay_r) = if st.ay_index < st.ay_left.len()
+                        && st.ay_index < st.ay_right.len()
+                    {
+                        let l = st.ay_left[st.ay_index];
+                        let r = st.ay_right[st.ay_index];
+                        st.ay_index += 1;
+                        ((l - 0.5) * 0.5, (r - 0.5) * 0.5)
+                    } else if st.ay_index < st.ay_samples.len() {
                         let v = st.ay_samples[st.ay_index];
                         st.ay_index += 1;
-                        // AY samples are 0..1; center and scale for mix.
-                        (v - 0.5) * 0.5
+                        let m = (v - 0.5) * 0.5;
+                        (m, m)
+                    } else if let (Some(&l), Some(&r)) = (st.ay_left.last(), st.ay_right.last()) {
+                        ((l - 0.5) * 0.5, (r - 0.5) * 0.5)
                     } else if let Some(&last) = st.ay_samples.last() {
-                        (last - 0.5) * 0.5
+                        let m = (last - 0.5) * 0.5;
+                        (m, m)
                     } else {
-                        0.0
+                        (0.0, 0.0)
                     };
-                    *sample = (beep + ay).clamp(-1.0, 1.0);
+                    let gain = st.volume.clamp(0.0, 1.0);
+                    let left = ((beep + ay_l) * gain).clamp(-1.0, 1.0);
+                    let right = ((beep + ay_r) * gain).clamp(-1.0, 1.0);
+                    frame[0] = left;
+                    if ch > 1 {
+                        frame[1] = right;
+                    }
+                    for s in frame.iter_mut().skip(2) {
+                        *s = 0.0;
+                    }
                     st.t += st.frame_t_per_sample;
                 }
             },
@@ -1016,7 +1669,7 @@ mod tests {
             shift: true,
             ..Default::default()
         };
-        session.sync_keyboard(&keys, mods);
+        session.sync_keyboard(&keys, mods, JoystickState::empty());
         let kb = session.machine.as_mut().unwrap().keyboard_mut();
         // Symbol (row7 bit1) and P (row5 bit0) active-low
         assert_eq!(kb.rows[7] & (1 << 1), 0);
@@ -1026,7 +1679,7 @@ mod tests {
     }
 
     #[test]
-    fn arrow_left_maps_caps_5() {
+    fn arrow_left_maps_joystick_kempston_and_cursor_mode() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
         if session.machine.is_none() {
@@ -1034,12 +1687,108 @@ mod tests {
         }
         let mut keys = std::collections::HashSet::new();
         keys.insert(egui::Key::ArrowLeft);
-        session.sync_keyboard(&keys, egui::Modifiers::default());
+        session.joystick_mode = JoystickMode::Kempston;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
+        assert!(session.machine.as_mut().unwrap().kempston_mut().left);
+
+        session.joystick_mode = JoystickMode::Cursor;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let m = session.machine.as_mut().unwrap();
         let rows = m.keyboard_mut().rows;
         assert_eq!(rows[0] & 1, 0); // Caps
         assert_eq!(rows[3] & (1 << 4), 0); // 5
-        assert!(m.kempston_mut().left);
+        assert!(!m.kempston_mut().left);
+    }
+
+    #[test]
+    fn physical_num1_survives_sinclair_left_joystick_clear() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            return;
+        }
+        let mut keys = std::collections::HashSet::new();
+        keys.insert(egui::Key::Num1);
+        session.joystick_mode = JoystickMode::SinclairLeft;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
+        let rows = session.machine.as_mut().unwrap().keyboard_mut().rows;
+        // Num1 = row 3 bit 0 must stay pressed even though Sinclair clears that row first.
+        assert_eq!(rows[3] & (1 << 0), 0);
+    }
+
+    #[test]
+    fn physical_num5_survives_cursor_joystick_clear() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            return;
+        }
+        let mut keys = std::collections::HashSet::new();
+        keys.insert(egui::Key::Num5);
+        session.joystick_mode = JoystickMode::Cursor;
+        session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
+        let rows = session.machine.as_mut().unwrap().keyboard_mut().rows;
+        // Num5 = row 3 bit 4 (also used as Cursor left); physical hold must remain.
+        assert_eq!(rows[3] & (1 << 4), 0);
+    }
+
+    fn synthetic_sna48_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 49179];
+        data[26] = 5;
+        data[23] = 0x00;
+        data[24] = 0x40;
+        data[27] = 0x00;
+        data[28] = 0x80;
+        data[27 + 0x4000] = 0xaa;
+        data
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_128k() {
+        let rom48 = EmulatorSession::workspace_root().join("roms/spec48.rom");
+        if !rom48.is_file() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let mut session = EmulatorSession::new(Model::Spectrum128, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: 128K ROM missing");
+            return;
+        }
+        let path = std::env::temp_dir().join("spec_chum_app_128_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        session.load_snapshot(&path);
+        assert_eq!(session.model, Model::Spectrum48);
+        assert_eq!(
+            session.machine.as_ref().map(Machine::model),
+            Some(Model::Spectrum48)
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_snapshot48_switches_from_plus3() {
+        let rom48 = EmulatorSession::workspace_root().join("roms/spec48.rom");
+        if !rom48.is_file() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+        let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: +3 ROM missing");
+            return;
+        }
+        let path = std::env::temp_dir().join("spec_chum_app_plus3_to_48.sna");
+        std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
+        session.load_snapshot(&path);
+        assert_eq!(session.model, Model::Spectrum48);
+        assert_eq!(
+            session.machine.as_ref().map(Machine::model),
+            Some(Model::Spectrum48)
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -1095,6 +1844,72 @@ mod tests {
             }
         }
         assert!(session.key_script.is_none(), "CODE script should finish");
+    }
+
+    /// +3 Type LOAD must queue keys (not a disk-Loader hint) and flash-load attr_mark (#144).
+    #[test]
+    fn plus3_type_load_code_flash_loads_attr_mark() {
+        let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: plus3/plus2a ROM missing");
+            return;
+        }
+        for _ in 0..250 {
+            session.tick_frame();
+        }
+        let tap = EmulatorSession::workspace_root().join("tests/fixtures/tape/attr_mark.tap");
+        session.load_tap(&tap);
+        session.type_load_quotes_code();
+        assert!(
+            session.key_script.is_some(),
+            "plus3 Type LOAD must queue a key script, not a status-only Loader hint"
+        );
+        assert!(
+            !session.status.to_lowercase().contains("tape loader"),
+            "must not point +3 users at disk Loader; status={}",
+            session.status
+        );
+        // Menu → 48 BASIC wait (~120) + LOAD "" CODE (~100) needs >300 frames.
+        for _ in 0..500 {
+            let _ = session.tick_key_script();
+            session.tick_frame();
+            if session.key_script.is_none() {
+                break;
+            }
+        }
+        assert!(
+            session.key_script.is_none(),
+            "plus3 Type LOAD script should finish"
+        );
+        // Instant-style flash for this regression (Play alone is EAR-only).
+        if let Some(m) = session.machine.as_mut() {
+            let mut opts = m.tape_load_options();
+            opts.flash_load = true;
+            m.set_tape_load_options(opts);
+            m.set_tape_playing(true);
+        }
+        let mut loaded = false;
+        for _ in 0..400 {
+            session.tick_frame();
+            let m = session.machine.as_ref().unwrap();
+            let code_ok = m.read_mem(0x8000) == 0x21
+                && m.read_mem(0x8001) == 0x00
+                && m.read_mem(0x8002) == 0x58
+                && m.read_mem(0x8003) == 0x36
+                && m.read_mem(0x8004) == 0xd7
+                && m.read_mem(0x8005) == 0xc9;
+            if code_ok {
+                loaded = true;
+                break;
+            }
+        }
+        assert!(
+            loaded,
+            "plus3 egui Type LOAD CODE + flash Play should load attr_mark at 0x8000 (PC={:04X} block={:?})",
+            session.machine.as_ref().unwrap().cpu().regs.pc,
+            session.machine.as_ref().unwrap().tape_block()
+        );
     }
 
     #[test]

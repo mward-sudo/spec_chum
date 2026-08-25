@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use formats::Snapshot48;
+use formats::{Snapshot128, Snapshot128Model, Snapshot48};
 use machine::{BreakReason, Machine, Model, TapeLoadOptions, Watch};
 use tape::{TapPlayer, TzxPlayer};
 use trace::DumpFilter;
@@ -12,7 +12,7 @@ use trace::DumpFilter;
 #[derive(Parser, Debug)]
 #[command(name = "spec-chum-debug", about = "Headless Spec Chum debugger")]
 struct Cli {
-    /// 48k, 128k, or plus3
+    /// 48k, 128k, plus2a, or plus3
     #[arg(long, default_value = "48k")]
     model: String,
     #[arg(long)]
@@ -31,7 +31,7 @@ struct Cli {
     /// Use EAR bitstream loading instead of instant flash-load at LD-BYTES.
     #[arg(long)]
     ear_load: bool,
-    /// EAR bitstream speed multiplier (clamped 1..=64; ignored when flash-load is instant).
+    /// EAR speed: N Spectrum frames per run_frame while playing (ignored when flash-load/Instant).
     #[arg(long, default_value_t = 1)]
     speed: u32,
     #[command(subcommand)]
@@ -109,6 +109,7 @@ fn default_rom(model: Model) -> PathBuf {
     match model {
         Model::Spectrum48 => PathBuf::from("roms/spec48.rom"),
         Model::Spectrum128 => PathBuf::from("roms/128/spec128uk.rom"),
+        Model::SpectrumPlus2A => PathBuf::from("roms/plus2a/plus2a.rom"),
         Model::SpectrumPlus3 => PathBuf::from("roms/plus3/plus3.rom"),
     }
 }
@@ -117,7 +118,8 @@ fn parse_model(s: &str) -> Result<Model> {
     Ok(match s.to_ascii_lowercase().as_str() {
         "48" | "48k" => Model::Spectrum48,
         "128" | "128k" => Model::Spectrum128,
-        "plus3" | "+3" | "plus2a" => Model::SpectrumPlus3,
+        "plus2a" | "+2a" => Model::SpectrumPlus2A,
+        "plus3" | "+3" => Model::SpectrumPlus3,
         other => bail!("unknown model {other}"),
     })
 }
@@ -129,12 +131,12 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
     let mut m = match model {
         Model::Spectrum48 => Machine::new_48k(&rom),
         Model::Spectrum128 => Machine::new_128k(&rom),
+        Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
         Model::SpectrumPlus3 => Machine::new_plus3(&rom),
     }
     .map_err(|e| anyhow::anyhow!(e))?;
     if let Some(path) = &cli.snapshot {
-        let snap = load_snapshot(path)?;
-        m.apply_snapshot48(&snap);
+        m = load_and_apply_snapshot(m, path)?;
     }
     if let Some(path) = &cli.tap {
         let img = tape::TapImage::load(path).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -180,16 +182,71 @@ fn print_ok_loaded(m: &Machine) -> bool {
     false
 }
 
-fn load_snapshot(path: &Path) -> Result<Snapshot48> {
+fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
     if ext == "z80" {
-        Snapshot48::load_z80(path).map_err(|e| anyhow::anyhow!("{e}"))
+        match Snapshot128::load_z80(path) {
+            Ok(snap) => {
+                // Z80 v3 encodes +2A/+3 via hw mode (+ modify-hardware bit).
+                let want = match snap.model {
+                    Snapshot128Model::SpectrumPlus3 => Model::SpectrumPlus3,
+                    Snapshot128Model::SpectrumPlus2A => Model::SpectrumPlus2A,
+                    Snapshot128Model::Spectrum128 => Model::Spectrum128,
+                };
+                if m.model() != want {
+                    let rom_path = default_rom(want);
+                    let rom = std::fs::read(&rom_path)
+                        .with_context(|| format!("ROM {}", rom_path.display()))?;
+                    m = match want {
+                        Model::SpectrumPlus3 => Machine::new_plus3(&rom),
+                        Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
+                        Model::Spectrum128 => Machine::new_128k(&rom),
+                        Model::Spectrum48 => unreachable!("128-family only"),
+                    }
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                }
+                m.apply_snapshot128(&snap);
+                Ok(m)
+            }
+            Err(e128) => match Snapshot48::load_z80(path) {
+                Ok(snap) => {
+                    if m.model() != Model::Spectrum48 {
+                        let rom_path = default_rom(Model::Spectrum48);
+                        let rom = std::fs::read(&rom_path)
+                            .with_context(|| format!("ROM {}", rom_path.display()))?;
+                        m = Machine::new_48k(&rom).map_err(|e| anyhow::anyhow!(e))?;
+                    }
+                    m.apply_snapshot48(&snap);
+                    Ok(m)
+                }
+                Err(_) => Err(anyhow::anyhow!("{e128}")),
+            },
+        }
     } else {
-        Snapshot48::load_sna(path).map_err(|e| anyhow::anyhow!("{e}"))
+        // SNA128 has no 1FFD field — keep the CLI `--model` (cannot auto-detect +3).
+        match Snapshot128::load_sna(path) {
+            Ok(snap) => {
+                m.apply_snapshot128(&snap);
+                Ok(m)
+            }
+            Err(e128) => match Snapshot48::load_sna(path) {
+                Ok(snap) => {
+                    if m.model() != Model::Spectrum48 {
+                        let rom_path = default_rom(Model::Spectrum48);
+                        let rom = std::fs::read(&rom_path)
+                            .with_context(|| format!("ROM {}", rom_path.display()))?;
+                        m = Machine::new_48k(&rom).map_err(|e| anyhow::anyhow!(e))?;
+                    }
+                    m.apply_snapshot48(&snap);
+                    Ok(m)
+                }
+                Err(_) => Err(anyhow::anyhow!("{e128}")),
+            },
+        }
     }
 }
 

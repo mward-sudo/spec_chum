@@ -3,11 +3,27 @@
 #![allow(clippy::pedantic)]
 
 mod ay;
+mod beta_disk;
+mod divmmc;
+mod interface1;
 mod kempston;
+mod kempston_mouse;
+mod multiface;
 mod plus3;
 
-pub use ay::Ay8912;
+pub use ay::{Ay8912, StereoMode};
+pub use beta_disk::BetaDisk;
+pub use divmmc::{
+    DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
+    PORT_SPI_DATA as DIVMMC_PORT_SPI_DATA,
+};
+pub use interface1::{Interface1, IF1_ROM_SIZE};
 pub use kempston::Kempston;
+pub use kempston_mouse::{
+    KempstonMouse, PORT_BUTTONS as MOUSE_PORT_BUTTONS, PORT_X as MOUSE_PORT_X,
+    PORT_Y as MOUSE_PORT_Y,
+};
+pub use multiface::{Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 
 use ula::{
@@ -93,6 +109,15 @@ pub struct Bus48 {
     /// Timestamped beeper edges: (frame_t, level).
     pub beeper_edges: Vec<(u32, bool)>,
     pub kempston: Kempston,
+    pub mouse: KempstonMouse,
+    /// Optional Multiface 1 (ROM attached separately).
+    pub multiface: Option<Multiface1>,
+    /// Optional DivMMC (control port `0xE3`).
+    pub divmmc: Option<DivMmc>,
+    /// Optional Interface 1 + Microdrive.
+    pub interface1: Option<Interface1>,
+    /// Optional Beta Disk / TR-DOS (VG93 ports when paged).
+    pub beta: Option<BetaDisk>,
 }
 
 impl Default for Bus48 {
@@ -116,6 +141,11 @@ impl Bus48 {
             ula: Ula48::new(),
             beeper_edges: Vec::new(),
             kempston: Kempston::new(),
+            mouse: KempstonMouse::new(),
+            multiface: None,
+            divmmc: None,
+            interface1: None,
+            beta: None,
         }
     }
 
@@ -125,6 +155,29 @@ impl Bus48 {
         }
         self.rom.copy_from_slice(data);
         Ok(())
+    }
+
+    /// Attach Multiface 1 with an 8 KiB ROM image (creates the peripheral if absent).
+    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), String> {
+        let mut mf = Multiface1::new();
+        mf.load_rom(rom)?;
+        self.multiface = Some(mf);
+        Ok(())
+    }
+
+    /// Attach a DivMMC (creates default peripheral if absent).
+    pub fn attach_divmmc(&mut self) -> &mut DivMmc {
+        self.divmmc.get_or_insert_with(DivMmc::new)
+    }
+
+    /// Attach Interface 1 (creates default peripheral if absent).
+    pub fn attach_interface1(&mut self) -> &mut Interface1 {
+        self.interface1.get_or_insert_with(Interface1::new)
+    }
+
+    /// Attach Beta Disk / TR-DOS (creates default peripheral if absent).
+    pub fn attach_beta(&mut self) -> &mut BetaDisk {
+        self.beta.get_or_insert_with(BetaDisk::new)
     }
 
     #[inline]
@@ -146,6 +199,22 @@ impl Bus48 {
     #[inline]
     #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
+        // Multiface NMI overlay wins over DivMMC / IF1 when paged (button press).
+        if let Some(mf) = self.multiface.as_ref() {
+            if let Some(v) = mf.read(addr) {
+                return v;
+            }
+        }
+        if let Some(d) = self.divmmc.as_ref() {
+            if let Some(v) = d.read_overlay(addr) {
+                return v;
+            }
+        }
+        if let Some(if1) = self.interface1.as_ref() {
+            if let Some(v) = if1.read_rom(addr) {
+                return v;
+            }
+        }
         if addr < 0x4000 {
             self.rom[addr as usize]
         } else {
@@ -155,6 +224,16 @@ impl Bus48 {
 
     #[inline]
     pub fn write(&mut self, addr: u16, value: u8) {
+        if let Some(mf) = self.multiface.as_mut() {
+            if mf.write(addr, value) {
+                return;
+            }
+        }
+        if let Some(d) = self.divmmc.as_mut() {
+            if d.write_overlay(addr, value) {
+                return;
+            }
+        }
         if addr >= 0x4000 {
             self.ram[addr as usize - 0x4000] = value;
         }
@@ -222,9 +301,22 @@ impl Bus48 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
-        // Kempston joystick (partial decode on low byte 0x1f)
+        if let Some(beta) = self.beta.as_mut() {
+            if let Some(v) = beta.in_port(port) {
+                return v;
+            }
+        }
+        if let Some(d) = self.divmmc.as_mut() {
+            if let Some(v) = d.in_port(port) {
+                return v;
+            }
+        }
+        // Kempston joystick (partial decode on low byte 0x1f) when Beta is not claiming it
         if port & 0xff == 0x1f {
             return self.kempston.read();
+        }
+        if let Some(v) = self.mouse.read_port(port) {
+            return v;
         }
         if port & 1 == 0 {
             return self.in_fe(port);
@@ -236,6 +328,21 @@ impl Bus48 {
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
+        if let Some(mf) = self.multiface.as_mut() {
+            if mf.out_port(port, value) {
+                return;
+            }
+        }
+        if let Some(beta) = self.beta.as_mut() {
+            if beta.out_port(port, value) {
+                return;
+            }
+        }
+        if let Some(d) = self.divmmc.as_mut() {
+            if d.out_port(port, value) {
+                return;
+            }
+        }
         if port & 1 == 0 {
             self.out_fe(value);
         }
@@ -262,6 +369,10 @@ pub struct Bus128 {
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
     pub kempston: Kempston,
+    pub mouse: KempstonMouse,
+    pub divmmc: Option<DivMmc>,
+    pub interface1: Option<Interface1>,
+    pub beta: Option<BetaDisk>,
 }
 
 impl Default for Bus128 {
@@ -287,7 +398,24 @@ impl Bus128 {
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
             kempston: Kempston::new(),
+            mouse: KempstonMouse::new(),
+            divmmc: None,
+            interface1: None,
+            beta: None,
         }
+    }
+
+    /// Attach a DivMMC (creates default peripheral if absent).
+    pub fn attach_divmmc(&mut self) -> &mut DivMmc {
+        self.divmmc.get_or_insert_with(DivMmc::new)
+    }
+
+    pub fn attach_interface1(&mut self) -> &mut Interface1 {
+        self.interface1.get_or_insert_with(Interface1::new)
+    }
+
+    pub fn attach_beta(&mut self) -> &mut BetaDisk {
+        self.beta.get_or_insert_with(BetaDisk::new)
     }
 
     /// Compatibility: selected AY register index.
@@ -332,6 +460,16 @@ impl Bus128 {
 
     #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
+        if let Some(d) = self.divmmc.as_ref() {
+            if let Some(v) = d.read_overlay(addr) {
+                return v;
+            }
+        }
+        if let Some(if1) = self.interface1.as_ref() {
+            if let Some(v) = if1.read_rom(addr) {
+                return v;
+            }
+        }
         match addr {
             0x0000..=0x3fff => self.rom[self.rom_num()][addr as usize],
             0x4000..=0x7fff => self.banks[5][addr as usize - 0x4000],
@@ -341,6 +479,11 @@ impl Bus128 {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
+        if let Some(d) = self.divmmc.as_mut() {
+            if d.write_overlay(addr, value) {
+                return;
+            }
+        }
         match addr {
             0x0000..=0x3fff => {}
             0x4000..=0x7fff => self.banks[5][addr as usize - 0x4000] = value,
@@ -394,8 +537,21 @@ impl Bus128 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        if let Some(beta) = self.beta.as_mut() {
+            if let Some(v) = beta.in_port(port) {
+                return v;
+            }
+        }
+        if let Some(d) = self.divmmc.as_mut() {
+            if let Some(v) = d.in_port(port) {
+                return v;
+            }
+        }
         if port & 0xff == 0x1f {
             return self.kempston.read();
+        }
+        if let Some(v) = self.mouse.read_port(port) {
+            return v;
         }
         if port & 1 == 0 {
             let keys = self.keyboard.read((port >> 8) as u8);
@@ -433,6 +589,16 @@ impl Bus128 {
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
+        if let Some(beta) = self.beta.as_mut() {
+            if beta.out_port(port, value) {
+                return;
+            }
+        }
+        if let Some(d) = self.divmmc.as_mut() {
+            if d.out_port(port, value) {
+                return;
+            }
+        }
         if port & 1 == 0 {
             self.border = value & 7;
             self.ula.set_border(self.frame_t, self.border);
@@ -527,5 +693,96 @@ mod tests {
         b.kempston.fire = true;
         b.kempston.right = true;
         assert_eq!(b.in_port(0x001f), 0x11);
+    }
+
+    #[test]
+    fn kempston_mouse_ports_after_delta_and_buttons() {
+        let mut b = Bus48::new();
+        b.mouse.set_delta(20, -4);
+        b.mouse.set_buttons(true, true, false);
+        assert_eq!(b.in_port(MOUSE_PORT_X), 20);
+        assert_eq!(b.in_port(MOUSE_PORT_Y), 4);
+        assert_eq!(b.in_port(MOUSE_PORT_BUTTONS), 0xfc); // D0+D1 clear
+    }
+
+    #[test]
+    fn multiface_nmi_overlays_synthetic_rom() {
+        let mut b = Bus48::new();
+        b.rom[0x66] = 0x11; // Spectrum ROM at NMI vector
+        let mut mf_rom = [0u8; MULTIFACE1_SIZE];
+        mf_rom[0x66] = 0xc3; // JP …
+        b.attach_multiface(&mf_rom).unwrap();
+        assert_eq!(b.read(0x0066), 0x11);
+        b.multiface.as_mut().unwrap().nmi();
+        assert_eq!(b.read(0x0066), 0xc3);
+        b.write(0x2000, 0x5a);
+        assert_eq!(b.read(0x2000), 0x5a);
+        b.out_port(0x003f, 0);
+        assert_eq!(b.read(0x0066), 0x11, "OUT 3Fh hides Multiface");
+    }
+
+    #[test]
+    fn multiface_nmi_beats_divmmc_conmem() {
+        let mut b = Bus48::new();
+        b.rom[0x66] = 0x11;
+        let d = b.attach_divmmc();
+        d.eeprom[0x66] = 0x77;
+        d.out_port(DIVMMC_PORT_CONTROL, 0x80); // CONMEM
+        let mut mf_rom = [0u8; MULTIFACE1_SIZE];
+        mf_rom[0x66] = 0xc3;
+        b.attach_multiface(&mf_rom).unwrap();
+        b.multiface.as_mut().unwrap().nmi();
+        assert_eq!(
+            b.read(0x0066),
+            0xc3,
+            "Multiface NMI must win over DivMMC CONMEM"
+        );
+    }
+
+    #[test]
+    fn divmmc_conmem_overlays_via_bus48() {
+        let mut b = Bus48::new();
+        b.rom[0] = 0x11;
+        let d = b.attach_divmmc();
+        d.ram[0] = 0x5a; // page 0 @ 0x2000 when CONMEM
+        d.out_port(DIVMMC_PORT_CONTROL, 0x80); // CONMEM, page 0
+        assert_eq!(b.read(0x2000), 0x5a);
+        b.write(0x2001, 0x42);
+        assert_eq!(b.divmmc.as_ref().unwrap().ram[1], 0x42);
+        b.divmmc.as_mut().unwrap().eeprom[0] = 0x77;
+        assert_eq!(b.read(0x0000), 0x77);
+    }
+
+    #[test]
+    fn interface1_shadow_rom_via_bus48() {
+        let mut b = Bus48::new();
+        b.rom[0x10] = 0x11;
+        let if1 = b.attach_interface1();
+        if1.rom[0x10] = 0x55;
+        if1.page_rom(true);
+        assert_eq!(b.read(0x0010), 0x55);
+        b.interface1.as_mut().unwrap().page_rom(false);
+        assert_eq!(b.read(0x0010), 0x11);
+    }
+
+    #[test]
+    fn beta_ports_when_trdos_paged_via_bus48() {
+        let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
+        raw[0] = 0x12;
+        raw[1] = 0x34;
+        let img = formats::TrdImage::parse(&raw).unwrap();
+        let mut b = Bus48::new();
+        b.kempston.fire = true;
+        // Without TR-DOS paged, 0x1f is Kempston
+        assert_eq!(b.in_port(0x001f), 0x10);
+        let beta = b.attach_beta();
+        beta.insert(img);
+        beta.page_trdos(true);
+        b.out_port(0x003f, 0); // track
+        b.out_port(0x005f, 1); // sector 1 → index 0
+        b.out_port(0x001f, 0x80); // read sector
+        assert_eq!(b.in_port(0x001f), 0x02); // DRQ
+        assert_eq!(b.in_port(0x007f), 0x12);
+        assert_eq!(b.in_port(0x007f), 0x34);
     }
 }

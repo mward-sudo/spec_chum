@@ -263,11 +263,13 @@ pub const MAPPING_DOC: &str = "\
 Mac → Spectrum keyboard
 • Letters/digits: direct matrix; Shift = Caps Shift; Option/Alt = Symbol Shift
 • \" (Shift+Quote) = Symbol + P    ' (Quote) = Symbol + 7
-• Arrows = Caps + 5/6/7/8 (cursor); also Kempston in the app
+• Arrows + Tab fire = host joystick (Machine menu: Kempston / Sinclair / Cursor)
+• USB/Bluetooth gamepads via gilrs (same stick + South/A fire)
 • Backspace = Caps + 0 (DELETE)
 • ; , . / - = = Symbol + O N M V J L (Shift variants for : < > ? _ +)
-• 48K LOAD \"\": type J then Shift+Quote twice, or use Tape → Type LOAD \"\"
-• 128K: use menu Tape Loader (often highlight + Enter), then Tape → Play
+• LOAD \"\": Tape → Type LOAD \"\" / Type LOAD \"\" CODE (all models)
+• 128K/+3: Type LOAD selects 48 BASIC then keywords — +3 menu Loader is disk, not tape
+• +2A: Type LOAD selects menu Loader (tape) for PROGRAM; CODE uses 48 BASIC
 ";
 
 #[cfg(test)]

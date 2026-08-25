@@ -23,7 +23,7 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 | `host_api` | C ABI host surface for native shells / future cores |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 
-Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`).
+Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`). Models include distinct **+2A** (tape Loader) and **+3** (disk Loader).
 
 ## Hard constraints
 
@@ -91,7 +91,7 @@ Recently closed accuracy/feature issues: [#33](https://github.com/mward-sudo/spe
 
 ## Cursor Cloud specific instructions
 
-The startup update script already runs `cargo fetch` and `./scripts/fetch_roms.sh`, and the base image already has the audio/GUI system libraries (`libasound2-dev`, `libgtk-3-dev`, `libglib2.0-dev`, plus Mesa/X11 runtime libs). So on a fresh cloud agent you can go straight to building, testing, and running.
+The startup update script already runs `cargo fetch` and `./scripts/fetch_roms.sh`, and the base image already has the audio/GUI system libraries (`libasound2-dev`, `libgtk-3-dev`, `libglib2.0-dev`, `libudev-dev`, plus Mesa/X11 runtime libs). So on a fresh cloud agent you can go straight to building, testing, and running.
 
 Standard commands are in `README.md` and the "Agent workflow" / "Testing expectations" sections above (`./scripts/check.sh`, `cargo test --workspace`, `cargo run -p app --release`). Non-obvious cloud caveats only:
 
