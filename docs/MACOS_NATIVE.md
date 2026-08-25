@@ -44,7 +44,7 @@ Environment:
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`
 - **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, +2A/+3) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
-- **Type LOAD ""** / **Type LOAD "" CODE** (Tape + Machine menus): 48K keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 shows a Tape Loader hint
+- **Type LOAD ""** / **Type LOAD "" CODE** (Tape + Machine menus): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only)
 - **Audio:** mono PCM from `sc_audio_*` each frame via `AVAudioEngine` (beeper + EAR mix + AY)
 - **Tape progress:** `ProgressView` from `sc_tape_progress` (block / pulse position)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)
@@ -52,7 +52,7 @@ Environment:
 
 ## Tape loading (Play / LD-BYTES)
 
-Insert starts **paused**. Enter the loader first (48K: `LOAD ""` / Type LOAD; 128K: Tape Loader), then **Tape → Play**.
+Insert starts **paused**. Use **Type LOAD ""** / **Type LOAD "" CODE** (or type keywords by hand in 48 BASIC), then **Tape → Play**. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk.
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm flash-load / EAR. Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 

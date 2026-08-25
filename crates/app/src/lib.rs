@@ -49,6 +49,8 @@ impl KeyScript {
     /// Shorter (6/3) drops the second `"` so `LOAD ""` never reaches LD-BYTES (#85).
     const PRESS: u32 = 10;
     const GAP: u32 = 5;
+    /// Idle frames after menu → 48 BASIC Enter so MAIN-EXEC settles (machine waits on PC).
+    const MENU_TO_48_BASIC_WAIT: u32 = 120;
 
     /// 48K keyword mode: J (`LOAD`) then `""` then Enter (PROGRAM tapes).
     fn load_quotes_48k() -> Self {
@@ -58,6 +60,30 @@ impl KeyScript {
     /// 48K: `LOAD "" CODE` Enter (CODE tapes such as `attr_mark.tap`).
     fn load_quotes_code_48k() -> Self {
         Self::load_quotes_48k_inner(true)
+    }
+
+    /// 128K / +3 boot menu → 48 BASIC, then keyword `LOAD ""` [CODE].
+    ///
+    /// +3's first item is disk **Loader**, not a tape loader — do not press Enter alone.
+    fn load_quotes_128_or_plus3(with_code: bool) -> Self {
+        let gap = Vec::new();
+        let cursor_down = vec![keymap::CAPS, (4, 4)]; // Caps+6
+        let enter = vec![(6, 0)];
+        let mut steps = Vec::new();
+        // Loader/Tape Loader → BASIC → Calculator → 48 BASIC (three downs).
+        for _ in 0..3 {
+            steps.push((cursor_down.clone(), Self::PRESS));
+            steps.push((gap.clone(), Self::GAP));
+        }
+        steps.push((enter, Self::PRESS));
+        steps.push((gap, Self::MENU_TO_48_BASIC_WAIT));
+        let mut load = Self::load_quotes_48k_inner(with_code);
+        steps.append(&mut load.steps);
+        Self {
+            steps,
+            step_i: 0,
+            frames_left: 0,
+        }
     }
 
     fn load_quotes_48k_inner(with_code: bool) -> Self {
@@ -245,7 +271,7 @@ impl EmulatorSession {
                     let n = player.image.blocks.len();
                     m.insert_tape(player);
                     self.status = format!(
-                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" (PROGRAM) or LOAD \"\" CODE, then Play. 128K/+3: Tape Loader or 48 BASIC, then Play. Instant flash-load skips ROM gaps; custom loaders still use EAR.",
+                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" (PROGRAM) or LOAD \"\" CODE, then Play. 128K/+3: Type LOAD enters 48 BASIC (not +3 disk Loader). Instant flash-load skips ROM gaps; custom loaders still use EAR.",
                         path.display()
                     );
                     return;
@@ -304,24 +330,35 @@ impl EmulatorSession {
     }
 
     fn type_load_quotes_inner(&mut self, with_code: bool) {
-        match self.model {
+        // +3 menu "Loader" is +3DOS disk — never Enter alone for tape (#144).
+        // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
+        self.key_script = Some(match self.model {
             Model::Spectrum48 => {
-                self.key_script = Some(if with_code {
+                if with_code {
                     KeyScript::load_quotes_code_48k()
                 } else {
                     KeyScript::load_quotes_48k()
-                });
-                self.status = if with_code {
-                    "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
-                } else {
-                    "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
-                };
+                }
             }
             Model::Spectrum128 | Model::SpectrumPlus3 => {
-                self.status =
-                    "128K/+2A: select Tape Loader on the menu (ENTER), then Tape → Play".into();
+                KeyScript::load_quotes_128_or_plus3(with_code)
             }
-        }
+        });
+        self.status = match (self.model, with_code) {
+            (Model::Spectrum48, true) => {
+                "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
+            }
+            (Model::Spectrum48, false) => {
+                "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
+            }
+            (_, true) => {
+                "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                    .into()
+            }
+            (_, false) => {
+                "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
+            }
+        };
     }
 
     /// Advance scripted keys if any; returns true when a script consumed input this frame.
@@ -762,11 +799,11 @@ impl SpecChumApp {
                             self.session.rewind_tape();
                             ui.close_menu();
                         }
-                        if ui.button("Type LOAD \"\" (48K)").clicked() {
+                        if ui.button("Type LOAD \"\"").clicked() {
                             self.session.type_load_quotes();
                             ui.close_menu();
                         }
-                        if ui.button("Type LOAD \"\" CODE (48K)").clicked() {
+                        if ui.button("Type LOAD \"\" CODE").clicked() {
                             self.session.type_load_quotes_code();
                             ui.close_menu();
                         }
@@ -1385,6 +1422,66 @@ mod tests {
             }
         }
         assert!(session.key_script.is_none(), "CODE script should finish");
+    }
+
+    /// +3 Type LOAD must queue keys (not a disk-Loader hint) and flash-load attr_mark (#144).
+    #[test]
+    fn plus3_type_load_code_flash_loads_attr_mark() {
+        let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
+        session.try_autoload_rom();
+        if session.machine.is_none() {
+            eprintln!("skip: plus3/plus2a ROM missing");
+            return;
+        }
+        for _ in 0..250 {
+            session.tick_frame();
+        }
+        let tap = EmulatorSession::workspace_root().join("tests/fixtures/tape/attr_mark.tap");
+        session.load_tap(&tap);
+        session.type_load_quotes_code();
+        assert!(
+            session.key_script.is_some(),
+            "plus3 Type LOAD must queue a key script, not a status-only Loader hint"
+        );
+        assert!(
+            !session.status.to_lowercase().contains("tape loader"),
+            "must not point +3 users at disk Loader; status={}",
+            session.status
+        );
+        // Menu → 48 BASIC wait (~120) + LOAD "" CODE (~100) needs >300 frames.
+        for _ in 0..500 {
+            let _ = session.tick_key_script();
+            session.tick_frame();
+            if session.key_script.is_none() {
+                break;
+            }
+        }
+        assert!(
+            session.key_script.is_none(),
+            "plus3 Type LOAD script should finish"
+        );
+        session.play_tape();
+        let mut loaded = false;
+        for _ in 0..400 {
+            session.tick_frame();
+            let m = session.machine.as_ref().unwrap();
+            let code_ok = m.read_mem(0x8000) == 0x21
+                && m.read_mem(0x8001) == 0x00
+                && m.read_mem(0x8002) == 0x58
+                && m.read_mem(0x8003) == 0x36
+                && m.read_mem(0x8004) == 0xd7
+                && m.read_mem(0x8005) == 0xc9;
+            if code_ok {
+                loaded = true;
+                break;
+            }
+        }
+        assert!(
+            loaded,
+            "plus3 egui Type LOAD CODE + Play should flash-load attr_mark at 0x8000 (PC={:04X} block={:?})",
+            session.machine.as_ref().unwrap().cpu().regs.pc,
+            session.machine.as_ref().unwrap().tape_block()
+        );
     }
 
     #[test]

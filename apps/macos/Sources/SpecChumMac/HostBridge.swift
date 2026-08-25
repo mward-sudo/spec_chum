@@ -299,8 +299,8 @@ final class HostBridge: ObservableObject {
         }
     }
 
-    /// Queue egui-parity `LOAD ""` [CODE] via `sc_set_key` (48K keyword mode).
-    /// 128K/+3: status hint only (select Tape Loader / 48 BASIC manually), matching egui.
+    /// Queue egui-parity `LOAD ""` [CODE] via `sc_set_key`.
+    /// 128K/+3: menu → 48 BASIC then keywords (+3 "Loader" is disk-only — do not Enter alone).
     func typeLoadQuotes(withCode: Bool = false) {
         switch model {
         case .spectrum48:
@@ -309,7 +309,10 @@ final class HostBridge: ObservableObject {
                 ? "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
                 : "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan"
         case .spectrum128, .spectrumPlus3:
-            status = "128K/+2A: select Tape Loader on the menu (ENTER), then Tape → Play"
+            keyScript = LoadKeyScript.loadQuotes128OrPlus3(withCode: withCode)
+            status = withCode
+                ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+                : "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan"
         }
     }
 
@@ -692,7 +695,7 @@ final class HostBridge: ObservableObject {
     }
 }
 
-/// 48K keyword-mode `LOAD ""` [CODE] Enter — mirrors egui `KeyScript` / ROM debounce.
+/// Keyword-mode `LOAD ""` [CODE] — mirrors egui `KeyScript` / ROM debounce.
 private struct LoadKeyScript {
     struct Step {
         let keys: [(UInt32, UInt32)]
@@ -705,10 +708,32 @@ private struct LoadKeyScript {
 
     private static let press: UInt32 = 10
     private static let gap: UInt32 = 5
+    /// Idle after menu → 48 BASIC Enter (egui `MENU_TO_48_BASIC_WAIT`).
+    private static let menuTo48BasicWait: UInt32 = 120
     private static let caps: (UInt32, UInt32) = (0, 0)
     private static let sym: (UInt32, UInt32) = (7, 1)
 
     static func loadQuotes48k(withCode: Bool) -> LoadKeyScript {
+        LoadKeyScript(steps: loadQuotes48kSteps(withCode: withCode))
+    }
+
+    /// 128K / +3 boot menu → 48 BASIC, then keyword LOAD (egui parity; #144).
+    static func loadQuotes128OrPlus3(withCode: Bool) -> LoadKeyScript {
+        let empty: [(UInt32, UInt32)] = []
+        let cursorDown: [(UInt32, UInt32)] = [caps, (4, 4)]
+        let enter: [(UInt32, UInt32)] = [(6, 0)]
+        var steps: [Step] = []
+        for _ in 0..<3 {
+            steps.append(Step(keys: cursorDown, frames: press))
+            steps.append(Step(keys: empty, frames: gap))
+        }
+        steps.append(Step(keys: enter, frames: press))
+        steps.append(Step(keys: empty, frames: menuTo48BasicWait))
+        steps.append(contentsOf: loadQuotes48kSteps(withCode: withCode))
+        return LoadKeyScript(steps: steps)
+    }
+
+    private static func loadQuotes48kSteps(withCode: Bool) -> [Step] {
         let j: [(UInt32, UInt32)] = [(6, 3)]
         let quote: [(UInt32, UInt32)] = [sym, (5, 0)]
         let extend: [(UInt32, UInt32)] = [caps, sym]
@@ -731,6 +756,6 @@ private struct LoadKeyScript {
         }
         steps.append(Step(keys: enter, frames: press))
         steps.append(Step(keys: empty, frames: 15))
-        return LoadKeyScript(steps: steps)
+        return steps
     }
 }
