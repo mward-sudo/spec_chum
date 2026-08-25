@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use formats::{Snapshot128, Snapshot48};
+use formats::{Snapshot128, Snapshot128Model, Snapshot48};
 use machine::{BreakReason, Machine, Model, TapeLoadOptions, Watch};
 use tape::{TapPlayer, TzxPlayer};
 use trace::DumpFilter;
@@ -191,12 +191,23 @@ fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
     if ext == "z80" {
         match Snapshot128::load_z80(path) {
             Ok(snap) => {
-                // Z80 v3 can encode +3 via page_1ffd — switch machine so 1FFD/FDC apply.
-                if snap.is_plus3() && m.model() != Model::SpectrumPlus3 {
-                    let rom_path = default_rom(Model::SpectrumPlus3);
+                // Z80 v3 encodes +2A/+3 via hw mode (+ modify-hardware bit).
+                let want = match snap.model {
+                    Snapshot128Model::SpectrumPlus3 => Model::SpectrumPlus3,
+                    Snapshot128Model::SpectrumPlus2A => Model::SpectrumPlus2A,
+                    Snapshot128Model::Spectrum128 => Model::Spectrum128,
+                };
+                if m.model() != want {
+                    let rom_path = default_rom(want);
                     let rom = std::fs::read(&rom_path)
                         .with_context(|| format!("ROM {}", rom_path.display()))?;
-                    m = Machine::new_plus3(&rom).map_err(|e| anyhow::anyhow!(e))?;
+                    m = match want {
+                        Model::SpectrumPlus3 => Machine::new_plus3(&rom),
+                        Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
+                        Model::Spectrum128 => Machine::new_128k(&rom),
+                        Model::Spectrum48 => unreachable!("128-family only"),
+                    }
+                    .map_err(|e| anyhow::anyhow!(e))?;
                 }
                 m.apply_snapshot128(&snap);
                 Ok(m)

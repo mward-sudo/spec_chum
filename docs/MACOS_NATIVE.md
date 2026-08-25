@@ -71,12 +71,14 @@ All Spectrum models have EAR/tape hardware; “no tape chrome” means **no tape
 
 ### Verify on Mac 48K
 
-1. `./scripts/fetch_roms.sh` then `./scripts/run_macos_app.sh`
-2. Model **48K** (Settings). Press toolbar **Instant** — pick `tests/fixtures/tape/print_ok.tap`. Expect Type LOAD then a quick flash-load; flash-load should not stick for a later **Play**.
-3. Open a tape via **Open Tape**, Type LOAD `""` (Tape menu), set EAR speed (e.g. 10x), press **Play** — expect border/tones (EAR), not an instant skip.
-4. For CODE blocks (`attr_mark.tap` / `minimal_code.tap`): **Type LOAD "" CODE**, then **Play**. `RANDOMIZE USR 32768` should paint the top-left attribute on `attr_mark`.
-5. Optional: local Boggit TZX (not in git) — Instant for the PROGRAM header (`BOGGIT pt1`). Later custom-loader blocks (`flag 0xC8`) need EAR (Play / Experience).
-6. With no tape inserted: Play / Rewind / speed / progress are hidden; Open + Instant remain.
+1. `./scripts/fetch_roms.sh`
+2. `./scripts/build_macos_app.sh` (or let `run_macos_app.sh` build for you)
+3. `./scripts/run_macos_app.sh`
+4. Model **48K** (Settings). Press toolbar **Instant** — pick `tests/fixtures/tape/print_ok.tap`. Expect Type LOAD then a quick flash-load; flash-load should not stick for a later **Play**.
+5. Open a tape via **Open Tape**, Type LOAD `""` (Tape menu), set EAR speed (e.g. 10x), press **Play** — expect border/tones (EAR), not an instant skip.
+6. For CODE blocks (`attr_mark.tap` / `minimal_code.tap`): **Type LOAD "" CODE**, then **Play**. `RANDOMIZE USR 32768` should paint the top-left attribute on `attr_mark`.
+7. Optional: local Boggit TZX (not in git) — Instant for the PROGRAM header (`BOGGIT pt1`). Later custom-loader blocks (`flag 0xC8`) need EAR (Play / Experience).
+8. With no tape inserted: Play / Rewind / speed / progress are hidden; Open + Instant remain.
 
 ### Snapshots / RZX / disk
 

@@ -236,10 +236,10 @@ impl EmulatorSession {
         if let Ok(snap) =
             formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
         {
-            let target = if snap.is_plus3() {
-                Model::SpectrumPlus3
-            } else {
-                Model::Spectrum128
+            let target = match snap.model {
+                formats::Snapshot128Model::SpectrumPlus3 => Model::SpectrumPlus3,
+                formats::Snapshot128Model::SpectrumPlus2A => Model::SpectrumPlus2A,
+                formats::Snapshot128Model::Spectrum128 => Model::Spectrum128,
             };
             if self.machine.is_none() || self.model != target {
                 self.model = target;
@@ -248,7 +248,7 @@ impl EmulatorSession {
             }
             if let Some(m) = self.machine.as_mut() {
                 m.apply_snapshot128(&snap);
-                self.status = format!("Loaded 128K/+3 snapshot {}", path.display());
+                self.status = format!("Loaded 128K/+2A/+3 snapshot {}", path.display());
             }
             return;
         }

@@ -289,10 +289,10 @@ impl HostSession {
         if let Ok(snap) =
             formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
         {
-            let required = if snap.is_plus3() {
-                ModelId::SpectrumPlus3
-            } else {
-                ModelId::Spectrum128
+            let required = match snap.model {
+                formats::Snapshot128Model::SpectrumPlus3 => ModelId::SpectrumPlus3,
+                formats::Snapshot128Model::SpectrumPlus2A => ModelId::SpectrumPlus2A,
+                formats::Snapshot128Model::Spectrum128 => ModelId::Spectrum128,
             };
             if self.machine.is_none() || self.model != required {
                 self.model = required;
@@ -447,7 +447,7 @@ impl HostSession {
             return Err(HostError::Message("key row/bit out of range".into()));
         }
         self.host_keys[row][bit as usize] = pressed;
-        m.keyboard_mut().set_key(row, bit, pressed);
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         Ok(())
     }
 
@@ -456,7 +456,7 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         self.host_keys = [[false; 5]; 8];
-        m.keyboard_mut().reset();
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         Ok(())
     }
 
@@ -464,11 +464,8 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
-        // Drop Sinclair/Cursor matrix leftovers before switching presentation.
-        m.clear_joystick_state();
         self.joystick_mode = mode;
-        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
-        Self::reapply_host_keys_to(m, &self.host_keys);
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         Ok(())
     }
 
@@ -477,8 +474,7 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         self.joystick_state = JoystickState::from_mask(mask);
-        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
-        Self::reapply_host_keys_to(m, &self.host_keys);
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         Ok(())
     }
 
@@ -487,10 +483,7 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         self.joystick_state = JoystickState::empty();
-        m.clear_joystick_state();
-        // Re-apply empty under current mode so Sinclair/Cursor matrix clears too.
-        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
-        Self::reapply_host_keys_to(m, &self.host_keys);
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         Ok(())
     }
 
@@ -498,10 +491,18 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return;
         };
-        Self::reapply_host_keys_to(m, &self.host_keys);
+        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
     }
 
-    fn reapply_host_keys_to(m: &mut Machine, host_keys: &[[bool; 5]; 8]) {
+    /// Reset matrix, apply joystick routing, then overlay retained host keys.
+    fn recompose_input(
+        m: &mut Machine,
+        mode: JoystickMode,
+        state: JoystickState,
+        host_keys: &[[bool; 5]; 8],
+    ) {
+        m.keyboard_mut().reset();
+        m.apply_joystick_state(mode, state);
         let kb = m.keyboard_mut();
         for (row, bits) in host_keys.iter().enumerate() {
             for (bit, pressed) in bits.iter().enumerate() {

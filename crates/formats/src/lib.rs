@@ -132,6 +132,15 @@ impl Snapshot48 {
 enum Z80MachineClass {
     Spectrum48,
     Spectrum128,
+    SpectrumPlus2A,
+    SpectrumPlus3,
+}
+
+/// Target machine for a banked 128K-family snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Snapshot128Model {
+    Spectrum128,
+    SpectrumPlus2A,
     SpectrumPlus3,
 }
 
@@ -182,10 +191,10 @@ fn parse_z80_header(data: &[u8]) -> Result<Z80HeaderInfo, FormatError> {
     } else {
         0
     };
-    // 1FFD only for +2A/+3 (xzx hw 7/8). Ignore trailing byte on plain 128K
+    // 1FFD for +2A/+3 (xzx hw 7/8). Ignore trailing byte on plain 128K
     // snapshots that happen to use a 55-byte extended header.
     let page_1ffd = match class {
-        Z80MachineClass::SpectrumPlus3 => {
+        Z80MachineClass::SpectrumPlus2A | Z80MachineClass::SpectrumPlus3 => {
             if extra >= 55 && header_len > 86 {
                 Some(data[86])
             } else {
@@ -203,10 +212,16 @@ fn parse_z80_header(data: &[u8]) -> Result<Z80HeaderInfo, FormatError> {
     })
 }
 
-fn z80_machine_class(extra: usize, hw: u8, _misc: u8) -> Z80MachineClass {
-    // xzx extensions: 7/8 = +3 / +2A.
+fn z80_machine_class(extra: usize, hw: u8, misc: u8) -> Z80MachineClass {
+    let modify_hardware = misc & 0x80 != 0;
+    // xzx: hw 7 = +3, hw 8 = +2A. FAQ "modify hardware" (byte 37 bit 7) remaps
+    // +3 identifiers (7/8) to +2A.
     if matches!(hw, 7 | 8) {
-        return Z80MachineClass::SpectrumPlus3;
+        return if modify_hardware || hw == 8 {
+            Z80MachineClass::SpectrumPlus2A
+        } else {
+            Z80MachineClass::SpectrumPlus3
+        };
     }
     let is_v2 = extra == 23;
     let is_128 = if is_v2 {
@@ -270,6 +285,8 @@ pub struct Snapshot128 {
     pub page_7ffd: u8,
     /// Last OUT to port `0x1FFD` when present (+2A/+3 Z80).
     pub page_1ffd: Option<u8>,
+    /// Target machine implied by the snapshot header (SNA128 is always 128K).
+    pub model: Snapshot128Model,
     /// Physical RAM banks 0..7.
     pub banks: [[u8; 16384]; 8],
 }
@@ -338,6 +355,7 @@ impl Snapshot128 {
             pc,
             page_7ffd,
             page_1ffd: None,
+            model: Snapshot128Model::Spectrum128,
             banks,
         })
     }
@@ -377,13 +395,24 @@ impl Snapshot128 {
             pc: s48.pc,
             page_7ffd: hdr.page_7ffd,
             page_1ffd: hdr.page_1ffd,
+            model: match hdr.class {
+                Z80MachineClass::SpectrumPlus2A => Snapshot128Model::SpectrumPlus2A,
+                Z80MachineClass::SpectrumPlus3 => Snapshot128Model::SpectrumPlus3,
+                Z80MachineClass::Spectrum128 => Snapshot128Model::Spectrum128,
+                Z80MachineClass::Spectrum48 => unreachable!("rejected above"),
+            },
             banks,
         })
     }
 
     #[must_use]
     pub fn is_plus3(&self) -> bool {
-        self.page_1ffd.is_some()
+        self.model == Snapshot128Model::SpectrumPlus3
+    }
+
+    #[must_use]
+    pub fn is_plus2a(&self) -> bool {
+        self.model == Snapshot128Model::SpectrumPlus2A
     }
 }
 
@@ -749,11 +778,33 @@ mod tests {
     fn parse_z80_v3_plus3_1ffd() {
         let s = Snapshot128::parse_z80(&synthetic_z80_v3_plus3()).unwrap();
         assert!(s.is_plus3());
+        assert!(!s.is_plus2a());
+        assert_eq!(s.model, Snapshot128Model::SpectrumPlus3);
         assert_eq!(s.pc, 0xc000);
         assert_eq!(s.page_7ffd, 0x03);
         assert_eq!(s.page_1ffd, Some(0x04));
         assert_eq!(s.banks[3][0], 0x13);
         assert_eq!(s.banks[7][0], 0x17);
+    }
+
+    #[test]
+    fn parse_z80_v3_plus2a_via_modify_hardware() {
+        let mut data = synthetic_z80_v3_plus3();
+        data[37] |= 0x80; // modify hardware → +2A
+        let s = Snapshot128::parse_z80(&data).unwrap();
+        assert!(s.is_plus2a());
+        assert!(!s.is_plus3());
+        assert_eq!(s.model, Snapshot128Model::SpectrumPlus2A);
+        assert_eq!(s.page_1ffd, Some(0x04));
+    }
+
+    #[test]
+    fn parse_z80_v3_hw8_is_plus2a() {
+        let mut data = synthetic_z80_v3_plus3();
+        data[34] = 8; // xzx +2A
+        let s = Snapshot128::parse_z80(&data).unwrap();
+        assert!(s.is_plus2a());
+        assert_eq!(s.model, Snapshot128Model::SpectrumPlus2A);
     }
 
     #[test]
