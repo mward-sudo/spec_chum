@@ -222,7 +222,11 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
+        let mode = self.joystick_mode;
+        let state = self.joystick_state;
+        let keys = self.host_keys;
         m.reset();
+        Self::recompose_input(m, mode, state, &keys);
         self.status = if m.has_tape() {
             "Reset (tape still inserted, paused)".into()
         } else {
@@ -312,7 +316,7 @@ impl HostSession {
             // Model switch builds a fresh Machine — restore retained host joystick.
             m.apply_joystick_state(self.joystick_mode, self.joystick_state);
             self.reapply_host_keys();
-            self.status = format!("Loaded 128K/+3 snapshot {}", path.display());
+            self.status = format!("Loaded {required:?} snapshot {}", path.display());
             return Ok(());
         }
         let snap = formats::Snapshot48::load_sna(path)
