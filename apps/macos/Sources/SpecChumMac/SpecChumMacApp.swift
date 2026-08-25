@@ -8,12 +8,13 @@ struct SpecChumMacApp: App {
     @StateObject private var host = HostBridge()
 
     var body: some Scene {
-        WindowGroup("Spec Chum") {
+        WindowGroup {
             ContentView(host: host)
                 .frame(minWidth: 640, minHeight: 520)
         }
         .defaultSize(width: 780, height: 640)
         .commands {
+            // File — Open… items with ellipsis; separators between media kinds
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
                 Button("Open Tape…") {
@@ -25,6 +26,8 @@ struct SpecChumMacApp: App {
                     openSnapshot()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .option])
+
+                Divider()
 
                 Button("Open RZX…") {
                     openRzx()
@@ -38,6 +41,15 @@ struct SpecChumMacApp: App {
                     openRom()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+            }
+
+            // View — inspector (system View menu also keeps toolbar / full screen)
+            CommandGroup(after: .toolbar) {
+                Button("Show Inspector") {
+                    host.showInspector = true
+                    host.refreshInspector()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
             }
 
             CommandMenu("Tape") {
@@ -66,13 +78,34 @@ struct SpecChumMacApp: App {
                 }
                 Divider()
                 ForEach(HostBridge.Model.allCases) { model in
-                    Button(model.title) {
+                    Button {
                         host.model = model
+                    } label: {
+                        if host.model == model {
+                            Text("✓ \(model.title)")
+                        } else {
+                            Text(model.title)
+                        }
                     }
                 }
             }
 
+            // Hardware — preserve Multiface (#145); Joystick modes for HIG discoverability
             CommandMenu("Hardware") {
+                Menu("Joystick") {
+                    ForEach(HostBridge.JoystickMode.allCases) { mode in
+                        Button {
+                            host.joystickMode = mode
+                        } label: {
+                            if host.joystickMode == mode {
+                                Text("✓ \(mode.title)")
+                            } else {
+                                Text(mode.title)
+                            }
+                        }
+                    }
+                }
+                Divider()
                 Button("Attach Multiface 1 ROM…") {
                     openMultifaceRom()
                 }
@@ -96,33 +129,45 @@ struct SpecChumMacApp: App {
                     host.step()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
-                Button("Add breakpoint at PC") {
+                Button("Add Breakpoint at PC") {
                     host.addBreakpointAtPc()
                 }
                 Button("Dump JSON to Desktop") {
                     host.dumpTraceJsonToDesktop()
                 }
-                Button("Show inspector") {
+                Button("Show Inspector") {
                     host.showInspector = true
                     host.refreshInspector()
                 }
                 Divider()
-                Button("Enable default trace") {
+                Button("Enable Default Trace") {
                     host.enableDefaultTrace()
                 }
-                Button("Dump trace to Desktop…") {
+                Button("Dump Trace to Desktop…") {
                     host.dumpTraceToDesktop()
                 }
-                Button("Dump trace to file…") {
+                Button("Dump Trace to File…") {
                     host.dumpTracePanel()
                 }
-                Button("Clear trace ring") {
+                Button("Clear Trace Ring") {
                     host.clearTrace()
                 }
                 Divider()
                 Button("Env: SPEC_CHUM_DEBUG=1 or SPEC_CHUM_TRACE=tape,cpu") {}
                     .disabled(true)
             }
+
+            CommandGroup(replacing: .help) {
+                Button("Spec Chum Help") {
+                    if let url = URL(string: "https://github.com/mward-sudo/spec_chum/blob/main/docs/MACOS_NATIVE.md") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+
+        Settings {
+            SpecChumSettingsView(host: host)
         }
     }
 

@@ -327,6 +327,7 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "RZX load failed"
         } else {
+            mediaTitle = url.lastPathComponent
             refreshStatus()
         }
     }
@@ -337,6 +338,7 @@ final class HostBridge: ObservableObject {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "DSK load failed"
         } else {
+            mediaTitle = url.lastPathComponent
             refreshStatus()
         }
     }
@@ -438,6 +440,9 @@ final class HostBridge: ObservableObject {
         let ok = sc_set_joystick_mode(handle, mode.rawValue) == 0
         if ok {
             joystickModeApplied = true
+            if joystickMode != mode {
+                joystickMode = mode
+            }
         }
         return ok
     }

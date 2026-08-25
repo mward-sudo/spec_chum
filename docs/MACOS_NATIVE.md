@@ -39,8 +39,9 @@ Environment:
 
 ## What this vertical slice includes
 
-- Native `MenuBar` / `Commands` (File → Open Tape / Snapshot / RZX / Disk / ROM; Tape Play/Pause/Rewind + Type LOAD; Machine Reset + model; **Hardware** Multiface; Debug trace dump)
-- Toolbar / status chrome via SwiftUI **`glassEffect`** on macOS 26+; fallback **`.ultraThinMaterial`**
+- Native `MenuBar` / `Commands` (File → Open…; Tape; Machine; **Hardware** Joystick + Multiface; Debug; Help) plus **Settings** (⌘,) for Instant / Speed / Joystick / model
+- System **`.toolbar`** (SF Symbols: open / play-pause / rewind / reset) + caption status footer; liquid-glass **`glassEffect`** on macOS 26+ for footer/wash, else **`.ultraThinMaterial`**
+- Window title reflects media + machine (`attr_mark.tap — 48K`); min size 640×520
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`
 - **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, **+3 only**) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
@@ -57,7 +58,7 @@ Insert starts **paused**. Use **Type LOAD ""** / **Type LOAD "" CODE** (or type 
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm flash-load / EAR. Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 
-Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (default) is near-instant (little border activity). Turn Instant off for authentic EAR border stripes / load tones; use the **Speed** control (`1x`…`20x`) to turbo the EAR bitstream. Options: Mac toolbar Instant checkbox + Speed menu; egui **Tape** menu; `sc_tape_set_load_options`.
+Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (default) is near-instant (little border activity). Turn Instant off for authentic EAR border stripes / load tones; use **Speed** (`1x`…`20x`) to turbo the EAR bitstream. Options: Mac toolbar Instant checkbox + **Spec Chum → Settings…** (or Hardware → Joystick); egui **Tape** menu; `sc_tape_set_load_options`.
 
 ### Verify on Mac 48K
 
@@ -145,19 +146,26 @@ egui’s `request_repaint_after(20ms)` throttle:
 **Verify:** 48K BASIC cursor blink should look like real hardware / egui (~50 Hz),
 not a rapid flicker.
 
+## UI conventions (HIG-oriented)
+
+- **Menus:** File Open… (ellipsis + separators); app menus Tape / Machine / Hardware / Debug; View → Show Inspector; Help → Spec Chum Help. ⌘-modified shortcuts only — they clear the matrix so Spectrum typing is not stolen when the display is focused.
+- **Toolbar:** semantic placements + SF Symbols; accessibility labels on icon-only controls; after chrome actions, focus returns to the Spectrum `NSView`.
+- **Settings:** Instant, EAR speed, model, joystick mode live in the Settings scene (also mirrored in Machine / Hardware menus where useful).
+- **Focus:** do not add decorative SwiftUI `.focusable()` rings; keep `NSApp.activate` + first responder (see Keyboard section).
+
 ## Liquid glass APIs used
 
 | API | Where | Fallback |
 | --- | --- | --- |
-| `View.glassEffect(_:in:)` | Toolbar bar, chips, status strip, window wash (`GlassChrome.swift`, `ContentView.swift`) | `.ultraThinMaterial` / gradient |
-| `Glass.regular` / `.regular.interactive()` / `.clear` | Same | n/a |
+| `View.glassEffect(_:in:)` | Status footer, window wash (`GlassChrome.swift`, `ContentView.swift`) | `.ultraThinMaterial` / gradient |
+| `Glass.regular` / `.clear` | Same | n/a |
 | `#available(macOS 26, *)` | Gates liquid glass | Older macOS materials |
 
 ## Not in this slice (still egui-only or follow-ups)
 
-- Joystick mode picker UI (ABI supports Sinclair L/R + Cursor; shell defaults to Kempston)
 - Signed / notarized SwiftUI distribution bundle (dev launch uses a staged `.app` via `open`)
 - ~20s “experience” tape mode ([#82](https://github.com/mward-sudo/spec_chum/issues/82))
+- DivMMC / IF1 / Beta UI on macOS (egui Hardware stubs first)
 
 ## CI (`macos-shell` — [#68](https://github.com/mward-sudo/spec_chum/issues/68))
 
