@@ -111,8 +111,9 @@ SHA256SUMS
 SHA256SUMS.asc          # only if GPG_PRIVATE_KEY is set
 ```
 
-Linux hosts need GTK 3 and ALSA runtime libraries (`libgtk-3-0` and
-`libasound2` on Debian/Ubuntu).
+Linux hosts need GTK 3, ALSA, and udev runtime libraries (`libgtk-3-0`,
+`libasound2`, and `libudev1` on Debian/Ubuntu). Build images also need
+`libudev-dev` / `pkg-config` for `gilrs`.
 
 A `workflow_dispatch` rebuild must pass an existing `vX.Y.Z` tag to publish;
 an empty tag still builds `dev-<sha>` artifacts only.
