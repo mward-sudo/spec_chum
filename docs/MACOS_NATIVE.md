@@ -55,7 +55,7 @@ Environment:
 
 ## Tape loading (Play / LD-BYTES)
 
-Insert starts **paused** with **flash-load off**. **Play** / **Rewind** / EAR **speed** / progress appear on the toolbar **only while a tape is inserted** (Open and Instant stay available). **Play** always uses the **EAR** path at the toolbar / Settings **EAR speed** (`1x`…`20x`). **Instant** always re-prompts with a TAP/TZX panel; flash-load restores **off** when the deck stops. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk. On +2A, menu **Loader** *is* tape.
+Insert starts **paused** with **flash-load off**. **Play** / **Rewind** / EAR **speed** / progress appear on the toolbar **only while a tape is inserted** (Open and Instant stay available). **Play** always uses the **EAR** path at the toolbar / Settings **EAR speed** (`1x`…`20x`). While Play is active, speed runs that many Spectrum frames per host tick (CPU+ULA+tape stay in lockstep, ROM-accurate pulse widths), so wall-clock ≈ realtime / speed — e.g. Boggit Side 1 pt1 ~333s @1× → ~17s @20× (full Side 1 ~657s → ~33s). Mid-play speed changes apply on the next tick. Host PCM keeps the last inner frame only (no S-second audio burst). **Machine Reset** keeps the inserted tape and +3 disk (tape pauses at its position). **Instant** always re-prompts with a TAP/TZX panel; flash-load restores **off** when the deck stops. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk. On +2A, menu **Loader** *is* tape.
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm EAR (or Instant flash-load). Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 

@@ -23,7 +23,7 @@ struct SpecChumSettingsView: View {
                         Text("10x").tag(UInt32(10))
                         Text("20x").tag(UInt32(20))
                     }
-                    .help("EAR bitstream speed for Play (Instant flash-loads regardless of speed)")
+                    .help("While Play: N Spectrum frames per tick (wall-clock ≈ realtime/N). Instant flash ignores this.")
                     Text("Toolbar Instant always opens a TAP/TZX panel, then flash-loads. Play alone stays on the EAR path at this speed. Disk images use Open Tape / Disk — Instant does not Type LOAD for DSK.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

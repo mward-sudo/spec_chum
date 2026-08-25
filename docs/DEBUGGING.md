@@ -84,7 +84,8 @@ cargo run -p debug_cli -- disasm --addr 056C --count 8
 cargo run -p debug_cli -- --tap tests/fixtures/tape/attr_mark.tap type-load --code
 # 128K / +3: 48 BASIC then LOAD "" CODE (not Tape Loader)
 cargo run -p debug_cli -- --model 128k --tap tests/fixtures/tape/attr_mark.tap type-load --code
-# EAR bitstream (ROM LD-BYTES; pause until typed). Speed shortens leader/pause only.
+# EAR bitstream (ROM LD-BYTES; pause until typed). Speed runs N Spectrum frames
+# per host tick while playing (wall-clock ≈ realtime/N); pulse widths stay ROM-accurate.
 # Models: 48k / 128k / plus2a / plus3. Instant flash is default; `--ear-load` disables it.
 cargo run -p debug_cli -- --model 48k --tap tests/fixtures/tape/attr_mark.tap \
   --ear-load --speed 10 type-load --code --max 2000

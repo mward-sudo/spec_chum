@@ -31,7 +31,7 @@ struct Cli {
     /// Use EAR bitstream loading instead of instant flash-load at LD-BYTES.
     #[arg(long)]
     ear_load: bool,
-    /// EAR bitstream speed multiplier (clamped 1..=64; ignored when flash-load is instant).
+    /// EAR speed: N Spectrum frames per run_frame while playing (ignored when flash-load/Instant).
     #[arg(long, default_value_t = 1)]
     speed: u32,
     #[command(subcommand)]

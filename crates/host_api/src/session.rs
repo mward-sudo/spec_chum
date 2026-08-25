@@ -219,7 +219,11 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         m.reset();
-        self.status = "Reset".into();
+        self.status = if m.has_tape() {
+            "Reset (tape still inserted, paused)".into()
+        } else {
+            "Reset".into()
+        };
         Ok(())
     }
 

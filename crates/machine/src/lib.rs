@@ -168,7 +168,11 @@ pub struct TapeLoadOptions {
     /// When true, TAP decks trap at LD-BYTES and poke bytes immediately.
     pub flash_load: bool,
     /// EAR bitstream speed multiplier (`1` = realtime). Clamped to `1..=64`.
-    /// Shortens TAP leader/pause; data pulse widths stay ROM-accurate so LD-BYTES can lock.
+    ///
+    /// While a tape is **playing** on the EAR path (flash-load off), each
+    /// [`Machine::run_frame`] executes this many Spectrum frames so wall-clock
+    /// load time ≈ realtime / speed. Pulse widths stay ROM-accurate (CPU↔tape
+    /// 1:1); Instant/flash-load is unchanged (single frame per call).
     pub speed: u32,
 }
 
@@ -654,7 +658,11 @@ impl Machine {
                     beta.page_trdos(false);
                 }
                 *ula = Ula48::new();
-                *tape = None;
+                // Keep inserted tape/disk media across reset; pause the deck at its
+                // current position. RZX input playback is cleared (machine state diverges).
+                if let Some(t) = tape.as_mut() {
+                    t.set_playing(false);
+                }
                 *rzx = None;
             }
             Self::Spec128 {
@@ -681,7 +689,9 @@ impl Machine {
                     beta.page_trdos(false);
                 }
                 *ula = Ula48::new();
-                *tape = None;
+                if let Some(t) = tape.as_mut() {
+                    t.set_playing(false);
+                }
                 *rzx = None;
             }
             Self::SpecPlus3 {
@@ -703,7 +713,10 @@ impl Machine {
                 bus.kempston.reset();
                 bus.mouse.reset();
                 *ula = Ula48::new();
-                *tape = None;
+                // +3 DSK stays in `bus.fdc.image`; only pause any inserted tape.
+                if let Some(t) = tape.as_mut() {
+                    t.set_playing(false);
+                }
                 *rzx = None;
             }
         }
@@ -1228,7 +1241,38 @@ impl Machine {
     }
 
     /// Run one video frame; returns beeper edges and AY samples for the frame.
+    /// Spectrum frames to run per [`Self::run_frame`] while EAR tape is playing.
+    ///
+    /// Speed multiplies wall-clock progress with CPU↔tape still 1:1 (ROM LD-BYTES
+    /// stays locked). Flash-load / Instant keeps a single frame so traps stay snappy.
+    /// At `speed == 1` this is always 1 — hardware-accurate path unchanged.
+    #[must_use]
+    fn ear_play_frame_reps(&self) -> u32 {
+        let opts = self.tape_load_options();
+        if opts.flash_load || !self.tape_playing() {
+            1
+        } else {
+            opts.speed.clamp(1, 64)
+        }
+    }
+
+    /// Run one or more Spectrum frames. While an EAR deck is playing, runs
+    /// [`TapeLoadOptions::speed`] frames so wall-clock ≈ realtime / speed.
+    /// Only the last inner frame's PCM/edges are returned (hosts should not try
+    /// to play S seconds of audio in one tick).
     pub fn run_frame(&mut self) -> FrameAudio {
+        let reps = self.ear_play_frame_reps();
+        let mut audio = self.run_one_frame();
+        for _ in 1..reps {
+            if self.debugger().paused || !self.tape_playing() {
+                break;
+            }
+            audio = self.run_one_frame();
+        }
+        audio
+    }
+
+    fn run_one_frame(&mut self) -> FrameAudio {
         if self.debugger().paused {
             return FrameAudio::default();
         }
@@ -1669,7 +1713,8 @@ impl Machine {
         if !t.playing() {
             return;
         }
-        // TAP turbo shortens leader/pause when the block is queued; keep CPU:tape 1:1 here.
+        // CPU↔tape 1:1 with ROM-accurate pulse widths. Wall-clock turbo is
+        // [`Machine::ear_play_frame_reps`] (multiple Spectrum frames per host tick).
         let new_ear = t.advance(dt);
         if new_ear != *ear {
             *ear = new_ear;
@@ -3312,33 +3357,165 @@ mod tests {
     }
 
     #[test]
-    fn tape_speed_multiplier_advances_pulses_faster() {
+    fn ear_speed_finishes_block_in_fewer_run_frames() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x00]],
+            ..Default::default()
+        };
+        let frames_until_block1 = |speed: u32| -> u32 {
+            let mut m = Machine::new_48k(&rom).unwrap();
+            m.set_tape_load_options(TapeLoadOptions {
+                flash_load: false,
+                speed,
+            });
+            m.insert_tape(TapPlayer::new(img.clone()));
+            m.set_tape_playing(true);
+            for n in 1..=50_000u32 {
+                let _ = m.run_frame();
+                if m.tape_block() == Some(1) {
+                    return n;
+                }
+            }
+            panic!("speed {speed}: did not reach block 1");
+        };
+        let slow = frames_until_block1(1);
+        let fast = frames_until_block1(10);
+        assert!(
+            fast * 7 < slow,
+            "EAR speed 10 should finish in ~1/10 host run_frames (1x={slow}, 10x={fast})"
+        );
+    }
+
+    #[test]
+    fn reset_keeps_tape_inserted_and_paused_at_position() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         };
         let img = TapImage::load(&fixture_tap()).expect("fixture");
-        let mut slow = Machine::new_48k(&rom).unwrap();
-        let mut fast = Machine::new_48k(&rom).unwrap();
-        slow.set_tape_load_options(TapeLoadOptions {
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
         });
-        fast.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 10,
-        });
-        slow.insert_tape(TapPlayer::new(img.clone()));
-        fast.insert_tape(TapPlayer::new(img));
-        slow.set_tape_playing(true);
-        fast.set_tape_playing(true);
-        let sp = slow.tape_progress().unwrap();
-        let fp = fast.tape_progress().unwrap();
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        for _ in 0..3 {
+            let _ = m.run_frame();
+        }
+        let block_before = m.tape_block();
+        let pulse_before = m.tape_progress().map(|p| p.pulse_index);
+        assert!(m.has_tape());
+        assert!(m.tape_playing());
+        m.reset();
+        assert!(m.has_tape(), "reset must not eject the tape");
+        assert!(!m.tape_playing(), "reset should pause the deck");
+        assert_eq!(
+            m.tape_block(),
+            block_before,
+            "reset should keep tape position"
+        );
+        assert_eq!(
+            m.tape_progress().map(|p| p.pulse_index),
+            pulse_before,
+            "reset should keep pulse position"
+        );
+    }
+
+    #[test]
+    fn reset_keeps_plus3_disk_inserted() {
+        let Some(rom) = rom_plus3_only().or_else(rom_plus2a_only) else {
+            eprintln!("skip: plus3 ROM missing");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        let data = {
+            let mut data = vec![0u8; 0x100];
+            data[0..8].copy_from_slice(b"MV - CPC");
+            data[0x30] = 1;
+            data[0x31] = 1;
+            let track_size: u16 = 0x100;
+            data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+            let mut track = vec![0u8; track_size as usize];
+            track[0..12].copy_from_slice(b"Track-Info\r\n");
+            data.extend_from_slice(&track);
+            data
+        };
+        let img = formats::DskImage::parse(&data).expect("minimal dsk");
+        m.insert_disk(img).expect("insert");
+        {
+            let Machine::SpecPlus3 { bus, .. } = &m else {
+                panic!("expected SpecPlus3");
+            };
+            assert!(bus.fdc.image.is_some());
+        }
+        m.reset();
+        let Machine::SpecPlus3 { bus, .. } = &m else {
+            panic!("expected SpecPlus3");
+        };
         assert!(
-            fp.pulse_count < sp.pulse_count,
-            "10x should schedule a shorter leader (slow {} pulses, fast {})",
-            sp.pulse_count,
-            fp.pulse_count
+            bus.fdc.image.is_some(),
+            "reset must not eject the +3 disk image"
+        );
+    }
+
+    #[test]
+    fn rom_ld_bytes_ear_survives_mid_load_speed_change() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark");
+        let data = img.blocks[1].clone();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 5,
+        });
+        let mut player = TapPlayer::new(img);
+        player.consume_block();
+        m.insert_tape(player);
+        m.set_tape_playing(true);
+
+        let ret = 0x1234u16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.a = 0xff;
+        m.cpu_mut().regs.f = flag::C;
+        m.cpu_mut().regs.set_ix(0x8000);
+        m.cpu_mut().regs.set_de((data.len() - 2) as u16);
+        m.cpu_mut().regs.pc = 0x0556;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        // Into the leader/data, then raise EAR turbo — must not restart the block.
+        for _ in 0..40 {
+            let _ = m.run_frame();
+        }
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 15,
+        });
+        let mut ok = false;
+        for _ in 0..400 {
+            let _ = m.run_frame();
+            if attr_mark_code_ok(&m) {
+                ok = true;
+                break;
+            }
+        }
+        assert!(
+            ok,
+            "ROM LD-BYTES EAR path should complete after mid-load speed change (PC={:04X} block={:?})",
+            m.cpu().regs.pc,
+            m.tape_block()
         );
     }
 
@@ -3665,8 +3842,7 @@ mod tests {
             .join("../../tests/fixtures/tape/attr_mark.tap");
         let img = TapImage::load(&path).expect("attr_mark.tap");
         let m = Machine::new_48k(&rom).unwrap();
-        // Speed 10 keeps ROM-accurate bit widths (leader/pause only); ~hundreds of frames.
-        // Speed 10 floors the leader so LD-LEADER's 1045-edge wait still fits; pause is /10.
+        // Speed N runs N Spectrum frames per run_frame while EAR playing.
         let (_m, loaded) = run_attr_mark_typed(m, img, false, 10, 200, 2_000);
         assert!(
             loaded,
@@ -4455,6 +4631,7 @@ mod tests {
     }
 
     /// Boggit-style PROGRAM + CODE + flag `0xC8` via RAM LD-BYTES clone.
+
     #[test]
     fn custom_loader_matrix_models_instant_and_ear() {
         let path = custom_loader_tap();
@@ -4541,13 +4718,17 @@ mod tests {
                             Some(2),
                             "{label} instant must not advance past CODE into C8 before USR"
                         );
-                    } else if let Some(TapeDeck::Tap(p)) = match &mut m {
-                        Machine::Spec48 { tape, .. }
-                        | Machine::Spec128 { tape, .. }
-                        | Machine::SpecPlus3 { tape, .. } => tape.as_mut(),
-                    } {
-                        p.rewind_to_block(2);
-                        m.set_tape_playing(true);
+                    } else {
+                        // Pause while rewinding/arming USR so multi-frame turbo cannot
+                        // burn C8 pilot before the RAM loader starts edge-detect.
+                        m.set_tape_playing(false);
+                        if let Some(TapeDeck::Tap(p)) = match &mut m {
+                            Machine::Spec48 { tape, .. }
+                            | Machine::Spec128 { tape, .. }
+                            | Machine::SpecPlus3 { tape, .. } => tape.as_mut(),
+                        } {
+                            p.rewind_to_block(2);
+                        }
                     }
                     // RANDOMIZE USR 32768 — enter the custom-flag loader.
                     let ret = 0x15e6u16;
@@ -4556,6 +4737,17 @@ mod tests {
                     m.write_mem(0xfffe, (ret >> 8) as u8);
                     m.cpu_mut().regs.halted = false;
                     m.cpu_mut().regs.pc = 0x8000;
+                    // Fake USR return (0x15E6) is not a real BASIC continuation: the
+                    // C8 byte at 0x9000 is visible for only ~15 frames then cleared.
+                    // Poll at 1× so warp-S host ticks cannot skip that window; the
+                    // earlier LOAD "" CODE phase still used full EAR warp.
+                    if !flash {
+                        m.set_tape_load_options(TapeLoadOptions {
+                            flash_load: false,
+                            speed: 1,
+                        });
+                    }
+                    m.set_tape_playing(true);
                     for _ in 0..max {
                         let _ = m.run_frame();
                         if custom_loader_ok(&m) {

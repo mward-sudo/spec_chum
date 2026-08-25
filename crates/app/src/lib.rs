@@ -1009,7 +1009,11 @@ impl SpecChumApp {
                         if ui.button("Reset").clicked() {
                             if let Some(m) = self.session.machine.as_mut() {
                                 m.reset();
-                                self.session.status = "Reset".into();
+                                self.session.status = if m.has_tape() {
+                                    "Reset (tape still inserted, paused)".into()
+                                } else {
+                                    "Reset".into()
+                                };
                             }
                             ui.close_menu();
                         }

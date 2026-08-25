@@ -92,7 +92,7 @@ struct ContentView: View {
                     }
                     .pickerStyle(.menu)
                     .frame(maxWidth: 72)
-                    .help("EAR bitstream speed (1x…20x); used when Play loads without Instant")
+                    .help("EAR speed while Play: N Spectrum frames/tick (wall-clock ≈ realtime/N)")
                     .accessibilityLabel("EAR speed")
                     .onChange(of: host.tapeSpeed) { _, _ in
                         FocusSpectrumView.post()
@@ -123,12 +123,14 @@ struct ContentView: View {
                         host.outputMuted.toggle()
                         FocusSpectrumView.post()
                     } label: {
-                        Label(
-                            host.outputMuted ? "Unmute" : "Mute",
-                            systemImage: host.outputMuted || host.outputVolume <= 0.001
+                        Image(
+                            systemName: host.outputMuted || host.outputVolume <= 0.001
                                 ? "speaker.slash.fill"
                                 : "speaker.wave.2.fill"
                         )
+                        .imageScale(.medium)
+                        .frame(width: 28, height: 22)
+                        .contentShape(Rectangle())
                     }
                     .help("Mute host audio output (does not change EAR / flash-load)")
                     .accessibilityLabel(host.outputMuted ? "Unmute" : "Mute")

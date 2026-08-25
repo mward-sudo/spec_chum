@@ -67,7 +67,7 @@ final class HostBridge: ObservableObject {
     @Published var instantLoad: Bool = false {
         didSet { pushTapeLoadOptions() }
     }
-    /// EAR speed multiplier presets (1x…20x); applied for the EAR Play path.
+    /// EAR speed (1x…20x): while Play is active, that many Spectrum frames per host tick.
     @Published var tapeSpeed: UInt32 = 1 {
         didSet { pushTapeLoadOptions() }
     }

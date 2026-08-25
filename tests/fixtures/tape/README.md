@@ -48,7 +48,7 @@ SPEC_CHUM_FULL_TAPE_MATRIX=1 cargo test -p machine --lib boggit -- --nocapture
 2. Turn **Instant flash-load** **off** for a pure EAR experience, **or** leave it **on** (ROM/48 BASIC blocks flash; custom `0xC8` blocks still need the RAM loader + EAR/Instant trap).
 3. Prefer **Tape Loader** from the 128 menu (Enter), **or** 48 BASIC then `LOAD ""` (**not** `LOAD "" CODE` — Side 1 starts with a **PROGRAM**).
 4. Press **Play** when the border goes red/cyan / the loader waits.
-5. EAR speed **1×** is realtime; higher speeds shorten leader/pause only.
+5. EAR speed **1×** is realtime; higher speeds run N Spectrum frames per host tick while Play is active (wall-clock ≈ realtime / N; pulse widths stay ROM-accurate).
 
 Debug / observability: see [`docs/DEBUGGING.md`](../../../docs/DEBUGGING.md).
 
