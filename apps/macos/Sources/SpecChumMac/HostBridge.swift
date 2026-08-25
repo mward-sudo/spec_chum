@@ -53,6 +53,9 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus2A: "+2A"
             }
         }
+
+        /// +3 has floppy; toolbar/File Open may include `.dsk`.
+        var supportsDisk: Bool { self == .spectrumPlus3 }
     }
 
     @Published private(set) var status: String = "Starting…"
@@ -60,7 +63,7 @@ final class HostBridge: ObservableObject {
     @Published private(set) var hasTape: Bool = false
     /// Last opened media filename for the window title (tape / snapshot / RZX / disk / ROM).
     @Published private(set) var mediaTitle: String?
-    /// Instant flash-load when true; EAR bitstream when false.
+    /// Flash-load when true; EAR bitstream when false. Instant toolbar sets this on for a load action (no sticky checkbox).
     @Published var instantLoad: Bool = true {
         didSet { pushTapeLoadOptions() }
     }
@@ -123,8 +126,18 @@ final class HostBridge: ObservableObject {
     private var disconnectObserver: NSObjectProtocol?
     /// Frame-scripted `LOAD ""` [CODE] (egui KeyScript parity); advanced in `runFrame`.
     private var keyScript: LoadKeyScript?
+    /// After Instant Type LOAD finishes, auto-Play with flash-load on.
+    private var pendingInstantPlay = false
     /// When syncing `model` from `sc_get_model` after snapshot load, skip `sc_set_model`.
     private var suppressModelPush = false
+
+    /// Toolbar / File label: include Disk only on +3.
+    var openMediaTitle: String {
+        model.supportsDisk ? "Open Tape / Disk" : "Open Tape"
+    }
+
+    /// Menu item with ellipsis.
+    var openMediaMenuTitle: String { "\(openMediaTitle)…" }
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
@@ -347,6 +360,32 @@ final class HostBridge: ObservableObject {
     /// 128K/+3: menu → 48 BASIC (+3 disk Loader — do not Enter alone).
     /// +2A: menu Loader is tape — Enter alone for PROGRAM.
     func typeLoadQuotes(withCode: Bool = false) {
+        beginTypeLoadQuotes(withCode: withCode, pendingPlay: false)
+    }
+
+    /// Instant load action: enable flash-load, Type LOAD "" (PROGRAM), then Play when ready.
+    /// If already at LD-BYTES (`0x056C`), Play immediately. CODE tapes still use Type LOAD "" CODE.
+    func instantLoadTape() {
+        guard handle != nil, hasTape else {
+            status = "Instant: insert a tape first"
+            return
+        }
+        instantLoad = true
+
+        // Already waiting at LD-BYTES — Play with flash-load.
+        if let r = regs(), r.pc == 0x056C {
+            pendingInstantPlay = false
+            playTape()
+            status = "Instant: flash-load on — playing at LD-BYTES"
+            return
+        }
+
+        beginTypeLoadQuotes(withCode: false, pendingPlay: true)
+        status = "Instant: flash-load on — typing LOAD \"\" then Play"
+    }
+
+    private func beginTypeLoadQuotes(withCode: Bool, pendingPlay: Bool) {
+        pendingInstantPlay = pendingPlay
         switch model {
         case .spectrum48:
             keyScript = LoadKeyScript.loadQuotes48k(withCode: withCode)
@@ -363,6 +402,36 @@ final class HostBridge: ObservableObject {
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
                 : "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan"
+        }
+    }
+
+    /// NSOpenPanel for tape (and `.dsk` on +3). Snapshots/RZX stay separate File items.
+    func presentOpenMediaPanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        var types: [UTType] = [
+            UTType(filenameExtension: "tap") ?? .data,
+            UTType(filenameExtension: "tzx") ?? .data,
+        ]
+        if model.supportsDisk {
+            types.append(UTType(filenameExtension: "dsk") ?? .data)
+            panel.title = "Open TAP / TZX / DSK"
+        } else {
+            panel.title = "Open TAP / TZX"
+        }
+        panel.allowedContentTypes = types
+        if panel.runModal() == .OK, let url = panel.url {
+            openMedia(at: url)
+        }
+    }
+
+    /// Route by extension: `.dsk` → disk (+3), else tape.
+    func openMedia(at url: URL) {
+        if url.pathExtension.lowercased() == "dsk" {
+            openDsk(at: url)
+        } else {
+            openTape(at: url)
         }
     }
 
@@ -720,6 +789,7 @@ final class HostBridge: ObservableObject {
         if script.stepIndex >= script.steps.count {
             keyScript = nil
             clearKeys()
+            finishInstantPlayIfPending()
             return
         }
         if script.framesLeft == 0 {
@@ -736,9 +806,17 @@ final class HostBridge: ObservableObject {
         }
         if script.stepIndex >= script.steps.count {
             keyScript = nil
+            finishInstantPlayIfPending()
         } else {
             keyScript = script
         }
+    }
+
+    private func finishInstantPlayIfPending() {
+        guard pendingInstantPlay else { return }
+        pendingInstantPlay = false
+        playTape()
+        status = "Instant: flash-load on — playing after LOAD \"\""
     }
 
     private static func takeLastError() -> String? {

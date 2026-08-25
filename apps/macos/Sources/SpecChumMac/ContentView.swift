@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ContentView: View {
     @ObservedObject var host: HostBridge
@@ -40,12 +39,21 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button {
-                    chromeAction { openTapePanel() }
+                    chromeAction { host.presentOpenMediaPanel() }
                 } label: {
-                    Label("Open Tape", systemImage: "opticaldiscdrive")
+                    Label(host.openMediaTitle, systemImage: "opticaldiscdrive")
                 }
-                .help("Open Tape…")
-                .accessibilityLabel("Open Tape")
+                .help(host.openMediaMenuTitle)
+                .accessibilityLabel(host.openMediaTitle)
+
+                Button {
+                    chromeAction { host.instantLoadTape() }
+                } label: {
+                    Label("Instant", systemImage: "bolt.fill")
+                }
+                .disabled(!host.hasTape)
+                .help("Flash-load: Type LOAD \"\" then Play (skip to program)")
+                .accessibilityLabel("Instant load")
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
@@ -95,15 +103,6 @@ struct ContentView: View {
             }
 
             ToolbarItemGroup(placement: .automatic) {
-                Toggle(isOn: $host.instantLoad) {
-                    Text("Instant")
-                }
-                .toggleStyle(.checkbox)
-                .help("Flash-load TAP/standard TZX at LD-BYTES (near-instant)")
-                .onChange(of: host.instantLoad) { _, _ in
-                    FocusSpectrumView.post()
-                }
-
                 Button {
                     chromeAction { host.reset() }
                 } label: {
@@ -148,20 +147,6 @@ struct ContentView: View {
     private func chromeAction(_ work: () -> Void) {
         work()
         FocusSpectrumView.post()
-    }
-
-    private func openTapePanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "tap") ?? .data,
-            UTType(filenameExtension: "tzx") ?? .data,
-        ]
-        panel.title = "Open TAP / TZX"
-        if panel.runModal() == .OK, let url = panel.url {
-            host.openTape(at: url)
-        }
     }
 }
 

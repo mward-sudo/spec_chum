@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Preferences window (⌘,) — Instant / Speed / Joystick / model (HIG Settings scene).
+/// Preferences window (⌘,) — EAR speed / Joystick / model (HIG Settings scene).
+/// Instant flash-load is a toolbar / Tape menu **action**, not a sticky checkbox.
 struct SpecChumSettingsView: View {
     @ObservedObject var host: HostBridge
 
@@ -15,8 +16,6 @@ struct SpecChumSettingsView: View {
                     }
                 }
                 Section("Tape") {
-                    Toggle("Instant flash-load", isOn: $host.instantLoad)
-                        .help("Flash-load TAP/standard TZX at LD-BYTES (near-instant)")
                     Picker("EAR speed", selection: $host.tapeSpeed) {
                         Text("1x").tag(UInt32(1))
                         Text("2x").tag(UInt32(2))
@@ -24,7 +23,10 @@ struct SpecChumSettingsView: View {
                         Text("10x").tag(UInt32(10))
                         Text("20x").tag(UInt32(20))
                     }
-                    .help("EAR bitstream speed (also speeds pulse TZX)")
+                    .help("EAR bitstream speed (also speeds pulse TZX); Instant toolbar enables flash-load for a load")
+                    Text("Use the Instant toolbar button (or Tape → Instant) to flash-load: Type LOAD \"\" then Play.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)

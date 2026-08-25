@@ -39,12 +39,13 @@ Environment:
 
 ## What this vertical slice includes
 
-- Native `MenuBar` / `Commands` (File → Open…; Tape; Machine; **Hardware** Joystick + Multiface; Debug; Help) plus **Settings** (⌘,) for Instant / Speed / Joystick / model
-- System **`.toolbar`** (SF Symbols: open / play-pause / rewind / reset) + caption status footer; liquid-glass **`glassEffect`** on macOS 26+ for footer/wash, else **`.ultraThinMaterial`**
+- Native `MenuBar` / `Commands` (File → Open…; Tape; Machine; **Hardware** Joystick + Multiface; Debug; Help) plus **Settings** (⌘,) for EAR Speed / Joystick / model
+- System **`.toolbar`** (SF Symbols: open / Instant / play-pause / rewind / reset) + caption status footer; liquid-glass **`glassEffect`** on macOS 26+ for footer/wash, else **`.ultraThinMaterial`**
 - Window title reflects media + machine (`attr_mark.tap — 48K`); min size 640×520
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
-- TAP/TZX open via `NSOpenPanel`, Play/Pause wired to `host_api`
+- **Open Tape** toolbar / File (⌘O): TAP/TZX via `NSOpenPanel`; on **+3** the control is **Open Tape / Disk** and also accepts `.dsk`. Snapshots / RZX stay separate File items
 - **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, **+3 only**) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
+- **Instant** toolbar / Tape menu **button** (not a checkbox): enables flash-load, types `LOAD ""`, then Play (or Play immediately if already at LD-BYTES)
 - **Type LOAD ""** / **Type LOAD "" CODE** (Tape + Machine menus): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only); **+2A** selects tape **Loader** for PROGRAM
 - **Hardware:** Multiface 1 attach + NMI (`sc_attach_multiface` / `sc_multiface_nmi`, 48K). DivMMC / IF1 / Beta stubs are exposed in the **egui** Hardware menu first.
 - **Audio:** mono PCM from `sc_audio_*` each frame via `AVAudioEngine` (beeper + EAR mix + AY)
@@ -54,29 +55,29 @@ Environment:
 
 ## Tape loading (Play / LD-BYTES)
 
-Insert starts **paused**. Use **Type LOAD ""** / **Type LOAD "" CODE** (or type keywords by hand in 48 BASIC), then **Tape → Play**. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk. On +2A, menu **Loader** *is* tape.
+Insert starts **paused**. Use **Instant** (toolbar) to skip straight to the program, or **Type LOAD ""** / **Type LOAD "" CODE** then **Tape → Play**. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk. On +2A, menu **Loader** *is* tape.
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm flash-load / EAR. Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 
-Standard-speed TZX is converted to TAP for flash-load. **Instant** flash-load (default) is near-instant (little border activity). Turn Instant off for authentic EAR border stripes / load tones; use **Speed** (`1x`…`20x`) to turbo the EAR bitstream. Options: Mac toolbar Instant checkbox + **Spec Chum → Settings…** (or Hardware → Joystick); egui **Tape** menu; `sc_tape_set_load_options`.
+Standard-speed TZX is converted to TAP for flash-load. **Instant** is an **action** (toolbar / Tape → Instant): it turns flash-load **on** for that load, runs Type LOAD `""` (PROGRAM), then Play — status notes “flash-load on”. If already waiting at LD-BYTES, Instant only Plays. CODE blocks still need **Type LOAD "" CODE** then Play. For authentic EAR border stripes / tones, use egui **Tape → Experience (~20s EAR)** (disables flash) or Play with flash-load already off; Settings keeps **EAR speed** (`1x`…`20x`). ABI: `sc_tape_set_load_options`.
 
 ### Verify on Mac 48K
 
 1. `./scripts/fetch_roms.sh` then `./scripts/run_macos_app.sh`
-2. Model **48K**. Open `tests/fixtures/tape/attr_mark.tap` (or `print_ok.tap` / `minimal_code.tap`).
-3. Leave **Instant** on. For PROGRAM loaders use **Tape → Type LOAD ""** (or type `LOAD ""` + Enter). For CODE blocks use **Type LOAD "" CODE**. Press **Play**.
-4. Expect program name in the border/ROM print path, then a quick data load. For `attr_mark.tap`, `RANDOMIZE USR 32768` should paint the top-left attribute.
-5. Optional: local Boggit TZX (not in git) — same flow; first header should show `BOGGIT pt1`. Later custom-loader blocks (`flag 0xC8`) need Instant off / EAR (or game’s own loader).
+2. Model **48K**. Open `tests/fixtures/tape/print_ok.tap` (PROGRAM) via **Open Tape**.
+3. Press toolbar **Instant** (enabled once a tape is loaded). Expect Type LOAD then a quick flash-load.
+4. For CODE blocks (`attr_mark.tap` / `minimal_code.tap`): **Type LOAD "" CODE**, then **Play** (or Instant after you are already at LD-BYTES). `RANDOMIZE USR 32768` should paint the top-left attribute on `attr_mark`.
+5. Optional: local Boggit TZX (not in git) — Instant / Type LOAD for the PROGRAM header (`BOGGIT pt1`). Later custom-loader blocks (`flag 0xC8`) need EAR (egui Experience or flash-load off).
 
 ### Snapshots / RZX / disk
 
 1. **File → Open Snapshot…** — `.sna` / `.z80` (48K or banked 128K/+3; host may switch model and autoload ROM).
 2. **File → Open RZX…** — requires a machine/ROM already loaded.
-3. **File → Open Disk…** — `.dsk` on **Spectrum +3** only (`sc_load_dsk`; +2A has no floppy).
+3. **Open Tape / Disk** (toolbar, +3) or **File → Open Disk…** — `.dsk` on **Spectrum +3** only (`sc_load_dsk`; +2A has no floppy).
 
 ### Experience ~20s load
 
-Abbreviated “feel of loading” that always finishes in about 20 seconds is still a follow-up ([#82](https://github.com/mward-sudo/spec_chum/issues/82)); ship Instant + Speed first.
+Abbreviated “feel of loading” that always finishes in about 20 seconds is still a follow-up ([#82](https://github.com/mward-sudo/spec_chum/issues/82)); ship Instant action + EAR Speed first.
 
 ## Keyboard (Mac native shell)
 
@@ -149,8 +150,8 @@ not a rapid flicker.
 ## UI conventions (HIG-oriented)
 
 - **Menus:** File Open… (ellipsis + separators); app menus Tape / Machine / Hardware / Debug; View → Show Inspector; Help → Spec Chum Help. ⌘-modified shortcuts only — they clear the matrix so Spectrum typing is not stolen when the display is focused.
-- **Toolbar:** semantic placements + SF Symbols; accessibility labels on icon-only controls; after chrome actions, focus returns to the Spectrum `NSView`.
-- **Settings:** Instant, EAR speed, model, joystick mode live in the Settings scene (also mirrored in Machine / Hardware menus where useful).
+- **Toolbar:** semantic placements + SF Symbols (Open Tape[/Disk], Instant, Play/Pause, Rewind, Reset); accessibility labels on icon-only controls; after chrome actions, focus returns to the Spectrum `NSView`.
+- **Settings:** EAR speed, model, joystick mode live in the Settings scene (Instant is a toolbar/Tape **action**, not a sticky checkbox).
 - **Focus:** do not add decorative SwiftUI `.focusable()` rings; keep `NSApp.activate` + first responder (see Keyboard section).
 
 ## Liquid glass APIs used

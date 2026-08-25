@@ -17,8 +17,8 @@ struct SpecChumMacApp: App {
             // File — Open… items with ellipsis; separators between media kinds
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
-                Button("Open Tape…") {
-                    openTape()
+                Button(host.openMediaMenuTitle) {
+                    host.presentOpenMediaPanel()
                 }
                 .keyboardShortcut("o", modifiers: .command)
 
@@ -36,6 +36,7 @@ struct SpecChumMacApp: App {
                 Button("Open Disk…") {
                     openDsk()
                 }
+                .disabled(!host.model.supportsDisk)
 
                 Button("Open ROM…") {
                     openRom()
@@ -58,6 +59,10 @@ struct SpecChumMacApp: App {
                 Button("Pause") { host.pauseTape() }
                 Button("Rewind") { host.rewindTape() }
                 Divider()
+                Button("Instant") {
+                    host.instantLoadTape()
+                }
+                .disabled(!host.hasTape)
                 Button("Type LOAD \"\"") {
                     host.typeLoadQuotes(withCode: false)
                 }
@@ -168,20 +173,6 @@ struct SpecChumMacApp: App {
 
         Settings {
             SpecChumSettingsView(host: host)
-        }
-    }
-
-    private func openTape() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "tap") ?? .data,
-            UTType(filenameExtension: "tzx") ?? .data,
-        ]
-        panel.title = "Open TAP / TZX"
-        if panel.runModal() == .OK, let url = panel.url {
-            host.openTape(at: url)
         }
     }
 

@@ -34,6 +34,8 @@ pub struct EmulatorSession {
     pub kempston_mouse: bool,
     /// Scripted matrix keys (e.g. auto-type `LOAD ""`).
     key_script: Option<KeyScript>,
+    /// After Instant Type LOAD finishes, auto-Play with flash-load on.
+    pending_instant_play: bool,
 }
 
 /// Hold a chord for `frames` emulated frames, then advance.
@@ -152,6 +154,7 @@ impl EmulatorSession {
             joystick_mode: JoystickMode::Kempston,
             kempston_mouse: false,
             key_script: None,
+            pending_instant_play: false,
         }
     }
 
@@ -349,18 +352,47 @@ impl EmulatorSession {
 
     /// Queue `LOAD ""` + Enter for 48K keyword mode; press Play separately when LD-BYTES waits.
     pub fn type_load_quotes(&mut self) {
-        self.type_load_quotes_inner(false);
+        self.type_load_quotes_inner(false, false);
     }
 
     /// Queue `LOAD "" CODE` + Enter (48K) for CODE blocks.
     pub fn type_load_quotes_code(&mut self) {
-        self.type_load_quotes_inner(true);
+        self.type_load_quotes_inner(true, false);
     }
 
-    fn type_load_quotes_inner(&mut self, with_code: bool) {
+    /// Instant load: enable flash-load, Type LOAD "" (PROGRAM), then Play when the script finishes.
+    /// If already at LD-BYTES, Play immediately. CODE tapes still use Type LOAD "" CODE.
+    pub fn instant_load_tape(&mut self) {
+        let at_ld_bytes = {
+            let Some(m) = self.machine.as_mut() else {
+                self.status = "Instant: no machine".into();
+                return;
+            };
+            if !m.has_tape() {
+                self.status = "Instant: insert a tape first".into();
+                return;
+            }
+            let mut opts = m.tape_load_options();
+            opts.flash_load = true;
+            m.set_tape_load_options(opts);
+            m.cpu().regs.pc == tape::LD_BYTES_TRAP_PC
+        };
+        if at_ld_bytes {
+            self.pending_instant_play = false;
+            self.play_tape();
+            self.status = "Instant: flash-load on — playing at LD-BYTES".into();
+            return;
+        }
+
+        self.type_load_quotes_inner(false, true);
+        self.status = "Instant: flash-load on — typing LOAD \"\" then Play".into();
+    }
+
+    fn type_load_quotes_inner(&mut self, with_code: bool, pending_play: bool) {
         // +3 menu "Loader" is +3DOS disk — never Enter alone for tape (#144).
         // +2A menu Loader is tape — Enter alone for PROGRAM (#145).
         // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
+        self.pending_instant_play = pending_play;
         self.key_script = Some(match self.model {
             Model::Spectrum48 => {
                 if with_code {
@@ -374,6 +406,9 @@ impl EmulatorSession {
                 KeyScript::load_quotes_128_or_plus3(with_code)
             }
         });
+        if pending_play {
+            return;
+        }
         self.status = match (self.model, with_code) {
             (Model::Spectrum48, true) => {
                 "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
@@ -404,6 +439,7 @@ impl EmulatorSession {
         };
         if script.step_i >= script.steps.len() {
             self.key_script = None;
+            self.finish_instant_play_if_pending();
             return false;
         }
         if script.frames_left == 0 {
@@ -416,6 +452,7 @@ impl EmulatorSession {
         }
         if script.step_i >= script.steps.len() {
             self.key_script = None;
+            self.finish_instant_play_if_pending();
         }
         if let Some(machine) = self.machine.as_mut() {
             let kb = machine.keyboard_mut();
@@ -425,6 +462,15 @@ impl EmulatorSession {
             }
         }
         true
+    }
+
+    fn finish_instant_play_if_pending(&mut self) {
+        if !self.pending_instant_play {
+            return;
+        }
+        self.pending_instant_play = false;
+        self.play_tape();
+        self.status = "Instant: flash-load on — playing after LOAD \"\"".into();
     }
 
     pub fn load_rzx(&mut self, path: &Path) {
@@ -1097,18 +1143,17 @@ impl SpecChumApp {
                             ui.close_menu();
                         }
                         ui.separator();
+                        let has_tape = self.session.machine.as_ref().is_some_and(Machine::has_tape);
+                        if ui
+                            .add_enabled(has_tape, egui::Button::new("Instant"))
+                            .on_hover_text("Flash-load: Type LOAD \"\" then Play (skip to program)")
+                            .clicked()
+                        {
+                            self.session.instant_load_tape();
+                            ui.close_menu();
+                        }
                         if let Some(m) = self.session.machine.as_mut() {
                             let mut opts = m.tape_load_options();
-                            let mut instant = opts.flash_load;
-                            if ui.checkbox(&mut instant, "Instant flash-load").changed() {
-                                opts.flash_load = instant;
-                                m.set_tape_load_options(opts);
-                                self.session.status = if instant {
-                                    "Tape: instant flash-load".into()
-                                } else {
-                                    format!("Tape: EAR load at {}x", opts.speed)
-                                };
-                            }
                             ui.label("EAR speed:");
                             for speed in [1u32, 2, 5, 10, 20] {
                                 let selected = opts.speed == speed;
@@ -1116,7 +1161,7 @@ impl SpecChumApp {
                                     opts.speed = speed;
                                     m.set_tape_load_options(opts);
                                     self.session.status = if opts.flash_load {
-                                        format!("Tape: instant flash-load, EAR speed {speed}x")
+                                        format!("Tape: flash-load on, EAR speed {speed}x")
                                     } else {
                                         format!("Tape: EAR load at {speed}x")
                                     };
