@@ -62,7 +62,6 @@ struct SpecChumMacApp: App {
                 Button("Instant") {
                     host.instantLoadTape()
                 }
-                .disabled(!host.hasTape)
                 Button("Type LOAD \"\"") {
                     host.typeLoadQuotes(withCode: false)
                 }

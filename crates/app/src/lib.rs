@@ -270,8 +270,9 @@ impl EmulatorSession {
             Ok(img) => {
                 if let Some(m) = self.machine.as_mut() {
                     m.insert_tape(tape::TapPlayer::new(img));
+                    self.force_flash_load(false);
                     self.status = format!(
-                        "Inserted TAP {} (paused — Tape → Play, or Type LOAD \"\")",
+                        "Inserted TAP {} (paused — Tape → Play for EAR, or Instant)",
                         path.display()
                     );
                 } else {
@@ -290,19 +291,22 @@ impl EmulatorSession {
                 return;
             }
         };
-        let Some(m) = self.machine.as_mut() else {
+        if self.machine.is_none() {
             self.status = "Load a machine ROM before inserting tape".into();
             return;
-        };
+        }
         // Standard-speed TZX → TAP deck so ROM/RAM LD-BYTES flash-load works (e.g. The Boggit).
         if tape::TzxPlayer::is_standard_speed_only(&data) {
             match tape::TzxPlayer::to_tap_player(&data) {
                 Ok(player) if player.image.blocks.is_empty() => {}
                 Ok(player) => {
                     let n = player.image.blocks.len();
-                    m.insert_tape(player);
+                    if let Some(m) = self.machine.as_mut() {
+                        m.insert_tape(player);
+                    }
+                    self.force_flash_load(false);
                     self.status = format!(
-                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" (PROGRAM) or LOAD \"\" CODE, then Play. 128K/+3: Type LOAD enters 48 BASIC (+3 disk Loader is not tape). +2A: Type LOAD uses menu Loader (tape). Instant flash-load skips ROM gaps; custom loaders still use EAR.",
+                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" then Play (EAR), or Instant. 128K/+3: Type LOAD enters 48 BASIC (+3 disk Loader is not tape). +2A: Type LOAD uses menu Loader (tape).",
                         path.display()
                     );
                     return;
@@ -315,7 +319,10 @@ impl EmulatorSession {
         }
         match tape::TzxPlayer::parse(&data) {
             Ok(player) => {
-                m.insert_tzx(player);
+                if let Some(m) = self.machine.as_mut() {
+                    m.insert_tzx(player);
+                }
+                self.force_flash_load(false);
                 self.status = format!(
                     "Inserted TZX {} (pulse playback, paused — Play when loader is ready)",
                     path.display()
@@ -325,7 +332,14 @@ impl EmulatorSession {
         }
     }
 
+    /// Play always uses the EAR path (flash-load off), respecting the EAR speed multiplier.
     pub fn play_tape(&mut self) {
+        self.force_flash_load(false);
+        self.play_tape_keeping_options();
+    }
+
+    /// Start the deck without changing flash-load (used by Instant while flash is temporarily on).
+    fn play_tape_keeping_options(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             if m.has_tape() {
                 m.set_tape_playing(true);
@@ -339,6 +353,7 @@ impl EmulatorSession {
     pub fn pause_tape(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             m.set_tape_playing(false);
+            self.force_flash_load(false);
             self.status = "Tape paused".into();
         }
     }
@@ -346,7 +361,19 @@ impl EmulatorSession {
     pub fn rewind_tape(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             m.rewind_tape();
+            self.force_flash_load(false);
             self.status = "Tape rewound (paused)".into();
+        }
+    }
+
+    fn force_flash_load(&mut self, on: bool) {
+        if let Some(m) = self.machine.as_mut() {
+            let mut opts = m.tape_load_options();
+            if opts.flash_load == on {
+                return;
+            }
+            opts.flash_load = on;
+            m.set_tape_load_options(opts);
         }
     }
 
@@ -360,11 +387,11 @@ impl EmulatorSession {
         self.type_load_quotes_inner(true, false);
     }
 
-    /// Instant load: enable flash-load, Type LOAD "" (PROGRAM), then Play when the script finishes.
-    /// If already at LD-BYTES, Play immediately. CODE tapes still use Type LOAD "" CODE.
+    /// Instant load: open a tape image, enable flash-load, Type LOAD "" (PROGRAM), then Play.
+    /// UI always prompts for a path first (`instant_load_path`). If already at LD-BYTES, Play immediately.
     pub fn instant_load_tape(&mut self) {
         let at_ld_bytes = {
-            let Some(m) = self.machine.as_mut() else {
+            let Some(m) = self.machine.as_ref() else {
                 self.status = "Instant: no machine".into();
                 return;
             };
@@ -372,20 +399,46 @@ impl EmulatorSession {
                 self.status = "Instant: insert a tape first".into();
                 return;
             }
-            let mut opts = m.tape_load_options();
-            opts.flash_load = true;
-            m.set_tape_load_options(opts);
             m.cpu().regs.pc == tape::LD_BYTES_TRAP_PC
         };
+        self.force_flash_load(true);
         if at_ld_bytes {
             self.pending_instant_play = false;
-            self.play_tape();
-            self.status = "Instant: flash-load on — playing at LD-BYTES".into();
+            self.play_tape_keeping_options();
+            self.status = "Instant: flash-loading at LD-BYTES".into();
             return;
         }
 
         self.type_load_quotes_inner(false, true);
-        self.status = "Instant: flash-load on — typing LOAD \"\" then Play".into();
+        self.status = "Instant: typing LOAD \"\" then flash-load Play".into();
+    }
+
+    /// Always-prompt Instant: insert the chosen image, then flash + Type LOAD + Play.
+    /// Does not reuse a previously inserted tape without selecting a path.
+    pub fn instant_load_path(&mut self, path: &Path) {
+        let ext = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "dsk" => {
+                self.load_dsk(path);
+                self.status = "Opened disk — Instant flash-load is for tape images".into();
+            }
+            "tzx" => {
+                self.load_tzx(path);
+                if self.machine.as_ref().is_some_and(Machine::has_tape) {
+                    self.instant_load_tape();
+                }
+            }
+            _ => {
+                self.load_tap(path);
+                if self.machine.as_ref().is_some_and(Machine::has_tape) {
+                    self.instant_load_tape();
+                }
+            }
+        }
     }
 
     fn type_load_quotes_inner(&mut self, with_code: bool, pending_play: bool) {
@@ -469,8 +522,8 @@ impl EmulatorSession {
             return;
         }
         self.pending_instant_play = false;
-        self.play_tape();
-        self.status = "Instant: flash-load on — playing after LOAD \"\"".into();
+        self.play_tape_keeping_options();
+        self.status = "Instant: flash-loading after LOAD \"\"".into();
     }
 
     pub fn load_rzx(&mut self, path: &Path) {
@@ -1143,13 +1196,20 @@ impl SpecChumApp {
                             ui.close_menu();
                         }
                         ui.separator();
-                        let has_tape = self.session.machine.as_ref().is_some_and(Machine::has_tape);
                         if ui
-                            .add_enabled(has_tape, egui::Button::new("Instant"))
-                            .on_hover_text("Flash-load: Type LOAD \"\" then Play (skip to program)")
+                            .button("Instant…")
+                            .on_hover_text(
+                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Play alone stays EAR-only.",
+                            )
                             .clicked()
                         {
-                            self.session.instant_load_tape();
+                            let mut dialog = rfd::FileDialog::new().add_filter("Tape", &["tap", "tzx"]);
+                            if self.session.model == Model::SpectrumPlus3 {
+                                dialog = dialog.add_filter("Disk", &["dsk"]);
+                            }
+                            if let Some(path) = dialog.pick_file() {
+                                self.session.instant_load_path(&path);
+                            }
                             ui.close_menu();
                         }
                         if let Some(m) = self.session.machine.as_mut() {
@@ -1159,12 +1219,9 @@ impl SpecChumApp {
                                 let selected = opts.speed == speed;
                                 if ui.selectable_label(selected, format!("{speed}x")).clicked() {
                                     opts.speed = speed;
+                                    // Keep flash_load as-is (Play forces it off; Instant turns it on).
                                     m.set_tape_load_options(opts);
-                                    self.session.status = if opts.flash_load {
-                                        format!("Tape: flash-load on, EAR speed {speed}x")
-                                    } else {
-                                        format!("Tape: EAR load at {speed}x")
-                                    };
+                                    self.session.status = format!("Tape: EAR speed {speed}x");
                                 }
                             }
                             if ui
@@ -1794,7 +1851,13 @@ mod tests {
             session.key_script.is_none(),
             "plus3 Type LOAD script should finish"
         );
-        session.play_tape();
+        // Instant-style flash for this regression (Play alone is EAR-only).
+        if let Some(m) = session.machine.as_mut() {
+            let mut opts = m.tape_load_options();
+            opts.flash_load = true;
+            m.set_tape_load_options(opts);
+            m.set_tape_playing(true);
+        }
         let mut loaded = false;
         for _ in 0..400 {
             session.tick_frame();
@@ -1812,7 +1875,7 @@ mod tests {
         }
         assert!(
             loaded,
-            "plus3 egui Type LOAD CODE + Play should flash-load attr_mark at 0x8000 (PC={:04X} block={:?})",
+            "plus3 egui Type LOAD CODE + flash Play should load attr_mark at 0x8000 (PC={:04X} block={:?})",
             session.machine.as_ref().unwrap().cpu().regs.pc,
             session.machine.as_ref().unwrap().tape_block()
         );

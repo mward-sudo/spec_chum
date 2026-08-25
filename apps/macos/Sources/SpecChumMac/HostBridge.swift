@@ -63,11 +63,11 @@ final class HostBridge: ObservableObject {
     @Published private(set) var hasTape: Bool = false
     /// Last opened media filename for the window title (tape / snapshot / RZX / disk / ROM).
     @Published private(set) var mediaTitle: String?
-    /// Flash-load when true; EAR bitstream when false. Instant toolbar sets this on for a load action (no sticky checkbox).
-    @Published var instantLoad: Bool = true {
+    /// Flash-load mirror of host options. Instant turns this on ephemerally; Play forces it off.
+    @Published var instantLoad: Bool = false {
         didSet { pushTapeLoadOptions() }
     }
-    /// EAR speed multiplier presets (also applied when instant is off).
+    /// EAR speed multiplier presets (1x…20x); applied for the EAR Play path.
     @Published var tapeSpeed: UInt32 = 1 {
         didSet { pushTapeLoadOptions() }
     }
@@ -126,8 +126,10 @@ final class HostBridge: ObservableObject {
     private var disconnectObserver: NSObjectProtocol?
     /// Frame-scripted `LOAD ""` [CODE] (egui KeyScript parity); advanced in `runFrame`.
     private var keyScript: LoadKeyScript?
-    /// After Instant Type LOAD finishes, auto-Play with flash-load on.
+    /// After Instant Type LOAD finishes, auto-Play with flash-load still on.
     private var pendingInstantPlay = false
+    /// Instant left flash-load on; clear it when the deck next stops (or Pause/Play/Rewind).
+    private var instantFlashActive = false
     /// When syncing `model` from `sc_get_model` after snapshot load, skip `sc_set_model`.
     private var suppressModelPush = false
 
@@ -220,6 +222,10 @@ final class HostBridge: ObservableObject {
         // Avoid @Published writes every tick — they re-enter SwiftUI and can
         // reset TimelineView(.periodic(from: .now)) into a turbo frame loop.
         if playing != tapePlaying {
+            if tapePlaying && !playing && instantFlashActive {
+                instantFlashActive = false
+                setFlashLoad(false)
+            }
             tapePlaying = playing
         }
         if tape != hasTape {
@@ -304,6 +310,9 @@ final class HostBridge: ObservableObject {
             status = HostBridge.takeLastError() ?? "Tape open failed"
         } else {
             mediaTitle = url.lastPathComponent
+            // Insert always leaves flash-load off; Instant turns it on ephemerally.
+            instantFlashActive = false
+            setFlashLoad(false)
             refreshStatus()
             hasTape = true
             tapePlaying = false
@@ -363,25 +372,56 @@ final class HostBridge: ObservableObject {
         beginTypeLoadQuotes(withCode: withCode, pendingPlay: false)
     }
 
-    /// Instant load action: enable flash-load, Type LOAD "" (PROGRAM), then Play when ready.
-    /// If already at LD-BYTES (`0x056C`), Play immediately. CODE tapes still use Type LOAD "" CODE.
+    /// Instant: always prompt for an image, then flash-load + Type LOAD "" + Play.
+    /// Never silently reuses the currently inserted tape. Play alone stays EAR-only.
     func instantLoadTape() {
-        guard handle != nil, hasTape else {
-            status = "Instant: insert a tape first"
+        presentInstantMediaPanel()
+    }
+
+    /// Same filters as Open Tape[/Disk]; on tape selection runs the Instant load path.
+    private func presentInstantMediaPanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        var types: [UTType] = [
+            UTType(filenameExtension: "tap") ?? .data,
+            UTType(filenameExtension: "tzx") ?? .data,
+        ]
+        if model.supportsDisk {
+            types.append(UTType(filenameExtension: "dsk") ?? .data)
+            panel.title = "Instant — Open TAP / TZX / DSK"
+        } else {
+            panel.title = "Instant — Open TAP / TZX"
+        }
+        panel.allowedContentTypes = types
+        guard panel.runModal() == .OK, let url = panel.url else {
+            status = "Instant cancelled"
             return
         }
-        instantLoad = true
+        if url.pathExtension.lowercased() == "dsk" {
+            openDsk(at: url)
+            status = "Opened disk — Instant flash-load is for tape images"
+            return
+        }
+        openTape(at: url)
+        guard hasTape else { return }
+        beginInstantLoadAfterInsert()
+    }
 
-        // Already waiting at LD-BYTES — Play with flash-load.
+    /// Flash on → Type LOAD "" → Play (flash cleared when deck stops / Pause / Play).
+    private func beginInstantLoadAfterInsert() {
+        instantFlashActive = true
+        setFlashLoad(true)
+
         if let r = regs(), r.pc == 0x056C {
             pendingInstantPlay = false
-            playTape()
-            status = "Instant: flash-load on — playing at LD-BYTES"
+            playTapeKeepingFlash()
+            status = "Instant: flash-loading at LD-BYTES"
             return
         }
 
         beginTypeLoadQuotes(withCode: false, pendingPlay: true)
-        status = "Instant: flash-load on — typing LOAD \"\" then Play"
+        status = "Instant: typing LOAD \"\" then flash-load Play"
     }
 
     private func beginTypeLoadQuotes(withCode: Bool, pendingPlay: Bool) {
@@ -435,7 +475,18 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    /// Play always forces flash-load off (EAR path at the selected speed).
     func playTape() {
+        instantFlashActive = false
+        setFlashLoad(false)
+        playTapeKeepingFlash()
+        if tapePlaying {
+            status = "Tape playing (EAR)"
+        }
+    }
+
+    /// Start the deck without clearing flash-load (Instant only).
+    private func playTapeKeepingFlash() {
         guard let handle else { return }
         if sc_tape_play(handle) != 0 {
             status = HostBridge.takeLastError() ?? "Play failed"
@@ -448,6 +499,8 @@ final class HostBridge: ObservableObject {
     func pauseTape() {
         guard let handle else { return }
         _ = sc_tape_pause(handle)
+        instantFlashActive = false
+        setFlashLoad(false)
         refreshStatus()
         tapePlaying = false
     }
@@ -455,6 +508,8 @@ final class HostBridge: ObservableObject {
     func rewindTape() {
         guard let handle else { return }
         _ = sc_tape_rewind(handle)
+        instantFlashActive = false
+        setFlashLoad(false)
         refreshStatus()
         tapePlaying = false
     }
@@ -464,13 +519,21 @@ final class HostBridge: ObservableObject {
 
     func syncTapeLoadOptionsFromHost() {
         guard let handle else { return }
-        var flash: Int32 = 1
+        var flash: Int32 = 0
         var speed: UInt32 = 1
         guard sc_tape_get_load_options(handle, &flash, &speed) == 0 else { return }
         suppressTapeOptsPush = true
         instantLoad = flash != 0
         tapeSpeed = max(1, min(speed, 64))
         suppressTapeOptsPush = false
+    }
+
+    private func setFlashLoad(_ on: Bool) {
+        guard instantLoad != on else {
+            pushTapeLoadOptions()
+            return
+        }
+        instantLoad = on
     }
 
     private func pushTapeLoadOptions() {
@@ -815,8 +878,8 @@ final class HostBridge: ObservableObject {
     private func finishInstantPlayIfPending() {
         guard pendingInstantPlay else { return }
         pendingInstantPlay = false
-        playTape()
-        status = "Instant: flash-load on — playing after LOAD \"\""
+        playTapeKeepingFlash()
+        status = "Instant: flash-loading after LOAD \"\""
     }
 
     private static func takeLastError() -> String? {

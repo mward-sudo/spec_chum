@@ -40,12 +40,12 @@ Environment:
 ## What this vertical slice includes
 
 - Native `MenuBar` / `Commands` (File → Open…; Tape; Machine; **Hardware** Joystick + Multiface; Debug; Help) plus **Settings** (⌘,) for EAR Speed / Joystick / model
-- System **`.toolbar`** (SF Symbols: open / Instant / play-pause / rewind / reset) + caption status footer; liquid-glass **`glassEffect`** on macOS 26+ for footer/wash, else **`.ultraThinMaterial`**
+- System **`.toolbar`** (SF Symbols: open / Instant / play-pause / rewind / EAR speed / reset) + caption status footer; liquid-glass **`glassEffect`** on macOS 26+ for footer/wash, else **`.ultraThinMaterial`**
 - Window title reflects media + machine (`attr_mark.tap — 48K`); min size 640×520
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit
 - **Open Tape** toolbar / File (⌘O): TAP/TZX via `NSOpenPanel`; on **+3** the control is **Open Tape / Disk** and also accepts `.dsk`. Snapshots / RZX stay separate File items
 - **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, **+3 only**) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
-- **Instant** toolbar / Tape menu **button** (not a checkbox): enables flash-load, types `LOAD ""`, then Play (or Play immediately if already at LD-BYTES)
+- **Instant** toolbar / Tape menu **button** (not a checkbox): **always** opens a file panel (same TAP/TZX[/DSK] filters as Open), inserts the selection, enables flash-load, types `LOAD ""`, then Play. Flash-load is restored **off** when the deck stops (or on Pause / Rewind / Play)
 - **Type LOAD ""** / **Type LOAD "" CODE** (Tape + Machine menus): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only); **+2A** selects tape **Loader** for PROGRAM
 - **Hardware:** Multiface 1 attach + NMI (`sc_attach_multiface` / `sc_multiface_nmi`, 48K). DivMMC / IF1 / Beta stubs are exposed in the **egui** Hardware menu first.
 - **Audio:** mono PCM from `sc_audio_*` each frame via `AVAudioEngine` (beeper + EAR mix + AY)
@@ -55,19 +55,19 @@ Environment:
 
 ## Tape loading (Play / LD-BYTES)
 
-Insert starts **paused**. Use **Instant** (toolbar) to skip straight to the program, or **Type LOAD ""** / **Type LOAD "" CODE** then **Tape → Play**. On +3 do **not** use menu **Loader** for tape — that is +3DOS disk. On +2A, menu **Loader** *is* tape.
+Insert starts **paused** with **flash-load off**. **Play** always uses the **EAR** path at the toolbar / Settings **EAR speed** (`1x`…`20x`) — authentic border/tones, sped up by the multiplier. **Instant** always re-prompts with an open panel; on a TAP/TZX selection it inserts, turns flash-load **on**, types `LOAD ""`, Plays, then restores flash-load **off** when the deck stops (so a later Play stays EAR-only). On +3 do **not** use menu **Loader** for tape — that is +3DOS disk. On +2A, menu **Loader** *is* tape.
 
-The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm flash-load / EAR. Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
+The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm EAR (or Instant flash-load). Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 
-Standard-speed TZX is converted to TAP for flash-load. **Instant** is an **action** (toolbar / Tape → Instant): it turns flash-load **on** for that load, runs Type LOAD `""` (PROGRAM), then Play — status notes “flash-load on”. If already waiting at LD-BYTES, Instant only Plays. CODE blocks still need **Type LOAD "" CODE** then Play. For authentic EAR border stripes / tones, use egui **Tape → Experience (~20s EAR)** (disables flash) or Play with flash-load already off; Settings keeps **EAR speed** (`1x`…`20x`). ABI: `sc_tape_set_load_options`.
+Standard-speed TZX is converted to TAP for flash-load. **Instant** is an **action** (toolbar / Tape → Instant): file panel → insert → flash on → Type LOAD `""` → Play. CODE blocks still need **Type LOAD "" CODE** then **Play** (EAR), or Instant after you are already at LD-BYTES with a CODE loader. For authentic EAR border stripes / tones, use **Play** (and optionally raise EAR speed) or egui **Tape → Experience (~20s EAR)**. ABI: `sc_tape_set_load_options`.
 
 ### Verify on Mac 48K
 
 1. `./scripts/fetch_roms.sh` then `./scripts/run_macos_app.sh`
-2. Model **48K**. Open `tests/fixtures/tape/print_ok.tap` (PROGRAM) via **Open Tape**.
-3. Press toolbar **Instant** (enabled once a tape is loaded). Expect Type LOAD then a quick flash-load.
-4. For CODE blocks (`attr_mark.tap` / `minimal_code.tap`): **Type LOAD "" CODE**, then **Play** (or Instant after you are already at LD-BYTES). `RANDOMIZE USR 32768` should paint the top-left attribute on `attr_mark`.
-5. Optional: local Boggit TZX (not in git) — Instant / Type LOAD for the PROGRAM header (`BOGGIT pt1`). Later custom-loader blocks (`flag 0xC8`) need EAR (egui Experience or flash-load off).
+2. Model **48K**. Press toolbar **Instant** — pick `tests/fixtures/tape/print_ok.tap`. Expect Type LOAD then a quick flash-load; flash-load should not stick for a later **Play**.
+3. Open a tape via **Open Tape**, Type LOAD `""`, set EAR speed (e.g. 10x), press **Play** — expect border/tones (EAR), not an instant skip.
+4. For CODE blocks (`attr_mark.tap` / `minimal_code.tap`): **Type LOAD "" CODE**, then **Play**. `RANDOMIZE USR 32768` should paint the top-left attribute on `attr_mark`.
+5. Optional: local Boggit TZX (not in git) — Instant for the PROGRAM header (`BOGGIT pt1`). Later custom-loader blocks (`flag 0xC8`) need EAR (Play / Experience).
 
 ### Snapshots / RZX / disk
 
@@ -150,8 +150,8 @@ not a rapid flicker.
 ## UI conventions (HIG-oriented)
 
 - **Menus:** File Open… (ellipsis + separators); app menus Tape / Machine / Hardware / Debug; View → Show Inspector; Help → Spec Chum Help. ⌘-modified shortcuts only — they clear the matrix so Spectrum typing is not stolen when the display is focused.
-- **Toolbar:** semantic placements + SF Symbols (Open Tape[/Disk], Instant, Play/Pause, Rewind, Reset); accessibility labels on icon-only controls; after chrome actions, focus returns to the Spectrum `NSView`.
-- **Settings:** EAR speed, model, joystick mode live in the Settings scene (Instant is a toolbar/Tape **action**, not a sticky checkbox).
+- **Toolbar:** semantic placements + SF Symbols (Open Tape[/Disk], Instant, Play/Pause, Rewind, EAR speed, Reset); accessibility labels on icon-only controls; after chrome actions, focus returns to the Spectrum `NSView`.
+- **Settings:** EAR speed, model, joystick mode live in the Settings scene (Instant is a toolbar/Tape **action** that always opens a file panel, not a sticky checkbox).
 - **Focus:** do not add decorative SwiftUI `.focusable()` rings; keep `NSApp.activate` + first responder (see Keyboard section).
 
 ## Liquid glass APIs used

@@ -174,8 +174,9 @@ pub struct TapeLoadOptions {
 
 impl Default for TapeLoadOptions {
     fn default() -> Self {
+        // EAR path by default; UI Instant actions enable flash-load ephemerally.
         Self {
-            flash_load: true,
+            flash_load: false,
             speed: 1,
         }
     }
@@ -2973,6 +2974,10 @@ mod tests {
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let data = img.blocks[1].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         // Skip header block so trap sees the data block.
         let mut player = TapPlayer::new(img);
         player.consume_block();
@@ -3018,6 +3023,10 @@ mod tests {
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let header = img.blocks[0].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         assert!(!m.tape_playing());
 
@@ -3129,6 +3138,10 @@ mod tests {
         let img = TapImage::load(&fixture_tap()).expect("fixture");
         let header = img.blocks[0].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
 
@@ -3173,6 +3186,10 @@ mod tests {
         let img = TapImage::load(&path).expect("attr_mark");
         let data = img.blocks[1].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         let mut player = TapPlayer::new(img);
         player.consume_block();
         m.insert_tape(player);
@@ -3347,6 +3364,10 @@ mod tests {
         let img = tape::TzxPlayer::to_tap_image(&data).expect("to tap");
         let header = img.blocks[0].clone();
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
 
@@ -3845,6 +3866,10 @@ mod tests {
         trace::clear();
         trace::enable(trace::Category::TAPE);
         let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+        });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
         // Expect header flag 0x00 but first block is data 0xff → skip then load.

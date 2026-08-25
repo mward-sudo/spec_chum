@@ -23,8 +23,8 @@ struct SpecChumSettingsView: View {
                         Text("10x").tag(UInt32(10))
                         Text("20x").tag(UInt32(20))
                     }
-                    .help("EAR bitstream speed (also speeds pulse TZX); Instant toolbar enables flash-load for a load")
-                    Text("Use the Instant toolbar button (or Tape → Instant) to flash-load: Type LOAD \"\" then Play.")
+                    .help("EAR bitstream speed for Play (Instant flash-loads regardless of speed)")
+                    Text("Instant always opens a file panel, then flash-loads (Type LOAD \"\" + Play). Play alone stays on the EAR path at this speed.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

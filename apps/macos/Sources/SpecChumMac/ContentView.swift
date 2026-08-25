@@ -51,8 +51,7 @@ struct ContentView: View {
                 } label: {
                     Label("Instant", systemImage: "bolt.fill")
                 }
-                .disabled(!host.hasTape)
-                .help("Flash-load: Type LOAD \"\" then Play (skip to program)")
+                .help("Always asks for a tape image, then flash-loads (Type LOAD \"\" + Play)")
                 .accessibilityLabel("Instant load")
             }
 
@@ -72,7 +71,7 @@ struct ContentView: View {
                     )
                 }
                 .disabled(!host.hasTape && !host.tapePlaying)
-                .help(host.tapePlaying ? "Pause tape" : "Play tape")
+                .help(host.tapePlaying ? "Pause tape" : "Play tape (EAR path; Instant is flash-load)")
                 .accessibilityLabel(host.tapePlaying ? "Pause tape" : "Play tape")
 
                 Button {
@@ -83,6 +82,21 @@ struct ContentView: View {
                 .disabled(!host.hasTape)
                 .help("Rewind tape")
                 .accessibilityLabel("Rewind tape")
+
+                Picker("Speed", selection: $host.tapeSpeed) {
+                    Text("1x").tag(UInt32(1))
+                    Text("2x").tag(UInt32(2))
+                    Text("5x").tag(UInt32(5))
+                    Text("10x").tag(UInt32(10))
+                    Text("20x").tag(UInt32(20))
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: 72)
+                .help("EAR bitstream speed (1x…20x); used when Play loads without Instant")
+                .accessibilityLabel("EAR speed")
+                .onChange(of: host.tapeSpeed) { _, _ in
+                    FocusSpectrumView.post()
+                }
             }
 
             ToolbarItem(placement: .automatic) {
