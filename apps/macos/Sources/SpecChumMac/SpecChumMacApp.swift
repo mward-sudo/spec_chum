@@ -14,7 +14,7 @@ struct SpecChumMacApp: App {
         }
         .defaultSize(width: 780, height: 640)
         .commands {
-            // File — Open… items with ellipsis; separators between media kinds
+            // File — Open… counterparts to toolbar (standard once); other media kinds here only
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
                 Button(host.openMediaMenuTitle) {
@@ -53,15 +53,8 @@ struct SpecChumMacApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .option])
             }
 
+            // Tape — Type LOAD only; Play / Instant / Rewind / speed live on the toolbar
             CommandMenu("Tape") {
-                Button("Play") { host.playTape() }
-                    .keyboardShortcut("p", modifiers: [.command, .shift])
-                Button("Pause") { host.pauseTape() }
-                Button("Rewind") { host.rewindTape() }
-                Divider()
-                Button("Instant") {
-                    host.instantLoadTape()
-                }
                 Button("Type LOAD \"\"") {
                     host.typeLoadQuotes(withCode: false)
                 }
@@ -70,46 +63,14 @@ struct SpecChumMacApp: App {
                 }
             }
 
+            // Machine — Reset (+ model in Settings)
             CommandMenu("Machine") {
                 Button("Reset") { host.reset() }
                     .keyboardShortcut("r", modifiers: .command)
-                Divider()
-                Button("Type LOAD \"\"") {
-                    host.typeLoadQuotes(withCode: false)
-                }
-                Button("Type LOAD \"\" CODE") {
-                    host.typeLoadQuotes(withCode: true)
-                }
-                Divider()
-                ForEach(HostBridge.Model.allCases) { model in
-                    Button {
-                        host.model = model
-                    } label: {
-                        if host.model == model {
-                            Text("✓ \(model.title)")
-                        } else {
-                            Text(model.title)
-                        }
-                    }
-                }
             }
 
-            // Hardware — preserve Multiface (#145); Joystick modes for HIG discoverability
+            // Hardware — Multiface; Joystick mode lives in Settings
             CommandMenu("Hardware") {
-                Menu("Joystick") {
-                    ForEach(HostBridge.JoystickMode.allCases) { mode in
-                        Button {
-                            host.joystickMode = mode
-                        } label: {
-                            if host.joystickMode == mode {
-                                Text("✓ \(mode.title)")
-                            } else {
-                                Text(mode.title)
-                            }
-                        }
-                    }
-                }
-                Divider()
                 Button("Attach Multiface 1 ROM…") {
                     openMultifaceRom()
                 }

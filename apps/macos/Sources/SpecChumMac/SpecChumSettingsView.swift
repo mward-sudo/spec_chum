@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Preferences window (⌘,) — EAR speed / Joystick / model (HIG Settings scene).
-/// Instant flash-load is a toolbar / Tape menu **action**, not a sticky checkbox.
+/// Preferences (⌘,) — model, EAR speed, host volume, joystick.
+/// Frequent actions (Open / Instant / Play / Rewind) stay on the toolbar.
 struct SpecChumSettingsView: View {
     @ObservedObject var host: HostBridge
 
@@ -24,7 +24,19 @@ struct SpecChumSettingsView: View {
                         Text("20x").tag(UInt32(20))
                     }
                     .help("EAR bitstream speed for Play (Instant flash-loads regardless of speed)")
-                    Text("Instant always opens a file panel, then flash-loads (Type LOAD \"\" + Play). Play alone stays on the EAR path at this speed.")
+                    Text("Toolbar Instant always opens a TAP/TZX panel, then flash-loads. Play alone stays on the EAR path at this speed. Disk images use Open Tape / Disk — Instant does not Type LOAD for DSK.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Section("Audio") {
+                    Toggle("Mute", isOn: $host.outputMuted)
+                        .help("Silence host PCM output only (not EAR fidelity)")
+                    HStack {
+                        Text("Volume")
+                        Slider(value: $host.outputVolume, in: 0 ... 1)
+                            .disabled(host.outputMuted)
+                    }
+                    Text("Host mixer gain for beeper / EAR mix / AY. Does not change tape bitstream timing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -54,6 +66,6 @@ struct SpecChumSettingsView: View {
                 Label("Input", systemImage: "gamecontroller")
             }
         }
-        .frame(width: 420, height: 280)
+        .frame(width: 440, height: 360)
     }
 }

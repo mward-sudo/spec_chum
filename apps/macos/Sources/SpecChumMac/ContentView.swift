@@ -55,68 +55,94 @@ struct ContentView: View {
                 .accessibilityLabel("Instant load")
             }
 
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    chromeAction {
-                        if host.tapePlaying {
-                            host.pauseTape()
-                        } else {
-                            host.playTape()
+            // Tape deck chrome — only when a tape is inserted (Open / Instant always available).
+            if host.hasTape || host.tapePlaying {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        chromeAction {
+                            if host.tapePlaying {
+                                host.pauseTape()
+                            } else {
+                                host.playTape()
+                            }
                         }
+                    } label: {
+                        Label(
+                            host.tapePlaying ? "Pause" : "Play",
+                            systemImage: host.tapePlaying ? "pause.fill" : "play.fill"
+                        )
                     }
-                } label: {
-                    Label(
-                        host.tapePlaying ? "Pause" : "Play",
-                        systemImage: host.tapePlaying ? "pause.fill" : "play.fill"
-                    )
-                }
-                .disabled(!host.hasTape && !host.tapePlaying)
-                .help(host.tapePlaying ? "Pause tape" : "Play tape (EAR path; Instant is flash-load)")
-                .accessibilityLabel(host.tapePlaying ? "Pause tape" : "Play tape")
+                    .help(host.tapePlaying ? "Pause tape" : "Play tape (EAR path; Instant is flash-load)")
+                    .accessibilityLabel(host.tapePlaying ? "Pause tape" : "Play tape")
 
-                Button {
-                    chromeAction { host.rewindTape() }
-                } label: {
-                    Label("Rewind", systemImage: "backward.end.fill")
-                }
-                .disabled(!host.hasTape)
-                .help("Rewind tape")
-                .accessibilityLabel("Rewind tape")
-
-                Picker("Speed", selection: $host.tapeSpeed) {
-                    Text("1x").tag(UInt32(1))
-                    Text("2x").tag(UInt32(2))
-                    Text("5x").tag(UInt32(5))
-                    Text("10x").tag(UInt32(10))
-                    Text("20x").tag(UInt32(20))
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: 72)
-                .help("EAR bitstream speed (1x…20x); used when Play loads without Instant")
-                .accessibilityLabel("EAR speed")
-                .onChange(of: host.tapeSpeed) { _, _ in
-                    FocusSpectrumView.post()
-                }
-            }
-
-            ToolbarItem(placement: .automatic) {
-                if let frac = host.tapeFraction {
-                    VStack(alignment: .leading, spacing: 1) {
-                        ProgressView(value: frac)
-                            .controlSize(.small)
-                            .frame(minWidth: 100, maxWidth: 160)
-                        Text(host.tapeBlockLabel)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    Button {
+                        chromeAction { host.rewindTape() }
+                    } label: {
+                        Label("Rewind", systemImage: "backward.end.fill")
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Tape progress")
-                    .accessibilityValue(host.tapeBlockLabel)
+                    .help("Rewind tape")
+                    .accessibilityLabel("Rewind tape")
+
+                    Picker("Speed", selection: $host.tapeSpeed) {
+                        Text("1x").tag(UInt32(1))
+                        Text("2x").tag(UInt32(2))
+                        Text("5x").tag(UInt32(5))
+                        Text("10x").tag(UInt32(10))
+                        Text("20x").tag(UInt32(20))
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 72)
+                    .help("EAR bitstream speed (1x…20x); used when Play loads without Instant")
+                    .accessibilityLabel("EAR speed")
+                    .onChange(of: host.tapeSpeed) { _, _ in
+                        FocusSpectrumView.post()
+                    }
+                }
+
+                ToolbarItem(placement: .automatic) {
+                    if let frac = host.tapeFraction {
+                        VStack(alignment: .leading, spacing: 1) {
+                            ProgressView(value: frac)
+                                .controlSize(.small)
+                                .frame(minWidth: 100, maxWidth: 160)
+                            Text(host.tapeBlockLabel)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Tape progress")
+                        .accessibilityValue(host.tapeBlockLabel)
+                    }
                 }
             }
 
             ToolbarItemGroup(placement: .automatic) {
+                HStack(spacing: 6) {
+                    Button {
+                        host.outputMuted.toggle()
+                        FocusSpectrumView.post()
+                    } label: {
+                        Label(
+                            host.outputMuted ? "Unmute" : "Mute",
+                            systemImage: host.outputMuted || host.outputVolume <= 0.001
+                                ? "speaker.slash.fill"
+                                : "speaker.wave.2.fill"
+                        )
+                    }
+                    .help("Mute host audio output (does not change EAR / flash-load)")
+                    .accessibilityLabel(host.outputMuted ? "Unmute" : "Mute")
+
+                    Slider(value: $host.outputVolume, in: 0 ... 1)
+                        .frame(width: 88)
+                        .disabled(host.outputMuted)
+                        .help("Host output volume (PCM gain only)")
+                        .accessibilityLabel("Volume")
+                        .onChange(of: host.outputVolume) { _, _ in
+                            FocusSpectrumView.post()
+                        }
+                }
+
                 Button {
                     chromeAction { host.reset() }
                 } label: {

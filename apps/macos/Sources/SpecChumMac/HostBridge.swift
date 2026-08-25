@@ -71,6 +71,25 @@ final class HostBridge: ObservableObject {
     @Published var tapeSpeed: UInt32 = 1 {
         didSet { pushTapeLoadOptions() }
     }
+    /// Host PCM output gain 0…1 (what the user hears). Does not affect EAR / flash-load.
+    @Published var outputVolume: Float = HostBridge.loadPersistedVolume() {
+        didSet {
+            let clamped = max(0, min(1, outputVolume))
+            if clamped != outputVolume {
+                outputVolume = clamped
+                return
+            }
+            audio.volume = clamped
+            UserDefaults.standard.set(Double(clamped), forKey: Self.volumeDefaultsKey)
+        }
+    }
+    /// Host output mute (mixer gain 0). Independent of Spectrum EAR bit.
+    @Published var outputMuted: Bool = HostBridge.loadPersistedMuted() {
+        didSet {
+            audio.muted = outputMuted
+            UserDefaults.standard.set(outputMuted, forKey: Self.mutedDefaultsKey)
+        }
+    }
     /// 0...1 tape position for ProgressView; nil when no tape.
     @Published private(set) var tapeFraction: Double?
     @Published private(set) var tapeBlockLabel: String = ""
@@ -155,7 +174,24 @@ final class HostBridge: ObservableObject {
         _ = applyJoystickMode(joystickMode)
         startGamepadDiscovery()
         let rate = Double(sc_audio_sample_rate(handle))
+        audio.volume = outputVolume
+        audio.muted = outputMuted
         audio.ensureStarted(sampleRate: rate > 0 ? rate : 44100)
+    }
+
+    private static let volumeDefaultsKey = "specChum.outputVolume"
+    private static let mutedDefaultsKey = "specChum.outputMuted"
+
+    private static func loadPersistedVolume() -> Float {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: volumeDefaultsKey) == nil {
+            return 1.0
+        }
+        return max(0, min(1, Float(defaults.double(forKey: volumeDefaultsKey))))
+    }
+
+    private static func loadPersistedMuted() -> Bool {
+        UserDefaults.standard.bool(forKey: mutedDefaultsKey)
     }
 
     deinit {
@@ -361,7 +397,8 @@ final class HostBridge: ObservableObject {
             status = HostBridge.takeLastError() ?? "DSK load failed"
         } else {
             mediaTitle = url.lastPathComponent
-            refreshStatus()
+            // Prefer a clear +3DOS hint over the raw host status string.
+            status = "DSK inserted — use +3 Loader / +3DOS"
         }
     }
 
@@ -378,29 +415,24 @@ final class HostBridge: ObservableObject {
         presentInstantMediaPanel()
     }
 
-    /// Same filters as Open Tape[/Disk]; on tape selection runs the Instant load path.
+    /// Tape-only filters; Instant is flash Type LOAD. Use Open Tape / Disk for `.dsk`.
     private func presentInstantMediaPanel() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        var types: [UTType] = [
+        panel.allowedContentTypes = [
             UTType(filenameExtension: "tap") ?? .data,
             UTType(filenameExtension: "tzx") ?? .data,
         ]
-        if model.supportsDisk {
-            types.append(UTType(filenameExtension: "dsk") ?? .data)
-            panel.title = "Instant — Open TAP / TZX / DSK"
-        } else {
-            panel.title = "Instant — Open TAP / TZX"
-        }
-        panel.allowedContentTypes = types
+        panel.title = "Instant — Open TAP / TZX"
         guard panel.runModal() == .OK, let url = panel.url else {
             status = "Instant cancelled"
             return
         }
+        // Defensive: Instant is tape-oriented; never fake Type LOAD for disks.
         if url.pathExtension.lowercased() == "dsk" {
             openDsk(at: url)
-            status = "Opened disk — Instant flash-load is for tape images"
+            status = "DSK inserted — use +3 Loader / +3DOS"
             return
         }
         openTape(at: url)

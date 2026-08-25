@@ -23,6 +23,8 @@ pub struct EmulatorSession {
     pub running: bool,
     pub throttle: bool,
     pub muted: bool,
+    /// Host PCM gain 0…1 (what the user hears). Does not affect EAR / flash-load.
+    pub volume: f32,
     pub status: String,
     pub model: Model,
     pub debug_open: bool,
@@ -146,6 +148,7 @@ impl EmulatorSession {
             running: true,
             throttle: true,
             muted: false,
+            volume: 1.0,
             status: "Load a ROM via Machine menu (or auto-detect roms/)".into(),
             model,
             debug_open: false,
@@ -424,7 +427,7 @@ impl EmulatorSession {
         match ext.as_str() {
             "dsk" => {
                 self.load_dsk(path);
-                self.status = "Opened disk — Instant flash-load is for tape images".into();
+                self.status = "DSK inserted — use +3 Loader / +3DOS".into();
             }
             "tzx" => {
                 self.load_tzx(path);
@@ -545,7 +548,12 @@ impl EmulatorSession {
             Ok(img) => {
                 if let Some(m) = self.machine.as_mut() {
                     match m.insert_disk(img) {
-                        Ok(()) => self.status = format!("Inserted DSK {}", path.display()),
+                        Ok(()) => {
+                            self.status = format!(
+                                "DSK inserted ({}) — use +3 Loader / +3DOS",
+                                path.display()
+                            );
+                        }
                         Err(e) => self.status = e,
                     }
                 } else {
@@ -805,6 +813,8 @@ struct BeeperState {
     frame_t_per_sample: f32,
     t: f32,
     muted: bool,
+    /// Linear host output gain 0…1.
+    volume: f32,
 }
 
 impl Default for BeeperState {
@@ -821,6 +831,7 @@ impl Default for BeeperState {
             frame_t_per_sample: 69888.0 / 44100.0,
             t: 0.0,
             muted: false,
+            volume: 1.0,
         }
     }
 }
@@ -1046,6 +1057,10 @@ impl SpecChumApp {
                             }
                         }
                         ui.checkbox(&mut self.session.muted, "Mute");
+                        ui.add_enabled(
+                            !self.session.muted,
+                            egui::Slider::new(&mut self.session.volume, 0.0..=1.0).text("Volume"),
+                        );
                     });
                     ui.menu_button("Hardware", |ui| {
                         let model = self.session.model;
@@ -1175,17 +1190,25 @@ impl SpecChumApp {
                         }
                     });
                     ui.menu_button("Tape", |ui| {
-                        if ui.button("Play tape").clicked() {
-                            self.session.play_tape();
-                            ui.close_menu();
-                        }
-                        if ui.button("Pause tape").clicked() {
-                            self.session.pause_tape();
-                            ui.close_menu();
-                        }
-                        if ui.button("Rewind tape").clicked() {
-                            self.session.rewind_tape();
-                            ui.close_menu();
+                        let has_tape = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_tape);
+                        if has_tape {
+                            if ui.button("Play tape").clicked() {
+                                self.session.play_tape();
+                                ui.close_menu();
+                            }
+                            if ui.button("Pause tape").clicked() {
+                                self.session.pause_tape();
+                                ui.close_menu();
+                            }
+                            if ui.button("Rewind tape").clicked() {
+                                self.session.rewind_tape();
+                                ui.close_menu();
+                            }
+                            ui.separator();
                         }
                         if ui.button("Type LOAD \"\"").clicked() {
                             self.session.type_load_quotes();
@@ -1199,43 +1222,46 @@ impl SpecChumApp {
                         if ui
                             .button("Instant…")
                             .on_hover_text(
-                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Play alone stays EAR-only.",
+                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Play alone stays EAR-only. Use File → Open DSK for disks.",
                             )
                             .clicked()
                         {
-                            let mut dialog = rfd::FileDialog::new().add_filter("Tape", &["tap", "tzx"]);
-                            if self.session.model == Model::SpectrumPlus3 {
-                                dialog = dialog.add_filter("Disk", &["dsk"]);
-                            }
+                            // Tape-only: Instant never fakes Type LOAD for DSK.
+                            let dialog =
+                                rfd::FileDialog::new().add_filter("Tape", &["tap", "tzx"]);
                             if let Some(path) = dialog.pick_file() {
                                 self.session.instant_load_path(&path);
                             }
                             ui.close_menu();
                         }
-                        if let Some(m) = self.session.machine.as_mut() {
-                            let mut opts = m.tape_load_options();
-                            ui.label("EAR speed:");
-                            for speed in [1u32, 2, 5, 10, 20] {
-                                let selected = opts.speed == speed;
-                                if ui.selectable_label(selected, format!("{speed}x")).clicked() {
-                                    opts.speed = speed;
-                                    // Keep flash_load as-is (Play forces it off; Instant turns it on).
-                                    m.set_tape_load_options(opts);
-                                    self.session.status = format!("Tape: EAR speed {speed}x");
+                        if has_tape {
+                            if let Some(m) = self.session.machine.as_mut() {
+                                let mut opts = m.tape_load_options();
+                                ui.label("EAR speed:");
+                                for speed in [1u32, 2, 5, 10, 20] {
+                                    let selected = opts.speed == speed;
+                                    if ui.selectable_label(selected, format!("{speed}x")).clicked()
+                                    {
+                                        opts.speed = speed;
+                                        // Keep flash_load as-is (Play forces it off; Instant turns it on).
+                                        m.set_tape_load_options(opts);
+                                        self.session.status =
+                                            format!("Tape: EAR speed {speed}x");
+                                    }
                                 }
-                            }
-                            if ui
-                                .button("Experience (~20s EAR)")
-                                .on_hover_text(
-                                    "EAR path at 16x (issue #82 interim; abbreviate tones later)",
-                                )
-                                .clicked()
-                            {
-                                opts.flash_load = false;
-                                opts.speed = 16;
-                                m.set_tape_load_options(opts);
-                                self.session.status =
-                                    "Tape: experience EAR load at 16x (~20s-class)".into();
+                                if ui
+                                    .button("Experience (~20s EAR)")
+                                    .on_hover_text(
+                                        "EAR path at 16x (issue #82 interim; abbreviate tones later)",
+                                    )
+                                    .clicked()
+                                {
+                                    opts.flash_load = false;
+                                    opts.speed = 16;
+                                    m.set_tape_load_options(opts);
+                                    self.session.status =
+                                        "Tape: experience EAR load at 16x (~20s-class)".into();
+                                }
                             }
                         }
                     });
@@ -1390,6 +1416,7 @@ impl SpecChumApp {
         let audio = self.session.tick_frame();
         if let Ok(mut b) = self.beeper.lock() {
             b.muted = self.session.muted;
+            b.volume = self.session.volume.clamp(0.0, 1.0);
             if !self.session.muted {
                 b.edges = audio.beeper_edges;
                 b.ay_samples = audio.ay_samples;
@@ -1600,8 +1627,9 @@ fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Stream> {
                     } else {
                         (0.0, 0.0)
                     };
-                    let left = (beep + ay_l).clamp(-1.0, 1.0);
-                    let right = (beep + ay_r).clamp(-1.0, 1.0);
+                    let gain = st.volume.clamp(0.0, 1.0);
+                    let left = ((beep + ay_l) * gain).clamp(-1.0, 1.0);
+                    let right = ((beep + ay_r) * gain).clamp(-1.0, 1.0);
                     frame[0] = left;
                     if ch > 1 {
                         frame[1] = right;
