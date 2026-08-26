@@ -68,10 +68,7 @@ struct ContentView: View {
     @ViewBuilder
     private var flatSpectrumChrome: some View {
         VStack(spacing: 0) {
-            SpectrumDisplayView(
-                host: host,
-                tick: host.displayTick
-            )
+            SpectrumDisplayView(host: host)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))

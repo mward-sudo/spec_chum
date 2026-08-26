@@ -156,8 +156,8 @@ final class HostBridge: ObservableObject {
             }
         }
     }
-    /// Bumps when a Spectrum frame runs so SwiftUI can refresh the display.
-    @Published private(set) var displayTick: UInt64 = 0
+    /// Weak flat-mode present view — refreshed directly from `runFrame` (no @Published churn).
+    private weak var spectrumPresentView: SpectrumNSView?
     /// Bevy/room FFI handle — only touched on `livingRoomQueue` (see header thread affinity).
     private var livingRoomHandle: UnsafeMutableRawPointer?
     /// Main-thread mirror: room created and ready for enqueue.
@@ -384,6 +384,11 @@ final class HostBridge: ObservableObject {
     /// Register the IOSurface present NSView (weak). Called from LivingRoomDisplayView.
     func attachLivingRoomPresentView(_ view: LivingRoomNSView) {
         livingRoomPresentView = view
+    }
+
+    /// Register the flat Spectrum NSView (weak). Called from SpectrumDisplayView.
+    func attachSpectrumPresentView(_ view: SpectrumNSView) {
+        spectrumPresentView = view
     }
 
     func skipLivingRoomIntro() {
@@ -852,9 +857,9 @@ final class HostBridge: ObservableObject {
             syncTapePublished()
             enqueueAudio()
             publishLivingRoomFramebuffer()
-            // Flat spectrum needs SwiftUI redraw; living room presents via DisplayLink + IOSurface.
+            // Flat spectrum presents via direct NSView refresh; living room uses DisplayLink + IOSurface.
             if !livingRoomMode {
-                displayTick &+= 1
+                spectrumPresentView?.presentFrame()
             }
             return true
         }
@@ -878,7 +883,7 @@ final class HostBridge: ObservableObject {
             syncTapePublished()
             publishLivingRoomFramebuffer()
             if !livingRoomMode {
-                displayTick &+= 1
+                spectrumPresentView?.presentFrame()
             }
             return true
         }
