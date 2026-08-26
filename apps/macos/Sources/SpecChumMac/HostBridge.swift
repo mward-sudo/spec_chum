@@ -714,7 +714,10 @@ final class HostBridge: ObservableObject {
         let dt = Float(max(deltaSeconds, 1.0 / 240.0))
         livingRoomQueue.async { [weak self] in
             defer { self?.finishRoomTick(generation: tickGen) }
-            guard let self, let room = self.livingRoomHandle else { return }
+            guard let self,
+                  self.shouldRunRoomTick(generation: tickGen),
+                  let room = self.livingRoomHandle
+            else { return }
             sc_room_perf_set_thread_hint(2)
             sc_room_set_frame_delta_seconds(room, dt)
 
@@ -750,6 +753,13 @@ final class HostBridge: ObservableObject {
                 InputLatencyProbe.noteRoomPresent()
             }
         }
+    }
+
+    /// True when this tick is still the active coalesced operation (not superseded by recovery).
+    private func shouldRunRoomTick(generation: UInt64) -> Bool {
+        roomTickLock.lock()
+        defer { roomTickLock.unlock() }
+        return roomTickInFlight && generation == roomTickGeneration
     }
 
     /// Clear coalesce flag after a room tick finishes or is abandoned.
