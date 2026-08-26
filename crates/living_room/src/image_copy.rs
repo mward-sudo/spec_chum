@@ -86,6 +86,17 @@ impl Plugin for ImageCopyPlugin {
     }
 }
 
+/// Drop stale copiers before rebuilding the headless render target (in-place resize).
+pub(crate) fn despawn_image_copiers(world: &mut World) {
+    let entities: Vec<Entity> = {
+        let mut query = world.query_filtered::<Entity, With<ImageCopier>>();
+        query.iter(world).collect()
+    };
+    for entity in entities {
+        world.despawn(entity);
+    }
+}
+
 /// Spawn a GPU→CPU copier for `src` (must have `COPY_SRC` usage).
 pub fn spawn_image_copier(
     commands: &mut Commands,

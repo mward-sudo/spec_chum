@@ -154,12 +154,20 @@ final class LivingRoomNSView: NSView {
     /// Debounced stepped resize from view backing pixels.
     func scheduleSteppedResizeIfNeeded() {
         guard host?.livingRoomMode == true, window != nil else { return }
-        let target = Self.steppedSize(for: self)
+        let target = Self.steppedSize(
+            for: self,
+            presentWidth: presentWidth,
+            presentHeight: presentHeight
+        )
         guard target.width != presentWidth || target.height != presentHeight else { return }
         resizeWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            let again = Self.steppedSize(for: self)
+            let again = Self.steppedSize(
+                for: self,
+                presentWidth: self.presentWidth,
+                presentHeight: self.presentHeight
+            )
             guard again.width != self.presentWidth || again.height != self.presentHeight else { return }
             self.rebindPresentSurface(width: again.width, height: again.height)
         }
@@ -184,25 +192,55 @@ final class LivingRoomNSView: NSView {
 
     /// Stepped long-edge budget, aspect matched to the view (no 16:9 letterboxing).
     /// Cap at **2560** backing pixels; CALayer linear-upscales when the view is larger.
-    static func steppedSize(for view: NSView) -> (width: Int, height: Int) {
+    /// Hysteresis around step boundaries avoids resize thrash (Dock show/hide, minor layout).
+    static func steppedSize(
+        for view: NSView,
+        presentWidth: Int,
+        presentHeight: Int
+    ) -> (width: Int, height: Int) {
         let scale = max(view.window?.backingScaleFactor ?? 2.0, 1.0)
         let bw = max(view.bounds.width * scale, 1)
         let bh = max(view.bounds.height * scale, 1)
         let aspect = bw / bh
-        let budget: CGFloat = min(max(bw, bh), 2560)
+        let rawLong = Int(max(bw, bh).rounded())
+        let longEdge = pickLongEdgeStep(rawLong: rawLong, currentLong: max(presentWidth, presentHeight))
+        let budget = CGFloat(longEdge)
         var w: Int
         var h: Int
         if aspect >= 1 {
-            w = Int(budget.rounded())
+            w = longEdge
             h = max(2, Int((budget / aspect).rounded()))
         } else {
-            h = Int(budget.rounded())
+            h = longEdge
             w = max(2, Int((budget * aspect).rounded()))
         }
         // Even dimensions are friendlier for GPU blit / IOSurface.
         w &= ~1
         h &= ~1
         return (max(w, 2), max(h, 2))
+    }
+
+    /// Long-edge steps with ±12% hysteresis so we do not recreate Bevy on tiny layout jitter.
+    private static func pickLongEdgeStep(rawLong: Int, currentLong: Int) -> Int {
+        let steps = [960, 1280, 1920, 2560]
+        let capped = min(max(rawLong, steps[0]), steps[steps.count - 1])
+        if currentLong > 0, steps.contains(currentLong) {
+            let lower = Int(Double(currentLong) * 0.88)
+            let upper = Int(Double(currentLong) * 1.12)
+            if capped >= lower, capped <= upper {
+                return currentLong
+            }
+        }
+        var best = steps[0]
+        var bestDist = abs(steps[0] - capped)
+        for step in steps.dropFirst() {
+            let dist = abs(step - capped)
+            if dist < bestDist {
+                best = step
+                bestDist = dist
+            }
+        }
+        return best
     }
 
     private static func makeIOSurface(width: Int, height: Int) -> IOSurface? {

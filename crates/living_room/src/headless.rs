@@ -271,16 +271,30 @@ impl HeadlessRoom {
         n
     }
 
-    /// Recreate the room at a new size (zoom resets; caller should skip intro + rebind IOSurface).
+    /// Resize the offscreen render target in place (caller should skip intro + rebind IOSurface).
+    ///
+    /// Avoids a full `HeadlessRoom::try_new` / GPU pipeline recompile on stepped window resizes
+    /// (was freezing SpecChumMac for seconds when the living-room queue blocked).
     pub fn resize(&mut self, width: u32, height: u32) -> Result<(), String> {
         let width = width.max(64);
         let height = height.max(64);
         if width == self.width && height == self.height {
             return Ok(());
         }
-        let mut next = Self::try_new(width, height)?;
-        next.request_skip_intro();
-        *self = next;
+        rebuild_headless_render_target(&mut self.apps, width, height)?;
+        self.width = width;
+        self.height = height;
+        self.apps.update();
+        let _ = self
+            .apps
+            .main
+            .world()
+            .resource::<RenderDevice>()
+            .wgpu_device()
+            .poll(PollType::Wait {
+                submission_index: None,
+                timeout: Some(Duration::from_millis(500)),
+            });
         Ok(())
     }
 
@@ -342,6 +356,17 @@ fn setup_headless_target(
 ) {
     let w = size.width;
     let h = size.height;
+    let handle = create_headless_render_image(&mut images, w, h);
+    commands.insert_resource(HeadlessRenderTargetHandle(handle.clone()));
+    spawn_image_copier(&mut commands, &render_device, handle.clone(), w, h);
+
+    let target = RenderTarget::Image(handle.into());
+    for entity in &cams {
+        commands.entity(entity).insert(target.clone());
+    }
+}
+
+fn create_headless_render_image(images: &mut Assets<Image>, w: u32, h: u32) -> Handle<Image> {
     let extent = Extent3d {
         width: w,
         height: h,
@@ -355,14 +380,69 @@ fn setup_headless_target(
         RenderAssetUsages::RENDER_WORLD,
     );
     image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
-    let handle = images.add(image);
-    commands.insert_resource(HeadlessRenderTargetHandle(handle.clone()));
-    spawn_image_copier(&mut commands, &render_device, handle.clone(), w, h);
+    images.add(image)
+}
+
+/// Rebuild the offscreen camera target without tearing down Bevy / recompiling pipelines.
+fn rebuild_headless_render_target(
+    apps: &mut SubApps,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    let world = apps.main.world_mut();
+    *world.resource_mut::<HeadlessSize>() = HeadlessSize { width, height };
+
+    if let Some(mut present) = world.get_resource_mut::<PresentTarget>() {
+        present.clear();
+    }
+
+    {
+        let bytes = (width as usize)
+            .saturating_mul(height as usize)
+            .saturating_mul(4);
+        let rgba = world.resource::<LatestRoomFrame>().rgba.clone();
+        if let Ok(mut buf) = rgba.lock() {
+            buf.clear();
+            buf.resize(bytes, 0);
+        }
+        let mut latest = world.resource_mut::<LatestRoomFrame>();
+        latest.width = width;
+        latest.height = height;
+    }
+
+    if let Some(mut plates) = world.get_resource_mut::<crate::hybrid::HybridPlates>() {
+        crate::hybrid::bind_present_target(width, height, Some(&mut plates));
+    }
+
+    crate::image_copy::despawn_image_copiers(world);
+
+    let handle = {
+        let mut images = world.resource_mut::<Assets<Image>>();
+        create_headless_render_image(&mut images, width, height)
+    };
+    world.resource_mut::<HeadlessRenderTargetHandle>().0 = handle.clone();
+
+    {
+        let render_device = world.resource::<RenderDevice>().clone();
+        spawn_image_copier(
+            &mut world.commands(),
+            &render_device,
+            handle.clone(),
+            width,
+            height,
+        );
+    }
 
     let target = RenderTarget::Image(handle.into());
-    for entity in &cams {
-        commands.entity(entity).insert(target.clone());
+    let cam_entities: Vec<Entity> = {
+        let mut query = world.query_filtered::<Entity, With<LivingRoomCamera>>();
+        query.iter(world).collect()
+    };
+    for entity in cam_entities {
+        world.entity_mut(entity).insert(target.clone());
     }
+
+    Ok(())
 }
 
 /// Keep hybrid bake plate resolution aligned with the headless present size.
