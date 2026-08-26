@@ -554,6 +554,8 @@ final class HostBridge: ObservableObject {
                 }
                 self.livingRoomReady = true
                 self.roomTickInFlight = false
+                self.roomTickStartedUptime = 0
+                self.roomTickGeneration &+= 1
                 self.scrollZoomAccum = 0
                 self.roomFbLock.lock()
                 self.roomFbPublished = []
@@ -581,6 +583,8 @@ final class HostBridge: ObservableObject {
                 guard ok else { return }
                 self.livingRoomReady = true
                 self.roomTickInFlight = false
+                self.roomTickStartedUptime = 0
+                self.roomTickGeneration &+= 1
                 self.scrollZoomAccum = 0
                 if let createError, self.livingRoomMode {
                     self.status = createError
