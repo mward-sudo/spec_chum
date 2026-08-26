@@ -8,6 +8,8 @@ UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libr
 
 Native macOS (liquid glass): [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md) — `./scripts/run_macos_app.sh`.
 
+Experimental Bevy 3D living-room CRT host: [docs/LIVING_ROOM.md](docs/LIVING_ROOM.md) — `cargo run -p living_room --release` ([#146](https://github.com/mward-sudo/spec_chum/issues/146)).
+
 ## Goals
 
 - Cycle-accurate Z80 (own implementation)

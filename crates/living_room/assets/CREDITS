@@ -1,0 +1,37 @@
+# Third-party assets (CC0)
+
+All files under `polyhaven/` are from [Poly Haven](https://polyhaven.com/) and are
+licensed **CC0** (public domain dedication). See https://polyhaven.com/license.
+
+## Models (1k glTF)
+
+| Asset | Path | Notes |
+| --- | --- | --- |
+| [television_02](https://polyhaven.com/a/television_02) | `models/television_02/` | Vintage CRT TV; `television_02_aperture.*` is a Spec Chum derivative with the painted screen faces removed (`scripts/punch_tv_screen_aperture.py`) so the bezel is real geometry |
+| [sofa_03](https://polyhaven.com/a/sofa_03) | `models/sofa_03/` | Vintage lounge sofa |
+| [ArmChair_01](https://polyhaven.com/a/ArmChair_01) | `models/ArmChair_01/` | Vintage armchair |
+| [ClassicConsole_01](https://polyhaven.com/a/ClassicConsole_01) | `models/ClassicConsole_01/` | Ornate console (unused; kept for fetch) |
+| [modern_wooden_cabinet](https://polyhaven.com/a/modern_wooden_cabinet) | `models/modern_wooden_cabinet/` | Low 80s-style TV stand / sideboard |
+| [industrial_wall_sconce](https://polyhaven.com/a/industrial_wall_sconce) | `models/industrial_wall_sconce/` | Brass/copper vintage wall lights |
+| [rubber_duck_toy](https://polyhaven.com/a/rubber_duck_toy) | `models/rubber_duck_toy/` | Floor toy |
+| [dirty_football](https://polyhaven.com/a/dirty_football) | `models/dirty_football/` | Floor toy (UK football) |
+| [gamepad](https://polyhaven.com/a/gamepad) | `models/gamepad/` | 80s-style living-room pad |
+| [portable_cassette_player](https://polyhaven.com/a/portable_cassette_player) | `models/portable_cassette_player/` | Walkman-era player |
+
+## Textures (1k JPG PBR)
+
+| Asset | Path | Use in scene |
+| --- | --- | --- |
+| [dirty_carpet](https://polyhaven.com/a/dirty_carpet) | `textures/dirty_carpet/` | Floor |
+| [floral_jacquard](https://polyhaven.com/a/floral_jacquard) | `textures/floral_jacquard/` | Wallpaper / curtains (80s pattern) |
+| [beige_wall_001](https://polyhaven.com/a/beige_wall_001) | `textures/beige_wall_001/` | Ceiling / plaster |
+| [american_walnut_veneer](https://polyhaven.com/a/american_walnut_veneer) | `textures/american_walnut_veneer/` | Skirting / wood trim |
+| [velour_velvet](https://polyhaven.com/a/velour_velvet) | `textures/velour_velvet/` | Soft furnishing accents |
+
+Re-fetch with:
+
+```bash
+./scripts/fetch_living_room_assets.sh
+```
+
+Shaders under `shaders/` are Spec Chum original (MIT).

@@ -11,6 +11,7 @@ members = [
     "crates/host_api",
     "crates/app",
     "crates/debug_cli",
+    "crates/living_room",
 ]
 default-members = ["crates/app"]
 
@@ -36,6 +37,9 @@ gilrs = "0.11"
 thiserror = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+host_api = { path = "crates/host_api" }
+bevy = "0.19"
+rfd = "0.15"
 
 # Inherited by members via `lints.workspace = true`.
 # CI uses `-D warnings`, so `warn` here fails the build.
@@ -54,3 +58,8 @@ missing_panics_doc = "allow"
 # Prefer Result / expect-with-reason over bare unwrap in non-test code.
 unwrap_used = "warn"
 expect_used = "allow"
+
+# macOS 27 dyld rejects cdylibs whose LC_SYMTAB string pool is not 8-byte aligned.
+# Rust's strip=debuginfo path can mis-align large Bevy dylibs (rust-lang/rust#157750).
+[profile.release.package.living_room]
+strip = "none"

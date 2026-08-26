@@ -22,6 +22,7 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 | `debug_cli` | Headless agent debugger binary `spec-chum-debug` |
 | `host_api` | C ABI host surface for native shells / future cores |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
+| `living_room` | Experimental Bevy 3D CRT host (`spec-chum-room`); excluded from default `./scripts/check.sh` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1` — see `docs/LIVING_ROOM.md` / #146. SpecChumMac **always links** the living_room staticlib for `host_api`; living-room is opt-in only as a *display mode*. |
 
 Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`). Models include distinct **+2A** (tape Loader) and **+3** (disk Loader).
 
@@ -29,6 +30,7 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
 - Do **not** commit ROM binaries (`roms/`, `*.rom`).
+- Do **not** change macOS **system** speaker volume (`osascript` `set volume` / `output volume`, CoreAudio device gain, etc.) or force-unmute the Mac. App-internal mute/volume (`specChum.outputVolume`) is the user’s preference — leave it alone unless the user explicitly asks.
 - Library crates: `thiserror` for public errors; no bare `unwrap` in non-test code.
 - Binary (`app`): `anyhow` is fine for top-level error context.
 - `unsafe` is denied workspace-wide; only introduce it with a documented `SAFETY` rationale and a narrowly scoped `#[allow(unsafe_code)]`.

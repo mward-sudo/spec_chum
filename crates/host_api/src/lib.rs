@@ -8,4 +8,4 @@
 pub mod ffi;
 pub mod session;
 
-pub use session::{HostError, HostRegs, HostSession, ModelId};
+pub use session::{HostError, HostRegs, HostSession, ModelId, AUDIO_SAMPLE_RATE};

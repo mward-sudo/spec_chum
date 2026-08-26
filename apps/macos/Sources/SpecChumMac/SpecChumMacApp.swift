@@ -7,12 +7,22 @@ struct SpecChumMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var host = HostBridge()
 
+    init() {
+        // Before SwiftUI creates NSWindows — prevents the document tab strip ("Spec Chum" + "+").
+        NSWindow.allowsAutomaticWindowTabbing = false
+        UserDefaults.standard.register(defaults: ["NSWindowTabbingEnabled": false])
+    }
+
     var body: some Scene {
-        WindowGroup {
+        // Single main window (not WindowGroup — that invites macOS title-bar tabs).
+        Window("Spec Chum", id: "main") {
             ContentView(host: host)
                 .frame(minWidth: 640, minHeight: 520)
         }
         .defaultSize(width: 780, height: 640)
+        // Toolbar band is the draggable titlebar region (unified over full-bleed content).
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
         .commands {
             // File — Open… counterparts to toolbar (standard once); other media kinds here only
             CommandGroup(replacing: .newItem) {}
