@@ -346,7 +346,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "cpal 0.15.3",
@@ -2263,7 +2263,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bus"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "formats",
  "trace",
@@ -2820,7 +2820,7 @@ checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
 name = "debug_cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3344,7 +3344,7 @@ dependencies = [
 
 [[package]]
 name = "formats"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "futures-channel"
@@ -3846,7 +3846,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "host_api"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "formats",
  "machine",
@@ -4319,7 +4319,7 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
 name = "living_room"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bevy",
@@ -4369,7 +4369,7 @@ dependencies = [
 
 [[package]]
 name = "machine"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bus",
  "formats",
@@ -6259,7 +6259,7 @@ dependencies = [
 
 [[package]]
 name = "tape"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "thiserror 2.0.20",
  "trace",
@@ -6433,7 +6433,7 @@ dependencies = [
 
 [[package]]
 name = "trace"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "tracing"
@@ -6583,7 +6583,7 @@ dependencies = [
 
 [[package]]
 name = "ula"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "unicode-ident"
@@ -7898,7 +7898,7 @@ dependencies = [
 
 [[package]]
 name = "z80"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "zbus"
