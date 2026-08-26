@@ -99,8 +99,12 @@ def main() -> int:
     uvals = struct.unpack_from("<" + "f" * (n * 2), blob, off)
     uvs = [(uvals[i], uvals[i + 1]) for i in range(0, len(uvals), 2)]
 
-    a, off, n, ct = accessor_info(prim["indices"])
-    fmt = "H" if ct == 5123 else "I"
+    _, off, n, ct = accessor_info(prim["indices"])
+    fmt_by_ct = {5121: "B", 5123: "H", 5125: "I"}
+    try:
+        fmt = fmt_by_ct[ct]
+    except KeyError as e:
+        raise SystemExit(f"unsupported index componentType {ct}") from e
     idxs = struct.unpack_from("<" + fmt * n, blob, off)
     tris = [(idxs[i], idxs[i + 1], idxs[i + 2]) for i in range(0, n, 3)]
 
@@ -148,7 +152,14 @@ def main() -> int:
     new_indices = []
     for t in keep:
         new_indices.extend(t)
-    idx_bytes = struct.pack("<" + "H" * len(new_indices), *new_indices)
+    max_idx = max(new_indices) if new_indices else 0
+    if max_idx > 0xFFFF:
+        out_fmt, out_ct = "I", 5125
+    elif max_idx > 0xFF:
+        out_fmt, out_ct = "H", 5123
+    else:
+        out_fmt, out_ct = "B", 5121
+    idx_bytes = struct.pack("<" + out_fmt * len(new_indices), *new_indices)
     # Align to 4 bytes.
     pad = (4 - (len(blob) % 4)) % 4
     blob.extend(b"\x00" * pad)
@@ -172,7 +183,7 @@ def main() -> int:
         {
             "bufferView": bv_idx,
             "byteOffset": 0,
-            "componentType": 5123,
+            "componentType": out_ct,
             "count": len(new_indices),
             "type": "SCALAR",
             "max": [max(new_indices)],

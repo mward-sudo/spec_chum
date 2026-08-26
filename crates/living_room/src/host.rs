@@ -86,6 +86,16 @@ impl EmulatorHost {
         self.status = format!("{label} · {}", self.session.status());
     }
 
+    /// Soft reset: keep inserted tape / disk / model (unlike [`Self::select_model`]).
+    pub fn reset(&mut self) {
+        match self.session.reset() {
+            Ok(()) => self.refresh_status_from_session(),
+            Err(e) => {
+                self.status = format!("{} · {e}", model_label(self.session.model()));
+            }
+        }
+    }
+
     pub fn open_media(&mut self, path: PathBuf) {
         let ext = path
             .extension()
@@ -225,6 +235,10 @@ fn tick_emulator(
                 }
             }
         }
+    }
+    // Cap leftover after max catch-up so a hitch doesn't spiral unbounded debt.
+    if frames >= 2 {
+        host.accumulator = host.accumulator.min(FRAME_PERIOD);
     }
 }
 

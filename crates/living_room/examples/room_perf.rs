@@ -151,8 +151,10 @@ fn main() {
     let soft = std::env::var("SPEC_CHUM_ROOM_PERF_SOFT")
         .map(|v| v != "0" && !v.is_empty())
         .unwrap_or(false);
+    let mut over_budget = false;
     if tick_p95 > P95_BUDGET_MS {
         eprintln!("FAIL: tick-only p95 {tick_p95:.2} ms exceeds {P95_BUDGET_MS} ms (60 Hz floor)");
+        over_budget = true;
         if !soft {
             std::process::exit(1);
         }
@@ -161,6 +163,7 @@ fn main() {
         eprintln!(
             "FAIL: tick-only average {tick_avg:.2} ms exceeds {AVG_BUDGET_MS} ms (60 Hz floor)"
         );
+        over_budget = true;
         if !soft {
             std::process::exit(1);
         }
@@ -183,5 +186,9 @@ fn main() {
     if !checksum_changed {
         eprintln!("WARN: room frame checksum never changed across timed ticks");
     }
-    eprintln!("OK: headless tick-only performance within budget at {w}×{h}");
+    if over_budget {
+        eprintln!("SOFT: headless tick-only over budget at {w}×{h} (CI continues)");
+    } else {
+        eprintln!("OK: headless tick-only performance within budget at {w}×{h}");
+    }
 }

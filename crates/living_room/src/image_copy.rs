@@ -1,7 +1,7 @@
 //! GPU→CPU readback of the headless render target (adapted from Bevy's headless_renderer example).
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bevy::{
     image::TextureFormatPixelInfo,
@@ -48,6 +48,8 @@ struct RenderWorldSender(Sender<Vec<u8>>);
 struct ImageCopier {
     buffer: Buffer,
     enabled: Arc<AtomicBool>,
+    /// Outstanding `map_async` from a prior frame that timed out; polled again later.
+    pending_map: Arc<Mutex<Option<Receiver<()>>>>,
     src_image: Handle<Image>,
     width: u32,
     height: u32,
@@ -107,6 +109,7 @@ pub fn spawn_image_copier(
     commands.spawn(ImageCopier {
         buffer,
         enabled: Arc::new(AtomicBool::new(true)),
+        pending_map: Arc::new(Mutex::new(None)),
         src_image: src,
         width,
         height,
@@ -184,6 +187,37 @@ fn receive_image_from_buffer(
         return;
     };
     for image_copier in image_copiers.0.iter() {
+        // Finish a previously timed-out map before starting a new one.
+        let pending = image_copier
+            .pending_map
+            .lock()
+            .ok()
+            .and_then(|mut slot| slot.take());
+        if let Some(r) = pending {
+            let mut mapped = false;
+            for _ in 0..10 {
+                let _ = render_device.poll(PollType::Wait {
+                    submission_index: None,
+                    timeout: Some(std::time::Duration::from_millis(50)),
+                });
+                if r.try_recv().is_ok() {
+                    mapped = true;
+                    break;
+                }
+            }
+            if mapped {
+                let buffer_slice = image_copier.buffer.slice(..);
+                let data = buffer_slice.get_mapped_range().to_vec();
+                let _ = sender.send(data);
+                image_copier.buffer.unmap();
+                image_copier.enabled.store(true, Ordering::Relaxed);
+            } else if let Ok(mut slot) = image_copier.pending_map.lock() {
+                // Still outstanding — retry next frame; leave enabled=false.
+                *slot = Some(r);
+            }
+            continue;
+        }
+
         if !image_copier.enabled.load(Ordering::Relaxed) {
             continue;
         }
@@ -209,8 +243,11 @@ fn receive_image_from_buffer(
             }
         }
         if !mapped {
-            // Mapping never completed; leave disabled so we don't submit onto a mapped buffer.
-            bevy::log::warn!("living_room image copy map timed out; CPU readback paused");
+            // Keep the receiver and retry on later frames (do not abandon permanently).
+            if let Ok(mut slot) = image_copier.pending_map.lock() {
+                *slot = Some(r);
+            }
+            bevy::log::warn!("living_room image copy map timed out; retrying next frame");
             continue;
         }
         let data = buffer_slice.get_mapped_range().to_vec();

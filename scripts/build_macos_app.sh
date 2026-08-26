@@ -33,9 +33,19 @@ if [[ ! -f "$ROOT/target/release/libspec_chum_room.a" ]]; then
 fi
 
 # Keep the Swift package headers in sync with the Rust crates.
+# `spec_chum_room.h` is a symlink to the crate SoT (avoid a second hand-maintained copy).
 mkdir -p apps/macos/Sources/CSpecChumHost/include
 cp crates/host_api/include/spec_chum_host.h apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h
-cp crates/living_room/include/spec_chum_room.h apps/macos/Sources/CSpecChumHost/include/spec_chum_room.h
+ROOM_H="apps/macos/Sources/CSpecChumHost/include/spec_chum_room.h"
+ROOM_SRC="../../../../../crates/living_room/include/spec_chum_room.h"
+if [[ -L "$ROOM_H" ]]; then
+  :
+elif [[ -e "$ROOM_H" ]]; then
+  rm -f "$ROOM_H"
+  ln -s "$ROOM_SRC" "$ROOM_H"
+else
+  ln -s "$ROOM_SRC" "$ROOM_H"
+fi
 
 echo "==> swift build (SpecChumMac, force_load libspec_chum_room.a)"
 export SPEC_CHUM_ROOT="$ROOT"

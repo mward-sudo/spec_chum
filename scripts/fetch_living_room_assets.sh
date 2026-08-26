@@ -16,7 +16,14 @@ download() {
     return 0
   fi
   echo "  get $(basename "$dest")"
-  curl -fsSL -A "$UA" -o "$dest" "$url"
+  local tmp="${dest}.partial"
+  # Write to a temp path first so a failed curl cannot leave a partial as "valid".
+  if ! curl -fsSL -A "$UA" -o "$tmp" "$url"; then
+    rm -f "$tmp"
+    echo "error: failed to download $url" >&2
+    return 1
+  fi
+  mv -f "$tmp" "$dest"
 }
 
 echo "==> Poly Haven models (1k glTF)"

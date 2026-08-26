@@ -101,9 +101,10 @@ fn chord_for(code: KeyCode, shift: bool, _sym_mod: bool) -> Option<Vec<(usize, u
         }
         KeyCode::Slash => {
             return Some(if shift {
-                vec![SYM, (0, 3)] // ?
+                vec![SYM, (0, 3)] // ? (Sym+C)
             } else {
-                vec![SYM, (7, 4)] // /
+                // Sym+V → /  (row0 bit4). (7,4) is B → * — wrong.
+                vec![SYM, (0, 4)]
             });
         }
         _ => {}

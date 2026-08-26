@@ -152,7 +152,7 @@ final class HostBridge: ObservableObject {
             if livingRoomMode {
                 ensureLivingRoom()
             } else {
-                destroyLivingRoom()
+                destroyLivingRoom(syncTeardown: false)
             }
         }
     }
@@ -162,6 +162,8 @@ final class HostBridge: ObservableObject {
     private var livingRoomHandle: UnsafeMutableRawPointer?
     /// Main-thread mirror: room created and ready for enqueue.
     private var livingRoomReady = false
+    /// Main-thread: create already queued (avoid sync waits / duplicate creates).
+    private var livingRoomCreateInFlight = false
     /// Serial queue for all `sc_room_*` on the embed handle (Bevy must not block AppKit).
     private let livingRoomQueue = DispatchQueue(label: "dev.specchum.living-room", qos: .userInteractive)
     /// Coalesce: at most one set_fb+tick in flight on the room queue.
@@ -173,6 +175,8 @@ final class HostBridge: ObservableObject {
     private var roomFbGeneration: UInt64 = 0
     /// Only touched on `livingRoomQueue`.
     private var roomFbLastUploadedGen: UInt64 = 0
+    /// Strong IOSurface retain for the async bind + room texture lifetime (queue only).
+    private var livingRoomBoundSurface: IOSurface?
     /// Weak present view — refresh CALayer.contents on main after each room tick (no @Published).
     private weak var livingRoomPresentView: LivingRoomNSView?
     private var scrollZoomAccum: CGFloat = 0
@@ -350,7 +354,7 @@ final class HostBridge: ObservableObject {
         GCController.stopWirelessControllerDiscovery()
         audio.stop()
         stopFrameTimer()
-        destroyLivingRoom()
+        destroyLivingRoom(syncTeardown: true)
         if let handle {
             sc_destroy(handle)
         }
@@ -412,16 +416,19 @@ final class HostBridge: ObservableObject {
     }
 
     /// Bind a shared IOSurface for zero-copy present (room queue, never blocks AppKit main).
-    /// `surface` must outlive the bind (NSView retains it).
+    /// Captures `surface` strongly until the bind runs; the room queue also retains it
+    /// for the texture lifetime (resize must not free the surface mid-bind).
     func bindLivingRoomPresent(surface: IOSurface, width: UInt32, height: UInt32) {
         ensureLivingRoom()
         guard livingRoomReady else { return }
         let bindW = width == 0 ? roomPresentWidth : width
         let bindH = height == 0 ? roomPresentHeight : height
-        let ptr = Unmanaged.passUnretained(surface).toOpaque()
+        let retained = surface
         livingRoomQueue.async { [weak self] in
             guard let self else { return }
             guard let room = self.livingRoomHandle else { return }
+            self.livingRoomBoundSurface = retained
+            let ptr = Unmanaged.passUnretained(retained).toOpaque()
             var bindError: String?
             if bindW != self.roomPresentWidth || bindH != self.roomPresentHeight {
                 if sc_room_resize(room, bindW, bindH) != 0 {
@@ -434,6 +441,7 @@ final class HostBridge: ObservableObject {
             }
             if bindError == nil, sc_room_set_present_iosurface(room, ptr, bindW, bindH) != 0 {
                 _ = sc_room_set_present_iosurface(room, nil, 0, 0)
+                self.livingRoomBoundSurface = nil
                 bindError = HostBridge.takeRoomLastError() ?? "Living room IOSurface bind failed"
             }
             if let bindError {
@@ -443,56 +451,60 @@ final class HostBridge: ObservableObject {
     }
 
     func clearLivingRoomPresent() {
-        guard livingRoomReady else { return }
-        livingRoomQueue.sync {
-            guard let room = livingRoomHandle else { return }
+        livingRoomQueue.async { [weak self] in
+            guard let self else { return }
+            self.livingRoomBoundSurface = nil
+            guard let room = self.livingRoomHandle else { return }
             _ = sc_room_set_present_iosurface(room, nil, 0, 0)
         }
     }
 
+    /// Non-blocking: create Bevy on `livingRoomQueue` and mark ready on main.
     private func ensureLivingRoom() {
-        if livingRoomReady { return }
-        var createError: String?
-        var created = false
-        livingRoomQueue.sync {
-            createError = createLivingRoomOnQueue(warmupTicks: 0)
-            created = livingRoomHandle != nil
-        }
-        guard created else {
-            status = createError
-                ?? "Living room renderer failed — run cargo build -p living_room --release --no-default-features"
-            livingRoomMode = false
-            livingRoomReady = false
-            return
-        }
-        livingRoomReady = true
-        roomTickInFlight = false
-        scrollZoomAccum = 0
-        roomFbLock.lock()
-        roomFbPublished = []
-        roomFbGeneration = 0
-        roomFbLock.unlock()
-        if let createError {
-            status = createError
+        if livingRoomReady || livingRoomCreateInFlight { return }
+        livingRoomCreateInFlight = true
+        livingRoomQueue.async { [weak self] in
+            guard let self else { return }
+            let createError = self.createLivingRoomOnQueue(warmupTicks: 0)
+            let ok = self.livingRoomHandle != nil
+            DispatchQueue.main.async {
+                self.livingRoomCreateInFlight = false
+                guard ok else {
+                    self.status = createError
+                        ?? "Living room renderer failed — run cargo build -p living_room --release --no-default-features"
+                    if self.livingRoomMode {
+                        self.livingRoomMode = false
+                    }
+                    self.livingRoomReady = false
+                    return
+                }
+                self.livingRoomReady = true
+                self.roomTickInFlight = false
+                self.scrollZoomAccum = 0
+                self.roomFbLock.lock()
+                self.roomFbPublished = []
+                self.roomFbGeneration = 0
+                self.roomFbLock.unlock()
+                if let createError {
+                    self.status = createError
+                }
+                // First bind may have been skipped while create was in flight.
+                self.livingRoomPresentView?.syncPresentTargetIfNeeded()
+            }
         }
     }
 
     /// Warm Bevy + GPU pipelines in the background while flat mode runs (issue #146).
     private func scheduleLivingRoomPreload() {
+        if livingRoomReady || livingRoomCreateInFlight { return }
+        livingRoomCreateInFlight = true
         livingRoomQueue.async { [weak self] in
             guard let self else { return }
-            guard self.livingRoomHandle == nil else {
-                DispatchQueue.main.async {
-                    if !self.livingRoomReady {
-                        self.livingRoomReady = true
-                        self.roomTickInFlight = false
-                    }
-                }
-                return
-            }
             let createError = self.createLivingRoomOnQueue(warmupTicks: 4)
+            let ok = self.livingRoomHandle != nil
             DispatchQueue.main.async {
-                guard self.livingRoomHandle != nil else { return }
+                self.livingRoomCreateInFlight = false
+                guard ok else { return }
                 self.livingRoomReady = true
                 self.roomTickInFlight = false
                 self.scrollZoomAccum = 0
@@ -500,6 +512,8 @@ final class HostBridge: ObservableObject {
                     self.status = createError
                     self.livingRoomMode = false
                     self.livingRoomReady = false
+                } else if self.livingRoomMode {
+                    self.livingRoomPresentView?.syncPresentTargetIfNeeded()
                 }
             }
         }
@@ -526,8 +540,10 @@ final class HostBridge: ObservableObject {
         return nil
     }
 
-    private func destroyLivingRoom() {
+    /// Tear down the room. `syncTeardown` is only for `deinit` (handle must not outlive HostBridge).
+    private func destroyLivingRoom(syncTeardown: Bool) {
         livingRoomReady = false
+        livingRoomCreateInFlight = false
         roomTickInFlight = false
         scrollZoomAccum = 0
         livingRoomPresentView = nil
@@ -536,13 +552,20 @@ final class HostBridge: ObservableObject {
         roomFbGeneration = 0
         roomFbLock.unlock()
         roomPerfLastSnap = nil
-        livingRoomQueue.sync {
-            roomFbLastUploadedGen = 0
-            if let livingRoomHandle {
+        let teardown = { [weak self] in
+            guard let self else { return }
+            self.roomFbLastUploadedGen = 0
+            self.livingRoomBoundSurface = nil
+            if let livingRoomHandle = self.livingRoomHandle {
                 _ = sc_room_set_present_iosurface(livingRoomHandle, nil, 0, 0)
                 sc_room_destroy(livingRoomHandle)
             }
-            livingRoomHandle = nil
+            self.livingRoomHandle = nil
+        }
+        if syncTeardown {
+            livingRoomQueue.sync(execute: teardown)
+        } else {
+            livingRoomQueue.async(execute: teardown)
         }
         roomPresentWidth = 1920
         roomPresentHeight = 1080

@@ -139,7 +139,7 @@ the display and over-couples camera to emulator cadence — hence dual-clock.
 
 ### Recommended architecture (dual clock)
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ AppKit main                                                             │
 │  • DispatchSourceTimer ~50 Hz (ULA / HostSession)                       │

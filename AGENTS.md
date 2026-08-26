@@ -52,6 +52,7 @@ Before claiming a task done:
 ```
 
 Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
+`living_room` is excluded unless `SPEC_CHUM_CHECK_LIVING_ROOM=1`; use `./scripts/check_living_room.sh` for that crate.
 
 ## Testing expectations
 

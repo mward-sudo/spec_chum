@@ -223,10 +223,7 @@ fn chrome_buttons(
                         }
                     }
                     ChromeAction::Pause => toggle_pause(&mut host),
-                    ChromeAction::Reset => {
-                        let model = host.session.model();
-                        host.select_model(model);
-                    }
+                    ChromeAction::Reset => host.reset(),
                     ChromeAction::Model48 => host.select_model(ModelId::Spectrum48),
                     ChromeAction::Model128 => host.select_model(ModelId::Spectrum128),
                     ChromeAction::ModelPlus3 => host.select_model(ModelId::SpectrumPlus3),
@@ -273,8 +270,7 @@ fn host_cmd_shortcuts(
         toggle_pause(&mut host);
     }
     if keys.just_pressed(KeyCode::KeyR) && !alt {
-        let model = host.session.model();
-        host.select_model(model);
+        host.reset();
     }
 }
 

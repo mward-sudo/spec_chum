@@ -51,9 +51,9 @@ pub fn import_iosurface_texture(
         desc.setWidth(width as usize);
         desc.setHeight(height as usize);
     }
-    desc.setUsage(
-        MTLTextureUsage::ShaderRead | MTLTextureUsage::RenderTarget | MTLTextureUsage::ShaderWrite,
-    );
+    // COPY_DST / render / sample only — BGRA8Unorm_sRGB is not shader-writable on
+    // every Metal GPU family, and ShaderWrite can make IOSurface texture create fail.
+    desc.setUsage(MTLTextureUsage::ShaderRead | MTLTextureUsage::RenderTarget);
 
     let Some(mtl_tex) = mtl_device.newTextureWithDescriptor_iosurface_plane(&desc, surface, 0)
     else {

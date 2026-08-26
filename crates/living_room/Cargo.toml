@@ -41,10 +41,11 @@ cpal = { workspace = true, optional = true }
 rfd = { workspace = true, optional = true }
 anyhow = { workspace = true }
 crossbeam-channel = "0.5"
+# Unconditional: `present.rs` uses `wgpu::Texture` on all targets.
+# Must track Bevy 0.19's wgpu (Metal HAL import in present_metal.rs).
+wgpu = "=29.0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-# Must track Bevy 0.19's wgpu (Metal hal import in present_metal.rs).
-wgpu = "=29.0.4"
 objc2 = "0.6.3"
 objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLDevice",
