@@ -170,12 +170,16 @@ final class HostBridge: ObservableObject {
     private var roomTickInFlight = false
     /// When `roomTickInFlight` was set; used to recover if Bevy/GPU stalls on the room queue.
     private var roomTickStartedUptime: TimeInterval = 0
+    /// Bumped on watchdog recovery / teardown so stale queue completions cannot clear a newer gate.
+    private var roomTickGeneration: UInt64 = 0
     private static let roomTickStuckSeconds: TimeInterval = 3.0
     private let roomTickLock = NSLock()
     /// Coalesce stepped IOSurface rebinds on the room queue (full resize was freezing the UI).
     private var roomPresentBindInFlight = false
     /// When `roomPresentBindInFlight` was set; used to recover if the room queue stalls.
     private var roomPresentBindStartedUptime: TimeInterval = 0
+    /// Bumped on watchdog recovery / teardown so stale bind completions cannot replay pending work.
+    private var roomPresentBindGeneration: UInt64 = 0
     private var roomPresentBindPending: (surface: IOSurface, width: UInt32, height: UInt32)?
     /// Latest Spectrum RGBA published on main; consumed on room queue (DisplayLink).
     private let roomFbLock = NSLock()
@@ -441,16 +445,25 @@ final class HostBridge: ObservableObject {
            ProcessInfo.processInfo.systemUptime - roomPresentBindStartedUptime
                >= Self.roomTickStuckSeconds
         {
+            roomPresentBindGeneration &+= 1
             roomPresentBindInFlight = false
             roomPresentBindStartedUptime = 0
+            roomPresentBindPending = nil
         }
         if roomPresentBindInFlight {
             roomPresentBindPending = (surface, bindW, bindH)
             return
         }
+        roomPresentBindGeneration &+= 1
+        let bindGen = roomPresentBindGeneration
         roomPresentBindInFlight = true
         roomPresentBindStartedUptime = ProcessInfo.processInfo.systemUptime
-        enqueueLivingRoomPresentBind(surface: surface, width: bindW, height: bindH)
+        enqueueLivingRoomPresentBind(
+            surface: surface,
+            width: bindW,
+            height: bindH,
+            generation: bindGen
+        )
     }
 
     /// Must run on `livingRoomQueue` only via `enqueueLivingRoomPresentBind`.
@@ -480,23 +493,32 @@ final class HostBridge: ObservableObject {
         }
     }
 
-    private func enqueueLivingRoomPresentBind(surface: IOSurface, width: UInt32, height: UInt32) {
+    private func enqueueLivingRoomPresentBind(
+        surface: IOSurface,
+        width: UInt32,
+        height: UInt32,
+        generation: UInt64
+    ) {
         let retained = surface
         livingRoomQueue.async { [weak self] in
             guard let self else { return }
             self.performLivingRoomPresentBind(surface: retained, width: width, height: height)
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
+                guard generation == self.roomPresentBindGeneration else { return }
                 self.roomPresentBindInFlight = false
                 self.roomPresentBindStartedUptime = 0
                 guard let pending = self.roomPresentBindPending else { return }
                 self.roomPresentBindPending = nil
+                self.roomPresentBindGeneration &+= 1
+                let nextGen = self.roomPresentBindGeneration
                 self.roomPresentBindInFlight = true
                 self.roomPresentBindStartedUptime = ProcessInfo.processInfo.systemUptime
                 self.enqueueLivingRoomPresentBind(
                     surface: pending.surface,
                     width: pending.width,
-                    height: pending.height
+                    height: pending.height,
+                    generation: nextGen
                 )
             }
         }
@@ -598,9 +620,11 @@ final class HostBridge: ObservableObject {
         livingRoomCreateInFlight = false
         roomTickInFlight = false
         roomTickStartedUptime = 0
+        roomTickGeneration &+= 1
         scrollZoomAccum = 0
         roomPresentBindInFlight = false
         roomPresentBindStartedUptime = 0
+        roomPresentBindGeneration &+= 1
         roomPresentBindPending = nil
         livingRoomPresentView = nil
         roomFbLock.lock()
@@ -672,18 +696,20 @@ final class HostBridge: ObservableObject {
             roomPerfSkippedBusy &+= 1
             return
         }
+        roomTickGeneration &+= 1
+        let tickGen = roomTickGeneration
         roomTickInFlight = true
         roomTickStartedUptime = ProcessInfo.processInfo.systemUptime
         roomTickLock.unlock()
         if let window = livingRoomPresentView?.window ?? NSApp.keyWindow ?? NSApp.mainWindow,
            !window.occlusionState.contains(.visible)
         {
-            clearRoomTickInFlight()
+            finishRoomTick(generation: tickGen)
             return
         }
         let dt = Float(max(deltaSeconds, 1.0 / 240.0))
         livingRoomQueue.async { [weak self] in
-            defer { self?.clearRoomTickInFlight() }
+            defer { self?.finishRoomTick(generation: tickGen) }
             guard let self, let room = self.livingRoomHandle else { return }
             sc_room_perf_set_thread_hint(2)
             sc_room_set_frame_delta_seconds(room, dt)
@@ -723,11 +749,12 @@ final class HostBridge: ObservableObject {
     }
 
     /// Clear coalesce flag after a room tick finishes or is abandoned.
-    private func clearRoomTickInFlight() {
+    private func finishRoomTick(generation: UInt64) {
         roomTickLock.lock()
+        defer { roomTickLock.unlock() }
+        guard generation == roomTickGeneration else { return }
         roomTickInFlight = false
         roomTickStartedUptime = 0
-        roomTickLock.unlock()
     }
 
     /// If Bevy/GPU blocked the room queue too long, drop the coalesce gate so DisplayLink can resume.
@@ -742,7 +769,11 @@ final class HostBridge: ObservableObject {
         if roomPerfEnabled {
             NSLog("roomperf: room tick in-flight %.1fs — forcing coalesce reset", elapsed)
         }
-        clearRoomTickInFlight()
+        roomTickLock.lock()
+        roomTickGeneration &+= 1
+        roomTickInFlight = false
+        roomTickStartedUptime = 0
+        roomTickLock.unlock()
     }
 
     private func noteHostFrame(elapsedMs: Double) {
