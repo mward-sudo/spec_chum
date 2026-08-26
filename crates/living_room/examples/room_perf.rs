@@ -41,7 +41,7 @@ fn summarize(label: &str, times: &[std::time::Duration]) -> (f64, f64, f64) {
 fn varying_frame(base: &[u8], i: usize) -> Vec<u8> {
     let mut frame = base.to_vec();
     let c = (i as u8).wrapping_mul(17).saturating_add(80);
-    for px in frame.chunks_exact_mut(4) {
+    for px in frame.as_chunks_mut::<4>().0 {
         px[0] = c;
         px[1] = c.wrapping_add(20);
         px[2] = c.wrapping_add(40);

@@ -206,7 +206,7 @@ mod tests {
         let mut glow = FrameGlow::default();
         // 8x8 solid red.
         let mut rgba = vec![0u8; 8 * 8 * 4];
-        for px in rgba.chunks_exact_mut(4) {
+        for px in rgba.as_chunks_mut::<4>().0 {
             px[0] = 255;
             px[3] = 255;
         }

@@ -55,7 +55,7 @@ fn main() {
     // Present target is BGRA; PPM wants RGB.
     let mut ppm = Vec::with_capacity(buf.len() / 4 * 3 + 32);
     ppm.extend_from_slice(format!("P6\n{w} {h}\n255\n").as_bytes());
-    for px in buf.chunks_exact(4) {
+    for px in buf.as_chunks::<4>().0 {
         ppm.extend_from_slice(&[px[2], px[1], px[0]]);
     }
     let mut f = std::fs::File::create(&out_path).expect("create probe output");
@@ -68,7 +68,7 @@ fn main() {
         let end = (start + third * w as usize * 4).min(buf.len());
         let rows = &buf[start..end];
         let mut sum = 0f64;
-        for px in rows.chunks_exact(4) {
+        for px in rows.as_chunks::<4>().0 {
             sum +=
                 f64::from(px[2]) * 0.2126 + f64::from(px[1]) * 0.7152 + f64::from(px[0]) * 0.0722;
         }
