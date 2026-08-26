@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the native macOS Spec Chum shell (Rust host_api + SwiftUI).
+# Build the native macOS Spec Chum shell (Rust host_api via living_room staticlib + SwiftUI).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,39 +22,43 @@ if [[ -z "${DEVELOPER_DIR:-}" ]]; then
 fi
 echo "==> Using DEVELOPER_DIR=$DEVELOPER_DIR"
 
-echo "==> cargo build -p host_api --release"
-cargo build -p host_api --release
+echo "==> cargo build -p living_room --release --no-default-features (embed staticlib + host_api)"
+# strip=none is set in workspace profile for living_room (macOS 27 LINKEDIT).
+# --no-default-features omits standalone Bevy chrome / cpal / rfd (Swift owns those).
+cargo build -p living_room --release --no-default-features
 
-# Make the dylib relocatable via @rpath (cargo defaults to an absolute install name).
-DYLIB="$ROOT/target/release/libspec_chum_host.dylib"
-if [[ -f "$DYLIB" ]]; then
-  install_name_tool -id '@rpath/libspec_chum_host.dylib' "$DYLIB" 2>/dev/null || true
-  # Keep deps/ copy in sync when present (linker may resolve either).
-  if [[ -f "$ROOT/target/release/deps/libspec_chum_host.dylib" ]]; then
-    cp -f "$DYLIB" "$ROOT/target/release/deps/libspec_chum_host.dylib"
-  fi
+if [[ ! -f "$ROOT/target/release/libspec_chum_room.a" ]]; then
+  echo "error: missing target/release/libspec_chum_room.a" >&2
+  exit 1
 fi
 
-# Keep the Swift package header in sync with the Rust crate.
+# Keep the Swift package headers in sync with the Rust crates.
+# `spec_chum_room.h` is a symlink to the crate SoT (avoid a second hand-maintained copy).
 mkdir -p apps/macos/Sources/CSpecChumHost/include
 cp crates/host_api/include/spec_chum_host.h apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h
+ROOM_H="apps/macos/Sources/CSpecChumHost/include/spec_chum_room.h"
+ROOM_SRC="../../../../../crates/living_room/include/spec_chum_room.h"
+if [[ -L "$ROOM_H" ]]; then
+  :
+elif [[ -e "$ROOM_H" ]]; then
+  rm -f "$ROOM_H"
+  ln -s "$ROOM_SRC" "$ROOM_H"
+else
+  ln -s "$ROOM_SRC" "$ROOM_H"
+fi
 
-echo "==> swift build (SpecChumMac)"
+echo "==> swift build (SpecChumMac, force_load libspec_chum_room.a)"
 export SPEC_CHUM_ROOT="$ROOT"
-# Prefer xcrun so the selected Xcode's swift is used.
 xcrun swift build -c release --package-path apps/macos
 
 BIN="$ROOT/apps/macos/.build/release/SpecChumMac"
-if [[ -x "$BIN" ]]; then
-  # Rewrite absolute cargo load path to @rpath if the linker baked one in.
-  ABS_DEPS="$ROOT/target/release/deps/libspec_chum_host.dylib"
-  ABS_REL="$ROOT/target/release/libspec_chum_host.dylib"
-  install_name_tool -change "$ABS_DEPS" '@rpath/libspec_chum_host.dylib' "$BIN" 2>/dev/null || true
-  install_name_tool -change "$ABS_REL" '@rpath/libspec_chum_host.dylib' "$BIN" 2>/dev/null || true
-fi
+APP_STAGE="$ROOT/apps/macos/.build/SpecChumMac.app"
+RESOURCES="$APP_STAGE/Contents/Resources"
+mkdir -p "$RESOURCES"
+echo "==> copy living_room assets → SpecChumMac.app Resources"
+"$ROOT/scripts/stage_living_room_assets.sh" "$ROOT" "$RESOURCES/living_room_assets"
 
 echo ""
 echo "Built: $BIN"
 echo "Run with:"
 echo "  ./scripts/run_macos_app.sh"
-echo "  # (stages SpecChumMac.app and open(1) so SpecChum becomes key — do not type in Terminal)"

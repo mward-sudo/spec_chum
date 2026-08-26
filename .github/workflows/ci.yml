@@ -43,10 +43,11 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # Exclude experimental Bevy living-room host (heavy); see scripts/check_living_room.sh / #146.
+        run: cargo clippy --workspace --all-targets --exclude living_room -- -D warnings
 
       - name: test
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude living_room
 
   z80doc:
     name: z80doc (slow-tests, release)
@@ -97,3 +98,33 @@ jobs:
 
       - name: Build macOS shell
         run: ./scripts/build_macos_app.sh
+
+  # Bevy living-room gate (#146). Not in default Linux check (compile cost); runs on macOS.
+  living-room:
+    name: living_room (Bevy)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+
+      - name: Fetch living-room assets
+        run: ./scripts/fetch_living_room_assets.sh
+
+      - name: check_living_room
+        # Soft-fail room_perf on virtualized macos-latest (hard-fail locally).
+        env:
+          SPEC_CHUM_ROOM_PERF_SOFT: "1"
+        run: ./scripts/check_living_room.sh

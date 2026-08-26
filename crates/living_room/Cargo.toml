@@ -1,0 +1,65 @@
+[package]
+name = "living_room"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Experimental Bevy 3D UK living-room CRT host for Spec Chum"
+publish = false
+default-run = "spec-chum-room"
+
+[lib]
+name = "spec_chum_room"
+# staticlib for SpecChumMac; cdylib is unsupported next to host_api (duplicate Rust/Bevy).
+crate-type = ["rlib", "staticlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "spec-chum-room"
+path = "src/main.rs"
+required-features = ["standalone"]
+
+# Headless tick budget gate (IOSurface-like present path).
+[[example]]
+name = "room_perf"
+path = "examples/room_perf.rs"
+
+# One-shot headless smoke (create + few ticks).
+[[example]]
+name = "room_probe"
+path = "examples/room_probe.rs"
+
+[features]
+default = ["standalone"]
+# Bevy winit host + cpal + rfd chrome (dev harness). SpecChumMac builds without this.
+standalone = ["dep:cpal", "dep:rfd"]
+
+[dependencies]
+host_api = { workspace = true }
+machine = { workspace = true }
+bevy = { workspace = true, features = ["jpeg"] }
+cpal = { workspace = true, optional = true }
+rfd = { workspace = true, optional = true }
+anyhow = { workspace = true }
+crossbeam-channel = "0.5"
+# Unconditional: `present.rs` uses `wgpu::Texture` on all targets.
+# Must track Bevy 0.19's wgpu (Metal HAL import in present_metal.rs).
+wgpu = "=29.0.4"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.3"
+objc2-metal = { version = "0.3.2", default-features = false, features = [
+    "MTLDevice",
+    "MTLTexture",
+    "MTLPixelFormat",
+    "MTLTypes",
+    "MTLResource",
+    "objc2-io-surface",
+    "std",
+] }
+objc2-io-surface = { version = "0.3.2", default-features = false, features = [
+    "IOSurfaceRef",
+    "std",
+] }
+
+[lints]
+workspace = true

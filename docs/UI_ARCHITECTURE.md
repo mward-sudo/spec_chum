@@ -12,6 +12,8 @@ Spec Chum’s scarce resource is **hardware accuracy** (Z80, ULA, tape), not UI 
 
 **Optional later:** a thin **libretro / RetroArch** core once the machine host API is stable (`run_frame`, framebuffer, audio batch, input inject, optional serialize). Tracked in [#64](https://github.com/mward-sudo/spec_chum/issues/64). The same `crates/host_api` surface is a useful stepping stone.
 
+**Optional experimental:** a Bevy 3D living-room CRT host (`crates/living_room`, binary `spec-chum-room`) — dark UK 1980s room, framebuffer on a physical tube. Not the default product UI; excluded from the default Linux CI/check gate unless `SPEC_CHUM_CHECK_LIVING_ROOM=1` (macOS `living-room` job runs `check_living_room.sh`). SpecChumMac **always links** the living_room staticlib (embeds `host_api`); the living-room *display* defaults **off**. See [LIVING_ROOM.md](LIVING_ROOM.md) and [#146](https://github.com/mward-sudo/spec_chum/issues/146).
+
 ## Comparison (emulator frontends)
 
 | Option | Framebuffer | Audio | Input latency | Menus / dialogs | macOS polish | Fit for Spec Chum |
@@ -82,6 +84,7 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 | Native multi-shell beyond macOS later | Only if packaging/a11y/menus become product-critical |
 | Avoid Tauri/Dioxus-web for the machine loop | Extra process/IPC is the wrong complexity for a Spectrum core |
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
+| Optional **Bevy living-room** | Experimental immersion host; SpecChumMac links staticlib, display opt-in; keep out of default CI; #146 |
 
 ## Practical chrome rules (current shell)
 

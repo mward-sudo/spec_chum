@@ -8,7 +8,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/apps/macos/.build/release/SpecChumMac"
-DYLIB="$ROOT/target/release/libspec_chum_host.dylib"
+ROOM_A="$ROOT/target/release/libspec_chum_room.a"
 APP="$ROOT/apps/macos/.build/SpecChumMac.app"
 CONTENTS="$APP/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
@@ -24,7 +24,7 @@ if [[ -z "${DEVELOPER_DIR:-}" ]]; then
   done
 fi
 
-if [[ ! -x "$BIN" || ! -f "$DYLIB" ]]; then
+if [[ ! -x "$BIN" || ! -f "$ROOM_A" ]]; then
   "$ROOT/scripts/build_macos_app.sh"
 fi
 
@@ -34,16 +34,44 @@ mkdir -p "$MACOS_DIR" "$CONTENTS/Resources"
 cp -f "$BIN" "$MACOS_DIR/SpecChumMac.bin"
 chmod +x "$MACOS_DIR/SpecChumMac.bin"
 
-# Launcher so SPEC_CHUM_ROOT / dylib path survive Launch Services `open`.
+# Launcher so SPEC_CHUM_ROOT / asset env survive Launch Services `open`.
+# Bake living-room / perf flags into the wrapper when set at stage time — `open`
+# does not forward the parent shell environment into the app.
 cat > "$MACOS_DIR/SpecChumMac" <<EOF
 #!/bin/bash
 set -euo pipefail
 export SPEC_CHUM_ROOT="$ROOT"
-export DYLD_LIBRARY_PATH="$ROOT/target/release\${DYLD_LIBRARY_PATH:+:\$DYLD_LIBRARY_PATH}"
+export SPEC_CHUM_LIVING_ROOM_ASSETS="$CONTENTS/Resources/living_room_assets"
+EOF
+if [[ -n "${SPEC_CHUM_LIVING_ROOM:-}" ]]; then
+  printf 'export SPEC_CHUM_LIVING_ROOM=%q\n' "$SPEC_CHUM_LIVING_ROOM" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_ROOM_PERF:-}" ]]; then
+  printf 'export SPEC_CHUM_ROOM_PERF=%q\n' "$SPEC_CHUM_ROOM_PERF" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_ROOM_APERTURE_DEBUG:-}" ]]; then
+  printf 'export SPEC_CHUM_ROOM_APERTURE_DEBUG=%q\n' "$SPEC_CHUM_ROOM_APERTURE_DEBUG" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_ROOM_HIDE_CRT:-}" ]]; then
+  printf 'export SPEC_CHUM_ROOM_HIDE_CRT=%q\n' "$SPEC_CHUM_ROOM_HIDE_CRT" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_ROOM_BRIGHT_DEBUG:-}" ]]; then
+  printf 'export SPEC_CHUM_ROOM_BRIGHT_DEBUG=%q\n' "$SPEC_CHUM_ROOM_BRIGHT_DEBUG" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_AUDIO_DEBUG:-}" ]]; then
+  printf 'export SPEC_CHUM_AUDIO_DEBUG=%q\n' "$SPEC_CHUM_AUDIO_DEBUG" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_INPUT_LATENCY:-}" ]]; then
+  printf 'export SPEC_CHUM_INPUT_LATENCY=%q\n' "$SPEC_CHUM_INPUT_LATENCY" >> "$MACOS_DIR/SpecChumMac"
+fi
+cat >> "$MACOS_DIR/SpecChumMac" <<EOF
 cd "$ROOT"
 exec "\$(dirname "\$0")/SpecChumMac.bin" "\$@"
 EOF
 chmod +x "$MACOS_DIR/SpecChumMac"
+
+# Ensure assets are present in the staged app (shared with build_macos_app.sh).
+"$ROOT/scripts/stage_living_room_assets.sh" "$ROOT" "$CONTENTS/Resources/living_room_assets"
 
 cat > "$CONTENTS/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -70,6 +98,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSWindowTabbingEnabled</key>
+	<false/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
@@ -79,5 +109,4 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 PLIST
 
 echo "Launching $APP (click the Spec Chum window; do not type in this Terminal)."
-# Launch Services activation — returns immediately; app becomes frontmost/key.
 open "$APP"

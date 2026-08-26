@@ -1,8 +1,53 @@
 import AppKit
-import CSpecChumHost
 import Foundation
 import GameController
+import IOSurface
 import UniformTypeIdentifiers
+import CSpecChumHost
+
+/// Temporary input-latency probe (`SPEC_CHUM_INPUT_LATENCY=1` → `/tmp/spec-input-latency.log`).
+private enum InputLatencyProbe {
+    static let enabled =
+        ProcessInfo.processInfo.environment["SPEC_CHUM_INPUT_LATENCY"] == "1"
+    private static var tKey: CFAbsoluteTime = 0
+    private static var pending = false
+
+    static func noteKey() {
+        guard enabled else { return }
+        tKey = CFAbsoluteTimeGetCurrent()
+        pending = true
+        write("key t0")
+    }
+
+    static func noteFbPublish() {
+        guard enabled, pending else { return }
+        write(String(format: "fb_publish +%.1fms", (CFAbsoluteTimeGetCurrent() - tKey) * 1000))
+    }
+
+    static func noteRoomPresent() {
+        guard enabled, pending else { return }
+        write(String(format: "room_present +%.1fms", (CFAbsoluteTimeGetCurrent() - tKey) * 1000))
+        pending = false
+    }
+
+    static func noteScroll(steps: Int32) {
+        guard enabled else { return }
+        write("scroll steps=\(steps) t=\(CFAbsoluteTimeGetCurrent())")
+    }
+
+    private static func write(_ msg: String) {
+        let line = String(format: "%.6f %@\n", CFAbsoluteTimeGetCurrent(), msg)
+        fputs(line, stderr)
+        let url = URL(fileURLWithPath: "/tmp/spec-input-latency.log")
+        if let h = try? FileHandle(forWritingTo: url) {
+            h.seekToEndOfFile()
+            h.write(Data(line.utf8))
+            try? h.close()
+        } else {
+            try? Data(line.utf8).write(to: url)
+        }
+    }
+}
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
@@ -100,6 +145,48 @@ final class HostBridge: ObservableObject {
         }
     }
     @Published var showInspector: Bool = false
+    /// When true, center view is the Bevy living room (SwiftUI chrome stays). Default off — experimental.
+    /// Set `SPEC_CHUM_LIVING_ROOM=1` to start in living-room mode (automation / perf capture).
+    @Published var livingRoomMode: Bool = ProcessInfo.processInfo.environment["SPEC_CHUM_LIVING_ROOM"] == "1" {
+        didSet {
+            if livingRoomMode {
+                ensureLivingRoom()
+            } else {
+                destroyLivingRoom(syncTeardown: false)
+            }
+        }
+    }
+    /// Bumps when a Spectrum frame runs so SwiftUI can refresh the display.
+    @Published private(set) var displayTick: UInt64 = 0
+    /// Bevy/room FFI handle — only touched on `livingRoomQueue` (see header thread affinity).
+    private var livingRoomHandle: UnsafeMutableRawPointer?
+    /// Main-thread mirror: room created and ready for enqueue.
+    private var livingRoomReady = false
+    /// Main-thread: create already queued (avoid sync waits / duplicate creates).
+    private var livingRoomCreateInFlight = false
+    /// Serial queue for all `sc_room_*` on the embed handle (Bevy must not block AppKit).
+    private let livingRoomQueue = DispatchQueue(label: "dev.specchum.living-room", qos: .userInteractive)
+    /// Coalesce: at most one set_fb+tick in flight on the room queue.
+    private var roomTickInFlight = false
+    private let roomTickLock = NSLock()
+    /// Latest Spectrum RGBA published on main; consumed on room queue (DisplayLink).
+    private let roomFbLock = NSLock()
+    private var roomFbPublished: [UInt8] = []
+    private var roomFbGeneration: UInt64 = 0
+    /// Only touched on `livingRoomQueue`.
+    private var roomFbLastUploadedGen: UInt64 = 0
+    /// Strong IOSurface retain for the async bind + room texture lifetime (queue only).
+    private var livingRoomBoundSurface: IOSurface?
+    /// Weak present view — refresh CALayer.contents on main after each room tick (no @Published).
+    private weak var livingRoomPresentView: LivingRoomNSView?
+    private var scrollZoomAccum: CGFloat = 0
+    /// Trackpad pixels per preset step (matches standalone Bevy `SCROLL_PIXELS_PER_STEP`).
+    private static let scrollZoomStepPx: CGFloat = 64
+    /// Active present size (stepped); updated on resize.
+    private(set) var roomPresentWidth: UInt32 = 1920
+    private(set) var roomPresentHeight: UInt32 = 1080
+    /// 50 Hz host clock (owns Spectrum pacing; SwiftUI only presents).
+    private var frameTimer: DispatchSourceTimer?
     @Published private(set) var debugPc: UInt16 = 0
     @Published private(set) var debugSp: UInt16 = 0
     @Published private(set) var debugAf: UInt16 = 0
@@ -135,6 +222,22 @@ final class HostBridge: ObservableObject {
     private static let framePeriod: TimeInterval = 1.0 / 50.0
     /// After a hitch, advance at most this many Spectrum frames per host tick.
     private static let maxCatchUpFrames = 2
+    /// `SPEC_CHUM_ROOM_PERF=1` — stderr + footer HUD for Bevy/host hitch diagnosis.
+    private let roomPerfEnabled =
+        ProcessInfo.processInfo.environment["SPEC_CHUM_ROOM_PERF"].map { $0 != "0" && !$0.isEmpty }
+            ?? false
+    @Published private(set) var roomPerfLine: String = ""
+    private var roomPerfHostFrames: UInt64 = 0
+    private var roomPerfHostSumMs: Double = 0
+    private var roomPerfHostMaxMs: Double = 0
+    private var roomPerfRoomSumMs: Double = 0
+    private var roomPerfRoomMaxMs: Double = 0
+    private var roomPerfRoomTicks: UInt64 = 0
+    private var roomPerfSkippedBusy: UInt64 = 0
+    private var roomPerfSpectrumFrames: UInt64 = 0
+    private var roomPerfHitches: UInt64 = 0
+    private var roomPerfLastHudUptime: TimeInterval = 0
+    private var roomPerfLastSnap: ScRoomPerfSnapshot?
     private let audio = TapeAudioPlayer()
     /// Publish progress at most ~4 Hz to avoid SwiftUI churn.
     private var progressPublishCounter: UInt32 = 0
@@ -143,6 +246,9 @@ final class HostBridge: ObservableObject {
     private var joystickModeApplied = false
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
+    private var ensureAudioObserver: NSObjectProtocol?
+    /// First successful post-activation audio arm (force-rebuild once).
+    private var audioOutputArmed = false
     /// Frame-scripted `LOAD ""` [CODE] (egui KeyScript parity); advanced in `runFrame`.
     private var keyScript: LoadKeyScript?
     /// After Instant Type LOAD finishes, auto-Play with flash-load still on.
@@ -173,10 +279,51 @@ final class HostBridge: ObservableObject {
         syncTapeLoadOptionsFromHost()
         _ = applyJoystickMode(joystickMode)
         startGamepadDiscovery()
-        let rate = Double(sc_audio_sample_rate(handle))
+        ensureAudioObserver = NotificationCenter.default.addObserver(
+            forName: .specChumEnsureAudio,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.ensureAudioOutput()
+        }
         audio.volume = outputVolume
         audio.muted = outputMuted
-        audio.ensureStarted(sampleRate: rate > 0 ? rate : 44100)
+        // Do not start AudioQueue here — pre-activation start can leave a zombie
+        // queue that accepts enqueues but never reaches the device.
+        // `applicationDidBecomeActive` → `ensureAudioOutput()` does the real start.
+        if livingRoomMode {
+            ensureLivingRoom()
+        } else {
+            scheduleLivingRoomPreload()
+        }
+        startFrameTimer()
+        scheduleAutomationOpenTapeIfRequested()
+        // If we already missed the first becomeActive (observer registered late), arm audio now.
+        DispatchQueue.main.async { [weak self] in
+            self?.ensureAudioOutput()
+        }
+    }
+
+    /// `SPEC_CHUM_OPEN_TAPE=/path/to.tap` (+ optional `SPEC_CHUM_AUTO_PLAY_TAPE=1`) for headless audio capture.
+    /// Never adjust macOS system output volume (no `osascript` `set volume` / CoreAudio device gain).
+    private func scheduleAutomationOpenTapeIfRequested() {
+        guard let path = ProcessInfo.processInfo.environment["SPEC_CHUM_OPEN_TAPE"], !path.isEmpty
+        else { return }
+        let autoPlay = ProcessInfo.processInfo.environment["SPEC_CHUM_AUTO_PLAY_TAPE"] == "1"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self else { return }
+            let url = URL(fileURLWithPath: path)
+            self.openTape(at: url)
+            if autoPlay, self.hasTape {
+                self.playTape()
+                NSLog(
+                    "spec-chum-audio: automation opened+played tape %@",
+                    url.lastPathComponent
+                )
+            } else {
+                NSLog("spec-chum-audio: automation opened tape %@", url.lastPathComponent)
+            }
+        }
     }
 
     private static let volumeDefaultsKey = "specChum.outputVolume"
@@ -201,11 +348,422 @@ final class HostBridge: ObservableObject {
         if let disconnectObserver {
             NotificationCenter.default.removeObserver(disconnectObserver)
         }
+        if let ensureAudioObserver {
+            NotificationCenter.default.removeObserver(ensureAudioObserver)
+        }
         GCController.stopWirelessControllerDiscovery()
         audio.stop()
+        stopFrameTimer()
+        destroyLivingRoom(syncTeardown: true)
         if let handle {
             sc_destroy(handle)
         }
+    }
+
+    var rawHandle: UnsafeMutableRawPointer? { handle }
+
+    /// (Re)start AudioQueue once the app/window is active. Safe to call repeatedly.
+    /// First call force-rebuilds so any pre-activation zombie queue is discarded.
+    func ensureAudioOutput() {
+        guard let handle else { return }
+        let rate = Double(sc_audio_sample_rate(handle))
+        let force = !audioOutputArmed
+        if audio.ensureStarted(sampleRate: rate > 0 ? rate : 44_100, force: force) {
+            audioOutputArmed = true
+        }
+    }
+
+    /// Register the IOSurface present NSView (weak). Called from LivingRoomDisplayView.
+    func attachLivingRoomPresentView(_ view: LivingRoomNSView) {
+        livingRoomPresentView = view
+    }
+
+    func skipLivingRoomIntro() {
+        guard livingRoomMode, livingRoomReady else { return }
+        livingRoomQueue.async { [weak self] in
+            guard let self, let room = self.livingRoomHandle else { return }
+            let rc = sc_room_skip_intro(room)
+            // Pose applies on next DisplayLink tick — no forced Bevy frame here.
+            DispatchQueue.main.async {
+                if rc != 0 {
+                    self.status = HostBridge.takeRoomLastError() ?? "Living room skip intro failed"
+                }
+            }
+        }
+    }
+
+    /// Trackpad / scroll: positive `deltaY` (scroll up) zooms toward the CRT.
+    /// One intentional flick → one preset step (64px threshold); Rust cooldown debounces inertia.
+    func nudgeLivingRoomZoom(deltaY: CGFloat) {
+        guard livingRoomMode, livingRoomReady else { return }
+        let stepPx = Self.scrollZoomStepPx
+        scrollZoomAccum += deltaY
+        var steps: Int32 = 0
+        if scrollZoomAccum >= stepPx {
+            steps = -1
+        } else if scrollZoomAccum <= -stepPx {
+            steps = 1
+        }
+        guard steps != 0 else { return }
+        // One step max per burst — discard remainder so leftover pixels don't re-trigger.
+        scrollZoomAccum = 0
+        InputLatencyProbe.noteScroll(steps: steps)
+        livingRoomQueue.async { [weak self] in
+            guard let self, let room = self.livingRoomHandle else { return }
+            _ = sc_room_nudge_zoom(room, steps)
+            // Pose eases on DisplayLink ticks — no forced sc_room_tick here.
+        }
+    }
+
+    /// Bind a shared IOSurface for zero-copy present (room queue, never blocks AppKit main).
+    /// Captures `surface` strongly until the bind runs; the room queue also retains it
+    /// for the texture lifetime (resize must not free the surface mid-bind).
+    func bindLivingRoomPresent(surface: IOSurface, width: UInt32, height: UInt32) {
+        ensureLivingRoom()
+        guard livingRoomReady else { return }
+        let bindW = width == 0 ? roomPresentWidth : width
+        let bindH = height == 0 ? roomPresentHeight : height
+        let retained = surface
+        livingRoomQueue.async { [weak self] in
+            guard let self else { return }
+            guard let room = self.livingRoomHandle else { return }
+            self.livingRoomBoundSurface = retained
+            let ptr = Unmanaged.passUnretained(retained).toOpaque()
+            var bindError: String?
+            if bindW != self.roomPresentWidth || bindH != self.roomPresentHeight {
+                if sc_room_resize(room, bindW, bindH) != 0 {
+                    bindError = HostBridge.takeRoomLastError() ?? "Living room resize failed"
+                } else {
+                    _ = sc_room_skip_intro(room)
+                    self.roomPresentWidth = bindW
+                    self.roomPresentHeight = bindH
+                }
+            }
+            if bindError == nil, sc_room_set_present_iosurface(room, ptr, bindW, bindH) != 0 {
+                _ = sc_room_set_present_iosurface(room, nil, 0, 0)
+                self.livingRoomBoundSurface = nil
+                bindError = HostBridge.takeRoomLastError() ?? "Living room IOSurface bind failed"
+            }
+            if let bindError {
+                DispatchQueue.main.async { self.status = bindError }
+            }
+        }
+    }
+
+    func clearLivingRoomPresent() {
+        livingRoomQueue.async { [weak self] in
+            guard let self else { return }
+            self.livingRoomBoundSurface = nil
+            guard let room = self.livingRoomHandle else { return }
+            _ = sc_room_set_present_iosurface(room, nil, 0, 0)
+        }
+    }
+
+    /// Non-blocking: create Bevy on `livingRoomQueue` and mark ready on main.
+    private func ensureLivingRoom() {
+        if livingRoomReady || livingRoomCreateInFlight { return }
+        livingRoomCreateInFlight = true
+        livingRoomQueue.async { [weak self] in
+            guard let self else { return }
+            let createError = self.createLivingRoomOnQueue(warmupTicks: 0)
+            let ok = self.livingRoomHandle != nil
+            DispatchQueue.main.async {
+                self.livingRoomCreateInFlight = false
+                guard ok else {
+                    self.status = createError
+                        ?? "Living room renderer failed — run cargo build -p living_room --release --no-default-features"
+                    if self.livingRoomMode {
+                        self.livingRoomMode = false
+                    }
+                    self.livingRoomReady = false
+                    return
+                }
+                self.livingRoomReady = true
+                self.roomTickInFlight = false
+                self.scrollZoomAccum = 0
+                self.roomFbLock.lock()
+                self.roomFbPublished = []
+                self.roomFbGeneration = 0
+                self.roomFbLock.unlock()
+                if let createError {
+                    self.status = createError
+                }
+                // First bind may have been skipped while create was in flight.
+                self.livingRoomPresentView?.syncPresentTargetIfNeeded()
+            }
+        }
+    }
+
+    /// Warm Bevy + GPU pipelines in the background while flat mode runs (issue #146).
+    private func scheduleLivingRoomPreload() {
+        if livingRoomReady || livingRoomCreateInFlight { return }
+        livingRoomCreateInFlight = true
+        livingRoomQueue.async { [weak self] in
+            guard let self else { return }
+            let createError = self.createLivingRoomOnQueue(warmupTicks: 4)
+            let ok = self.livingRoomHandle != nil
+            DispatchQueue.main.async {
+                self.livingRoomCreateInFlight = false
+                guard ok else { return }
+                self.livingRoomReady = true
+                self.roomTickInFlight = false
+                self.scrollZoomAccum = 0
+                if let createError, self.livingRoomMode {
+                    self.status = createError
+                    self.livingRoomMode = false
+                    self.livingRoomReady = false
+                } else if self.livingRoomMode {
+                    self.livingRoomPresentView?.syncPresentTargetIfNeeded()
+                }
+            }
+        }
+    }
+
+    /// Must run on `livingRoomQueue`. Creates handle, skips intro, optional warmup ticks.
+    private func createLivingRoomOnQueue(warmupTicks: Int) -> String? {
+        guard livingRoomHandle == nil else { return nil }
+        livingRoomHandle = sc_room_create(roomPresentWidth, roomPresentHeight)
+        guard livingRoomHandle != nil else {
+            return HostBridge.takeRoomLastError()
+                ?? "Living room renderer failed — run cargo build -p living_room --release --no-default-features"
+        }
+        if sc_room_skip_intro(livingRoomHandle) != 0 {
+            return HostBridge.takeRoomLastError() ?? "Living room skip intro failed"
+        }
+        roomFbLastUploadedGen = 0
+        if warmupTicks > 0, let room = livingRoomHandle {
+            for _ in 0..<warmupTicks {
+                sc_room_set_frame_delta_seconds(room, 1.0 / 60.0)
+                _ = sc_room_tick(room)
+            }
+        }
+        return nil
+    }
+
+    /// Tear down the room. `syncTeardown` is only for `deinit` (handle must not outlive HostBridge).
+    private func destroyLivingRoom(syncTeardown: Bool) {
+        livingRoomReady = false
+        livingRoomCreateInFlight = false
+        roomTickInFlight = false
+        scrollZoomAccum = 0
+        livingRoomPresentView = nil
+        roomFbLock.lock()
+        roomFbPublished = []
+        roomFbGeneration = 0
+        roomFbLock.unlock()
+        roomPerfLastSnap = nil
+        let teardown = { [weak self] in
+            guard let self else { return }
+            self.roomFbLastUploadedGen = 0
+            self.livingRoomBoundSurface = nil
+            if let livingRoomHandle = self.livingRoomHandle {
+                _ = sc_room_set_present_iosurface(livingRoomHandle, nil, 0, 0)
+                sc_room_destroy(livingRoomHandle)
+            }
+            self.livingRoomHandle = nil
+        }
+        if syncTeardown {
+            livingRoomQueue.sync(execute: teardown)
+        } else {
+            livingRoomQueue.async(execute: teardown)
+        }
+        roomPresentWidth = 1920
+        roomPresentHeight = 1080
+    }
+
+    /// Main: copy latest Spectrum RGBA into the publish slot (DisplayLink consumes).
+    private func publishLivingRoomFramebuffer() {
+        guard livingRoomMode, livingRoomReady, let handle else { return }
+        guard let fb = sc_framebuffer_ptr(handle) else { return }
+        let w = sc_framebuffer_width(handle)
+        let h = sc_framebuffer_height(handle)
+        guard w > 0, h > 0 else { return }
+        let byteLen = Int(w * h * 4)
+        roomFbLock.lock()
+        if roomFbPublished.count != byteLen {
+            roomFbPublished = [UInt8](repeating: 0, count: byteLen)
+        }
+        roomFbPublished.withUnsafeMutableBytes { dst in
+            guard let base = dst.baseAddress else { return }
+            base.copyMemory(from: fb, byteCount: byteLen)
+        }
+        roomFbGeneration &+= 1
+        roomFbLock.unlock()
+        InputLatencyProbe.noteFbPublish()
+        if roomPerfEnabled {
+            roomPerfSpectrumFrames &+= 1
+        }
+    }
+
+    /// After keyboard matrix sync: run one Spectrum frame immediately (don't wait for 50 Hz timer).
+    func flushInputFrame() {
+        InputLatencyProbe.noteKey()
+        _ = runFrame()
+        roomTickLock.lock()
+        let busy = roomTickInFlight
+        roomTickLock.unlock()
+        guard livingRoomMode, livingRoomReady, !busy else { return }
+        onLivingRoomDisplayTick(deltaSeconds: 1.0 / 60.0)
+    }
+
+    /// DisplayLink → room queue: sample latest FB, tick Bevy at refresh rate (coalesce if busy).
+    func onLivingRoomDisplayTick(deltaSeconds: CFTimeInterval) {
+        guard livingRoomMode, livingRoomReady else { return }
+        roomTickLock.lock()
+        if roomTickInFlight {
+            roomTickLock.unlock()
+            roomPerfSkippedBusy &+= 1
+            return
+        }
+        roomTickInFlight = true
+        roomTickLock.unlock()
+        if let window = livingRoomPresentView?.window ?? NSApp.keyWindow ?? NSApp.mainWindow,
+           !window.occlusionState.contains(.visible)
+        {
+            roomTickLock.lock()
+            roomTickInFlight = false
+            roomTickLock.unlock()
+            return
+        }
+        let dt = Float(max(deltaSeconds, 1.0 / 240.0))
+        livingRoomQueue.async { [weak self] in
+            defer {
+                if let self {
+                    self.roomTickLock.lock()
+                    self.roomTickInFlight = false
+                    self.roomTickLock.unlock()
+                }
+            }
+            guard let self, let room = self.livingRoomHandle else { return }
+            sc_room_perf_set_thread_hint(2)
+            sc_room_set_frame_delta_seconds(room, dt)
+
+            var upload: [UInt8]?
+            var gen: UInt64 = 0
+            self.roomFbLock.lock()
+            gen = self.roomFbGeneration
+            if gen != self.roomFbLastUploadedGen, !self.roomFbPublished.isEmpty {
+                upload = self.roomFbPublished
+            }
+            self.roomFbLock.unlock()
+
+            let t0 = ProcessInfo.processInfo.systemUptime
+            if let upload {
+                let setRc = upload.withUnsafeBufferPointer { buf -> Int32 in
+                    guard let base = buf.baseAddress else { return -1 }
+                    return sc_room_set_framebuffer(room, base, UInt32(buf.count))
+                }
+                if setRc == 0 {
+                    self.roomFbLastUploadedGen = gen
+                }
+            }
+            _ = sc_room_tick(room)
+            let roomMs = (ProcessInfo.processInfo.systemUptime - t0) * 1000.0
+            var snap = ScRoomPerfSnapshot()
+            let gotSnap = self.roomPerfEnabled && sc_room_perf_snapshot(room, &snap) == 0
+            DispatchQueue.main.async {
+                if self.roomPerfEnabled {
+                    self.roomPerfRoomTicks &+= 1
+                    self.roomPerfRoomSumMs += roomMs
+                    self.roomPerfRoomMaxMs = max(self.roomPerfRoomMaxMs, roomMs)
+                    if gotSnap { self.roomPerfLastSnap = snap }
+                }
+                self.livingRoomPresentView?.refreshLayerContents()
+                InputLatencyProbe.noteRoomPresent()
+            }
+        }
+    }
+
+    private func noteHostFrame(elapsedMs: Double) {
+        guard roomPerfEnabled else { return }
+        roomPerfHostFrames &+= 1
+        roomPerfHostSumMs += elapsedMs
+        roomPerfHostMaxMs = max(roomPerfHostMaxMs, elapsedMs)
+        if elapsedMs >= 25.0 {
+            roomPerfHitches &+= 1
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        if roomPerfLastHudUptime == 0 || now - roomPerfLastHudUptime >= 1.0 {
+            roomPerfLastHudUptime = now
+            publishRoomPerfHud()
+        }
+    }
+
+    private func publishRoomPerfHud() {
+        guard roomPerfEnabled else { return }
+        let hostAvg = roomPerfHostFrames > 0
+            ? roomPerfHostSumMs / Double(roomPerfHostFrames) : 0
+        let roomAvg = roomPerfRoomTicks > 0
+            ? roomPerfRoomSumMs / Double(roomPerfRoomTicks) : 0
+        // Counts over the last ~1s window ≈ Hz.
+        let roomHz = Double(roomPerfRoomTicks)
+        let specHz = Double(roomPerfSpectrumFrames)
+        var rustBit = ""
+        if let snap = roomPerfLastSnap {
+            let thr: String = {
+                switch snap.thread_hint {
+                case 1: return "main"
+                case 2: return "roomQ"
+                default: return "?"
+                }
+            }()
+            rustBit = String(
+                format: " bevy last=%.1f avg=%.1f max=%.1fms \(thr) %ux%u z%u present=%u",
+                Double(snap.last_tick_us) / 1000.0,
+                Double(snap.avg_window_us) / 1000.0,
+                Double(snap.max_window_us) / 1000.0,
+                snap.width,
+                snap.height,
+                snap.zoom_preset,
+                UInt(snap.has_present)
+            )
+        }
+        let line = String(
+            format:
+                "roomperf host avg=%.1f max=%.1fms hitches=%llu | roomHz=%.0f specHz=%.0f wall avg=%.1f max=%.1fms skip=%llu linear %ux%u%@",
+            hostAvg,
+            roomPerfHostMaxMs,
+            roomPerfHitches,
+            roomHz,
+            specHz,
+            roomAvg,
+            roomPerfRoomMaxMs,
+            roomPerfSkippedBusy,
+            roomPresentWidth,
+            roomPresentHeight,
+            rustBit
+        )
+        roomPerfLine = line
+        NSLog("%@", line)
+        roomPerfHostFrames = 0
+        roomPerfHostSumMs = 0
+        roomPerfHostMaxMs = 0
+        roomPerfRoomSumMs = 0
+        roomPerfRoomMaxMs = 0
+        roomPerfRoomTicks = 0
+        roomPerfSkippedBusy = 0
+        roomPerfSpectrumFrames = 0
+        roomPerfHitches = 0
+    }
+
+    private func startFrameTimer() {
+        stopFrameTimer()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(
+            deadline: .now(),
+            repeating: Self.framePeriod,
+            leeway: .milliseconds(4)
+        )
+        timer.setEventHandler { [weak self] in
+            self?.runFrame()
+        }
+        timer.resume()
+        frameTimer = timer
+    }
+
+    private func stopFrameTimer() {
+        frameTimer?.cancel()
+        frameTimer = nil
     }
 
     /// Run Spectrum frame(s) capped to ~50 Hz wall clock (egui throttle parity).
@@ -213,6 +771,12 @@ final class HostBridge: ObservableObject {
     @discardableResult
     func runFrame() -> Bool {
         guard let handle else { return false }
+        let hostT0 = ProcessInfo.processInfo.systemUptime
+        defer {
+            if roomPerfEnabled {
+                noteHostFrame(elapsedMs: (ProcessInfo.processInfo.systemUptime - hostT0) * 1000.0)
+            }
+        }
         let now = ProcessInfo.processInfo.systemUptime
         if lastFrameUptime == 0 {
             lastFrameUptime = now
@@ -221,6 +785,11 @@ final class HostBridge: ObservableObject {
             sc_run_frame(handle)
             syncTapePublished()
             enqueueAudio()
+            publishLivingRoomFramebuffer()
+            // Flat spectrum needs SwiftUI redraw; living room presents via DisplayLink + IOSurface.
+            if !livingRoomMode {
+                displayTick &+= 1
+            }
             return true
         }
 
@@ -229,6 +798,9 @@ final class HostBridge: ObservableObject {
             pushJoystick()
             tickKeyScript()
             sc_run_frame(handle)
+            // Enqueue each frame — sc_run_frame replaces PCM; skipping mid catch-up
+            // underruns AudioQueue (especially under living-room hitching).
+            enqueueAudio()
             lastFrameUptime += Self.framePeriod
             ran += 1
         }
@@ -238,7 +810,10 @@ final class HostBridge: ObservableObject {
         }
         if ran > 0 {
             syncTapePublished()
-            enqueueAudio()
+            publishLivingRoomFramebuffer()
+            if !livingRoomMode {
+                displayTick &+= 1
+            }
             return true
         }
         return false
@@ -334,6 +909,10 @@ final class HostBridge: ObservableObject {
             status = HostBridge.takeLastError() ?? "ROM load failed"
         } else {
             mediaTitle = url.lastPathComponent
+            // Custom ROM into a running machine is not a hot-swap — reset like real hardware.
+            if sc_reset(handle) != 0 {
+                status = HostBridge.takeLastError() ?? "ROM loaded but reset failed"
+            }
             pushTapeLoadOptions()
             refreshStatus()
         }
@@ -498,6 +1077,19 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    /// NSOpenPanel for a custom ROM image; successful load resets the machine.
+    func presentOpenRomPanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "rom") ?? .data]
+        panel.title = "Open ROM"
+        if panel.runModal() == .OK, let url = panel.url {
+            loadRom(at: url)
+        }
+    }
+
+
     /// Route by extension: `.dsk` → disk (+3), else tape.
     func openMedia(at url: URL) {
         if url.pathExtension.lowercased() == "dsk" {
@@ -520,6 +1112,7 @@ final class HostBridge: ObservableObject {
     /// Start the deck without clearing flash-load (Instant only).
     private func playTapeKeepingFlash() {
         guard let handle else { return }
+        ensureAudioOutput()
         if sc_tape_play(handle) != 0 {
             status = HostBridge.takeLastError() ?? "Play failed"
         } else {
@@ -586,6 +1179,23 @@ final class HostBridge: ObservableObject {
     func setKey(row: UInt32, bit: UInt32, pressed: Bool) {
         guard let handle else { return }
         _ = sc_set_key(handle, row, bit, pressed ? 1 : 0)
+    }
+
+    /// Batch matrix update for one key edge (single recompose path in Rust via setKey loop).
+    func syncKeyboardMatrix(
+        modifiers: [(UInt32, UInt32)],
+        held: [(UInt32, UInt32)],
+        joystickMask: UInt32
+    ) {
+        clearKeys()
+        for (row, bit) in modifiers {
+            setKey(row: row, bit: bit, pressed: true)
+        }
+        for (row, bit) in held {
+            setKey(row: row, bit: bit, pressed: true)
+        }
+        setKeyboardJoystickMask(joystickMask)
+        flushInputFrame()
     }
 
     func clearKeys() {
@@ -918,6 +1528,13 @@ final class HostBridge: ObservableObject {
         guard let cstr = sc_last_error() else { return nil }
         let s = String(cString: cstr)
         sc_string_free(cstr)
+        return s
+    }
+
+    private static func takeRoomLastError() -> String? {
+        guard let cstr = sc_room_last_error() else { return nil }
+        let s = String(cString: cstr)
+        sc_room_string_free(cstr)
         return s
     }
 

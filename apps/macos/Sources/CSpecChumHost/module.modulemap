@@ -1,5 +1,6 @@
 module CSpecChumHost [system] {
     header "include/spec_chum_host.h"
-    link "spec_chum_host"
+    header "include/spec_chum_room.h"
+    // Linking is owned by Package.swift (force_load living_room staticlib).
     export *
 }

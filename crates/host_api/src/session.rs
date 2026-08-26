@@ -195,6 +195,22 @@ impl HostSession {
         self.status = format!("Model set to {:?}; load a ROM", model);
     }
 
+    /// Switch the selected model and autoload its ROM from `roms/`.
+    ///
+    /// After this returns, [`Self::model`] always matches `model`. On success the
+    /// loaded [`Machine`] matches too; on ROM miss the machine stays unloaded.
+    pub fn select_model(&mut self, model: ModelId) -> Result<(), HostError> {
+        self.set_model(model);
+        self.try_autoload_rom();
+        if self.has_machine() {
+            Ok(())
+        } else {
+            Err(HostError::Message(format!(
+                "ROM for {model:?} not found; run ./scripts/fetch_roms.sh"
+            )))
+        }
+    }
+
     /// Load ROM bytes for the current model.
     pub fn load_rom_bytes(&mut self, rom: &[u8]) -> Result<(), HostError> {
         let machine = match self.model {
@@ -985,6 +1001,41 @@ mod tests {
         assert_eq!(ModelId::from_u32(9), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
         assert_eq!(ModelId::SpectrumPlus2A.to_model(), Model::SpectrumPlus2A);
+    }
+
+    #[test]
+    fn select_model_keeps_session_model_in_sync() {
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        for model in [
+            ModelId::Spectrum48,
+            ModelId::Spectrum128,
+            ModelId::SpectrumPlus3,
+            ModelId::SpectrumPlus2A,
+            ModelId::Spectrum48,
+        ] {
+            let result = s.select_model(model);
+            assert_eq!(
+                s.model(),
+                model,
+                "session.model() must match selection even if ROM load fails"
+            );
+            match result {
+                Ok(()) => {
+                    assert!(s.has_machine(), "autoload should install a machine");
+                    assert_eq!(
+                        s.machine.as_ref().expect("machine").model(),
+                        model.to_model(),
+                        "loaded Machine must match selected ModelId"
+                    );
+                }
+                Err(_) => {
+                    assert!(
+                        !s.has_machine(),
+                        "failed autoload must leave the machine unloaded"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
