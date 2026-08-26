@@ -44,6 +44,8 @@ pub struct AudioOut {
     fade_in: Arc<AtomicUsize>,
     /// DC-blocker state shared with the callback.
     dc: Arc<Mutex<DcBlock>>,
+    /// Set by the RT callback if WAV handoff fails; reported on the main thread.
+    capture_handoff_fail: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -150,6 +152,9 @@ fn gate_audio_on_lock(
     muted: Res<AudioMuted>,
     audio: Res<AudioOut>,
 ) {
+    if audio.capture_handoff_fail.swap(false, Ordering::Relaxed) {
+        eprintln!("living_room: WAV capture handoff failed (worker unavailable)");
+    }
     // Silence until sofa cam locks; honour user mute after that.
     let live = locked.is_some() && !muted.0;
     audio.set_live(live);
@@ -167,9 +172,10 @@ fn start_audio() -> (AudioOut, AudioStream) {
     } else {
         None
     }));
+    let handoff_fail = Arc::new(AtomicBool::new(false));
     let wav_tx = if capture {
         let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<f32>>(1);
-        std::thread::Builder::new()
+        match std::thread::Builder::new()
             .name("living_room-wav".into())
             .spawn(move || {
                 if let Ok(samples) = rx.recv() {
@@ -186,9 +192,16 @@ fn start_audio() -> (AudioOut, AudioStream) {
                         }
                     }
                 }
-            })
-            .ok();
-        Some(tx)
+            }) {
+            Ok(_join) => Some(tx),
+            Err(e) => {
+                eprintln!("living_room: failed to start WAV capture thread: {e}");
+                if let Ok(mut rec) = record.lock() {
+                    *rec = None;
+                }
+                None
+            }
+        }
     } else {
         None
     };
@@ -199,12 +212,14 @@ fn start_audio() -> (AudioOut, AudioStream) {
     let dc_cb = Arc::clone(&dc);
     let rec_cb = Arc::clone(&record);
     let wav_cb = wav_tx.clone();
+    let handoff_cb = Arc::clone(&handoff_fail);
     let out = AudioOut {
         buffer: Arc::clone(&buffer),
         last,
         live,
         fade_in,
         dc,
+        capture_handoff_fail: handoff_fail,
     };
 
     let host = cpal::default_host();
@@ -247,6 +262,7 @@ fn start_audio() -> (AudioOut, AudioStream) {
                     &dc_cb,
                     &rec_cb,
                     wav_cb.as_ref(),
+                    &handoff_cb,
                 );
             },
             err_fn,
@@ -266,6 +282,7 @@ fn start_audio() -> (AudioOut, AudioStream) {
                     &dc_cb,
                     &rec_cb,
                     wav_cb.as_ref(),
+                    &handoff_cb,
                 );
                 for (out_s, s) in data.iter_mut().zip(tmp.iter()) {
                     *out_s = (s.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
@@ -329,6 +346,7 @@ fn fill_output(
     dc: &Arc<Mutex<DcBlock>>,
     record: &Arc<Mutex<Option<Vec<f32>>>>,
     wav_tx: Option<&SyncSender<Vec<f32>>>,
+    handoff_fail: &Arc<AtomicBool>,
 ) {
     // Intro / mute → hard silence.
     if !live.load(Ordering::Relaxed) {
@@ -384,7 +402,9 @@ fn fill_output(
                     let samples = std::mem::take(cap);
                     *rec = None;
                     if let Some(tx) = wav_tx {
-                        let _ = tx.try_send(samples);
+                        if tx.try_send(samples).is_err() {
+                            handoff_fail.store(true, Ordering::Relaxed);
+                        }
                     }
                 }
             }
