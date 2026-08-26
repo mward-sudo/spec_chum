@@ -431,6 +431,7 @@ fn rebuild_headless_render_target(
             width,
             height,
         );
+        world.flush();
     }
 
     let target = RenderTarget::Image(handle.into());

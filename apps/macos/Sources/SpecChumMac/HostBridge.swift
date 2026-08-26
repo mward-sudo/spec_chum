@@ -174,6 +174,8 @@ final class HostBridge: ObservableObject {
     private let roomTickLock = NSLock()
     /// Coalesce stepped IOSurface rebinds on the room queue (full resize was freezing the UI).
     private var roomPresentBindInFlight = false
+    /// When `roomPresentBindInFlight` was set; used to recover if the room queue stalls.
+    private var roomPresentBindStartedUptime: TimeInterval = 0
     private var roomPresentBindPending: (surface: IOSurface, width: UInt32, height: UInt32)?
     /// Latest Spectrum RGBA published on main; consumed on room queue (DisplayLink).
     private let roomFbLock = NSLock()
@@ -429,11 +431,20 @@ final class HostBridge: ObservableObject {
         guard livingRoomReady else { return }
         let bindW = width == 0 ? roomPresentWidth : width
         let bindH = height == 0 ? roomPresentHeight : height
+        if roomPresentBindInFlight,
+           roomPresentBindStartedUptime > 0,
+           ProcessInfo.processInfo.systemUptime - roomPresentBindStartedUptime
+               >= Self.roomTickStuckSeconds
+        {
+            roomPresentBindInFlight = false
+            roomPresentBindStartedUptime = 0
+        }
         if roomPresentBindInFlight {
             roomPresentBindPending = (surface, bindW, bindH)
             return
         }
         roomPresentBindInFlight = true
+        roomPresentBindStartedUptime = ProcessInfo.processInfo.systemUptime
         enqueueLivingRoomPresentBind(surface: surface, width: bindW, height: bindH)
     }
 
@@ -472,9 +483,11 @@ final class HostBridge: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.roomPresentBindInFlight = false
+                self.roomPresentBindStartedUptime = 0
                 guard let pending = self.roomPresentBindPending else { return }
                 self.roomPresentBindPending = nil
                 self.roomPresentBindInFlight = true
+                self.roomPresentBindStartedUptime = ProcessInfo.processInfo.systemUptime
                 self.enqueueLivingRoomPresentBind(
                     surface: pending.surface,
                     width: pending.width,
@@ -582,6 +595,7 @@ final class HostBridge: ObservableObject {
         roomTickStartedUptime = 0
         scrollZoomAccum = 0
         roomPresentBindInFlight = false
+        roomPresentBindStartedUptime = 0
         roomPresentBindPending = nil
         livingRoomPresentView = nil
         roomFbLock.lock()
