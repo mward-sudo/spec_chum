@@ -1,20 +1,20 @@
 import AppKit
+import CSpecChumHost
 import SwiftUI
 
 struct SpectrumDisplayView: NSViewRepresentable {
     @ObservedObject var host: HostBridge
-    var tick: UInt64
 
     func makeNSView(context: Context) -> SpectrumNSView {
         let view = SpectrumNSView()
         view.host = host
+        host.attachSpectrumPresentView(view)
         return view
     }
 
     func updateNSView(_ nsView: SpectrumNSView, context: Context) {
         nsView.host = host
-        _ = tick
-        nsView.needsDisplay = true
+        host.attachSpectrumPresentView(nsView)
     }
 }
 
@@ -30,6 +30,9 @@ struct SpectrumDisplayView: NSViewRepresentable {
 /// OS repeats would look like press edges and spam 48K keywords (e.g. LOAD).
 final class SpectrumNSView: NSView {
     weak var host: HostBridge?
+    private var bitmapRep: NSBitmapImageRep?
+    private var bitmapWidth = 0
+    private var bitmapHeight = 0
     private var held: Set<UInt16> = []
     private var keyMonitor: Any?
     private var becomeKeyObserver: NSObjectProtocol?
@@ -104,15 +107,36 @@ final class SpectrumNSView: NSView {
         return ok
     }
 
+    /// Called from the 50 Hz host timer — avoids @Published SwiftUI invalidation every frame.
+    func presentFrame() {
+        if Thread.isMainThread {
+            needsDisplay = true
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.needsDisplay = true
+            }
+        }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         NSColor.black.setFill()
         bounds.fill()
 
-        guard let image = host?.makeFrameImage() else { return }
-        let imgSize = image.size
-        guard imgSize.width > 0, imgSize.height > 0 else { return }
+        guard let handle = host?.rawHandle,
+              let src = sc_framebuffer_ptr(handle)
+        else { return }
+        let w = Int(sc_framebuffer_width(handle))
+        let h = Int(sc_framebuffer_height(handle))
+        guard w > 0, h > 0, let rep = ensureBitmap(width: w, height: h),
+              let dst = rep.bitmapData
+        else { return }
 
+        let byteLen = w * h * 4
+        dst.update(from: src, count: byteLen)
+
+        guard let cgImage = rep.cgImage else { return }
+        let imgSize = NSSize(width: w, height: h)
         let scale = min(bounds.width / imgSize.width, bounds.height / imgSize.height)
         let drawW = imgSize.width * scale
         let drawH = imgSize.height * scale
@@ -123,15 +147,31 @@ final class SpectrumNSView: NSView {
             height: drawH
         )
 
-        NSGraphicsContext.current?.imageInterpolation = .none
-        image.draw(
-            in: rect,
-            from: NSRect(origin: .zero, size: imgSize),
-            operation: .copy,
-            fraction: 1.0,
-            respectFlipped: true,
-            hints: [.interpolation: NSImageInterpolation.none]
-        )
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        ctx.interpolationQuality = .none
+        ctx.draw(cgImage, in: rect)
+    }
+
+    private func ensureBitmap(width: Int, height: Int) -> NSBitmapImageRep? {
+        if let rep = bitmapRep, bitmapWidth == width, bitmapHeight == height {
+            return rep
+        }
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: width * 4,
+            bitsPerPixel: 32
+        ) else { return nil }
+        bitmapRep = rep
+        bitmapWidth = width
+        bitmapHeight = height
+        return rep
     }
 
     override func keyDown(with event: NSEvent) {

@@ -164,22 +164,30 @@ final class TapeAudioPlayer {
     /// Enqueue one frame of mono f32 samples (host rate). Engine must already be started.
     func schedule(samples: UnsafePointer<Float>, count: Int) {
         guard count > 0, started else { return }
-        let chunk = Array(UnsafeBufferPointer(start: samples, count: count))
-        capture?.append(chunk)
+        if Self.captureEnabled {
+            capture?.append(Array(UnsafeBufferPointer(start: samples, count: count)))
+        }
 
         ringLock.lock()
         let enqueueErr = pendingEnqueueError
         pendingEnqueueError = noErr
-        for s in chunk {
-            if ringCount == Self.maxRing {
-                ringHead = (ringHead + 1) % Self.maxRing
-                ringCount -= 1
+        let cap = Self.maxRing
+        var idx = ringHead
+        var len = ringCount
+        var i = 0
+        while i < count {
+            if len == cap {
+                idx = (idx + 1) % cap
+                len -= 1
             }
-            let idx = (ringHead + ringCount) % Self.maxRing
-            ring[idx] = s
-            ringCount += 1
+            let write = (idx + len) % cap
+            ring[write] = samples[i]
+            len += 1
+            i += 1
         }
-        let qLen = ringCount
+        ringHead = idx
+        ringCount = len
+        let qLen = len
         let callbacks = callbackCount
         ringLock.unlock()
 
@@ -191,8 +199,8 @@ final class TapeAudioPlayer {
             debugSchedules &+= 1
             if debugSchedules == 1 || debugSchedules % 250 == 0 {
                 var peak: Float = 0
-                for s in chunk {
-                    peak = max(peak, abs(s))
+                for j in 0..<count {
+                    peak = max(peak, abs(samples[j]))
                 }
                 debugLog(
                     "schedule: +\(count) peak=\(peak) ring=\(qLen) callbacks=\(callbacks)"
