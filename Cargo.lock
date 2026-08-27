@@ -4375,6 +4375,7 @@ dependencies = [
  "bus",
  "formats",
  "tape",
+ "thiserror 2.0.20",
  "trace",
  "ula",
  "z80",

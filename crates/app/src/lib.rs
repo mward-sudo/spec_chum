@@ -675,7 +675,7 @@ impl EmulatorSession {
                         "Interface 1 attached (no roms/if1.rom — paging hooks ready)".into()
                     };
                 }
-                Err(e) => self.status = e,
+                Err(e) => self.status = e.to_string(),
             }
         } else {
             self.status = "Load a machine ROM first".into();
@@ -692,7 +692,7 @@ impl EmulatorSession {
                                 if1.insert_mdr(cart);
                                 self.status = format!("Inserted MDR {}", path.display());
                             }
-                            Err(e) => self.status = e,
+                            Err(e) => self.status = e.to_string(),
                         }
                     } else {
                         self.status = "Load a machine ROM first".into();

@@ -593,7 +593,9 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
-        let if1 = m.attach_interface1().map_err(HostError::Message)?;
+        let if1 = m
+            .attach_interface1()
+            .map_err(|e| HostError::Message(e.to_string()))?;
         if !if1.rom_loaded {
             for cand in ["roms/if1.rom", "roms/if1-2.rom", "roms/interface1.rom"] {
                 for root in rom_search_roots() {
@@ -624,7 +626,8 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         let data = std::fs::read(path)?;
-        m.load_interface1_rom(&data).map_err(HostError::Message)?;
+        m.load_interface1_rom(&data)
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = format!("Loaded IF1 ROM {}", path.display());
         Ok(())
     }
@@ -637,7 +640,9 @@ impl HostSession {
         let data = std::fs::read(path)?;
         let cart =
             formats::MdrImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
-        let if1 = m.attach_interface1().map_err(HostError::Message)?;
+        let if1 = m
+            .attach_interface1()
+            .map_err(|e| HostError::Message(e.to_string()))?;
         if1.insert_mdr(cart);
         self.status = format!("Inserted MDR {}", path.display());
         Ok(())

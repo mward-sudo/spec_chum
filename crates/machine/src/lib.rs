@@ -27,7 +27,17 @@ use tape::{
     evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, TapPlayer, TapeTrapResult,
     TzxPlayer,
 };
+use thiserror::Error;
 use ula::{int_active_48, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48, INT_LENGTH_128};
+
+/// Errors attaching Interface 1 or loading its shadow ROM.
+#[derive(Debug, Error)]
+pub enum Interface1Error {
+    #[error("Interface 1 is not supported on Spectrum +2A/+3")]
+    UnsupportedModel,
+    #[error(transparent)]
+    Rom(#[from] bus::Interface1RomError),
+}
 
 /// Advance `frame_t` by `dt` and report whether a display frame boundary was crossed.
 ///
@@ -1161,11 +1171,11 @@ impl Machine {
     }
 
     /// Attach Interface 1 on 48K/128K.
-    pub fn attach_interface1(&mut self) -> Result<&mut bus::Interface1, String> {
+    pub fn attach_interface1(&mut self) -> Result<&mut bus::Interface1, Interface1Error> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_interface1()),
             Self::Spec128 { bus, .. } => Ok(bus.attach_interface1()),
-            Self::SpecPlus3 { .. } => Err("Interface 1 is not supported on Spectrum +2A/+3".into()),
+            Self::SpecPlus3 { .. } => Err(Interface1Error::UnsupportedModel),
         }
     }
 
@@ -1187,9 +1197,10 @@ impl Machine {
     }
 
     /// Load an 8 KiB Interface 1 ROM into the attached peripheral (creates IF1 if needed).
-    pub fn load_interface1_rom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_interface1_rom(&mut self, data: &[u8]) -> Result<(), Interface1Error> {
         let if1 = self.attach_interface1()?;
-        if1.load_rom(data).map_err(|e| e.to_string())
+        if1.load_rom(data)?;
+        Ok(())
     }
 
     /// True when IF1 is attached and an 8K ROM image has been loaded.
