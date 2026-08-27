@@ -120,6 +120,10 @@ impl Multiface1 {
     ///
     /// `joy` is the Kempston-compatible value (D0–D4) when the port is a page-out
     /// decode (A7=0). Page-in ports return `0xff` (floating / unused data).
+    ///
+    /// Callers that chain expansion devices should apply this for its paging side
+    /// effect, then prefer another device’s read data when that device claims the
+    /// port (e.g. Beta Disk status on `0x1f` while TR-DOS is paged).
     #[must_use]
     pub fn in_port(&mut self, port: u16, joy: u8) -> Option<u8> {
         if !multiface1_port_match(port) {
@@ -137,6 +141,10 @@ impl Multiface1 {
     }
 
     /// `OUT` on MF1 ports clears NMI pending (does not page out).
+    ///
+    /// Returns `true` if the port matched. Callers that chain expansion devices
+    /// (e.g. [`crate::Bus48`]) should apply this side effect and continue dispatch
+    /// rather than treating a match as exclusive ownership of the cycle.
     #[must_use]
     pub fn out_port(&mut self, port: u16, _value: u8) -> bool {
         if !multiface1_port_match(port) {

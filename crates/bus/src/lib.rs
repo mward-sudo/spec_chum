@@ -320,6 +320,14 @@ impl Bus48 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        // Multiface 1: matching IN pages by A7 as a side effect (MAME-style: does not
+        // consume the expansion-bus cycle). Prefer Beta/DivMMC data when they claim.
+        let mf_data = if let Some(mf) = self.multiface.as_mut() {
+            let joy = self.kempston.read();
+            mf.in_port(port, joy)
+        } else {
+            None
+        };
         if let Some(beta) = self.beta.as_mut() {
             if let Some(v) = beta.in_port(port) {
                 return v;
@@ -331,12 +339,8 @@ impl Bus48 {
                 return v;
             }
         }
-        // Multiface 1: IN pages by A7; page-out ports also return Kempston bits.
-        if let Some(mf) = self.multiface.as_mut() {
-            let joy = self.kempston.read();
-            if let Some(v) = mf.in_port(port, joy) {
-                return v;
-            }
+        if let Some(v) = mf_data {
+            return v;
         }
         if let Some(if1) = self.interface1.as_mut() {
             if let Some(v) = if1.in_port(port) {
@@ -360,10 +364,10 @@ impl Bus48 {
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
+        // Multiface clears NMI pending on matching OUT but does not consume the cycle
+        // (Beta / other peripherals still see the same port write).
         if let Some(mf) = self.multiface.as_mut() {
-            if mf.out_port(port, value) {
-                return;
-            }
+            let _ = mf.out_port(port, value);
         }
         if let Some(beta) = self.beta.as_mut() {
             if beta.out_port(port, value) {
@@ -816,6 +820,50 @@ mod tests {
         b.multiface.as_mut().unwrap().page_in();
         assert_eq!(b.in_port(0x001f), 0x11);
         assert!(!b.multiface.as_ref().unwrap().paged);
+    }
+
+    #[test]
+    fn multiface_and_beta_share_port_1f_cycle() {
+        // MF1 side effects chain with the expansion bus; Beta keeps data/command
+        // priority when TR-DOS is paged (MAME mface1 + interface style).
+        let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
+        raw[0] = 0x12;
+        raw[1] = 0x34;
+        let img = formats::TrdImage::parse(&raw).unwrap();
+        let mut b = Bus48::new();
+        b.attach_multiface(&[0u8; MULTIFACE1_SIZE]).unwrap();
+        {
+            let mf = b.multiface.as_mut().unwrap();
+            mf.page_in();
+            mf.nmi_pending = true;
+        }
+        let beta = b.attach_beta();
+        beta.insert(img);
+        beta.page_trdos(true);
+
+        b.out_port(0x003f, 0);
+        b.out_port(0x005f, 1);
+        b.out_port(0x001f, 0x80); // read sector — MF clears NMI; Beta still gets command
+        assert!(
+            !b.multiface.as_ref().unwrap().nmi_pending,
+            "OUT 1Fh clears MF NMI pending"
+        );
+        assert!(
+            b.multiface.as_ref().unwrap().paged,
+            "OUT does not page Multiface out"
+        );
+
+        b.kempston.fire = true;
+        assert_eq!(
+            b.in_port(0x001f),
+            0x02,
+            "IN 1Fh returns Beta status, not Kempston"
+        );
+        assert!(
+            !b.multiface.as_ref().unwrap().paged,
+            "IN 1Fh still pages Multiface out as a side effect"
+        );
+        assert_eq!(b.in_port(0x007f), 0x12);
     }
 
     #[test]
