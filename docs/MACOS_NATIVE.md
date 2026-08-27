@@ -67,7 +67,7 @@ SPEC_CHUM_AUDIO_DEBUG=1 apps/macos/.build/release/SpecChumMac
 - **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, **+3 only**) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
 - **Instant** toolbar **only** (not duplicated in Tape menu): always opens a TAP/TZX panel, inserts, flash-loads, types `LOAD ""`, then Play. Flash-load restores **off** when the deck stops (or on Pause / Rewind / Play). Instant does **not** offer `.dsk`
 - **Type LOAD ""** / **Type LOAD "" CODE** (**Tape** menu only): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only); **+2A** selects tape **Loader** for PROGRAM
-- **Hardware:** Multiface 1 attach + NMI (`sc_attach_multiface` / `sc_multiface_nmi`, 48K). Joystick mode is **Settings → Input**. DivMMC / IF1 / Beta stubs are exposed in the **egui** Hardware menu first.
+- **Hardware:** Multiface 1 attach + NMI (`sc_attach_multiface` / `sc_multiface_nmi`, 48K). DivMMC attach + SD/EEPROM (`sc_attach_divmmc` / `sc_load_divmmc_sd` / `sc_load_divmmc_eeprom`, 48K/128K). Joystick mode is **Settings → Input**. File → **Open TRD…** and Hardware → **Load TR-DOS ROM…** (`sc_load_trd` / `sc_load_trdos_rom`) on 48K/128K. IF1 / Beta stubs remain egui-first.
 - **Audio:** mono PCM from `sc_audio_*` each frame via **AudioQueue** (beeper + EAR mix + AY). Toolbar **mute** + **volume** (0…1) are **host mixer gain only** — they do not change EAR bit fidelity or flash-load. Persisted in `UserDefaults` (`specChum.outputVolume` / `specChum.outputMuted`)
 - **Tape progress:** `ProgressView` from `sc_tape_progress` (shown only when a tape is present)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)
@@ -106,6 +106,7 @@ All Spectrum models have EAR/tape hardware; “no tape chrome” means **no tape
 1. **File → Open Snapshot…** — `.sna` / `.z80` (48K or banked 128K/+3; host may switch model and autoload ROM).
 2. **File → Open RZX…** — requires a machine/ROM already loaded.
 3. **Open Tape / Disk** (toolbar, +3) or **File → Open Disk…** — `.dsk` on **Spectrum +3** only (`sc_load_dsk`; +2A has no floppy). Boot **Loader** / +3DOS — not Instant.
+4. **File → Open TRD…** — `.trd` on **48K/128K** (`sc_load_trd`). **Hardware → Load TR-DOS ROM…** for the 16 KiB ROM (`sc_load_trdos_rom`, not fetched by `fetch_roms.sh`). Enter TR-DOS with `RANDOMIZE USR 15616`.
 
 ### Experience ~20s load
 
@@ -202,7 +203,7 @@ tracks the display when living room is on.
 
 - Signed / notarized SwiftUI distribution bundle (dev launch uses a staged `.app` via `open`)
 - ~20s “experience” tape mode ([#82](https://github.com/mward-sudo/spec_chum/issues/82))
-- DivMMC / IF1 / Beta UI on macOS (egui Hardware stubs first)
+- IF1 / Beta UI on macOS (egui Hardware stubs first); DivMMC SD/EEPROM attach is available
 
 ## CI (`macos-shell` / `living-room` — [#68](https://github.com/mward-sudo/spec_chum/issues/68) / [#146](https://github.com/mward-sudo/spec_chum/issues/146))
 

@@ -101,6 +101,9 @@ final class HostBridge: ObservableObject {
 
         /// +3 has floppy; toolbar/File Open may include `.dsk`.
         var supportsDisk: Bool { self == .spectrumPlus3 }
+
+        /// Beta Disk / TR-DOS on 48K and 128K (not +2A/+3).
+        var supportsBeta: Bool { self == .spectrum48 || self == .spectrum128 }
     }
 
     @Published private(set) var status: String = "Starting…"
@@ -1119,6 +1122,27 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    func openTrd(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_trd(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "TRD load failed"
+        } else {
+            mediaTitle = url.lastPathComponent
+            status = "TRD inserted — attach TR-DOS ROM, then RANDOMIZE USR 15616"
+        }
+    }
+
+    func loadTrdosRom(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_trdos_rom(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "TR-DOS ROM load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
     /// Queue egui-parity `LOAD ""` [CODE] via `sc_set_key`.
     /// 128K/+3: menu → 48 BASIC (+3 disk Loader — do not Enter alone).
     /// +2A: menu Loader is tape — Enter alone for PROGRAM.
@@ -1434,6 +1458,35 @@ final class HostBridge: ObservableObject {
         guard let handle else { return }
         if sc_multiface_nmi(handle) != 0 {
             status = HostBridge.takeLastError() ?? "Multiface NMI failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func attachDivmmc() {
+        guard let handle else { return }
+        if sc_attach_divmmc(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "DivMMC attach failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func loadDivmmcSd(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_divmmc_sd(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "DivMMC SD load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func loadDivmmcEeprom(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_divmmc_eeprom(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "DivMMC EEPROM load failed"
         } else {
             refreshStatus()
         }
