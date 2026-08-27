@@ -67,7 +67,7 @@ SPEC_CHUM_AUDIO_DEBUG=1 apps/macos/.build/release/SpecChumMac
 - **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, **+3 only**) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
 - **Instant** toolbar **only** (not duplicated in Tape menu): always opens a TAP/TZX panel, inserts, flash-loads, types `LOAD ""`, then Play. Flash-load restores **off** when the deck stops (or on Pause / Rewind / Play). Instant does **not** offer `.dsk`
 - **Type LOAD ""** / **Type LOAD "" CODE** (**Tape** menu only): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only); **+2A** selects tape **Loader** for PROGRAM
-- **Hardware:** Multiface 1 attach + NMI (`sc_attach_multiface` / `sc_multiface_nmi`, 48K). Joystick mode is **Settings → Input**. DivMMC / IF1 / Beta stubs are exposed in the **egui** Hardware menu first.
+- **Hardware:** Multiface 1 attach + NMI (`sc_attach_multiface` / `sc_multiface_nmi`, 48K). Supply your own **8 KiB** Multiface ROM (not shipped — see [MULTIFACE.md](MULTIFACE.md)). Joystick mode is **Settings → Input**. DivMMC / IF1 / Beta stubs are exposed in the **egui** Hardware menu first.
 - **Audio:** mono PCM from `sc_audio_*` each frame via **AudioQueue** (beeper + EAR mix + AY). Toolbar **mute** + **volume** (0…1) are **host mixer gain only** — they do not change EAR bit fidelity or flash-load. Persisted in `UserDefaults` (`specChum.outputVolume` / `specChum.outputMuted`)
 - **Tape progress:** `ProgressView` from `sc_tape_progress` (shown only when a tape is present)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)

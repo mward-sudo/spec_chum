@@ -23,7 +23,7 @@ pub use kempston_mouse::{
     KempstonMouse, PORT_BUTTONS as MOUSE_PORT_BUTTONS, PORT_X as MOUSE_PORT_X,
     PORT_Y as MOUSE_PORT_Y,
 };
-pub use multiface::{Multiface1, MULTIFACE1_SIZE};
+pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 
 use ula::{
@@ -311,7 +311,14 @@ impl Bus48 {
                 return v;
             }
         }
-        // Kempston joystick (partial decode on low byte 0x1f) when Beta is not claiming it
+        // Multiface 1: IN pages by A7; page-out ports also return Kempston bits.
+        if let Some(mf) = self.multiface.as_mut() {
+            let joy = self.kempston.read();
+            if let Some(v) = mf.in_port(port, joy) {
+                return v;
+            }
+        }
+        // Kempston joystick (partial decode on low byte 0x1f) when Beta/MF not claiming it
         if port & 0xff == 0x1f {
             return self.kempston.read();
         }
@@ -713,12 +720,40 @@ mod tests {
         mf_rom[0x66] = 0xc3; // JP …
         b.attach_multiface(&mf_rom).unwrap();
         assert_eq!(b.read(0x0066), 0x11);
-        b.multiface.as_mut().unwrap().nmi();
+        let mf = b.multiface.as_mut().unwrap();
+        mf.nmi();
+        mf.page_on_nmi_vector();
         assert_eq!(b.read(0x0066), 0xc3);
         b.write(0x2000, 0x5a);
         assert_eq!(b.read(0x2000), 0x5a);
-        b.out_port(0x003f, 0);
-        assert_eq!(b.read(0x0066), 0x11, "OUT 3Fh hides Multiface");
+        assert_eq!(b.in_port(0x001f), 0, "IN 1Fh pages out");
+        assert_eq!(b.read(0x0066), 0x11, "IN 1Fh hides Multiface");
+    }
+
+    #[test]
+    fn multiface_in_9f_pages_back_in() {
+        let mut b = Bus48::new();
+        b.rom[0] = 0x11;
+        let mut mf_rom = [0u8; MULTIFACE1_SIZE];
+        mf_rom[0] = 0xaa;
+        b.attach_multiface(&mf_rom).unwrap();
+        b.multiface.as_mut().unwrap().page_in();
+        assert_eq!(b.read(0x0000), 0xaa);
+        let _ = b.in_port(0x001f);
+        assert_eq!(b.read(0x0000), 0x11);
+        let _ = b.in_port(0x009f);
+        assert_eq!(b.read(0x0000), 0xaa, "IN 9Fh pages Multiface back in");
+    }
+
+    #[test]
+    fn multiface_kempston_on_in_1f_while_attached() {
+        let mut b = Bus48::new();
+        b.attach_multiface(&[0u8; MULTIFACE1_SIZE]).unwrap();
+        b.kempston.fire = true;
+        b.kempston.right = true;
+        b.multiface.as_mut().unwrap().page_in();
+        assert_eq!(b.in_port(0x001f), 0x11);
+        assert!(!b.multiface.as_ref().unwrap().paged);
     }
 
     #[test]
@@ -731,7 +766,9 @@ mod tests {
         let mut mf_rom = [0u8; MULTIFACE1_SIZE];
         mf_rom[0x66] = 0xc3;
         b.attach_multiface(&mf_rom).unwrap();
-        b.multiface.as_mut().unwrap().nmi();
+        let mf = b.multiface.as_mut().unwrap();
+        mf.nmi();
+        mf.page_on_nmi_vector();
         assert_eq!(
             b.read(0x0066),
             0xc3,
