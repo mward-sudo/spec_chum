@@ -345,6 +345,9 @@ final class LivingRoomNSView: NSView {
         var modifiers = SpectrumKeymap.modifierKeys(flags: flags, suppressCaps: suppressCaps)
         var matrixHeld: [(UInt32, UInt32)] = []
         for code in held {
+            if SpectrumKeymap.isJoystickRoutingKey(keyCode: code) {
+                continue
+            }
             let chord = SpectrumKeymap.chords(keyCode: code, flags: flags)
             if SpectrumKeymap.suppressesModifierCaps(keyCode: code) {
                 matrixHeld.append(contentsOf: chord)

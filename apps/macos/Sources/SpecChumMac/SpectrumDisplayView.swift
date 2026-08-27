@@ -307,6 +307,9 @@ final class SpectrumNSView: NSView {
             host?.setKey(row: row, bit: bit, pressed: true)
         }
         for code in held {
+            if SpectrumKeymap.isJoystickRoutingKey(keyCode: code) {
+                continue
+            }
             let chord = SpectrumKeymap.chords(keyCode: code, flags: flags)
             if SpectrumKeymap.suppressesModifierCaps(keyCode: code) {
                 for (row, bit) in chord {

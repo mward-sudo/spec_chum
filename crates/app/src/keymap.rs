@@ -1,64 +1,21 @@
 //! Host (macOS/egui) → ZX Spectrum keyboard matrix mapping.
 //!
-//! Spectrum matrix rows (active-low bits 0–4), matching `bus::Keyboard`:
-//! - 0: Caps Shift, Z, X, C, V
-//! - 1: A, S, D, F, G
-//! - 2: Q, W, E, R, T
-//! - 3: 1, 2, 3, 4, 5
-//! - 4: 0, 9, 8, 7, 6
-//! - 5: P, O, I, U, Y
-//! - 6: Enter, L, K, J, H
-//! - 7: Space, Symbol Shift, M, N, B
-//!
-//! ## macOS / egui tips
-//! - `"` is Symbol Shift + P (not Shift+Quote alone as Caps+anything).
-//! - Cursor keys are Caps Shift + 5/6/7/8 (also mirrored to Kempston in the app).
-//! - Option/Alt or Ctrl hold Symbol Shift for letter chords (e.g. Option+J → `-`).
-//! - Shift alone is Caps Shift for letters/digits (uppercase / keywords with Caps).
+//! Shared matrix constants and Symbol-layer tables live in [`spec_chum_host::keymap`]
+//! (ANSI codes for the SwiftUI shell). This module maps [`egui::Key`] + modifiers.
 
 use eframe::egui::{Key, Modifiers};
 
-/// Caps Shift (row 0, bit 0).
-pub const CAPS: (usize, u8) = (0, 0);
-/// Symbol Shift (row 7, bit 1).
-pub const SYM: (usize, u8) = (7, 1);
-
-/// A Spectrum key chord: one or more matrix positions held together.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Chord {
-    pub keys: Vec<(usize, u8)>,
-}
-
-impl Chord {
-    #[must_use]
-    pub fn single(row: usize, bit: u8) -> Self {
-        Self {
-            keys: vec![(row, bit)],
-        }
-    }
-
-    #[must_use]
-    pub fn with_caps(row: usize, bit: u8) -> Self {
-        Self {
-            keys: vec![CAPS, (row, bit)],
-        }
-    }
-
-    #[must_use]
-    pub fn with_sym(row: usize, bit: u8) -> Self {
-        Self {
-            keys: vec![SYM, (row, bit)],
-        }
-    }
-}
+pub use spec_chum_host::keymap::{Chord, CAPS, MAPPING_DOC, SYM};
 
 /// Map an egui key + modifiers to Spectrum matrix chords.
 ///
 /// Returns `None` when the key is unused (e.g. F-keys). Punctuation that needs
-/// Symbol Shift overrides Caps from the host Shift key.
+/// Symbol Shift overrides Caps from the host Shift key. Arrow keys and Tab are
+/// joystick-routed in the app and return `None` here.
 #[must_use]
 pub fn chord_for(key: Key, modifiers: Modifiers) -> Option<Chord> {
     // Arrow keys → Spectrum cursor (Caps + 5/6/7/8), regardless of Shift.
+    // Matrix injection is skipped in `sync_keyboard`; joystick routing applies them.
     match key {
         Key::ArrowLeft => return Some(Chord::with_caps(3, 4)), // 5
         Key::ArrowDown => return Some(Chord::with_caps(4, 4)), // 6
@@ -80,19 +37,12 @@ pub fn chord_for(key: Key, modifiers: Modifiers) -> Option<Chord> {
 /// Modifier keys alone (when no punctuation override is active).
 #[must_use]
 pub fn modifier_keys(modifiers: Modifiers, suppress_caps: bool) -> Vec<(usize, u8)> {
-    let mut out = Vec::new();
-    if modifiers.shift && !suppress_caps {
-        out.push(CAPS);
-    }
-    // Option/Alt or Ctrl → Symbol Shift (macOS Option is the natural Symbol analogue).
-    if modifiers.alt || modifiers.ctrl || modifiers.command {
-        // Command alone is often used by the OS; still map when held with a letter
-        // via apply path — here we expose Sym for alt/ctrl primarily.
-        if modifiers.alt || modifiers.ctrl {
-            out.push(SYM);
-        }
-    }
-    out
+    spec_chum_host::keymap::modifier_keys(
+        modifiers.shift,
+        modifiers.alt,
+        modifiers.ctrl,
+        suppress_caps,
+    )
 }
 
 /// True when this key event owns Symbol/Caps itself (punctuation / arrows).
@@ -257,20 +207,6 @@ fn punct_chord(key: Key, modifiers: Modifiers) -> Option<Chord> {
         _ => None,
     }
 }
-
-/// Human-readable mapping notes for Help / docs.
-pub const MAPPING_DOC: &str = "\
-Mac → Spectrum keyboard
-• Letters/digits: direct matrix; Shift = Caps Shift; Option/Alt = Symbol Shift
-• \" (Shift+Quote) = Symbol + P    ' (Quote) = Symbol + 7
-• Arrows + Tab fire = host joystick (Machine menu: Kempston / Sinclair / Cursor)
-• USB/Bluetooth gamepads via gilrs (same stick + South/A fire)
-• Backspace = Caps + 0 (DELETE)
-• ; , . / - = = Symbol + O N M V J L (Shift variants for : < > ? _ +)
-• LOAD \"\": Tape → Type LOAD \"\" / Type LOAD \"\" CODE (all models)
-• 128K/+3: Type LOAD selects 48 BASIC then keywords — +3 menu Loader is disk, not tape
-• +2A: Type LOAD selects menu Loader (tape) for PROGRAM; CODE uses 48 BASIC
-";
 
 #[cfg(test)]
 mod tests {

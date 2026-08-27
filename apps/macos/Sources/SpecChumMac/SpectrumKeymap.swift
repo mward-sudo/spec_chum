@@ -1,6 +1,6 @@
 import AppKit
 
-/// Mac → Spectrum matrix mapping (parity with `crates/app/src/keymap.rs`).
+/// Mac → Spectrum matrix mapping (parity with `host_api::keymap` / egui `app::keymap`).
 ///
 /// Uses hardware key codes so mapping works even when synthetic / empty
 /// `characters` are present (flagsChanged rebuilds, local monitors).
@@ -8,18 +8,28 @@ enum SpectrumKeymap {
     static let caps: (UInt32, UInt32) = (0, 0)
     static let sym: (UInt32, UInt32) = (7, 1)
 
+    /// Arrow keys + Tab — joystick stick only (egui skips matrix chords for these).
+    static func isJoystickRoutingKey(keyCode: UInt16) -> Bool {
+        switch keyCode {
+        case 123, 124, 125, 126, 48: // arrows, Tab
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Matrix chords for one physical key + current modifiers.
+    /// Joystick-routing keys return `[]` — use `kempstonMask(held:)` instead.
     static func chords(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> [(UInt32, UInt32)] {
+        if isJoystickRoutingKey(keyCode: keyCode) {
+            return []
+        }
+
         let shift = flags.contains(.shift)
 
-        // Arrows / delete → Caps + digit (ignore host Shift as extra Caps).
-        switch keyCode {
-        case 123: return [caps, (3, 4)] // left → Caps+5
-        case 125: return [caps, (4, 4)] // down → Caps+6
-        case 126: return [caps, (4, 3)] // up → Caps+7
-        case 124: return [caps, (4, 2)] // right → Caps+8
-        case 51: return [caps, (4, 0)] // delete → Caps+0
-        default: break
+        // Backspace → Caps+0 (DELETE); not joystick-routed.
+        if keyCode == 51 {
+            return [caps, (4, 0)]
         }
 
         // Symbol-layer punctuation (host Shift must not also inject Caps).
@@ -62,7 +72,7 @@ enum SpectrumKeymap {
 
     static func suppressesModifierCaps(keyCode: UInt16) -> Bool {
         switch keyCode {
-        case 123, 124, 125, 126, 51: // arrows, delete
+        case 51: // delete
             return true
         case 39, 41, 43, 47, 44, 27, 24, 33, 30, 42, 50: // punct
             return true
@@ -86,7 +96,7 @@ enum SpectrumKeymap {
     // MARK: - Private
 
     private static func letterDigit(keyCode: UInt16) -> (UInt32, UInt32)? {
-        // ANSI US key codes (same as Carbon / HIToolbox).
+        // ANSI US key codes (same as Carbon / HIToolbox / host_api::keymap::ansi).
         switch keyCode {
         case 18: return (3, 0) // 1
         case 19: return (3, 1) // 2

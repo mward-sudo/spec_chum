@@ -112,18 +112,23 @@ Abbreviated “feel of loading” that always finishes in about 20 seconds is st
 
 ## Keyboard (Mac native shell)
 
-Mapping matches egui (`crates/app/src/keymap.rs`) using **ANSI key codes** in
-`SpectrumKeymap.swift`:
+Mapping matches egui (`crates/app/src/keymap.rs`) and is **tested in Rust**
+against ANSI key codes in [`host_api::keymap`](../../crates/host_api/src/keymap.rs)
+(`SpectrumKeymap.swift` mirrors that table):
 
 | Host | Spectrum |
 | --- | --- |
 | Letters / digits | Direct matrix |
 | Shift | Caps Shift |
 | Option / Ctrl | Symbol Shift |
-| Arrows | Caps + 5/6/7/8 (cursor) |
+| Arrows | Host joystick only (Kempston port and/or Sinclair/Cursor matrix via `sc_set_joystick`) — **not** duplicate Caps+5/6/7/8 matrix chords |
+| Tab | Kempston fire (joystick bit 4) |
 | Backspace | Caps + 0 (DELETE) |
 | `'` / `"` | Symbol + 7 / Symbol + P |
 | `; , . / - = [ ] \\ \`` (+ Shift variants) | Same Symbol layer as egui |
+
+**Keyword entry:** one short press inserts the whole keyword (`j` → `LOAD ` with trailing space).
+OS autorepeat is ignored; keys stay down until `keyUp` (see below).
 
 **Key application vs focus ring:** A SwiftUI focus ring (or `.focusable()`) does **not**
 make SpecChum the key app. Keystrokes only reach the Spectrum matrix when SpecChum
@@ -140,8 +145,24 @@ keeps a matrix key held until `keyUp`; treating repeats as new presses spams 48K
 keyword mode (e.g. one short `j` → many `LOAD`s). Duplicate press events while a
 key is already held are also ignored so the matrix does not flicker.
 
-**Verify:** after `./scripts/run_macos_app.sh`, typing must **not** appear in Terminal;
-after 48K BASIC boots, letters should appear in BASIC; one short `j` → one `LOAD`.
+### Manual verify (48K BASIC)
+
+After `./scripts/run_macos_app.sh` (click the SpecChum window — keys must **not** echo in Terminal):
+
+| Action | Expected |
+| --- | --- |
+| `p` at `K` cursor | Inserts `PRINT ` (keyword + space) |
+| Short `j` | One `LOAD` keyword, not repeated |
+| Shift+`2` (Quote key) | `"` via Symbol+P, not Caps+quote |
+| `'` (Quote alone) | Symbol+7 → `'` |
+| Option+`j` | `-` (Symbol layer) |
+| Arrow keys (Kempston mode) | Cursor in BASIC **and** Kempston left/right/up/down in games; matrix must not also show Caps+5/6/7/8 |
+| Tab (Kempston) | Fire bit on port `0x1F` |
+| Backspace | DELETE (Caps+0) |
+| Settings → Cursor + arrows | Caps+5/6/7/8 via joystick routing only |
+| Tape → Type LOAD `""` | Keyword script; 128K/+3 drops to 48 BASIC first |
+
+Rust regression tests: `cargo test -p host_api keymap` and session joystick/matrix tests in `crates/host_api/src/session.rs`.
 
 ## Joystick (Mac native shell)
 
