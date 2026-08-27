@@ -460,7 +460,9 @@ impl Memory for MemIoPlus3<'_> {
 
 impl Io for MemIoPlus3<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        // +2A/+3 gate array: no Sinclair-style ULA I/O contention.
+        // +2A/+3 gate array: no Sinclair-style ULA I/O contention. FDC ports
+        // `2FFD`/`3FFD` are on the gate array as well (wait=0). Confirmed for
+        // +3DOS; no accuracy follow-up from #141.
         let _ = (port, t);
         let v = self.bus.in_port(port);
         if let Some(w) = self.watch.as_ref() {
@@ -719,7 +721,9 @@ impl Machine {
                 bus.kempston.reset();
                 bus.mouse.reset();
                 *ula = Ula48::new();
-                // +3 DSK stays in `bus.fdc.image`; only pause any inserted tape.
+                // +3 DSK stays in `bus.fdc.image`; reset µPD765 command state.
+                bus.fdc.reset_controller();
+                bus.fdc.set_motor(false);
                 if let Some(t) = tape.as_mut() {
                     t.set_playing(false);
                 }
@@ -2998,6 +3002,8 @@ mod tests {
             );
             assert_eq!(mem3.in_port(FE, t).1, 0, "+3 I/O never contends");
             assert_eq!(mem3.in_port(HI_FF, t).1, 0, "+3 I/O never contends");
+            assert_eq!(mem3.in_port(0x2ffd, t).1, 0, "+3 FDC status uncontended");
+            assert_eq!(mem3.in_port(0x3ffd, t).1, 0, "+3 FDC data uncontended");
         }
 
         // Access after the instruction has already burned into the contended window.
@@ -3876,6 +3882,48 @@ mod tests {
             assert_eq!(bus.read(0x0000), 0x5a);
             assert_eq!(bus.in_port(0x00ff), 0xff, "no floating bus");
         }
+    }
+
+    /// ROM-gated: Loader (menu Enter) must talk to the µPD765 on a synthetic
+    /// +3DOS DATA disk. Skips if `roms/plus3/plus3.rom` is missing — do not
+    /// fall back to +2A ROM.
+    #[test]
+    fn plus3_loader_talks_to_fdc_on_data_disk() {
+        let Some(rom) = rom_plus3_only() else {
+            eprintln!("skip: roms/plus3/plus3.rom missing — run ./scripts/fetch_roms.sh");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        m.insert_disk(formats::DskImage::synthetic_plus3_data())
+            .expect("insert");
+        for _ in 0..120 {
+            let _ = m.run_frame();
+        }
+        // Loader is the first menu item; Enter = row 6 bit 0.
+        m.hold_keys(&[(6, 0)], 10);
+        m.hold_keys(&[], 5);
+        m.keyboard_mut().reset();
+        for _ in 0..500 {
+            let _ = m.run_frame();
+        }
+        let Machine::SpecPlus3 { bus, cpu, .. } = &m else {
+            panic!("expected SpecPlus3");
+        };
+        assert!(
+            bus.fdc.read_count > 0,
+            "Loader/+3DOS should READ from the FDC (seek={} read={} write={} PC={:04X} 1FFD={:02X} PCN={})",
+            bus.fdc.seek_count,
+            bus.fdc.read_count,
+            bus.fdc.write_count,
+            cpu.regs.pc,
+            bus.page_1ffd,
+            bus.fdc.pcn(0)
+        );
+        assert!(
+            bus.fdc.seek_count > 0,
+            "expected SEEK or RECALIBRATE before/during disk boot (seek=0 read={})",
+            bus.fdc.read_count
+        );
     }
 
     /// Shared `LOAD "" CODE` harness for `attr_mark.tap`. Returns whether CODE
