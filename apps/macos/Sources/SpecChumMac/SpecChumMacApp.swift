@@ -93,11 +93,24 @@ struct SpecChumMacApp: App {
                     host.multifaceNmi()
                 }
                 Divider()
+                Button("Attach DivMMC") {
+                    host.attachDivmmc()
+                }
+                .disabled(!host.model.supportsBeta)
+                Button("Open DivMMC SD image…") {
+                    openDivmmcSd()
+                }
+                .disabled(!host.model.supportsBeta)
+                Button("Open DivMMC EEPROM (ESXDOS)…") {
+                    openDivmmcEeprom()
+                }
+                .disabled(!host.model.supportsBeta)
+                Divider()
                 Button("Load TR-DOS ROM…") {
                     openTrdosRom()
                 }
                 .disabled(!host.model.supportsBeta)
-                Button("DivMMC / IF1: use egui (stubs)") {}
+                Button("IF1 / Beta: use egui (stubs)") {}
                     .disabled(true)
             }
 
@@ -205,6 +218,37 @@ struct SpecChumMacApp: App {
         panel.title = "Open TR-DOS disk (TRD)"
         if panel.runModal() == .OK, let url = panel.url {
             host.openTrd(at: url)
+        }
+    }
+
+    private func openDivmmcSd() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "img") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+            UTType(filenameExtension: "mmc") ?? .data,
+            UTType(filenameExtension: "sd") ?? .data,
+        ]
+        panel.title = "Open DivMMC SD image"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadDivmmcSd(at: url)
+        }
+    }
+
+    private func openDivmmcEeprom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+            UTType(filenameExtension: "eeprom") ?? .data,
+        ]
+        panel.title = "Open DivMMC EEPROM (ESXDOS, 8 KiB+)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadDivmmcEeprom(at: url)
         }
     }
 

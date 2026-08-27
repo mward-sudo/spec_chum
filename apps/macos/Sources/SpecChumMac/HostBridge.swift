@@ -1393,6 +1393,35 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    func attachDivmmc() {
+        guard let handle else { return }
+        if sc_attach_divmmc(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "DivMMC attach failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func loadDivmmcSd(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_divmmc_sd(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "DivMMC SD load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func loadDivmmcEeprom(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_divmmc_eeprom(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "DivMMC EEPROM load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
     /// OR keyboard Kempston bits with GCController digital stick + A fire.
     private func pushJoystick() {
         guard let handle else { return }

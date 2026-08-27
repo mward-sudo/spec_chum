@@ -588,6 +588,44 @@ impl HostSession {
         self.machine.as_ref().is_some_and(Machine::has_multiface)
     }
 
+    /// Attach DivMMC on 48K/128K (no media).
+    pub fn attach_divmmc(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.attach_divmmc().map_err(HostError::Message)?;
+        self.status = "DivMMC attached".into();
+        Ok(())
+    }
+
+    /// Attach DivMMC and load a flat SD/MMC image.
+    pub fn load_divmmc_sd(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        let div = m.attach_divmmc().map_err(HostError::Message)?;
+        div.attach_sd(data);
+        self.status = format!("DivMMC SD {}", path.display());
+        Ok(())
+    }
+
+    /// Attach DivMMC and load an ESXDOS EEPROM (8 KiB or larger prefix).
+    pub fn load_divmmc_eeprom(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        m.attach_divmmc_eeprom(&data).map_err(HostError::Message)?;
+        self.status = format!("DivMMC EEPROM {}", path.display());
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn has_divmmc(&self) -> bool {
+        self.machine.as_ref().is_some_and(Machine::has_divmmc)
+    }
+
     #[must_use]
     pub fn joystick_mode(&self) -> JoystickMode {
         self.joystick_mode
