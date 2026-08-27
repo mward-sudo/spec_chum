@@ -48,6 +48,11 @@ struct SpecChumMacApp: App {
                 }
                 .disabled(!host.model.supportsDisk)
 
+                Button("Open TRD…") {
+                    openTrd()
+                }
+                .disabled(!host.model.supportsBeta)
+
                 Button("Open ROM…") {
                     openRom()
                 }
@@ -88,7 +93,11 @@ struct SpecChumMacApp: App {
                     host.multifaceNmi()
                 }
                 Divider()
-                Button("DivMMC / IF1 / Beta: use egui (stubs)") {}
+                Button("Load TR-DOS ROM…") {
+                    openTrdosRom()
+                }
+                .disabled(!host.model.supportsBeta)
+                Button("DivMMC / IF1: use egui (stubs)") {}
                     .disabled(true)
             }
 
@@ -183,6 +192,33 @@ struct SpecChumMacApp: App {
         panel.title = "Open Disk (DSK)"
         if panel.runModal() == .OK, let url = panel.url {
             host.openDsk(at: url)
+        }
+    }
+
+    private func openTrd() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "trd") ?? .data,
+        ]
+        panel.title = "Open TR-DOS disk (TRD)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.openTrd(at: url)
+        }
+    }
+
+    private func openTrdosRom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+        ]
+        panel.title = "Load TR-DOS ROM (16 KiB)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadTrdosRom(at: url)
         }
     }
 

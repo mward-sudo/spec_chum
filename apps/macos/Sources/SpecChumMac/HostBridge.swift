@@ -101,6 +101,9 @@ final class HostBridge: ObservableObject {
 
         /// +3 has floppy; toolbar/File Open may include `.dsk`.
         var supportsDisk: Bool { self == .spectrumPlus3 }
+
+        /// Beta Disk / TR-DOS on 48K and 128K (not +2A/+3).
+        var supportsBeta: Bool { self == .spectrum48 || self == .spectrum128 }
     }
 
     @Published private(set) var status: String = "Starting…"
@@ -1094,6 +1097,27 @@ final class HostBridge: ObservableObject {
             mediaTitle = url.lastPathComponent
             // Prefer a clear +3DOS hint over the raw host status string.
             status = "DSK inserted — use +3 Loader / +3DOS"
+        }
+    }
+
+    func openTrd(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_trd(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "TRD load failed"
+        } else {
+            mediaTitle = url.lastPathComponent
+            status = "TRD inserted — attach TR-DOS ROM, then RANDOMIZE USR 15616"
+        }
+    }
+
+    func loadTrdosRom(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_trdos_rom(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "TR-DOS ROM load failed"
+        } else {
+            refreshStatus()
         }
     }
 

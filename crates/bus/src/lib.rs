@@ -12,7 +12,7 @@ mod multiface;
 mod plus3;
 
 pub use ay::{Ay8912, StereoMode};
-pub use beta_disk::BetaDisk;
+pub use beta_disk::{BetaDisk, TRDOS_ROM_SIZE};
 pub use divmmc::{
     DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
     PORT_SPI_DATA as DIVMMC_PORT_SPI_DATA,
@@ -180,6 +180,13 @@ impl Bus48 {
         self.beta.get_or_insert_with(BetaDisk::new)
     }
 
+    /// M1 paging for an attached Beta / TR-DOS ROM (48K window `0x3C00–0x3DFF`).
+    pub fn notify_beta_m1(&mut self, pc: u16) {
+        if let Some(beta) = self.beta.as_mut() {
+            beta.notify_m1(pc, 0x3c00);
+        }
+    }
+
     #[inline]
     #[must_use]
     pub fn is_contended(addr: u16) -> bool {
@@ -212,6 +219,11 @@ impl Bus48 {
         }
         if let Some(if1) = self.interface1.as_ref() {
             if let Some(v) = if1.read_rom(addr) {
+                return v;
+            }
+        }
+        if let Some(beta) = self.beta.as_ref() {
+            if let Some(v) = beta.read_rom(addr) {
                 return v;
             }
         }
@@ -418,6 +430,13 @@ impl Bus128 {
         self.beta.get_or_insert_with(BetaDisk::new)
     }
 
+    /// M1 paging for an attached Beta / TR-DOS ROM (128K window `0x3D00–0x3DFF`).
+    pub fn notify_beta_m1(&mut self, pc: u16) {
+        if let Some(beta) = self.beta.as_mut() {
+            beta.notify_m1(pc, 0x3d00);
+        }
+    }
+
     /// Compatibility: selected AY register index.
     #[must_use]
     pub fn ay_reg(&self) -> u8 {
@@ -467,6 +486,11 @@ impl Bus128 {
         }
         if let Some(if1) = self.interface1.as_ref() {
             if let Some(v) = if1.read_rom(addr) {
+                return v;
+            }
+        }
+        if let Some(beta) = self.beta.as_ref() {
+            if let Some(v) = beta.read_rom(addr) {
                 return v;
             }
         }
@@ -784,5 +808,43 @@ mod tests {
         assert_eq!(b.in_port(0x001f), 0x02); // DRQ
         assert_eq!(b.in_port(0x007f), 0x12);
         assert_eq!(b.in_port(0x007f), 0x34);
+    }
+
+    #[test]
+    fn beta_trdos_rom_overlays_when_paged() {
+        let mut rom = [0u8; crate::TRDOS_ROM_SIZE];
+        rom[0] = 0x42;
+        let mut b = Bus48::new();
+        b.rom[0] = 0x11;
+        let beta = b.attach_beta();
+        beta.load_rom(&rom).unwrap();
+        beta.page_trdos(true);
+        assert_eq!(b.read(0x0000), 0x42);
+        b.beta.as_mut().unwrap().page_trdos(false);
+        assert_eq!(b.read(0x0000), 0x11);
+    }
+
+    #[test]
+    fn kempston_port_1f_untouched_when_beta_attached_but_not_paged() {
+        let mut b = Bus48::new();
+        b.kempston.fire = true;
+        b.attach_beta();
+        assert_eq!(b.in_port(0x001f), 0x10);
+    }
+
+    #[test]
+    fn bus128_m1_pages_trdos_at_3d00_not_3c00() {
+        let mut rom = [0u8; crate::TRDOS_ROM_SIZE];
+        rom[0] = 0x42;
+        let mut b = Bus128::new();
+        b.rom[0][0] = 0x11;
+        let beta = b.attach_beta();
+        beta.load_rom(&rom).unwrap();
+        b.notify_beta_m1(0x3c00);
+        assert!(!b.beta.as_ref().unwrap().paged);
+        assert_eq!(b.read(0x0000), 0x11);
+        b.notify_beta_m1(0x3d00);
+        assert!(b.beta.as_ref().unwrap().paged);
+        assert_eq!(b.read(0x0000), 0x42);
     }
 }
