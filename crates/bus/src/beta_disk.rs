@@ -621,8 +621,9 @@ mod tests {
         beta.page_trdos(true);
         assert!(beta.out_port(0x001f, 0x80));
         assert_eq!(beta.status, STAT_NOT_READY);
+        assert_eq!(beta.in_port(0x00ff), Some(0x80)); // INTRQ before status read
         assert_eq!(beta.in_port(0x001f), Some(STAT_NOT_READY));
-        assert_eq!(beta.in_port(0x00ff), Some(0x80));
+        assert_eq!(beta.in_port(0x00ff), Some(0), "status read clears INTRQ");
     }
 
     #[test]
