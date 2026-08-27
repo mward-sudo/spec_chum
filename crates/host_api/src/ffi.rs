@@ -561,6 +561,45 @@ pub extern "C" fn sc_clear_joystick(handle: *mut c_void) -> c_int {
 }
 
 #[no_mangle]
+pub extern "C" fn sc_set_mouse_delta(handle: *mut c_void, dx: c_int, dy: c_int) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    let dx = dx.clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8;
+    let dy = dy.clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8;
+    match s.set_mouse_delta(dx, dy) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_set_mouse_buttons(
+    handle: *mut c_void,
+    left: c_int,
+    right: c_int,
+    middle: c_int,
+) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.set_mouse_buttons(left != 0, right != 0, middle != 0) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn sc_attach_multiface(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
     let Some(s) = session_mut(handle) else {
@@ -956,6 +995,16 @@ mod tests {
         let err = sc_last_error();
         assert!(!err.is_null());
         sc_string_free(err);
+    }
+
+    #[test]
+    fn ffi_mouse_delta_and_buttons_smoke() {
+        let h = sc_create(0, 1);
+        assert!(!h.is_null());
+        // No ROM yet — must fail cleanly.
+        assert_eq!(sc_set_mouse_delta(h, 1, 0), -1);
+        assert_eq!(sc_set_mouse_buttons(h, 1, 0, 0), -1);
+        sc_destroy(h);
     }
 
     #[test]

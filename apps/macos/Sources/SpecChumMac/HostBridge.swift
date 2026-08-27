@@ -209,6 +209,20 @@ final class HostBridge: ObservableObject {
             _ = applyJoystickMode(joystickMode)
         }
     }
+    /// When true, Spectrum / living-room pointer motion feeds the Kempston mouse (egui parity).
+    @Published var kempstonMouse: Bool = false {
+        didSet {
+            guard oldValue != kempstonMouse else { return }
+            if !kempstonMouse {
+                pendingMouseDx = 0
+                pendingMouseDy = 0
+                mouseLeft = false
+                mouseRight = false
+                mouseMiddle = false
+                clearGuestMouseButtons()
+            }
+        }
+    }
     @Published var model: Model = .spectrum48 {
         didSet {
             guard let handle, oldValue != model, !suppressModelPush else { return }
@@ -256,6 +270,12 @@ final class HostBridge: ObservableObject {
     /// Arrows + Tab → Kempston bits (egui parity); OR’d with gamepad each frame.
     private(set) var keyboardJoystickMask: UInt32 = 0
     private var joystickModeApplied = false
+    /// Accumulated host pointer delta since last `pushMouse` (egui frame clamp parity).
+    private var pendingMouseDx: Int32 = 0
+    private var pendingMouseDy: Int32 = 0
+    private var mouseLeft = false
+    private var mouseRight = false
+    private var mouseMiddle = false
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
     private var ensureAudioObserver: NSObjectProtocol?
@@ -897,6 +917,7 @@ final class HostBridge: ObservableObject {
         if lastFrameUptime == 0 {
             lastFrameUptime = now
             pushJoystick()
+            pushMouse()
             tickKeyScript()
             sc_run_frame(handle)
             syncTapePublished()
@@ -912,6 +933,7 @@ final class HostBridge: ObservableObject {
         var ran = 0
         while now - lastFrameUptime >= Self.framePeriod, ran < Self.maxCatchUpFrames {
             pushJoystick()
+            pushMouse()
             tickKeyScript()
             sc_run_frame(handle)
             // Enqueue each frame — sc_run_frame replaces PCM; skipping mid catch-up
@@ -1348,6 +1370,54 @@ final class HostBridge: ObservableObject {
         guard let handle else { return false }
         keyboardJoystickMask = 0
         return sc_clear_joystick(handle) == 0
+    }
+
+    /// NSEvent deltas: positive `deltaY` is up; Kempston/egui use positive dy = down.
+    func noteMouseDelta(deltaX: CGFloat, deltaY: CGFloat) {
+        guard kempstonMouse else { return }
+        pendingMouseDx += Int32(deltaX.rounded())
+        pendingMouseDy += Int32((-deltaY).rounded())
+    }
+
+    /// `buttonNumber`: 0=left, 1=right, 2=middle (AppKit).
+    func noteMouseButton(buttonNumber: Int, pressed: Bool) {
+        guard kempstonMouse else { return }
+        switch buttonNumber {
+        case 0: mouseLeft = pressed
+        case 1: mouseRight = pressed
+        case 2: mouseMiddle = pressed
+        default: break
+        }
+    }
+
+    func clearMouseButtons() {
+        mouseLeft = false
+        mouseRight = false
+        mouseMiddle = false
+        clearGuestMouseButtons()
+    }
+
+    private func clearGuestMouseButtons() {
+        guard let handle else { return }
+        _ = sc_set_mouse_buttons(handle, 0, 0, 0)
+    }
+
+    /// Clamp accumulated motion to i8 and push buttons (egui per-frame parity).
+    private func pushMouse() {
+        guard kempstonMouse, let handle else { return }
+        let dx = max(Int32(Int8.min), min(Int32(Int8.max), pendingMouseDx))
+        let dy = max(Int32(Int8.min), min(Int32(Int8.max), pendingMouseDy))
+        pendingMouseDx = 0
+        pendingMouseDy = 0
+        if dx != 0 || dy != 0 {
+            _ = sc_set_mouse_delta(handle, Int32(dx), Int32(dy))
+        }
+        _ = sc_set_mouse_buttons(
+            handle,
+            mouseLeft ? 1 : 0,
+            mouseRight ? 1 : 0,
+            mouseMiddle ? 1 : 0
+        )
     }
 
     func attachMultiface(at url: URL) {

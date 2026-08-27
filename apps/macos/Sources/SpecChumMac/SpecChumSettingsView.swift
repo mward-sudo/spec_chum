@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Preferences (⌘,) — model, EAR speed, host volume, joystick.
+/// Preferences (⌘,) — model, EAR speed, host volume, joystick, Kempston mouse.
 /// Frequent actions (Open / Instant / Play / Rewind) stay on the toolbar.
 struct SpecChumSettingsView: View {
     @ObservedObject var host: HostBridge
@@ -49,9 +49,16 @@ struct SpecChumSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Mouse") {
+                Toggle("Kempston mouse", isOn: $host.kempstonMouse)
+                    .help("Map Spectrum / living-room pointer delta and buttons to Kempston ports (egui parity)")
+                Text("When enabled, motion over the Spectrum or living-room view updates ports FBDF/FFDF/FADF.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 440, height: 360)
+        .frame(width: 440, height: 420)
     }
 }

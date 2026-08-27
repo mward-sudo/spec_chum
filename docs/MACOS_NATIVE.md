@@ -56,7 +56,7 @@ SPEC_CHUM_AUDIO_DEBUG=1 apps/macos/.build/release/SpecChumMac
 
 ## What this vertical slice includes
 
-- Native `MenuBar` / `Commands` plus **Settings** (⌘,) — HIG split: **toolbar** = frequent (Open / Instant / Play / Rewind / volume); **Settings** = model, EAR speed, volume, joystick; **menus** = File Open… counterparts, Tape Type LOAD, Machine Reset, Hardware Multiface, Debug (no Instant/Play/model/joystick clones)
+- Native `MenuBar` / `Commands` plus **Settings** (⌘,) — HIG split: **toolbar** = frequent (Open / Instant / Play / Rewind / volume); **Settings** = model, EAR speed, volume, joystick, Kempston mouse; **menus** = File Open… counterparts, Tape Type LOAD, Machine Reset, Hardware Multiface, Debug (no Instant/Play/model/joystick clones)
 - System **`.toolbar`** (SF Symbols: open / Instant; Play–Rewind–EAR speed **only when a tape is inserted**; mute + volume slider; reset) + caption status footer; liquid-glass **`glassEffect`** on macOS 26+ for footer/wash, else **`.ultraThinMaterial`**
 - Window title reflects media + machine (`attr_mark.tap — 48K`); min size 640×520
 - ~50 Hz framebuffer blit (RGBA from Rust) with nearest-neighbor aspect-fit — **default**
@@ -72,6 +72,7 @@ SPEC_CHUM_AUDIO_DEBUG=1 apps/macos/.build/release/SpecChumMac
 - **Tape progress:** `ProgressView` from `sc_tape_progress` (shown only when a tape is present)
 - Keyboard: app activation + Spectrum `NSView` first responder + `sc_set_key` (see below)
 - **Joystick:** `GCController` (USB/Bluetooth) + keyboard Kempston mirror via `sc_set_joystick` (mode in Settings)
+- **Kempston mouse:** Settings toggle; Spectrum / living-room pointer delta + buttons via `sc_set_mouse_delta` / `sc_set_mouse_buttons` (egui Machine-menu parity)
 
 ## Tape loading (Play / LD-BYTES)
 

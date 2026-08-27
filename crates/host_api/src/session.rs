@@ -508,6 +508,31 @@ impl HostSession {
         Ok(())
     }
 
+    /// Accumulate host pointer motion into the Kempston mouse (positive `dy` = down).
+    pub fn set_mouse_delta(&mut self, dx: i8, dy: i8) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        if dx != 0 || dy != 0 {
+            m.mouse_mut().set_delta(dx, dy);
+        }
+        Ok(())
+    }
+
+    /// Set Kempston mouse button state (host primary = left).
+    pub fn set_mouse_buttons(
+        &mut self,
+        left: bool,
+        right: bool,
+        middle: bool,
+    ) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.mouse_mut().set_buttons(left, right, middle);
+        Ok(())
+    }
+
     fn reapply_host_keys(&mut self) {
         let Some(m) = self.machine.as_mut() else {
             return;
@@ -886,6 +911,24 @@ mod tests {
             let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
             assert_ne!(rows[6] & (1 << 3), 0, "J released");
         }
+    }
+
+    #[test]
+    fn kempston_mouse_ports_after_synthetic_deltas() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_mouse_delta(20, -4).unwrap();
+        s.set_mouse_buttons(true, true, false).unwrap();
+        let mouse = s.machine.as_mut().unwrap().mouse_mut();
+        assert_eq!(mouse.x, 20);
+        assert_eq!(mouse.y, 4);
+        assert_eq!(mouse.buttons_byte(), 0xfc); // D0+D1 clear
+        s.set_mouse_buttons(false, false, false).unwrap();
+        assert_eq!(s.machine.as_mut().unwrap().mouse_mut().buttons_byte(), 0xff);
     }
 
     #[test]
