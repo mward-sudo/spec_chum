@@ -110,13 +110,53 @@ impl TrdImage {
         side: u8,
         sector: u8,
     ) -> Option<&[u8; TRD_SECTOR_SIZE]> {
+        let idx = self.index_chs(track, side, sector)?;
+        self.sectors.get(idx)
+    }
+
+    fn index_chs(&self, track: u8, side: u8, sector: u8) -> Option<usize> {
         if side >= self.sides || sector as usize >= TRD_SECTORS_PER_TRACK {
+            return None;
+        }
+        if usize::from(track) >= usize::from(self.tracks) {
             return None;
         }
         let idx = (usize::from(track) * usize::from(self.sides) + usize::from(side))
             * TRD_SECTORS_PER_TRACK
             + usize::from(sector);
-        self.sectors.get(idx)
+        if idx >= self.sectors.len() {
+            return None;
+        }
+        Some(idx)
+    }
+
+    /// Write a 256-byte sector on side 0 (`sector` is 0-based 0..15).
+    pub fn write_sector(
+        &mut self,
+        track: usize,
+        sector: usize,
+        data: &[u8; TRD_SECTOR_SIZE],
+    ) -> bool {
+        let Some(idx) = self.index(track, sector) else {
+            return false;
+        };
+        self.sectors[idx] = *data;
+        true
+    }
+
+    /// Write a 256-byte sector by CHS (`sector` is 0-based 0..15).
+    pub fn write_sector_chs(
+        &mut self,
+        track: u8,
+        side: u8,
+        sector: u8,
+        data: &[u8; TRD_SECTOR_SIZE],
+    ) -> bool {
+        let Some(idx) = self.index_chs(track, side, sector) else {
+            return false;
+        };
+        self.sectors[idx] = *data;
+        true
     }
 }
 
@@ -141,5 +181,17 @@ mod tests {
         let sec = img.read_sector(0, 1).unwrap();
         assert_eq!([sec[0], sec[1]], [0xde, 0xad]);
         assert!(img.read_sector(0, 16).is_none());
+    }
+
+    #[test]
+    fn write_sector_roundtrip() {
+        let mut img = TrdImage::parse(&synthetic_trd()).unwrap();
+        let mut data = [0u8; TRD_SECTOR_SIZE];
+        data[0] = 0xbe;
+        data[1] = 0xef;
+        assert!(img.write_sector(0, 1, &data));
+        let sec = img.read_sector(0, 1).unwrap();
+        assert_eq!([sec[0], sec[1]], [0xbe, 0xef]);
+        assert!(!img.write_sector(0, 16, &data));
     }
 }

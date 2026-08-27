@@ -1145,6 +1145,17 @@ impl Machine {
         }
     }
 
+    /// Insert a `.trd` image (attaches Beta if needed). 48K/128K only.
+    pub fn insert_trd(&mut self, image: formats::TrdImage) -> Result<(), String> {
+        self.attach_beta()?.insert(image);
+        Ok(())
+    }
+
+    /// Load a 16 KiB TR-DOS ROM onto Beta (attaches the interface if needed).
+    pub fn load_trdos_rom(&mut self, data: &[u8]) -> Result<(), String> {
+        self.attach_beta()?.load_rom(data)
+    }
+
     pub fn beta_mut(&mut self) -> Option<&mut bus::BetaDisk> {
         match self {
             Self::Spec48 { bus, .. } => bus.beta.as_mut(),
@@ -1345,6 +1356,7 @@ impl Machine {
                         }
                     }
                     let pc = cpu.regs.pc;
+                    bus.notify_beta_m1(pc);
                     let cpu_on = trace::enabled(trace::Category::CPU);
                     let pre = cpu_on.then(|| {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
@@ -1479,6 +1491,7 @@ impl Machine {
                         }
                     }
                     let pc = cpu.regs.pc;
+                    bus.notify_beta_m1(pc);
                     let cpu_on = trace::enabled(trace::Category::CPU);
                     let pre = cpu_on.then(|| {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
@@ -2060,6 +2073,7 @@ impl Machine {
                     }
                 }
                 let pc = cpu.regs.pc;
+                bus.notify_beta_m1(pc);
                 let was_halt = cpu.regs.halted;
                 let cpu_on = trace::enabled(trace::Category::CPU);
                 let pre = cpu_on.then(|| {
@@ -2171,6 +2185,7 @@ impl Machine {
                     }
                 }
                 let pc = cpu.regs.pc;
+                bus.notify_beta_m1(pc);
                 let was_halt = cpu.regs.halted;
                 let cpu_on = trace::enabled(trace::Category::CPU);
                 let pre = cpu_on.then(|| {
@@ -2342,6 +2357,7 @@ impl Machine {
                 tape_opts,
                 ..
             } => {
+                bus.notify_beta_m1(cpu.regs.pc);
                 let last_t = cpu.t;
                 let mut mio = MemIo48 {
                     bus: bus.as_mut(),
@@ -2369,6 +2385,7 @@ impl Machine {
                 tape_opts,
                 ..
             } => {
+                bus.notify_beta_m1(cpu.regs.pc);
                 let last_t = cpu.t;
                 let mut mio = MemIo128 {
                     bus: bus.as_mut(),
@@ -2760,6 +2777,99 @@ mod tests {
             m.read_mem(0x2000),
             0x42,
             "NMI handler should have written flag to MF RAM"
+        );
+    }
+
+    fn synthetic_trd_with_marker(b0: u8, b1: u8) -> formats::TrdImage {
+        let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
+        raw[0] = b0;
+        raw[1] = b1;
+        formats::TrdImage::parse(&raw).unwrap()
+    }
+
+    /// TR-DOS-style `IN A,(#FF)` / `INI` loop at `USR 15616` (`0x3D00`).
+    fn trdos_read_sector_rom() -> [u8; bus::TRDOS_ROM_SIZE] {
+        let mut rom = [0u8; bus::TRDOS_ROM_SIZE];
+        let code: &[u8] = &[
+            0x3e, 0x3c, // LD A,3Ch
+            0xd3, 0xff, // OUT (FFh),A
+            0xaf, // XOR A
+            0xd3, 0x3f, // OUT (3Fh),A
+            0x3e, 0x01, // LD A,1
+            0xd3, 0x5f, // OUT (5Fh),A
+            0x3e, 0x80, // LD A,80h
+            0xd3, 0x1f, // OUT (1Fh),A
+            0x21, 0x00, 0x40, // LD HL,4000h
+            0x01, 0x7f, 0x00, // LD BC,007Fh
+            0xdb, 0xff, // IN A,(FFh)
+            0xe6, 0xc0, // AND C0h
+            0x28, 0xfa, // JR Z, wait
+            0xfa, 0x22, 0x3d, // JP M, done
+            0xed, 0xa2, // INI
+            0x18, 0xf3, // JR wait
+            0x76, // HALT
+        ];
+        rom[0x3d00..0x3d00 + code.len()].copy_from_slice(code);
+        rom
+    }
+
+    #[test]
+    fn beta_trdos_rom_loop_reads_trd_sector_into_ram() {
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        m.load_trdos_rom(&trdos_read_sector_rom()).unwrap();
+        m.insert_trd(synthetic_trd_with_marker(0x12, 0x34)).unwrap();
+        m.cpu_mut().regs.pc = 0x3d00;
+        m.cpu_mut().regs.sp = 0xfffd;
+        for _ in 0..4000 {
+            if m.cpu().regs.halted {
+                break;
+            }
+            m.step_once();
+        }
+        assert!(m.cpu().regs.halted, "synthetic TR-DOS loop should HALT");
+        assert_eq!(m.read_mem(0x4000), 0x12);
+        assert_eq!(m.read_mem(0x4001), 0x34);
+        assert!(m.has_beta());
+    }
+
+    /// Optional: real `roms/trdos.rom` + 48K ROM. Skips cleanly when either is missing.
+    #[test]
+    fn trdos_rom_usr_15616_pages_when_fixture_present() {
+        let Some(spec) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/trdos.rom");
+        let Ok(trdos) = std::fs::read(&path) else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        if trdos.len() != bus::TRDOS_ROM_SIZE {
+            eprintln!(
+                "skip: roms/trdos.rom is {} bytes, expected {}",
+                trdos.len(),
+                bus::TRDOS_ROM_SIZE
+            );
+            return;
+        }
+        let mut m = Machine::new_48k(&spec).unwrap();
+        m.load_trdos_rom(&trdos).unwrap();
+        m.insert_trd(synthetic_trd_with_marker(0, 0)).unwrap();
+        m.cpu_mut().regs.pc = 0x3d00;
+        m.cpu_mut().regs.sp = 0xfffd;
+        let mut saw_paged = false;
+        for _ in 0..50_000 {
+            m.step_once();
+            if let Machine::Spec48 { bus, .. } = &m {
+                if bus.beta.as_ref().is_some_and(|b| b.paged) {
+                    saw_paged = true;
+                    break;
+                }
+            }
+        }
+        assert!(
+            saw_paged,
+            "fetch at 0x3D00 should page TR-DOS ROM (USR 15616)"
         );
     }
 
