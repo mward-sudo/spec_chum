@@ -662,7 +662,7 @@ pub extern "C" fn sc_has_multiface(handle: *mut c_void) -> c_int {
     i32::from(s.has_multiface())
 }
 
-/* Interface 1 + Microdrive (48K/128K). Returns 0 ok, -1 error. */
+/* Interface 1 + Microdrive (48K/128K). Attach/load/insert return 0 ok, -1 error. */
 #[no_mangle]
 pub extern "C" fn sc_attach_interface1(handle: *mut c_void) -> c_int {
     clear_last_error();
@@ -733,6 +733,7 @@ pub extern "C" fn sc_insert_mdr(handle: *mut c_void, path: *const c_char) -> c_i
 
 #[no_mangle]
 pub extern "C" fn sc_has_interface1(handle: *mut c_void) -> c_int {
+    // Returns 1 if Interface 1 is attached, 0 if absent or handle is null.
     let Some(s) = session_mut(handle) else {
         return 0;
     };

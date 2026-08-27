@@ -2266,6 +2266,7 @@ name = "bus"
 version = "0.4.1"
 dependencies = [
  "formats",
+ "thiserror 2.0.20",
  "trace",
  "ula",
 ]

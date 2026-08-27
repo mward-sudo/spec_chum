@@ -1189,7 +1189,7 @@ impl Machine {
     /// Load an 8 KiB Interface 1 ROM into the attached peripheral (creates IF1 if needed).
     pub fn load_interface1_rom(&mut self, data: &[u8]) -> Result<(), String> {
         let if1 = self.attach_interface1()?;
-        if1.load_rom(data)
+        if1.load_rom(data).map_err(|e| e.to_string())
     }
 
     /// True when IF1 is attached and an 8K ROM image has been loaded.
@@ -2962,8 +2962,10 @@ mod tests {
         let rom = [0u8; 16384];
         let mut m = Machine::new_48k(&rom).unwrap();
         let if1 = m.attach_interface1().unwrap();
-        if1.rom[0x0008] = 0x00; // NOP
-        if1.rom[0x0700] = 0x00; // NOP — post-fetch unpages
+        let mut if1_rom = [0u8; bus::IF1_ROM_SIZE];
+        if1_rom[0x0008] = 0x00; // NOP
+        if1_rom[0x0700] = 0x00; // NOP — post-fetch unpages
+        if1.load_rom(&if1_rom).unwrap();
         m.cpu_mut().regs.pc = 0x0008;
         m.step_cpu_only();
         assert!(
@@ -2981,13 +2983,14 @@ mod tests {
 
     #[test]
     fn interface1_rom_load_skips_cleanly_when_missing() {
-        let path = std::path::Path::new("roms/if1.rom");
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/if1.rom");
         if !path.is_file() {
+            eprintln!("skip: roms/if1.rom missing");
             return;
         }
         let rom = [0u8; 16384];
         let mut m = Machine::new_48k(&rom).unwrap();
-        let data = std::fs::read(path).unwrap();
+        let data = std::fs::read(&path).unwrap();
         m.load_interface1_rom(&data).unwrap();
         assert!(m.interface1_rom_loaded());
     }

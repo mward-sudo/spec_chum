@@ -596,10 +596,16 @@ impl HostSession {
         let if1 = m.attach_interface1().map_err(HostError::Message)?;
         if !if1.rom_loaded {
             for cand in ["roms/if1.rom", "roms/if1-2.rom", "roms/interface1.rom"] {
-                let path = Path::new(cand);
-                if path.is_file() {
-                    let data = std::fs::read(path)?;
-                    if1.load_rom(&data).map_err(HostError::Message)?;
+                for root in rom_search_roots() {
+                    let path = root.join(cand);
+                    if path.is_file() {
+                        let data = std::fs::read(&path)?;
+                        if1.load_rom(&data)
+                            .map_err(|e| HostError::Message(e.to_string()))?;
+                        break;
+                    }
+                }
+                if if1.rom_loaded {
                     break;
                 }
             }

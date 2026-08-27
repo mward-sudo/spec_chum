@@ -644,18 +644,28 @@ impl EmulatorSession {
                     // Optional IF1 ROM — not shipped; try common local paths.
                     let mut loaded = if1.rom_loaded;
                     if !loaded {
+                        let roots = [
+                            Self::workspace_root(),
+                            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+                        ];
                         for cand in ["roms/if1.rom", "roms/if1-2.rom", "roms/interface1.rom"] {
-                            if let Ok(data) = std::fs::read(cand) {
-                                match if1.load_rom(&data) {
-                                    Ok(()) => {
-                                        loaded = true;
-                                        break;
-                                    }
-                                    Err(e) => {
-                                        self.status = e;
-                                        return;
+                            for root in &roots {
+                                let path = root.join(cand);
+                                if let Ok(data) = std::fs::read(&path) {
+                                    match if1.load_rom(&data) {
+                                        Ok(()) => {
+                                            loaded = true;
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            self.status = e.to_string();
+                                            return;
+                                        }
                                     }
                                 }
+                            }
+                            if loaded {
+                                break;
                             }
                         }
                     }

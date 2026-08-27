@@ -14,9 +14,19 @@
 //! motor running, data port R/W walks the cartridge image.
 
 use formats::{MdrImage, MDR_SECTORS, MDR_SECTOR_SIZE};
+use thiserror::Error;
 
 /// Typical IF1 shadow ROM size (8K).
 pub const IF1_ROM_SIZE: usize = 8192;
+
+/// Errors from loading an Interface 1 shadow ROM image.
+#[derive(Debug, Error)]
+pub enum Interface1RomError {
+    #[error("IF1 ROM must be {expected} bytes, got {got}")]
+    InvalidSize { expected: usize, got: usize },
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
 
 /// Number of Microdrive units on the daisy chain (hardware max).
 pub const MICRODRIVE_COUNT: usize = 8;
@@ -188,20 +198,20 @@ impl Interface1 {
         }
     }
 
-    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), Interface1RomError> {
         if data.len() != IF1_ROM_SIZE {
-            return Err(format!(
-                "IF1 ROM must be {IF1_ROM_SIZE} bytes, got {}",
-                data.len()
-            ));
+            return Err(Interface1RomError::InvalidSize {
+                expected: IF1_ROM_SIZE,
+                got: data.len(),
+            });
         }
         self.rom.copy_from_slice(data);
         self.rom_loaded = true;
         Ok(())
     }
 
-    pub fn load_rom_path(&mut self, path: &std::path::Path) -> Result<(), String> {
-        let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    pub fn load_rom_path(&mut self, path: &std::path::Path) -> Result<(), Interface1RomError> {
+        let data = std::fs::read(path)?;
         self.load_rom(&data)
     }
 
@@ -239,7 +249,7 @@ impl Interface1 {
 
     /// Page in before opcode fetch at `0x0008` / `0x1708`.
     pub fn pre_opcode_fetch(&mut self, pc: u16) {
-        if matches!(pc, 0x0008 | 0x1708) {
+        if self.rom_loaded && matches!(pc, 0x0008 | 0x1708) {
             self.rom_paged = true;
         }
     }
@@ -251,10 +261,10 @@ impl Interface1 {
         }
     }
 
-    /// Shadow ROM visible at `0000–3FFF` when paged (8K mirrored).
+    /// Shadow ROM visible at `0000–3FFF` when paged and a ROM image is loaded.
     #[must_use]
     pub fn read_rom(&self, addr: u16) -> Option<u8> {
-        if !self.rom_paged || addr >= 0x4000 {
+        if !self.rom_loaded || !self.rom_paged || addr >= 0x4000 {
             return None;
         }
         Some(self.rom[(addr as usize) & (IF1_ROM_SIZE - 1)])
@@ -401,7 +411,9 @@ mod tests {
     #[test]
     fn shadow_rom_page_and_mirror() {
         let mut if1 = Interface1::new();
-        if1.rom[0x10] = 0x55;
+        let mut rom = [0u8; IF1_ROM_SIZE];
+        rom[0x10] = 0x55;
+        if1.load_rom(&rom).unwrap();
         assert!(if1.read_rom(0x10).is_none());
         if1.page_rom(true);
         assert_eq!(if1.read_rom(0x10), Some(0x55));
@@ -409,8 +421,20 @@ mod tests {
     }
 
     #[test]
+    fn unloaded_rom_never_shadows() {
+        let mut if1 = Interface1::new();
+        if1.page_rom(true);
+        assert!(if1.read_rom(0x10).is_none());
+        if1.page_rom(false);
+        if1.pre_opcode_fetch(0x0008);
+        assert!(!if1.rom_paged);
+        assert!(if1.read_rom(0x10).is_none());
+    }
+
+    #[test]
     fn rom_paging_hooks_at_classic_addresses() {
         let mut if1 = Interface1::new();
+        if1.load_rom(&[0u8; IF1_ROM_SIZE]).unwrap();
         if1.pre_opcode_fetch(0x0008);
         assert!(if1.rom_paged);
         if1.post_opcode_fetch(0x0700);

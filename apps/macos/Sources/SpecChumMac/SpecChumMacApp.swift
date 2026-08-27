@@ -96,12 +96,15 @@ struct SpecChumMacApp: App {
                 Button("Attach Interface 1") {
                     host.attachInterface1()
                 }
+                .disabled(!host.model.supportsBeta)
                 Button("Load Interface 1 ROM…") {
                     openInterface1Rom()
                 }
+                .disabled(!host.model.supportsBeta)
                 Button("Open Microdrive MDR…") {
                     openMdr()
                 }
+                .disabled(!host.model.supportsBeta)
                 Divider()
                 Button("Attach DivMMC") {
                     host.attachDivmmc()
