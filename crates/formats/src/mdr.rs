@@ -9,6 +9,10 @@ use crate::FormatError;
 pub const MDR_SECTORS: usize = 254;
 /// Bytes per MDR sector (header + data + checksums as stored in `.mdr` files).
 pub const MDR_SECTOR_SIZE: usize = 543;
+/// Header record length within each sector (Fuse `LIBSPECTRUM_MICRODRIVE_HEAD_LEN`).
+pub const MDR_HEAD_LEN: usize = 15;
+/// Data bytes per record (Fuse `DATA_LEN`); plus 1 checksum follows in the sector.
+pub const MDR_DATA_LEN: usize = 512;
 /// Full cartridge without write-protect flag.
 pub const MDR_IMAGE_SIZE: usize = MDR_SECTORS * MDR_SECTOR_SIZE;
 

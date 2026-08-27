@@ -12,6 +12,7 @@ ula = { workspace = true }
 tape = { workspace = true }
 formats = { workspace = true }
 trace = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true
