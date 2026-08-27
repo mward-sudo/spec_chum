@@ -566,6 +566,60 @@ impl HostSession {
         self.machine.as_ref().is_some_and(Machine::has_multiface)
     }
 
+    /// Attach Interface 1 on 48K/128K (optionally load `roms/if1.rom` if present).
+    pub fn attach_interface1(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let if1 = m.attach_interface1().map_err(HostError::Message)?;
+        if !if1.rom_loaded {
+            for cand in ["roms/if1.rom", "roms/if1-2.rom", "roms/interface1.rom"] {
+                let path = Path::new(cand);
+                if path.is_file() {
+                    let data = std::fs::read(path)?;
+                    if1.load_rom(&data).map_err(HostError::Message)?;
+                    break;
+                }
+            }
+        }
+        self.status = if if1.rom_loaded {
+            "Interface 1 attached (ROM loaded)".into()
+        } else {
+            "Interface 1 attached (no IF1 ROM on disk)".into()
+        };
+        Ok(())
+    }
+
+    /// Load an 8 KiB Interface 1 ROM image from `path`.
+    pub fn load_interface1_rom(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        m.load_interface1_rom(&data).map_err(HostError::Message)?;
+        self.status = format!("Loaded IF1 ROM {}", path.display());
+        Ok(())
+    }
+
+    /// Insert a Microdrive `.mdr` cartridge (attaches IF1 if needed).
+    pub fn insert_mdr(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        let cart =
+            formats::MdrImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
+        let if1 = m.attach_interface1().map_err(HostError::Message)?;
+        if1.insert_mdr(cart);
+        self.status = format!("Inserted MDR {}", path.display());
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn has_interface1(&self) -> bool {
+        self.machine.as_ref().is_some_and(Machine::has_interface1)
+    }
+
     #[must_use]
     pub fn joystick_mode(&self) -> JoystickMode {
         self.joystick_mode

@@ -79,7 +79,7 @@ struct SpecChumMacApp: App {
                     .keyboardShortcut("r", modifiers: .command)
             }
 
-            // Hardware — Multiface; Joystick mode lives in Settings
+            // Hardware — Multiface / IF1; Joystick mode lives in Settings
             CommandMenu("Hardware") {
                 Button("Attach Multiface 1 ROM…") {
                     openMultifaceRom()
@@ -88,7 +88,17 @@ struct SpecChumMacApp: App {
                     host.multifaceNmi()
                 }
                 Divider()
-                Button("DivMMC / IF1 / Beta: use egui (stubs)") {}
+                Button("Attach Interface 1") {
+                    host.attachInterface1()
+                }
+                Button("Load Interface 1 ROM…") {
+                    openInterface1Rom()
+                }
+                Button("Open Microdrive MDR…") {
+                    openMdr()
+                }
+                Divider()
+                Button("DivMMC / Beta: use egui (stubs)") {}
                     .disabled(true)
             }
 
@@ -197,6 +207,33 @@ struct SpecChumMacApp: App {
         panel.title = "Attach Multiface 1 ROM (8 KiB, 48K)"
         if panel.runModal() == .OK, let url = panel.url {
             host.attachMultiface(at: url)
+        }
+    }
+
+    private func openInterface1Rom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+        ]
+        panel.title = "Load Interface 1 ROM (8 KiB)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadInterface1Rom(at: url)
+        }
+    }
+
+    private func openMdr() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "mdr") ?? .data,
+        ]
+        panel.title = "Open Microdrive MDR"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.insertMdr(at: url)
         }
     }
 

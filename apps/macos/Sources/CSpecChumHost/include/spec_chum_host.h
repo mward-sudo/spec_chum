@@ -71,6 +71,12 @@ int sc_attach_multiface(void *handle, const char *path);
 int sc_multiface_nmi(void *handle);
 int sc_has_multiface(void *handle);
 
+/* Interface 1 + Microdrive (48K/128K). Returns 0 ok, -1 error. */
+int sc_attach_interface1(void *handle);
+int sc_load_interface1_rom(void *handle, const char *path);
+int sc_insert_mdr(void *handle, const char *path);
+int sc_has_interface1(void *handle);
+
 /* Heap strings — free with sc_string_free */
 char *sc_status(void *handle);
 char *sc_last_error(void);

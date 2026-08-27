@@ -8,7 +8,7 @@ mod rzx;
 mod trd;
 
 pub use dsk::{DskImage, Plus3Fdc, Sector};
-pub use mdr::{MdrImage, MDR_IMAGE_SIZE, MDR_SECTORS, MDR_SECTOR_SIZE};
+pub use mdr::{MdrImage, MDR_DATA_LEN, MDR_HEAD_LEN, MDR_IMAGE_SIZE, MDR_SECTORS, MDR_SECTOR_SIZE};
 pub use rzx::{apply_input_byte, RzxFrame, RzxRecording};
 pub use trd::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 

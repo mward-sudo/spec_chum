@@ -17,7 +17,7 @@ pub use divmmc::{
     DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
     PORT_SPI_DATA as DIVMMC_PORT_SPI_DATA,
 };
-pub use interface1::{Interface1, IF1_ROM_SIZE};
+pub use interface1::{Interface1, IF1_ROM_SIZE, MICRODRIVE_COUNT};
 pub use kempston::Kempston;
 pub use kempston_mouse::{
     KempstonMouse, PORT_BUTTONS as MOUSE_PORT_BUTTONS, PORT_X as MOUSE_PORT_X,
@@ -306,6 +306,11 @@ impl Bus48 {
                 return v;
             }
         }
+        if let Some(if1) = self.interface1.as_mut() {
+            if let Some(v) = if1.in_port(port) {
+                return v;
+            }
+        }
         if let Some(d) = self.divmmc.as_mut() {
             if let Some(v) = d.in_port(port) {
                 return v;
@@ -335,6 +340,11 @@ impl Bus48 {
         }
         if let Some(beta) = self.beta.as_mut() {
             if beta.out_port(port, value) {
+                return;
+            }
+        }
+        if let Some(if1) = self.interface1.as_mut() {
+            if if1.out_port(port, value) {
                 return;
             }
         }
@@ -542,6 +552,11 @@ impl Bus128 {
                 return v;
             }
         }
+        if let Some(if1) = self.interface1.as_mut() {
+            if let Some(v) = if1.in_port(port) {
+                return v;
+            }
+        }
         if let Some(d) = self.divmmc.as_mut() {
             if let Some(v) = d.in_port(port) {
                 return v;
@@ -591,6 +606,11 @@ impl Bus128 {
     pub fn out_port(&mut self, port: u16, value: u8) {
         if let Some(beta) = self.beta.as_mut() {
             if beta.out_port(port, value) {
+                return;
+            }
+        }
+        if let Some(if1) = self.interface1.as_mut() {
+            if if1.out_port(port, value) {
                 return;
             }
         }
@@ -754,13 +774,27 @@ mod tests {
     }
 
     #[test]
-    fn interface1_shadow_rom_via_bus48() {
+    fn interface1_microdrive_ports_via_bus48() {
+        let mut b = Bus48::new();
+        let if1 = b.attach_interface1();
+        let mut cart = formats::MdrImage::blank();
+        cart.sectors[0][0] = 0x42;
+        if1.insert_mdr(cart);
+        b.out_port(0x00ef, 0x02);
+        b.out_port(0x00ef, 0x00);
+        let _ = b.in_port(0x00ef);
+        assert_eq!(b.in_port(0x00e7), 0x42);
+    }
+
+    #[test]
+    fn interface1_shadow_rom_mirror_via_bus48() {
         let mut b = Bus48::new();
         b.rom[0x10] = 0x11;
         let if1 = b.attach_interface1();
         if1.rom[0x10] = 0x55;
         if1.page_rom(true);
         assert_eq!(b.read(0x0010), 0x55);
+        assert_eq!(b.read(0x2010), 0x55);
         b.interface1.as_mut().unwrap().page_rom(false);
         assert_eq!(b.read(0x0010), 0x11);
     }
