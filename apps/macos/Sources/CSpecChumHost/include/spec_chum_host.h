@@ -81,6 +81,13 @@ int sc_load_divmmc_eeprom(void *handle, const char *path);
 /* Returns 1 if DivMMC is attached, 0 if not attached or handle is null. */
 int sc_has_divmmc(void *handle);
 
+/* Interface 1 + Microdrive (48K/128K). Attach/load/insert return 0 ok, -1 error. */
+int sc_attach_interface1(void *handle);
+int sc_load_interface1_rom(void *handle, const char *path);
+int sc_insert_mdr(void *handle, const char *path);
+/* Returns 1 if Interface 1 is attached, 0 if absent or handle is null. */
+int sc_has_interface1(void *handle);
+
 /* Heap strings — free with sc_string_free */
 char *sc_status(void *handle);
 char *sc_last_error(void);

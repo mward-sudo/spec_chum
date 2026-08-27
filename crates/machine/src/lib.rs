@@ -27,7 +27,17 @@ use tape::{
     evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, TapPlayer, TapeTrapResult,
     TzxPlayer,
 };
+use thiserror::Error;
 use ula::{int_active_48, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48, INT_LENGTH_128};
+
+/// Errors attaching Interface 1 or loading its shadow ROM.
+#[derive(Debug, Error)]
+pub enum Interface1Error {
+    #[error("Interface 1 is not supported on Spectrum +2A/+3")]
+    UnsupportedModel,
+    #[error(transparent)]
+    Rom(#[from] bus::Interface1RomError),
+}
 
 /// Advance `frame_t` by `dt` and report whether a display frame boundary was crossed.
 ///
@@ -256,6 +266,8 @@ pub struct MemIo48<'a> {
     pub(crate) watch: Option<debugger::WatchHook<'a>>,
     /// `cpu.t` at the start of the current instruction (for mid-instruction ULA time).
     pub(crate) t_step_start: u64,
+    /// When set, the first `read` at this PC runs IF1 pre/post opcode-fetch paging.
+    pub(crate) opcode_pc: Option<u16>,
 }
 
 impl MemIo48<'_> {
@@ -268,6 +280,14 @@ impl MemIo48<'_> {
 
 impl Memory for MemIo48<'_> {
     fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
+        let mut unpage_after = false;
+        if self.opcode_pc == Some(addr) {
+            if let Some(if1) = self.bus.interface1.as_mut() {
+                if1.pre_opcode_fetch(addr);
+                unpage_after = addr == 0x0700;
+            }
+            self.opcode_pc = None;
+        }
         let wait = if Bus48::is_contended(addr) {
             ula::contention_delay_48(self.ula_t(t))
         } else {
@@ -277,6 +297,11 @@ impl Memory for MemIo48<'_> {
             emit_contend_sampled(addr, self.ula_t(t), wait);
         }
         let v = self.bus.read(addr);
+        if unpage_after {
+            if let Some(if1) = self.bus.interface1.as_mut() {
+                if1.post_opcode_fetch(0x0700);
+            }
+        }
         if let Some(w) = self.watch.as_ref() {
             w.mem_access(addr, false, v);
         }
@@ -336,6 +361,8 @@ pub struct MemIo128<'a> {
     pub bus: &'a mut Bus128,
     pub(crate) watch: Option<debugger::WatchHook<'a>>,
     pub(crate) t_step_start: u64,
+    /// When set, the first `read` at this PC runs IF1 pre/post opcode-fetch paging.
+    pub(crate) opcode_pc: Option<u16>,
 }
 
 impl MemIo128<'_> {
@@ -348,6 +375,14 @@ impl MemIo128<'_> {
 
 impl Memory for MemIo128<'_> {
     fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
+        let mut unpage_after = false;
+        if self.opcode_pc == Some(addr) {
+            if let Some(if1) = self.bus.interface1.as_mut() {
+                if1.pre_opcode_fetch(addr);
+                unpage_after = addr == 0x0700;
+            }
+            self.opcode_pc = None;
+        }
         let ft = self.ula_t(t);
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
@@ -357,6 +392,11 @@ impl Memory for MemIo128<'_> {
             emit_contend_sampled(addr, ft, wait);
         }
         let v = self.bus.read(addr);
+        if unpage_after {
+            if let Some(if1) = self.bus.interface1.as_mut() {
+                if1.post_opcode_fetch(0x0700);
+            }
+        }
         if let Some(w) = self.watch.as_ref() {
             w.mem_access(addr, false, v);
         }
@@ -1078,6 +1118,7 @@ impl Machine {
                         bus: bus.as_mut(),
                         watch: None,
                         t_step_start,
+                        opcode_pc: None,
                     };
                     cpu.nmi(&mut mio)
                 };
@@ -1130,11 +1171,11 @@ impl Machine {
     }
 
     /// Attach Interface 1 on 48K/128K.
-    pub fn attach_interface1(&mut self) -> Result<&mut bus::Interface1, String> {
+    pub fn attach_interface1(&mut self) -> Result<&mut bus::Interface1, Interface1Error> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_interface1()),
             Self::Spec128 { bus, .. } => Ok(bus.attach_interface1()),
-            Self::SpecPlus3 { .. } => Err("Interface 1 is not supported on Spectrum +2A/+3".into()),
+            Self::SpecPlus3 { .. } => Err(Interface1Error::UnsupportedModel),
         }
     }
 
@@ -1151,6 +1192,23 @@ impl Machine {
         match self {
             Self::Spec48 { bus, .. } => bus.interface1.is_some(),
             Self::Spec128 { bus, .. } => bus.interface1.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
+    /// Load an 8 KiB Interface 1 ROM into the attached peripheral (creates IF1 if needed).
+    pub fn load_interface1_rom(&mut self, data: &[u8]) -> Result<(), Interface1Error> {
+        let if1 = self.attach_interface1()?;
+        if1.load_rom(data)?;
+        Ok(())
+    }
+
+    /// True when IF1 is attached and an 8K ROM image has been loaded.
+    #[must_use]
+    pub fn interface1_rom_loaded(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.interface1.as_ref().is_some_and(|i| i.rom_loaded),
+            Self::Spec128 { bus, .. } => bus.interface1.as_ref().is_some_and(|i| i.rom_loaded),
             Self::SpecPlus3 { .. } => false,
         }
     }
@@ -1355,6 +1413,7 @@ impl Machine {
                             bus: bus.as_mut(),
                             watch: None,
                             t_step_start: cpu.t,
+                            opcode_pc: None,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -1389,6 +1448,7 @@ impl Machine {
                             bus: bus.as_mut(),
                             watch,
                             t_step_start: cpu.t,
+                            opcode_pc: Some(pc),
                         };
                         cpu.step(&mut mio);
                     }
@@ -1478,6 +1538,7 @@ impl Machine {
                             bus: bus.as_mut(),
                             watch: None,
                             t_step_start: cpu.t,
+                            opcode_pc: None,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -1525,6 +1586,7 @@ impl Machine {
                             bus: bus.as_mut(),
                             watch,
                             t_step_start: cpu.t,
+                            opcode_pc: Some(pc),
                         };
                         cpu.step(&mut mio);
                     }
@@ -2065,6 +2127,7 @@ impl Machine {
                         bus: bus.as_mut(),
                         watch: None,
                         t_step_start: cpu.t,
+                        opcode_pc: None,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -2110,6 +2173,7 @@ impl Machine {
                         bus: bus.as_mut(),
                         watch,
                         t_step_start: cpu.t,
+                        opcode_pc: Some(pc),
                     };
                     cpu.step(&mut mio);
                 }
@@ -2177,6 +2241,7 @@ impl Machine {
                         bus: bus.as_mut(),
                         watch: None,
                         t_step_start: cpu.t,
+                        opcode_pc: None,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -2223,6 +2288,7 @@ impl Machine {
                         bus: bus.as_mut(),
                         watch,
                         t_step_start: cpu.t,
+                        opcode_pc: Some(pc),
                     };
                     cpu.step(&mut mio);
                 }
@@ -2387,6 +2453,7 @@ impl Machine {
                     bus: bus.as_mut(),
                     watch: None,
                     t_step_start: cpu.t,
+                    opcode_pc: Some(cpu.regs.pc),
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -2416,6 +2483,7 @@ impl Machine {
                     bus: bus.as_mut(),
                     watch: None,
                     t_step_start: cpu.t,
+                    opcode_pc: Some(cpu.regs.pc),
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -2899,6 +2967,45 @@ mod tests {
     }
 
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
+
+    #[test]
+    fn interface1_opcode_fetch_pages_shadow_rom() {
+        let rom = [0u8; 16384];
+        let mut m = Machine::new_48k(&rom).unwrap();
+        let if1 = m.attach_interface1().unwrap();
+        let mut if1_rom = [0u8; bus::IF1_ROM_SIZE];
+        if1_rom[0x0008] = 0x00; // NOP
+        if1_rom[0x0700] = 0x00; // NOP — post-fetch unpages
+        if1.load_rom(&if1_rom).unwrap();
+        m.cpu_mut().regs.pc = 0x0008;
+        m.step_cpu_only();
+        assert!(
+            m.interface1_mut().unwrap().rom_paged,
+            "IF1 should stay paged after fetch at 0x0008 (until 0x0700)"
+        );
+        m.cpu_mut().regs.pc = 0x0700;
+        m.interface1_mut().unwrap().page_rom(true);
+        m.step_cpu_only();
+        assert!(
+            !m.interface1_mut().unwrap().rom_paged,
+            "IF1 should unpage after opcode fetch at 0x0700"
+        );
+    }
+
+    #[test]
+    fn interface1_rom_load_skips_cleanly_when_missing() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/if1.rom");
+        if !path.is_file() {
+            eprintln!("skip: roms/if1.rom missing");
+            return;
+        }
+        let rom = [0u8; 16384];
+        let mut m = Machine::new_48k(&rom).unwrap();
+        let data = std::fs::read(&path).unwrap();
+        m.load_interface1_rom(&data).unwrap();
+        assert!(m.interface1_rom_loaded());
+    }
+
     #[test]
     fn memio_mid_instruction_contention_table() {
         // Contended screen address; FAQ Contended I/O ports.
@@ -2939,6 +3046,7 @@ mod tests {
                 bus: &mut bus,
                 watch: None,
                 t_step_start: 100,
+                opcode_pc: None,
             };
             let t = 100 + dt;
             assert_eq!(
@@ -2979,6 +3087,7 @@ mod tests {
                 bus: &mut bus,
                 watch: None,
                 t_step_start: 100,
+                opcode_pc: None,
             };
             let t = 100 + dt;
             assert_eq!(
@@ -3034,6 +3143,7 @@ mod tests {
             bus: &mut bus,
             watch: None,
             t_step_start: 50,
+            opcode_pc: None,
         };
         assert_eq!(
             mem.read(ADDR, 53).1,

@@ -1393,6 +1393,35 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    func attachInterface1() {
+        guard let handle else { return }
+        if sc_attach_interface1(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Interface 1 attach failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func loadInterface1Rom(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_load_interface1_rom(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "IF1 ROM load failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    func insertMdr(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_insert_mdr(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "MDR insert failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
     func attachDivmmc() {
         guard let handle else { return }
         if sc_attach_divmmc(handle) != 0 {

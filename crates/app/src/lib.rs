@@ -640,8 +640,42 @@ impl EmulatorSession {
     pub fn attach_interface1_stub(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             match m.attach_interface1() {
-                Ok(_) => self.status = "Interface 1 attached (stub)".into(),
-                Err(e) => self.status = e,
+                Ok(if1) => {
+                    // Optional IF1 ROM — not shipped; try common local paths.
+                    let mut loaded = if1.rom_loaded;
+                    if !loaded {
+                        let roots = [
+                            Self::workspace_root(),
+                            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+                        ];
+                        for cand in ["roms/if1.rom", "roms/if1-2.rom", "roms/interface1.rom"] {
+                            for root in &roots {
+                                let path = root.join(cand);
+                                if let Ok(data) = std::fs::read(&path) {
+                                    match if1.load_rom(&data) {
+                                        Ok(()) => {
+                                            loaded = true;
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            self.status = e.to_string();
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                            if loaded {
+                                break;
+                            }
+                        }
+                    }
+                    self.status = if loaded {
+                        "Interface 1 attached (ROM loaded)".into()
+                    } else {
+                        "Interface 1 attached (no roms/if1.rom — paging hooks ready)".into()
+                    };
+                }
+                Err(e) => self.status = e.to_string(),
             }
         } else {
             self.status = "Load a machine ROM first".into();
@@ -658,7 +692,7 @@ impl EmulatorSession {
                                 if1.insert_mdr(cart);
                                 self.status = format!("Inserted MDR {}", path.display());
                             }
-                            Err(e) => self.status = e,
+                            Err(e) => self.status = e.to_string(),
                         }
                     } else {
                         self.status = "Load a machine ROM first".into();
@@ -1204,7 +1238,7 @@ impl SpecChumApp {
                                 ui.close_menu();
                             }
                             ui.label(if has_if1 {
-                                "IF1: attached (shadow ROM / MDR slot stub)"
+                                "IF1: attached (Microdrive I/O + ROM paging)"
                             } else {
                                 "IF1: not attached"
                             });
