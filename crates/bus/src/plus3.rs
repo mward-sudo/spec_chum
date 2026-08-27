@@ -7,6 +7,9 @@
 //! FDC ports (`2FFD`/`3FFD`); when [`BusPlus3::disk_interface`] is false those
 //! ports read as `0xFF` so menu **Loader** uses tape (real +2A). When true, the
 //! µPD765 path is present and **Loader** is +3DOS disk (real +3).
+//!
+//! Port `1FFD` bit 3 is the floppy motor; [`formats::Plus3Fdc::set_motor`] is
+//! updated on every `1FFD` write. FDC I/O is not Sinclair ULA-contended.
 
 use ula::{contention_delay_128, Ula48, FRAME_TSTATES_128};
 
@@ -203,6 +206,8 @@ impl BusPlus3 {
             return;
         }
         self.page_1ffd = value;
+        // Bit 3: floppy motor. Drive-ready (ST3) follows motor ∧ disk inserted.
+        self.fdc.set_motor(value & 0x08 != 0);
         if trace::enabled(trace::Category::BUS) {
             trace::emit(trace::EventKind::BusPort1ffd { value });
         }
@@ -475,5 +480,30 @@ mod tests {
         let mut b = BusPlus3::new_with_disk(true);
         assert!(b.disk_interface);
         assert_eq!(b.in_port(0x2ffd) & 0x80, 0x80);
+    }
+
+    #[test]
+    fn fdc_motor_bit_on_1ffd_affects_st3() {
+        let mut b = BusPlus3::new();
+        b.fdc.insert(formats::DskImage::synthetic_plus3_data());
+        // SENSE DRIVE STATUS, unit 0 — motor off → not ready.
+        b.out_port(0x3ffd, 0x04);
+        b.out_port(0x3ffd, 0x00);
+        assert_eq!(b.in_port(0x2ffd) & 0xd0, 0xd0, "result phase");
+        let st3 = b.in_port(0x3ffd);
+        assert_eq!(st3 & 0x20, 0, "ready bit clear with motor off");
+
+        b.out_port(0x1ffd, 0x08); // motor on
+        assert!(b.fdc.motor_on());
+        b.out_port(0x3ffd, 0x04);
+        b.out_port(0x3ffd, 0x00);
+        let st3 = b.in_port(0x3ffd);
+        assert_eq!(st3 & 0x20, 0x20, "ready when motor on + disk");
+
+        b.fdc.set_write_protect(true);
+        b.out_port(0x3ffd, 0x04);
+        b.out_port(0x3ffd, 0x00);
+        let st3 = b.in_port(0x3ffd);
+        assert_eq!(st3 & 0x40, 0x40, "write-protect in ST3");
     }
 }
