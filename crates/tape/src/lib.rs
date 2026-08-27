@@ -92,6 +92,12 @@ pub const BIT1_T: u32 = 1710;
 /// Inter-block pause (~1s at 3.5 MHz).
 pub const PAUSE_T: u32 = 3_500_000;
 
+/// Experience load: abbreviated inter-block pause for ~20s-class wall clock at [`EXPERIENCE_EAR_SPEED`].
+/// Pilot/sync/data pulse widths stay ROM-accurate so LD-BYTES keeps syncing.
+pub const EXPERIENCE_PAUSE_T: u32 = 175_000;
+/// EAR frame multiplier paired with abbreviated pauses (see issue #82).
+pub const EXPERIENCE_EAR_SPEED: u32 = 16;
+
 /// Append one edge-to-edge pulse and toggle the EAR level.
 pub(crate) fn push_pulse(pulses: &mut Vec<(u32, bool)>, level: &mut bool, duration: u32) {
     pulses.push((duration, *level));
@@ -114,6 +120,7 @@ pub struct TapPlayer {
     /// Turbo: inspect/host field only — pulse schedule is always ROM-accurate.
     /// Wall-clock turbo is applied by the machine frame loop while playing.
     speed: u32,
+    experience: bool,
     /// Optional per-block pause override (TZX 0x10). Empty → [`PAUSE_T`].
     block_pause_t: Vec<u32>,
 }
@@ -130,6 +137,7 @@ impl TapPlayer {
             remain: 0,
             level: false,
             speed: 1,
+            experience: false,
             block_pause_t: Vec::new(),
         };
         p.block_pause_t = p.image.pause_t.clone();
@@ -160,6 +168,19 @@ impl TapPlayer {
     #[must_use]
     pub fn speed(&self) -> u32 {
         self.speed
+    }
+
+    #[must_use]
+    pub fn experience(&self) -> bool {
+        self.experience
+    }
+
+    pub fn set_experience(&mut self, experience: bool) {
+        if self.experience == experience {
+            return;
+        }
+        self.experience = experience;
+        self.queue_block(self.block);
     }
 
     /// Rewind to the first block and pause.
@@ -240,12 +261,15 @@ impl TapPlayer {
                 push_pulse(&mut self.pulses, &mut level, len);
             }
         }
-        let pause = self
-            .block_pause_t
-            .get(idx)
-            .copied()
-            .filter(|&t| t > 0)
-            .unwrap_or(PAUSE_T);
+        let pause = if self.experience {
+            EXPERIENCE_PAUSE_T
+        } else {
+            self.block_pause_t
+                .get(idx)
+                .copied()
+                .filter(|&t| t > 0)
+                .unwrap_or(PAUSE_T)
+        };
         push_pulse(&mut self.pulses, &mut level, pause);
         if let Some(&(r, l)) = self.pulses.first() {
             self.remain = r;
@@ -477,6 +501,20 @@ mod tests {
         let p = TapPlayer::new(img);
         let expected = PILOT_DATA_PULSES as usize + 2 + (2 * 8 * 2) + 1;
         assert_eq!(p.scheduled_pulses(), expected);
+    }
+
+    #[test]
+    fn experience_pause_is_shorter_than_rom() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0x00]],
+            ..Default::default()
+        };
+        let mut p = TapPlayer::new(img);
+        let full_pause = *p.pulses.last().expect("pause pulse");
+        p.set_experience(true);
+        let exp_pause = *p.pulses.last().expect("pause pulse");
+        assert_eq!(full_pause.0, PAUSE_T);
+        assert_eq!(exp_pause.0, EXPERIENCE_PAUSE_T);
     }
 
     #[test]

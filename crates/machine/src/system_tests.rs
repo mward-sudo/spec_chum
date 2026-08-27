@@ -132,6 +132,7 @@ fn load_program_tap(machine: &mut Machine, tap: &Path) {
     machine.set_tape_load_options(TapeLoadOptions {
         flash_load: true,
         speed: 1,
+        ..Default::default()
     });
     machine.insert_tape(TapPlayer::new(image));
     match machine.model() {

@@ -453,6 +453,7 @@ pub extern "C" fn sc_tape_get_load_options(
     handle: *mut c_void,
     flash_load: *mut c_int,
     speed: *mut c_uint,
+    experience_load: *mut c_int,
 ) -> c_int {
     let Some(s) = session_mut(handle) else {
         return -1;
@@ -468,16 +469,20 @@ pub extern "C" fn sc_tape_get_load_options(
         if !speed.is_null() {
             *speed = opts.speed;
         }
+        if !experience_load.is_null() {
+            *experience_load = i32::from(opts.experience_load);
+        }
     }
     0
 }
 
-/// Set instant flash-load and EAR speed multiplier (clamped to 1..=64).
+/// Set instant flash-load, EAR speed multiplier (1..64), and experience mode.
 #[no_mangle]
 pub extern "C" fn sc_tape_set_load_options(
     handle: *mut c_void,
     flash_load: c_int,
     speed: c_uint,
+    experience_load: c_int,
 ) -> c_int {
     clear_last_error();
     let Some(s) = session_mut(handle) else {
@@ -487,6 +492,7 @@ pub extern "C" fn sc_tape_set_load_options(
     match s.set_tape_load_options(machine::TapeLoadOptions {
         flash_load: flash_load != 0,
         speed,
+        experience_load: experience_load != 0,
     }) {
         Ok(()) => 0,
         Err(e) => {

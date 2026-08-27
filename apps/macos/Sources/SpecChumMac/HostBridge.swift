@@ -117,6 +117,14 @@ final class HostBridge: ObservableObject {
     }
     /// EAR speed (1x…20x): while Play is active, that many Spectrum frames per host tick.
     @Published var tapeSpeed: UInt32 = 1 {
+        didSet {
+            if !suppressTapeOptsPush, tapeSpeed != 0 {
+                experienceLoad = false
+            }
+            pushTapeLoadOptions()
+        }
+    }
+    @Published var experienceLoad: Bool = false {
         didSet { pushTapeLoadOptions() }
     }
     /// Host PCM output gain 0…1 (what the user hears). Does not affect EAR / flash-load.
@@ -1308,14 +1316,19 @@ final class HostBridge: ObservableObject {
         guard let handle else { return }
         var flash: Int32 = 0
         var speed: UInt32 = 1
-        guard sc_tape_get_load_options(handle, &flash, &speed) == 0 else { return }
+        var experience: Int32 = 0
+        guard sc_tape_get_load_options(handle, &flash, &speed, &experience) == 0 else { return }
         suppressTapeOptsPush = true
         instantLoad = flash != 0
         tapeSpeed = max(1, min(speed, 64))
+        experienceLoad = experience != 0
         suppressTapeOptsPush = false
     }
 
     private func setFlashLoad(_ on: Bool) {
+        if on {
+            experienceLoad = false
+        }
         guard instantLoad != on else {
             pushTapeLoadOptions()
             return
@@ -1325,7 +1338,12 @@ final class HostBridge: ObservableObject {
 
     private func pushTapeLoadOptions() {
         guard let handle, !suppressTapeOptsPush else { return }
-        _ = sc_tape_set_load_options(handle, instantLoad ? 1 : 0, max(1, min(tapeSpeed, 64)))
+        _ = sc_tape_set_load_options(
+            handle,
+            instantLoad ? 1 : 0,
+            max(1, min(tapeSpeed, 64)),
+            experienceLoad ? 1 : 0
+        )
         refreshStatus()
     }
 

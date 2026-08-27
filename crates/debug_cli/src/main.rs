@@ -158,6 +158,7 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
     m.set_tape_load_options(TapeLoadOptions {
         flash_load: !cli.ear_load,
         speed: cli.speed,
+        ..Default::default()
     });
     Ok(m)
 }

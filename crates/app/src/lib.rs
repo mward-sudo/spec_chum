@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
-use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model};
+use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
 
 /// Session state shared by the GUI and headless tests.
 #[derive(Debug)]
@@ -372,10 +372,13 @@ impl EmulatorSession {
     fn force_flash_load(&mut self, on: bool) {
         if let Some(m) = self.machine.as_mut() {
             let mut opts = m.tape_load_options();
-            if opts.flash_load == on {
+            if opts.flash_load == on && (!on || !opts.experience_load) {
                 return;
             }
             opts.flash_load = on;
+            if on {
+                opts.experience_load = false;
+            }
             m.set_tape_load_options(opts);
         }
     }
@@ -1331,30 +1334,29 @@ impl SpecChumApp {
                         if has_tape {
                             if let Some(m) = self.session.machine.as_mut() {
                                 let mut opts = m.tape_load_options();
+                                ui.label("Load mode:");
+                                if ui
+                                    .selectable_label(opts.experience_load, "Experience (~20s)")
+                                    .on_hover_text(
+                                        "Abbreviated pauses on the EAR path at 16× (~20s-class; issue #82)",
+                                    )
+                                    .clicked()
+                                {
+                                    m.set_tape_load_options(TapeLoadOptions::experience());
+                                    self.session.status =
+                                        "Tape: experience load (~20s EAR)".into();
+                                }
                                 ui.label("EAR speed:");
                                 for speed in [1u32, 2, 5, 10, 20] {
-                                    let selected = opts.speed == speed;
+                                    let selected = !opts.experience_load && opts.speed == speed;
                                     if ui.selectable_label(selected, format!("{speed}x")).clicked()
                                     {
+                                        opts.experience_load = false;
                                         opts.speed = speed;
-                                        // Keep flash_load as-is (Play forces it off; Instant turns it on).
                                         m.set_tape_load_options(opts);
                                         self.session.status =
                                             format!("Tape: EAR speed {speed}x");
                                     }
-                                }
-                                if ui
-                                    .button("Experience (~20s EAR)")
-                                    .on_hover_text(
-                                        "EAR path at 16x (issue #82 interim; abbreviate tones later)",
-                                    )
-                                    .clicked()
-                                {
-                                    opts.flash_load = false;
-                                    opts.speed = 16;
-                                    m.set_tape_load_options(opts);
-                                    self.session.status =
-                                        "Tape: experience EAR load at 16x (~20s-class)".into();
                                 }
                             }
                         }
