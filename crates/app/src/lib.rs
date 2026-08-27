@@ -673,11 +673,29 @@ impl EmulatorSession {
     pub fn attach_beta_stub(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             match m.attach_beta() {
-                Ok(_) => self.status = "Beta Disk attached (stub)".into(),
+                Ok(_) => self.status = "Beta Disk attached".into(),
                 Err(e) => self.status = e,
             }
         } else {
             self.status = "Load a machine ROM first".into();
+        }
+    }
+
+    pub fn load_trdos_rom(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.load_trdos_rom(&data) {
+                        Ok(()) => {
+                            self.status = format!("Loaded TR-DOS ROM {}", path.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a machine ROM first".into();
+                }
+            }
+            Err(e) => self.status = format!("TR-DOS ROM error: {e}"),
         }
     }
 
@@ -1192,14 +1210,20 @@ impl SpecChumApp {
                             });
 
                             ui.separator();
-                            if ui.button("Attach Beta Disk (stub)").clicked() {
+                            if ui.button("Attach Beta Disk").clicked() {
                                 self.session.attach_beta_stub();
                                 ui.close_menu();
                             }
-                            if ui
-                                .add_enabled(has_beta, egui::Button::new("Open TRD…"))
-                                .clicked()
-                            {
+                            if ui.button("Load TR-DOS ROM…").clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("TR-DOS ROM", &["rom", "bin"])
+                                    .pick_file()
+                                {
+                                    self.session.load_trdos_rom(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            if ui.button("Open TRD…").clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("TRD", &["trd"])
                                     .pick_file()
@@ -1209,7 +1233,7 @@ impl SpecChumApp {
                                 ui.close_menu();
                             }
                             ui.label(if has_beta {
-                                "Beta: attached (VG93 read-sector stub)"
+                                "Beta: VG93 + TR-DOS paging (need 16K ROM for USR 15616)"
                             } else {
                                 "Beta: not attached"
                             });

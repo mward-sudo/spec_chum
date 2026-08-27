@@ -1,6 +1,7 @@
 //! Amstrad/Spectrum +3 `.DSK` / Extended DSK image reader.
 //!
-//! Provides sector lookup sufficient for unit tests and a minimal FDC path.
+//! Sector lookup is by physical track (file order) plus CHRN. The µPD765
+//! state machine lives in [`crate::Plus3Fdc`].
 
 use std::path::Path;
 
@@ -90,15 +91,98 @@ impl DskImage {
         })
     }
 
-    /// Find sector by physical track/side/id.
+    fn track_index(&self, track: u8, side: u8) -> Option<usize> {
+        if side >= self.sides {
+            return None;
+        }
+        let idx = usize::from(track) * usize::from(self.sides) + usize::from(side);
+        (idx < self.tracks_data.len()).then_some(idx)
+    }
+
+    /// Find sector by physical track/side/id, requiring CHRN C to match `track`.
     #[must_use]
     pub fn find_sector(&self, track: u8, side: u8, sector_id: u8) -> Option<&Sector> {
-        let idx = usize::from(track) * usize::from(self.sides) + usize::from(side);
-        self.tracks_data
-            .get(idx)?
-            .sectors
+        self.track_index(track, side).and_then(|idx| {
+            self.tracks_data[idx]
+                .sectors
+                .iter()
+                .find(|s| s.track == track && s.side == side && s.sector_id == sector_id)
+        })
+    }
+
+    /// Sector on a physical track matching id `R` (and side `H` when present).
+    ///
+    /// Unlike [`Self::find_sector`], CHRN C need not equal the physical cylinder —
+    /// SYSTEM-format ids such as `0xC1` still resolve after SEEK to track 0.
+    #[must_use]
+    pub fn find_id(&self, physical_track: u8, side: u8, sector_id: u8) -> Option<&Sector> {
+        let idx = self.track_index(physical_track, side)?;
+        let secs = &self.tracks_data[idx].sectors;
+        secs.iter()
+            .find(|s| s.sector_id == sector_id && s.side == side)
+            .or_else(|| secs.iter().find(|s| s.sector_id == sector_id))
+    }
+
+    /// Mutable [`Self::find_id`] for WRITE DATA.
+    pub fn find_id_mut(
+        &mut self,
+        physical_track: u8,
+        side: u8,
+        sector_id: u8,
+    ) -> Option<&mut Sector> {
+        let idx = self.track_index(physical_track, side)?;
+        let secs = &mut self.tracks_data[idx].sectors;
+        if let Some(i) = secs
             .iter()
-            .find(|s| s.track == track && s.side == side && s.sector_id == sector_id)
+            .position(|s| s.sector_id == sector_id && s.side == side)
+        {
+            return secs.get_mut(i);
+        }
+        let i = secs.iter().position(|s| s.sector_id == sector_id)?;
+        secs.get_mut(i)
+    }
+
+    /// First sector listed on a physical track/side (READ ID).
+    #[must_use]
+    pub fn first_sector(&self, physical_track: u8, side: u8) -> Option<&Sector> {
+        let idx = self.track_index(physical_track, side)?;
+        self.tracks_data[idx].sectors.first()
+    }
+
+    /// In-memory +3DOS 180K DATA disk: 40 tracks × 1 side × 9 × 512-byte sectors (ids 1–9).
+    ///
+    /// Track 0 sector 1 starts with the PCW/+3 10-byte spec; remaining directory
+    /// bytes are `0xE5` (empty CP/M entries).
+    #[must_use]
+    pub fn synthetic_plus3_data() -> Self {
+        const TRACKS: u8 = 40;
+        const SPT: u8 = 9;
+        const N: u8 = 2;
+        let size = 128usize << N;
+        let mut tracks_data = Vec::with_capacity(usize::from(TRACKS));
+        for t in 0..TRACKS {
+            let mut sectors = Vec::with_capacity(usize::from(SPT));
+            for s in 1..=SPT {
+                let mut data = vec![0xE5; size];
+                if t == 0 && s == 1 {
+                    data[..10].copy_from_slice(&[0x00, 0x00, 40, 9, 2, 1, 3, 2, 0x2A, 0x52]);
+                }
+                sectors.push(Sector {
+                    track: t,
+                    side: 0,
+                    sector_id: s,
+                    size_code: N,
+                    data,
+                });
+            }
+            tracks_data.push(TrackData { sectors });
+        }
+        Self {
+            tracks: TRACKS,
+            sides: 1,
+            extended: false,
+            tracks_data,
+        }
     }
 }
 
@@ -138,108 +222,6 @@ fn parse_track(data: &[u8]) -> Result<TrackData, FormatError> {
     Ok(TrackData { sectors })
 }
 
-/// Minimal +3 µPD765 path: READ DATA command stream → sector bytes on data port.
-#[derive(Clone, Debug, Default)]
-pub struct Plus3Fdc {
-    pub image: Option<DskImage>,
-    pub track: u8,
-    pub side: u8,
-    pub sector: u8,
-    pub status: u8,
-    last_data: Vec<u8>,
-    data_index: usize,
-    /// Command-phase bytes for READ DATA (`0x06` / `0x46`) then C/H/R/N…
-    cmd: Vec<u8>,
-    /// After a successful READ DATA: main status reports data ready.
-    data_ready: bool,
-}
-
-impl Plus3Fdc {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn insert(&mut self, image: DskImage) {
-        self.image = Some(image);
-        self.status = 0;
-        self.cmd.clear();
-        self.data_ready = false;
-        self.last_data.clear();
-        self.data_index = 0;
-    }
-
-    /// Seek and prepare sector buffer; returns true if found.
-    pub fn read_sector(&mut self, track: u8, side: u8, sector: u8) -> bool {
-        self.track = track;
-        self.side = side;
-        self.sector = sector;
-        self.data_index = 0;
-        if let Some(img) = self.image.as_ref() {
-            if let Some(sec) = img.find_sector(track, side, sector) {
-                self.last_data = sec.data.clone();
-                self.status = 0;
-                self.data_ready = true;
-                return true;
-            }
-        }
-        self.last_data.clear();
-        self.status = 0x10;
-        self.data_ready = false;
-        false
-    }
-
-    /// Write a command/parameter byte (port `3FFD` data).
-    ///
-    /// Accepts µPD765 READ DATA (`0x06`/`0x46`) and its full 9-byte command phase:
-    /// opcode, HD/US, C, H, R, N, EOT, GPL, DTL.
-    pub fn write_command_byte(&mut self, value: u8) {
-        if self.cmd.is_empty() {
-            if value & 0x1f == 0x06 {
-                self.cmd.push(value);
-            }
-            return;
-        }
-        self.cmd.push(value);
-        if self.cmd.len() >= 9 {
-            let c = self.cmd[2];
-            let h = self.cmd[3];
-            let r = self.cmd[4];
-            let _ = self.read_sector(c, h, r);
-            self.cmd.clear();
-        }
-    }
-
-    /// Main status register (`2FFD`): bit7 RQM, bit6 DIO (1=FDC→CPU), bit4 busy.
-    #[must_use]
-    pub fn main_status(&self) -> u8 {
-        let mut s = 0x80;
-        if self.data_ready && self.data_remaining() > 0 {
-            s |= 0x40 | 0x10;
-        }
-        s
-    }
-
-    #[must_use]
-    pub fn data_remaining(&self) -> usize {
-        self.last_data.len().saturating_sub(self.data_index)
-    }
-
-    pub fn read_data_byte(&mut self) -> u8 {
-        if self.data_index < self.last_data.len() {
-            let b = self.last_data[self.data_index];
-            self.data_index += 1;
-            if self.data_index >= self.last_data.len() {
-                self.data_ready = false;
-            }
-            b
-        } else {
-            self.data_ready = false;
-            0xff
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -262,55 +244,17 @@ mod tests {
         track[0x19] = 0; // H
         track[0x1a] = 0xc1; // R
         track[0x1b] = 1; // N
-                         // sector data
         track[0x100] = 0x42;
         track[0x101] = 0x43;
         data.extend_from_slice(&track);
         data
     }
 
-    #[test]
-    fn parse_and_read_sector() {
-        let img = DskImage::parse(&synthetic_dsk()).unwrap();
-        let sec = img.find_sector(0, 0, 0xc1).unwrap();
-        assert_eq!(sec.data[0], 0x42);
-        assert_eq!(sec.data[1], 0x43);
-        let mut fdc = Plus3Fdc::new();
-        fdc.insert(img);
-        assert!(fdc.read_sector(0, 0, 0xc1));
-        assert_eq!(fdc.read_data_byte(), 0x42);
-        assert_eq!(fdc.read_data_byte(), 0x43);
-    }
-
-    fn feed_read_data(fdc: &mut Plus3Fdc, c: u8, h: u8, r: u8) {
-        // opcode, HD/US, C, H, R, N, EOT, GPL, DTL
-        for b in [0x46, 0, c, h, r, 1, 0x09, 0x2a, 0xff] {
-            fdc.write_command_byte(b);
-        }
-    }
-
-    #[test]
-    fn read_data_command_stream_loads_sector() {
-        let img = DskImage::parse(&synthetic_dsk()).unwrap();
-        let mut fdc = Plus3Fdc::new();
-        fdc.insert(img);
-        feed_read_data(&mut fdc, 0, 0, 0xc1);
-        assert!(fdc.data_remaining() > 0);
-        assert_eq!(fdc.main_status() & 0xc0, 0xc0);
-        assert_eq!(fdc.read_data_byte(), 0x42);
-        assert_eq!(fdc.read_data_byte(), 0x43);
-    }
-
-    /// Two 256-byte sectors on track 0 for FDC sector-lookup goldens.
-    ///
-    /// `Plus3Fdc::write_command_byte` accepts the full 9-byte µPD765 READ DATA phase;
-    /// BusPlus3 routes ports `3FFD`/`2FFD` to that path. Full +3DOS boot still needs
-    /// more µPD765 commands ([#141](https://github.com/mward-sudo/spec_chum/issues/141)).
     fn synthetic_dsk_two_sectors() -> Vec<u8> {
         let mut data = vec![0u8; 0x100];
         data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1; // tracks
-        data[0x31] = 1; // sides
+        data[0x30] = 1;
+        data[0x31] = 1;
         let track_size: u16 = 0x100 + 256 * 2;
         data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
 
@@ -318,8 +262,8 @@ mod tests {
         track[0..12].copy_from_slice(b"Track-Info\r\n");
         track[0x10] = 0;
         track[0x11] = 0;
-        track[0x14] = 1; // N=1 → 256 bytes
-        track[0x15] = 2; // two sectors
+        track[0x14] = 1;
+        track[0x15] = 2;
         track[0x18] = 0;
         track[0x19] = 0;
         track[0x1a] = 0xc1;
@@ -337,47 +281,46 @@ mod tests {
     }
 
     #[test]
-    fn multi_sector_dsk_read_two_sectors() {
+    fn parse_and_read_sector() {
+        let img = DskImage::parse(&synthetic_dsk()).unwrap();
+        let sec = img.find_sector(0, 0, 0xc1).unwrap();
+        assert_eq!(sec.data[0], 0x42);
+        assert_eq!(sec.data[1], 0x43);
+    }
+
+    #[test]
+    fn multi_sector_dsk_lookup() {
         let img = DskImage::parse(&synthetic_dsk_two_sectors()).unwrap();
         let s1 = img.find_sector(0, 0, 0xc1).unwrap();
         let s2 = img.find_sector(0, 0, 0xc2).unwrap();
         assert_eq!([s1.data[0], s1.data[1]], [0xa1, 0xa2]);
         assert_eq!([s2.data[0], s2.data[1]], [0xb1, 0xb2]);
-
-        let mut fdc = Plus3Fdc::new();
-        fdc.insert(img);
-        assert!(fdc.read_sector(0, 0, 0xc1));
-        assert_eq!(fdc.read_data_byte(), 0xa1);
-        assert_eq!(fdc.read_data_byte(), 0xa2);
-        assert!(fdc.read_sector(0, 0, 0xc2));
-        assert_eq!(fdc.read_data_byte(), 0xb1);
-        assert_eq!(fdc.read_data_byte(), 0xb2);
-        assert!(!fdc.read_sector(0, 0, 0xc3), "missing sector id");
-        assert_eq!(fdc.status, 0x10);
+        assert!(img.find_sector(0, 0, 0xc3).is_none());
     }
 
     #[test]
-    fn read_data_command_bytes_load_sector() {
-        let img = DskImage::parse(&synthetic_dsk()).unwrap();
-        let mut fdc = Plus3Fdc::new();
-        fdc.insert(img);
-        // Same 9-byte phase with MT/MF clear (opcode 0x06).
-        for b in [0x06u8, 0, 0, 0, 0xc1, 1, 0x09, 0x2a, 0xff] {
-            fdc.write_command_byte(b);
-        }
-        assert_eq!(fdc.main_status() & 0xc0, 0xc0);
-        assert_eq!(fdc.read_data_byte(), 0x42);
-        assert_eq!(fdc.read_data_byte(), 0x43);
+    fn find_id_matches_r_without_chrn_c() {
+        let mut img = DskImage::parse(&synthetic_dsk()).unwrap();
+        img.tracks_data[0].sectors[0].track = 0xff;
+        assert!(img.find_sector(0, 0, 0xc1).is_none());
+        let sec = img.find_id(0, 0, 0xc1).unwrap();
+        assert_eq!(sec.data[0], 0x42);
+        img.find_id_mut(0, 0, 0xc1).unwrap().data[0] = 0x99;
+        assert_eq!(img.find_id(0, 0, 0xc1).unwrap().data[0], 0x99);
     }
 
     #[test]
-    fn read_data_nine_byte_phase_selects_correct_sector() {
-        let img = DskImage::parse(&synthetic_dsk_two_sectors()).unwrap();
-        let mut fdc = Plus3Fdc::new();
-        fdc.insert(img);
-        // Five-byte mistaken parse would treat HD/US,C,H as C,H,R and miss 0xc2.
-        feed_read_data(&mut fdc, 0, 0, 0xc2);
-        assert_eq!(fdc.read_data_byte(), 0xb1);
-        assert_eq!(fdc.read_data_byte(), 0xb2);
+    fn synthetic_plus3_data_has_pcw_spec() {
+        let img = DskImage::synthetic_plus3_data();
+        assert_eq!(img.tracks, 40);
+        assert_eq!(img.sides, 1);
+        let sec = img.find_id(0, 0, 1).unwrap();
+        assert_eq!(sec.size_code, 2);
+        assert_eq!(
+            &sec.data[..10],
+            &[0x00, 0x00, 40, 9, 2, 1, 3, 2, 0x2A, 0x52]
+        );
+        assert_eq!(img.find_id(0, 0, 9).unwrap().data.len(), 512);
+        assert!(img.first_sector(0, 0).is_some());
     }
 }

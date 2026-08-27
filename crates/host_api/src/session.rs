@@ -382,6 +382,28 @@ impl HostSession {
         Ok(())
     }
 
+    /// Attach Beta Disk / TR-DOS and insert a `.trd` (48K/128K).
+    pub fn load_trd(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let img = formats::TrdImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
+        m.insert_trd(img).map_err(HostError::Message)?;
+        self.status = format!("Inserted TRD {}", path.display());
+        Ok(())
+    }
+
+    /// Load a 16 KiB TR-DOS ROM (attaches Beta on 48K/128K).
+    pub fn load_trdos_rom(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        m.load_trdos_rom(&data).map_err(HostError::Message)?;
+        self.status = format!("Loaded TR-DOS ROM {}", path.display());
+        Ok(())
+    }
+
     /// Best-effort ROM load for the current model (workspace / `SPEC_CHUM_ROOT` / cwd).
     fn try_autoload_rom(&mut self) {
         let candidates: &[&str] = match self.model {
@@ -1315,6 +1337,10 @@ mod tests {
             s.load_dsk(Path::new("/tmp/missing.dsk")),
             Err(HostError::NoMachine)
         ));
+        assert!(matches!(
+            s.load_trd(Path::new("/tmp/missing.trd")),
+            Err(HostError::NoMachine)
+        ));
     }
 
     #[test]
@@ -1348,6 +1374,35 @@ mod tests {
                 assert!(
                     msg.contains("+3") || msg.contains("Plus3") || msg.contains("plus3"),
                     "expected model-rejection message, got {msg}"
+                );
+            }
+            other => panic!("expected Message rejection, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_trd_rejects_plus3() {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus3/plus3.rom");
+        let Ok(rom) = std::fs::read(&p) else {
+            eprintln!("skip: roms/plus3/plus3.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::SpectrumPlus3, false);
+        s.load_rom_bytes(&rom).expect("rom");
+
+        let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
+        raw[0xe3] = 0;
+        let dir = std::env::temp_dir().join("spec_chum_host_api_trd_reject");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("reject.trd");
+        std::fs::write(&path, &raw).expect("write trd");
+
+        let err = s.load_trd(&path).expect_err("+3 must reject TRD");
+        match err {
+            HostError::Message(msg) => {
+                assert!(
+                    msg.contains("Beta") || msg.contains("+2A") || msg.contains("+3"),
+                    "expected Beta rejection, got {msg}"
                 );
             }
             other => panic!("expected Message rejection, got {other:?}"),
