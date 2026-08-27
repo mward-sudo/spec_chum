@@ -490,7 +490,9 @@ impl Memory for MemIoPlus3<'_> {
 
 impl Io for MemIoPlus3<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        // +2A/+3 gate array: no Sinclair-style ULA I/O contention.
+        // +2A/+3 gate array: no Sinclair-style ULA I/O contention. FDC ports
+        // `2FFD`/`3FFD` are on the gate array as well (wait=0). Confirmed for
+        // +3DOS; no accuracy follow-up from #141.
         let _ = (port, t);
         let v = self.bus.in_port(port);
         if let Some(w) = self.watch.as_ref() {
@@ -688,7 +690,7 @@ impl Machine {
                     beta.page_trdos(false);
                 }
                 if let Some(div) = bus.divmmc.as_mut() {
-                    div.control = 0;
+                    div.reset_soft();
                 }
                 *ula = Ula48::new();
                 // Keep inserted tape/disk media across reset; pause the deck at its
@@ -722,7 +724,7 @@ impl Machine {
                     beta.page_trdos(false);
                 }
                 if let Some(div) = bus.divmmc.as_mut() {
-                    div.control = 0;
+                    div.reset_soft();
                 }
                 *ula = Ula48::new();
                 if let Some(t) = tape.as_mut() {
@@ -749,7 +751,9 @@ impl Machine {
                 bus.kempston.reset();
                 bus.mouse.reset();
                 *ula = Ula48::new();
-                // +3 DSK stays in `bus.fdc.image`; only pause any inserted tape.
+                // +3 DSK stays in `bus.fdc.image`; reset µPD765 command state.
+                bus.fdc.reset_controller();
+                bus.fdc.set_motor(false);
                 if let Some(t) = tape.as_mut() {
                     t.set_playing(false);
                 }
@@ -1124,6 +1128,12 @@ impl Machine {
         }
     }
 
+    /// Attach DivMMC and load an ESXDOS EEPROM image (8 KiB, or larger prefix).
+    pub fn attach_divmmc_eeprom(&mut self, data: &[u8]) -> Result<(), String> {
+        let div = self.attach_divmmc()?;
+        div.attach_eeprom(data)
+    }
+
     pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
         match self {
             Self::Spec48 { bus, .. } => bus.divmmc.as_mut(),
@@ -1137,6 +1147,15 @@ impl Machine {
         match self {
             Self::Spec48 { bus, .. } => bus.divmmc.is_some(),
             Self::Spec128 { bus, .. } => bus.divmmc.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
+    #[must_use]
+    pub fn has_divmmc_eeprom(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.divmmc.as_ref().is_some_and(|d| d.eeprom_loaded),
+            Self::Spec128 { bus, .. } => bus.divmmc.as_ref().is_some_and(|d| d.eeprom_loaded),
             Self::SpecPlus3 { .. } => false,
         }
     }
@@ -1190,6 +1209,17 @@ impl Machine {
             Self::Spec128 { bus, .. } => Ok(bus.attach_beta()),
             Self::SpecPlus3 { .. } => Err("Beta Disk is not supported on Spectrum +2A/+3".into()),
         }
+    }
+
+    /// Insert a `.trd` image (attaches Beta if needed). 48K/128K only.
+    pub fn insert_trd(&mut self, image: formats::TrdImage) -> Result<(), String> {
+        self.attach_beta()?.insert(image);
+        Ok(())
+    }
+
+    /// Load a 16 KiB TR-DOS ROM onto Beta (attaches the interface if needed).
+    pub fn load_trdos_rom(&mut self, data: &[u8]) -> Result<(), String> {
+        self.attach_beta()?.load_rom(data)
     }
 
     pub fn beta_mut(&mut self) -> Option<&mut bus::BetaDisk> {
@@ -1393,6 +1423,8 @@ impl Machine {
                         }
                     }
                     let pc = cpu.regs.pc;
+                    bus.notify_divmmc_m1(pc);
+                    bus.notify_beta_m1(pc);
                     let cpu_on = trace::enabled(trace::Category::CPU);
                     let pre = cpu_on.then(|| {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
@@ -1529,6 +1561,8 @@ impl Machine {
                         }
                     }
                     let pc = cpu.regs.pc;
+                    bus.notify_divmmc_m1(pc);
+                    bus.notify_beta_m1(pc);
                     let cpu_on = trace::enabled(trace::Category::CPU);
                     let pre = cpu_on.then(|| {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
@@ -2112,6 +2146,8 @@ impl Machine {
                     }
                 }
                 let pc = cpu.regs.pc;
+                bus.notify_divmmc_m1(pc);
+                bus.notify_beta_m1(pc);
                 let was_halt = cpu.regs.halted;
                 let cpu_on = trace::enabled(trace::Category::CPU);
                 let pre = cpu_on.then(|| {
@@ -2225,6 +2261,8 @@ impl Machine {
                     }
                 }
                 let pc = cpu.regs.pc;
+                bus.notify_divmmc_m1(pc);
+                bus.notify_beta_m1(pc);
                 let was_halt = cpu.regs.halted;
                 let cpu_on = trace::enabled(trace::Category::CPU);
                 let pre = cpu_on.then(|| {
@@ -2397,6 +2435,8 @@ impl Machine {
                 tape_opts,
                 ..
             } => {
+                bus.notify_divmmc_m1(cpu.regs.pc);
+                bus.notify_beta_m1(cpu.regs.pc);
                 let last_t = cpu.t;
                 let mut mio = MemIo48 {
                     bus: bus.as_mut(),
@@ -2425,6 +2465,8 @@ impl Machine {
                 tape_opts,
                 ..
             } => {
+                bus.notify_divmmc_m1(cpu.regs.pc);
+                bus.notify_beta_m1(cpu.regs.pc);
                 let last_t = cpu.t;
                 let mut mio = MemIo128 {
                     bus: bus.as_mut(),
@@ -2820,6 +2862,99 @@ mod tests {
         );
     }
 
+    fn synthetic_trd_with_marker(b0: u8, b1: u8) -> formats::TrdImage {
+        let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
+        raw[0] = b0;
+        raw[1] = b1;
+        formats::TrdImage::parse(&raw).unwrap()
+    }
+
+    /// TR-DOS-style `IN A,(#FF)` / `INI` loop at `USR 15616` (`0x3D00`).
+    fn trdos_read_sector_rom() -> [u8; bus::TRDOS_ROM_SIZE] {
+        let mut rom = [0u8; bus::TRDOS_ROM_SIZE];
+        let code: &[u8] = &[
+            0x3e, 0x3c, // LD A,3Ch
+            0xd3, 0xff, // OUT (FFh),A
+            0xaf, // XOR A
+            0xd3, 0x3f, // OUT (3Fh),A
+            0x3e, 0x01, // LD A,1
+            0xd3, 0x5f, // OUT (5Fh),A
+            0x3e, 0x80, // LD A,80h
+            0xd3, 0x1f, // OUT (1Fh),A
+            0x21, 0x00, 0x40, // LD HL,4000h
+            0x01, 0x7f, 0x00, // LD BC,007Fh
+            0xdb, 0xff, // IN A,(FFh)
+            0xe6, 0xc0, // AND C0h
+            0x28, 0xfa, // JR Z, wait
+            0xfa, 0x22, 0x3d, // JP M, done
+            0xed, 0xa2, // INI
+            0x18, 0xf3, // JR wait
+            0x76, // HALT
+        ];
+        rom[0x3d00..0x3d00 + code.len()].copy_from_slice(code);
+        rom
+    }
+
+    #[test]
+    fn beta_trdos_rom_loop_reads_trd_sector_into_ram() {
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        m.load_trdos_rom(&trdos_read_sector_rom()).unwrap();
+        m.insert_trd(synthetic_trd_with_marker(0x12, 0x34)).unwrap();
+        m.cpu_mut().regs.pc = 0x3d00;
+        m.cpu_mut().regs.sp = 0xfffd;
+        for _ in 0..4000 {
+            if m.cpu().regs.halted {
+                break;
+            }
+            m.step_once();
+        }
+        assert!(m.cpu().regs.halted, "synthetic TR-DOS loop should HALT");
+        assert_eq!(m.read_mem(0x4000), 0x12);
+        assert_eq!(m.read_mem(0x4001), 0x34);
+        assert!(m.has_beta());
+    }
+
+    /// Optional: real `roms/trdos.rom` + 48K ROM. Skips cleanly when either is missing.
+    #[test]
+    fn trdos_rom_usr_15616_pages_when_fixture_present() {
+        let Some(spec) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/trdos.rom");
+        let Ok(trdos) = std::fs::read(&path) else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        if trdos.len() != bus::TRDOS_ROM_SIZE {
+            eprintln!(
+                "skip: roms/trdos.rom is {} bytes, expected {}",
+                trdos.len(),
+                bus::TRDOS_ROM_SIZE
+            );
+            return;
+        }
+        let mut m = Machine::new_48k(&spec).unwrap();
+        m.load_trdos_rom(&trdos).unwrap();
+        m.insert_trd(synthetic_trd_with_marker(0, 0)).unwrap();
+        m.cpu_mut().regs.pc = 0x3d00;
+        m.cpu_mut().regs.sp = 0xfffd;
+        let mut saw_paged = false;
+        for _ in 0..50_000 {
+            m.step_once();
+            if let Machine::Spec48 { bus, .. } = &m {
+                if bus.beta.as_ref().is_some_and(|b| b.paged) {
+                    saw_paged = true;
+                    break;
+                }
+            }
+        }
+        assert!(
+            saw_paged,
+            "fetch at 0x3D00 should page TR-DOS ROM (USR 15616)"
+        );
+    }
+
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
 
     #[test]
@@ -2983,6 +3118,8 @@ mod tests {
             );
             assert_eq!(mem3.in_port(FE, t).1, 0, "+3 I/O never contends");
             assert_eq!(mem3.in_port(HI_FF, t).1, 0, "+3 I/O never contends");
+            assert_eq!(mem3.in_port(0x2ffd, t).1, 0, "+3 FDC status uncontended");
+            assert_eq!(mem3.in_port(0x3ffd, t).1, 0, "+3 FDC data uncontended");
         }
 
         // Access after the instruction has already burned into the contended window.
@@ -3862,6 +3999,48 @@ mod tests {
             assert_eq!(bus.read(0x0000), 0x5a);
             assert_eq!(bus.in_port(0x00ff), 0xff, "no floating bus");
         }
+    }
+
+    /// ROM-gated: Loader (menu Enter) must talk to the µPD765 on a synthetic
+    /// +3DOS DATA disk. Skips if `roms/plus3/plus3.rom` is missing — do not
+    /// fall back to +2A ROM.
+    #[test]
+    fn plus3_loader_talks_to_fdc_on_data_disk() {
+        let Some(rom) = rom_plus3_only() else {
+            eprintln!("skip: roms/plus3/plus3.rom missing — run ./scripts/fetch_roms.sh");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        m.insert_disk(formats::DskImage::synthetic_plus3_data())
+            .expect("insert");
+        for _ in 0..120 {
+            let _ = m.run_frame();
+        }
+        // Loader is the first menu item; Enter = row 6 bit 0.
+        m.hold_keys(&[(6, 0)], 10);
+        m.hold_keys(&[], 5);
+        m.keyboard_mut().reset();
+        for _ in 0..500 {
+            let _ = m.run_frame();
+        }
+        let Machine::SpecPlus3 { bus, cpu, .. } = &m else {
+            panic!("expected SpecPlus3");
+        };
+        assert!(
+            bus.fdc.read_count > 0,
+            "Loader/+3DOS should READ from the FDC (seek={} read={} write={} PC={:04X} 1FFD={:02X} PCN={})",
+            bus.fdc.seek_count,
+            bus.fdc.read_count,
+            bus.fdc.write_count,
+            cpu.regs.pc,
+            bus.page_1ffd,
+            bus.fdc.pcn(0)
+        );
+        assert!(
+            bus.fdc.seek_count > 0,
+            "expected SEEK or RECALIBRATE before/during disk boot (seek=0 read={})",
+            bus.fdc.read_count
+        );
     }
 
     /// Shared `LOAD "" CODE` harness for `attr_mark.tap`. Returns whether CODE

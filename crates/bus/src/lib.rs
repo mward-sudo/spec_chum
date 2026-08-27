@@ -12,7 +12,7 @@ mod multiface;
 mod plus3;
 
 pub use ay::{Ay8912, StereoMode};
-pub use beta_disk::BetaDisk;
+pub use beta_disk::{BetaDisk, TRDOS_ROM_SIZE};
 pub use divmmc::{
     DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
     PORT_SPI_DATA as DIVMMC_PORT_SPI_DATA,
@@ -170,6 +170,13 @@ impl Bus48 {
         self.divmmc.get_or_insert_with(DivMmc::new)
     }
 
+    /// M1 opcode-fetch hook for DivMMC automap.
+    pub fn notify_divmmc_m1(&mut self, pc: u16) {
+        if let Some(d) = self.divmmc.as_mut() {
+            d.notify_m1(pc);
+        }
+    }
+
     /// Attach Interface 1 (creates default peripheral if absent).
     pub fn attach_interface1(&mut self) -> &mut Interface1 {
         self.interface1.get_or_insert_with(Interface1::new)
@@ -178,6 +185,13 @@ impl Bus48 {
     /// Attach Beta Disk / TR-DOS (creates default peripheral if absent).
     pub fn attach_beta(&mut self) -> &mut BetaDisk {
         self.beta.get_or_insert_with(BetaDisk::new)
+    }
+
+    /// M1 paging for an attached Beta / TR-DOS ROM (48K window `0x3C00–0x3DFF`).
+    pub fn notify_beta_m1(&mut self, pc: u16) {
+        if let Some(beta) = self.beta.as_mut() {
+            beta.notify_m1(pc, 0x3c00);
+        }
     }
 
     #[inline]
@@ -212,6 +226,11 @@ impl Bus48 {
         }
         if let Some(if1) = self.interface1.as_ref() {
             if let Some(v) = if1.read_rom(addr) {
+                return v;
+            }
+        }
+        if let Some(beta) = self.beta.as_ref() {
+            if let Some(v) = beta.read_rom(addr) {
                 return v;
             }
         }
@@ -420,12 +439,26 @@ impl Bus128 {
         self.divmmc.get_or_insert_with(DivMmc::new)
     }
 
+    /// M1 opcode-fetch hook for DivMMC automap.
+    pub fn notify_divmmc_m1(&mut self, pc: u16) {
+        if let Some(d) = self.divmmc.as_mut() {
+            d.notify_m1(pc);
+        }
+    }
+
     pub fn attach_interface1(&mut self) -> &mut Interface1 {
         self.interface1.get_or_insert_with(Interface1::new)
     }
 
     pub fn attach_beta(&mut self) -> &mut BetaDisk {
         self.beta.get_or_insert_with(BetaDisk::new)
+    }
+
+    /// M1 paging for an attached Beta / TR-DOS ROM (128K window `0x3D00–0x3DFF`).
+    pub fn notify_beta_m1(&mut self, pc: u16) {
+        if let Some(beta) = self.beta.as_mut() {
+            beta.notify_m1(pc, 0x3d00);
+        }
     }
 
     /// Compatibility: selected AY register index.
@@ -477,6 +510,11 @@ impl Bus128 {
         }
         if let Some(if1) = self.interface1.as_ref() {
             if let Some(v) = if1.read_rom(addr) {
+                return v;
+            }
+        }
+        if let Some(beta) = self.beta.as_ref() {
+            if let Some(v) = beta.read_rom(addr) {
                 return v;
             }
         }
@@ -760,6 +798,39 @@ mod tests {
     }
 
     #[test]
+    fn divmmc_eeprom_fixture_automaps_when_present() {
+        // Optional local fixture — not committed. Place ≥8 KiB ESXDOS at
+        // `roms/esxdos.rom` or `roms/divmmc.rom` to exercise real-image automap.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let path = ["roms/esxdos.rom", "roms/divmmc.rom"]
+            .into_iter()
+            .map(|rel| root.join(rel))
+            .find(|p| p.is_file());
+        let Some(path) = path else {
+            eprintln!("skipping: no roms/esxdos.rom or roms/divmmc.rom");
+            return;
+        };
+        let data = std::fs::read(path).expect("read eeprom fixture");
+        let mut b = Bus48::new();
+        let d = b.attach_divmmc();
+        d.attach_eeprom(&data).expect("attach eeprom");
+        b.notify_divmmc_m1(0x0000);
+        assert!(b.divmmc.as_ref().unwrap().automap);
+        assert_eq!(b.read(0x0000), data[0]);
+    }
+
+    #[test]
+    fn divmmc_automap_via_notify_m1() {
+        let mut b = Bus48::new();
+        let d = b.attach_divmmc();
+        d.attach_eeprom(&[0x5au8; 8192]).unwrap();
+        let rom0 = b.rom[0];
+        assert_eq!(b.read(0x0000), rom0);
+        b.notify_divmmc_m1(0x0008);
+        assert_eq!(b.read(0x0000), 0x5a);
+    }
+
+    #[test]
     fn divmmc_conmem_overlays_via_bus48() {
         let mut b = Bus48::new();
         b.rom[0] = 0x11;
@@ -818,5 +889,43 @@ mod tests {
         assert_eq!(b.in_port(0x001f), 0x02); // DRQ
         assert_eq!(b.in_port(0x007f), 0x12);
         assert_eq!(b.in_port(0x007f), 0x34);
+    }
+
+    #[test]
+    fn beta_trdos_rom_overlays_when_paged() {
+        let mut rom = [0u8; crate::TRDOS_ROM_SIZE];
+        rom[0] = 0x42;
+        let mut b = Bus48::new();
+        b.rom[0] = 0x11;
+        let beta = b.attach_beta();
+        beta.load_rom(&rom).unwrap();
+        beta.page_trdos(true);
+        assert_eq!(b.read(0x0000), 0x42);
+        b.beta.as_mut().unwrap().page_trdos(false);
+        assert_eq!(b.read(0x0000), 0x11);
+    }
+
+    #[test]
+    fn kempston_port_1f_untouched_when_beta_attached_but_not_paged() {
+        let mut b = Bus48::new();
+        b.kempston.fire = true;
+        b.attach_beta();
+        assert_eq!(b.in_port(0x001f), 0x10);
+    }
+
+    #[test]
+    fn bus128_m1_pages_trdos_at_3d00_not_3c00() {
+        let mut rom = [0u8; crate::TRDOS_ROM_SIZE];
+        rom[0] = 0x42;
+        let mut b = Bus128::new();
+        b.rom[0][0] = 0x11;
+        let beta = b.attach_beta();
+        beta.load_rom(&rom).unwrap();
+        b.notify_beta_m1(0x3c00);
+        assert!(!b.beta.as_ref().unwrap().paged);
+        assert_eq!(b.read(0x0000), 0x11);
+        b.notify_beta_m1(0x3d00);
+        assert!(b.beta.as_ref().unwrap().paged);
+        assert_eq!(b.read(0x0000), 0x42);
     }
 }

@@ -48,6 +48,11 @@ struct SpecChumMacApp: App {
                 }
                 .disabled(!host.model.supportsDisk)
 
+                Button("Open TRD…") {
+                    openTrd()
+                }
+                .disabled(!host.model.supportsBeta)
+
                 Button("Open ROM…") {
                     openRom()
                 }
@@ -98,7 +103,24 @@ struct SpecChumMacApp: App {
                     openMdr()
                 }
                 Divider()
-                Button("DivMMC / Beta: use egui (stubs)") {}
+                Button("Attach DivMMC") {
+                    host.attachDivmmc()
+                }
+                .disabled(!host.model.supportsBeta)
+                Button("Open DivMMC SD image…") {
+                    openDivmmcSd()
+                }
+                .disabled(!host.model.supportsBeta)
+                Button("Open DivMMC EEPROM (ESXDOS)…") {
+                    openDivmmcEeprom()
+                }
+                .disabled(!host.model.supportsBeta)
+                Divider()
+                Button("Load TR-DOS ROM…") {
+                    openTrdosRom()
+                }
+                .disabled(!host.model.supportsBeta)
+                Button("Beta: use egui (stubs)") {}
                     .disabled(true)
             }
 
@@ -193,6 +215,64 @@ struct SpecChumMacApp: App {
         panel.title = "Open Disk (DSK)"
         if panel.runModal() == .OK, let url = panel.url {
             host.openDsk(at: url)
+        }
+    }
+
+    private func openTrd() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "trd") ?? .data,
+        ]
+        panel.title = "Open TR-DOS disk (TRD)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.openTrd(at: url)
+        }
+    }
+
+    private func openDivmmcSd() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "img") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+            UTType(filenameExtension: "mmc") ?? .data,
+            UTType(filenameExtension: "sd") ?? .data,
+        ]
+        panel.title = "Open DivMMC SD image"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadDivmmcSd(at: url)
+        }
+    }
+
+    private func openDivmmcEeprom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+            UTType(filenameExtension: "eeprom") ?? .data,
+        ]
+        panel.title = "Open DivMMC EEPROM (ESXDOS, 8 KiB+)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadDivmmcEeprom(at: url)
+        }
+    }
+
+    private func openTrdosRom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+        ]
+        panel.title = "Load TR-DOS ROM (16 KiB)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadTrdosRom(at: url)
         }
     }
 
