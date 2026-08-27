@@ -1,0 +1,43 @@
+---
+description: Recurring CodeRabbit findings — avoid repeating them in Spec Chum PRs
+alwaysApply: true
+---
+
+# CodeRabbit lessons (agent habits)
+
+Distilled from real CR reviews (e.g. [#157](https://github.com/mward-sudo/spec_chum/pull/157), [#151](https://github.com/mward-sudo/spec_chum/pull/151), [#83](https://github.com/mward-sudo/spec_chum/pull/83)). **Merge-gate / draft→ready workflow:** see `pr-review-merge.mdc` and `CONTRIBUTING.md` — do not duplicate that policy here. **Issue linking:** see `github-issues.mdc`.
+
+## Quota and when to request review
+
+- Plan allows **~10 reviews/hour**. Do **not** request CR on every push, on chore/docs-only draft PRs, or while still iterating.
+- Default: stay **draft** → undraft when merge-candidate → **one** `@coderabbitai full review` (human comment preferred) → after fix commits use **`@coderabbitai review`** (incremental), not another full review.
+- Rate-limited / skipped status is a **hold**, not a pass — open a revisit issue rather than merging (see `pr-review-merge.mdc`).
+
+## Wontfix / deferred nits
+
+- Prefer a short PR reply + **follow-up GitHub issue** (user preference) over silently ignoring or burning more review cycles. Example: synthetic DSK fixture dedupe → [#164](https://github.com/mward-sudo/spec_chum/issues/164) after PR #157.
+
+## `Refs` vs `Closes` / stubs
+
+- Placeholder, deepen-in-progress, or incomplete acceptance → **`Refs #N`**, never `Closes`.
+- Do not treat stubs / `assert!(… || true)` / “smoke only” as done (lesson [#17](https://github.com/mward-sudo/spec_chum/issues/17)).
+
+## Cross-crate compile (especially `living_room`)
+
+- Default `./scripts/check.sh` **excludes** `living_room` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1`. SpecChumMac still **links** the living_room staticlib.
+- When changing shared types / FFI / `host_api` / tape options: also run `./scripts/check_living_room.sh` (or the env-gated check), and grep **all** crates including `living_room` and `apps/macos`.
+
+## Struct / API field additions
+
+- Adding a field to a public struct (e.g. `TapeLoadOptions`) breaks every struct-literal call site across crates. **Grep** `TapeLoadOptions {`, similar constructors, and FFI wrappers before finishing.
+- Keep egui / macOS / `host_api` / `living_room` constructors in sync when the host surface grows.
+
+## Test fixtures
+
+- Do not copy-paste synthetic media builders across `formats` / `bus` / `machine` tests (CR nit on #157: `synthetic_dsk` thrice). Prefer one shared `cfg(test)` / `test-util` helper, or file a follow-up (#164) if deferring.
+
+## Host / ABI hygiene (recurring themes)
+
+- Avoid hand-copied duplicate C headers for the same ABI (`sc_room_*` lived in two places — CR on #151). One source of truth.
+- Snapshot / model load paths: keep UI `model` and machine model aligned after load (CR on #143).
+- Do not leave guest input latched when a host toggle disables that input (mouse buttons, joystick matrix collisions).
