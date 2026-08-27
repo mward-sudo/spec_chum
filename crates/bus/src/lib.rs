@@ -180,10 +180,10 @@ impl Bus48 {
         self.beta.get_or_insert_with(BetaDisk::new)
     }
 
-    /// M1 paging for an attached Beta / TR-DOS ROM.
+    /// M1 paging for an attached Beta / TR-DOS ROM (48K window `0x3C00–0x3DFF`).
     pub fn notify_beta_m1(&mut self, pc: u16) {
         if let Some(beta) = self.beta.as_mut() {
-            beta.notify_m1(pc);
+            beta.notify_m1(pc, 0x3c00);
         }
     }
 
@@ -430,10 +430,10 @@ impl Bus128 {
         self.beta.get_or_insert_with(BetaDisk::new)
     }
 
-    /// M1 paging for an attached Beta / TR-DOS ROM.
+    /// M1 paging for an attached Beta / TR-DOS ROM (128K window `0x3D00–0x3DFF`).
     pub fn notify_beta_m1(&mut self, pc: u16) {
         if let Some(beta) = self.beta.as_mut() {
-            beta.notify_m1(pc);
+            beta.notify_m1(pc, 0x3d00);
         }
     }
 
@@ -830,5 +830,21 @@ mod tests {
         b.kempston.fire = true;
         b.attach_beta();
         assert_eq!(b.in_port(0x001f), 0x10);
+    }
+
+    #[test]
+    fn bus128_m1_pages_trdos_at_3d00_not_3c00() {
+        let mut rom = [0u8; crate::TRDOS_ROM_SIZE];
+        rom[0] = 0x42;
+        let mut b = Bus128::new();
+        b.rom[0][0] = 0x11;
+        let beta = b.attach_beta();
+        beta.load_rom(&rom).unwrap();
+        b.notify_beta_m1(0x3c00);
+        assert!(!b.beta.as_ref().unwrap().paged);
+        assert_eq!(b.read(0x0000), 0x11);
+        b.notify_beta_m1(0x3d00);
+        assert!(b.beta.as_ref().unwrap().paged);
+        assert_eq!(b.read(0x0000), 0x42);
     }
 }

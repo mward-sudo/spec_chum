@@ -6,7 +6,8 @@
 //! System port `0xFF` (Fuse / Beta 128): write selects drive (`D0–D1`), HLT
 //! (`D3`), side (`D4` set = side 0), MFM (`D5`). Read: `D7` = INTRQ, `D6` = DRQ.
 //!
-//! Opcode-fetch (M1) paging: ROM in at `0x3C00–0x3DFF`, out at `PC >= 0x4000`.
+//! Opcode-fetch (M1) paging: ROM in at `0x3C00–0x3DFF` (48K) or `0x3D00–0x3DFF`
+//! (128K), out at `PC >= 0x4000`.
 
 use formats::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 
@@ -110,15 +111,15 @@ impl BetaDisk {
 
     /// M1 (opcode fetch) paging used by TR-DOS `USR 15616` (`0x3D00`).
     ///
-    /// 48K Beta decodes `0x3C00–0x3DFF`; 128K is `0x3D00–0x3DFF`. Both ranges
-    /// page in here. Unpage only on fetches at `PC >= 0x4000` so TR-DOS can
-    /// read/write RAM without dropping the ROM. No-op until a ROM is loaded so
-    /// port-only tests can latch `paged` manually.
-    pub fn notify_m1(&mut self, pc: u16) {
+    /// `page_in_lo` is the start of the page-in window through `0x3DFF`:
+    /// `0x3C00` for 48K Beta, `0x3D00` for Beta 128. Unpage only on fetches at
+    /// `PC >= 0x4000` so TR-DOS can read/write RAM without dropping the ROM.
+    /// No-op until a ROM is loaded so port-only tests can latch `paged` manually.
+    pub fn notify_m1(&mut self, pc: u16, page_in_lo: u16) {
         if !self.rom_loaded {
             return;
         }
-        if (0x3c00..0x3e00).contains(&pc) {
+        if (page_in_lo..0x3e00).contains(&pc) {
             self.paged = true;
         } else if pc >= 0x4000 {
             self.paged = false;
@@ -204,11 +205,13 @@ impl BetaDisk {
         self.image.is_some() && self.drive() == 0
     }
 
+    /// 0-based index for the latched sector ID (`1..=16`). Returns
+    /// `TRD_SECTORS_PER_TRACK` for an invalid ID so callers report RNF.
     fn sector_index(&self) -> usize {
         if self.sector == 0 {
-            0
+            TRD_SECTORS_PER_TRACK
         } else {
-            usize::from(self.sector.saturating_sub(1))
+            usize::from(self.sector - 1)
         }
     }
 
@@ -370,9 +373,11 @@ impl BetaDisk {
     }
 
     fn start_read_address(&mut self) {
-        let idx = self
-            .sector_index()
-            .min(TRD_SECTORS_PER_TRACK.saturating_sub(1));
+        let idx = self.sector_index();
+        if idx >= TRD_SECTORS_PER_TRACK {
+            self.finish_rnf();
+            return;
+        }
         let Some(img) = self.image.as_ref() else {
             self.finish_not_ready();
             return;
@@ -691,11 +696,11 @@ mod tests {
         beta.load_rom(&rom).unwrap();
         assert!(!beta.paged);
         assert!(beta.read_rom(0).is_none());
-        beta.notify_m1(0x3d00);
+        beta.notify_m1(0x3d00, 0x3c00);
         assert!(beta.paged);
         assert_eq!(beta.read_rom(0), Some(0x42));
         assert_eq!(beta.read_rom(0x3d00), Some(0xc3));
-        beta.notify_m1(0x4000);
+        beta.notify_m1(0x4000, 0x3c00);
         assert!(!beta.paged);
         assert!(beta.read_rom(0).is_none());
     }
@@ -706,8 +711,8 @@ mod tests {
         rom[0x0100] = 0x76;
         let mut beta = BetaDisk::new();
         beta.load_rom(&rom).unwrap();
-        beta.notify_m1(0x3d00);
-        beta.notify_m1(0x0100);
+        beta.notify_m1(0x3d00, 0x3c00);
+        beta.notify_m1(0x0100, 0x3c00);
         assert!(beta.paged);
         assert_eq!(beta.read_rom(0x0100), Some(0x76));
     }
@@ -716,7 +721,38 @@ mod tests {
     fn notify_m1_ignored_until_rom_loaded() {
         let mut beta = BetaDisk::new();
         beta.page_trdos(true);
-        beta.notify_m1(0x4000);
+        beta.notify_m1(0x4000, 0x3c00);
         assert!(beta.paged, "port-only attach must keep manual paging");
+    }
+
+    #[test]
+    fn sector_zero_is_record_not_found() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0, 0));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x005f, 0);
+        beta.out_port(0x001f, 0x80);
+        assert_eq!(beta.in_port(0x001f), Some(STAT_RNF));
+        // Sector 1 still intact (sector 0 must not alias to it).
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x80);
+        assert_eq!(beta.in_port(0x007f), Some(0));
+    }
+
+    #[test]
+    fn m1_48k_pages_at_3c00_128k_does_not() {
+        let mut rom = [0u8; TRDOS_ROM_SIZE];
+        rom[0] = 0x42;
+        let mut beta = BetaDisk::new();
+        beta.load_rom(&rom).unwrap();
+        beta.notify_m1(0x3c00, 0x3d00);
+        assert!(!beta.paged, "128K window must ignore 0x3C00");
+        beta.notify_m1(0x3d00, 0x3d00);
+        assert!(beta.paged);
+        beta.notify_m1(0x4000, 0x3d00);
+        assert!(!beta.paged);
+        beta.notify_m1(0x3c00, 0x3c00);
+        assert!(beta.paged, "48K window pages at 0x3C00");
     }
 }
