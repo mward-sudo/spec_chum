@@ -96,12 +96,15 @@ struct SpecChumMacApp: App {
                 Button("Attach DivMMC") {
                     host.attachDivmmc()
                 }
+                .disabled(!host.model.supportsBeta)
                 Button("Open DivMMC SD image…") {
                     openDivmmcSd()
                 }
+                .disabled(!host.model.supportsBeta)
                 Button("Open DivMMC EEPROM (ESXDOS)…") {
                     openDivmmcEeprom()
                 }
+                .disabled(!host.model.supportsBeta)
                 Divider()
                 Button("Load TR-DOS ROM…") {
                     openTrdosRom()

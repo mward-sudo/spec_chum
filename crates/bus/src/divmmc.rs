@@ -57,8 +57,6 @@ struct SdSpi {
     idle: bool,
     /// Next command is an application command (after CMD55).
     app_next: bool,
-    /// Last MISO byte (full-duplex latch).
-    miso: u8,
 }
 
 impl Default for SdSpi {
@@ -67,7 +65,6 @@ impl Default for SdSpi {
             phase: SpiPhase::Idle,
             idle: true,
             app_next: false,
-            miso: 0xff,
         }
     }
 }
@@ -75,7 +72,6 @@ impl Default for SdSpi {
 impl SdSpi {
     fn reset_transaction(&mut self) {
         self.phase = SpiPhase::Idle;
-        self.miso = 0xff;
     }
 
     fn soft_reset_card(&mut self) {
@@ -84,9 +80,7 @@ impl SdSpi {
 
     fn exchange(&mut self, mosi: u8, sd: &mut [u8]) -> u8 {
         // One IN or OUT on the data port = one SPI byte (DivMMC CPLD behaviour).
-        let v = self.clock(mosi, sd);
-        self.miso = v;
-        v
+        self.clock(mosi, sd)
     }
 
     fn clock(&mut self, mosi: u8, sd: &mut [u8]) -> u8 {
@@ -261,13 +255,19 @@ impl SdSpi {
     }
 
     fn sector_byte(sd: &[u8], lba: u32, offset: usize) -> u8 {
-        let base = (lba as usize).saturating_mul(SD_SECTOR_SIZE);
-        sd.get(base + offset).copied().unwrap_or(0xff)
+        let idx = (lba as usize)
+            .checked_mul(SD_SECTOR_SIZE)
+            .and_then(|base| base.checked_add(offset));
+        idx.and_then(|i| sd.get(i).copied()).unwrap_or(0xff)
     }
 
     fn write_sector_byte(sd: &mut [u8], lba: u32, offset: usize, value: u8) {
-        let base = (lba as usize).saturating_mul(SD_SECTOR_SIZE);
-        let idx = base + offset;
+        let Some(idx) = (lba as usize)
+            .checked_mul(SD_SECTOR_SIZE)
+            .and_then(|base| base.checked_add(offset))
+        else {
+            return;
+        };
         if idx < sd.len() {
             sd[idx] = value;
         }

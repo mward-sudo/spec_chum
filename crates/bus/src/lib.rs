@@ -781,9 +781,10 @@ mod tests {
     fn divmmc_eeprom_fixture_automaps_when_present() {
         // Optional local fixture — not committed. Place ≥8 KiB ESXDOS at
         // `roms/esxdos.rom` or `roms/divmmc.rom` to exercise real-image automap.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let path = ["roms/esxdos.rom", "roms/divmmc.rom"]
             .into_iter()
-            .map(std::path::Path::new)
+            .map(|rel| root.join(rel))
             .find(|p| p.is_file());
         let Some(path) = path else {
             eprintln!("skipping: no roms/esxdos.rom or roms/divmmc.rom");

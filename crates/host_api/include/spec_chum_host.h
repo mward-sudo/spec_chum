@@ -78,6 +78,7 @@ int sc_has_multiface(void *handle);
 int sc_attach_divmmc(void *handle);
 int sc_load_divmmc_sd(void *handle, const char *path);
 int sc_load_divmmc_eeprom(void *handle, const char *path);
+/* Returns 1 if DivMMC is attached, 0 if not attached or handle is null. */
 int sc_has_divmmc(void *handle);
 
 /* Heap strings — free with sc_string_free */
