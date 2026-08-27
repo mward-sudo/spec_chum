@@ -658,7 +658,7 @@ impl Machine {
                     beta.page_trdos(false);
                 }
                 if let Some(div) = bus.divmmc.as_mut() {
-                    div.control = 0;
+                    div.reset_soft();
                 }
                 *ula = Ula48::new();
                 // Keep inserted tape/disk media across reset; pause the deck at its
@@ -692,7 +692,7 @@ impl Machine {
                     beta.page_trdos(false);
                 }
                 if let Some(div) = bus.divmmc.as_mut() {
-                    div.control = 0;
+                    div.reset_soft();
                 }
                 *ula = Ula48::new();
                 if let Some(t) = tape.as_mut() {
@@ -1093,6 +1093,12 @@ impl Machine {
         }
     }
 
+    /// Attach DivMMC and load an ESXDOS EEPROM image (8 KiB, or larger prefix).
+    pub fn attach_divmmc_eeprom(&mut self, data: &[u8]) -> Result<(), String> {
+        let div = self.attach_divmmc()?;
+        div.attach_eeprom(data)
+    }
+
     pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
         match self {
             Self::Spec48 { bus, .. } => bus.divmmc.as_mut(),
@@ -1106,6 +1112,15 @@ impl Machine {
         match self {
             Self::Spec48 { bus, .. } => bus.divmmc.is_some(),
             Self::Spec128 { bus, .. } => bus.divmmc.is_some(),
+            Self::SpecPlus3 { .. } => false,
+        }
+    }
+
+    #[must_use]
+    pub fn has_divmmc_eeprom(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.divmmc.as_ref().is_some_and(|d| d.eeprom_loaded),
+            Self::Spec128 { bus, .. } => bus.divmmc.as_ref().is_some_and(|d| d.eeprom_loaded),
             Self::SpecPlus3 { .. } => false,
         }
     }
@@ -1345,6 +1360,7 @@ impl Machine {
                         }
                     }
                     let pc = cpu.regs.pc;
+                    bus.notify_divmmc_m1(pc);
                     let cpu_on = trace::enabled(trace::Category::CPU);
                     let pre = cpu_on.then(|| {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
@@ -1479,6 +1495,7 @@ impl Machine {
                         }
                     }
                     let pc = cpu.regs.pc;
+                    bus.notify_divmmc_m1(pc);
                     let cpu_on = trace::enabled(trace::Category::CPU);
                     let pre = cpu_on.then(|| {
                         let (bytes, len) = peek_opcode(|a| bus.read(a), pc);
@@ -2060,6 +2077,7 @@ impl Machine {
                     }
                 }
                 let pc = cpu.regs.pc;
+                bus.notify_divmmc_m1(pc);
                 let was_halt = cpu.regs.halted;
                 let cpu_on = trace::enabled(trace::Category::CPU);
                 let pre = cpu_on.then(|| {
@@ -2171,6 +2189,7 @@ impl Machine {
                     }
                 }
                 let pc = cpu.regs.pc;
+                bus.notify_divmmc_m1(pc);
                 let was_halt = cpu.regs.halted;
                 let cpu_on = trace::enabled(trace::Category::CPU);
                 let pre = cpu_on.then(|| {
@@ -2342,6 +2361,7 @@ impl Machine {
                 tape_opts,
                 ..
             } => {
+                bus.notify_divmmc_m1(cpu.regs.pc);
                 let last_t = cpu.t;
                 let mut mio = MemIo48 {
                     bus: bus.as_mut(),
@@ -2369,6 +2389,7 @@ impl Machine {
                 tape_opts,
                 ..
             } => {
+                bus.notify_divmmc_m1(cpu.regs.pc);
                 let last_t = cpu.t;
                 let mut mio = MemIo128 {
                     bus: bus.as_mut(),

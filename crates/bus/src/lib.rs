@@ -170,6 +170,13 @@ impl Bus48 {
         self.divmmc.get_or_insert_with(DivMmc::new)
     }
 
+    /// M1 opcode-fetch hook for DivMMC automap.
+    pub fn notify_divmmc_m1(&mut self, pc: u16) {
+        if let Some(d) = self.divmmc.as_mut() {
+            d.notify_m1(pc);
+        }
+    }
+
     /// Attach Interface 1 (creates default peripheral if absent).
     pub fn attach_interface1(&mut self) -> &mut Interface1 {
         self.interface1.get_or_insert_with(Interface1::new)
@@ -408,6 +415,13 @@ impl Bus128 {
     /// Attach a DivMMC (creates default peripheral if absent).
     pub fn attach_divmmc(&mut self) -> &mut DivMmc {
         self.divmmc.get_or_insert_with(DivMmc::new)
+    }
+
+    /// M1 opcode-fetch hook for DivMMC automap.
+    pub fn notify_divmmc_m1(&mut self, pc: u16) {
+        if let Some(d) = self.divmmc.as_mut() {
+            d.notify_m1(pc);
+        }
     }
 
     pub fn attach_interface1(&mut self) -> &mut Interface1 {
@@ -737,6 +751,38 @@ mod tests {
             0xc3,
             "Multiface NMI must win over DivMMC CONMEM"
         );
+    }
+
+    #[test]
+    fn divmmc_eeprom_fixture_automaps_when_present() {
+        // Optional local fixture — not committed. Place ≥8 KiB ESXDOS at
+        // `roms/esxdos.rom` or `roms/divmmc.rom` to exercise real-image automap.
+        let path = ["roms/esxdos.rom", "roms/divmmc.rom"]
+            .into_iter()
+            .map(std::path::Path::new)
+            .find(|p| p.is_file());
+        let Some(path) = path else {
+            eprintln!("skipping: no roms/esxdos.rom or roms/divmmc.rom");
+            return;
+        };
+        let data = std::fs::read(path).expect("read eeprom fixture");
+        let mut b = Bus48::new();
+        let d = b.attach_divmmc();
+        d.attach_eeprom(&data).expect("attach eeprom");
+        b.notify_divmmc_m1(0x0000);
+        assert!(b.divmmc.as_ref().unwrap().automap);
+        assert_eq!(b.read(0x0000), data[0]);
+    }
+
+    #[test]
+    fn divmmc_automap_via_notify_m1() {
+        let mut b = Bus48::new();
+        let d = b.attach_divmmc();
+        d.attach_eeprom(&[0x5au8; 8192]).unwrap();
+        let rom0 = b.rom[0];
+        assert_eq!(b.read(0x0000), rom0);
+        b.notify_divmmc_m1(0x0008);
+        assert_eq!(b.read(0x0000), 0x5a);
     }
 
     #[test]

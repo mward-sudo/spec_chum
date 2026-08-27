@@ -71,6 +71,12 @@ int sc_attach_multiface(void *handle, const char *path);
 int sc_multiface_nmi(void *handle);
 int sc_has_multiface(void *handle);
 
+/* DivMMC (48K/128K): attach, flat SD image, ESXDOS EEPROM. Returns 0 ok, -1 error. */
+int sc_attach_divmmc(void *handle);
+int sc_load_divmmc_sd(void *handle, const char *path);
+int sc_load_divmmc_eeprom(void *handle, const char *path);
+int sc_has_divmmc(void *handle);
+
 /* Heap strings — free with sc_string_free */
 char *sc_status(void *handle);
 char *sc_last_error(void);

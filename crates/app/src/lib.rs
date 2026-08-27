@@ -592,7 +592,7 @@ impl EmulatorSession {
     pub fn attach_divmmc_stub(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             match m.attach_divmmc() {
-                Ok(_) => self.status = "DivMMC attached (stub)".into(),
+                Ok(_) => self.status = "DivMMC attached".into(),
                 Err(e) => self.status = e,
             }
         } else {
@@ -616,6 +616,24 @@ impl EmulatorSession {
                 }
             }
             Err(e) => self.status = format!("SD image error: {e}"),
+        }
+    }
+
+    pub fn attach_divmmc_eeprom(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => {
+                if let Some(m) = self.machine.as_mut() {
+                    match m.attach_divmmc_eeprom(&data) {
+                        Ok(()) => {
+                            self.status = format!("DivMMC EEPROM {}", path.display());
+                        }
+                        Err(e) => self.status = e,
+                    }
+                } else {
+                    self.status = "Load a machine ROM first".into();
+                }
+            }
+            Err(e) => self.status = format!("EEPROM error: {e}"),
         }
     }
 
@@ -1084,7 +1102,7 @@ impl SpecChumApp {
                             .is_some_and(Machine::has_interface1);
                         let has_beta = self.session.machine.as_ref().is_some_and(Machine::has_beta);
 
-                        ui.label("Peripherals (stubs where noted)");
+                        ui.label("Peripherals (partial where noted)");
                         ui.separator();
 
                         if model == Model::Spectrum48 {
@@ -1113,7 +1131,7 @@ impl SpecChumApp {
 
                         ui.separator();
                         if matches!(model, Model::Spectrum48 | Model::Spectrum128) {
-                            if ui.button("Attach DivMMC (stub)").clicked() {
+                            if ui.button("Attach DivMMC").clicked() {
                                 self.session.attach_divmmc_stub();
                                 ui.close_menu();
                             }
@@ -1129,8 +1147,23 @@ impl SpecChumApp {
                                 }
                                 ui.close_menu();
                             }
+                            if ui
+                                .add_enabled(
+                                    has_div,
+                                    egui::Button::new("Open DivMMC EEPROM (ESXDOS)…"),
+                                )
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("EEPROM / ESXDOS", &["rom", "bin", "eeprom"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_divmmc_eeprom(&path);
+                                }
+                                ui.close_menu();
+                            }
                             ui.label(if has_div {
-                                "DivMMC: attached (paging/SPI stub; no ESXDOS boot)"
+                                "DivMMC: attached (SPI sector I/O + automap; ESXDOS boot needs EEPROM)"
                             } else {
                                 "DivMMC: not attached"
                             });

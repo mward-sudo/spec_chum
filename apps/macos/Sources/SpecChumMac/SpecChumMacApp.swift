@@ -88,7 +88,17 @@ struct SpecChumMacApp: App {
                     host.multifaceNmi()
                 }
                 Divider()
-                Button("DivMMC / IF1 / Beta: use egui (stubs)") {}
+                Button("Attach DivMMC") {
+                    host.attachDivmmc()
+                }
+                Button("Open DivMMC SD image…") {
+                    openDivmmcSd()
+                }
+                Button("Open DivMMC EEPROM (ESXDOS)…") {
+                    openDivmmcEeprom()
+                }
+                Divider()
+                Button("IF1 / Beta: use egui (stubs)") {}
                     .disabled(true)
             }
 
@@ -183,6 +193,37 @@ struct SpecChumMacApp: App {
         panel.title = "Open Disk (DSK)"
         if panel.runModal() == .OK, let url = panel.url {
             host.openDsk(at: url)
+        }
+    }
+
+    private func openDivmmcSd() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "img") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+            UTType(filenameExtension: "mmc") ?? .data,
+            UTType(filenameExtension: "sd") ?? .data,
+        ]
+        panel.title = "Open DivMMC SD image"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadDivmmcSd(at: url)
+        }
+    }
+
+    private func openDivmmcEeprom() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+            UTType(filenameExtension: "eeprom") ?? .data,
+        ]
+        panel.title = "Open DivMMC EEPROM (ESXDOS, 8 KiB+)"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.loadDivmmcEeprom(at: url)
         }
     }
 
