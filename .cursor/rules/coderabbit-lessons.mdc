@@ -5,7 +5,7 @@ alwaysApply: true
 
 # CodeRabbit lessons (agent habits)
 
-Distilled from real CR reviews (e.g. [#157](https://github.com/mward-sudo/spec_chum/pull/157), [#151](https://github.com/mward-sudo/spec_chum/pull/151), [#83](https://github.com/mward-sudo/spec_chum/pull/83)). **Merge-gate / draft→ready workflow:** see `pr-review-merge.mdc` and `CONTRIBUTING.md` — do not duplicate that policy here. **Issue linking:** see `github-issues.mdc`.
+Distilled from historical CodeRabbit reviews on mainline PRs (~66 PRs scanned; **29** had CR findings — e.g. [#26](https://github.com/mward-sudo/spec_chum/pull/26), [#79](https://github.com/mward-sudo/spec_chum/pull/79), [#83](https://github.com/mward-sudo/spec_chum/pull/83), [#98](https://github.com/mward-sudo/spec_chum/pull/98), [#111](https://github.com/mward-sudo/spec_chum/pull/111), [#143](https://github.com/mward-sudo/spec_chum/pull/143), [#151](https://github.com/mward-sudo/spec_chum/pull/151), [#153](https://github.com/mward-sudo/spec_chum/pull/153), [#157](https://github.com/mward-sudo/spec_chum/pull/157)). On-demand reviews mean many recent drafts have **no** CR history yet. **Merge-gate / draft→ready:** see `pr-review-merge.mdc` / `CONTRIBUTING.md`. **Issue linking:** see `github-issues.mdc`.
 
 ## Quota and when to request review
 
@@ -32,12 +32,40 @@ Distilled from real CR reviews (e.g. [#157](https://github.com/mward-sudo/spec_c
 - Adding a field to a public struct (e.g. `TapeLoadOptions`) breaks every struct-literal call site across crates. **Grep** `TapeLoadOptions {`, similar constructors, and FFI wrappers before finishing.
 - Keep egui / macOS / `host_api` / `living_room` constructors in sync when the host surface grows.
 
-## Test fixtures
+## Test quality (recurring)
 
-- Do not copy-paste synthetic media builders across `formats` / `bus` / `machine` tests (CR nit on #157: `synthetic_dsk` thrice). Prefer one shared `cfg(test)` / `test-util` helper, or file a follow-up (#164) if deferring.
+- Smoke / matrix tests must **assert real outcomes** — not `assert!(true)`, not state the test just forced by hand (#88, #98, #104).
+- Make precondition assertions meaningful (e.g. carry clear before SCF; Q/flag cases that actually exercise the claim) (#124).
+- ROM-dependent tests must **skip cleanly** when `roms/` is missing (#109, #131, #143).
+- Do not copy-paste synthetic media builders across crates (CR nit on #157: `synthetic_dsk` thrice). Prefer one shared `cfg(test)` / `test-util` helper, or file a follow-up (#164) if deferring.
 
-## Host / ABI hygiene (recurring themes)
+## Tape / EAR / UI truthfulness
 
-- Avoid hand-copied duplicate C headers for the same ABI (`sc_room_*` lived in two places — CR on #151). One source of truth.
-- Snapshot / model load paths: keep UI `model` and machine model aligned after load (CR on #143).
-- Do not leave guest input latched when a host toggle disables that input (mouse buttons, joystick matrix collisions).
+- One EAR-level / pulse convention across TZX producers; keep Instant/flash paths consistent with EAR semantics (#102, #104).
+- UI status and controls must match the active load path (don’t claim EAR while flash-load runs; don’t leave a disabled control implying an option that still applies) (#83).
+- Handle empty / pulse-free / trailing-empty tape decks in progress labels and completion (#79, #113).
+
+## Frame-boundary audio and counters
+
+- Carry speaker level, AY samples, and late frame edges into the next frame — do not drop cross-boundary state (#79, #113, #120).
+- Prefer saturating / guarded arithmetic for progress and catch-up caps; don’t print OK after a soft budget failure (#113, #151).
+
+## Host / ABI / input hygiene
+
+- Avoid hand-copied duplicate C headers for the same ABI (`sc_room_*` / debugger FFI lived in two places — #98, #151). One source of truth.
+- Snapshot / model load: keep UI `model` and machine model aligned; reload when snapshot model differs (#143).
+- Do not leave guest input latched when a host toggle disables that input (mouse buttons, joystick vs matrix — #143). On macOS, release held keys when Command becomes active (#71).
+- Reset-as-model-reselection drops inserted media — preserve or re-insert intentionally (#151).
+- Living-room host: don’t block the UI thread on the room queue; a single map timeout must not permanently disable CPU readback; stall recovery must be generation-safe (#151, #153).
+
+## Errors, I/O, hot paths
+
+- Don’t discard `Result`s from play/start/write/init (`stream.play()`, append writers, `Gilrs::new()`, WAV delivery) (#102, #143, #151).
+- Don’t flush/reopen a file per trace event; buffer and handle write failures (#98, #102).
+- Downloads/assets: write atomically; don’t retain a failed download as a valid cache entry (#109, #151).
+- No hardcoded developer machine paths — use env vars / repo-relative paths (#83).
+
+## CI / release (when touching workflows or packaging)
+
+- Pin Actions to immutable SHAs; validate `workflow_dispatch` / PR-number inputs; disable `persist-credentials` where unneeded; concurrency groups on release (#111, #112).
+- Keep crate version, docs, and native macOS **numeric** bundle version in sync (#111, #126, #129).
