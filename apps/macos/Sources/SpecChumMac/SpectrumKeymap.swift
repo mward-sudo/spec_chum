@@ -8,7 +8,7 @@ enum SpectrumKeymap {
     static let caps: (UInt32, UInt32) = (0, 0)
     static let sym: (UInt32, UInt32) = (7, 1)
 
-    /// Arrow keys + Tab — joystick stick only (egui skips matrix chords for these).
+    /// Arrow keys + Tab — joystick-only routing (arrows = directions, Tab = fire).
     static func isJoystickRoutingKey(keyCode: UInt16) -> Bool {
         switch keyCode {
         case 123, 124, 125, 126, 48: // arrows, Tab

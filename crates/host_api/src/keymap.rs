@@ -148,7 +148,9 @@ pub struct SyncKeys {
 
 #[must_use]
 pub fn sync_keys(held: &[u16], shift: bool, option: bool, control: bool) -> SyncKeys {
-    let suppress_caps = held.iter().copied().any(suppresses_modifier_caps);
+    let suppress_caps = held.iter().copied().any(|code| {
+        is_joystick_routing_key(code) || suppresses_modifier_caps(code)
+    });
     let modifiers = modifier_keys(shift, option, control, suppress_caps);
     let mut matrix = Vec::new();
     for &code in held {
@@ -362,6 +364,22 @@ mod tests {
     #[test]
     fn tab_is_fire_only_via_kempston_mask() {
         let sync = sync_keys(&[ansi::TAB], false, false, false);
+        assert!(sync.matrix.is_empty());
+        assert_eq!(sync.kempston_mask, 0x10);
+    }
+
+    #[test]
+    fn shift_arrow_suppresses_caps_modifier() {
+        let sync = sync_keys(&[ansi::LEFT], true, false, false);
+        assert!(sync.modifiers.is_empty());
+        assert!(sync.matrix.is_empty());
+        assert_eq!(sync.kempston_mask, 0x02);
+    }
+
+    #[test]
+    fn shift_tab_suppresses_caps_modifier() {
+        let sync = sync_keys(&[ansi::TAB], true, false, false);
+        assert!(sync.modifiers.is_empty());
         assert!(sync.matrix.is_empty());
         assert_eq!(sync.kempston_mask, 0x10);
     }
