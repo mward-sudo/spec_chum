@@ -691,7 +691,7 @@ impl Machine {
                 bus.kempston.reset();
                 bus.mouse.reset();
                 if let Some(mf) = bus.multiface.as_mut() {
-                    mf.hide();
+                    mf.reset();
                 }
                 if let Some(if1) = bus.interface1.as_mut() {
                     if1.page_rom(false);
@@ -1107,11 +1107,19 @@ impl Machine {
         }
     }
 
-    /// Page Multiface 1 (if attached) and raise NMI. Returns NMI T-states, or `None` if MF absent.
+    /// Press Multiface 1 red button (if attached) and raise NMI.
+    ///
+    /// Asserts NMI pending, runs the Z80 NMI sequence to `0x0066`, then pages MF
+    /// ROM/RAM over `0000–3FFF` (vector-fetch latch). Returns NMI T-states, or
+    /// `None` if MF is absent. A second press while NMI is still pending is ignored
+    /// (returns `Some(0)`).
     pub fn multiface_nmi(&mut self) -> Option<u32> {
         match self {
             Self::Spec48 { cpu, bus, .. } => {
-                bus.multiface.as_mut()?.nmi();
+                let mf = bus.multiface.as_mut()?;
+                if !mf.press_button() {
+                    return Some(0);
+                }
                 let t_step_start = cpu.t;
                 let dt = {
                     let mut mio = MemIo48 {
@@ -1123,6 +1131,9 @@ impl Machine {
                     cpu.nmi(&mut mio)
                 };
                 bus.advance_frame_t(dt);
+                if let Some(mf) = bus.multiface.as_mut() {
+                    mf.page_on_nmi_vector();
+                }
                 Some(dt)
             }
             _ => None,
@@ -2827,6 +2838,33 @@ mod tests {
 
     fn fixture_tap() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/tape/minimal_code.tap")
+    }
+
+    #[test]
+    fn multiface_in_pages_out_and_back_for_return() {
+        let mut rom = [0u8; bus::MULTIFACE1_SIZE];
+        rom[0x66] = 0x76; // HALT at NMI vector
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        m.attach_multiface(&rom).unwrap();
+        m.cpu_mut().regs.sp = 0xfffd;
+        let _ = m.multiface_nmi().expect("MF attached");
+        match &m {
+            Machine::Spec48 { bus, .. } => {
+                assert!(bus.multiface.as_ref().unwrap().paged);
+            }
+            _ => unreachable!(),
+        }
+        // Toolkit-style page out / page in without another button press.
+        match &mut m {
+            Machine::Spec48 { bus, .. } => {
+                let _ = bus.in_port(0x001f);
+                assert!(!bus.multiface.as_ref().unwrap().paged);
+                let _ = bus.in_port(0x009f);
+                assert!(bus.multiface.as_ref().unwrap().paged);
+                assert_eq!(bus.read(0x0066), 0x76);
+            }
+            _ => unreachable!(),
+        }
     }
 
     /// Synthetic MF ROM: at NMI vector, `LD A,42h / LD (2000h),A / HALT` — flag in MF RAM.

@@ -23,7 +23,7 @@ pub use kempston_mouse::{
     KempstonMouse, PORT_BUTTONS as MOUSE_PORT_BUTTONS, PORT_X as MOUSE_PORT_X,
     PORT_Y as MOUSE_PORT_Y,
 };
-pub use multiface::{Multiface1, MULTIFACE1_SIZE};
+pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 
 use ula::{
@@ -320,6 +320,14 @@ impl Bus48 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        // Multiface 1: matching IN pages by A7 as a side effect (MAME-style: does not
+        // consume the expansion-bus cycle). Prefer Beta/DivMMC data when they claim.
+        let mf_data = if let Some(mf) = self.multiface.as_mut() {
+            let joy = self.kempston.read();
+            mf.in_port(port, joy)
+        } else {
+            None
+        };
         if let Some(beta) = self.beta.as_mut() {
             if let Some(v) = beta.in_port(port) {
                 return v;
@@ -331,12 +339,15 @@ impl Bus48 {
                 return v;
             }
         }
+        if let Some(v) = mf_data {
+            return v;
+        }
         if let Some(if1) = self.interface1.as_mut() {
             if let Some(v) = if1.in_port(port) {
                 return v;
             }
         }
-        // Kempston joystick (partial decode on low byte 0x1f) when Beta is not claiming it
+        // Kempston joystick (partial decode on low byte 0x1f) when Beta/MF not claiming it
         if port & 0xff == 0x1f {
             return self.kempston.read();
         }
@@ -353,10 +364,10 @@ impl Bus48 {
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
+        // Multiface clears NMI pending on matching OUT but does not consume the cycle
+        // (Beta / other peripherals still see the same port write).
         if let Some(mf) = self.multiface.as_mut() {
-            if mf.out_port(port, value) {
-                return;
-            }
+            let _ = mf.out_port(port, value);
         }
         if let Some(beta) = self.beta.as_mut() {
             if beta.out_port(port, value) {
@@ -775,12 +786,84 @@ mod tests {
         mf_rom[0x66] = 0xc3; // JP …
         b.attach_multiface(&mf_rom).unwrap();
         assert_eq!(b.read(0x0066), 0x11);
-        b.multiface.as_mut().unwrap().nmi();
+        let mf = b.multiface.as_mut().unwrap();
+        mf.nmi();
+        mf.page_on_nmi_vector();
         assert_eq!(b.read(0x0066), 0xc3);
         b.write(0x2000, 0x5a);
         assert_eq!(b.read(0x2000), 0x5a);
+        assert_eq!(b.in_port(0x001f), 0, "IN 1Fh pages out");
+        assert_eq!(b.read(0x0066), 0x11, "IN 1Fh hides Multiface");
+    }
+
+    #[test]
+    fn multiface_in_9f_pages_back_in() {
+        let mut b = Bus48::new();
+        b.rom[0] = 0x11;
+        let mut mf_rom = [0u8; MULTIFACE1_SIZE];
+        mf_rom[0] = 0xaa;
+        b.attach_multiface(&mf_rom).unwrap();
+        b.multiface.as_mut().unwrap().page_in();
+        assert_eq!(b.read(0x0000), 0xaa);
+        let _ = b.in_port(0x001f);
+        assert_eq!(b.read(0x0000), 0x11);
+        let _ = b.in_port(0x009f);
+        assert_eq!(b.read(0x0000), 0xaa, "IN 9Fh pages Multiface back in");
+    }
+
+    #[test]
+    fn multiface_kempston_on_in_1f_while_attached() {
+        let mut b = Bus48::new();
+        b.attach_multiface(&[0u8; MULTIFACE1_SIZE]).unwrap();
+        b.kempston.fire = true;
+        b.kempston.right = true;
+        b.multiface.as_mut().unwrap().page_in();
+        assert_eq!(b.in_port(0x001f), 0x11);
+        assert!(!b.multiface.as_ref().unwrap().paged);
+    }
+
+    #[test]
+    fn multiface_and_beta_share_port_1f_cycle() {
+        // MF1 side effects chain with the expansion bus; Beta keeps data/command
+        // priority when TR-DOS is paged (MAME mface1 + interface style).
+        let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
+        raw[0] = 0x12;
+        raw[1] = 0x34;
+        let img = formats::TrdImage::parse(&raw).unwrap();
+        let mut b = Bus48::new();
+        b.attach_multiface(&[0u8; MULTIFACE1_SIZE]).unwrap();
+        {
+            let mf = b.multiface.as_mut().unwrap();
+            mf.page_in();
+            mf.nmi_pending = true;
+        }
+        let beta = b.attach_beta();
+        beta.insert(img);
+        beta.page_trdos(true);
+
         b.out_port(0x003f, 0);
-        assert_eq!(b.read(0x0066), 0x11, "OUT 3Fh hides Multiface");
+        b.out_port(0x005f, 1);
+        b.out_port(0x001f, 0x80); // read sector — MF clears NMI; Beta still gets command
+        assert!(
+            !b.multiface.as_ref().unwrap().nmi_pending,
+            "OUT 1Fh clears MF NMI pending"
+        );
+        assert!(
+            b.multiface.as_ref().unwrap().paged,
+            "OUT does not page Multiface out"
+        );
+
+        b.kempston.fire = true;
+        assert_eq!(
+            b.in_port(0x001f),
+            0x02,
+            "IN 1Fh returns Beta status, not Kempston"
+        );
+        assert!(
+            !b.multiface.as_ref().unwrap().paged,
+            "IN 1Fh still pages Multiface out as a side effect"
+        );
+        assert_eq!(b.in_port(0x007f), 0x12);
     }
 
     #[test]
@@ -793,7 +876,9 @@ mod tests {
         let mut mf_rom = [0u8; MULTIFACE1_SIZE];
         mf_rom[0x66] = 0xc3;
         b.attach_multiface(&mf_rom).unwrap();
-        b.multiface.as_mut().unwrap().nmi();
+        let mf = b.multiface.as_mut().unwrap();
+        mf.nmi();
+        mf.page_on_nmi_vector();
         assert_eq!(
             b.read(0x0066),
             0xc3,
