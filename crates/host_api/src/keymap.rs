@@ -164,6 +164,10 @@ pub fn sync_keys(held: &[u16], shift: bool, option: bool, control: bool) -> Sync
             matrix.extend(chord.keys.into_iter().filter(|&k| k != CAPS && k != SYM));
         }
     }
+    // Dedupe shared positions (e.g. SYM in modifiers and matrix) — Swift syncMatrix parity.
+    let mut seen = std::collections::HashSet::new();
+    let modifiers = modifiers.into_iter().filter(|k| seen.insert(*k)).collect();
+    let matrix = matrix.into_iter().filter(|k| seen.insert(*k)).collect();
     SyncKeys {
         modifiers,
         matrix,
@@ -400,5 +404,13 @@ mod tests {
         let sync = sync_keys(&[38], true, false, false);
         assert_eq!(sync.modifiers, vec![CAPS]);
         assert_eq!(sync.matrix, vec![(6, 3)]);
+    }
+
+    #[test]
+    fn sync_dedupes_modifier_positions_in_matrix() {
+        // Option+Quote: SYM in modifiers and in chord — must not appear twice.
+        let sync = sync_keys(&[ansi::QUOTE], false, true, false);
+        assert_eq!(sync.modifiers, vec![SYM]);
+        assert_eq!(sync.matrix, vec![(4, 3)]); // Symbol+7 for '
     }
 }

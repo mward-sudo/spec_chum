@@ -114,7 +114,7 @@ Abbreviated “feel of loading” that always finishes in about 20 seconds is st
 ## Keyboard (Mac native shell)
 
 Mapping matches egui (`crates/app/src/keymap.rs`) and is **tested in Rust**
-against ANSI key codes in [`host_api::keymap`](../../crates/host_api/src/keymap.rs)
+against ANSI key codes in [`host_api::keymap`](../crates/host_api/src/keymap.rs)
 (`SpectrumKeymap.swift` mirrors that table):
 
 | Host | Spectrum |
@@ -128,7 +128,7 @@ against ANSI key codes in [`host_api::keymap`](../../crates/host_api/src/keymap.
 | `'` / `"` | Symbol + 7 / Symbol + P |
 | `; , . / - = [ ] \\ \`` (+ Shift variants) | Same Symbol layer as egui |
 
-**Keyword entry:** one short press inserts the whole keyword (`j` → `LOAD ` with trailing space).
+**Keyword entry:** one short press inserts the whole keyword (`j` → `LOAD` with trailing space).
 OS autorepeat is ignored; keys stay down until `keyUp` (see below).
 
 **Key application vs focus ring:** A SwiftUI focus ring (or `.focusable()`) does **not**
@@ -152,7 +152,7 @@ After `./scripts/run_macos_app.sh` (click the SpecChum window — keys must **no
 
 | Action | Expected |
 | --- | --- |
-| `p` at `K` cursor | Inserts `PRINT ` (keyword + space) |
+| `p` at `K` cursor | Inserts `PRINT` (keyword + space) |
 | Short `j` | One `LOAD` keyword, not repeated |
 | Shift+`2` (Quote key) | `"` via Symbol+P, not Caps+quote |
 | `'` (Quote alone) | Symbol+7 → `'` |

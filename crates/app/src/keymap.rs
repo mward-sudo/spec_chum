@@ -11,7 +11,8 @@ pub use spec_chum_host::keymap::{Chord, CAPS, MAPPING_DOC, SYM};
 ///
 /// Returns `None` when the key is unused (e.g. F-keys). Punctuation that needs
 /// Symbol Shift overrides Caps from the host Shift key. Arrow keys and Tab are
-/// joystick-routed in the app and return `None` here.
+/// joystick-routed in `sync_keyboard` (matrix injection skipped); direct
+/// `chord_for` calls still return Caps cursor chords for arrows.
 #[must_use]
 pub fn chord_for(key: Key, modifiers: Modifiers) -> Option<Chord> {
     // Arrow keys → Spectrum cursor (Caps + 5/6/7/8), regardless of Shift.
