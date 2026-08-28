@@ -149,6 +149,104 @@ impl DskImage {
         self.tracks_data[idx].sectors.first()
     }
 
+    /// Replace sectors on a physical track (µPD765 FORMAT TRACK).
+    pub fn format_track(
+        &mut self,
+        physical_track: u8,
+        head: u8,
+        fill: u8,
+        entries: &[(u8, u8, u8, u8)],
+    ) {
+        let Some(idx) = self.track_index(physical_track, head) else {
+            return;
+        };
+        self.tracks_data[idx].sectors = entries
+            .iter()
+            .map(|&(c, h, r, n)| {
+                let size = 128usize << n.min(6);
+                Sector {
+                    track: c,
+                    side: h,
+                    sector_id: r,
+                    size_code: n,
+                    data: vec![fill; size],
+                }
+            })
+            .collect();
+    }
+
+    /// Raw CPC DSK bytes: one track, one 256-byte sector (id `0xC1`, payload `0x42 0x43`).
+    ///
+    /// Shared test fixture — see [`Self::synthetic_one_sector`].
+    #[must_use]
+    pub fn synthetic_one_sector_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 0x100];
+        data[0..8].copy_from_slice(b"MV - CPC");
+        data[0x30] = 1;
+        data[0x31] = 1;
+        let track_size: u16 = 0x100 + 256;
+        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+
+        let mut track = vec![0u8; track_size as usize];
+        track[0..12].copy_from_slice(b"Track-Info\r\n");
+        track[0x10] = 0;
+        track[0x11] = 0;
+        track[0x14] = 1;
+        track[0x15] = 1;
+        track[0x18] = 0;
+        track[0x19] = 0;
+        track[0x1a] = 0xc1;
+        track[0x1b] = 1;
+        track[0x100] = 0x42;
+        track[0x101] = 0x43;
+        data.extend_from_slice(&track);
+        data
+    }
+
+    /// Parsed [`Self::synthetic_one_sector_bytes`].
+    #[must_use]
+    pub fn synthetic_one_sector() -> Self {
+        Self::parse(&Self::synthetic_one_sector_bytes()).expect("synthetic_one_sector fixture")
+    }
+
+    /// Raw CPC DSK bytes: one track, two 256-byte sectors (ids `0xC1`, `0xC2`).
+    #[must_use]
+    pub fn synthetic_two_sectors_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 0x100];
+        data[0..8].copy_from_slice(b"MV - CPC");
+        data[0x30] = 1;
+        data[0x31] = 1;
+        let track_size: u16 = 0x100 + 256 * 2;
+        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+
+        let mut track = vec![0u8; track_size as usize];
+        track[0..12].copy_from_slice(b"Track-Info\r\n");
+        track[0x10] = 0;
+        track[0x11] = 0;
+        track[0x14] = 1;
+        track[0x15] = 2;
+        track[0x18] = 0;
+        track[0x19] = 0;
+        track[0x1a] = 0xc1;
+        track[0x1b] = 1;
+        track[0x20] = 0;
+        track[0x21] = 0;
+        track[0x22] = 0xc2;
+        track[0x23] = 1;
+        track[0x100] = 0xa1;
+        track[0x101] = 0xa2;
+        track[0x200] = 0xb1;
+        track[0x201] = 0xb2;
+        data.extend_from_slice(&track);
+        data
+    }
+
+    /// Parsed [`Self::synthetic_two_sectors_bytes`].
+    #[must_use]
+    pub fn synthetic_two_sectors() -> Self {
+        Self::parse(&Self::synthetic_two_sectors_bytes()).expect("synthetic_two_sectors fixture")
+    }
+
     /// In-memory +3DOS 180K DATA disk: 40 tracks × 1 side × 9 × 512-byte sectors (ids 1–9).
     ///
     /// Track 0 sector 1 starts with the PCW/+3 10-byte spec; remaining directory
@@ -226,63 +324,9 @@ fn parse_track(data: &[u8]) -> Result<TrackData, FormatError> {
 mod tests {
     use super::*;
 
-    fn synthetic_dsk() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1; // tracks
-        data[0x31] = 1; // sides
-        let track_size: u16 = 0x100 + 256; // header + one 256-byte sector
-        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-
-        let mut track = vec![0u8; track_size as usize];
-        track[0..12].copy_from_slice(b"Track-Info\r\n");
-        track[0x10] = 0; // track
-        track[0x11] = 0; // side
-        track[0x14] = 1; // sector size code → 256
-        track[0x15] = 1; // sector count
-        track[0x18] = 0; // C
-        track[0x19] = 0; // H
-        track[0x1a] = 0xc1; // R
-        track[0x1b] = 1; // N
-        track[0x100] = 0x42;
-        track[0x101] = 0x43;
-        data.extend_from_slice(&track);
-        data
-    }
-
-    fn synthetic_dsk_two_sectors() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1;
-        data[0x31] = 1;
-        let track_size: u16 = 0x100 + 256 * 2;
-        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-
-        let mut track = vec![0u8; track_size as usize];
-        track[0..12].copy_from_slice(b"Track-Info\r\n");
-        track[0x10] = 0;
-        track[0x11] = 0;
-        track[0x14] = 1;
-        track[0x15] = 2;
-        track[0x18] = 0;
-        track[0x19] = 0;
-        track[0x1a] = 0xc1;
-        track[0x1b] = 1;
-        track[0x20] = 0;
-        track[0x21] = 0;
-        track[0x22] = 0xc2;
-        track[0x23] = 1;
-        track[0x100] = 0xa1;
-        track[0x101] = 0xa2;
-        track[0x200] = 0xb1;
-        track[0x201] = 0xb2;
-        data.extend_from_slice(&track);
-        data
-    }
-
     #[test]
     fn parse_and_read_sector() {
-        let img = DskImage::parse(&synthetic_dsk()).unwrap();
+        let img = DskImage::synthetic_one_sector();
         let sec = img.find_sector(0, 0, 0xc1).unwrap();
         assert_eq!(sec.data[0], 0x42);
         assert_eq!(sec.data[1], 0x43);
@@ -290,7 +334,7 @@ mod tests {
 
     #[test]
     fn multi_sector_dsk_lookup() {
-        let img = DskImage::parse(&synthetic_dsk_two_sectors()).unwrap();
+        let img = DskImage::synthetic_two_sectors();
         let s1 = img.find_sector(0, 0, 0xc1).unwrap();
         let s2 = img.find_sector(0, 0, 0xc2).unwrap();
         assert_eq!([s1.data[0], s1.data[1]], [0xa1, 0xa2]);
@@ -300,7 +344,7 @@ mod tests {
 
     #[test]
     fn find_id_matches_r_without_chrn_c() {
-        let mut img = DskImage::parse(&synthetic_dsk()).unwrap();
+        let mut img = DskImage::synthetic_one_sector();
         img.tracks_data[0].sectors[0].track = 0xff;
         assert!(img.find_sector(0, 0, 0xc1).is_none());
         let sec = img.find_id(0, 0, 0xc1).unwrap();
