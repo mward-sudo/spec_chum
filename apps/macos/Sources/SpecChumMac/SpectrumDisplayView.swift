@@ -59,6 +59,11 @@ final class SpectrumNSView: NSView {
 
     override var focusRingMaskBounds: NSRect { .zero }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        KempstonMouseTracking.installTrackingArea(on: self)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         tearDownObservers()
@@ -98,7 +103,67 @@ final class SpectrumNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         claimFocus()
+        if KempstonMouseTracking.handleButton(host: host, buttonNumber: 0, pressed: true) {
+            return
+        }
         super.mouseDown(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if KempstonMouseTracking.handleButton(host: host, buttonNumber: 0, pressed: false) {
+            return
+        }
+        super.mouseUp(with: event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        claimFocus()
+        if KempstonMouseTracking.handleButton(host: host, buttonNumber: 1, pressed: true) {
+            return
+        }
+        super.rightMouseDown(with: event)
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        if KempstonMouseTracking.handleButton(host: host, buttonNumber: 1, pressed: false) {
+            return
+        }
+        super.rightMouseUp(with: event)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        claimFocus()
+        if KempstonMouseTracking.handleButton(host: host, buttonNumber: Int(event.buttonNumber), pressed: true) {
+            return
+        }
+        super.otherMouseDown(with: event)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        if KempstonMouseTracking.handleButton(host: host, buttonNumber: Int(event.buttonNumber), pressed: false) {
+            return
+        }
+        super.otherMouseUp(with: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        KempstonMouseTracking.handleMotion(host: host, event: event)
+        super.mouseMoved(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        KempstonMouseTracking.handleMotion(host: host, event: event)
+        super.mouseDragged(with: event)
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        KempstonMouseTracking.handleMotion(host: host, event: event)
+        super.rightMouseDragged(with: event)
+    }
+
+    override func otherMouseDragged(with event: NSEvent) {
+        KempstonMouseTracking.handleMotion(host: host, event: event)
+        super.otherMouseDragged(with: event)
     }
 
     override func becomeFirstResponder() -> Bool {
@@ -282,6 +347,7 @@ final class SpectrumNSView: NSView {
         held.removeAll()
         host?.clearKeys()
         host?.setKeyboardJoystickMask(0)
+        host?.clearMouseButtons()
     }
 
     // MARK: - Matrix sync

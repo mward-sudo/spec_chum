@@ -69,6 +69,12 @@ int sc_set_joystick_mode(void *handle, unsigned int mode);
 int sc_set_joystick(void *handle, unsigned int mask);
 int sc_clear_joystick(void *handle);
 
+/* Kempston mouse — dx/dy host pixels (positive dy = down); clamped to i8 per call.
+ * Buttons are active-low on the guest ports; pass pressed as 1 / released as 0
+ * (left / right / middle). */
+int sc_set_mouse_delta(void *handle, int dx, int dy);
+int sc_set_mouse_buttons(void *handle, int left, int right, int middle);
+
 /* Multiface 1 (48K): attach 8 KiB ROM, then NMI. Returns 0 ok, -1 error. */
 int sc_attach_multiface(void *handle, const char *path);
 int sc_multiface_nmi(void *handle);
