@@ -388,10 +388,10 @@ final class LivingRoomNSView: NSView {
             releaseAllKeys()
             return
         }
-        applyKey(code: event.keyCode, pressed: false, flags: event.modifierFlags)
-        for code in held {
-            applyKey(code: code, pressed: true, flags: event.modifierFlags)
-        }
+        // Rebuild from held + current flags. Do not re-apply already-held
+        // keys via applyKey — that early-returns and leaves Caps stuck when
+        // Shift is released while an arrow (joystick-routed) remains down.
+        syncMatrix(flags: event.modifierFlags)
     }
 
     // MARK: - Matrix sync
@@ -408,10 +408,22 @@ final class LivingRoomNSView: NSView {
     }
 
     private func syncMatrix(flags: NSEvent.ModifierFlags) {
-        let suppressCaps = held.contains { SpectrumKeymap.suppressesModifierCaps(keyCode: $0) }
+        let hasNonJoystickHeld = held.contains { !SpectrumKeymap.isJoystickRoutingKey(keyCode: $0) }
+        let suppressCaps: Bool
+        if hasNonJoystickHeld {
+            suppressCaps = held.contains { SpectrumKeymap.suppressesModifierCaps(keyCode: $0) }
+        } else {
+            suppressCaps = held.contains { code in
+                SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
+                    || SpectrumKeymap.suppressesModifierCaps(keyCode: code)
+            }
+        }
         var modifiers = SpectrumKeymap.modifierKeys(flags: flags, suppressCaps: suppressCaps)
         var matrixHeld: [(UInt32, UInt32)] = []
         for code in held {
+            if SpectrumKeymap.isJoystickRoutingKey(keyCode: code) {
+                continue
+            }
             let chord = SpectrumKeymap.chords(keyCode: code, flags: flags)
             if SpectrumKeymap.suppressesModifierCaps(keyCode: code) {
                 matrixHeld.append(contentsOf: chord)

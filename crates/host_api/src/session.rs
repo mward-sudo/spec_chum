@@ -1104,6 +1104,46 @@ mod tests {
     }
 
     #[test]
+    fn kempston_arrow_left_does_not_pollute_matrix() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick(0x02).unwrap(); // left
+        let m = s.machine.as_mut().unwrap();
+        assert!(m.kempston_mut().left);
+        let rows = m.keyboard_mut().rows;
+        assert_ne!(
+            rows[0] & 1,
+            0,
+            "Caps must not be injected for Kempston arrows"
+        );
+        assert_ne!(
+            rows[3] & (1 << 4),
+            0,
+            "5 must not be injected for Kempston arrows"
+        );
+    }
+
+    #[test]
+    fn cursor_left_via_joystick_applies_caps_five() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.set_joystick_mode(JoystickMode::Cursor).unwrap();
+        s.set_joystick(0x02).unwrap(); // left
+        let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+        assert_eq!(rows[0] & 1, 0, "Caps down for Cursor left");
+        assert_eq!(rows[3] & (1 << 4), 0, "5 down for Cursor left");
+    }
+
+    #[test]
     fn open_fixture_tap_progress_and_audio_pcm() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
