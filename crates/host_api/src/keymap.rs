@@ -148,9 +148,17 @@ pub struct SyncKeys {
 
 #[must_use]
 pub fn sync_keys(held: &[u16], shift: bool, option: bool, control: bool) -> SyncKeys {
-    let suppress_caps = held.iter().copied().any(|code| {
-        is_joystick_routing_key(code) || suppresses_modifier_caps(code)
-    });
+    let has_non_joystick_held = held
+        .iter()
+        .copied()
+        .any(|code| !is_joystick_routing_key(code));
+    let suppress_caps = if has_non_joystick_held {
+        held.iter().copied().any(suppresses_modifier_caps)
+    } else {
+        held.iter()
+            .copied()
+            .any(|code| is_joystick_routing_key(code) || suppresses_modifier_caps(code))
+    };
     let modifiers = modifier_keys(shift, option, control, suppress_caps);
     let mut matrix = Vec::new();
     for &code in held {
@@ -382,6 +390,14 @@ mod tests {
         assert!(sync.modifiers.is_empty());
         assert!(sync.matrix.is_empty());
         assert_eq!(sync.kempston_mask, 0x10);
+    }
+
+    #[test]
+    fn shift_left_a_preserves_caps_for_matrix_key() {
+        let sync = sync_keys(&[ansi::LEFT, 0], true, false, false);
+        assert_eq!(sync.modifiers, vec![CAPS]);
+        assert_eq!(sync.matrix, vec![(1, 0)]);
+        assert_eq!(sync.kempston_mask, 0x02);
     }
 
     #[test]

@@ -341,9 +341,15 @@ final class LivingRoomNSView: NSView {
     }
 
     private func syncMatrix(flags: NSEvent.ModifierFlags) {
-        let suppressCaps = held.contains { code in
-            SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
-                || SpectrumKeymap.suppressesModifierCaps(keyCode: code)
+        let hasNonJoystickHeld = held.contains { !SpectrumKeymap.isJoystickRoutingKey(keyCode: $0) }
+        let suppressCaps: Bool
+        if hasNonJoystickHeld {
+            suppressCaps = held.contains { SpectrumKeymap.suppressesModifierCaps(keyCode: $0) }
+        } else {
+            suppressCaps = held.contains { code in
+                SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
+                    || SpectrumKeymap.suppressesModifierCaps(keyCode: code)
+            }
         }
         var modifiers = SpectrumKeymap.modifierKeys(flags: flags, suppressCaps: suppressCaps)
         var matrixHeld: [(UInt32, UInt32)] = []

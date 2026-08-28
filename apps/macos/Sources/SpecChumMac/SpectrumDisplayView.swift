@@ -302,9 +302,15 @@ final class SpectrumNSView: NSView {
     /// changes so `run_frame` never observes a cleared intermediate state.
     private func syncMatrix(flags: NSEvent.ModifierFlags) {
         host?.clearKeys()
-        let suppressCaps = held.contains { code in
-            SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
-                || SpectrumKeymap.suppressesModifierCaps(keyCode: code)
+        let hasNonJoystickHeld = held.contains { !SpectrumKeymap.isJoystickRoutingKey(keyCode: $0) }
+        let suppressCaps: Bool
+        if hasNonJoystickHeld {
+            suppressCaps = held.contains { SpectrumKeymap.suppressesModifierCaps(keyCode: $0) }
+        } else {
+            suppressCaps = held.contains { code in
+                SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
+                    || SpectrumKeymap.suppressesModifierCaps(keyCode: code)
+            }
         }
         for (row, bit) in SpectrumKeymap.modifierKeys(flags: flags, suppressCaps: suppressCaps) {
             host?.setKey(row: row, bit: bit, pressed: true)
