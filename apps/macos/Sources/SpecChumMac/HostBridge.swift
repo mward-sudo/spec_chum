@@ -274,8 +274,8 @@ final class HostBridge: ObservableObject {
     private(set) var keyboardJoystickMask: UInt32 = 0
     private var joystickModeApplied = false
     /// Accumulated host pointer delta since last `pushMouse` (egui frame clamp parity).
-    private var pendingMouseDx: Int32 = 0
-    private var pendingMouseDy: Int32 = 0
+    private var pendingMouseDx: CGFloat = 0
+    private var pendingMouseDy: CGFloat = 0
     private var mouseLeft = false
     private var mouseRight = false
     private var mouseMiddle = false
@@ -1399,8 +1399,8 @@ final class HostBridge: ObservableObject {
     /// NSEvent deltas: positive `deltaY` is up; Kempston/egui use positive dy = down.
     func noteMouseDelta(deltaX: CGFloat, deltaY: CGFloat) {
         guard kempstonMouse else { return }
-        pendingMouseDx += Int32(deltaX.rounded())
-        pendingMouseDy += Int32((-deltaY).rounded())
+        pendingMouseDx += deltaX
+        pendingMouseDy -= deltaY
     }
 
     /// `buttonNumber`: 0=left, 1=right, 2=middle (AppKit).
@@ -1415,6 +1415,8 @@ final class HostBridge: ObservableObject {
     }
 
     func clearMouseButtons() {
+        pendingMouseDx = 0
+        pendingMouseDy = 0
         mouseLeft = false
         mouseRight = false
         mouseMiddle = false
@@ -1429,10 +1431,10 @@ final class HostBridge: ObservableObject {
     /// Clamp accumulated motion to i8 and push buttons (egui per-frame parity).
     private func pushMouse() {
         guard kempstonMouse, let handle else { return }
-        let dx = max(Int32(Int8.min), min(Int32(Int8.max), pendingMouseDx))
-        let dy = max(Int32(Int8.min), min(Int32(Int8.max), pendingMouseDy))
-        pendingMouseDx = 0
-        pendingMouseDy = 0
+        let dx = Int32(max(CGFloat(Int8.min), min(CGFloat(Int8.max), pendingMouseDx.rounded())))
+        let dy = Int32(max(CGFloat(Int8.min), min(CGFloat(Int8.max), pendingMouseDy.rounded())))
+        pendingMouseDx -= CGFloat(dx)
+        pendingMouseDy -= CGFloat(dy)
         if dx != 0 || dy != 0 {
             _ = sc_set_mouse_delta(handle, Int32(dx), Int32(dy))
         }
