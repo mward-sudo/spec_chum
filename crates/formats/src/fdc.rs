@@ -634,7 +634,7 @@ impl Plus3Fdc {
         let fill = self.format_fill;
         let cyl = self.pcn[Self::unit_index(us)];
         let mut entries = Vec::new();
-        for chunk in self.format_ids.chunks_exact(4) {
+        for chunk in self.format_ids.as_chunks::<4>().0 {
             entries.push((chunk[0], chunk[1], chunk[2], chunk[3]));
         }
         let formatted = self
