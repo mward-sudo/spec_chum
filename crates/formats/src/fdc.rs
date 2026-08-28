@@ -5,9 +5,9 @@
 //!
 //! Supported commands: SPECIFY, SENSE DRIVE STATUS, SENSE INTERRUPT STATUS,
 //! RECALIBRATE, SEEK, READ ID, READ DATA / READ DELETED DATA, WRITE DATA /
-//! WRITE DELETED DATA. Unknown opcodes return ST0=`0x80`.
+//! WRITE DELETED DATA, FORMAT TRACK. Unknown opcodes return ST0=`0x80`.
 //!
-//! **Unsupported:** FORMAT TRACK, SCAN EQUAL/LOW/HIGH, READ TRACK. Copy-protected
+//! **Unsupported:** SCAN EQUAL/LOW/HIGH, READ TRACK. Copy-protected
 //! or non-standard DSK geometry is not modelled.
 
 use crate::dsk::DskImage;
@@ -65,6 +65,7 @@ enum Phase {
     Command,
     ExecRead,
     ExecWrite,
+    ExecFormat,
     Result,
 }
 
@@ -84,6 +85,8 @@ pub struct Plus3Fdc {
     pub read_count: u32,
     /// Completed WRITE DATA / WRITE DELETED DATA.
     pub write_count: u32,
+    /// Completed FORMAT TRACK commands.
+    pub format_count: u32,
     motor_on: bool,
     pcn: [u8; 4],
     phase: Phase,
@@ -98,6 +101,12 @@ pub struct Plus3Fdc {
     write_cyl: u8,
     write_head: u8,
     write_id: u8,
+    format_us: u8,
+    format_head: u8,
+    format_n: u8,
+    format_sc: u8,
+    format_fill: u8,
+    format_ids: Vec<u8>,
 }
 
 impl Default for Plus3Fdc {
@@ -119,6 +128,7 @@ impl Plus3Fdc {
             seek_count: 0,
             read_count: 0,
             write_count: 0,
+            format_count: 0,
             motor_on: false,
             pcn: [0; 4],
             phase: Phase::Idle,
@@ -133,6 +143,12 @@ impl Plus3Fdc {
             write_cyl: 0,
             write_head: 0,
             write_id: 0,
+            format_us: 0,
+            format_head: 0,
+            format_n: 0,
+            format_sc: 0,
+            format_fill: 0,
+            format_ids: Vec::new(),
         }
     }
 
@@ -263,6 +279,13 @@ impl Plus3Fdc {
                     self.result_index = 0;
                 }
             }
+            Phase::ExecFormat => {
+                self.format_ids.push(value);
+                let need = usize::from(self.format_sc) * 4;
+                if self.format_ids.len() >= need {
+                    self.commit_format();
+                }
+            }
             Phase::ExecRead | Phase::Result => {}
         }
     }
@@ -274,7 +297,7 @@ impl Plus3Fdc {
             Phase::Idle => MSR_RQM,
             Phase::Command => MSR_RQM | MSR_CB,
             Phase::ExecRead => MSR_RQM | MSR_DIO | MSR_EXM | MSR_CB,
-            Phase::ExecWrite => MSR_RQM | MSR_EXM | MSR_CB,
+            Phase::ExecWrite | Phase::ExecFormat => MSR_RQM | MSR_EXM | MSR_CB,
             Phase::Result => MSR_RQM | MSR_DIO | MSR_CB,
         }
     }
@@ -337,7 +360,7 @@ impl Plus3Fdc {
             0x07 => self.cmd_recalibrate(),
             0x08 => self.cmd_sense_interrupt(),
             0x0a => self.cmd_read_id(),
-            0x0d => self.cmd_format_unsupported(),
+            0x0d => self.cmd_format_track(),
             0x0f => self.cmd_seek(),
             _ => self.enter_invalid(),
         }
@@ -568,21 +591,73 @@ impl Plus3Fdc {
         }
     }
 
-    fn cmd_format_unsupported(&mut self) {
+    fn cmd_format_track(&mut self) {
         let us_hd = self.cmd.get(1).copied().unwrap_or(0);
         let us = us_hd & 3;
         let head = (us_hd >> 2) & 1;
+        let n = self.cmd.get(2).copied().unwrap_or(0);
+        let sc = self.cmd.get(3).copied().unwrap_or(0);
+        let fill = self.cmd.get(5).copied().unwrap_or(0xe5);
         let cyl = self.pcn[Self::unit_index(us)];
-        self.set_result_7(
-            ST0_IC_ABNORMAL | us | (head << 2),
-            ST1_ND,
-            0,
-            cyl,
-            head,
-            0,
-            0,
-        );
+        self.format_us = us;
+        self.format_head = head;
+        self.format_n = n;
+        self.format_sc = sc;
+        self.format_fill = fill;
+        self.format_ids.clear();
+        if self.write_protect {
+            self.set_result_7(
+                ST0_IC_ABNORMAL | us | (head << 2),
+                ST1_NW,
+                0,
+                cyl,
+                head,
+                0,
+                n,
+            );
+            self.phase = Phase::Result;
+            return;
+        }
+        if sc == 0 {
+            self.set_result_7(us | (head << 2), 0, 0, cyl, head, 0, n);
+            self.format_count = self.format_count.saturating_add(1);
+            self.phase = Phase::Result;
+            return;
+        }
+        self.phase = Phase::ExecFormat;
+    }
+
+    fn commit_format(&mut self) {
+        let us = self.format_us;
+        let head = self.format_head;
+        let n = self.format_n;
+        let fill = self.format_fill;
+        let cyl = self.pcn[Self::unit_index(us)];
+        let mut entries = Vec::new();
+        for chunk in self.format_ids.as_chunks::<4>().0 {
+            entries.push((chunk[0], chunk[1], chunk[2], chunk[3]));
+        }
+        let formatted = self
+            .image
+            .as_mut()
+            .is_some_and(|img| img.format_track(cyl, head, fill, &entries));
+        if formatted {
+            self.format_count = self.format_count.saturating_add(1);
+            let (c, h, r, nn) = entries.last().copied().unwrap_or((cyl, head, 0, n));
+            self.set_result_7(us | (head << 2), 0, 0, c, h, r, nn);
+        } else {
+            self.set_result_7(
+                ST0_IC_ABNORMAL | us | (head << 2),
+                ST1_ND,
+                0,
+                cyl,
+                head,
+                0,
+                n,
+            );
+        }
         self.phase = Phase::Result;
+        self.format_ids.clear();
     }
 
     fn chrn_params(&self) -> Option<RwParams> {
@@ -634,62 +709,7 @@ fn transfer_len(n: u8, dtl: u8) -> usize {
 mod tests {
     use super::*;
 
-    fn synthetic_dsk() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1;
-        data[0x31] = 1;
-        let track_size: u16 = 0x100 + 256;
-        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-
-        let mut track = vec![0u8; track_size as usize];
-        track[0..12].copy_from_slice(b"Track-Info\r\n");
-        track[0x10] = 0;
-        track[0x11] = 0;
-        track[0x14] = 1;
-        track[0x15] = 1;
-        track[0x18] = 0;
-        track[0x19] = 0;
-        track[0x1a] = 0xc1;
-        track[0x1b] = 1;
-        track[0x100] = 0x42;
-        track[0x101] = 0x43;
-        data.extend_from_slice(&track);
-        data
-    }
-
-    fn synthetic_dsk_two_sectors() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1;
-        data[0x31] = 1;
-        let track_size: u16 = 0x100 + 256 * 2;
-        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-
-        let mut track = vec![0u8; track_size as usize];
-        track[0..12].copy_from_slice(b"Track-Info\r\n");
-        track[0x10] = 0;
-        track[0x11] = 0;
-        track[0x14] = 1;
-        track[0x15] = 2;
-        track[0x18] = 0;
-        track[0x19] = 0;
-        track[0x1a] = 0xc1;
-        track[0x1b] = 1;
-        track[0x20] = 0;
-        track[0x21] = 0;
-        track[0x22] = 0xc2;
-        track[0x23] = 1;
-        track[0x100] = 0xa1;
-        track[0x101] = 0xa2;
-        track[0x200] = 0xb1;
-        track[0x201] = 0xb2;
-        data.extend_from_slice(&track);
-        data
-    }
-
-    fn loaded(bytes: &[u8]) -> Plus3Fdc {
-        let img = DskImage::parse(bytes).unwrap();
+    fn loaded(img: DskImage) -> Plus3Fdc {
         let mut fdc = Plus3Fdc::new();
         fdc.insert(img);
         fdc
@@ -715,7 +735,7 @@ mod tests {
 
     #[test]
     fn parse_and_read_sector() {
-        let mut fdc = loaded(&synthetic_dsk());
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
         assert!(fdc.read_sector(0, 0, 0xc1));
         assert_eq!(fdc.read_data_byte(), 0x42);
         assert_eq!(fdc.read_data_byte(), 0x43);
@@ -723,7 +743,7 @@ mod tests {
 
     #[test]
     fn read_data_command_stream_loads_sector() {
-        let mut fdc = loaded(&synthetic_dsk());
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
         feed_read_data(&mut fdc, 0, 0, 0xc1);
         assert!(fdc.data_remaining() > 0);
         assert_eq!(fdc.main_status() & 0xc0, 0xc0);
@@ -733,7 +753,7 @@ mod tests {
 
     #[test]
     fn multi_sector_dsk_read_two_sectors() {
-        let mut fdc = loaded(&synthetic_dsk_two_sectors());
+        let mut fdc = loaded(DskImage::synthetic_two_sectors());
         assert!(fdc.read_sector(0, 0, 0xc1));
         assert_eq!(fdc.read_data_byte(), 0xa1);
         assert_eq!(fdc.read_data_byte(), 0xa2);
@@ -746,7 +766,7 @@ mod tests {
 
     #[test]
     fn read_data_command_bytes_load_sector() {
-        let mut fdc = loaded(&synthetic_dsk());
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
         for b in [0x06u8, 0, 0, 0, 0xc1, 1, 0x09, 0x2a, 0xff] {
             fdc.write_command_byte(b);
         }
@@ -757,7 +777,7 @@ mod tests {
 
     #[test]
     fn read_data_nine_byte_phase_selects_correct_sector() {
-        let mut fdc = loaded(&synthetic_dsk_two_sectors());
+        let mut fdc = loaded(DskImage::synthetic_two_sectors());
         feed_read_data(&mut fdc, 0, 0, 0xc2);
         assert_eq!(fdc.read_data_byte(), 0xb1);
         assert_eq!(fdc.read_data_byte(), 0xb2);
@@ -833,7 +853,7 @@ mod tests {
 
     #[test]
     fn read_data_result_phase_en_when_r_equals_eot() {
-        let mut fdc = loaded(&synthetic_dsk());
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
         for b in [0x46u8, 0, 0, 0, 0xc1, 1, 0xc1, 0x2a, 0xff] {
             fdc.write_command_byte(b);
         }
@@ -864,7 +884,7 @@ mod tests {
 
     #[test]
     fn write_data_round_trip() {
-        let mut fdc = loaded(&synthetic_dsk());
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
         for b in [0x05u8, 0, 0, 0, 0xc1, 1, 0xc1, 0x2a, 0xff] {
             fdc.write_command_byte(b);
         }
@@ -902,7 +922,7 @@ mod tests {
 
     #[test]
     fn write_protect_skips_execution() {
-        let mut fdc = loaded(&synthetic_dsk());
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
         fdc.set_write_protect(true);
         for b in [0x05u8, 0, 0, 0, 0xc1, 1, 0xc1, 0x2a, 0xff] {
             fdc.write_command_byte(b);
@@ -910,5 +930,81 @@ mod tests {
         let res = drain_result(&mut fdc);
         assert_eq!(res[1] & ST1_NW, ST1_NW);
         assert_eq!(fdc.main_status(), MSR_RQM);
+    }
+
+    #[test]
+    fn format_track_replaces_sectors_on_disk() {
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
+        // FORMAT TRACK: opcode, HD/US, N, SC, GPL, fill
+        for b in [0x0du8, 0x00, 0x01, 0x02, 0x2a, 0xe5] {
+            fdc.write_command_byte(b);
+        }
+        assert_eq!(fdc.main_status(), MSR_RQM | MSR_EXM | MSR_CB);
+        // Two sectors: C H R N each
+        for b in [0x00, 0x00, 0xc1, 0x01, 0x00, 0x00, 0xc2, 0x01] {
+            fdc.write_command_byte(b);
+        }
+        let res = drain_result(&mut fdc);
+        assert_eq!(res.len(), 7);
+        assert_eq!(res[0] & 0xc0, 0, "normal termination");
+        assert_eq!(res[3..7], [0x00, 0x00, 0xc2, 0x01]);
+        assert_eq!(fdc.format_count, 1);
+
+        feed_read_data(&mut fdc, 0, 0, 0xc1);
+        assert_eq!(fdc.read_data_byte(), 0xe5);
+        assert_eq!(fdc.read_data_byte(), 0xe5);
+        feed_read_data(&mut fdc, 0, 0, 0xc2);
+        assert_eq!(fdc.read_data_byte(), 0xe5);
+    }
+
+    #[test]
+    fn format_track_write_protect_returns_nw() {
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
+        fdc.set_write_protect(true);
+        for b in [0x0du8, 0x00, 0x01, 0x01, 0x2a, 0xe5] {
+            fdc.write_command_byte(b);
+        }
+        let res = drain_result(&mut fdc);
+        assert_eq!(res[1] & ST1_NW, ST1_NW);
+        assert_eq!(fdc.main_status(), MSR_RQM);
+    }
+
+    fn feed_format_track(fdc: &mut Plus3Fdc, sc: u8, ids: &[(u8, u8, u8, u8)]) {
+        for b in [0x0du8, 0x00, 0x01, sc, 0x2a, 0xe5] {
+            fdc.write_command_byte(b);
+        }
+        for &(c, h, r, n) in ids {
+            for b in [c, h, r, n] {
+                fdc.write_command_byte(b);
+            }
+        }
+    }
+
+    #[test]
+    fn format_track_no_image_returns_abnormal_nd() {
+        let mut fdc = Plus3Fdc::new();
+        feed_format_track(&mut fdc, 1, &[(0, 0, 0xc1, 1)]);
+        let res = drain_result(&mut fdc);
+        assert_eq!(res.len(), 7);
+        assert_eq!(res[0] & ST0_IC_ABNORMAL, ST0_IC_ABNORMAL);
+        assert_eq!(res[1] & ST1_ND, ST1_ND);
+        assert_eq!(res[3..7], [0, 0, 0, 1]);
+        assert_eq!(fdc.format_count, 0);
+    }
+
+    #[test]
+    fn format_track_out_of_range_returns_abnormal_nd() {
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
+        fdc.write_command_byte(0x0f);
+        fdc.write_command_byte(0x00);
+        fdc.write_command_byte(99);
+        let _ = sis(&mut fdc);
+        feed_format_track(&mut fdc, 1, &[(99, 0, 0xc1, 1)]);
+        let res = drain_result(&mut fdc);
+        assert_eq!(res.len(), 7);
+        assert_eq!(res[0] & ST0_IC_ABNORMAL, ST0_IC_ABNORMAL);
+        assert_eq!(res[1] & ST1_ND, ST1_ND);
+        assert_eq!(res[3..7], [99, 0, 0, 1]);
+        assert_eq!(fdc.format_count, 0);
     }
 }

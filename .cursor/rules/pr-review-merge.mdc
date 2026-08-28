@@ -7,6 +7,10 @@ alwaysApply: true
 
 Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unresolved CodeRabbit threads. **Do not repeat that.**
 
+## In-editor review (Cursor plugin)
+
+CodeRabbit is available via the **Cursor plugin** for local / in-editor change review — the preferred path while iterating on a branch or before push. Use it to catch issues early; it does **not** satisfy the merge gate on its own. Ready PRs still need the GitHub on-demand workflow below plus `./scripts/check_pr_reviews.sh`. See `CONTRIBUTING.md` → “CodeRabbit — in-editor review”.
+
 ## On-demand + hold-until-clean (unified)
 
 CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Agents still need a completed CR pass on the latest HEAD before merge of a ready PR:

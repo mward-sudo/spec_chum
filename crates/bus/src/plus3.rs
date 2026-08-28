@@ -433,29 +433,8 @@ mod tests {
 
     #[test]
     fn fdc_read_data_protocol_via_ports() {
-        let img = formats::DskImage::parse(&{
-            let mut data = vec![0u8; 0x100];
-            data[0..8].copy_from_slice(b"MV - CPC");
-            data[0x30] = 1;
-            data[0x31] = 1;
-            let track_size: u16 = 0x100 + 256;
-            data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-            let mut track = vec![0u8; track_size as usize];
-            track[0..12].copy_from_slice(b"Track-Info\r\n");
-            track[0x14] = 1;
-            track[0x15] = 1;
-            track[0x18] = 0;
-            track[0x19] = 0;
-            track[0x1a] = 0xc1;
-            track[0x1b] = 1;
-            track[0x100] = 0x42;
-            track[0x101] = 0x43;
-            data.extend_from_slice(&track);
-            data
-        })
-        .unwrap();
         let mut b = BusPlus3::new();
-        b.fdc.insert(img);
+        b.fdc.insert(formats::DskImage::synthetic_one_sector());
         // µPD765 READ DATA: opcode, HD/US, C, H, R, N, EOT, GPL, DTL
         for byte in [0x06u8, 0x00, 0x00, 0x00, 0xc1, 0x01, 0x09, 0x2a, 0xff] {
             b.out_port(0x3ffd, byte);

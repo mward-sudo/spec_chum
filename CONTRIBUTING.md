@@ -39,6 +39,12 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
 - **Before merge / finish PR:** mark ready if still draft, request one CodeRabbit pass when merge-candidate, then run `./scripts/check_pr_reviews.sh`. **Hold until CodeRabbit is clean** on HEAD (not pending / missing / rate-limited) **and** unresolved **actionable** bot threads are cleared, unless the user explicitly waives. See below.
 
+## CodeRabbit — in-editor review (Cursor plugin)
+
+For **local / in-editor** review while iterating (staged, uncommitted, or branch diffs), use the **CodeRabbit Cursor plugin** — the preferred path in Cursor. Ask to review your changes; agents route generic review requests to CodeRabbit via the plugin skill.
+
+This **complements** the GitHub PR workflow below; it does **not** replace the merge gate. Ready PRs still need `@coderabbitai full review` / `@coderabbitai review` on GitHub and `./scripts/check_pr_reviews.sh` before merge.
+
 ## CodeRabbit — review when ready (usage)
 
 Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://docs.coderabbit.ai/configuration/auto-review), [review commands](https://docs.coderabbit.ai/reference/review-commands)). Automatic reviews are **off** so iteration pushes do not burn allowance. Workflow:
