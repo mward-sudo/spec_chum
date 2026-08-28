@@ -1,0 +1,71 @@
+---
+description: Recurring CodeRabbit findings — avoid repeating them in Spec Chum PRs
+alwaysApply: true
+---
+
+# CodeRabbit lessons (agent habits)
+
+Distilled from historical CodeRabbit reviews on mainline PRs (~66 PRs scanned; **29** had CR findings — e.g. [#26](https://github.com/mward-sudo/spec_chum/pull/26), [#79](https://github.com/mward-sudo/spec_chum/pull/79), [#83](https://github.com/mward-sudo/spec_chum/pull/83), [#98](https://github.com/mward-sudo/spec_chum/pull/98), [#111](https://github.com/mward-sudo/spec_chum/pull/111), [#143](https://github.com/mward-sudo/spec_chum/pull/143), [#151](https://github.com/mward-sudo/spec_chum/pull/151), [#153](https://github.com/mward-sudo/spec_chum/pull/153), [#157](https://github.com/mward-sudo/spec_chum/pull/157)). On-demand reviews mean many recent drafts have **no** CR history yet. **Merge-gate / draft→ready:** see [pr-review-merge.mdc](pr-review-merge.mdc) / [CONTRIBUTING.md](../../CONTRIBUTING.md). **Issue linking:** see [github-issues.mdc](github-issues.mdc).
+
+## Quota and when to request review
+
+- Plan allows **~10 reviews/hour**. Do **not** request CR on every push, on chore/docs-only draft PRs, or while still iterating.
+- Default: stay **draft** → undraft when merge-candidate → **one** `@coderabbitai full review` (human comment preferred) → after fix commits use **`@coderabbitai review`** (incremental), not another full review.
+- Rate-limited / skipped status is a **hold**, not a pass — open a revisit issue rather than merging (see `pr-review-merge.mdc`).
+
+## Wontfix / deferred nits
+
+- Prefer a short PR reply + **follow-up GitHub issue** (user preference) over silently ignoring or burning more review cycles. Example: synthetic DSK fixture dedupe → [#164](https://github.com/mward-sudo/spec_chum/issues/164) after PR #157.
+
+## `Refs` vs `Closes` / stubs
+
+- Placeholder, deepen-in-progress, or incomplete acceptance → **`Refs #N`**, never `Closes`.
+- Do not treat stubs / `assert!(… || true)` / “smoke only” as done (lesson [#17](https://github.com/mward-sudo/spec_chum/issues/17)).
+
+## Cross-crate compile (especially `living_room`)
+
+- Default `./scripts/check.sh` **excludes** `living_room` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1`. SpecChumMac still **links** the living_room staticlib.
+- When changing shared types / FFI / `host_api` / tape options: also run `./scripts/check_living_room.sh` (or the env-gated check), and grep **all** crates including `living_room` and `apps/macos`.
+
+## Struct / API field additions
+
+- Adding a field to a public struct (e.g. `TapeLoadOptions`) breaks every struct-literal call site across crates. **Grep** `TapeLoadOptions {`, similar constructors, and FFI wrappers before finishing.
+- Keep egui / macOS / `host_api` / `living_room` constructors in sync when the host surface grows.
+
+## Test quality (recurring)
+
+- Smoke / matrix tests must **assert real outcomes** — not `assert!(true)`, not state the test just forced by hand (#88, #98, #104).
+- Make precondition assertions meaningful (e.g. carry clear before SCF; Q/flag cases that actually exercise the claim) (#124).
+- ROM-dependent tests must **skip cleanly** when `roms/` is missing (#109, #131, #143).
+- Do not copy-paste synthetic media builders across crates (CR nit on #157: `synthetic_dsk` thrice). Prefer one shared `cfg(test)` / `test-util` helper, or file a follow-up (#164) if deferring.
+
+## Tape / EAR / UI truthfulness
+
+- One EAR-level / pulse convention across TZX producers; keep Instant/flash paths consistent with EAR semantics (#102, #104).
+- UI status and controls must match the active load path (don’t claim EAR while flash-load runs; don’t leave a disabled control implying an option that still applies) (#83).
+- Handle empty / pulse-free / trailing-empty tape decks in progress labels and completion (#79, #113).
+
+## Frame-boundary audio and counters
+
+- Carry speaker level, AY samples, and late frame edges into the next frame — do not drop cross-boundary state (#79, #113, #120).
+- Prefer saturating / guarded arithmetic for progress and catch-up caps; don’t print OK after a soft budget failure (#113, #151).
+
+## Host / ABI / input hygiene
+
+- Avoid hand-copied duplicate C headers for the same ABI (`sc_room_*` / debugger FFI lived in two places — #98, #151). One source of truth.
+- Snapshot / model load: keep UI `model` and machine model aligned; reload when snapshot model differs (#143).
+- Do not leave guest input latched when a host toggle disables that input (mouse buttons, joystick vs matrix — #143). On macOS, release held keys when Command becomes active (#71).
+- Reset-as-model-reselection drops inserted media — preserve or re-insert intentionally (#151).
+- Living-room host: don’t block the UI thread on the room queue; a single map timeout must not permanently disable CPU readback; stall recovery must be generation-safe (#151, #153).
+
+## Errors, I/O, hot paths
+
+- Don’t discard `Result`s from play/start/write/init (`stream.play()`, append writers, `Gilrs::new()`, WAV delivery) (#102, #143, #151).
+- Don’t flush/reopen a file per trace event; buffer and handle write failures (#98, #102).
+- Downloads/assets: write atomically; don’t retain a failed download as a valid cache entry (#109, #151).
+- No hardcoded developer machine paths — use env vars / repo-relative paths (#83).
+
+## CI / release (when touching workflows or packaging)
+
+- Pin Actions to immutable SHAs; validate `workflow_dispatch` / PR-number inputs; disable `persist-credentials` where unneeded; concurrency groups on release (#111, #112).
+- Keep crate version, docs, and native macOS **numeric** bundle version in sync (#111, #126, #129).
