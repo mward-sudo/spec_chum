@@ -637,12 +637,25 @@ impl Plus3Fdc {
         for chunk in self.format_ids.chunks_exact(4) {
             entries.push((chunk[0], chunk[1], chunk[2], chunk[3]));
         }
-        if let Some(img) = self.image.as_mut() {
-            img.format_track(cyl, head, fill, &entries);
+        let formatted = self
+            .image
+            .as_mut()
+            .is_some_and(|img| img.format_track(cyl, head, fill, &entries));
+        if formatted {
+            self.format_count = self.format_count.saturating_add(1);
+            let (c, h, r, nn) = entries.last().copied().unwrap_or((cyl, head, 0, n));
+            self.set_result_7(us | (head << 2), 0, 0, c, h, r, nn);
+        } else {
+            self.set_result_7(
+                ST0_IC_ABNORMAL | us | (head << 2),
+                ST1_ND,
+                0,
+                cyl,
+                head,
+                0,
+                n,
+            );
         }
-        self.format_count = self.format_count.saturating_add(1);
-        let (c, h, r, nn) = entries.last().copied().unwrap_or((cyl, head, 0, n));
-        self.set_result_7(us | (head << 2), 0, 0, c, h, r, nn);
         self.phase = Phase::Result;
         self.format_ids.clear();
     }
@@ -954,5 +967,44 @@ mod tests {
         let res = drain_result(&mut fdc);
         assert_eq!(res[1] & ST1_NW, ST1_NW);
         assert_eq!(fdc.main_status(), MSR_RQM);
+    }
+
+    fn feed_format_track(fdc: &mut Plus3Fdc, sc: u8, ids: &[(u8, u8, u8, u8)]) {
+        for b in [0x0du8, 0x00, 0x01, sc, 0x2a, 0xe5] {
+            fdc.write_command_byte(b);
+        }
+        for &(c, h, r, n) in ids {
+            for b in [c, h, r, n] {
+                fdc.write_command_byte(b);
+            }
+        }
+    }
+
+    #[test]
+    fn format_track_no_image_returns_abnormal_nd() {
+        let mut fdc = Plus3Fdc::new();
+        feed_format_track(&mut fdc, 1, &[(0, 0, 0xc1, 1)]);
+        let res = drain_result(&mut fdc);
+        assert_eq!(res.len(), 7);
+        assert_eq!(res[0] & ST0_IC_ABNORMAL, ST0_IC_ABNORMAL);
+        assert_eq!(res[1] & ST1_ND, ST1_ND);
+        assert_eq!(res[3..7], [0, 0, 0, 1]);
+        assert_eq!(fdc.format_count, 0);
+    }
+
+    #[test]
+    fn format_track_out_of_range_returns_abnormal_nd() {
+        let mut fdc = loaded(DskImage::synthetic_one_sector());
+        fdc.write_command_byte(0x0f);
+        fdc.write_command_byte(0x00);
+        fdc.write_command_byte(99);
+        let _ = sis(&mut fdc);
+        feed_format_track(&mut fdc, 1, &[(99, 0, 0xc1, 1)]);
+        let res = drain_result(&mut fdc);
+        assert_eq!(res.len(), 7);
+        assert_eq!(res[0] & ST0_IC_ABNORMAL, ST0_IC_ABNORMAL);
+        assert_eq!(res[1] & ST1_ND, ST1_ND);
+        assert_eq!(res[3..7], [99, 0, 0, 1]);
+        assert_eq!(fdc.format_count, 0);
     }
 }

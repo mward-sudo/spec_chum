@@ -150,15 +150,18 @@ impl DskImage {
     }
 
     /// Replace sectors on a physical track (µPD765 FORMAT TRACK).
+    ///
+    /// Returns `false` when `physical_track` / `head` are out of range.
+    #[must_use]
     pub fn format_track(
         &mut self,
         physical_track: u8,
         head: u8,
         fill: u8,
         entries: &[(u8, u8, u8, u8)],
-    ) {
+    ) -> bool {
         let Some(idx) = self.track_index(physical_track, head) else {
-            return;
+            return false;
         };
         self.tracks_data[idx].sectors = entries
             .iter()
@@ -173,6 +176,7 @@ impl DskImage {
                 }
             })
             .collect();
+        true
     }
 
     /// Raw CPC DSK bytes: one track, one 256-byte sector (id `0xC1`, payload `0x42 0x43`).
