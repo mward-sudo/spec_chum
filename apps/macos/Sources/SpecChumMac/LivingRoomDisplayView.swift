@@ -321,10 +321,10 @@ final class LivingRoomNSView: NSView {
             releaseAllKeys()
             return
         }
-        applyKey(code: event.keyCode, pressed: false, flags: event.modifierFlags)
-        for code in held {
-            applyKey(code: code, pressed: true, flags: event.modifierFlags)
-        }
+        // Rebuild from held + current flags. Do not re-apply already-held
+        // keys via applyKey — that early-returns and leaves Caps stuck when
+        // Shift is released while an arrow (joystick-routed) remains down.
+        syncMatrix(flags: event.modifierFlags)
     }
 
     // MARK: - Matrix sync
