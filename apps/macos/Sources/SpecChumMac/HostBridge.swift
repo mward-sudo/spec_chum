@@ -99,6 +99,11 @@ final class HostBridge: ObservableObject {
             }
         }
 
+        /// Toolbar machine picker: fit the longest `title` ("Spectrum 128K") plus chevron.
+        /// A 64pt cap clips the selected label so the control looks empty on launch (#184).
+        static let toolbarPickerMinWidth: CGFloat = 148
+        static let toolbarPickerMaxWidth: CGFloat = 180
+
         /// +3 has floppy; toolbar/File Open may include `.dsk`.
         var supportsDisk: Bool { self == .spectrumPlus3 }
 

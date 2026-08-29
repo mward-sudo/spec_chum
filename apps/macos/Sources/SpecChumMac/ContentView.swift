@@ -184,13 +184,20 @@ struct ContentView: View {
             Picker("Model", selection: $host.model) {
                 // Display order 48K → 128K → +2A → +3 (ABI raw values stay unchanged).
                 ForEach([HostBridge.Model.spectrum48, .spectrum128, .spectrumPlus2A, .spectrumPlus3]) { model in
-                    Text(model.shortTitle).tag(model)
+                    Text(model.title).tag(model)
                 }
             }
             .pickerStyle(.menu)
-            .frame(maxWidth: 64)
+            .labelsHidden()
+            .frame(
+                minWidth: HostBridge.Model.toolbarPickerMinWidth,
+                maxWidth: HostBridge.Model.toolbarPickerMaxWidth,
+                alignment: .leading
+            )
+            .fixedSize(horizontal: true, vertical: false)
             .help("Machine model (48K / 128K / +2A / +3)")
             .accessibilityLabel("Machine model")
+            .accessibilityValue(host.model.title)
             .onChange(of: host.model) { _, _ in
                 FocusSpectrumView.post()
             }
