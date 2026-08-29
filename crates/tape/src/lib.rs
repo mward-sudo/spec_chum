@@ -180,7 +180,25 @@ impl TapPlayer {
             return;
         }
         self.experience = experience;
-        self.queue_block(self.block);
+        // Only the trailing pause differs between modes. Patch it in place so a
+        // mid-block toggle does not restart the ROM-accurate pilot/sync/data
+        // pulses currently in flight (mirrors `set_speed`'s mid-load guarantee).
+        let pause = if experience {
+            EXPERIENCE_PAUSE_T
+        } else {
+            self.block_pause_t
+                .get(self.block)
+                .copied()
+                .filter(|&t| t > 0)
+                .unwrap_or(PAUSE_T)
+        };
+        let n = self.pulses.len();
+        if let Some(last) = self.pulses.last_mut() {
+            last.0 = pause;
+        }
+        if n > 0 && self.pulse_i + 1 == n {
+            self.remain = pause;
+        }
     }
 
     /// Rewind to the first block and pause.
@@ -515,6 +533,32 @@ mod tests {
         let exp_pause = *p.pulses.last().expect("pause pulse");
         assert_eq!(full_pause.0, PAUSE_T);
         assert_eq!(exp_pause.0, EXPERIENCE_PAUSE_T);
+    }
+
+    #[test]
+    fn set_experience_mid_block_keeps_pulse_position() {
+        let img = TapImage {
+            blocks: vec![vec![0x00, 0xaa, 0xaa]],
+            ..Default::default()
+        };
+        let mut p = TapPlayer::new(img);
+        p.set_playing(true);
+        let _ = p.advance(PILOT_PULSE_T * 10);
+        let pulse_i = p.pulse_index();
+        let n = p.scheduled_pulses();
+        p.set_experience(true);
+        assert!(p.experience());
+        assert_eq!(
+            p.pulse_index(),
+            pulse_i,
+            "mid-load set_experience must not restart the EAR schedule"
+        );
+        assert_eq!(p.scheduled_pulses(), n);
+        assert_eq!(
+            p.pulses.last().expect("pause").0,
+            EXPERIENCE_PAUSE_T,
+            "trailing pause should switch to experience duration in place"
+        );
     }
 
     #[test]

@@ -506,8 +506,11 @@ pub extern "C" fn sc_tape_get_load_options_ex(
 
 /// Set instant flash-load and EAR speed multiplier (1..64).
 ///
-/// Preserves the historical three-argument C ABI. Leaves `experience_load`
-/// unchanged; use [`sc_tape_set_load_options_ex`] to set experience mode.
+/// Preserves the historical three-argument C ABI. When `flash_load` is enabled,
+/// clears `experience_load` so Instant can override a prior Experience selection
+/// (options normalization prefers Experience when both flags are set and would
+/// otherwise drop flash). Use [`sc_tape_set_load_options_ex`] to set experience
+/// mode explicitly.
 #[no_mangle]
 pub extern "C" fn sc_tape_set_load_options(
     handle: *mut c_void,
@@ -519,12 +522,16 @@ pub extern "C" fn sc_tape_set_load_options(
         set_last_error("null handle");
         return -1;
     };
-    let experience_load = s
-        .tape_load_options()
-        .map(|o| o.experience_load)
-        .unwrap_or(false);
+    let flash = flash_load != 0;
+    let experience_load = if flash {
+        false
+    } else {
+        s.tape_load_options()
+            .map(|o| o.experience_load)
+            .unwrap_or(false)
+    };
     match s.set_tape_load_options(machine::TapeLoadOptions {
-        flash_load: flash_load != 0,
+        flash_load: flash,
         speed,
         experience_load,
     }) {
