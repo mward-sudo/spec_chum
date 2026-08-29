@@ -233,12 +233,15 @@ impl TzxPlayer {
                 }
             }
         }
+        let playing = !pulses.is_empty();
         let mut player = Self {
             pulses,
             pulse_i: 0,
             remain: 0,
             level: false,
-            playing: true,
+            // Empty / pulse-free decks are already finished; don't report playing
+            // until the first advance() clears the flag (#79 / CR outside-diff).
+            playing,
             block: 0,
             block_starts,
         };
@@ -825,6 +828,8 @@ mod tests {
         assert_eq!(p.block_count(), 0);
         assert_eq!(p.active_pulse_count(), 0);
         assert_eq!(p.scheduled_pulses(), 0);
+        assert!(p.finished());
+        assert!(!p.playing);
     }
 
     /// Minimal ID 0x11 turbo block (custom pilot/sync/bit widths).
