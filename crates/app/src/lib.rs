@@ -1442,6 +1442,15 @@ impl SpecChumApp {
                         ui.label("Spec Chum — from-scratch ZX Spectrum emulator");
                         ui.separator();
                         ui.label(MAPPING_DOC);
+                        ui.separator();
+                        ui.label(
+                            "Amstrad have kindly given their permission for the redistribution \
+of their copyrighted material but retain that copyright.",
+                        );
+                        ui.label(
+                            "System ROMs are not shipped with Spec Chum — fetch with ./scripts/fetch_roms.sh \
+(see docs/ROMS.md).",
+                        );
                     });
                     ui.separator();
                     if let Some(p) = self

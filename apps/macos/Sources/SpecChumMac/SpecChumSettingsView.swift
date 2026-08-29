@@ -56,9 +56,20 @@ struct SpecChumSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("ROMs / copyright") {
+                Text(
+                    "Amstrad have kindly given their permission for the redistribution of their copyrighted material but retain that copyright."
+                )
+                .font(.caption)
+                Text(
+                    "System ROMs are not shipped with Spec Chum. Fetch official images with ./scripts/fetch_roms.sh — see docs/ROMS.md."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 440, height: 420)
+        .frame(width: 440, height: 500)
     }
 }

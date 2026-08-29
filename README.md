@@ -45,13 +45,19 @@ Apple/Windows/GPG signing). See [docs/RELEASE.md](docs/RELEASE.md).
 
 ## ROMs
 
-System ROMs are **not** included in this repository. Fetch them with:
+System ROMs are **not** included in this repository and are **not** attached to
+GitHub Releases. Fetch official Spectrum images with:
 
 ```bash
 ./scripts/fetch_roms.sh
 ```
 
 Source: [spectrumforeveryone/zx-roms](https://github.com/spectrumforeveryone/zx-roms) (pinned commit in the script).
+
+**Amstrad / Sinclair:** Amstrad have kindly given their permission for the
+redistribution of their copyrighted material but retain that copyright. Do not
+alter the copyright messages inside ROM images. Details, clone/peripheral
+firmware, and other grants: [docs/ROMS.md](docs/ROMS.md).
 
 ## Development
 
@@ -77,4 +83,9 @@ Engineering quality backlog (warnings, lints, provable test tiers): [#171](https
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Sinclair ROM binaries remain subject to their own terms and are not redistributed by this project.
+MIT — see [LICENSE](LICENSE) (Spec Chum source only).
+
+Amstrad have kindly given their permission for the redistribution of their
+copyrighted Spectrum ROM material but retain that copyright. This project does
+not commit or Release-attach ROM binaries; fetch them yourself (see
+[docs/ROMS.md](docs/ROMS.md)).

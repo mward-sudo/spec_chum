@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Fetch ZX Spectrum system ROMs from spectrumforeveryone/zx-roms.
-# ROMs are NOT redistributed by this project.
+# ROMs are NOT redistributed by this project (not in git / not in Releases).
+# Amstrad have kindly given their permission for the redistribution of their
+# copyrighted material but retain that copyright — see docs/ROMS.md.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

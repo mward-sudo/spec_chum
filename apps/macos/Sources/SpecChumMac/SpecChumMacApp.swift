@@ -173,6 +173,11 @@ struct SpecChumMacApp: App {
                         NSWorkspace.shared.open(url)
                     }
                 }
+                Button("ROM Copyright Notice") {
+                    if let url = URL(string: "https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
             }
         }
 
