@@ -371,8 +371,10 @@ fn plus3_cpm_chs(data_sector_index: u8) -> (u8, u8) {
 
 fn plus3_basic_poke_marker() -> Vec<u8> {
     // 10 POKE 32768,165
+    // 32768 does not fit the signed-int 0x0E form (`00 00 00 80 00` is -32768);
+    // ZX float uses mantissa in [0.5, 1), so 32768 = 0.5×2^16 → `90 00 00 00 00`.
     vec![
-        0x00, 0x0A, 0x17, 0x00, 0xF4, b'3', b'2', b'7', b'6', b'8', 0x0E, 0x00, 0x00, 0x00, 0x80,
+        0x00, 0x0A, 0x17, 0x00, 0xF4, b'3', b'2', b'7', b'6', b'8', 0x0E, 0x90, 0x00, 0x00, 0x00,
         0x00, b',', b'1', b'6', b'5', 0x0E, 0x00, 0x00, 0xA5, 0x00, 0x00, 0x0D,
     ]
 }
@@ -517,6 +519,11 @@ mod tests {
         let data = img.find_id(1, 0, 5).unwrap();
         assert_eq!(&data.data[0..8], b"PLUS3DOS");
         assert_eq!(data.data[15], 0, "BASIC type");
+        // 32768 after 0x0E must be ZX float 0.5×2^16 (`90…`), not signed-int -32768.
+        assert_eq!(
+            &data.data[128 + 11..128 + 16],
+            [0x90, 0x00, 0x00, 0x00, 0x00]
+        );
         assert_ne!(sector_checksum(&img.find_id(0, 0, 1).unwrap().data), 3);
         assert_eq!(plus3_cpm_chs(0), (1, 1));
         assert_eq!(plus3_cpm_chs(4), (1, 5));
