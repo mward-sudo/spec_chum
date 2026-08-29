@@ -1352,6 +1352,7 @@ impl SpecChumApp {
                                     if ui.selectable_label(selected, format!("{speed}x")).clicked()
                                     {
                                         opts.experience_load = false;
+                                        opts.flash_load = false;
                                         opts.speed = speed;
                                         m.set_tape_load_options(opts);
                                         self.session.status =

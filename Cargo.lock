@@ -354,6 +354,7 @@ dependencies = [
  "egui",
  "formats",
  "gilrs",
+ "host_api",
  "machine",
  "rfd",
  "tape",

@@ -120,6 +120,7 @@ final class HostBridge: ObservableObject {
         didSet {
             if !suppressTapeOptsPush, tapeSpeed != 0 {
                 experienceLoad = false
+                instantLoad = false
             }
             pushTapeLoadOptions()
         }
