@@ -72,21 +72,21 @@ Before implementing: `gh issue list` / `gh issue view N` for related work. Prefe
 
 ### CodeRabbit — on-demand + merge gate
 
-For in-editor / local review before push, prefer the **CodeRabbit Cursor plugin** (`CONTRIBUTING.md` → “CodeRabbit — in-editor review”). `.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label `coderabbit-review`) → disposition → `./scripts/check_pr_reviews.sh`. After fix commits that move HEAD, request **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
+For in-editor / local review before push, prefer the **CodeRabbit Cursor plugin** or `coderabbit review --agent` (`CONTRIBUTING.md` → “CodeRabbit — in-editor review”) — required habit before merge-candidate when CLI available. `.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (GitHub CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label) **if not rate-limited** → disposition → `./scripts/check_pr_reviews.sh`. After fix commits: **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
 
-### Before merge — CodeRabbit clean + bot review threads (hard gate)
+### Before merge — CodeRabbit + bot review threads (hard gate)
 
 Any task to **finish, land, or merge a PR** must include this gate. A **ready** PR is **not merge-ready** while **either**:
 
-- CodeRabbit on the latest HEAD is **pending / in progress / rate-limited / skipped** (or missing / failed) — a green `Review rate limited` or `Review skipped` status is **not** a completed review; open a revisit issue and hold; or
+- CodeRabbit on HEAD is **pending / in progress / missing / failed** — hold for a completed GitHub review when possible; or
 - CodeRabbit (or similar bots) have unresolved **actionable** review threads,
 
-unless the user **explicitly** waives. **Drafts** may skip CR completeness in the script but still fail on unresolved bot threads; do not merge drafts.
+unless the user **explicitly** waives. **Rate-limited / skipped** (including green `Review rate limited`) is **not** “Review completed” and is **not** a hard merge hold: gate 1 soft-passes with a warning; agents must have run local CR and dispositioned threads; optional revisit issue (e.g. [#181](https://github.com/mward-sudo/spec_chum/issues/181)). **Drafts** may skip CR completeness in the script but still fail on unresolved bot threads; do not merge drafts.
 
-1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — on ready PRs fails on rate-limited/pending/missing CodeRabbit **and** on unresolved bot threads.
-2. If missing/pending/skipped: first pass → `@coderabbitai full review` (or label `coderabbit-review`); after prior full review + fixes → `@coderabbitai review` (incremental); if rate-limited: hold; wait for a completed CR pass on HEAD; do not merge.
-3. Fix or reply wontfix, then resolve each thread; re-run the script (and the **Bot review threads** CI check if red).
-4. Waiver only with user instruction: `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews` — document on the PR.
+1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — ready PRs: hard-fail pending/missing/error; soft-pass rate-limited/skipped; hard-fail unresolved bot threads.
+2. If missing/pending: first pass → `@coderabbitai full review` (or label); after prior full review + fixes → `@coderabbitai review`. If rate-limited: do not burn quota; rely on local CR + soft-pass; optional revisit issue.
+3. Disposition each finding (threads **and** actionable outside-diff / summary nits): fix, wontfix+resolve, or open a follow-up issue then resolve — never leave actionable comments hanging; re-run the script (and the **Bot review threads** CI check if red).
+4. Waiver only with user instruction: `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews` — document on the PR. (Rate-limit soft-pass does not require this waiver.)
 
 CI: `.github/workflows/pr-bot-reviews.yml` (default `GITHUB_TOKEN`). Local/script remains mandatory for agents. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83)).
 

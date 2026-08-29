@@ -9,24 +9,36 @@
 # Draft vs ready (aligns with on-demand CodeRabbit usage):
 #   - Draft PRs: skip CodeRabbit HEAD completeness (CR not required yet).
 #     Still fail on unresolved bot threads if any exist.
-#   - Ready / non-draft: hold until CodeRabbit completed on HEAD, then threads.
+#   - Ready / non-draft: prefer CodeRabbit "Review completed" on HEAD, then
+#     check unresolved bot threads.
 #
-# Hold until clean (ready PRs): green "Review rate limited" or "Review skipped"
-# commit statuses are NOT a pass — the gate can otherwise look clean while CR
-# never actually reviewed HEAD.
+# Soft-pass (gate 1 only): green "Review rate limited" or "Review skipped" is
+# NOT treated as "Review completed". Gate 1 warns and continues so merge is not
+# hard-blocked on GitHub quota; agents MUST still run local CR (Cursor plugin /
+# `coderabbit review --agent`) and disposition findings. Gate 2 (unresolved
+# bot threads) still hard-fails. Optional: open a revisit issue when quota resets.
+#
+# Hard-fail (gate 1): pending / missing / error / unexpected / non-completed
+# success that is not rate-limited or skipped.
 #
 # Usage:
 #   ./scripts/check_pr_reviews.sh [PR_NUMBER]
 #   ./scripts/check_pr_reviews.sh [PR_NUMBER] --waive "reason"
+#   ./scripts/check_pr_reviews.sh --self-test
 #   SPEC_CHUM_REVIEW_WAIVER="reason" ./scripts/check_pr_reviews.sh [PR_NUMBER]
 #
 # Waiver (local/CI): only when the user explicitly asked, OR PR has label
 # `waive-bot-reviews`. Document the reason on the PR.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# shellcheck source=lib/pr_review_cr_classify.sh
+source "$SCRIPT_DIR/lib/pr_review_cr_classify.sh"
 
 WAIVER="${SPEC_CHUM_REVIEW_WAIVER:-}"
 PR_ARG=""
+SELF_TEST=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --waive)
@@ -37,13 +49,17 @@ while [[ $# -gt 0 ]]; do
       WAIVER="${1#--waive=}"
       shift
       ;;
+    --self-test)
+      SELF_TEST=1
+      shift
+      ;;
     -h|--help)
       awk '/^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0" | tail -n +2
       exit 0
       ;;
     -*)
       echo "unknown option: $1" >&2
-      echo "usage: $0 [PR_NUMBER] [--waive \"reason\"]" >&2
+      echo "usage: $0 [PR_NUMBER] [--waive \"reason\"] | --self-test" >&2
       exit 2
       ;;
     *)
@@ -52,6 +68,34 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$SELF_TEST" -eq 1 ]]; then
+  fail=0
+  expect() {
+    local found="$1" state="$2" desc="$3" want_out="$4" label="$5"
+    classify_coderabbit_head_status "$found" "$state" "$desc"
+    if [[ "$CR_CLASSIFY_OUTCOME" != "$want_out" ]]; then
+      echo "FAIL: $label — got $CR_CLASSIFY_OUTCOME want $want_out (state=$state desc=$desc)" >&2
+      fail=1
+    else
+      echo "ok: $label → $CR_CLASSIFY_OUTCOME"
+    fi
+  }
+  expect true success "Review completed" pass "completed"
+  expect true success "Review rate limited" soft_pass "rate-limited success"
+  expect true failure "Review rate limited" soft_pass "rate-limited failure"
+  expect true success "Review skipped: on demand" soft_pass "skipped"
+  expect true pending "Queued" hold "pending"
+  expect false "" "" hold "missing"
+  expect true error "boom" hold "error"
+  expect true success "In progress" hold "non-completed success"
+  if [[ "$fail" -ne 0 ]]; then
+    echo "self-test failed" >&2
+    exit 1
+  fi
+  echo "==> check_pr_reviews self-test passed"
+  exit 0
+fi
 
 if [[ -n "$PR_ARG" ]]; then
   PR="$PR_ARG"
@@ -127,42 +171,42 @@ else
   CR_FOUND="$(echo "$CR_JSON" | jq -r .found)"
   CR_STATE="$(echo "$CR_JSON" | jq -r '.state // empty')"
   CR_DESC="$(echo "$CR_JSON" | jq -r '.description // empty')"
-  CR_DESC_LC="$(printf '%s' "$CR_DESC" | tr '[:upper:]' '[:lower:]')"
 
-  cr_hold_reason=""
-  if [[ "$CR_FOUND" != "true" ]]; then
-    cr_hold_reason="CodeRabbit has not reported a commit status on HEAD ${HEAD_SHA:0:12} yet (pending / not started / on-demand not requested)."
-  elif [[ "$CR_STATE" == "pending" ]]; then
-    cr_hold_reason="CodeRabbit is still pending on HEAD ${HEAD_SHA:0:12}: ${CR_DESC:-pending}"
-  elif [[ "$CR_DESC_LC" == *rate*limit* ]]; then
-    # CodeRabbit often marks rate-limited as success — do not treat as a completed review.
-    cr_hold_reason="CodeRabbit is rate-limited on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). Full re-review did not run."
-  elif [[ "$CR_DESC_LC" == *skip* ]]; then
-    # On-demand / label / draft skips can be green — still not a completed review on HEAD.
-    cr_hold_reason="CodeRabbit skipped review on HEAD ${HEAD_SHA:0:12} (status=\"${CR_DESC}\"; state=${CR_STATE}). First pass: @coderabbitai full review (or label); after fixes: @coderabbitai review."
-  elif [[ "$CR_STATE" == "failure" || "$CR_STATE" == "error" ]]; then
-    cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is ${CR_STATE}: ${CR_DESC:-no description}"
-  elif [[ "$CR_STATE" != "success" ]]; then
-    cr_hold_reason="CodeRabbit status on HEAD ${HEAD_SHA:0:12} is unexpected (${CR_STATE}: ${CR_DESC:-no description})."
-  elif [[ "$CR_DESC_LC" != "review completed" ]]; then
-    # Only the known final description counts — empty / "in progress" success must not pass.
-    cr_hold_reason="CodeRabbit on HEAD ${HEAD_SHA:0:12} is not a completed review (status=\"${CR_DESC:-none}\"; state=${CR_STATE}). Waiting for \"Review completed\"."
-  fi
+  classify_coderabbit_head_status "$CR_FOUND" "$CR_STATE" "$CR_DESC"
 
-  if [[ -n "$cr_hold_reason" ]]; then
-    echo "==> PR #$PR: CodeRabbit hold on HEAD ${HEAD_SHA:0:12}"
-    echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}"
-    apply_waiver_or_fail "$cr_hold_reason" \
-      "Next steps:" \
-      "  1. Hold the PR — do not merge while CodeRabbit is pending, in progress, missing, skipped, or rate-limited." \
-      "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label); after fixes '@coderabbitai review'." \
-      "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
-      "  4. Open a follow-up issue if rate-limited (e.g. \"Revisit CodeRabbit on PR #${PR}\")." \
-      "  5. Re-run: ./scripts/check_pr_reviews.sh $PR" \
-      "     (or re-run the \"Bot review threads\" GitHub Actions check)"
-  fi
-
-  echo "==> PR #$PR: CodeRabbit completed on HEAD ${HEAD_SHA:0:12} (${CR_DESC:-success})"
+  case "$CR_CLASSIFY_OUTCOME" in
+    soft_pass)
+      # Loud warning: not "Review completed"; local CR + gate 2 still apply.
+      echo "==> PR #$PR: WARNING: CodeRabbit on HEAD ${HEAD_SHA:0:12} is ${CR_CLASSIFY_REASON}" >&2
+      echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}" >&2
+      echo "    GitHub CodeRabbit unavailable — gate 1 soft-passes (NOT treated as Review completed)." >&2
+      echo "    Agents MUST have run local CR (Cursor plugin / coderabbit review --agent)" >&2
+      echo "    and dispositioned actionable findings before merge." >&2
+      echo "    Unresolved bot threads still hard-fail (gate 2)." >&2
+      echo "    Optional: open a revisit issue when quota resets (e.g. #181)." >&2
+      ;;
+    hold)
+      cr_hold_reason="CodeRabbit hold on HEAD ${HEAD_SHA:0:12}: ${CR_CLASSIFY_REASON}"
+      echo "==> PR #$PR: CodeRabbit hold on HEAD ${HEAD_SHA:0:12}"
+      echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}"
+      apply_waiver_or_fail "$cr_hold_reason" \
+        "Next steps:" \
+        "  1. Hold the PR — do not merge while CodeRabbit is pending, in progress, missing, or errored." \
+        "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label); after fixes '@coderabbitai review'." \
+        "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
+        "  4. If rate-limited/skipped, gate 1 soft-passes after this script update — still run local CR;" \
+        "     unresolved threads remain a hard fail. Optional revisit issue when quota resets." \
+        "  5. Re-run: ./scripts/check_pr_reviews.sh $PR" \
+        "     (or re-run the \"Bot review threads\" GitHub Actions check)"
+      ;;
+    pass)
+      echo "==> PR #$PR: CodeRabbit completed on HEAD ${HEAD_SHA:0:12} (${CR_DESC:-success})"
+      ;;
+    *)
+      echo "internal error: unknown CR_CLASSIFY_OUTCOME=$CR_CLASSIFY_OUTCOME" >&2
+      exit 2
+      ;;
+  esac
 fi
 
 # --- Gate 2: unresolved bot review threads -----------------------------------
