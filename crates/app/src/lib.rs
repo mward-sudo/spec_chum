@@ -1897,8 +1897,7 @@ impl eframe::App for SpecChumApp {
             {
                 self.prefs.window_width = w;
                 self.prefs.window_height = h;
-                self.prefs_size_deadline =
-                    Some(Instant::now() + Duration::from_millis(750));
+                self.prefs_size_deadline = Some(Instant::now() + Duration::from_millis(750));
             }
         }
         if self
