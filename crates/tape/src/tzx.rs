@@ -361,6 +361,8 @@ impl TzxPlayer {
         {
             self.pulse_i = self.pulses.len();
             self.sync_block();
+            // Idle EAR is low; do not leave a high final pulse latched after stop.
+            self.level = false;
         }
         if self.finished() {
             self.playing = false;
@@ -690,6 +692,29 @@ mod tests {
             "exact final pulse boundary must clear playing immediately"
         );
         assert!(p.finished());
+        assert!(!p.ear_level(), "EAR must idle low after exact end");
+    }
+
+    #[test]
+    fn advance_clears_high_ear_on_exact_final_pulse_end() {
+        // Pure-tone pulses alternate from initial low; the 2nd pulse is high.
+        // Exact end of that high pulse must not leave EAR latched high.
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x12);
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&2u16.to_le_bytes());
+        let mut p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(p.scheduled_pulses(), 2);
+        let _ = p.advance(1000);
+        let mid = p.advance(500);
+        assert!(mid && p.ear_level(), "second pure-tone pulse should be high");
+        let level = p.advance(500);
+        assert!(!p.playing);
+        assert!(p.finished());
+        assert!(!level, "exact end must return low EAR");
+        assert!(!p.ear_level(), "exact end must clear latched high EAR");
     }
 
     #[test]
