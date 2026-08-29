@@ -2151,13 +2151,16 @@ impl Machine {
         cpu: &Cpu,
         _player: &TapPlayer,
     ) {
+        // Instant flash often exits with SP=$7FDC; EAR LD-BYTES sits ~$7FE4..$7FE8.
+        // Editor / +3DOS stacks live up near `$FFxx` — never rewrite those.
         let sp = cpu.regs.sp;
-        if !(0x7FE0..=0x7FF0).contains(&sp) {
+        if !(0x7FD0..=0x7FF0).contains(&sp) {
             return;
         }
         if cpu.regs.pc >= 0x4000 {
             return;
         }
+        // CLEAR 32767 → RAMTOP=$7FFF. Skip pre-CLEAR Instant traps (RAMTOP still low).
         let ramtop = u16::from_le_bytes([bus.read(0x5CB2), bus.read(0x5CB3)]);
         if ramtop != 0x7FFF {
             return;
@@ -2166,6 +2169,7 @@ impl Machine {
         if marker != 0x0038 {
             return;
         }
+        // Already repaired / 48 BASIC Instant leaves MAIN return at $7FFC.
         let ret_chain = u16::from_le_bytes([bus.read(0x7FFC), bus.read(0x7FFD)]);
         if ret_chain == 0x1303 {
             return;
