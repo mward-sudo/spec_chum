@@ -80,7 +80,7 @@ Insert starts **paused** with **flash-load off**. **Play** / **Rewind** / EAR **
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm EAR (or Instant flash-load). Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 
-Standard-speed TZX is converted to TAP for flash-load. **Instant** is a toolbar action: file panel → insert → flash on → Type LOAD `""` → Play. CODE blocks still need **Tape → Type LOAD "" CODE** then **Play** (EAR), or Instant after you are already at LD-BYTES with a CODE loader. ABI: `sc_tape_set_load_options(handle, flash, speed, experience)`.
+Standard-speed TZX is converted to TAP for flash-load. **Instant** is a toolbar action: file panel → insert → flash on → Type LOAD `""` → Play. CODE blocks still need **Tape → Type LOAD "" CODE** then **Play** (EAR), or Instant after you are already at LD-BYTES with a CODE loader. ABI: `sc_tape_set_load_options_ex(handle, flash, speed, experience)`.
 
 ### Disk UI (minimal — enough for now)
 
@@ -110,7 +110,7 @@ All Spectrum models have EAR/tape hardware; “no tape chrome” means **no tape
 
 ### Experience ~20s load
 
-Toolbar / Settings **Experience** (~20s): abbreviated inter-block pauses on the EAR path at **16×** ([#82](https://github.com/mward-sudo/spec_chum/issues/82)). Same Play / Pause / LD-BYTES hold behaviour as normal EAR; ABI via `sc_tape_set_load_options(..., experience)`.
+Toolbar / Settings **Experience** (~20s): abbreviated inter-block pauses on the EAR path at **16×** ([#82](https://github.com/mward-sudo/spec_chum/issues/82)). Same Play / Pause / LD-BYTES hold behaviour as normal EAR; ABI via `sc_tape_set_load_options_ex(..., experience)`.
 
 ## Keyboard (Mac native shell)
 

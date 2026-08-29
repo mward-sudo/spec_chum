@@ -1317,7 +1317,7 @@ final class HostBridge: ObservableObject {
         var flash: Int32 = 0
         var speed: UInt32 = 1
         var experience: Int32 = 0
-        guard sc_tape_get_load_options(handle, &flash, &speed, &experience) == 0 else { return }
+        guard sc_tape_get_load_options_ex(handle, &flash, &speed, &experience) == 0 else { return }
         suppressTapeOptsPush = true
         instantLoad = flash != 0
         tapeSpeed = max(1, min(speed, 64))
@@ -1338,7 +1338,7 @@ final class HostBridge: ObservableObject {
 
     private func pushTapeLoadOptions() {
         guard let handle, !suppressTapeOptsPush else { return }
-        _ = sc_tape_set_load_options(
+        _ = sc_tape_set_load_options_ex(
             handle,
             instantLoad ? 1 : 0,
             max(1, min(tapeSpeed, 64)),

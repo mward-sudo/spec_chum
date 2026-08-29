@@ -440,9 +440,10 @@ impl Display for Inspect {
         if let Some(t) = &self.tape {
             writeln!(
                 f,
-                "tape playing={} flash={} speed={}x block={}/{}",
+                "tape playing={} flash={} experience={} speed={}x block={}/{}",
                 u8::from(t.playing),
                 u8::from(t.flash_load),
+                u8::from(t.experience_load),
                 t.speed,
                 t.block_index,
                 t.block_count

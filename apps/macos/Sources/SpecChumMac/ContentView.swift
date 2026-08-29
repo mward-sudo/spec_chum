@@ -138,8 +138,9 @@ struct ContentView: View {
                     get: { host.experienceLoad ? 0 : host.tapeSpeed },
                     set: { val in
                         if val == 0 {
-                            host.experienceLoad = true
+                            // tapeSpeed.didSet clears experienceLoad — set speed first.
                             host.tapeSpeed = 16
+                            host.experienceLoad = true
                         } else {
                             host.experienceLoad = false
                             host.tapeSpeed = val
