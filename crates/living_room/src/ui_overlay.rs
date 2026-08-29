@@ -223,9 +223,9 @@ fn chrome_buttons(
                         }
                         // Best-effort persist mute into the shared prefs file (#186).
                         let path = spec_chum_host::default_prefs_path();
-                        let mut prefs = spec_chum_host::load_prefs(&path);
-                        prefs.muted = muted.0;
-                        let _ = spec_chum_host::save_prefs(&path, &prefs);
+                        let _ = spec_chum_host::update_prefs(&path, |prefs| {
+                            prefs.muted = muted.0;
+                        });
                     }
                     ChromeAction::Pause => toggle_pause(&mut host),
                     ChromeAction::Reset => host.reset(),
@@ -263,9 +263,9 @@ fn toggle_pause(host: &mut EmulatorHost) {
 
 fn persist_living_room_model(model: ModelId) {
     let path = spec_chum_host::default_prefs_path();
-    let mut prefs = spec_chum_host::load_prefs(&path);
-    prefs.set_model_from_id(model);
-    let _ = spec_chum_host::save_prefs(&path, &prefs);
+    let _ = spec_chum_host::update_prefs(&path, |prefs| {
+        prefs.set_model_from_id(model);
+    });
 }
 
 /// ⌘ shortcuts mirroring SpecChumMac — never bare letters (those are Spectrum).

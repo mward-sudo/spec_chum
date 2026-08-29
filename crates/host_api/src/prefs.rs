@@ -7,6 +7,8 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 use machine::{AyStereoMode, JoystickMode, Model, TapeLoadOptions};
 use serde::{Deserialize, Serialize};
@@ -311,11 +313,70 @@ pub fn load_prefs(path: &Path) -> UiPreferences {
 /// Atomically write preferences (temp file + rename). Errors are ignored by callers
 /// that only need best-effort persistence; tests assert the `Result`.
 pub fn save_prefs(path: &Path, prefs: &UiPreferences) -> std::io::Result<()> {
+    let _guard = PrefsLock::acquire(path)?;
+    save_prefs_locked(path, prefs)
+}
+
+/// Read-modify-write under the same process-wide lock as [`save_prefs`].
+pub fn update_prefs(path: &Path, update: impl FnOnce(&mut UiPreferences)) -> std::io::Result<()> {
+    let _guard = PrefsLock::acquire(path)?;
+    let mut prefs = load_prefs_unlocked(path);
+    update(&mut prefs);
+    save_prefs_locked(path, &prefs)
+}
+
+struct PrefsLock {
+    path: PathBuf,
+}
+
+impl PrefsLock {
+    fn acquire(path: &Path) -> std::io::Result<Self> {
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)?;
+        }
+        let lock_path = path.with_extension("json.lock");
+        for attempt in 0..50 {
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&lock_path)
+            {
+                Ok(_) => return Ok(Self { path: lock_path }),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    thread::sleep(Duration::from_millis(5 * (attempt + 1)));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::WouldBlock,
+            "prefs lock timeout",
+        ))
+    }
+}
+
+impl Drop for PrefsLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn load_prefs_unlocked(path: &Path) -> UiPreferences {
+    let Ok(bytes) = fs::read(path) else {
+        return UiPreferences::default();
+    };
+    match serde_json::from_slice::<UiPreferences>(&bytes) {
+        Ok(p) => p.sanitized(),
+        Err(_) => UiPreferences::default(),
+    }
+}
+
+fn save_prefs_locked(path: &Path, prefs: &UiPreferences) -> std::io::Result<()> {
     let prefs = prefs.clone().sanitized();
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent)?;
     }
-    let tmp = path.with_extension("json.tmp");
+    let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
     let json = serde_json::to_vec_pretty(&prefs)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     {
@@ -323,8 +384,13 @@ pub fn save_prefs(path: &Path, prefs: &UiPreferences) -> std::io::Result<()> {
         f.write_all(&json)?;
         f.sync_all()?;
     }
-    fs::rename(&tmp, path)?;
-    Ok(())
+    match fs::rename(&tmp, path) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
 }
 
 #[cfg(test)]

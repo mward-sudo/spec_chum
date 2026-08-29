@@ -124,12 +124,13 @@ impl EmulatorHost {
     }
 
     pub fn set_play_ear(&mut self) {
-        let opts = TapeLoadOptions {
-            flash_load: false,
-            speed: 1,
-            ..Default::default()
-        };
-        let _ = self.session.set_tape_load_options(opts);
+        // Play is always EAR: clear flash-load only; keep restored speed / Experience.
+        if let Some(mut opts) = self.session.tape_load_options() {
+            if opts.flash_load {
+                opts.flash_load = false;
+                let _ = self.session.set_tape_load_options(opts);
+            }
+        }
         match self.session.play_tape() {
             Ok(()) => self.refresh_status_from_session(),
             Err(e) => {

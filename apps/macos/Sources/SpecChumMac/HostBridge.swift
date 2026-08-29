@@ -478,7 +478,14 @@ final class HostBridge: ObservableObject {
             persistRecentFiles()
             return
         }
-        openMedia(at: url)
+        switch url.pathExtension.lowercased() {
+        case "sna", "z80":
+            openSnapshot(at: url)
+        case "rzx":
+            openRzx(at: url)
+        default:
+            openMedia(at: url)
+        }
     }
 
     deinit {
