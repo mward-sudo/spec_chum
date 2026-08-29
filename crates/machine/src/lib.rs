@@ -4138,6 +4138,78 @@ mod tests {
         );
     }
 
+    /// ROM-gated: menu Loader + `DOS_BOOT` (checksum 3) must run the titled
+    /// bootstrap. Commercial +3 disks and DSKTOOL use this path; Fuse's phantom
+    /// typist only presses Enter — the ROM does the rest.
+    #[test]
+    fn plus3_loader_dos_boot_runs_titled_marker() {
+        let Some(rom) = rom_plus3_only() else {
+            eprintln!("skip: roms/plus3/plus3.rom missing — run ./scripts/fetch_roms.sh");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        m.insert_disk(formats::DskImage::synthetic_plus3_boot_marker())
+            .expect("insert");
+        for _ in 0..120 {
+            let _ = m.run_frame();
+        }
+        m.hold_keys(&[(6, 0)], 10);
+        m.hold_keys(&[], 5);
+        m.keyboard_mut().reset();
+        let mut ok = false;
+        for _ in 0..800 {
+            let _ = m.run_frame();
+            if m.inspect().border == 2 || m.read_mem(0xFE20) == 0xA5 {
+                ok = true;
+                break;
+            }
+        }
+        assert!(
+            ok,
+            "Loader DOS_BOOT should set border 2 or poke FE20 (PC={:04X} border={} FE20={:02X} special={})",
+            m.cpu().regs.pc,
+            m.inspect().border,
+            m.read_mem(0xFE20),
+            m.inspect().paging.special
+        );
+    }
+
+    /// ROM-gated: non-bootable titled disk → Loader `LOAD "DISK"` → BASIC RUN.
+    #[test]
+    fn plus3_loader_load_disk_runs_basic_marker() {
+        let Some(rom) = rom_plus3_only() else {
+            eprintln!("skip: roms/plus3/plus3.rom missing — run ./scripts/fetch_roms.sh");
+            return;
+        };
+        let mut m = Machine::new_plus3(&rom).unwrap();
+        m.insert_disk(formats::DskImage::synthetic_plus3_disk_basic())
+            .expect("insert");
+        for _ in 0..120 {
+            let _ = m.run_frame();
+        }
+        m.hold_keys(&[(6, 0)], 10);
+        m.hold_keys(&[], 5);
+        m.keyboard_mut().reset();
+        let mut ok = false;
+        for _ in 0..2_500 {
+            let _ = m.run_frame();
+            if m.read_mem(0x8000) == 0xA5 {
+                ok = true;
+                break;
+            }
+        }
+        let pc = m.cpu().regs.pc;
+        let poke = m.read_mem(0x8000);
+        let (read, seek) = match &m {
+            Machine::SpecPlus3 { bus, .. } => (bus.fdc.read_count, bus.fdc.seek_count),
+            _ => panic!("expected SpecPlus3"),
+        };
+        assert!(
+            ok,
+            "Loader LOAD \"DISK\" should RUN BASIC poke at 8000 (PC={pc:04X} 8000={poke:02X} read={read} seek={seek})"
+        );
+    }
+
     /// Shared `LOAD "" CODE` harness for `attr_mark.tap`. Returns whether CODE
     /// bytes landed at 0x8000. Caller must hold `trace::test_lock()` when tracing.
     fn run_attr_mark_load_path(rom: &[u8]) -> (Machine, bool) {
