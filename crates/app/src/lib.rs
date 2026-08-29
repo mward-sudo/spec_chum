@@ -8,6 +8,7 @@ pub use keymap::MAPPING_DOC;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
@@ -868,6 +869,8 @@ pub struct SpecChumApp {
     prefs: UiPreferences,
     prefs_path: PathBuf,
     prefs_dirty: bool,
+    /// Debounce window-size writes so continuous resize does not save every frame.
+    prefs_size_deadline: Option<Instant>,
 }
 
 impl std::fmt::Debug for SpecChumApp {
@@ -976,6 +979,7 @@ impl SpecChumApp {
             prefs,
             prefs_path,
             prefs_dirty: false,
+            prefs_size_deadline: None,
         }
     }
 
@@ -1893,14 +1897,23 @@ impl eframe::App for SpecChumApp {
             {
                 self.prefs.window_width = w;
                 self.prefs.window_height = h;
-                self.mark_prefs_dirty();
+                self.prefs_size_deadline =
+                    Some(Instant::now() + Duration::from_millis(750));
             }
+        }
+        if self
+            .prefs_size_deadline
+            .is_some_and(|t| Instant::now() >= t)
+        {
+            self.prefs_size_deadline = None;
+            self.mark_prefs_dirty();
         }
         self.ui(ctx);
         self.persist_prefs_if_dirty();
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.prefs_size_deadline = None;
         self.prefs_dirty = true;
         self.persist_prefs_if_dirty();
     }
