@@ -63,6 +63,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for Rust practices, TDD expectations, and
 ./scripts/run_slow_tests.sh     # required before vX.Y.Z: z80doc + system-tests + z80full
 ```
 
+Engineering quality backlog (warnings, lints, provable test tiers): [#171](https://github.com/mward-sudo/spec_chum/issues/171).
+
 ## Known limitations / follow-ups
 
 - **z80test** — `z80doc` and `z80full` run under `--features slow-tests` ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed; [#122](https://github.com/mward-sudo/spec_chum/issues/122)). CI selects `z80doc` by name; run `z80full_all_tests_passed` for the full suite. **Releases require** `./scripts/run_slow_tests.sh`.
