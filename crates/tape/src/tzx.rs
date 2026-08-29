@@ -295,6 +295,12 @@ impl TzxPlayer {
         self.pulse_i
     }
 
+    /// True when every scheduled pulse has been consumed.
+    #[must_use]
+    pub fn finished(&self) -> bool {
+        self.pulses.is_empty() || self.pulse_i >= self.pulses.len()
+    }
+
     /// Pulse index within the active logical block (for UI progress).
     #[must_use]
     pub fn active_pulse_index(&self) -> usize {
@@ -345,6 +351,13 @@ impl TzxPlayer {
             let step = dt.min(self.remain);
             self.remain -= step;
             dt -= step;
+        }
+        // #178: pause when the pulse schedule is exhausted so EAR turbo stops.
+        if self.pulse_i >= self.pulses.len() || self.pulses.is_empty() {
+            self.sync_block();
+            if self.pulse_i >= self.pulses.len() {
+                self.playing = false;
+            }
         }
         self.level
     }
