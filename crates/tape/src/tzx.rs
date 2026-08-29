@@ -709,7 +709,10 @@ mod tests {
         assert_eq!(p.scheduled_pulses(), 2);
         let _ = p.advance(1000);
         let mid = p.advance(500);
-        assert!(mid && p.ear_level(), "second pure-tone pulse should be high");
+        assert!(
+            mid && p.ear_level(),
+            "second pure-tone pulse should be high"
+        );
         let level = p.advance(500);
         assert!(!p.playing);
         assert!(p.finished());
