@@ -13,9 +13,17 @@ Distilled from historical CodeRabbit reviews on mainline PRs (~66 PRs scanned; *
 - Default: stay **draft** → undraft when merge-candidate → **one** `@coderabbitai full review` (human comment preferred) → after fix commits use **`@coderabbitai review`** (incremental), not another full review.
 - Rate-limited / skipped status is a **hold**, not a pass — open a revisit issue rather than merging (see `pr-review-merge.mdc`).
 
-## Wontfix / deferred nits
+## Always disposition review comments
 
-- Prefer a short PR reply + **follow-up GitHub issue** (user preference) over silently ignoring or burning more review cycles. Example: synthetic DSK fixture dedupe → [#164](https://github.com/mward-sudo/spec_chum/issues/164) after PR #157.
+Every actionable CodeRabbit (or similar bot) finding must be dispositioned — **never leave them hanging**. Outside-diff / summary findings count too (the merge-gate script only sees GraphQL threads).
+
+Disposition is one of:
+
+1. **Fix** in code (and resolve the thread if any), or
+2. **Wontfix** — short PR reply with reason, then **resolve**, or
+3. **Defer** — open a **follow-up GitHub issue**, link it from the PR reply, then resolve (user preference for deferred nits over silently ignoring or burning more review cycles). Example: synthetic DSK fixture dedupe → [#164](https://github.com/mward-sudo/spec_chum/issues/164) after PR #157.
+
+See also [pr-review-merge.mdc](pr-review-merge.mdc).
 
 ## `Refs` vs `Closes` / stubs
 

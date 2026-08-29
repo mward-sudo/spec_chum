@@ -18,7 +18,7 @@ CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRa
 1. Iterate on a **draft** PR (no CR required yet).
 2. When merge-candidate: mark ready → comment `@coderabbitai full review` (or label `coderabbit-review`).
 3. After fix commits that move HEAD: comment `@coderabbitai review` (**incremental**) — do not request another full review for routine post-fix HEAD. The merge gate still needs a completed review on the latest commit.
-4. Disposition threads **and** actionable outside-diff / summary findings → `./scripts/check_pr_reviews.sh` → merge.
+4. Disposition **every** actionable finding (threads **and** outside-diff / summary nits) — fix, wontfix+resolve, or follow-up issue — then `./scripts/check_pr_reviews.sh` → merge. Never leave actionable comments hanging.
 
 Prefer a **human** `@coderabbitai …` comment when requesting reviews: CodeRabbit may ignore other bots (`Skipped: comment is from another GitHub bot`). Label `coderabbit-review` is a backup.
 
@@ -41,10 +41,10 @@ Ignoring the ready-PR conditions is a process failure. Prefer opening a follow-u
 2. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**. On ready PRs the script hard-fails on rate-limited / skipped / pending / missing CodeRabbit **and** on unresolved bot threads.
 3. If CodeRabbit is pending, missing, skipped, or rate-limited on HEAD: **hold** — for a first pass request `@coderabbitai full review` (or label `coderabbit-review`); after a prior full review and fix commits, request `@coderabbitai review` (incremental). Wait for a completed review (e.g. `Review completed`), then re-run the script. Do not merge on a rate-limited or skipped status.
 4. Treat bot comments as blocking when **actionable** (bugs, wrong behavior, clear maintainability fixes).
-5. Disposition each finding: fix in code, or reply with a short wontfix reason, then **resolve** the thread.
+5. Disposition each finding (including actionable outside-diff / summary nits): **fix** in code, **wontfix** with a short reason then **resolve**, or **defer** via a follow-up GitHub issue (link from the PR reply) then resolve. Prefer a follow-up issue over silently ignoring deferred nits — see `coderabbit-lessons.mdc`.
 6. Re-run the script (and re-run the CI check if it failed) after addressing feedback.
 7. Only waive with user instruction: `--waive "reason"`, `SPEC_CHUM_REVIEW_WAIVER`, or PR label `waive-bot-reviews` — and document the waiver on the PR.
 
-Non-actionable nitpicks may be waived with a one-line reason; do **not** silently ignore Major/functional findings.
+Do **not** silently ignore Major/functional findings; non-actionable nitpicks still need a one-line wontfix (or follow-up issue) before resolve.
 
 See `CONTRIBUTING.md` → “Review check before merge”.

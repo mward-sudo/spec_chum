@@ -52,7 +52,7 @@ Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://
 1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
 2. When merge-candidate: mark **Ready for review**, then request a first pass with `@coderabbitai full review` or label `coderabbit-review`.
 3. After fixing review findings (commits that move HEAD): request an **incremental** pass with `@coderabbitai review`. Do not burn another full review for post-fix HEAD unless the prior full review never completed or CodeRabbit asks for one.
-4. Disposition actionable threads (including outside-diff / summary nits that are not GraphQL threads), then run the merge gate below.
+4. Disposition **every** actionable finding (threads **and** outside-diff / summary nits): fix in code, reply wontfix with reason and resolve, or open a follow-up GitHub issue (preferred for deferred nits) then resolve — never leave them hanging. Then run the merge gate below.
 
 **Human trigger preferred:** CodeRabbit may ignore review commands and thread replies from other GitHub bots (`Skipped: comment is from another GitHub bot`). Prefer a human `@coderabbitai …` comment when agents’ requests are ignored. Label `coderabbit-review` remains a backup.
 

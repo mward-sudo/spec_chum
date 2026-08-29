@@ -85,7 +85,7 @@ unless the user **explicitly** waives. **Drafts** may skip CR completeness in th
 
 1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — on ready PRs fails on rate-limited/pending/missing CodeRabbit **and** on unresolved bot threads.
 2. If missing/pending/skipped: first pass → `@coderabbitai full review` (or label `coderabbit-review`); after prior full review + fixes → `@coderabbitai review` (incremental); if rate-limited: hold; wait for a completed CR pass on HEAD; do not merge.
-3. Fix or reply wontfix, then resolve each thread; re-run the script (and the **Bot review threads** CI check if red).
+3. Disposition each finding (threads **and** actionable outside-diff / summary nits): fix, wontfix+resolve, or open a follow-up issue then resolve — never leave actionable comments hanging; re-run the script (and the **Bot review threads** CI check if red).
 4. Waiver only with user instruction: `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews` — document on the PR.
 
 CI: `.github/workflows/pr-bot-reviews.yml` (default `GITHUB_TOKEN`). Local/script remains mandatory for agents. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83)).
