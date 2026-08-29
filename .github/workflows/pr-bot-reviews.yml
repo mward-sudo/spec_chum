@@ -1,6 +1,7 @@
 # PR status check: for ready PRs, fail when CodeRabbit has not completed a
-# review on HEAD (pending / in progress / rate-limited / missing / error);
-# drafts skip CR completeness. Always fail when unresolved CodeRabbit/bot
+# review on HEAD (pending / in progress / missing / error); rate-limited /
+# skipped soft-passes gate 1 with a warning (local CR + threads still apply).
+# Drafts skip CR completeness. Always fail when unresolved CodeRabbit/bot
 # review threads remain.
 # Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
 #
@@ -133,4 +134,4 @@ jobs:
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=Ready PRs: fails when CodeRabbit is pending/missing/rate-limited on HEAD or unresolved bot threads remain. Drafts skip CR completeness but still fail on unresolved threads. See the workflow run for details.'
+            -f 'output[summary]=Ready PRs: hard-fails when CodeRabbit is pending/missing/error on HEAD or unresolved bot threads remain. Rate-limited/skipped soft-passes gate 1 (local CR required). Drafts skip CR completeness but still fail on unresolved threads. See the workflow run for details.'

@@ -10,8 +10,9 @@ Distilled from historical CodeRabbit reviews on mainline PRs (~66 PRs scanned; *
 ## Quota and when to request review
 
 - Plan allows **~10 reviews/hour**. Do **not** request CR on every push, on chore/docs-only draft PRs, or while still iterating.
-- Default: stay **draft** → undraft when merge-candidate → **one** `@coderabbitai full review` (human comment preferred) → after fix commits use **`@coderabbitai review`** (incremental), not another full review.
-- Rate-limited / skipped status is a **hold**, not a pass — open a revisit issue rather than merging (see `pr-review-merge.mdc`).
+- **Local first:** Cursor plugin / `coderabbit review --agent` while iterating (required habit before merge-candidate when CLI available).
+- **GitHub when quota allows:** stay **draft** → undraft when merge-candidate → **one** `@coderabbitai full review` (human comment preferred) → after fix commits use **`@coderabbitai review`** (incremental), not another full review. Skip requesting GitHub CR when already rate-limited.
+- **Rate-limited / skipped:** gate 1 **soft-passes** with a warning (not treated as “Review completed”). Merge is allowed if local CR was clean and bot threads are dispositioned; gate 2 still hard-fails on unresolved threads. Optional revisit issue (e.g. [#181](https://github.com/mward-sudo/spec_chum/issues/181)) — not a merge hold (see `pr-review-merge.mdc`).
 
 ## Always disposition review comments
 
