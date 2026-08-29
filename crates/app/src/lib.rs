@@ -11,6 +11,9 @@ use std::sync::{Arc, Mutex};
 
 use eframe::egui;
 use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
+use spec_chum_host::{
+    default_prefs_path, load_prefs, save_prefs, UiPreferences, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
+};
 
 /// Session state shared by the GUI and headless tests.
 #[derive(Debug)]
@@ -861,6 +864,10 @@ pub struct SpecChumApp {
     theme_applied: bool,
     /// Optional gamepad (USB/Bluetooth via gilrs). `None` if init failed.
     gilrs: Option<gilrs::Gilrs>,
+    /// Host-local preferences (#186); written on change / exit.
+    prefs: UiPreferences,
+    prefs_path: PathBuf,
+    prefs_dirty: bool,
 }
 
 impl std::fmt::Debug for SpecChumApp {
@@ -917,8 +924,17 @@ impl SpecChumApp {
     /// Construct the app; tests pass `start_audio = false` to avoid cpal devices.
     #[must_use]
     pub fn new_with_audio(start_audio: bool) -> Self {
+        Self::new_with_audio_prefs(start_audio, default_prefs_path())
+    }
+
+    /// Like [`Self::new_with_audio`], but loads/saves prefs from `prefs_path` (tests).
+    #[must_use]
+    pub fn new_with_audio_prefs(start_audio: bool, prefs_path: PathBuf) -> Self {
+        let prefs = load_prefs(&prefs_path);
         let beeper = Arc::new(Mutex::new(BeeperState {
             frame_t_per_sample: 69888.0 / 44100.0,
+            muted: prefs.muted,
+            volume: prefs.volume,
             ..BeeperState::default()
         }));
         let stream = if start_audio {
@@ -926,8 +942,22 @@ impl SpecChumApp {
         } else {
             None
         };
-        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        let mut session = EmulatorSession::new(prefs.model.to_model(), true);
+        session.throttle = prefs.throttle;
+        session.muted = prefs.muted;
+        session.volume = prefs.volume;
+        session.joystick_mode = prefs.joystick_mode.to_mode();
+        session.kempston_mouse = prefs.kempston_mouse;
         session.try_autoload_rom();
+        if let Some(m) = session.machine.as_mut() {
+            m.set_tape_load_options(prefs.tape_load_options());
+            if matches!(
+                session.model,
+                Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
+            ) {
+                m.set_ay_stereo_mode(prefs.ay_stereo.to_mode());
+            }
+        }
         let gilrs = match gilrs::Gilrs::new() {
             Ok(g) => Some(g),
             Err(gilrs::Error::NotImplemented(g)) => Some(g),
@@ -943,7 +973,101 @@ impl SpecChumApp {
             _stream: stream,
             theme_applied: false,
             gilrs,
+            prefs,
+            prefs_path,
+            prefs_dirty: false,
         }
+    }
+
+    fn mark_prefs_dirty(&mut self) {
+        self.prefs_dirty = true;
+    }
+
+    fn sync_prefs_from_session(&mut self) {
+        self.prefs.set_model_from_machine(self.session.model);
+        self.prefs.throttle = self.session.throttle;
+        self.prefs.muted = self.session.muted;
+        self.prefs.volume = self.session.volume.clamp(0.0, 1.0);
+        self.prefs.set_joystick(self.session.joystick_mode);
+        self.prefs.kempston_mouse = self.session.kempston_mouse;
+        if let Some(m) = self.session.machine.as_ref() {
+            self.prefs.set_tape_from_options(m.tape_load_options());
+            self.prefs.set_ay_stereo(m.ay_stereo_mode());
+        }
+    }
+
+    fn persist_prefs_if_dirty(&mut self) {
+        if !self.prefs_dirty {
+            return;
+        }
+        self.sync_prefs_from_session();
+        if save_prefs(&self.prefs_path, &self.prefs).is_ok() {
+            self.prefs_dirty = false;
+        }
+    }
+
+    fn note_recent_if_ok(&mut self, path: &Path) {
+        let status = self.session.status.as_str();
+        if status.starts_with("Inserted")
+            || status.starts_with("Loaded")
+            || status.starts_with("DSK inserted")
+        {
+            self.note_recent_file(path);
+        }
+    }
+
+    fn note_recent_file(&mut self, path: &Path) {
+        self.prefs.push_recent(path);
+        self.mark_prefs_dirty();
+    }
+
+    /// Re-apply tape / AY options after a model ROM reload.
+    fn apply_restored_machine_options(&mut self) {
+        if let Some(m) = self.session.machine.as_mut() {
+            m.set_tape_load_options(self.prefs.tape_load_options());
+            if matches!(
+                self.session.model,
+                Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
+            ) {
+                m.set_ay_stereo_mode(self.prefs.ay_stereo.to_mode());
+            }
+        }
+    }
+
+    fn open_recent_path(&mut self, path: PathBuf) {
+        if !path.is_file() {
+            self.session.status = format!("Recent file missing: {}", path.display());
+            self.prefs
+                .recent_files
+                .retain(|p| Path::new(p) != path.as_path());
+            self.mark_prefs_dirty();
+            return;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "sna" | "z80" => self.session.load_snapshot(&path),
+            "tap" => self.session.load_tap(&path),
+            "tzx" => self.session.load_tzx(&path),
+            "rzx" => self.session.load_rzx(&path),
+            "dsk" => self.session.load_dsk(&path),
+            _ => {
+                self.session.status = format!("Unknown recent type: {}", path.display());
+                return;
+            }
+        }
+        if !self.session.status.to_ascii_lowercase().contains("error")
+            && !self.session.status.contains("before")
+            && !self.session.status.contains("Missing")
+        {
+            self.note_recent_if_ok(&path);
+        }
+        // Snapshot may have switched model — keep prefs in sync.
+        self.prefs.set_model_from_machine(self.session.model);
+        self.mark_prefs_dirty();
     }
 
     fn poll_gamepad(&mut self) -> JoystickState {
@@ -998,6 +1122,9 @@ impl SpecChumApp {
                                 .pick_file()
                             {
                                 self.session.load_snapshot(&path);
+                                self.note_recent_if_ok(&path);
+                                self.prefs.set_model_from_machine(self.session.model);
+                                self.mark_prefs_dirty();
                             }
                             ui.close_menu();
                         }
@@ -1007,6 +1134,7 @@ impl SpecChumApp {
                                 .pick_file()
                             {
                                 self.session.load_tap(&path);
+                                self.note_recent_if_ok(&path);
                             }
                             ui.close_menu();
                         }
@@ -1016,6 +1144,7 @@ impl SpecChumApp {
                                 .pick_file()
                             {
                                 self.session.load_tzx(&path);
+                                self.note_recent_if_ok(&path);
                             }
                             ui.close_menu();
                         }
@@ -1025,6 +1154,7 @@ impl SpecChumApp {
                                 .pick_file()
                             {
                                 self.session.load_rzx(&path);
+                                self.note_recent_if_ok(&path);
                             }
                             ui.close_menu();
                         }
@@ -1034,8 +1164,25 @@ impl SpecChumApp {
                                 .pick_file()
                             {
                                 self.session.load_dsk(&path);
+                                self.note_recent_if_ok(&path);
                             }
                             ui.close_menu();
+                        }
+                        if !self.prefs.recent_files.is_empty() {
+                            ui.separator();
+                            ui.menu_button("Open recent", |ui| {
+                                let recents = self.prefs.recent_files.clone();
+                                for path_str in recents {
+                                    let label = Path::new(&path_str)
+                                        .file_name()
+                                        .and_then(|n| n.to_str())
+                                        .unwrap_or(path_str.as_str());
+                                    if ui.button(label).clicked() {
+                                        self.open_recent_path(PathBuf::from(path_str));
+                                        ui.close_menu();
+                                    }
+                                }
+                            });
                         }
                         if ui.button("Quit").clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1047,6 +1194,8 @@ impl SpecChumApp {
                             .clicked()
                         {
                             self.session.try_autoload_rom();
+                            self.apply_restored_machine_options();
+                            self.mark_prefs_dirty();
                         }
                         if ui
                             .radio_value(
@@ -1057,6 +1206,8 @@ impl SpecChumApp {
                             .clicked()
                         {
                             self.session.try_autoload_rom();
+                            self.apply_restored_machine_options();
+                            self.mark_prefs_dirty();
                         }
                         if ui
                             .radio_value(
@@ -1067,6 +1218,8 @@ impl SpecChumApp {
                             .clicked()
                         {
                             self.session.try_autoload_rom();
+                            self.apply_restored_machine_options();
+                            self.mark_prefs_dirty();
                         }
                         if ui
                             .radio_value(
@@ -1077,6 +1230,8 @@ impl SpecChumApp {
                             .clicked()
                         {
                             self.session.try_autoload_rom();
+                            self.apply_restored_machine_options();
+                            self.mark_prefs_dirty();
                         }
                         if ui.button("Reset").clicked() {
                             if let Some(m) = self.session.machine.as_mut() {
@@ -1089,31 +1244,66 @@ impl SpecChumApp {
                             }
                             ui.close_menu();
                         }
-                        ui.checkbox(&mut self.session.running, "Running");
-                        ui.checkbox(&mut self.session.throttle, "Throttle ~50Hz");
+                        if ui
+                            .checkbox(&mut self.session.running, "Running")
+                            .changed()
+                        {
+                            // not persisted
+                        }
+                        if ui
+                            .checkbox(&mut self.session.throttle, "Throttle ~50Hz")
+                            .changed()
+                        {
+                            self.mark_prefs_dirty();
+                        }
                         ui.separator();
                         ui.label("Joystick");
-                        ui.radio_value(
-                            &mut self.session.joystick_mode,
-                            JoystickMode::Kempston,
-                            "Kempston",
-                        );
-                        ui.radio_value(
-                            &mut self.session.joystick_mode,
-                            JoystickMode::SinclairLeft,
-                            "Sinclair left (1–5)",
-                        );
-                        ui.radio_value(
-                            &mut self.session.joystick_mode,
-                            JoystickMode::SinclairRight,
-                            "Sinclair right (6–0)",
-                        );
-                        ui.radio_value(
-                            &mut self.session.joystick_mode,
-                            JoystickMode::Cursor,
-                            "Cursor",
-                        );
-                        ui.checkbox(&mut self.session.kempston_mouse, "Kempston mouse");
+                        if ui
+                            .radio_value(
+                                &mut self.session.joystick_mode,
+                                JoystickMode::Kempston,
+                                "Kempston",
+                            )
+                            .changed()
+                        {
+                            self.mark_prefs_dirty();
+                        }
+                        if ui
+                            .radio_value(
+                                &mut self.session.joystick_mode,
+                                JoystickMode::SinclairLeft,
+                                "Sinclair left (1–5)",
+                            )
+                            .changed()
+                        {
+                            self.mark_prefs_dirty();
+                        }
+                        if ui
+                            .radio_value(
+                                &mut self.session.joystick_mode,
+                                JoystickMode::SinclairRight,
+                                "Sinclair right (6–0)",
+                            )
+                            .changed()
+                        {
+                            self.mark_prefs_dirty();
+                        }
+                        if ui
+                            .radio_value(
+                                &mut self.session.joystick_mode,
+                                JoystickMode::Cursor,
+                                "Cursor",
+                            )
+                            .changed()
+                        {
+                            self.mark_prefs_dirty();
+                        }
+                        if ui
+                            .checkbox(&mut self.session.kempston_mouse, "Kempston mouse")
+                            .changed()
+                        {
+                            self.mark_prefs_dirty();
+                        }
                         if matches!(
                             self.session.model,
                             Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
@@ -1125,18 +1315,31 @@ impl SpecChumApp {
                                 .machine
                                 .as_ref()
                                 .map_or(AyStereoMode::Mono, Machine::ay_stereo_mode);
+                            let before = mode;
                             ui.radio_value(&mut mode, AyStereoMode::Mono, "Mono");
                             ui.radio_value(&mut mode, AyStereoMode::Acb, "ACB");
                             ui.radio_value(&mut mode, AyStereoMode::Abc, "ABC");
-                            if let Some(m) = self.session.machine.as_mut() {
-                                m.set_ay_stereo_mode(mode);
+                            if mode != before {
+                                if let Some(m) = self.session.machine.as_mut() {
+                                    m.set_ay_stereo_mode(mode);
+                                }
+                                self.prefs.set_ay_stereo(mode);
+                                self.mark_prefs_dirty();
                             }
                         }
-                        ui.checkbox(&mut self.session.muted, "Mute");
-                        ui.add_enabled(
-                            !self.session.muted,
-                            egui::Slider::new(&mut self.session.volume, 0.0..=1.0).text("Volume"),
-                        );
+                        if ui.checkbox(&mut self.session.muted, "Mute").changed() {
+                            self.mark_prefs_dirty();
+                        }
+                        if ui
+                            .add_enabled(
+                                !self.session.muted,
+                                egui::Slider::new(&mut self.session.volume, 0.0..=1.0)
+                                    .text("Volume"),
+                            )
+                            .changed()
+                        {
+                            self.mark_prefs_dirty();
+                        }
                     });
                     ui.menu_button("Hardware", |ui| {
                         let model = self.session.model;
@@ -1332,6 +1535,7 @@ impl SpecChumApp {
                             ui.close_menu();
                         }
                         if has_tape {
+                            let mut tape_prefs_changed = false;
                             if let Some(m) = self.session.machine.as_mut() {
                                 let mut opts = m.tape_load_options();
                                 ui.label("Load mode:");
@@ -1345,6 +1549,7 @@ impl SpecChumApp {
                                     m.set_tape_load_options(TapeLoadOptions::experience());
                                     self.session.status =
                                         "Tape: experience load (~20s EAR)".into();
+                                    tape_prefs_changed = true;
                                 }
                                 ui.label("EAR speed:");
                                 for speed in [1u32, 2, 5, 10, 20] {
@@ -1357,8 +1562,15 @@ impl SpecChumApp {
                                         m.set_tape_load_options(opts);
                                         self.session.status =
                                             format!("Tape: EAR speed {speed}x");
+                                        tape_prefs_changed = true;
                                     }
                                 }
+                            }
+                            if tape_prefs_changed {
+                                if let Some(m) = self.session.machine.as_ref() {
+                                    self.prefs.set_tape_from_options(m.tape_load_options());
+                                }
+                                self.mark_prefs_dirty();
                             }
                         }
                     });
@@ -1672,7 +1884,25 @@ impl eframe::App for SpecChumApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let size = ctx.input(|i| i.viewport().inner_rect.map(|r| r.size()));
+        if let Some(size) = size {
+            let w = size.x.max(MIN_WINDOW_WIDTH);
+            let h = size.y.max(MIN_WINDOW_HEIGHT);
+            if (self.prefs.window_width - w).abs() > 0.5
+                || (self.prefs.window_height - h).abs() > 0.5
+            {
+                self.prefs.window_width = w;
+                self.prefs.window_height = h;
+                self.mark_prefs_dirty();
+            }
+        }
         self.ui(ctx);
+        self.persist_prefs_if_dirty();
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.prefs_dirty = true;
+        self.persist_prefs_if_dirty();
     }
 }
 
@@ -2120,6 +2350,44 @@ mod tests {
             let pc = m.cpu().regs.pc;
             m.step_once();
             assert_ne!(m.cpu().regs.pc, pc, "step_once should advance PC");
+        }
+    }
+
+    #[test]
+    fn prefs_restore_model_tape_volume_on_launch() {
+        use spec_chum_host::{save_prefs, PrefJoystick, PrefModel, UiPreferences};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!("spec-chum-app-prefs-{nanos}.json"));
+        let prefs = UiPreferences {
+            model: PrefModel::Spectrum128,
+            tape_experience: true,
+            volume: 0.55,
+            muted: true,
+            throttle: false,
+            kempston_mouse: true,
+            joystick_mode: PrefJoystick::Cursor,
+            ..UiPreferences::default()
+        };
+        save_prefs(&path, &prefs).expect("save prefs");
+
+        let app = SpecChumApp::new_with_audio_prefs(false, path.clone());
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(app.session.model, Model::Spectrum128);
+        assert!((app.session.volume - 0.55).abs() < f32::EPSILON);
+        assert!(app.session.muted);
+        assert!(!app.session.throttle);
+        assert!(app.session.kempston_mouse);
+        assert_eq!(app.session.joystick_mode, JoystickMode::Cursor);
+        if let Some(m) = app.session.machine.as_ref() {
+            let opts = m.tape_load_options();
+            assert!(opts.experience_load);
+            assert!(!opts.flash_load);
         }
     }
 }

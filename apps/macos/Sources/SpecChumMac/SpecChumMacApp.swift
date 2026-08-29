@@ -57,6 +57,17 @@ struct SpecChumMacApp: App {
                     openRom()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                if !host.recentFiles.isEmpty {
+                    Divider()
+                    Menu("Open Recent") {
+                        ForEach(Array(host.recentFiles.enumerated()), id: \.offset) { _, url in
+                            Button(url.lastPathComponent) {
+                                host.openRecentFile(url)
+                            }
+                        }
+                    }
+                }
             }
 
             // View — inspector (system View menu also keeps toolbar / full screen)

@@ -7,6 +7,11 @@
 
 pub mod ffi;
 pub mod keymap;
+pub mod prefs;
 pub mod session;
 
+pub use prefs::{
+    default_prefs_path, load_prefs, save_prefs, PrefAyStereo, PrefJoystick, PrefModel,
+    UiPreferences, MAX_RECENT_FILES, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, PREFS_VERSION,
+};
 pub use session::{HostError, HostRegs, HostSession, ModelId, AUDIO_SAMPLE_RATE};

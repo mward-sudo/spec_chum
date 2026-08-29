@@ -221,12 +221,26 @@ fn chrome_buttons(
                                 a.clear();
                             }
                         }
+                        // Best-effort persist mute into the shared prefs file (#186).
+                        let path = spec_chum_host::default_prefs_path();
+                        let mut prefs = spec_chum_host::load_prefs(&path);
+                        prefs.muted = muted.0;
+                        let _ = spec_chum_host::save_prefs(&path, &prefs);
                     }
                     ChromeAction::Pause => toggle_pause(&mut host),
                     ChromeAction::Reset => host.reset(),
-                    ChromeAction::Model48 => host.select_model(ModelId::Spectrum48),
-                    ChromeAction::Model128 => host.select_model(ModelId::Spectrum128),
-                    ChromeAction::ModelPlus3 => host.select_model(ModelId::SpectrumPlus3),
+                    ChromeAction::Model48 => {
+                        host.select_model(ModelId::Spectrum48);
+                        persist_living_room_model(ModelId::Spectrum48);
+                    }
+                    ChromeAction::Model128 => {
+                        host.select_model(ModelId::Spectrum128);
+                        persist_living_room_model(ModelId::Spectrum128);
+                    }
+                    ChromeAction::ModelPlus3 => {
+                        host.select_model(ModelId::SpectrumPlus3);
+                        persist_living_room_model(ModelId::SpectrumPlus3);
+                    }
                 }
             }
             Interaction::Hovered => *bg = BackgroundColor(BTN_HOVER),
@@ -245,6 +259,13 @@ fn toggle_pause(host: &mut EmulatorHost) {
     } else {
         format!("{label} · Running")
     };
+}
+
+fn persist_living_room_model(model: ModelId) {
+    let path = spec_chum_host::default_prefs_path();
+    let mut prefs = spec_chum_host::load_prefs(&path);
+    prefs.set_model_from_id(model);
+    let _ = spec_chum_host::save_prefs(&path, &prefs);
 }
 
 /// ⌘ shortcuts mirroring SpecChumMac — never bare letters (those are Spectrum).

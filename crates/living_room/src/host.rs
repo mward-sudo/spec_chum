@@ -57,14 +57,19 @@ impl Plugin for HostPlugin {
 
 impl EmulatorHost {
     fn boot() -> Self {
+        let prefs = spec_chum_host::load_prefs(&spec_chum_host::default_prefs_path());
+        let model = prefs.model.to_model_id();
         let mut host = Self {
-            session: HostSession::new(ModelId::Spectrum48, true),
+            session: HostSession::new(model, true),
             accumulator: Duration::ZERO,
             status: String::new(),
             paused_overlay: false,
         };
         // Single path: selection always goes through select_model + ROM autoload.
-        host.select_model(ModelId::Spectrum48);
+        host.select_model(model);
+        let _ = host
+            .session
+            .set_tape_load_options(prefs.tape_load_options());
         host
     }
 

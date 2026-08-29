@@ -140,8 +140,9 @@ pub struct AudioPlugin;
 impl Plugin for AudioPlugin {
     fn build(&self, app: &mut App) {
         let (out, stream) = start_audio();
+        let prefs = spec_chum_host::load_prefs(&spec_chum_host::default_prefs_path());
         app.insert_resource(out)
-            .init_resource::<AudioMuted>()
+            .insert_resource(AudioMuted(prefs.muted))
             .insert_non_send(stream)
             .add_systems(Update, gate_audio_on_lock);
     }
