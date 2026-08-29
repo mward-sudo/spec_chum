@@ -233,12 +233,15 @@ impl TzxPlayer {
                 }
             }
         }
+        let playing = !pulses.is_empty();
         let mut player = Self {
             pulses,
             pulse_i: 0,
             remain: 0,
             level: false,
-            playing: true,
+            // Empty / pulse-free decks are already finished; don't report playing
+            // until the first advance() clears the flag (#79 / CR outside-diff).
+            playing,
             block: 0,
             block_starts,
         };
@@ -295,6 +298,12 @@ impl TzxPlayer {
         self.pulse_i
     }
 
+    /// True when every scheduled pulse has been consumed.
+    #[must_use]
+    pub fn finished(&self) -> bool {
+        self.pulses.is_empty() || self.pulse_i >= self.pulses.len()
+    }
+
     /// Pulse index within the active logical block (for UI progress).
     #[must_use]
     pub fn active_pulse_index(&self) -> usize {
@@ -345,6 +354,21 @@ impl TzxPlayer {
             let step = dt.min(self.remain);
             self.remain -= step;
             dt -= step;
+        }
+        // #178: when the final pulse is consumed exactly (`remain == 0` while
+        // still indexing the last pulse), promote to exhaustion immediately so
+        // EAR turbo stops without requiring another `advance` call.
+        if !self.pulses.is_empty()
+            && self.remain == 0
+            && self.pulse_i.saturating_add(1) >= self.pulses.len()
+        {
+            self.pulse_i = self.pulses.len();
+            self.sync_block();
+            // Idle EAR is low; do not leave a high final pulse latched after stop.
+            self.level = false;
+        }
+        if self.finished() {
+            self.playing = false;
         }
         self.level
     }
@@ -650,6 +674,56 @@ mod tests {
     }
 
     #[test]
+    fn advance_clears_playing_on_exact_final_pulse_boundary() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x12); // Pure Tone
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&2u16.to_le_bytes());
+        let mut p = TzxPlayer::parse(&v).unwrap();
+        assert!(p.playing);
+        assert_eq!(p.scheduled_pulses(), 2);
+        let _ = p.advance(1000);
+        assert!(
+            p.playing,
+            "exact end of first pulse must not clear playing yet"
+        );
+        let _ = p.advance(1000);
+        assert!(
+            !p.playing,
+            "exact final pulse boundary must clear playing immediately"
+        );
+        assert!(p.finished());
+        assert!(!p.ear_level(), "EAR must idle low after exact end");
+    }
+
+    #[test]
+    fn advance_clears_high_ear_on_exact_final_pulse_end() {
+        // Pure-tone pulses alternate from initial low; the 2nd pulse is high.
+        // Exact end of that high pulse must not leave EAR latched high.
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x12);
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&2u16.to_le_bytes());
+        let mut p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(p.scheduled_pulses(), 2);
+        let _ = p.advance(1000);
+        let mid = p.advance(500);
+        assert!(
+            mid && p.ear_level(),
+            "second pure-tone pulse should be high"
+        );
+        let level = p.advance(500);
+        assert!(!p.playing);
+        assert!(p.finished());
+        assert!(!level, "exact end must return low EAR");
+        assert!(!p.ear_level(), "exact end must clear latched high EAR");
+    }
+
+    #[test]
     fn standard_then_pure_tone_keeps_alternating_levels() {
         let mut v = Vec::new();
         v.extend_from_slice(b"ZXTape!");
@@ -734,12 +808,15 @@ mod tests {
         assert_eq!(p.active_pulse_index(), 0);
         assert_eq!(p.active_pulse_count(), 4);
         assert_eq!(p.scheduled_pulses(), 10);
+        // Step one pulse at a time so we land in block 1 without exhausting the
+        // whole schedule (exact final-pulse promotion sets pulse_i == len).
         while p.block == 0 {
-            let _ = p.advance(10_000);
+            let _ = p.advance(1000);
         }
         assert_eq!(p.block, 1);
         assert_eq!(p.active_pulse_count(), 6);
         assert!(p.active_pulse_index() < p.active_pulse_count());
+        assert!(p.playing);
     }
 
     #[test]
@@ -751,6 +828,8 @@ mod tests {
         assert_eq!(p.block_count(), 0);
         assert_eq!(p.active_pulse_count(), 0);
         assert_eq!(p.scheduled_pulses(), 0);
+        assert!(p.finished());
+        assert!(!p.playing);
     }
 
     /// Minimal ID 0x11 turbo block (custom pilot/sync/bit widths).

@@ -164,6 +164,15 @@ impl TapeDeck {
         }
     }
 
+    /// True when the deck has no remaining bitstream / TAP blocks to play.
+    #[must_use]
+    pub fn finished(&self) -> bool {
+        match self {
+            Self::Tap(t) => t.finished(),
+            Self::Tzx(t) => t.finished(),
+        }
+    }
+
     pub fn rewind(&mut self) {
         match self {
             Self::Tap(t) => t.rewind(),
@@ -1381,10 +1390,21 @@ impl Machine {
     #[must_use]
     fn ear_play_frame_reps(&self) -> u32 {
         let opts = self.tape_load_options();
-        if opts.flash_load || !self.tape_playing() {
+        // Turbo only while EAR is actively playing a non-finished deck (#178).
+        if opts.flash_load || !self.tape_playing() || self.tape_finished() {
             1
         } else {
             opts.speed.clamp(1, 64)
+        }
+    }
+
+    /// True when an inserted deck has exhausted its bitstream / blocks.
+    #[must_use]
+    pub fn tape_finished(&self) -> bool {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => tape.as_ref().is_some_and(TapeDeck::finished),
         }
     }
 
@@ -1813,6 +1833,11 @@ impl Machine {
                 while ay_samples.len() < AY_SAMPLES {
                     push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
                 }
+                if !bus.disk_interface {
+                    if let Some(TapeDeck::Tap(player)) = tape.as_ref() {
+                        Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
+                    }
+                }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     ay_samples,
@@ -2086,6 +2111,9 @@ impl Machine {
                 }
                 cpu.regs.set_ix(dest.wrapping_add(n));
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, true);
+                if !bus.disk_interface {
+                    Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
+                }
                 if trace::enabled(trace::Category::TAPE) {
                     trace::emit(trace::EventKind::FlashLoadExit {
                         success: true,
@@ -2108,6 +2136,68 @@ impl Machine {
                 }
                 true
             }
+        }
+    }
+
+    /// #179: +2A menu Loader + CLEAR 32767 games leave `0x0038` where the
+    /// 48K FP calculator expects the `0xFFFF` end-marker (and editor return
+    /// addresses instead of MAIN). Detect the verified Loader stack state and
+    /// rewrite the post-CLEAR stack words to the 48 BASIC equivalents so
+    /// Instant/EAR auto-run works. Requires SP in the CLEAR-32767 window, PC
+    /// still in ROM, RAMTOP=`0x7FFF`, marker `0x0038` at `$7FEC`, and `$7FFC`
+    /// not already the repaired MAIN return (`0x1303`).
+    fn plus2a_repair_menu_loader_stack_if_needed(
+        bus: &mut BusPlus3,
+        cpu: &Cpu,
+        _player: &TapPlayer,
+    ) {
+        // Instant flash often exits with SP=$7FDC; EAR LD-BYTES sits ~$7FE4..$7FE8.
+        // Editor / +3DOS stacks live up near `$FFxx` — never rewrite those.
+        let sp = cpu.regs.sp;
+        if !(0x7FD0..=0x7FF0).contains(&sp) {
+            return;
+        }
+        if cpu.regs.pc >= 0x4000 {
+            return;
+        }
+        // CLEAR 32767 → RAMTOP=$7FFF. Skip pre-CLEAR Instant traps (RAMTOP still low).
+        let ramtop = u16::from_le_bytes([bus.read(0x5CB2), bus.read(0x5CB3)]);
+        if ramtop != 0x7FFF {
+            return;
+        }
+        let marker = u16::from_le_bytes([bus.read(0x7FEC), bus.read(0x7FED)]);
+        if marker != 0x0038 {
+            return;
+        }
+        // Already repaired / 48 BASIC Instant leaves MAIN return at $7FFC.
+        let ret_chain = u16::from_le_bytes([bus.read(0x7FFC), bus.read(0x7FFD)]);
+        if ret_chain == 0x1303 {
+            return;
+        }
+        bus.write(0x7FEC, 0xFF);
+        bus.write(0x7FED, 0xFF);
+        // Snapshot from a working 48 BASIC Instant load of Deathchase at the
+        // same CLEAR 32767 / USR / LD-BYTES depth (SP=7FE6). Absolute addresses
+        // are stable for RAMTOP=7FFF PROGRAM+CODE loaders.
+        const WORDS: &[(u16, u16)] = &[
+            (0x7FCC, 0x02DB),
+            (0x7FCE, 0x3873),
+            (0x7FD0, 0x5DB8),
+            (0x7FD2, 0x004D),
+            (0x7FD4, 0x52C7),
+            (0x7FD6, 0x0039),
+            (0x7FD8, 0x52C6),
+            (0x7FDA, 0x020C),
+            (0x7FDC, 0x0E5C),
+            (0x7FF2, 0x0009),
+            (0x7FF6, 0x1C10),
+            (0x7FF8, 0x1B52),
+            (0x7FFA, 0x1B76),
+            (0x7FFC, 0x1303),
+        ];
+        for &(addr, val) in WORDS {
+            bus.write(addr, (val & 0xFF) as u8);
+            bus.write(addr.wrapping_add(1), (val >> 8) as u8);
         }
     }
 
@@ -2369,6 +2459,11 @@ impl Machine {
             } => {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
+                }
+                if !bus.disk_interface {
+                    if let Some(TapeDeck::Tap(player)) = tape.as_ref() {
+                        Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
+                    }
                 }
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
@@ -3682,6 +3777,103 @@ mod tests {
             Some(0),
             "EAR path should not consume via trap"
         );
+    }
+
+    #[test]
+    fn ear_turbo_returns_to_1x_after_tape_finishes() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        // Tiny TAP so EAR turbo finishes quickly.
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x00, 0xff]],
+            ..Default::default()
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 20,
+            ..Default::default()
+        });
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        assert!(m.tape_playing());
+        // Mid-load: turbo must run multiple Spectrum frames per host tick.
+        let t0 = m.cpu().t;
+        let _ = m.run_frame();
+        let mid_dt = m.cpu().t.saturating_sub(t0);
+        assert!(
+            mid_dt > 20_000,
+            "expected turbo mid-load T-state advance, got {mid_dt}"
+        );
+        for _ in 0..20_000 {
+            let _ = m.run_frame();
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        assert!(
+            m.tape_finished() || !m.tape_playing(),
+            "deck should finish/pause after EAR exhausts"
+        );
+        assert!(
+            !m.tape_playing(),
+            "playing must clear when finished so turbo stops (#178)"
+        );
+        let t1 = m.cpu().t;
+        let _ = m.run_frame();
+        let post_dt = m.cpu().t.saturating_sub(t1);
+        // One Spectrum frame ≈ 69888 T-states (48K); allow slack, but not N× turbo.
+        assert!(
+            post_dt < 150_000,
+            "after tape end, run_frame should be ~1× (got {post_dt} T-states)"
+        );
+    }
+
+    #[test]
+    fn plus2a_stack_repair_ignores_coincidental_0038_marker() {
+        let player = TapPlayer::new(TapImage::default());
+        let plant = |bus: &mut BusPlus3| {
+            bus.write(0x5CB2, 0xFF);
+            bus.write(0x5CB3, 0x7F); // RAMTOP = 0x7FFF
+            bus.write(0x7FEC, 0x38);
+            bus.write(0x7FED, 0x00); // coincidental 0x0038 marker
+            bus.write(0x7FFC, 0xAA);
+            bus.write(0x7FFD, 0xBB); // sentinel 0xBBAA
+        };
+        let assert_untouched = |bus: &BusPlus3| {
+            assert_eq!(
+                u16::from_le_bytes([bus.read(0x7FEC), bus.read(0x7FED)]),
+                0x0038
+            );
+            assert_eq!(
+                u16::from_le_bytes([bus.read(0x7FFC), bus.read(0x7FFD)]),
+                0xBBAA
+            );
+        };
+
+        // SP outside CLEAR-32767 loader window — must not rewrite high RAM.
+        {
+            let mut bus = BusPlus3::new_with_disk(false);
+            plant(&mut bus);
+            let mut cpu = Cpu::new();
+            cpu.regs.sp = 0xFF50;
+            cpu.regs.pc = 0x15E8;
+            Machine::plus2a_repair_menu_loader_stack_if_needed(&mut bus, &cpu, &player);
+            assert_untouched(&bus);
+        }
+
+        // SP looks like Loader depth but PC already left ROM — must not rewrite.
+        {
+            let mut bus = BusPlus3::new_with_disk(false);
+            plant(&mut bus);
+            let mut cpu = Cpu::new();
+            cpu.regs.sp = 0x7FE6;
+            cpu.regs.pc = 0x8000;
+            Machine::plus2a_repair_menu_loader_stack_if_needed(&mut bus, &cpu, &player);
+            assert_untouched(&bus);
+        }
     }
 
     #[test]

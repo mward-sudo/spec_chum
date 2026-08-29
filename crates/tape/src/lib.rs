@@ -326,6 +326,11 @@ impl TapPlayer {
             self.block += 1;
             self.queue_block(self.block);
         }
+        // #178: stop "playing" when the bitstream is exhausted so EAR turbo
+        // (`Machine::ear_play_frame_reps`) returns to 1× realtime.
+        if self.finished() {
+            self.playing = false;
+        }
         self.level
     }
 }
@@ -471,6 +476,10 @@ pub fn evaluate_ld_bytes_trap(
             len,
         });
         player.consume_block();
+        // #178: Instant/flash also leaves playing latched; pause when the deck is empty.
+        if player.finished() {
+            player.playing = false;
+        }
         return TapeTrapResult::Success { addr, len };
     }
 }
