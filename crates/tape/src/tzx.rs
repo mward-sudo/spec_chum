@@ -352,12 +352,18 @@ impl TzxPlayer {
             self.remain -= step;
             dt -= step;
         }
-        // #178: pause when the pulse schedule is exhausted so EAR turbo stops.
-        if self.pulse_i >= self.pulses.len() || self.pulses.is_empty() {
+        // #178: when the final pulse is consumed exactly (`remain == 0` while
+        // still indexing the last pulse), promote to exhaustion immediately so
+        // EAR turbo stops without requiring another `advance` call.
+        if !self.pulses.is_empty()
+            && self.remain == 0
+            && self.pulse_i.saturating_add(1) >= self.pulses.len()
+        {
+            self.pulse_i = self.pulses.len();
             self.sync_block();
-            if self.pulse_i >= self.pulses.len() {
-                self.playing = false;
-            }
+        }
+        if self.finished() {
+            self.playing = false;
         }
         self.level
     }
@@ -663,6 +669,30 @@ mod tests {
     }
 
     #[test]
+    fn advance_clears_playing_on_exact_final_pulse_boundary() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x12); // Pure Tone
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&2u16.to_le_bytes());
+        let mut p = TzxPlayer::parse(&v).unwrap();
+        assert!(p.playing);
+        assert_eq!(p.scheduled_pulses(), 2);
+        let _ = p.advance(1000);
+        assert!(
+            p.playing,
+            "exact end of first pulse must not clear playing yet"
+        );
+        let _ = p.advance(1000);
+        assert!(
+            !p.playing,
+            "exact final pulse boundary must clear playing immediately"
+        );
+        assert!(p.finished());
+    }
+
+    #[test]
     fn standard_then_pure_tone_keeps_alternating_levels() {
         let mut v = Vec::new();
         v.extend_from_slice(b"ZXTape!");
@@ -747,12 +777,15 @@ mod tests {
         assert_eq!(p.active_pulse_index(), 0);
         assert_eq!(p.active_pulse_count(), 4);
         assert_eq!(p.scheduled_pulses(), 10);
+        // Step one pulse at a time so we land in block 1 without exhausting the
+        // whole schedule (exact final-pulse promotion sets pulse_i == len).
         while p.block == 0 {
-            let _ = p.advance(10_000);
+            let _ = p.advance(1000);
         }
         assert_eq!(p.block, 1);
         assert_eq!(p.active_pulse_count(), 6);
         assert!(p.active_pulse_index() < p.active_pulse_count());
+        assert!(p.playing);
     }
 
     #[test]

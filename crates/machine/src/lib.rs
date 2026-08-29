@@ -1835,7 +1835,7 @@ impl Machine {
                 }
                 if !bus.disk_interface {
                     if let Some(TapeDeck::Tap(player)) = tape.as_ref() {
-                        Self::plus2a_repair_menu_loader_stack_if_needed(bus, player);
+                        Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
                     }
                 }
                 FrameAudio {
@@ -2112,7 +2112,7 @@ impl Machine {
                 cpu.regs.set_ix(dest.wrapping_add(n));
                 Self::ret_from_tape_trap(cpu, ret_lo, ret_hi, true);
                 if !bus.disk_interface {
-                    Self::plus2a_repair_menu_loader_stack_if_needed(bus, player);
+                    Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
                 }
                 if trace::enabled(trace::Category::TAPE) {
                     trace::emit(trace::EventKind::FlashLoadExit {
@@ -2141,11 +2141,33 @@ impl Machine {
 
     /// #179: +2A menu Loader + CLEAR 32767 games leave `0x0038` where the
     /// 48K FP calculator expects the `0xFFFF` end-marker (and editor return
-    /// addresses instead of MAIN). Detect the marker and rewrite the post-CLEAR
-    /// stack words to the 48 BASIC equivalents so Instant/EAR auto-run works.
-    fn plus2a_repair_menu_loader_stack_if_needed(bus: &mut BusPlus3, _player: &TapPlayer) {
+    /// addresses instead of MAIN). Detect the verified Loader stack state and
+    /// rewrite the post-CLEAR stack words to the 48 BASIC equivalents so
+    /// Instant/EAR auto-run works. Requires SP in the CLEAR-32767 window, PC
+    /// still in ROM, RAMTOP=`0x7FFF`, marker `0x0038` at `$7FEC`, and `$7FFC`
+    /// not already the repaired MAIN return (`0x1303`).
+    fn plus2a_repair_menu_loader_stack_if_needed(
+        bus: &mut BusPlus3,
+        cpu: &Cpu,
+        _player: &TapPlayer,
+    ) {
+        let sp = cpu.regs.sp;
+        if !(0x7FE0..=0x7FF0).contains(&sp) {
+            return;
+        }
+        if cpu.regs.pc >= 0x4000 {
+            return;
+        }
+        let ramtop = u16::from_le_bytes([bus.read(0x5CB2), bus.read(0x5CB3)]);
+        if ramtop != 0x7FFF {
+            return;
+        }
         let marker = u16::from_le_bytes([bus.read(0x7FEC), bus.read(0x7FED)]);
         if marker != 0x0038 {
+            return;
+        }
+        let ret_chain = u16::from_le_bytes([bus.read(0x7FFC), bus.read(0x7FFD)]);
+        if ret_chain == 0x1303 {
             return;
         }
         bus.write(0x7FEC, 0xFF);
@@ -2436,7 +2458,7 @@ impl Machine {
                 }
                 if !bus.disk_interface {
                     if let Some(TapeDeck::Tap(player)) = tape.as_ref() {
-                        Self::plus2a_repair_menu_loader_stack_if_needed(bus, player);
+                        Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
                     }
                 }
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
@@ -3803,6 +3825,51 @@ mod tests {
             post_dt < 150_000,
             "after tape end, run_frame should be ~1× (got {post_dt} T-states)"
         );
+    }
+
+    #[test]
+    fn plus2a_stack_repair_ignores_coincidental_0038_marker() {
+        let player = TapPlayer::new(TapImage::default());
+        let plant = |bus: &mut BusPlus3| {
+            bus.write(0x5CB2, 0xFF);
+            bus.write(0x5CB3, 0x7F); // RAMTOP = 0x7FFF
+            bus.write(0x7FEC, 0x38);
+            bus.write(0x7FED, 0x00); // coincidental 0x0038 marker
+            bus.write(0x7FFC, 0xAA);
+            bus.write(0x7FFD, 0xBB); // sentinel 0xBBAA
+        };
+        let assert_untouched = |bus: &BusPlus3| {
+            assert_eq!(
+                u16::from_le_bytes([bus.read(0x7FEC), bus.read(0x7FED)]),
+                0x0038
+            );
+            assert_eq!(
+                u16::from_le_bytes([bus.read(0x7FFC), bus.read(0x7FFD)]),
+                0xBBAA
+            );
+        };
+
+        // SP outside CLEAR-32767 loader window — must not rewrite high RAM.
+        {
+            let mut bus = BusPlus3::new_with_disk(false);
+            plant(&mut bus);
+            let mut cpu = Cpu::new();
+            cpu.regs.sp = 0xFF50;
+            cpu.regs.pc = 0x15E8;
+            Machine::plus2a_repair_menu_loader_stack_if_needed(&mut bus, &cpu, &player);
+            assert_untouched(&bus);
+        }
+
+        // SP looks like Loader depth but PC already left ROM — must not rewrite.
+        {
+            let mut bus = BusPlus3::new_with_disk(false);
+            plant(&mut bus);
+            let mut cpu = Cpu::new();
+            cpu.regs.sp = 0x7FE6;
+            cpu.regs.pc = 0x8000;
+            Machine::plus2a_repair_menu_loader_stack_if_needed(&mut bus, &cpu, &player);
+            assert_untouched(&bus);
+        }
     }
 
     #[test]
