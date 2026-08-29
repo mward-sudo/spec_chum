@@ -474,6 +474,8 @@ impl HostSession {
         let effective = m.tape_load_options();
         let mode = if effective.flash_load {
             "instant"
+        } else if effective.experience_load {
+            "experience"
         } else {
             "EAR"
         };
@@ -1156,6 +1158,7 @@ mod tests {
         s.set_tape_load_options(machine::TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         })
         .expect("opts");
         let p0 = s.tape_progress().expect("progress");

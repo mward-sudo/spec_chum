@@ -184,6 +184,10 @@ pub struct TapeLoadOptions {
     /// load time ≈ realtime / speed. Pulse widths stay ROM-accurate (CPU↔tape
     /// 1:1); Instant/flash-load is unchanged (single frame per call).
     pub speed: u32,
+    /// ~20s-class load: abbreviated inter-block pauses on the EAR path at
+    /// [`tape::EXPERIENCE_EAR_SPEED`] (issue #82). Mutually exclusive with
+    /// [`Self::flash_load`].
+    pub experience_load: bool,
 }
 
 impl Default for TapeLoadOptions {
@@ -192,6 +196,7 @@ impl Default for TapeLoadOptions {
         Self {
             flash_load: false,
             speed: 1,
+            experience_load: false,
         }
     }
 }
@@ -200,6 +205,27 @@ impl TapeLoadOptions {
     #[must_use]
     pub fn with_speed(mut self, speed: u32) -> Self {
         self.speed = speed.clamp(1, 64);
+        self.experience_load = false;
+        self
+    }
+
+    #[must_use]
+    pub fn experience() -> Self {
+        Self {
+            flash_load: false,
+            speed: tape::EXPERIENCE_EAR_SPEED,
+            experience_load: true,
+        }
+    }
+
+    fn normalized(mut self) -> Self {
+        if self.experience_load {
+            self.flash_load = false;
+            self.speed = tape::EXPERIENCE_EAR_SPEED;
+        } else if self.flash_load {
+            self.experience_load = false;
+        }
+        self.speed = self.speed.clamp(1, 64);
         self
     }
 }
@@ -782,10 +808,7 @@ impl Machine {
     }
 
     pub fn set_tape_load_options(&mut self, opts: TapeLoadOptions) {
-        let opts = TapeLoadOptions {
-            flash_load: opts.flash_load,
-            speed: opts.speed.clamp(1, 64),
-        };
+        let opts = opts.normalized();
         match self {
             Self::Spec48 {
                 tape_opts, tape, ..
@@ -799,18 +822,22 @@ impl Machine {
                 *tape_opts = opts;
                 if let Some(TapeDeck::Tap(p)) = tape.as_mut() {
                     p.set_speed(opts.speed);
+                    p.set_experience(opts.experience_load);
                 }
             }
         }
         trace::emit(trace::EventKind::MachineLoadMode {
             flash_load: opts.flash_load,
             speed: opts.speed as u8,
+            experience_load: opts.experience_load,
         });
     }
 
     pub fn insert_tape(&mut self, mut player: TapPlayer) {
         player.set_playing(false);
-        player.set_speed(self.tape_load_options().speed);
+        let opts = self.tape_load_options();
+        player.set_speed(opts.speed);
+        player.set_experience(opts.experience_load);
         match self {
             Self::Spec48 { tape, .. }
             | Self::Spec128 { tape, .. }
@@ -2828,7 +2855,7 @@ impl Machine {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use tape::TapImage;
+    use tape::{tap_checksum, TapImage};
     use ula::{FRAME_TSTATES_48, INT_LENGTH_48};
 
     fn rom48() -> Option<Vec<u8>> {
@@ -3214,6 +3241,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         assert!(!m.ear(), "EAR idle without tape");
         m.insert_tape(TapPlayer::new(img));
@@ -3250,6 +3278,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img.clone()));
         m.set_tape_playing(true);
@@ -3276,6 +3305,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         assert!(!m.tape_playing());
@@ -3313,6 +3343,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         // Skip header block so trap sees the data block.
         let mut player = TapPlayer::new(img);
@@ -3362,6 +3393,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         assert!(!m.tape_playing());
@@ -3455,6 +3487,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
@@ -3477,6 +3510,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
@@ -3525,6 +3559,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         let mut player = TapPlayer::new(img);
         player.consume_block();
@@ -3568,6 +3603,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         let mut player = TapPlayer::new(img);
         player.consume_block();
@@ -3624,6 +3660,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
@@ -3662,6 +3699,7 @@ mod tests {
             m.set_tape_load_options(TapeLoadOptions {
                 flash_load: false,
                 speed,
+                ..Default::default()
             });
             m.insert_tape(TapPlayer::new(img.clone()));
             m.set_tape_playing(true);
@@ -3692,6 +3730,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
@@ -3768,6 +3807,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 5,
+            ..Default::default()
         });
         let mut player = TapPlayer::new(img);
         player.consume_block();
@@ -3793,6 +3833,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 15,
+            ..Default::default()
         });
         let mut ok = false;
         for _ in 0..400 {
@@ -3835,6 +3876,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
@@ -3887,6 +3929,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         for _ in 0..200 {
@@ -4105,6 +4148,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         for _ in 0..200 {
@@ -4147,7 +4191,11 @@ mod tests {
         warmup: u32,
         max_frames: u32,
     ) -> (Machine, bool) {
-        m.set_tape_load_options(TapeLoadOptions { flash_load, speed });
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load,
+            speed,
+            ..Default::default()
+        });
         m.insert_tape(TapPlayer::new(img));
         for _ in 0..warmup {
             let _ = m.run_frame();
@@ -4163,6 +4211,106 @@ mod tests {
             }
         }
         (m, loaded)
+    }
+
+    #[test]
+    fn attr_mark_experience_load_succeeds() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/attr_mark.tap");
+        let img = TapImage::load(&path).expect("attr_mark.tap");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions::experience());
+        m.insert_tape(TapPlayer::new(img));
+        for _ in 0..200 {
+            let _ = m.run_frame();
+        }
+        m.type_load_quotes(true);
+        m.set_tape_playing(true);
+        let mut loaded = false;
+        for _ in 0..800 {
+            let _ = m.run_frame();
+            if attr_mark_code_ok(&m) {
+                loaded = true;
+                break;
+            }
+        }
+        assert!(
+            loaded,
+            "experience LOAD \"\" CODE should poke attr_mark bytes at 0x8000"
+        );
+        let opts = m.tape_load_options();
+        assert!(opts.experience_load);
+        assert_eq!(opts.speed, tape::EXPERIENCE_EAR_SPEED);
+    }
+
+    #[test]
+    fn ld_bytes_waits_while_tape_paused_in_experience_mode() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage::load(&fixture_tap()).expect("fixture");
+        let header_len = img.blocks[0].len();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions::experience());
+        m.insert_tape(TapPlayer::new(img));
+        let ret = 0x12abu16;
+        m.cpu_mut().regs.sp = 0x5f00;
+        m.write_mem(0x5f00, (ret & 0xff) as u8);
+        m.write_mem(0x5f01, (ret >> 8) as u8);
+        m.cpu_mut().regs.pc = LD_BYTES_TRAP_PC;
+        m.cpu_mut().regs.a_ = 0x00;
+        m.cpu_mut().regs.f_ = flag::C;
+        m.cpu_mut().regs.set_ix(0x5c00);
+        m.cpu_mut().regs.set_de((header_len - 2) as u16);
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        for _ in 0..64 {
+            m.step_once();
+            assert_eq!(
+                m.cpu().regs.pc,
+                LD_BYTES_TRAP_PC,
+                "experience must hold at LD-BYTES until Play"
+            );
+        }
+    }
+
+    #[test]
+    fn experience_multi_block_load_within_wall_clock_budget() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let payload_len = 1024usize;
+        let mut blocks = Vec::new();
+        for i in 0..30u8 {
+            let mut block = vec![0u8; payload_len + 2];
+            block[0] = 0xff;
+            block[1..=payload_len].fill(i);
+            block[payload_len + 1] = tap_checksum(&block[..=payload_len]);
+            blocks.push(block);
+        }
+        let img = TapImage {
+            blocks,
+            ..Default::default()
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions::experience());
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        let max_host_frames = 25 * 50;
+        for _n in 0..max_host_frames {
+            let _ = m.run_frame();
+            if m.tape_block().is_none_or(|b| b >= 30) {
+                return;
+            }
+        }
+        panic!("experience load did not finish within {max_host_frames} host frames");
     }
 
     #[test]
@@ -4319,6 +4467,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         for _ in 0..200 {
@@ -4378,6 +4527,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
@@ -4694,6 +4844,7 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         });
         m.insert_tzx(player);
         m.set_tape_playing(true);
@@ -4842,7 +4993,11 @@ mod tests {
         max_frames: u32,
         done: impl Fn(&Machine) -> bool,
     ) -> (Machine, bool) {
-        m.set_tape_load_options(TapeLoadOptions { flash_load, speed });
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load,
+            speed,
+            ..Default::default()
+        });
         m.insert_tape(TapPlayer::new(img));
         for _ in 0..warmup {
             let _ = m.run_frame();
@@ -5022,6 +5177,7 @@ mod tests {
                 m.set_tape_load_options(TapeLoadOptions {
                     flash_load: flash,
                     speed,
+                    ..Default::default()
                 });
                 m.insert_tape(TapPlayer::new(img.clone()));
                 for _ in 0..warmup {
@@ -5078,6 +5234,7 @@ mod tests {
                         m.set_tape_load_options(TapeLoadOptions {
                             flash_load: false,
                             speed: 1,
+                            ..Default::default()
                         });
                     }
                     m.set_tape_playing(true);
@@ -5180,6 +5337,7 @@ mod tests {
                 machine.set_tape_load_options(TapeLoadOptions {
                     flash_load: flash,
                     speed,
+                    ..Default::default()
                 });
                 machine.insert_tape(deck);
                 for _ in 0..200 {

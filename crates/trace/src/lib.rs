@@ -284,6 +284,7 @@ pub enum EventKind {
     MachineLoadMode {
         flash_load: bool,
         speed: u8,
+        experience_load: bool,
     },
     MachineLdBytesHold {
         holding: bool,
@@ -444,10 +445,11 @@ impl Display for EventKind {
                 write!(f, "ula.border color={color} frame_t={frame_t}")
             }
             Self::MachineModel { model } => write!(f, "machine.model id={model}"),
-            Self::MachineLoadMode { flash_load, speed } => write!(
+            Self::MachineLoadMode { flash_load, speed, experience_load } => write!(
                 f,
-                "machine.load_mode flash={} speed={speed}x",
-                u8::from(flash_load)
+                "machine.load_mode flash={} speed={speed}x experience={}",
+                u8::from(flash_load),
+                u8::from(experience_load)
             ),
             Self::MachineLdBytesHold { holding, pc } => write!(
                 f,

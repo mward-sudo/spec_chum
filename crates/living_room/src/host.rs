@@ -122,6 +122,7 @@ impl EmulatorHost {
         let opts = TapeLoadOptions {
             flash_load: false,
             speed: 1,
+            ..Default::default()
         };
         let _ = self.session.set_tape_load_options(opts);
         match self.session.play_tape() {
@@ -136,6 +137,7 @@ impl EmulatorHost {
         let opts = TapeLoadOptions {
             flash_load: true,
             speed: 1,
+            ..Default::default()
         };
         match self.session.set_tape_load_options(opts) {
             Ok(()) => {

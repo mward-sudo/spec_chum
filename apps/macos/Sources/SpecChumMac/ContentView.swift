@@ -134,7 +134,21 @@ struct ContentView: View {
                 .help("Rewind tape")
                 .accessibilityLabel("Rewind tape")
 
-                Picker("Speed", selection: $host.tapeSpeed) {
+                Picker("Load", selection: Binding(
+                    get: { host.experienceLoad ? 0 : host.tapeSpeed },
+                    set: { val in
+                        if val == 0 {
+                            // tapeSpeed.didSet clears experienceLoad — set speed first.
+                            host.tapeSpeed = 16
+                            host.experienceLoad = true
+                        } else {
+                            host.experienceLoad = false
+                            host.tapeSpeed = val
+                        }
+                        FocusSpectrumView.post()
+                    }
+                )) {
+                    Text("Experience").tag(UInt32(0))
                     Text("1x").tag(UInt32(1))
                     Text("2x").tag(UInt32(2))
                     Text("5x").tag(UInt32(5))
@@ -142,12 +156,9 @@ struct ContentView: View {
                     Text("20x").tag(UInt32(20))
                 }
                 .pickerStyle(.menu)
-                .frame(maxWidth: 72)
-                .help("EAR speed while Play: N Spectrum frames/tick (wall-clock ≈ realtime/N)")
-                .accessibilityLabel("EAR speed")
-                .onChange(of: host.tapeSpeed) { _, _ in
-                    FocusSpectrumView.post()
-                }
+                .frame(maxWidth: 96)
+                .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick")
+                .accessibilityLabel("Tape load mode")
             }
 
             ToolbarItem(placement: .principal) {

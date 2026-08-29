@@ -52,9 +52,15 @@ int sc_tape_progress(void *handle,
                      unsigned int *block_count,
                      unsigned int *pulse_index,
                      unsigned int *pulse_count);
-/* Instant flash-load (1) vs EAR-only (0); speed multiplier 1..64 */
+/* Instant flash-load (1) vs EAR-only (0); speed 1..64.
+ * Three-arg get/set keep the historical ABI (experience unchanged on set).
+ * Use *_ex for experience mode (#82). */
 int sc_tape_get_load_options(void *handle, int *flash_load, unsigned int *speed);
 int sc_tape_set_load_options(void *handle, int flash_load, unsigned int speed);
+int sc_tape_get_load_options_ex(void *handle, int *flash_load, unsigned int *speed,
+                                int *experience_load);
+int sc_tape_set_load_options_ex(void *handle, int flash_load, unsigned int speed,
+                                int experience_load);
 
 const float *sc_audio_ptr(void *handle);
 unsigned int sc_audio_frames(void *handle);
