@@ -52,7 +52,9 @@ GitHub Releases. Fetch official Spectrum images with:
 ./scripts/fetch_roms.sh
 ```
 
-Source: [spectrumforeveryone/zx-roms](https://github.com/spectrumforeveryone/zx-roms) (pinned commit in the script).
+Source: [spectrumforeveryone/zx-roms](https://github.com/spectrumforeveryone/zx-roms) and
+[Fuse `roms/`](https://github.com/fuse-emulator/fuse/tree/master/roms) for distributable
+non-Amstrad sets (Timex, OpenSE, +3e, Datel, SpeccyBoot) — pinned commits in the script.
 
 **Amstrad / Sinclair:** Amstrad have kindly given their permission for the
 redistribution of their copyrighted material but retain that copyright. Do not
