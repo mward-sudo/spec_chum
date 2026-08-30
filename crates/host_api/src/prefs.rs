@@ -129,6 +129,7 @@ pub fn pref_model_slug(model: PrefModel) -> &'static str {
         PrefModel::SpectrumPlus2A => "spectrum_plus2_a",
         PrefModel::SpectrumPlus3 => "spectrum_plus3",
         PrefModel::Pentagon128 => "pentagon128",
+        PrefModel::TimexTC2048 => "timex_tc2048",
     }
 }
 
@@ -341,11 +342,12 @@ pub enum PrefModel {
     SpectrumPlus2A,
     SpectrumPlus3,
     Pentagon128,
+    TimexTC2048,
 }
 
 impl PrefModel {
     /// Canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
@@ -353,6 +355,7 @@ impl PrefModel {
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
         Self::Pentagon128,
+        Self::TimexTC2048,
     ];
 
     #[must_use]
@@ -365,6 +368,7 @@ impl PrefModel {
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
             Model::Pentagon128 => Self::Pentagon128,
+            Model::TimexTC2048 => Self::TimexTC2048,
         }
     }
 
@@ -383,6 +387,7 @@ impl PrefModel {
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
             Self::Pentagon128 => Model::Pentagon128,
+            Self::TimexTC2048 => Model::TimexTC2048,
         }
     }
 
@@ -396,6 +401,7 @@ impl PrefModel {
             Self::SpectrumPlus2A => ModelId::SpectrumPlus2A,
             Self::SpectrumPlus3 => ModelId::SpectrumPlus3,
             Self::Pentagon128 => ModelId::Pentagon128,
+            Self::TimexTC2048 => ModelId::TimexTC2048,
         }
     }
 

@@ -217,6 +217,7 @@ impl EmulatorSession {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
                 Machine::new_pentagon128(data, &trdos)
             }
+            Model::TimexTC2048 => Machine::new_timex_tc2048(data),
         }
     }
 
@@ -455,7 +456,7 @@ impl EmulatorSession {
         // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
         self.pending_instant_play = pending_play;
         self.key_script = Some(match self.model {
-            Model::Spectrum16K | Model::Spectrum48 => {
+            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 => {
                 if with_code {
                     KeyScript::load_quotes_code_48k()
                 } else {
@@ -472,10 +473,10 @@ impl EmulatorSession {
             return;
         }
         self.status = match (self.model, with_code) {
-            (Model::Spectrum16K | Model::Spectrum48, true) => {
+            (Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048, true) => {
                 "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
             }
-            (Model::Spectrum16K | Model::Spectrum48, false) => {
+            (Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048, false) => {
                 "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
             }
             (Model::SpectrumPlus2A, false) => {
@@ -1891,7 +1892,7 @@ impl SpecChumApp {
                         ui.label("Peripherals (partial where noted)");
                         ui.separator();
 
-                        if matches!(model, Model::Spectrum16K | Model::Spectrum48) {
+                        if matches!(model, Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048) {
                             if ui.button("Attach Multiface 1 ROM…").clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("Multiface ROM", &["rom", "bin"])
@@ -1920,6 +1921,7 @@ impl SpecChumApp {
                             model,
                             Model::Spectrum16K
                                 | Model::Spectrum48
+                                | Model::TimexTC2048
                                 | Model::Spectrum128
                                 | Model::SpectrumPlus2
                                 | Model::Pentagon128

@@ -306,6 +306,8 @@ pub enum Model {
     SpectrumPlus3,
     /// Pentagon 128 clone (#188 Phase B / #193): user ROM + TR-DOS, distinct timing.
     Pentagon128,
+    /// Timex TC2048 (#192 Phase 1): 48K-class + SCLD ports, distributable ROM.
+    TimexTC2048,
 }
 
 impl Model {
@@ -324,10 +326,13 @@ impl Model {
         )
     }
 
-    /// 48K-class bus (16K / 48K).
+    /// 48K-class bus (16K / 48K / Timex TC2048).
     #[must_use]
     pub fn is_48k_class(self) -> bool {
-        matches!(self, Self::Spectrum16K | Self::Spectrum48)
+        matches!(
+            self,
+            Self::Spectrum16K | Self::Spectrum48 | Self::TimexTC2048
+        )
     }
 }
 
@@ -739,6 +744,23 @@ impl Machine {
         })
     }
 
+    /// Timex TC2048: 48K hardware + SCLD ports (#192 Phase 1).
+    pub fn new_timex_tc2048(rom: &[u8]) -> Result<Self, String> {
+        let mut bus = Bus48::new();
+        bus.timex = true;
+        bus.load_rom(rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 7 });
+        Ok(Self::Spec48 {
+            cpu: Cpu::new(),
+            bus: Box::new(bus),
+            ula: Ula48::new(),
+            tape: None,
+            tape_opts: TapeLoadOptions::default(),
+            rzx: None,
+            debugger: Debugger::default(),
+        })
+    }
+
     pub fn new_128k(rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus128::new();
         bus.load_rom128(rom)?;
@@ -823,7 +845,9 @@ impl Machine {
     pub fn model(&self) -> Model {
         match self {
             Self::Spec48 { bus, .. } => {
-                if bus.ram16k {
+                if bus.timex {
+                    Model::TimexTC2048
+                } else if bus.ram16k {
                     Model::Spectrum16K
                 } else {
                     Model::Spectrum48
@@ -871,6 +895,9 @@ impl Machine {
                 }
                 if let Some(div) = bus.divmmc.as_mut() {
                     div.reset_soft();
+                }
+                if bus.timex {
+                    bus.timex_scld.reset();
                 }
                 *ula = Ula48::new();
                 // Keep inserted tape/disk media across reset; pause the deck at its
@@ -3069,7 +3096,9 @@ impl Machine {
     /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +2 / +2A Loader / +3 48 BASIC).
     pub fn type_load_quotes(&mut self, with_code: bool) {
         match self.model() {
-            Model::Spectrum16K | Model::Spectrum48 => self.type_load_quotes_48k(with_code),
+            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 => {
+                self.type_load_quotes_48k(with_code)
+            }
             Model::Spectrum128 => self.type_load_quotes_128k(with_code),
             Model::SpectrumPlus2 => self.type_load_quotes_plus2(with_code),
             Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
@@ -4389,6 +4418,20 @@ mod tests {
     }
 
     #[test]
+    fn timex_tc2048_boot_smoke() {
+        let Some(path) = resolve_rom_path(Model::TimexTC2048) else {
+            eprintln!("skip: roms/timex/tc2048.rom missing");
+            return;
+        };
+        let rom = std::fs::read(path).expect("read timex rom");
+        let mut m = Machine::new_timex_tc2048(&rom).unwrap();
+        assert_eq!(m.model(), Model::TimexTC2048);
+        for _ in 0..50 {
+            let _ = m.run_frame();
+        }
+    }
+
+    #[test]
     fn model_16k_limits_ram_to_16k() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -5530,6 +5573,7 @@ mod tests {
                         let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                         Machine::new_pentagon128(rom, &trdos).unwrap()
                     }
+                    Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
                 },
                 img.clone(),
                 true,
@@ -5575,6 +5619,7 @@ mod tests {
                             let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                             Machine::new_pentagon128(rom, &trdos).unwrap()
                         }
+                        Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
                     },
                     img.clone(),
                     false,
@@ -5662,6 +5707,7 @@ mod tests {
                         let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                         Machine::new_pentagon128(rom, &trdos).unwrap()
                     }
+                    Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
                 };
                 m.set_tape_load_options(TapeLoadOptions {
                     flash_load: flash,
@@ -5826,6 +5872,7 @@ mod tests {
                         let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                         Machine::new_pentagon128(&rom, &trdos).unwrap()
                     }
+                    Model::TimexTC2048 => Machine::new_timex_tc2048(&rom).unwrap(),
                 };
                 let deck = TapPlayer::new(img.clone());
                 let mut machine = m;
