@@ -14,9 +14,9 @@ use eframe::egui;
 use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
 use spec_chum_host::{
     apply_user_config, default_prefs_path, hardware_compat, install_model_rom, load_prefs,
-    model_rom_available, rom_setup_json, save_prefs, slot_rom_overrides_for_model,
-    sync_model_rom_paths, PrefAyStereo, PrefJoystick, PrefModel, RomSetupJson, UiPreferences,
-    UserMachineConfig, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
+    model_requires_user_rom, model_rom_available, rom_setup_json, save_prefs,
+    slot_rom_overrides_for_model, sync_model_rom_paths, PrefAyStereo, PrefJoystick, PrefModel,
+    RomSetupJson, UiPreferences, UserMachineConfig, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
 };
 
 /// Session state shared by the GUI and headless tests.
@@ -1034,6 +1034,15 @@ impl SpecChumApp {
         )
     }
 
+    /// Top-bar ROMs affordance for user-ROM models or when built-in ROM files are missing/invalid.
+    fn show_roms_toolbar_button(&self) -> bool {
+        if self.prefs.active_config_id.is_some() {
+            return false;
+        }
+        self.needs_rom_setup()
+            || model_requires_user_rom(PrefModel::from_model(self.session.model).to_model_id())
+    }
+
     fn refresh_rom_setup(&mut self) {
         self.rom_setup_error = None;
         self.rom_setup = Some(rom_setup_json(
@@ -1533,7 +1542,7 @@ impl SpecChumApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    if self.needs_rom_setup() {
+                    if self.show_roms_toolbar_button() {
                         if ui.button("ROMs…").clicked() {
                             self.show_rom_setup = true;
                             self.refresh_rom_setup();

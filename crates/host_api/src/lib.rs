@@ -22,7 +22,7 @@ pub use prefs::{
     MIN_WINDOW_WIDTH, PREFS_VERSION,
 };
 pub use rom_setup::{
-    install_model_rom, model_rom_available, model_rom_paths_snapshot, rom_setup_json,
-    slot_rom_overrides_for_model, sync_model_rom_paths, RomSetupJson, RomSetupSlot,
+    install_model_rom, model_requires_user_rom, model_rom_available, model_rom_paths_snapshot,
+    rom_setup_json, slot_rom_overrides_for_model, sync_model_rom_paths, RomSetupJson, RomSetupSlot,
 };
 pub use session::{HostError, HostRegs, HostSession, ModelId, AUDIO_SAMPLE_RATE};

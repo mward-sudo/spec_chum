@@ -133,6 +133,12 @@ pub fn rom_setup_json(model: ModelId, rom_paths: &BTreeMap<String, String>) -> R
     }
 }
 
+/// True when the model's ROM dumps are never auto-fetched (user must supply paths).
+#[must_use]
+pub fn model_requires_user_rom(model: ModelId) -> bool {
+    machine::requires_user_rom(model.to_model())
+}
+
 /// True when required ROM slots are present (persisted paths or workspace search).
 #[must_use]
 pub fn model_rom_available(model: ModelId, rom_paths: &BTreeMap<String, String>) -> bool {
@@ -179,6 +185,12 @@ pub fn install_model_rom(
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn pentagon_requires_user_rom() {
+        assert!(model_requires_user_rom(ModelId::Pentagon128));
+        assert!(!model_requires_user_rom(ModelId::Spectrum48));
+    }
 
     #[test]
     fn pentagon_rom_setup_has_user_slots() {

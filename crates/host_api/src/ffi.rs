@@ -99,6 +99,17 @@ pub extern "C" fn sc_get_model(handle: *mut c_void) -> c_uint {
     s.model() as c_uint
 }
 
+/// Returns 1 when the model's ROM dumps are never auto-fetched (user must supply paths).
+#[no_mangle]
+pub extern "C" fn sc_model_requires_user_rom(model: c_uint) -> c_int {
+    clear_last_error();
+    let Some(model) = ModelId::from_u32(model) else {
+        set_last_error("invalid model id");
+        return 0;
+    };
+    i32::from(crate::rom_setup::model_requires_user_rom(model))
+}
+
 /// Returns 1 when required ROM slots are present (persisted paths or workspace search).
 #[no_mangle]
 pub extern "C" fn sc_model_rom_available(model: c_uint) -> c_int {

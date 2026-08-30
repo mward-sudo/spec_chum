@@ -25,6 +25,8 @@ void sc_destroy(void *handle);
 int sc_set_model(void *handle, unsigned int model);
 /* Active model id (SC_MODEL_*). Returns UINT_MAX on null handle. */
 unsigned int sc_get_model(void *handle);
+/* 1 when the model's ROM dumps are never auto-fetched (user must supply paths). */
+int sc_model_requires_user_rom(unsigned int model);
 /* 1 when required ROM slots exist (persisted paths or workspace search; #188). */
 int sc_model_rom_available(unsigned int model);
 /* Heap JSON — required ROM slots + status; free with sc_string_free. */

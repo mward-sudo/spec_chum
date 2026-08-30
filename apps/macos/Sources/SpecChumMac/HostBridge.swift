@@ -130,7 +130,7 @@ final class HostBridge: ObservableObject {
         var romAvailable: Bool { sc_model_rom_available(rawValue) != 0 }
 
         /// Models whose ROM dumps are never auto-fetched (user must supply paths).
-        var requiresUserProvidedRoms: Bool { self == .pentagon128 }
+        var requiresUserProvidedRoms: Bool { sc_model_requires_user_rom(rawValue) != 0 }
 
         /// +3 has floppy; toolbar/File Open may include `.dsk`.
         var supportsDisk: Bool { self == .spectrumPlus3 }
@@ -338,9 +338,10 @@ final class HostBridge: ObservableObject {
         return !model.romAvailable
     }
 
-    /// Toolbar ROMs affordance when built-in ROM files are still missing or invalid.
+    /// Toolbar ROMs affordance for user-ROM models or when built-in ROM files are missing/invalid.
     var showRomsToolbarButton: Bool {
-        activeConfigId == nil && needsRomSetup
+        guard activeConfigId == nil else { return false }
+        return needsRomSetup || model.requiresUserProvidedRoms
     }
 
     /// True when a saved custom profile (not a built-in model pick) is active.
