@@ -213,7 +213,9 @@ impl UserMachineConfig {
         }
         if !compat.beta {
             self.attach_beta = false;
-            self.trdos_rom_path = None;
+            if !machine::requires_trdos_rom(self.base.to_model()) {
+                self.trdos_rom_path = None;
+            }
         }
         if !compat.ay_stereo {
             self.ay_stereo = PrefAyStereo::Mono;
@@ -227,7 +229,7 @@ impl UserMachineConfig {
         if !self.attach_interface1 {
             self.interface1_rom_path = None;
         }
-        if !self.attach_beta {
+        if !self.attach_beta && !machine::requires_trdos_rom(self.base.to_model()) {
             self.trdos_rom_path = None;
         }
         self
