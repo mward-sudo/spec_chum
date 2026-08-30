@@ -35,6 +35,15 @@ struct ContentView: View {
         .sheet(isPresented: $host.showInspector) {
             DebugInspectorView(host: host)
         }
+        .sheet(isPresented: $host.showMachineConfigEditor) {
+            if let draft = host.machineConfigEditorDraft {
+                MachineConfigEditorView(
+                    host: host,
+                    draft: draft,
+                    isNew: host.machineConfigEditorIsNew
+                )
+            }
+        }
         .onChange(of: host.showInspector) { _, showing in
             if !showing {
                 FocusSpectrumView.post()
@@ -181,35 +190,77 @@ struct ContentView: View {
 
         // Trailing cluster — separate placements so `.unified` does not cram/wrap one group.
         ToolbarItem(placement: .status) {
-            Picker("Model", selection: $host.model) {
-                ForEach(HostBridge.Model.pickerOrder) { model in
-                    Text(model.title).tag(model).disabled(!model.romAvailable)
+            Menu {
+                Section("Built-in models") {
+                    Text("Select only — default ROMs. Session hardware via Hardware menu.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    ForEach(HostBridge.Model.pickerOrder) { pick in
+                        Button {
+                            chromeAction { host.selectBuiltinModel(pick) }
+                        } label: {
+                            HStack {
+                                Text(pick.title)
+                                if host.activeConfigId == nil && host.model == pick {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        .disabled(!pick.romAvailable)
+                    }
                 }
+                Section("My configurations") {
+                    Button("+ New configuration…") {
+                        chromeAction { host.beginNewConfiguration() }
+                    }
+                    if host.customConfigs.isEmpty {
+                        Text("(none saved yet)")
+                    }
+                    ForEach(host.customConfigs) { cfg in
+                        Button {
+                            chromeAction { host.selectCustomConfiguration(id: cfg.id) }
+                        } label: {
+                            HStack {
+                                Text(cfg.name)
+                                if host.activeConfigId == cfg.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    if !host.customConfigs.isEmpty {
+                        Menu("Manage configuration…") {
+                            ForEach(host.customConfigs) { cfg in
+                                Button("Edit “\(cfg.name)”…") {
+                                    chromeAction { host.beginEditConfiguration(id: cfg.id) }
+                                }
+                                Button("Delete “\(cfg.name)”", role: .destructive) {
+                                    chromeAction { host.deleteConfiguration(id: cfg.id) }
+                                }
+                            }
+                        }
+                    }
+                    if host.isCustomConfigActive {
+                        Divider()
+                        Button("Edit configuration…") {
+                            chromeAction { host.beginEditActiveConfiguration() }
+                        }
+                        Button("Delete configuration", role: .destructive) {
+                            chromeAction { host.deleteActiveConfiguration() }
+                        }
+                    }
+                }
+            } label: {
+                Text(host.machineDisplayTitle)
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
             .frame(
                 minWidth: HostBridge.Model.toolbarPickerMinWidth,
                 maxWidth: HostBridge.Model.toolbarPickerMaxWidth,
                 alignment: .leading
             )
-            .fixedSize(horizontal: true, vertical: false)
-            .help("Machine model (16K / 48K / 128K / +2 / +2A / +3). Greyed when ROM missing.")
-            .accessibilityLabel("Machine model")
-            .accessibilityValue(host.model.title)
-            .onChange(of: host.model) { _, _ in
-                FocusSpectrumView.post()
-            }
-        }
-
-        ToolbarItem(placement: .status) {
-            Button {
-                chromeAction { host.presentOpenRomPanel() }
-            } label: {
-                Label("Load ROM", systemImage: "memorychip")
-            }
-            .help("Load a custom ROM image (resets the machine)")
-            .accessibilityLabel("Load ROM")
+            .help("Built-ins: select only. Custom profiles: edit hardware & ROM.")
+            .accessibilityLabel("Machine")
+            .accessibilityValue(host.machineDisplayTitle)
         }
 
         ToolbarItem(placement: .status) {

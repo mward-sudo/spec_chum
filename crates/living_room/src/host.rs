@@ -257,13 +257,7 @@ mod tests {
             status: String::new(),
             paused_overlay: false,
         };
-        for model in [
-            ModelId::Spectrum16K,
-            ModelId::Spectrum48,
-            ModelId::Spectrum128,
-            ModelId::SpectrumPlus2,
-            ModelId::SpectrumPlus3,
-        ] {
+        for model in ModelId::ALL {
             host.select_model(model);
             assert_eq!(host.session.model(), model);
             assert!(

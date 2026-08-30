@@ -134,6 +134,9 @@ int sc_run_until_break(void *handle, unsigned int max_insns);
 /* Heap UTF-8 JSON of the trace ring; free with sc_string_free. */
 char *sc_debug_dump_json(void);
 
+/* User machine configuration (#187) — JSON matches host_api::UserMachineConfig. */
+int sc_apply_user_config_json(void *handle, const char *json);
+
 #ifdef __cplusplus
 }
 #endif

@@ -46,7 +46,19 @@ impl ModelId {
         }
     }
 
-    /// All models in UI order.
+    #[must_use]
+    pub fn from_model(m: Model) -> Self {
+        match m {
+            Model::Spectrum16K => Self::Spectrum16K,
+            Model::Spectrum48 => Self::Spectrum48,
+            Model::Spectrum128 => Self::Spectrum128,
+            Model::SpectrumPlus2 => Self::SpectrumPlus2,
+            Model::SpectrumPlus3 => Self::SpectrumPlus3,
+            Model::SpectrumPlus2A => Self::SpectrumPlus2A,
+        }
+    }
+
+    /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
     pub const ALL: [Self; 6] = [
         Self::Spectrum16K,
         Self::Spectrum48,
@@ -261,6 +273,22 @@ impl HostSession {
         let data = std::fs::read(path)?;
         self.load_rom_bytes(&data)?;
         self.status = format!("Loaded {}", path.display());
+        Ok(())
+    }
+
+    /// Boot from a saved user profile (#187).
+    pub fn apply_user_config(
+        &mut self,
+        config: &crate::machine_config::UserMachineConfig,
+    ) -> Result<(), crate::machine_config::MachineConfigError> {
+        let roots = rom_search_roots();
+        let applied = crate::machine_config::apply_user_config(config, &roots)?;
+        self.model = ModelId::from_model(applied.model);
+        self.joystick_mode = applied.joystick_mode;
+        self.machine = Some(applied.machine);
+        self.reapply_host_keys();
+        self.last_speaker_level = false;
+        self.status = applied.status;
         Ok(())
     }
 

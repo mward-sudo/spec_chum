@@ -80,7 +80,7 @@ final class HostBridge: ObservableObject {
         case spectrumPlus2 = 4
         case spectrum16K = 5
 
-        /// UI order (matches egui Machine menu).
+        /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
         static let pickerOrder: [Model] = [
             .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3,
         ]
@@ -272,8 +272,15 @@ final class HostBridge: ObservableObject {
     @Published var model: Model = HostBridge.loadPersistedModel() {
         didSet {
             guard oldValue != model else { return }
+            if !suppressActiveConfigClear {
+                activeConfigId = nil
+                persistActiveConfigId()
+            }
             if !suppressPrefsPersist {
                 UserDefaults.standard.set(Int(model.rawValue), forKey: Self.modelDefaultsKey)
+                if activeConfigId == nil {
+                    UserDefaults.standard.set(Int(model.rawValue), forKey: Self.lastBuiltinModelKey)
+                }
             }
             guard let handle, !suppressModelPush else { return }
             _ = sc_set_model(handle, model.rawValue)
@@ -283,15 +290,39 @@ final class HostBridge: ObservableObject {
         }
     }
 
+    /// Saved user machine profiles (#187). Empty when using a built-in model only.
+    @Published private(set) var customConfigs: [UserMachineConfig] = HostBridge.loadPersistedCustomConfigs()
+    /// When set, the active profile is custom (not a built-in toolbar/menu pick).
+    @Published var activeConfigId: String? = UserDefaults.standard.string(forKey: HostBridge.activeConfigIdKey)
+    @Published var showMachineConfigEditor = false
+    @Published var machineConfigEditorDraft: UserMachineConfig?
+    @Published var machineConfigEditorIsNew = true
+
+    /// True when a saved custom profile (not a built-in model pick) is active.
+    var isCustomConfigActive: Bool {
+        guard let id = activeConfigId else { return false }
+        return customConfigs.contains { $0.id == id }
+    }
+
+    /// Toolbar / window label: custom profile name or built-in short title.
+    var machineDisplayTitle: String {
+        if let id = activeConfigId,
+           let cfg = customConfigs.first(where: { $0.id == id })
+        {
+            return cfg.name
+        }
+        return model.shortTitle
+    }
+
     /// Recent media paths (most recent first); reopen from File menu — not auto-inserted on launch.
     @Published private(set) var recentFiles: [URL] = HostBridge.loadPersistedRecentFiles()
 
     /// Document-style window title: media + machine (HIG).
     var windowTitle: String {
         if let mediaTitle, !mediaTitle.isEmpty {
-            return "\(mediaTitle) — \(model.shortTitle)"
+            return "\(mediaTitle) — \(machineDisplayTitle)"
         }
-        return "Spec Chum — \(model.shortTitle)"
+        return "Spec Chum — \(machineDisplayTitle)"
     }
 
     private var handle: UnsafeMutableRawPointer?
@@ -342,6 +373,8 @@ final class HostBridge: ObservableObject {
     private var instantFlashActive = false
     /// When syncing `model` from `sc_get_model` after snapshot load, skip `sc_set_model`.
     private var suppressModelPush = false
+    /// Skip clearing `activeConfigId` when syncing model from a custom profile apply.
+    private var suppressActiveConfigClear = false
     /// Skip UserDefaults writes while restoring published prefs in bulk.
     private var suppressPrefsPersist = false
 
@@ -355,6 +388,9 @@ final class HostBridge: ObservableObject {
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
+        let restoredCustom = Self.loadPersistedCustomConfigs()
+        customConfigs = restoredCustom
+        activeConfigId = UserDefaults.standard.string(forKey: Self.activeConfigIdKey)
         // Restore model before create so the first machine matches last session (#186).
         handle = sc_create(model.rawValue, 1)
         if handle == nil {
@@ -362,7 +398,16 @@ final class HostBridge: ObservableObject {
             return
         }
         sc_debug_init_from_env()
-        tryAutoloadRom()
+        if let id = activeConfigId,
+           let cfg = customConfigs.first(where: { $0.id == id }),
+           applyCustomConfiguration(cfg)
+        {
+            // Custom profile restored.
+        } else {
+            activeConfigId = nil
+            persistActiveConfigId()
+            tryAutoloadRom()
+        }
         refreshStatus()
         // Prefer persisted tape prefs over host defaults after create.
         pushTapeLoadOptions()
@@ -418,6 +463,10 @@ final class HostBridge: ObservableObject {
     private static let volumeDefaultsKey = "specChum.outputVolume"
     private static let mutedDefaultsKey = "specChum.outputMuted"
     private static let modelDefaultsKey = "specChum.model"
+    private static let lastBuiltinModelKey = "specChum.lastBuiltinModel"
+    private static let customConfigsKey = "specChum.customConfigs"
+    static let activeConfigIdKey = "specChum.activeConfigId"
+    private static let maxCustomConfigs = 32
     private static let tapeSpeedDefaultsKey = "specChum.tapeEarSpeed"
     private static let experienceDefaultsKey = "specChum.tapeExperience"
     private static let joystickDefaultsKey = "specChum.joystickMode"
@@ -438,8 +487,155 @@ final class HostBridge: ObservableObject {
     }
 
     private static func loadPersistedModel() -> Model {
-        let raw = UInt32(UserDefaults.standard.integer(forKey: modelDefaultsKey))
+        let defaults = UserDefaults.standard
+        if let id = defaults.string(forKey: activeConfigIdKey),
+           let data = defaults.data(forKey: customConfigsKey),
+           let configs = try? JSONDecoder().decode([UserMachineConfig].self, from: data),
+           configs.contains(where: { $0.id == id })
+        {
+            // Model field reflects base while custom profile is active; pick last built-in fallback.
+            let raw = UInt32(defaults.integer(forKey: lastBuiltinModelKey))
+            if raw == 0, defaults.object(forKey: lastBuiltinModelKey) == nil {
+                return .spectrum48
+            }
+            return Model(rawValue: raw) ?? .spectrum48
+        }
+        let raw = UInt32(defaults.integer(forKey: modelDefaultsKey))
         return Model(rawValue: raw) ?? .spectrum48
+    }
+
+    private static func loadPersistedCustomConfigs() -> [UserMachineConfig] {
+        guard let data = UserDefaults.standard.data(forKey: customConfigsKey),
+              let decoded = try? JSONDecoder().decode([UserMachineConfig].self, from: data)
+        else {
+            return []
+        }
+        return Array(decoded.prefix(maxCustomConfigs))
+    }
+
+    private func persistCustomConfigs() {
+        guard let data = try? JSONEncoder().encode(customConfigs) else { return }
+        UserDefaults.standard.set(data, forKey: Self.customConfigsKey)
+    }
+
+    private func persistActiveConfigId() {
+        if let activeConfigId {
+            UserDefaults.standard.set(activeConfigId, forKey: Self.activeConfigIdKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.activeConfigIdKey)
+        }
+    }
+
+    /// Select a built-in model (clears active custom profile).
+    func selectBuiltinModel(_ pick: Model) {
+        guard pick.romAvailable else {
+            status = "Missing ROM for \(pick.title) — run ./scripts/fetch_roms.sh"
+            return
+        }
+        activeConfigId = nil
+        persistActiveConfigId()
+        if model != pick {
+            model = pick
+        } else {
+            guard let handle else { return }
+            _ = sc_set_model(handle, pick.rawValue)
+            tryAutoloadRom()
+            pushTapeLoadOptions()
+            refreshStatus()
+        }
+    }
+
+    func selectCustomConfiguration(id: String) {
+        guard let cfg = customConfigs.first(where: { $0.id == id }) else { return }
+        if applyCustomConfiguration(cfg) {
+            activeConfigId = id
+            persistActiveConfigId()
+        }
+    }
+
+    func beginNewConfiguration() {
+        let base = activeConfigId == nil ? model : (customConfigs.first { $0.id == activeConfigId }?.base.hostModel ?? model)
+        var draft = UserMachineConfig.newNamed("My Spectrum", base: base)
+        draft.joystickMode = PrefJoystickSlug.from(joystickMode)
+        draft.kempstonMouse = kempstonMouse
+        machineConfigEditorDraft = draft
+        machineConfigEditorIsNew = true
+        showMachineConfigEditor = true
+    }
+
+    func beginEditConfiguration(id: String) {
+        guard let cfg = customConfigs.first(where: { $0.id == id }) else { return }
+        machineConfigEditorDraft = cfg
+        machineConfigEditorIsNew = false
+        showMachineConfigEditor = true
+    }
+
+    func beginEditActiveConfiguration() {
+        guard let id = activeConfigId, isCustomConfigActive else { return }
+        beginEditConfiguration(id: id)
+    }
+
+    func deleteConfiguration(id: String) {
+        guard customConfigs.contains(where: { $0.id == id }) else { return }
+        customConfigs.removeAll { $0.id == id }
+        persistCustomConfigs()
+        if activeConfigId == id {
+            activeConfigId = nil
+            persistActiveConfigId()
+            let fallback = Model(
+                rawValue: UInt32(UserDefaults.standard.integer(forKey: Self.lastBuiltinModelKey))
+            ) ?? .spectrum48
+            selectBuiltinModel(fallback)
+        }
+    }
+
+    func deleteActiveConfiguration() {
+        guard let id = activeConfigId, isCustomConfigActive else { return }
+        deleteConfiguration(id: id)
+    }
+
+    @discardableResult
+    func saveCustomConfiguration(_ config: UserMachineConfig, isNew: Bool) -> Bool {
+        if isNew, customConfigs.count >= Self.maxCustomConfigs {
+            status = "Cannot save more than \(Self.maxCustomConfigs) configurations"
+            return false
+        }
+        guard applyCustomConfiguration(config) else { return false }
+        if let idx = customConfigs.firstIndex(where: { $0.id == config.id }) {
+            customConfigs[idx] = config
+        } else {
+            customConfigs.append(config)
+        }
+        persistCustomConfigs()
+        activeConfigId = config.id
+        persistActiveConfigId()
+        return true
+    }
+
+    @discardableResult
+    private func applyCustomConfiguration(_ config: UserMachineConfig) -> Bool {
+        guard let handle else { return false }
+        guard let data = try? JSONEncoder().encode(config),
+              let json = String(data: data, encoding: .utf8)
+        else {
+            status = "Failed to encode configuration"
+            return false
+        }
+        let ok = json.withCString { sc_apply_user_config_json(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "Configuration apply failed"
+            return false
+        }
+        suppressActiveConfigClear = true
+        suppressModelPush = true
+        model = config.base.hostModel
+        suppressModelPush = false
+        suppressActiveConfigClear = false
+        joystickMode = config.joystickMode.hostMode
+        kempstonMouse = config.kempstonMouse
+        pushTapeLoadOptions()
+        refreshStatus()
+        return true
     }
 
     private static func loadPersistedTapeSpeed() -> UInt32 {
@@ -1170,7 +1366,7 @@ final class HostBridge: ObservableObject {
         return NSImage(cgImage: cgImage, size: size)
     }
 
-    func loadRom(at url: URL) {
+    private func loadRom(at url: URL) {
         guard let handle else { return }
         let ok = url.path.withCString { sc_load_rom(handle, $0) }
         if ok != 0 {
@@ -1369,19 +1565,6 @@ final class HostBridge: ObservableObject {
             openMedia(at: url)
         }
     }
-
-    /// NSOpenPanel for a custom ROM image; successful load resets the machine.
-    func presentOpenRomPanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [UTType(filenameExtension: "rom") ?? .data]
-        panel.title = "Open ROM"
-        if panel.runModal() == .OK, let url = panel.url {
-            loadRom(at: url)
-        }
-    }
-
 
     /// Route by extension: `.dsk` → disk (+3), else tape.
     func openMedia(at url: URL) {

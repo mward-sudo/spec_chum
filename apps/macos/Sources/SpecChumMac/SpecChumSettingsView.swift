@@ -8,11 +8,12 @@ struct SpecChumSettingsView: View {
     var body: some View {
         Form {
             Section("Machine") {
-                Picker("Model", selection: $host.model) {
-                    ForEach(HostBridge.Model.allCases) { model in
-                        Text(model.title).tag(model)
-                    }
-                }
+                Text("Built-in models and custom configurations are in the Machine menu and toolbar picker.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Built-ins use default ROMs from ./scripts/fetch_roms.sh. Custom ROM overrides belong in a saved configuration only.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Tape") {
                 Picker("EAR speed", selection: $host.tapeSpeed) {

@@ -204,6 +204,18 @@ impl UserMachineConfig {
         if !compat.ay_stereo {
             self.ay_stereo = PrefAyStereo::Mono;
         }
+        if !self.attach_multiface {
+            self.multiface_rom_path = None;
+        }
+        if !self.attach_divmmc {
+            self.divmmc_eeprom_path = None;
+        }
+        if !self.attach_interface1 {
+            self.interface1_rom_path = None;
+        }
+        if !self.attach_beta {
+            self.trdos_rom_path = None;
+        }
         self
     }
 
