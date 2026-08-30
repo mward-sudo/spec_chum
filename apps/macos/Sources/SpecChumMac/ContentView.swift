@@ -44,6 +44,9 @@ struct ContentView: View {
                 )
             }
         }
+        .sheet(isPresented: $host.showRomSetup) {
+            RomSetupView(host: host)
+        }
         .onChange(of: host.showInspector) { _, showing in
             if !showing {
                 FocusSpectrumView.post()
@@ -98,6 +101,16 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var livingRoomToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
+            if host.showRomsToolbarButton {
+                Button {
+                    chromeAction { host.presentRomSetup() }
+                } label: {
+                    Label("ROMs", systemImage: "memorychip")
+                }
+                .help("Choose ROM files required for the current model")
+                .accessibilityLabel("ROMs")
+            }
+
             Button {
                 chromeAction { host.presentOpenMediaPanel() }
             } label: {
@@ -201,12 +214,15 @@ struct ContentView: View {
                         } label: {
                             HStack {
                                 Text(pick.title)
+                                if !pick.romAvailable {
+                                    Image(systemName: "exclamationmark.circle")
+                                        .foregroundStyle(.secondary)
+                                }
                                 if host.activeConfigId == nil && host.model == pick {
                                     Image(systemName: "checkmark")
                                 }
                             }
                         }
-                        .disabled(!pick.romAvailable)
                     }
                 }
                 Section("My configurations") {

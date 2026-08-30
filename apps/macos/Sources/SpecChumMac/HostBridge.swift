@@ -113,6 +113,19 @@ final class HostBridge: ObservableObject {
             }
         }
 
+        /// Prefs key segment (`spectrum48`, `pentagon128`, …) — matches host_api JSON v2.
+        var prefSlug: String {
+            switch self {
+            case .spectrum16K: "spectrum16_k"
+            case .spectrum48: "spectrum48"
+            case .spectrum128: "spectrum128"
+            case .spectrumPlus2: "spectrum_plus2"
+            case .spectrumPlus2A: "spectrum_plus2_a"
+            case .spectrumPlus3: "spectrum_plus3"
+            case .pentagon128: "pentagon128"
+            }
+        }
+
         /// Default ROM from fetch script present (#188).
         var romAvailable: Bool { sc_model_rom_available(rawValue) != 0 }
 
@@ -285,11 +298,16 @@ final class HostBridge: ObservableObject {
                     UserDefaults.standard.set(Int(model.rawValue), forKey: Self.lastBuiltinModelKey)
                 }
             }
+            if activeConfigId == nil {
+                romSetupModel = model
+            }
             guard let handle, !suppressModelPush else { return }
             _ = sc_set_model(handle, model.rawValue)
             tryAutoloadRom()
             pushTapeLoadOptions()
             refreshStatus()
+            refreshRomSetupQuiet()
+            maybeAutoPresentRomSetup()
         }
     }
 
@@ -300,6 +318,24 @@ final class HostBridge: ObservableObject {
     @Published var showMachineConfigEditor = false
     @Published var machineConfigEditorDraft: UserMachineConfig?
     @Published var machineConfigEditorIsNew = true
+
+    /// ROM setup sheet (#188) — shown when built-in model ROMs are incomplete.
+    @Published var showRomSetup = false
+    @Published private(set) var romSetupPayload: RomSetupPayload?
+    @Published private(set) var romSetupError: String?
+    /// Model the ROM dialog is configuring (may differ while picking from menu).
+    @Published var romSetupModel: Model = .spectrum48
+
+    /// True when the active built-in model still needs ROM files on disk.
+    var needsRomSetup: Bool {
+        guard activeConfigId == nil else { return false }
+        return !model.romAvailable
+    }
+
+    /// Toolbar / menu ROMs affordance when built-in ROM files are missing.
+    var showRomsToolbarButton: Bool {
+        activeConfigId == nil && !model.romAvailable
+    }
 
     /// True when a saved custom profile (not a built-in model pick) is active.
     var isCustomConfigActive: Bool {
@@ -394,6 +430,8 @@ final class HostBridge: ObservableObject {
         let restoredCustom = Self.loadPersistedCustomConfigs()
         customConfigs = restoredCustom
         activeConfigId = UserDefaults.standard.string(forKey: Self.activeConfigIdKey)
+        romSetupModel = model
+        syncModelRomPathsToHost()
         // Restore model before create so the first machine matches last session (#186).
         handle = sc_create(model.rawValue, 1)
         if handle == nil {
@@ -411,6 +449,8 @@ final class HostBridge: ObservableObject {
             persistActiveConfigId()
             tryAutoloadRom()
         }
+        refreshRomSetupQuiet()
+        maybeAutoPresentRomSetup()
         refreshStatus()
         // Prefer persisted tape prefs over host defaults after create.
         pushTapeLoadOptions()
@@ -475,7 +515,11 @@ final class HostBridge: ObservableObject {
     private static let joystickDefaultsKey = "specChum.joystickMode"
     private static let kempstonMouseDefaultsKey = "specChum.kempstonMouse"
     private static let recentFilesDefaultsKey = "specChum.recentFiles"
+    private static let modelRomPathsKey = "specChum.modelRomPaths"
     private static let maxRecentFiles = 12
+
+    /// Persisted ROM paths keyed `{pref_model_slug}_{slot}` (mirrors host_api v2 JSON).
+    private var modelRomPaths: [String: String] = HostBridge.loadPersistedModelRomPaths()
 
     private static func loadPersistedVolume() -> Float {
         let defaults = UserDefaults.standard
@@ -531,12 +575,9 @@ final class HostBridge: ObservableObject {
 
     /// Select a built-in model (clears active custom profile).
     func selectBuiltinModel(_ pick: Model) {
-        guard pick.romAvailable else {
-            status = "Missing ROM for \(pick.title) — run ./scripts/fetch_roms.sh"
-            return
-        }
         activeConfigId = nil
         persistActiveConfigId()
+        romSetupModel = pick
         if model != pick {
             model = pick
         } else {
@@ -545,11 +586,104 @@ final class HostBridge: ObservableObject {
             tryAutoloadRom()
             pushTapeLoadOptions()
             refreshStatus()
+            refreshRomSetupQuiet()
+            maybeAutoPresentRomSetup()
         }
+    }
+
+    /// Open ROM setup manually or after a built-in model pick when files are missing.
+    func presentRomSetup(auto: Bool = false) {
+        romSetupModel = activeConfigId == nil ? model : romSetupModel
+        refreshRomSetup()
+        showRomSetup = true
+        if auto, let payload = romSetupPayload, !payload.complete {
+            status = "ROMs required for \(payload.modelTitle)"
+        }
+    }
+
+    func refreshRomSetup() {
+        romSetupError = nil
+        romSetupPayload = RomSetupCodec.fetch(model: romSetupModel)
+        if romSetupPayload == nil {
+            romSetupError = HostBridge.takeLastError() ?? "ROM setup unavailable"
+        }
+    }
+
+    /// After a built-in model change: auto-open ROM sheet when paths are unset or files invalid.
+    private func maybeAutoPresentRomSetup() {
+        guard activeConfigId == nil else {
+            showRomSetup = false
+            return
+        }
+        syncModelRomPathsToHost()
+        refreshRomSetup()
+        if needsRomSetup {
+            showRomSetup = true
+            if let payload = romSetupPayload, !payload.complete {
+                status = "ROMs required for \(payload.modelTitle)"
+            }
+        } else {
+            showRomSetup = false
+        }
+    }
+
+    /// Update cached payload without opening the sheet (model changes / init).
+    private func refreshRomSetupQuiet() {
+        guard activeConfigId == nil else {
+            romSetupPayload = nil
+            return
+        }
+        romSetupModel = model
+        refreshRomSetup()
+    }
+
+    func pickRomForSlot(_ slotId: String) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "rom") ?? .data,
+            UTType(filenameExtension: "bin") ?? .data,
+        ]
+        panel.title = "Choose ROM file"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        installRomSlot(slotId: slotId, from: url)
+    }
+
+    func installRomSlot(slotId: String, from url: URL) {
+        romSetupError = nil
+        let ok = url.path.withCString { source in
+            slotId.withCString { slot in
+                sc_install_model_rom(romSetupModel.rawValue, slot, source)
+            }
+        }
+        if ok != 0 {
+            romSetupError = HostBridge.takeLastError() ?? "ROM install failed"
+            refreshRomSetup()
+            return
+        }
+        pullModelRomPathsFromHost()
+        refreshRomSetup()
+        if romSetupModel == model, romSetupPayload?.complete == true {
+            finishRomSetup(loadMachine: true)
+        } else {
+            status = "Installed \(url.lastPathComponent) → roms/"
+        }
+    }
+
+    func finishRomSetup(loadMachine: Bool) {
+        if loadMachine, romSetupModel == model {
+            tryAutoloadRom()
+            pushTapeLoadOptions()
+            refreshStatus()
+        }
+        showRomSetup = false
+        romSetupError = nil
     }
 
     func selectCustomConfiguration(id: String) {
         guard let cfg = customConfigs.first(where: { $0.id == id }) else { return }
+        showRomSetup = false
         if applyCustomConfiguration(cfg) {
             activeConfigId = id
             persistActiveConfigId()
@@ -667,6 +801,46 @@ final class HostBridge: ObservableObject {
     private static func loadPersistedRecentFiles() -> [URL] {
         let paths = UserDefaults.standard.stringArray(forKey: recentFilesDefaultsKey) ?? []
         return paths.prefix(maxRecentFiles).map { URL(fileURLWithPath: $0) }
+    }
+
+    private static func loadPersistedModelRomPaths() -> [String: String] {
+        guard let data = UserDefaults.standard.data(forKey: modelRomPathsKey),
+              let decoded = try? JSONDecoder().decode([String: String].self, from: data)
+        else {
+            return [:]
+        }
+        return decoded.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func persistModelRomPaths() {
+        guard let data = try? JSONEncoder().encode(modelRomPaths) else { return }
+        UserDefaults.standard.set(data, forKey: Self.modelRomPathsKey)
+    }
+
+    private func syncModelRomPathsToHost() {
+        guard let json = try? JSONEncoder().encode(modelRomPaths),
+              let text = String(data: json, encoding: .utf8)
+        else {
+            return
+        }
+        _ = text.withCString { sc_sync_model_rom_paths_json($0) }
+    }
+
+    private func pullModelRomPathsFromHost() {
+        guard let cstr = sc_model_rom_paths_json() else { return }
+        defer { sc_string_free(cstr) }
+        let text = String(cString: cstr)
+        guard let data = text.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([String: String].self, from: data)
+        else {
+            return
+        }
+        modelRomPaths = decoded
+        persistModelRomPaths()
+    }
+
+    private func modelRomPath(model: Model, slot: String) -> String? {
+        modelRomPaths["\(model.prefSlug)_\(slot)"]
     }
 
     private func persistRecentFiles() {
@@ -2053,6 +2227,13 @@ final class HostBridge: ObservableObject {
     }
 
     func tryAutoloadRom() {
+        syncModelRomPathsToHost()
+        if let main = modelRomPath(model: model, slot: "main"),
+           FileManager.default.isReadableFile(atPath: main)
+        {
+            loadRom(at: URL(fileURLWithPath: main))
+            return
+        }
         let candidates: [String] = {
             switch model {
             case .spectrum16K, .spectrum48:

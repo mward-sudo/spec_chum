@@ -86,6 +86,12 @@ struct SpecChumMacApp: App {
 
             // Machine — built-in models, custom profiles, reset
             CommandMenu("Machine") {
+                if host.showRomsToolbarButton {
+                    Button("ROMs…") {
+                        host.presentRomSetup()
+                    }
+                    Divider()
+                }
                 Menu("Built-in models") {
                     Text("Select only — default ROMs. Session hardware via Hardware menu.")
                         .font(.caption)
@@ -96,11 +102,12 @@ struct SpecChumMacApp: App {
                         } label: {
                             if host.activeConfigId == nil && host.model == pick {
                                 Text("✓ \(pick.title)")
+                            } else if !pick.romAvailable {
+                                Text("\(pick.title) (ROMs required)")
                             } else {
                                 Text(pick.title)
                             }
                         }
-                        .disabled(!pick.romAvailable)
                     }
                 }
                 Divider()

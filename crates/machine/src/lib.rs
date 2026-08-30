@@ -18,11 +18,16 @@ pub use debugger::{BreakReason, Debugger, Watch};
 pub use inspect::{Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 pub use rom::{
-    main_rom_available, main_rom_available_in, model_label, model_title, read_rom, read_trdos_rom,
-    requires_trdos_rom, requires_user_rom, resolve_rom_path, resolve_rom_path_in,
-    resolve_trdos_rom_path, resolve_trdos_rom_path_in, rom_available, rom_available_in,
-    rom_candidates, search_roots, trdos_rom_available, trdos_rom_available_in, unavailable_reason,
-    ALL_MODELS,
+    expected_main_rom_bytes, install_rom_slot, main_rom_available, main_rom_available_in,
+    model_label, model_title, read_rom, read_rom_with_overrides, read_trdos_rom,
+    read_trdos_rom_with_overrides, requires_trdos_rom, requires_user_rom, resolve_rom_path,
+    resolve_rom_path_in, resolve_rom_path_in_with_overrides, resolve_trdos_rom_path,
+    resolve_trdos_rom_path_in, resolve_trdos_rom_path_in_with_overrides, rom_available,
+    rom_available_in, rom_available_in_with_overrides, rom_candidates, rom_path_status,
+    rom_slot_descriptors, rom_slot_state, rom_slot_state_with_override, rom_slot_states,
+    rom_slot_states_with_overrides, search_roots, trdos_rom_available, trdos_rom_available_in,
+    unavailable_reason, writable_install_root, RomSlotDescriptor, RomSlotKind, RomSlotState,
+    RomSlotStatus, ALL_MODELS,
 };
 
 use std::cell::Cell;

@@ -25,8 +25,16 @@ void sc_destroy(void *handle);
 int sc_set_model(void *handle, unsigned int model);
 /* Active model id (SC_MODEL_*). Returns UINT_MAX on null handle. */
 unsigned int sc_get_model(void *handle);
-/* 1 when default ROM for model exists under workspace search roots (#188). */
+/* 1 when required ROM slots exist (persisted paths or workspace search; #188). */
 int sc_model_rom_available(unsigned int model);
+/* Heap JSON — required ROM slots + status; free with sc_string_free. */
+char *sc_model_rom_setup_json(unsigned int model);
+/* JSON object map `{model_slot: path}` — free with sc_string_free. */
+char *sc_model_rom_paths_json(void);
+/* Replace process-global ROM path map from JSON object; returns 0 ok, -1 error. */
+int sc_sync_model_rom_paths_json(const char *json);
+/* Validate source, persist path, best-effort copy into roms/. Returns 0 ok, -1 error. */
+int sc_install_model_rom(unsigned int model, const char *slot_id, const char *source_path);
 int sc_load_rom(void *handle, const char *path);
 int sc_load_rom_bytes(void *handle, const uint8_t *data, size_t len);
 int sc_reset(void *handle);
