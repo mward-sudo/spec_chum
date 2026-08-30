@@ -13,7 +13,7 @@ pub mod session;
 
 pub use machine_config::{
     apply_user_config, expected_rom_bytes, hardware_compat, new_config_id, validate_main_rom,
-    AppliedConfig, HardwareCompat, UserMachineConfig, MAX_CUSTOM_CONFIGS,
+    AppliedConfig, HardwareCompat, MachineConfigError, UserMachineConfig, MAX_CUSTOM_CONFIGS,
 };
 pub use prefs::{
     default_prefs_path, load_prefs, save_prefs, update_prefs, PrefAyStereo, PrefJoystick,

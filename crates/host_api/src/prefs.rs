@@ -36,6 +36,9 @@ pub struct UiPreferences {
     pub version: u32,
     #[serde(default)]
     pub model: PrefModel,
+    /// Last built-in model selected (restored when deleting an active custom profile).
+    #[serde(default)]
+    pub last_builtin_model: PrefModel,
     /// When true, restore Experience (~20s) EAR mode (not Instant flash-load).
     #[serde(default)]
     pub tape_experience: bool,
@@ -92,6 +95,7 @@ impl Default for UiPreferences {
         Self {
             version: PREFS_VERSION,
             model: PrefModel::Spectrum48,
+            last_builtin_model: PrefModel::Spectrum48,
             tape_experience: false,
             tape_ear_speed: 1,
             volume: 1.0,
@@ -128,10 +132,12 @@ impl UiPreferences {
         self.window_height = self.window_height.max(MIN_WINDOW_HEIGHT);
         self.recent_files.retain(|p| !p.trim().is_empty());
         self.recent_files.truncate(MAX_RECENT_FILES);
+        let mut seen = std::collections::HashSet::new();
         self.custom_configs = self
             .custom_configs
             .drain(..)
             .map(|c| c.sanitized())
+            .filter(|c| seen.insert(c.id.clone()))
             .take(MAX_CUSTOM_CONFIGS)
             .collect();
         if let Some(id) = self.active_config_id.as_ref() {
@@ -149,6 +155,7 @@ impl UiPreferences {
     }
 
     pub fn select_builtin_model(&mut self, model: PrefModel) {
+        self.last_builtin_model = model;
         self.model = model;
         self.active_config_id = None;
     }
@@ -214,11 +221,15 @@ impl UiPreferences {
     }
 
     pub fn set_model_from_machine(&mut self, model: Model) {
-        self.model = PrefModel::from_model(model);
+        let pref = PrefModel::from_model(model);
+        self.model = pref;
+        if self.active_config_id.is_none() {
+            self.last_builtin_model = pref;
+        }
     }
 
     pub fn set_model_from_id(&mut self, model: ModelId) {
-        self.model = PrefModel::from_model_id(model);
+        self.set_model_from_machine(model.to_model());
     }
 
     pub fn set_joystick(&mut self, mode: JoystickMode) {
@@ -227,6 +238,14 @@ impl UiPreferences {
 
     pub fn set_ay_stereo(&mut self, mode: AyStereoMode) {
         self.ay_stereo = PrefAyStereo::from_mode(mode);
+    }
+
+    /// AY routing for the active machine: custom profile when selected, else top-level pref.
+    #[must_use]
+    pub fn effective_ay_stereo(&self) -> AyStereoMode {
+        self.active_custom_config()
+            .map(|c| c.ay_stereo.to_mode())
+            .unwrap_or_else(|| self.ay_stereo.to_mode())
     }
 
     pub fn set_tape_from_options(&mut self, opts: TapeLoadOptions) {

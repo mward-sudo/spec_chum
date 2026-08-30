@@ -7,8 +7,42 @@ use std::path::{Path, PathBuf};
 
 use machine::{AyStereoMode, JoystickMode, Machine, Model};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::prefs::{PrefAyStereo, PrefJoystick, PrefModel};
+
+/// Errors from validating or applying a [`UserMachineConfig`].
+#[derive(Debug, Error)]
+pub enum MachineConfigError {
+    #[error("configuration name is required")]
+    NameRequired,
+    #[error("ROM for {model} must be {expected} bytes, got {actual}")]
+    RomSize {
+        model: String,
+        expected: usize,
+        actual: usize,
+    },
+    #[error("read {path}: {source}")]
+    Io {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Missing ROM for {model} — {reason}")]
+    MissingRom { model: String, reason: String },
+    #[error("{peripheral} ROM not found: {path}")]
+    PeripheralRomMissing {
+        peripheral: &'static str,
+        path: String,
+    },
+    #[error("{peripheral}: {message}")]
+    Peripheral {
+        peripheral: &'static str,
+        message: String,
+    },
+    #[error("machine: {0}")]
+    Machine(String),
+}
 
 /// Maximum saved custom profiles.
 pub const MAX_CUSTOM_CONFIGS: usize = 32;
@@ -24,16 +58,16 @@ pub fn expected_rom_bytes(model: PrefModel) -> usize {
 }
 
 /// Validate ROM size for `model` before booting.
-pub fn validate_main_rom(data: &[u8], model: PrefModel) -> Result<(), String> {
+pub fn validate_main_rom(data: &[u8], model: PrefModel) -> Result<(), MachineConfigError> {
     let expected = expected_rom_bytes(model);
     if data.len() == expected {
         Ok(())
     } else {
-        Err(format!(
-            "ROM for {} must be {expected} bytes, got {}",
-            machine::model_title(model.to_model()),
-            data.len()
-        ))
+        Err(MachineConfigError::RomSize {
+            model: machine::model_title(model.to_model()).to_string(),
+            expected,
+            actual: data.len(),
+        })
     }
 }
 
@@ -174,10 +208,10 @@ impl UserMachineConfig {
     }
 
     /// Validate name, compatibility, and ROM paths before save/apply.
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), MachineConfigError> {
         let c = self.clone().sanitized();
         if c.name.is_empty() {
-            return Err("configuration name is required".into());
+            return Err(MachineConfigError::NameRequired);
         }
         if let Some(path) = &c.custom_rom_path {
             validate_rom_file(path, c.base)?;
@@ -185,14 +219,20 @@ impl UserMachineConfig {
         if c.attach_multiface {
             if let Some(path) = &c.multiface_rom_path {
                 if !Path::new(path).is_file() {
-                    return Err(format!("Multiface ROM not found: {path}"));
+                    return Err(MachineConfigError::PeripheralRomMissing {
+                        peripheral: "Multiface",
+                        path: path.clone(),
+                    });
                 }
             }
         }
         if c.attach_beta {
             if let Some(path) = &c.trdos_rom_path {
                 if !Path::new(path).is_file() {
-                    return Err(format!("TR-DOS ROM not found: {path}"));
+                    return Err(MachineConfigError::PeripheralRomMissing {
+                        peripheral: "TR-DOS",
+                        path: path.clone(),
+                    });
                 }
             }
         }
@@ -221,8 +261,11 @@ pub fn new_config_id() -> String {
     format!("cfg-{nanos}")
 }
 
-fn validate_rom_file(path: &str, model: PrefModel) -> Result<(), String> {
-    let data = std::fs::read(path).map_err(|e| format!("read {path}: {e}"))?;
+fn validate_rom_file(path: &str, model: PrefModel) -> Result<(), MachineConfigError> {
+    let data = std::fs::read(path).map_err(|e| MachineConfigError::Io {
+        path: path.to_string(),
+        source: e,
+    })?;
     validate_main_rom(&data, model)
 }
 
@@ -230,27 +273,33 @@ fn validate_rom_file(path: &str, model: PrefModel) -> Result<(), String> {
 pub fn resolve_main_rom(
     config: &UserMachineConfig,
     roots: &[PathBuf],
-) -> Result<(Vec<u8>, String), String> {
+) -> Result<(Vec<u8>, String), MachineConfigError> {
     let config = config.clone().sanitized();
     if let Some(custom) = &config.custom_rom_path {
-        let data = std::fs::read(custom).map_err(|e| format!("read {custom}: {e}"))?;
+        let data = std::fs::read(custom).map_err(|e| MachineConfigError::Io {
+            path: custom.clone(),
+            source: e,
+        })?;
         validate_main_rom(&data, config.base)?;
         return Ok((data, custom.clone()));
     }
     let model = config.base.to_model();
     let path = machine::resolve_rom_path_in(model, roots).ok_or_else(|| {
-        format!(
-            "Missing ROM for {} — {}",
-            machine::model_title(model),
-            machine::unavailable_reason(model)
-        )
+        MachineConfigError::MissingRom {
+            model: machine::model_title(model).to_string(),
+            reason: machine::unavailable_reason(model).to_string(),
+        }
     })?;
-    let data = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let path_display = path.display().to_string();
+    let data = std::fs::read(&path).map_err(|e| MachineConfigError::Io {
+        path: path_display.clone(),
+        source: e,
+    })?;
     validate_main_rom(&data, config.base)?;
-    Ok((data, path.display().to_string()))
+    Ok((data, path_display))
 }
 
-fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, String> {
+fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, MachineConfigError> {
     match model {
         Model::Spectrum16K => Machine::new_16k(rom),
         Model::Spectrum48 => Machine::new_48k(rom),
@@ -259,6 +308,7 @@ fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, String> {
         Model::SpectrumPlus2A => Machine::new_plus2a(rom),
         Model::SpectrumPlus3 => Machine::new_plus3(rom),
     }
+    .map_err(MachineConfigError::Machine)
 }
 
 /// Build a [`Machine`] from a user config and attach enabled peripherals.
@@ -267,7 +317,7 @@ fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, String> {
 pub fn apply_user_config(
     config: &UserMachineConfig,
     roots: &[PathBuf],
-) -> Result<AppliedConfig, String> {
+) -> Result<AppliedConfig, MachineConfigError> {
     let config = config.clone().sanitized();
     config.validate()?;
     let model = config.base.to_model();
@@ -278,23 +328,40 @@ pub fn apply_user_config(
     if config.attach_multiface && hardware_compat(config.base).multiface {
         match &config.multiface_rom_path {
             Some(path) if Path::new(path).is_file() => {
-                let data = std::fs::read(path).map_err(|e| format!("Multiface ROM: {e}"))?;
+                let data = std::fs::read(path).map_err(|e| MachineConfigError::Io {
+                    path: path.clone(),
+                    source: e,
+                })?;
                 machine
                     .attach_multiface(&data)
-                    .map_err(|e| format!("Multiface: {e}"))?;
+                    .map_err(|e| MachineConfigError::Peripheral {
+                        peripheral: "Multiface",
+                        message: e,
+                    })?;
             }
             _ => notes.push("Multiface enabled but no ROM — not attached"),
         }
     }
 
     if config.attach_divmmc && hardware_compat(config.base).divmmc {
-        machine.attach_divmmc().map_err(|e| e.to_string())?;
+        machine
+            .attach_divmmc()
+            .map_err(|e| MachineConfigError::Peripheral {
+                peripheral: "DivMMC",
+                message: e,
+            })?;
         if let Some(path) = &config.divmmc_eeprom_path {
             if Path::new(path).is_file() {
-                let data = std::fs::read(path).map_err(|e| format!("DivMMC EEPROM: {e}"))?;
-                machine
-                    .attach_divmmc_eeprom(&data)
-                    .map_err(|e| format!("DivMMC EEPROM: {e}"))?;
+                let data = std::fs::read(path).map_err(|e| MachineConfigError::Io {
+                    path: path.clone(),
+                    source: e,
+                })?;
+                machine.attach_divmmc_eeprom(&data).map_err(|e| {
+                    MachineConfigError::Peripheral {
+                        peripheral: "DivMMC EEPROM",
+                        message: e,
+                    }
+                })?;
             } else {
                 notes.push("DivMMC EEPROM path missing — stub only");
             }
@@ -302,13 +369,25 @@ pub fn apply_user_config(
     }
 
     if config.attach_interface1 && hardware_compat(config.base).interface1 {
-        let if1 = machine.attach_interface1().map_err(|e| e.to_string())?;
+        let if1 = machine
+            .attach_interface1()
+            .map_err(|e| MachineConfigError::Peripheral {
+                peripheral: "Interface 1",
+                message: e.to_string(),
+            })?;
         let mut loaded = if1.rom_loaded;
         if !loaded {
             if let Some(path) = &config.interface1_rom_path {
                 if Path::new(path).is_file() {
-                    let data = std::fs::read(path).map_err(|e| format!("IF1 ROM: {e}"))?;
-                    if1.load_rom(&data).map_err(|e| e.to_string())?;
+                    let data = std::fs::read(path).map_err(|e| MachineConfigError::Io {
+                        path: path.clone(),
+                        source: e,
+                    })?;
+                    if1.load_rom(&data)
+                        .map_err(|e| MachineConfigError::Peripheral {
+                            peripheral: "Interface 1",
+                            message: e.to_string(),
+                        })?;
                     loaded = true;
                 }
             }
@@ -335,13 +414,24 @@ pub fn apply_user_config(
     }
 
     if config.attach_beta && hardware_compat(config.base).beta {
-        machine.attach_beta().map_err(|e| e.to_string())?;
+        machine
+            .attach_beta()
+            .map_err(|e| MachineConfigError::Peripheral {
+                peripheral: "Beta",
+                message: e,
+            })?;
         if let Some(path) = &config.trdos_rom_path {
             if Path::new(path).is_file() {
-                let data = std::fs::read(path).map_err(|e| format!("TR-DOS ROM: {e}"))?;
+                let data = std::fs::read(path).map_err(|e| MachineConfigError::Io {
+                    path: path.clone(),
+                    source: e,
+                })?;
                 machine
                     .load_trdos_rom(&data)
-                    .map_err(|e| format!("TR-DOS: {e}"))?;
+                    .map_err(|e| MachineConfigError::Peripheral {
+                        peripheral: "TR-DOS",
+                        message: e,
+                    })?;
             } else {
                 notes.push("Beta attached but TR-DOS ROM missing");
             }
@@ -447,7 +537,16 @@ mod tests {
             ..UserMachineConfig::new_named("Bad", PrefModel::Spectrum48)
         };
         let err = apply_user_config(&cfg, &roots).expect_err("bad size");
-        assert!(err.contains("16384"), "{err}");
+        assert!(
+            matches!(
+                err,
+                MachineConfigError::RomSize {
+                    expected: 16384,
+                    ..
+                }
+            ),
+            "{err}"
+        );
         let _ = std::fs::remove_file(&bad);
     }
 }

@@ -206,7 +206,10 @@ impl EmulatorSession {
     }
 
     /// Boot from a saved user profile (#187).
-    pub fn apply_user_machine_config(&mut self, config: &UserMachineConfig) -> Result<(), String> {
+    pub fn apply_user_machine_config(
+        &mut self,
+        config: &UserMachineConfig,
+    ) -> Result<(), spec_chum_host::MachineConfigError> {
         let roots = vec![Self::workspace_root()];
         let applied = apply_user_config(config, &roots)?;
         self.model = applied.model;
@@ -936,13 +939,18 @@ impl SpecChumApp {
         session.joystick_mode = prefs.joystick_mode.to_mode();
         session.kempston_mouse = prefs.kempston_mouse;
         if let Some(cfg) = prefs.active_custom_config().cloned() {
-            if session.apply_user_machine_config(&cfg).is_ok() {
-                prefs.sync_machine_fields_from_config(&cfg);
-                session.joystick_mode = cfg.joystick_mode.to_mode();
-                session.kempston_mouse = cfg.kempston_mouse;
-            } else {
-                session.model = prefs.model.to_model();
-                session.try_autoload_rom();
+            match session.apply_user_machine_config(&cfg) {
+                Ok(()) => {
+                    prefs.sync_machine_fields_from_config(&cfg);
+                    session.joystick_mode = cfg.joystick_mode.to_mode();
+                    session.kempston_mouse = cfg.kempston_mouse;
+                }
+                Err(e) => {
+                    session.model = prefs.model.to_model();
+                    session.try_autoload_rom();
+                    session.status =
+                        format!("Config “{}” failed: {e} — {}", cfg.name, session.status);
+                }
             }
         } else {
             session.try_autoload_rom();
@@ -956,7 +964,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
             ) {
-                m.set_ay_stereo_mode(prefs.ay_stereo.to_mode());
+                m.set_ay_stereo_mode(prefs.effective_ay_stereo());
             }
         }
         let gilrs = match gilrs::Gilrs::new() {
@@ -1042,7 +1050,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
             ) {
-                m.set_ay_stereo_mode(self.prefs.ay_stereo.to_mode());
+                m.set_ay_stereo_mode(self.prefs.effective_ay_stereo());
             }
         }
     }
@@ -1261,27 +1269,33 @@ impl SpecChumApp {
         if save {
             let to_save = draft.clone().sanitized();
             match to_save.validate() {
-                Ok(()) => match self.session.apply_user_machine_config(&to_save) {
-                    Ok(()) => {
-                        if self.prefs.upsert_custom_config(to_save.clone()) {
-                            self.prefs.select_custom_config(&to_save.id);
-                            self.sync_prefs_from_custom_config(&to_save);
-                            self.session.joystick_mode = to_save.joystick_mode.to_mode();
-                            self.session.kempston_mouse = to_save.kempston_mouse;
-                            self.apply_restored_machine_options();
-                            self.mark_prefs_dirty();
-                            self.config_draft = None;
-                            self.config_editor_error = None;
-                        } else {
-                            self.config_editor_error = Some(format!(
-                                "Cannot save more than {} configurations",
-                                spec_chum_host::MAX_CUSTOM_CONFIGS
-                            ));
+                Ok(()) => {
+                    let is_new = !self.prefs.custom_configs.iter().any(|c| c.id == to_save.id);
+                    if is_new
+                        && self.prefs.custom_configs.len() >= spec_chum_host::MAX_CUSTOM_CONFIGS
+                    {
+                        self.config_editor_error = Some(format!(
+                            "Cannot save more than {} configurations",
+                            spec_chum_host::MAX_CUSTOM_CONFIGS
+                        ));
+                    } else {
+                        match self.session.apply_user_machine_config(&to_save) {
+                            Ok(()) => {
+                                self.prefs.upsert_custom_config(to_save.clone());
+                                self.prefs.select_custom_config(&to_save.id);
+                                self.sync_prefs_from_custom_config(&to_save);
+                                self.session.joystick_mode = to_save.joystick_mode.to_mode();
+                                self.session.kempston_mouse = to_save.kempston_mouse;
+                                self.apply_restored_machine_options();
+                                self.mark_prefs_dirty();
+                                self.config_draft = None;
+                                self.config_editor_error = None;
+                            }
+                            Err(e) => self.config_editor_error = Some(e.to_string()),
                         }
                     }
-                    Err(e) => self.config_editor_error = Some(e),
-                },
-                Err(e) => self.config_editor_error = Some(e),
+                }
+                Err(e) => self.config_editor_error = Some(e.to_string()),
             }
         }
     }
@@ -1423,7 +1437,7 @@ impl SpecChumApp {
                                             self.apply_restored_machine_options();
                                             self.mark_prefs_dirty();
                                         }
-                                        Err(e) => self.session.status = e,
+                                        Err(e) => self.session.status = e.to_string(),
                                     }
                                 }
                             }
@@ -1462,7 +1476,8 @@ impl SpecChumApp {
                         {
                             if let Some(id) = self.prefs.active_config_id.clone() {
                                 self.prefs.delete_custom_config(&id);
-                                self.session.model = self.prefs.model.to_model();
+                                self.prefs.model = self.prefs.last_builtin_model;
+                                self.session.model = self.prefs.last_builtin_model.to_model();
                                 self.session.try_autoload_rom();
                                 self.apply_restored_machine_options();
                                 self.mark_prefs_dirty();
