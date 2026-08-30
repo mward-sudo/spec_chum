@@ -58,7 +58,7 @@ impl ModelId {
         }
     }
 
-    /// All models in UI order.
+    /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
     pub const ALL: [Self; 6] = [
         Self::Spectrum16K,
         Self::Spectrum48,

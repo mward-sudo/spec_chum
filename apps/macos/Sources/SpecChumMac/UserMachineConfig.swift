@@ -56,12 +56,15 @@ struct UserMachineConfig: Codable, Identifiable, Equatable {
 }
 
 enum PrefModelSlug: String, Codable, CaseIterable {
-    case spectrum48 = "spectrum_48"
     case spectrum16K = "spectrum_16k"
+    case spectrum48 = "spectrum_48"
     case spectrum128 = "spectrum_128"
     case spectrumPlus2 = "spectrum_plus2"
     case spectrumPlus2A = "spectrum_plus2a"
     case spectrumPlus3 = "spectrum_plus3"
+
+    /// Canonical UI order (matches `machine::ALL_MODELS` / `HostBridge.Model.pickerOrder`).
+    static let pickerOrder: [PrefModelSlug] = HostBridge.Model.pickerOrder.map { from($0) }
 
     var hostModel: HostBridge.Model {
         switch self {

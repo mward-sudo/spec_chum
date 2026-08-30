@@ -80,7 +80,7 @@ final class HostBridge: ObservableObject {
         case spectrumPlus2 = 4
         case spectrum16K = 5
 
-        /// UI order (matches egui Machine menu).
+        /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
         static let pickerOrder: [Model] = [
             .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3,
         ]

@@ -54,7 +54,7 @@ pub fn model_title(model: Model) -> &'static str {
     }
 }
 
-/// Every selectable model in UI order.
+/// Canonical UI order for every host picker / menu (16K → 48K → 128K → +2 → +2A → +3).
 pub const ALL_MODELS: [Model; 6] = [
     Model::Spectrum16K,
     Model::Spectrum48,
@@ -147,6 +147,21 @@ pub fn read_rom(model: Model) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn all_models_ui_order() {
+        assert_eq!(
+            ALL_MODELS,
+            [
+                Model::Spectrum16K,
+                Model::Spectrum48,
+                Model::Spectrum128,
+                Model::SpectrumPlus2,
+                Model::SpectrumPlus2A,
+                Model::SpectrumPlus3,
+            ]
+        );
+    }
 
     #[test]
     fn phase_a_models_use_fetchable_paths() {

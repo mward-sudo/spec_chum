@@ -277,9 +277,9 @@ impl UiPreferences {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PrefModel {
+    Spectrum16K,
     #[default]
     Spectrum48,
-    Spectrum16K,
     Spectrum128,
     SpectrumPlus2,
     SpectrumPlus2A,
@@ -287,6 +287,16 @@ pub enum PrefModel {
 }
 
 impl PrefModel {
+    /// Canonical UI order (matches [`machine::ALL_MODELS`]).
+    pub const ALL: [Self; 6] = [
+        Self::Spectrum16K,
+        Self::Spectrum48,
+        Self::Spectrum128,
+        Self::SpectrumPlus2,
+        Self::SpectrumPlus2A,
+        Self::SpectrumPlus3,
+    ];
+
     #[must_use]
     pub fn from_model(m: Model) -> Self {
         match m {
@@ -598,6 +608,13 @@ mod tests {
         cfg.ay_stereo = PrefAyStereo::Acb;
         p.sync_machine_fields_from_config(&cfg);
         assert_eq!(p.ay_stereo, PrefAyStereo::Acb);
+    }
+
+    #[test]
+    fn pref_model_all_matches_machine_ui_order() {
+        for (pref, model) in PrefModel::ALL.iter().zip(machine::ALL_MODELS.iter()) {
+            assert_eq!(pref.to_model(), *model);
+        }
     }
 
     #[test]

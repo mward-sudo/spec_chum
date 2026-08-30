@@ -36,7 +36,7 @@ struct MachineConfigEditorView: View {
 
                 GroupBox("Base model") {
                     Picker("Base", selection: $draft.base) {
-                        ForEach(PrefModelSlug.allCases, id: \.self) { slug in
+                        ForEach(PrefModelSlug.pickerOrder, id: \.self) { slug in
                             Text(slug.title).tag(slug)
                         }
                     }
