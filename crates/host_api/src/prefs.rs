@@ -612,6 +612,7 @@ mod tests {
 
     #[test]
     fn pref_model_all_matches_machine_ui_order() {
+        assert_eq!(PrefModel::ALL.len(), machine::ALL_MODELS.len());
         for (pref, model) in PrefModel::ALL.iter().zip(machine::ALL_MODELS.iter()) {
             assert_eq!(pref.to_model(), *model);
         }
