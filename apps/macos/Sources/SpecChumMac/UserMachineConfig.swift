@@ -140,9 +140,14 @@ struct HardwareCompatFlags {
 
     static func forBase(_ base: PrefModelSlug) -> HardwareCompatFlags {
         switch base.hostModel {
-        case .spectrum16K, .spectrum48, .timexTC2048, .timexTS2068:
+        case .spectrum16K, .spectrum48, .timexTC2048:
             return HardwareCompatFlags(
                 multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: false
+            )
+        case .timexTS2068:
+            // Matches host_api::hardware_compat — TS2068 has Timex AY.
+            return HardwareCompatFlags(
+                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: true
             )
         case .spectrum128, .spectrumPlus2, .pentagon128:
             return HardwareCompatFlags(

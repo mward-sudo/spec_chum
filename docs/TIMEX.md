@@ -41,7 +41,7 @@ equivalent dumps in the ROM setup dialog).
 | SCLD ports `0xFF` / `0xF4` | Latched (both models) |
 | Horizontal MMU (TS2068) | HSR bits page EX-ROM (or empty DOCK) over 8K chunks; EX-ROM mirrored per Fuse |
 | AY (TS2068) | Ports `0xF5` / `0xF6` (Timex wiring); stereo pan selectable |
-| Timex joysticks on AY R14 | Not modelled yet |
+| Timex joysticks on AY R14 | Modelled (Fuse bit layout); host Kempston remapped to both sticks |
 | Dock cartridges | Empty (reads `0xFF`); no `.dck` loader |
 | SCLD video | **Not implemented** — no Timex ULA / hi-res framebuffer |
 
@@ -53,7 +53,8 @@ switches into **hi-res or extended display modes** will look wrong:
 - **512×192 hi-res** — garbled or incorrectly laid out (SCLD video deferred)
 - **Extended / dual-screen modes** — broken visually
 - Border / paging side effects of those modes — not modelled
-- Dock software and Timex joystick ports — not yet
+- Dock software — not yet
+- Dedicated Timex joystick input modes (separate from Kempston) — not yet
 
 Do not expect Timex-specific demos, art packages, or games that depend on 512×192 to
 render correctly until SCLD video lands.

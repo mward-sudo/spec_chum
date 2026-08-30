@@ -1673,6 +1673,16 @@ impl Machine {
                         if has_ay {
                             ay_t = ay_t.saturating_add(HOLD_T);
                             bus.ay.advance(HOLD_T);
+                            while ay_samples.len() < AY_SAMPLES
+                                && f64::from(ay_t) >= (ay_samples.len() as f64 + 1.0) * t_per_sample
+                            {
+                                push_ay_frame_sample(
+                                    &bus.ay,
+                                    &mut ay_samples,
+                                    &mut ay_left,
+                                    &mut ay_right,
+                                );
+                            }
                         }
                         frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_48);
                         continue;
@@ -2504,6 +2514,9 @@ impl Machine {
                         tape_opts.speed,
                         tape_opts.flash_load,
                     );
+                    if bus.timex_2068 {
+                        bus.ay.advance(HOLD_T);
+                    }
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_48;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
@@ -2541,6 +2554,9 @@ impl Machine {
                             tape_opts.speed,
                             tape_opts.flash_load,
                         );
+                        if bus.timex_2068 {
+                            bus.ay.advance(irq_t);
+                        }
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_48;
                         return;
                     }
@@ -2592,6 +2608,9 @@ impl Machine {
                     tape_opts.speed,
                     tape_opts.flash_load,
                 );
+                if bus.timex_2068 {
+                    bus.ay.advance(dt);
+                }
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_48;
             }
             Self::Spec128 {
@@ -2875,6 +2894,9 @@ impl Machine {
                     tape_opts.speed,
                     tape_opts.flash_load,
                 );
+                if bus.timex_2068 {
+                    bus.ay.advance(dt);
+                }
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_48;
             }
             Self::Spec128 {
@@ -4550,6 +4572,45 @@ mod tests {
     }
 
     #[test]
+    fn timex_ts2068_ay_advances_on_step_apis() {
+        let Some((home, exrom)) = rom_timex_ts2068() else {
+            eprintln!("skip: roms/timex/tc2068-*.rom missing");
+            return;
+        };
+        let mut m = Machine::new_timex_ts2068(&home, &exrom).unwrap();
+        // Short period tone A so sample_mono goes non-zero once AY advances.
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.out_port(0x00F5, 0);
+            bus.out_port(0x00F6, 1); // period fine = 1
+            bus.out_port(0x00F5, 1);
+            bus.out_port(0x00F6, 0); // period coarse = 0
+            bus.out_port(0x00F5, 7);
+            bus.out_port(0x00F6, 0x3e); // enable tone A
+            bus.out_port(0x00F5, 8);
+            bus.out_port(0x00F6, 0x0f); // full volume A
+        } else {
+            panic!("expected Spec48 bus for TS2068");
+        }
+        let mut saw = false;
+        for _ in 0..4_000 {
+            m.step_once();
+            if let Machine::Spec48 { bus, .. } = &m {
+                if bus.ay.sample_mono() > 0.0 {
+                    saw = true;
+                    break;
+                }
+            }
+        }
+        assert!(saw, "step_once must advance Timex AY");
+        m.run_tstates(2_000);
+        m.step_cpu_only();
+        let _ = m.run_frame();
+        if let Machine::Spec48 { bus, .. } = &m {
+            assert!(bus.ay.sample_mono().is_finite());
+        }
+    }
+
+    #[test]
     fn model_16k_limits_ram_to_16k() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -5668,6 +5729,9 @@ mod tests {
         if let Some(r) = rom_timex_tc2048() {
             cases.push((Model::TimexTC2048, r, "timex"));
         }
+        if let Some((home, _)) = rom_timex_ts2068() {
+            cases.push((Model::TimexTS2068, home, "ts2068"));
+        }
         if cases.is_empty() {
             eprintln!("skip: no ROMs for attr_mark matrix");
             return;
@@ -5684,39 +5748,45 @@ mod tests {
             } else {
                 250
             };
-            // Instant
-            let (_m, ok) = run_typed_load(
-                match model {
-                    Model::Spectrum16K => Machine::new_16k(rom).unwrap(),
-                    Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
-                    Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
-                    Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
-                    Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
-                    Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
-                    Model::Pentagon128 => {
-                        let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
-                        Machine::new_pentagon128(rom, &trdos).unwrap()
-                    }
-                    Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
-                    Model::TimexTS2068 => {
-                        let ex = read_exrom(Model::TimexTS2068).expect("ts2068 exrom");
-                        Machine::new_timex_ts2068(rom, &ex).unwrap()
-                    }
-                },
-                img.clone(),
-                true,
-                1,
-                true,
-                warmup,
-                500,
-                attr_mark_code_ok,
-            );
-            report.push_str(&format!(
-                "  {label} instant: {}\n",
-                if ok { "PASS" } else { "FAIL" }
-            ));
-            if !ok {
-                failed.push(format!("{label}/instant"));
+            // Instant / flash-load traps Spectrum LD-BYTES PCs; Timex BASIC differs.
+            if matches!(model, Model::TimexTS2068) {
+                report.push_str(&format!(
+                    "  {label} instant: SKIP (Timex ROM — no Spectrum flash trap)\n"
+                ));
+            } else {
+                let (_m, ok) = run_typed_load(
+                    match model {
+                        Model::Spectrum16K => Machine::new_16k(rom).unwrap(),
+                        Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
+                        Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                        Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
+                        Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
+                        Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                        Model::Pentagon128 => {
+                            let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
+                            Machine::new_pentagon128(rom, &trdos).unwrap()
+                        }
+                        Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
+                        Model::TimexTS2068 => {
+                            let ex = read_exrom(Model::TimexTS2068).expect("ts2068 exrom");
+                            Machine::new_timex_ts2068(rom, &ex).unwrap()
+                        }
+                    },
+                    img.clone(),
+                    true,
+                    1,
+                    true,
+                    warmup,
+                    500,
+                    attr_mark_code_ok,
+                );
+                report.push_str(&format!(
+                    "  {label} instant: {}\n",
+                    if ok { "PASS" } else { "FAIL" }
+                ));
+                if !ok {
+                    failed.push(format!("{label}/instant"));
+                }
             }
             let full = std::env::var_os("SPEC_CHUM_FULL_TAPE_MATRIX").is_some();
             for speed in speeds {
@@ -5805,6 +5875,8 @@ mod tests {
         if let Some(r) = rom_timex_tc2048() {
             cases.push((Model::TimexTC2048, r, "timex"));
         }
+        // Timex TS2068: Timex BASIC is not Spectrum-compatible for this custom-loader
+        // fixture (attr_mark EAR covers TS2068 tape via the shared match arms).
         if cases.is_empty() {
             eprintln!("skip: no ROMs for custom_loader matrix");
             return;

@@ -5,10 +5,33 @@
 //!
 //! Phase 2a (TS2068 / TC2068): horizontal MMU uses those latches — bit 7 of
 //! port 0xFF selects EX-ROM vs empty DOCK; port 0xF4 selects which 8K chunks
-//! are overlaid on the home bank.
+//! are overlaid on the home bank. AY ports F5/F6 plus R14 Timex joysticks
+//! (Fuse-compatible bit layout).
 
 /// Size of the Timex TS2068 / TC2068 EX-ROM bank (chunk 0').
 pub const TIMEX_EXROM_SIZE: usize = 8192;
+
+/// Active-high Timex joystick mask (Fuse `timex_mask`): up / down / left / right / fire.
+#[must_use]
+pub fn timex_joystick_mask(up: bool, down: bool, left: bool, right: bool, fire: bool) -> u8 {
+    let mut v = 0u8;
+    if up {
+        v |= 0x01;
+    }
+    if down {
+        v |= 0x02;
+    }
+    if left {
+        v |= 0x04;
+    }
+    if right {
+        v |= 0x08;
+    }
+    if fire {
+        v |= 0x80;
+    }
+    v
+}
 
 /// Timex SCLD latch state (ports 0xFF and 0xF4).
 #[derive(Clone, Debug, Default)]
@@ -84,6 +107,15 @@ impl TimexScld {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn joystick_mask_fuse_layout() {
+        assert_eq!(timex_joystick_mask(true, false, false, false, false), 0x01);
+        assert_eq!(timex_joystick_mask(false, true, false, false, false), 0x02);
+        assert_eq!(timex_joystick_mask(false, false, true, false, false), 0x04);
+        assert_eq!(timex_joystick_mask(false, false, false, true, false), 0x08);
+        assert_eq!(timex_joystick_mask(false, false, false, false, true), 0x80);
+    }
 
     #[test]
     fn port_ff_read_returns_last_write() {

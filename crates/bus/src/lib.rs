@@ -26,7 +26,7 @@ pub use kempston_mouse::{
 };
 pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
-pub use timex::{TimexScld, TIMEX_EXROM_SIZE};
+pub use timex::{timex_joystick_mask, TimexScld, TIMEX_EXROM_SIZE};
 
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
@@ -419,8 +419,36 @@ impl Bus48 {
         }
         if self.timex_2068 {
             match port & 0xff {
-                // Timex AY: register select (F5) / data (F6). Joystick on R14 deferred.
-                0xf5 | 0xf6 => return self.ay.read_data(),
+                // Register select is write-only (WoS / Fuse: IN F5 → 0xFF).
+                0xf5 => return 0xff,
+                // Data port: normal AY read, or Timex joysticks when R14 selected.
+                0xf6 => {
+                    if self.ay.selected != 14 {
+                        return self.ay.read_data();
+                    }
+                    // R7 bit 6 = Port A direction (1 = output → return latched R14).
+                    let mut ret = if self.ay.regs[7] & 0x40 != 0 {
+                        self.ay.regs[14]
+                    } else {
+                        0xff
+                    };
+                    // Active-high press bits AND-NOT into the active-low read (Fuse).
+                    // Host Kempston is remapped onto both Timex sticks for Phase 2a.
+                    let joy = timex::timex_joystick_mask(
+                        self.kempston.up,
+                        self.kempston.down,
+                        self.kempston.left,
+                        self.kempston.right,
+                        self.kempston.fire,
+                    );
+                    if port & 0x0100 != 0 {
+                        ret &= !joy;
+                    }
+                    if port & 0x0200 != 0 {
+                        ret &= !joy;
+                    }
+                    return ret;
+                }
                 _ => {}
             }
         }
@@ -879,6 +907,39 @@ mod tests {
         b.out_port(0x00F6, 0x38);
         assert_eq!(b.ay.selected, 0x07);
         assert_eq!(b.ay.regs[7], 0x38);
+        // Register select is write-only.
+        assert_eq!(b.in_port(0x00F5), 0xFF);
+        assert_eq!(b.in_port(0x00F6), 0x38);
+    }
+
+    #[test]
+    fn timex_2068_ay_r14_joysticks_via_f6() {
+        let mut b = Bus48::new();
+        b.timex = true;
+        b.timex_2068 = true;
+        // Select R14; R7 bit 6 clear → Port A input (joysticks).
+        b.out_port(0x00F5, 14);
+        b.out_port(0x00F6, 0); // unused; ensure R14 latched low when output later
+        b.out_port(0x00F5, 7);
+        b.out_port(0x00F6, 0x00); // bit 6 clear
+        b.out_port(0x00F5, 14);
+
+        assert_eq!(b.in_port(0x00F5), 0xFF, "IN F5 always floating");
+        assert_eq!(b.in_port(0x00F6), 0xFF, "no stick strobe → idle high");
+
+        b.kempston.up = true;
+        b.kempston.fire = true;
+        // Fuse Timex mask: up=0x01, fire=0x80 → active-low read clears those bits.
+        assert_eq!(b.in_port(0x01F6), !0x81u8, "left stick (A8)");
+        assert_eq!(b.in_port(0x02F6), !0x81u8, "right stick (A9)");
+        assert_eq!(b.in_port(0x00F6), 0xFF, "neither strobe");
+
+        // R7 bit 6 set → Port A output; return latched R14, ignore sticks.
+        b.out_port(0x00F5, 7);
+        b.out_port(0x00F6, 0x40);
+        b.out_port(0x00F5, 14);
+        b.out_port(0x00F6, 0x5A);
+        assert_eq!(b.in_port(0x01F6), 0x5A);
     }
 
     #[test]

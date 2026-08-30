@@ -993,6 +993,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
                     | Model::Pentagon128
+                    | Model::TimexTS2068
             ) {
                 m.set_ay_stereo_mode(prefs.effective_ay_stereo());
             }
@@ -1153,6 +1154,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
                     | Model::Pentagon128
+                    | Model::TimexTS2068
             ) {
                 m.set_ay_stereo_mode(self.prefs.effective_ay_stereo());
             }

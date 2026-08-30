@@ -585,6 +585,15 @@ mod tests {
     }
 
     #[test]
+    fn timex_ts2068_enables_ay_stereo() {
+        let compat = hardware_compat(PrefModel::TimexTS2068);
+        assert!(compat.multiface);
+        assert!(compat.ay_stereo);
+        let tc = hardware_compat(PrefModel::TimexTC2048);
+        assert!(!tc.ay_stereo);
+    }
+
+    #[test]
     fn apply_builtin_rom_when_no_override() {
         let roots = machine::search_roots();
         if !machine::rom_available_in(Model::Spectrum48, &roots) {
