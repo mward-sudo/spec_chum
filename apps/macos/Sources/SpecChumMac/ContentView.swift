@@ -114,20 +114,6 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var livingRoomToolbar: some ToolbarContent {
-        // Separate ToolbarItem — conditional children inside ToolbarItemGroup often fail to
-        // appear or refresh on macOS unified toolbars (#188 Pentagon ROMs affordance).
-        if host.showRomsToolbarButton {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    chromeAction { host.presentRomSetup() }
-                } label: {
-                    Label("ROMs", systemImage: "memorychip")
-                }
-                .help("Choose ROM files required for the current model")
-                .accessibilityLabel("ROMs")
-            }
-        }
-
         ToolbarItemGroup(placement: .navigation) {
             Button {
                 chromeAction { host.presentOpenMediaPanel() }
@@ -295,6 +281,20 @@ struct ContentView: View {
             .help("Built-ins: select only. Custom profiles: edit hardware & ROM.")
             .accessibilityLabel("Machine")
             .accessibilityValue(host.machineDisplayTitle)
+        }
+
+        // Separate ToolbarItem — conditional children inside ToolbarItemGroup often fail to
+        // appear or refresh on macOS unified toolbars (#188 Pentagon ROMs affordance).
+        if host.showRomsToolbarButton {
+            ToolbarItem(placement: .status) {
+                Button {
+                    chromeAction { host.presentRomSetup() }
+                } label: {
+                    Label("ROMs", systemImage: "memorychip")
+                }
+                .help("Choose ROM files required for the current model")
+                .accessibilityLabel("ROMs")
+            }
         }
 
         ToolbarItem(placement: .status) {
