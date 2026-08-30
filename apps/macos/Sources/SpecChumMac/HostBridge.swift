@@ -338,14 +338,9 @@ final class HostBridge: ObservableObject {
         return !model.romAvailable
     }
 
-    /// Auto-present ROM setup when picking a built-in model from the menu / toolbar.
-    private func shouldAutoPresentRomSetup(for pick: Model) -> Bool {
-        pick.requiresUserProvidedRoms || !pick.romAvailable
-    }
-
-    /// Toolbar / menu ROMs affordance for built-in models (missing or user-provided ROMs).
+    /// Toolbar ROMs affordance when built-in ROM files are still missing or invalid.
     var showRomsToolbarButton: Bool {
-        activeConfigId == nil && shouldAutoPresentRomSetup(for: model)
+        activeConfigId == nil && needsRomSetup
     }
 
     /// True when a saved custom profile (not a built-in model pick) is active.
@@ -600,9 +595,6 @@ final class HostBridge: ObservableObject {
             refreshRomSetupQuiet()
             maybeAutoPresentRomSetup()
         }
-        if shouldAutoPresentRomSetup(for: pick) {
-            presentRomSetup(auto: true)
-        }
     }
 
     /// Open ROM setup manually or after a built-in model pick when files are missing.
@@ -706,6 +698,7 @@ final class HostBridge: ObservableObject {
         }
         showRomSetup = false
         romSetupError = nil
+        FocusSpectrumView.postDelayed()
     }
 
     func selectCustomConfiguration(id: String) {

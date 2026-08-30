@@ -1050,28 +1050,21 @@ impl SpecChumApp {
         self.session.try_autoload_rom();
         self.apply_restored_machine_options();
         self.mark_prefs_dirty();
-        self.refresh_rom_setup();
-        if machine::requires_user_rom(pick)
-            || !model_rom_available(
-                PrefModel::from_model(pick).to_model_id(),
-                &self.prefs.model_rom_paths,
-            )
-        {
-            self.show_rom_setup = true;
-            if let Some(doc) = &self.rom_setup {
-                if !doc.complete {
-                    self.session.status = format!("ROMs required for {}", doc.model_title);
-                }
-            }
-        } else {
-            self.maybe_auto_present_rom_setup();
-        }
+        self.maybe_auto_present_rom_setup();
     }
 
     /// Auto-open ROM setup when the active built-in model still lacks valid ROM files.
     fn maybe_auto_present_rom_setup(&mut self) {
         self.refresh_rom_setup();
         self.show_rom_setup = self.needs_rom_setup();
+        if !self.show_rom_setup {
+            return;
+        }
+        if let Some(doc) = &self.rom_setup {
+            if !doc.complete {
+                self.session.status = format!("ROMs required for {}", doc.model_title);
+            }
+        }
     }
 
     fn finish_rom_setup(&mut self) {
@@ -1621,7 +1614,7 @@ impl SpecChumApp {
                         }
                     });
                     ui.menu_button("Machine", |ui| {
-                        if self.needs_rom_setup() {
+                        if self.prefs.active_config_id.is_none() {
                             if ui.button("ROMs…").clicked() {
                                 self.show_rom_setup = true;
                                 self.refresh_rom_setup();

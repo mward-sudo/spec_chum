@@ -456,6 +456,12 @@ final class LivingRoomNSView: NSView {
         guard let window else { return }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(self)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, window.isKeyWindow else { return }
+            if window.firstResponder !== self {
+                window.makeFirstResponder(self)
+            }
+        }
     }
 
     /// Backup capture when we are not first responder but the window is key.
@@ -464,7 +470,6 @@ final class LivingRoomNSView: NSView {
         guard let fr = window.firstResponder else { return true }
         if fr === self { return false }
         if fr is NSTextView || fr is NSTextField { return false }
-        if fr is NSControl { return false }
         return true
     }
 

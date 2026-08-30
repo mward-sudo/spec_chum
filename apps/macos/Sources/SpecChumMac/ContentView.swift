@@ -49,6 +49,20 @@ struct ContentView: View {
                 FocusSpectrumView.post()
             }
         }
+        .onChange(of: host.model) { _, _ in
+            // Toolbar Machine menus often keep an NSControl as first responder after pick.
+            FocusSpectrumView.postDelayed()
+        }
+        .onChange(of: host.showRomSetup) { _, showing in
+            if !showing {
+                FocusSpectrumView.postDelayed()
+            }
+        }
+        .onChange(of: host.showMachineConfigEditor) { _, showing in
+            if !showing {
+                FocusSpectrumView.postDelayed()
+            }
+        }
     }
 
     /// Full-bleed 3D room. Toolbar + glass footer sit in chrome bands; CRT is framed
@@ -407,6 +421,14 @@ enum FocusSpectrumView {
 
     static func post() {
         NotificationCenter.default.post(name: name, object: nil)
+    }
+
+    /// Reclaim focus after SwiftUI chrome (toolbar menus, sheets) closes on the next run loop.
+    static func postDelayed() {
+        post()
+        DispatchQueue.main.async {
+            post()
+        }
     }
 }
 

@@ -275,6 +275,13 @@ final class SpectrumNSView: NSView {
         guard let window else { return }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(self)
+        // Toolbar Machine pickers often steal first responder until the menu closes.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, window.isKeyWindow else { return }
+            if window.firstResponder !== self {
+                window.makeFirstResponder(self)
+            }
+        }
     }
 
     /// Backup capture only when we are not first responder but the window is key.
@@ -282,9 +289,8 @@ final class SpectrumNSView: NSView {
         guard let window, window.isKeyWindow else { return false }
         guard let fr = window.firstResponder else { return true }
         if fr === self { return false }
+        // Only defer to real text fields — toolbar buttons/menus are NSControls too.
         if fr is NSTextView || fr is NSTextField { return false }
-        if fr is NSControl { return false }
-        // SwiftUI hosting views are plain NSViews — monitor fills the gap.
         return true
     }
 
@@ -398,5 +404,6 @@ final class SpectrumNSView: NSView {
         }
         // Kempston mirror (egui: arrows + Tab fire) — OR’d with GCController in HostBridge.
         host?.setKeyboardJoystickMask(SpectrumKeymap.kempstonMask(held: held))
+        host?.flushInputFrame()
     }
 }

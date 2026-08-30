@@ -21,6 +21,11 @@ struct SpecChumMacApp: App {
                 .sheet(isPresented: $host.showRomSetup) {
                     RomSetupView(host: host)
                 }
+                .onChange(of: host.showRomSetup) { _, showing in
+                    if !showing {
+                        FocusSpectrumView.postDelayed()
+                    }
+                }
         }
         .defaultSize(width: 780, height: 640)
         // Toolbar band is the draggable titlebar region (unified over full-bleed content).
@@ -102,6 +107,7 @@ struct SpecChumMacApp: App {
                     ForEach(HostBridge.Model.pickerOrder) { pick in
                         Button {
                             host.selectBuiltinModel(pick)
+                            FocusSpectrumView.postDelayed()
                         } label: {
                             if host.activeConfigId == nil && host.model == pick {
                                 Text("✓ \(pick.title)")
