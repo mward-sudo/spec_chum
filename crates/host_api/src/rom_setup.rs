@@ -64,6 +64,9 @@ fn slot_hint(model: Model, slot_id: &str, user_provided: bool) -> String {
     if slot_id == "trdos" {
         return "16 KiB TR-DOS image (user-provided; see docs/ROMS.md)".into();
     }
+    if slot_id == "exrom" {
+        return "8 KiB Timex EX-ROM (tc2068-1.rom; fetch with ./scripts/fetch_roms.sh)".into();
+    }
     if user_provided {
         return format!(
             "User-provided dump for {} — see docs/ROMS.md",

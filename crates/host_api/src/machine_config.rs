@@ -52,7 +52,10 @@ pub const MAX_CUSTOM_CONFIGS: usize = 32;
 #[must_use]
 pub fn expected_rom_bytes(model: PrefModel) -> usize {
     match model {
-        PrefModel::Spectrum16K | PrefModel::Spectrum48 | PrefModel::TimexTC2048 => 16 * 1024,
+        PrefModel::Spectrum16K
+        | PrefModel::Spectrum48
+        | PrefModel::TimexTC2048
+        | PrefModel::TimexTS2068 => 16 * 1024,
         PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 | PrefModel::Pentagon128 => 32 * 1024,
         PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 => 64 * 1024,
     }
@@ -90,13 +93,14 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
     HardwareCompat {
         multiface: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048
+            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068
         ),
         divmmc: matches!(
             m,
             Model::Spectrum16K
                 | Model::Spectrum48
                 | Model::TimexTC2048
+                | Model::TimexTS2068
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
@@ -106,6 +110,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
             Model::Spectrum16K
                 | Model::Spectrum48
                 | Model::TimexTC2048
+                | Model::TimexTS2068
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
@@ -115,6 +120,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
             Model::Spectrum16K
                 | Model::Spectrum48
                 | Model::TimexTC2048
+                | Model::TimexTS2068
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
@@ -126,6 +132,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::SpectrumPlus2A
                 | Model::SpectrumPlus3
                 | Model::Pentagon128
+                | Model::TimexTS2068
         ),
         kempston_mouse: true,
         joystick: true,
@@ -364,6 +371,11 @@ fn build_machine(
             Machine::new_pentagon128(rom, &trdos)
         }
         Model::TimexTC2048 => Machine::new_timex_tc2048(rom).map_err(|e| e.to_string()),
+        Model::TimexTS2068 => {
+            let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)
+                .map_err(|e| MachineConfigError::Machine(format!("EX-ROM: {e}")))?;
+            Machine::new_timex_ts2068(rom, &exrom).map_err(|e| e.to_string())
+        }
     }
     .map_err(MachineConfigError::Machine)
 }
@@ -570,6 +582,15 @@ mod tests {
         assert!(compat.interface1);
         assert!(compat.beta);
         assert!(!compat.ay_stereo);
+    }
+
+    #[test]
+    fn timex_ts2068_enables_ay_stereo() {
+        let compat = hardware_compat(PrefModel::TimexTS2068);
+        assert!(compat.multiface);
+        assert!(compat.ay_stereo);
+        let tc = hardware_compat(PrefModel::TimexTC2048);
+        assert!(!tc.ay_stereo);
     }
 
     #[test]

@@ -63,7 +63,7 @@ Sparse checkout **excludes** `peripherals/Interface1` and `zx80-81` (see
 | Destination | Grant | Notes |
 | --- | --- | --- |
 | `roms/timex/tc2048.rom` | Lawson 1999 / Amstrad copyright (Fuse README.copyright) | TC2048 Phase 1 ([#192](https://github.com/mward-sudo/spec_chum/issues/192)); see [TIMEX.md](TIMEX.md) |
-| `roms/timex/tc2068-0.rom`, `tc2068-1.rom` | Lawson 1999 base + Timex modifications PD per Fuse copyright file | TC2068 Phase 2 ([#192](https://github.com/mward-sudo/spec_chum/issues/192)); fetched early, not wired yet |
+| `roms/timex/tc2068-0.rom`, `tc2068-1.rom` | Lawson 1999 base + Timex modifications PD per Fuse copyright file | TS2068 / TC2068 Phase 2a ([#192](https://github.com/mward-sudo/spec_chum/issues/192)); wired for smoke-boot + horizontal MMU |
 
 ### OpenSE BASIC — Fuse `se-*.rom` (GPL-2+)
 
@@ -118,18 +118,19 @@ Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
 
 Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. TR-DOS boot depth still tracked in [#140](https://github.com/mward-sudo/spec_chum/issues/140).
 
-### Timex TC2048 — fetched path (#192 Phase 1)
+### Timex TC2048 / TS2068 — fetched paths (#192)
 
 After `./scripts/fetch_roms.sh`:
 
 | File | Size | Notes |
 | --- | --- | --- |
-| `roms/timex/tc2048.rom` | 16 KiB | Required for **Timex TC2048** in Machine pickers |
+| `roms/timex/tc2048.rom` | 16 KiB | **Timex TC2048** |
+| `roms/timex/tc2068-0.rom` | 16 KiB | **Timex TS2068** home ROM |
+| `roms/timex/tc2068-1.rom` | 8 KiB | **Timex TS2068** EX-ROM |
 
-Phase 1 = Timex ROM + SCLD port latches (`0xFF` / `0xF4`), **not** SCLD video.
-Standard **256×192** works; **512×192** hi-res and extended modes are visually
-broken until Phase 2. Full scope, limits, and Phase 2 (TS2068 / TC2068, horizontal
-MMU): [TIMEX.md](TIMEX.md).
+Phase 1 (TC2048) + Phase 2a (TS2068 smoke-boot / horizontal MMU / AY ports) are
+wired. Display is still standard **256×192**; **512×192** hi-res and extended
+SCLD modes are visually broken until Phase 2b. See [TIMEX.md](TIMEX.md).
 
 Peripheral attach UX: Multiface ([MULTIFACE.md](MULTIFACE.md)), Interface 1,
 Beta, DivMMC — see GitHub issues #137–#140 / #169.

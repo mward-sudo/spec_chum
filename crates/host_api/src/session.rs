@@ -22,6 +22,8 @@ pub enum ModelId {
     Pentagon128 = 6,
     /// Timex TC2048 (#192 Phase 1).
     TimexTC2048 = 7,
+    /// Timex TS2068 / TC2068 (#192 Phase 2a).
+    TimexTS2068 = 8,
 }
 
 impl ModelId {
@@ -36,6 +38,7 @@ impl ModelId {
             5 => Some(Self::Spectrum16K),
             6 => Some(Self::Pentagon128),
             7 => Some(Self::TimexTC2048),
+            8 => Some(Self::TimexTS2068),
             _ => None,
         }
     }
@@ -51,6 +54,7 @@ impl ModelId {
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::Pentagon128 => Model::Pentagon128,
             Self::TimexTC2048 => Model::TimexTC2048,
+            Self::TimexTS2068 => Model::TimexTS2068,
         }
     }
 
@@ -65,11 +69,12 @@ impl ModelId {
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::Pentagon128 => Self::Pentagon128,
             Model::TimexTC2048 => Self::TimexTC2048,
+            Model::TimexTS2068 => Self::TimexTS2068,
         }
     }
 
     /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
@@ -78,6 +83,7 @@ impl ModelId {
         Self::SpectrumPlus3,
         Self::Pentagon128,
         Self::TimexTC2048,
+        Self::TimexTS2068,
     ];
 
     #[must_use]
@@ -499,6 +505,11 @@ impl HostSession {
                 Machine::new_pentagon128(rom, &trdos)
             }
             ModelId::TimexTC2048 => Machine::new_timex_tc2048(rom).map_err(|e| e.to_string()),
+            ModelId::TimexTS2068 => {
+                let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)
+                    .map_err(HostError::Message)?;
+                Machine::new_timex_ts2068(rom, &exrom).map_err(|e| e.to_string())
+            }
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
@@ -901,7 +912,8 @@ impl HostSession {
         let frame_t = match m.model() {
             machine::Model::Spectrum16K
             | machine::Model::Spectrum48
-            | machine::Model::TimexTC2048 => 69_888,
+            | machine::Model::TimexTC2048
+            | machine::Model::TimexTS2068 => 69_888,
             machine::Model::Spectrum128
             | machine::Model::SpectrumPlus2
             | machine::Model::SpectrumPlus2A
@@ -1296,6 +1308,9 @@ mod tests {
         assert_eq!(ModelId::from_u32(3), Some(ModelId::SpectrumPlus2A));
         assert_eq!(ModelId::from_u32(4), Some(ModelId::SpectrumPlus2));
         assert_eq!(ModelId::from_u32(5), Some(ModelId::Spectrum16K));
+        assert_eq!(ModelId::from_u32(6), Some(ModelId::Pentagon128));
+        assert_eq!(ModelId::from_u32(7), Some(ModelId::TimexTC2048));
+        assert_eq!(ModelId::from_u32(8), Some(ModelId::TimexTS2068));
         assert_eq!(ModelId::from_u32(9), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
         assert_eq!(ModelId::SpectrumPlus2.to_model(), Model::SpectrumPlus2);
