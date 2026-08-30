@@ -94,7 +94,7 @@ struct SpecChumMacApp: App {
 
             // Machine — built-in models, custom profiles, reset
             CommandMenu("Machine") {
-                if host.activeConfigId == nil {
+                if host.showRomsToolbarButton {
                     Button("ROMs…") {
                         host.presentRomSetup()
                     }

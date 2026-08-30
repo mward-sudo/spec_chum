@@ -338,10 +338,9 @@ final class HostBridge: ObservableObject {
         return !model.romAvailable
     }
 
-    /// Toolbar ROMs affordance for user-ROM models or when built-in ROM files are missing/invalid.
+    /// Toolbar ROMs affordance — same gate as Machine → ROMs… (built-in only).
     var showRomsToolbarButton: Bool {
-        guard activeConfigId == nil else { return false }
-        return needsRomSetup || model.requiresUserProvidedRoms
+        activeConfigId == nil
     }
 
     /// True when a saved custom profile (not a built-in model pick) is active.

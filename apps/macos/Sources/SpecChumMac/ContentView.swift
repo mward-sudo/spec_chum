@@ -114,8 +114,10 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var livingRoomToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            if host.showRomsToolbarButton {
+        // Separate ToolbarItem — conditional children inside ToolbarItemGroup often fail to
+        // appear or refresh on macOS unified toolbars (#188 Pentagon ROMs affordance).
+        if host.showRomsToolbarButton {
+            ToolbarItem(placement: .navigation) {
                 Button {
                     chromeAction { host.presentRomSetup() }
                 } label: {
@@ -124,7 +126,9 @@ struct ContentView: View {
                 .help("Choose ROM files required for the current model")
                 .accessibilityLabel("ROMs")
             }
+        }
 
+        ToolbarItemGroup(placement: .navigation) {
             Button {
                 chromeAction { host.presentOpenMediaPanel() }
             } label: {
