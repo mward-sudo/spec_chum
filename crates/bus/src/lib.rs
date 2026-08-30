@@ -427,11 +427,10 @@ impl Bus48 {
                         return self.ay.read_data();
                     }
                     // R7 bit 6 = Port A direction (1 = output → return latched R14).
-                    let mut ret = if self.ay.regs[7] & 0x40 != 0 {
-                        self.ay.regs[14]
-                    } else {
-                        0xff
-                    };
+                    if self.ay.regs[7] & 0x40 != 0 {
+                        return self.ay.regs[14];
+                    }
+                    let mut ret = 0xffu8;
                     // Active-high press bits AND-NOT into the active-low read (Fuse).
                     // Host Kempston is remapped onto both Timex sticks for Phase 2a.
                     let joy = timex::timex_joystick_mask(
@@ -938,8 +937,8 @@ mod tests {
         b.out_port(0x00F5, 7);
         b.out_port(0x00F6, 0x40);
         b.out_port(0x00F5, 14);
-        b.out_port(0x00F6, 0x5A);
-        assert_eq!(b.in_port(0x01F6), 0x5A);
+        b.out_port(0x00F6, 0xFF);
+        assert_eq!(b.in_port(0x01F6), 0xFF, "output direction ignores sticks");
     }
 
     #[test]

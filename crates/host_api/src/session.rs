@@ -1308,7 +1308,10 @@ mod tests {
         assert_eq!(ModelId::from_u32(3), Some(ModelId::SpectrumPlus2A));
         assert_eq!(ModelId::from_u32(4), Some(ModelId::SpectrumPlus2));
         assert_eq!(ModelId::from_u32(5), Some(ModelId::Spectrum16K));
-        assert_eq!(ModelId::from_u32(10), None);
+        assert_eq!(ModelId::from_u32(6), Some(ModelId::Pentagon128));
+        assert_eq!(ModelId::from_u32(7), Some(ModelId::TimexTC2048));
+        assert_eq!(ModelId::from_u32(8), Some(ModelId::TimexTS2068));
+        assert_eq!(ModelId::from_u32(9), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
         assert_eq!(ModelId::SpectrumPlus2.to_model(), Model::SpectrumPlus2);
         assert_eq!(ModelId::Spectrum16K.to_model(), Model::Spectrum16K);
