@@ -119,38 +119,50 @@ struct RomSetupView: View {
             }
 
             if let payload = host.romSetupPayload {
-                if payload.fetchable {
-                    Text(
-                        "System ROMs are not shipped with Spec Chum. Fetch official images with ./scripts/fetch_roms.sh, or choose files below — paths are remembered across restarts."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if payload.slots.isEmpty {
+                    Text("No ROM slots reported for this model.")
+                        .foregroundStyle(.secondary)
                 } else {
-                    Text(
-                        "This model needs user-provided ROM dumps (never fetched automatically). Choose each file below — paths are remembered across restarts."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                ForEach(payload.slots) { slot in
-                    RomSetupSlotRow(host: host, slot: slot)
-                }
-
-                if payload.complete {
-                    Label("All required ROMs are present.", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.callout)
-                } else if let err = host.romSetupError {
-                    Text(err)
+                    if payload.fetchable {
+                        Text(
+                            "System ROMs are not shipped with Spec Chum. Fetch official images with ./scripts/fetch_roms.sh, or choose files below — paths are remembered across restarts."
+                        )
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(
+                            "This model needs user-provided ROM dumps (never fetched automatically). Choose each file below — paths are remembered across restarts."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    ForEach(payload.slots) { slot in
+                        RomSetupSlotRow(host: host, slot: slot)
+                    }
+
+                    if payload.complete {
+                        Label("All required ROMs are present.", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.callout)
+                    } else if let err = host.romSetupError {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
             } else {
-                Text("Could not load ROM requirements.")
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Could not load ROM requirements.")
+                        .foregroundStyle(.secondary)
+                    if let err = host.romSetupError {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
             }
 
             HStack {

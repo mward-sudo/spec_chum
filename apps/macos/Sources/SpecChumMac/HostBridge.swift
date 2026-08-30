@@ -129,6 +129,9 @@ final class HostBridge: ObservableObject {
         /// Default ROM from fetch script present (#188).
         var romAvailable: Bool { sc_model_rom_available(rawValue) != 0 }
 
+        /// Models whose ROM dumps are never auto-fetched (user must supply paths).
+        var requiresUserProvidedRoms: Bool { self == .pentagon128 }
+
         /// +3 has floppy; toolbar/File Open may include `.dsk`.
         var supportsDisk: Bool { self == .spectrumPlus3 }
 
@@ -332,9 +335,9 @@ final class HostBridge: ObservableObject {
         return !model.romAvailable
     }
 
-    /// Toolbar / menu ROMs affordance when built-in ROM files are missing.
+    /// Toolbar / menu ROMs affordance for built-in models (missing or user-provided ROMs).
     var showRomsToolbarButton: Bool {
-        activeConfigId == nil && !model.romAvailable
+        activeConfigId == nil && (!model.romAvailable || model.requiresUserProvidedRoms)
     }
 
     /// True when a saved custom profile (not a built-in model pick) is active.
@@ -589,16 +592,15 @@ final class HostBridge: ObservableObject {
             refreshRomSetupQuiet()
             maybeAutoPresentRomSetup()
         }
+        if pick.requiresUserProvidedRoms {
+            presentRomSetup(auto: true)
+        }
     }
 
     /// Open ROM setup manually or after a built-in model pick when files are missing.
     func presentRomSetup(auto: Bool = false) {
         romSetupModel = activeConfigId == nil ? model : romSetupModel
-        refreshRomSetup()
-        showRomSetup = true
-        if auto, let payload = romSetupPayload, !payload.complete {
-            status = "ROMs required for \(payload.modelTitle)"
-        }
+        scheduleRomSetupSheet(auto: auto, force: true)
     }
 
     func refreshRomSetup() {
@@ -609,22 +611,32 @@ final class HostBridge: ObservableObject {
         }
     }
 
-    /// After a built-in model change: auto-open ROM sheet when paths are unset or files invalid.
-    private func maybeAutoPresentRomSetup() {
+    /// Present the ROM sheet on the next run loop (SwiftUI may miss `true` set during init).
+    private func scheduleRomSetupSheet(auto: Bool, force: Bool) {
         guard activeConfigId == nil else {
             showRomSetup = false
             return
         }
         syncModelRomPathsToHost()
         refreshRomSetup()
-        if needsRomSetup {
-            showRomSetup = true
-            if let payload = romSetupPayload, !payload.complete {
-                status = "ROMs required for \(payload.modelTitle)"
-            }
-        } else {
+        let shouldShow = force || needsRomSetup
+        guard shouldShow else {
             showRomSetup = false
+            return
         }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.activeConfigId == nil else { return }
+            self.refreshRomSetup()
+            self.showRomSetup = true
+            if auto, let payload = self.romSetupPayload, !payload.complete {
+                self.status = "ROMs required for \(payload.modelTitle)"
+            }
+        }
+    }
+
+    /// After a built-in model change: auto-open ROM sheet when paths are unset or files invalid.
+    private func maybeAutoPresentRomSetup() {
+        scheduleRomSetupSheet(auto: true, force: false)
     }
 
     /// Update cached payload without opening the sheet (model changes / init).
