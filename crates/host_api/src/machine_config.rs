@@ -3,6 +3,7 @@
 //! Serializable profiles: base model + optional hardware + ROM override.
 //! Apply logic is shared by egui and tests; macOS parity is follow-up #169.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use machine::{AyStereoMode, JoystickMode, Machine, Model};
@@ -294,10 +295,22 @@ fn validate_rom_file(path: &str, model: PrefModel) -> Result<(), MachineConfigEr
     validate_main_rom(&data, model)
 }
 
+fn slot_overrides_for_config(config: &UserMachineConfig) -> BTreeMap<String, PathBuf> {
+    let mut overrides = crate::rom_setup::slot_rom_overrides_for_model(config.base.to_model_id());
+    if let Some(path) = &config.custom_rom_path {
+        overrides.insert("main".into(), PathBuf::from(path));
+    }
+    if let Some(path) = &config.trdos_rom_path {
+        overrides.insert("trdos".into(), PathBuf::from(path));
+    }
+    overrides
+}
+
 /// Resolve main ROM bytes: custom path or default autoload for `base`.
 pub fn resolve_main_rom(
     config: &UserMachineConfig,
     roots: &[PathBuf],
+    overrides: &BTreeMap<String, PathBuf>,
 ) -> Result<(Vec<u8>, String), MachineConfigError> {
     let config = config.clone().sanitized();
     if let Some(custom) = &config.custom_rom_path {
@@ -309,12 +322,13 @@ pub fn resolve_main_rom(
         return Ok((data, custom.clone()));
     }
     let model = config.base.to_model();
-    let path = machine::resolve_rom_path_in(model, roots).ok_or_else(|| {
-        MachineConfigError::MissingRom {
-            model: machine::model_title(model).to_string(),
-            reason: machine::unavailable_reason(model).to_string(),
-        }
-    })?;
+    let path =
+        machine::resolve_rom_path_in_with_overrides(model, roots, overrides).ok_or_else(|| {
+            MachineConfigError::MissingRom {
+                model: machine::model_title(model).to_string(),
+                reason: machine::unavailable_reason(model).to_string(),
+            }
+        })?;
     let path_display = path.display().to_string();
     let data = std::fs::read(&path).map_err(|e| MachineConfigError::Io {
         path: path_display.clone(),
@@ -324,7 +338,11 @@ pub fn resolve_main_rom(
     Ok((data, path_display))
 }
 
-fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, MachineConfigError> {
+fn build_machine(
+    model: Model,
+    rom: &[u8],
+    overrides: &BTreeMap<String, PathBuf>,
+) -> Result<Machine, MachineConfigError> {
     match model {
         Model::Spectrum16K => Machine::new_16k(rom),
         Model::Spectrum48 => Machine::new_48k(rom),
@@ -333,7 +351,7 @@ fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, MachineConfigError
         Model::SpectrumPlus2A => Machine::new_plus2a(rom),
         Model::SpectrumPlus3 => Machine::new_plus3(rom),
         Model::Pentagon128 => {
-            let trdos = machine::read_trdos_rom(Model::Pentagon128)
+            let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
                 .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
             Machine::new_pentagon128(rom, &trdos)
         }
@@ -351,8 +369,9 @@ pub fn apply_user_config(
     let config = config.clone().sanitized();
     config.validate()?;
     let model = config.base.to_model();
-    let (rom, rom_label) = resolve_main_rom(&config, roots)?;
-    let mut machine = build_machine(model, &rom)?;
+    let overrides = slot_overrides_for_config(&config);
+    let (rom, rom_label) = resolve_main_rom(&config, roots, &overrides)?;
+    let mut machine = build_machine(model, &rom, &overrides)?;
     let mut notes = Vec::new();
 
     if config.attach_multiface && hardware_compat(config.base).multiface {

@@ -102,6 +102,10 @@ Supply your own images (or wait for a new written grant). **Do not** extend
 | TR-DOS / Beta Disk | © Technology Research; Fuse dropped redistribution |
 | ESXDOS / DivMMC EEPROM | Public download ≠ redistribution grant ([#138](https://github.com/mward-sudo/spec_chum/issues/138)) |
 | Pentagon / Scorpion | Clone firmware; user dumps ([#193](https://github.com/mward-sudo/spec_chum/issues/193)) |
+| Opus Discovery | No clear grant (Fuse dropped) |
+| TK90X / Didaktik / Inves clones | No public grant found ([#195](https://github.com/mward-sudo/spec_chum/issues/195)) |
+| ZX80 / ZX81 | Nine Tiles rights; zx-roms “kind permission” unverified ([#188](https://github.com/mward-sudo/spec_chum/issues/188)) |
+| Spectrum Next firmware | Separate Next licence ([#191](https://github.com/mward-sudo/spec_chum/issues/191)) |
 
 ### Pentagon 128 — user-provided paths (#188 Phase B)
 
@@ -113,10 +117,6 @@ Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
 | `roms/pentagon/trdos.rom` | 16 KiB | TR-DOS for Beta Disk — both files required before the model enables |
 
 Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. TR-DOS boot depth still tracked in [#140](https://github.com/mward-sudo/spec_chum/issues/140).
-| Opus Discovery | No clear grant (Fuse dropped) |
-| TK90X / Didaktik / Inves clones | No public grant found ([#195](https://github.com/mward-sudo/spec_chum/issues/195)) |
-| ZX80 / ZX81 | Nine Tiles rights; zx-roms “kind permission” unverified ([#188](https://github.com/mward-sudo/spec_chum/issues/188)) |
-| Spectrum Next firmware | Separate Next licence ([#191](https://github.com/mward-sudo/spec_chum/issues/191)) |
 
 Peripheral attach UX: Multiface ([MULTIFACE.md](MULTIFACE.md)), Interface 1,
 Beta, DivMMC — see GitHub issues #137–#140 / #169.
