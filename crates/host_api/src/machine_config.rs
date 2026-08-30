@@ -363,7 +363,7 @@ fn build_machine(
                 .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
             Machine::new_pentagon128(rom, &trdos)
         }
-        Model::TimexTC2048 => Machine::new_timex_tc2048(rom),
+        Model::TimexTC2048 => Machine::new_timex_tc2048(rom).map_err(|e| e.to_string()),
     }
     .map_err(MachineConfigError::Machine)
 }

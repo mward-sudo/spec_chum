@@ -217,7 +217,7 @@ impl EmulatorSession {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
                 Machine::new_pentagon128(data, &trdos)
             }
-            Model::TimexTC2048 => Machine::new_timex_tc2048(data),
+            Model::TimexTC2048 => Machine::new_timex_tc2048(data).map_err(|e| e.to_string()),
         }
     }
 

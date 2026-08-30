@@ -498,7 +498,7 @@ impl HostSession {
                     .map_err(HostError::Message)?;
                 Machine::new_pentagon128(rom, &trdos)
             }
-            ModelId::TimexTC2048 => Machine::new_timex_tc2048(rom),
+            ModelId::TimexTC2048 => Machine::new_timex_tc2048(rom).map_err(|e| e.to_string()),
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
