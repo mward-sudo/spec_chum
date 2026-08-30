@@ -28,7 +28,7 @@ pub use kempston_mouse::{
 pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 pub use timex::{timex_joystick_mask, TimexScld, TIMEX_EXROM_SIZE};
-pub use timex_dock::{TimexDock, TimexDockChunk};
+pub use timex_dock::{TimexDock, TimexDockChunk, TimexDockError};
 
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
@@ -194,9 +194,9 @@ impl Bus48 {
     }
 
     /// Insert a Timex `.dck` cartridge (TS2068 / TC2068 only).
-    pub fn insert_timex_dock(&mut self, image: &formats::DckImage) -> Result<(), String> {
+    pub fn insert_timex_dock(&mut self, image: &formats::DckImage) -> Result<(), TimexDockError> {
         if !self.timex_2068 {
-            return Err("Timex dock requires TS2068 / TC2068".into());
+            return Err(TimexDockError::UnsupportedModel);
         }
         self.timex_dock = Some(TimexDock::from_dck(image));
         Ok(())
@@ -209,9 +209,7 @@ impl Bus48 {
 
     #[must_use]
     pub fn has_timex_dock(&self) -> bool {
-        self.timex_dock
-            .as_ref()
-            .is_some_and(TimexDock::has_any_content)
+        self.timex_dock.is_some()
     }
 
     /// HOME-bank overlay from an inserted `.dck` (Spectrum ROM cart, etc.).

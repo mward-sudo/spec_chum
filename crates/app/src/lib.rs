@@ -727,7 +727,7 @@ impl EmulatorSession {
                             Ok(()) => {
                                 self.status = format!("Inserted DCK {}", path.display());
                             }
-                            Err(e) => self.status = e,
+                            Err(e) => self.status = e.to_string(),
                         }
                     } else {
                         self.status = "Load a machine ROM first".into();
@@ -743,7 +743,7 @@ impl EmulatorSession {
         if let Some(m) = self.machine.as_mut() {
             match m.eject_timex_dock() {
                 Ok(()) => self.status = "Ejected Timex dock".into(),
-                Err(e) => self.status = e,
+                Err(e) => self.status = e.to_string(),
             }
         } else {
             self.status = "Load a machine ROM first".into();

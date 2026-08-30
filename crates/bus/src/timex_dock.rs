@@ -4,6 +4,15 @@
 //! HOME ROM/RAM replace, and optional EX-ROM chunk replace.
 
 use formats::{DckBankId, DckChunkAccess, DckImage, DCK_CHUNK_SIZE};
+use thiserror::Error;
+
+/// Errors inserting or ejecting a Timex `.dck` dock cartridge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum TimexDockError {
+    /// Dock requires a TS2068 / TC2068 bus configuration.
+    #[error("Timex dock requires TS2068 / TC2068")]
+    UnsupportedModel,
+}
 
 /// One 8 KiB Timex bank chunk from a dock cartridge.
 #[derive(Clone, Debug)]

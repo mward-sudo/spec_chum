@@ -775,7 +775,8 @@ impl HostSession {
         let data = std::fs::read(path)?;
         let image =
             formats::DckImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
-        m.insert_timex_dock(&image).map_err(HostError::Message)?;
+        m.insert_timex_dock(&image)
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = format!("Inserted DCK {}", path.display());
         Ok(())
     }
@@ -785,7 +786,8 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
-        m.eject_timex_dock().map_err(HostError::Message)?;
+        m.eject_timex_dock()
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = "Ejected Timex dock".into();
         Ok(())
     }

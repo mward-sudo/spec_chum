@@ -1447,38 +1447,31 @@ impl Machine {
         }
     }
 
-    /// Insert a Timex `.dck` dock cartridge (TS2068 / TC2068 only). Resets SCLD latches.
-    pub fn insert_timex_dock(&mut self, image: &formats::DckImage) -> Result<(), String> {
+    /// Insert a Timex `.dck` dock cartridge (TS2068 / TC2068 only). Soft-resets the machine.
+    pub fn insert_timex_dock(
+        &mut self,
+        image: &formats::DckImage,
+    ) -> Result<(), bus::TimexDockError> {
         match self {
-            Self::Spec48 { bus, cpu, .. } if bus.timex_2068 => {
+            Self::Spec48 { bus, .. } if bus.timex_2068 => {
                 bus.insert_timex_dock(image)?;
-                bus.timex_scld.reset();
-                bus.ay.reset();
-                cpu.reset();
-                bus.keyboard.reset();
-                bus.frame_t = 0;
-                bus.beeper_edges.clear();
-                Ok(())
             }
-            _ => Err("Timex dock requires TS2068 / TC2068".into()),
+            _ => return Err(bus::TimexDockError::UnsupportedModel),
         }
+        self.reset();
+        Ok(())
     }
 
-    /// Eject Timex dock cartridge and soft-reset CPU/SCLD (keep Timex ROMs).
-    pub fn eject_timex_dock(&mut self) -> Result<(), String> {
+    /// Eject Timex dock cartridge and soft-reset the machine (keep Timex ROMs).
+    pub fn eject_timex_dock(&mut self) -> Result<(), bus::TimexDockError> {
         match self {
-            Self::Spec48 { bus, cpu, .. } if bus.timex_2068 => {
+            Self::Spec48 { bus, .. } if bus.timex_2068 => {
                 bus.eject_timex_dock();
-                bus.timex_scld.reset();
-                bus.ay.reset();
-                cpu.reset();
-                bus.keyboard.reset();
-                bus.frame_t = 0;
-                bus.beeper_edges.clear();
-                Ok(())
             }
-            _ => Err("Timex dock requires TS2068 / TC2068".into()),
+            _ => return Err(bus::TimexDockError::UnsupportedModel),
         }
+        self.reset();
+        Ok(())
     }
 
     #[must_use]
