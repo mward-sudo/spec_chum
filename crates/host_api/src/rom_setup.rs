@@ -181,6 +181,17 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn pentagon_rom_setup_has_user_slots() {
+        sync_model_rom_paths(BTreeMap::new());
+        let doc = rom_setup_json(ModelId::Pentagon128, &BTreeMap::new());
+        assert_eq!(doc.slots.len(), 2);
+        assert!(!doc.fetchable);
+        assert_eq!(doc.slots[0].id, "main");
+        assert_eq!(doc.slots[1].id, "trdos");
+        assert_eq!(doc.slots[1].expected_bytes, 16 * 1024);
+    }
+
+    #[test]
     fn rom_setup_json_serializes() {
         let doc = rom_setup_json(ModelId::Pentagon128, &BTreeMap::new());
         let text = serde_json::to_string(&doc).expect("json");

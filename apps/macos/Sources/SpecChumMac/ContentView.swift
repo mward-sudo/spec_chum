@@ -44,9 +44,6 @@ struct ContentView: View {
                 )
             }
         }
-        .sheet(isPresented: $host.showRomSetup) {
-            RomSetupView(host: host)
-        }
         .onChange(of: host.showInspector) { _, showing in
             if !showing {
                 FocusSpectrumView.post()

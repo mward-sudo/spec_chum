@@ -332,12 +332,20 @@ final class HostBridge: ObservableObject {
     /// True when the active built-in model still needs ROM files on disk.
     var needsRomSetup: Bool {
         guard activeConfigId == nil else { return false }
+        if let payload = romSetupPayload, !payload.complete {
+            return true
+        }
         return !model.romAvailable
+    }
+
+    /// Auto-present ROM setup when picking a built-in model from the menu / toolbar.
+    private func shouldAutoPresentRomSetup(for pick: Model) -> Bool {
+        pick.requiresUserProvidedRoms || !pick.romAvailable
     }
 
     /// Toolbar / menu ROMs affordance for built-in models (missing or user-provided ROMs).
     var showRomsToolbarButton: Bool {
-        activeConfigId == nil && (!model.romAvailable || model.requiresUserProvidedRoms)
+        activeConfigId == nil && shouldAutoPresentRomSetup(for: model)
     }
 
     /// True when a saved custom profile (not a built-in model pick) is active.
@@ -592,14 +600,16 @@ final class HostBridge: ObservableObject {
             refreshRomSetupQuiet()
             maybeAutoPresentRomSetup()
         }
-        if pick.requiresUserProvidedRoms {
+        if shouldAutoPresentRomSetup(for: pick) {
             presentRomSetup(auto: true)
         }
     }
 
     /// Open ROM setup manually or after a built-in model pick when files are missing.
     func presentRomSetup(auto: Bool = false) {
-        romSetupModel = activeConfigId == nil ? model : romSetupModel
+        if activeConfigId == nil {
+            romSetupModel = model
+        }
         scheduleRomSetupSheet(auto: auto, force: true)
     }
 
@@ -626,7 +636,12 @@ final class HostBridge: ObservableObject {
         }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.activeConfigId == nil else { return }
+            self.syncModelRomPathsToHost()
             self.refreshRomSetup()
+            guard force || self.needsRomSetup else {
+                self.showRomSetup = false
+                return
+            }
             self.showRomSetup = true
             if auto, let payload = self.romSetupPayload, !payload.complete {
                 self.status = "ROMs required for \(payload.modelTitle)"

@@ -18,6 +18,9 @@ struct SpecChumMacApp: App {
         Window("Spec Chum", id: "main") {
             ContentView(host: host)
                 .frame(minWidth: 640, minHeight: 520)
+                .sheet(isPresented: $host.showRomSetup) {
+                    RomSetupView(host: host)
+                }
         }
         .defaultSize(width: 780, height: 640)
         // Toolbar band is the draggable titlebar region (unified over full-bleed content).

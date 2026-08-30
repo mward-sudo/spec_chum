@@ -1022,11 +1022,16 @@ impl SpecChumApp {
     }
 
     fn needs_rom_setup(&self) -> bool {
-        self.prefs.active_config_id.is_none()
-            && !model_rom_available(
-                PrefModel::from_model(self.session.model).to_model_id(),
-                &self.prefs.model_rom_paths,
-            )
+        if self.prefs.active_config_id.is_some() {
+            return false;
+        }
+        if self.rom_setup.as_ref().is_some_and(|doc| !doc.complete) {
+            return true;
+        }
+        !model_rom_available(
+            PrefModel::from_model(self.session.model).to_model_id(),
+            &self.prefs.model_rom_paths,
+        )
     }
 
     fn refresh_rom_setup(&mut self) {
@@ -1045,7 +1050,22 @@ impl SpecChumApp {
         self.session.try_autoload_rom();
         self.apply_restored_machine_options();
         self.mark_prefs_dirty();
-        self.maybe_auto_present_rom_setup();
+        self.refresh_rom_setup();
+        if machine::requires_user_rom(pick)
+            || !model_rom_available(
+                PrefModel::from_model(pick).to_model_id(),
+                &self.prefs.model_rom_paths,
+            )
+        {
+            self.show_rom_setup = true;
+            if let Some(doc) = &self.rom_setup {
+                if !doc.complete {
+                    self.session.status = format!("ROMs required for {}", doc.model_title);
+                }
+            }
+        } else {
+            self.maybe_auto_present_rom_setup();
+        }
     }
 
     /// Auto-open ROM setup when the active built-in model still lacks valid ROM files.
