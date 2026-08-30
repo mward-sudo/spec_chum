@@ -154,6 +154,12 @@ impl UiPreferences {
         self.custom_configs.iter().find(|c| &c.id == id)
     }
 
+    /// True when a saved custom profile (not a built-in model pick) is active.
+    #[must_use]
+    pub fn is_custom_config_active(&self) -> bool {
+        self.active_custom_config().is_some()
+    }
+
     pub fn select_builtin_model(&mut self, model: PrefModel) {
         self.last_builtin_model = model;
         self.model = model;

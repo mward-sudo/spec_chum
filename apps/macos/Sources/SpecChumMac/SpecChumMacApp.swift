@@ -87,6 +87,9 @@ struct SpecChumMacApp: App {
             // Machine — built-in models, custom profiles, reset
             CommandMenu("Machine") {
                 Menu("Built-in models") {
+                    Text("Select only — default ROMs. Session hardware via Hardware menu.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     ForEach(HostBridge.Model.pickerOrder) { pick in
                         Button {
                             host.selectBuiltinModel(pick)
@@ -119,7 +122,19 @@ struct SpecChumMacApp: App {
                             }
                         }
                     }
-                    if host.activeConfigId != nil {
+                    if !host.customConfigs.isEmpty {
+                        Menu("Manage configuration…") {
+                            ForEach(host.customConfigs) { cfg in
+                                Button("Edit “\(cfg.name)”…") {
+                                    host.beginEditConfiguration(id: cfg.id)
+                                }
+                                Button("Delete “\(cfg.name)”", role: .destructive) {
+                                    host.deleteConfiguration(id: cfg.id)
+                                }
+                            }
+                        }
+                    }
+                    if host.isCustomConfigActive {
                         Divider()
                         Button("Edit configuration…") {
                             host.beginEditActiveConfiguration()

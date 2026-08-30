@@ -1155,112 +1155,132 @@ impl SpecChumApp {
         };
         egui::Window::new(title)
             .open(&mut open)
-            .default_width(420.0)
+            .default_width(440.0)
+            .default_height(560.0)
             .show(ctx, |ui| {
-                ui.label("Name");
-                ui.text_edit_singleline(&mut draft.name);
-                ui.separator();
-                ui.label("Base model");
-                let root = EmulatorSession::workspace_root();
-                for pick in machine::ALL_MODELS {
-                    let pref = PrefModel::from_model(pick);
-                    let available = machine::rom_available_in(pick, std::slice::from_ref(&root))
-                        || draft.custom_rom_path.is_some();
-                    let title = machine::model_title(pick);
-                    let mut selected = draft.base == pref;
-                    if ui
-                        .add_enabled_ui(available, |ui| ui.radio_value(&mut selected, true, title))
-                        .inner
-                        .clicked()
-                    {
-                        draft.base = pref;
-                        *draft = draft.clone().sanitized();
-                    }
-                }
-                ui.separator();
-                Self::path_field(ui, "Main ROM", &mut draft.custom_rom_path, "ROM");
-                ui.label("Leave empty to use the default ROM for the base model.");
-                ui.separator();
-                ui.label("Joystick");
-                ui.radio_value(&mut draft.joystick_mode, PrefJoystick::Kempston, "Kempston");
-                ui.radio_value(
-                    &mut draft.joystick_mode,
-                    PrefJoystick::SinclairLeft,
-                    "Sinclair left",
+                ui.weak(
+                    "Saved profile: base model, optional main ROM override, and hardware to attach on load.",
                 );
-                ui.radio_value(
-                    &mut draft.joystick_mode,
-                    PrefJoystick::SinclairRight,
-                    "Sinclair right",
-                );
-                ui.radio_value(&mut draft.joystick_mode, PrefJoystick::Cursor, "Cursor");
-                ui.checkbox(&mut draft.kempston_mouse, "Kempston mouse");
-                let compat = hardware_compat(draft.base);
-                if compat.ay_stereo {
+                ui.separator();
+                egui::ScrollArea::vertical().max_height(480.0).show(ui, |ui| {
+                    ui.label("Name");
+                    ui.text_edit_singleline(&mut draft.name);
                     ui.separator();
-                    ui.label("AY stereo");
-                    ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Mono, "Mono");
-                    ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Acb, "ACB");
-                    ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Abc, "ABC");
-                }
+                    ui.label("Base model");
+                    let root = EmulatorSession::workspace_root();
+                    for pick in machine::ALL_MODELS {
+                        let pref = PrefModel::from_model(pick);
+                        let available = machine::rom_available_in(pick, std::slice::from_ref(&root))
+                            || draft.custom_rom_path.is_some();
+                        let title = machine::model_title(pick);
+                        let mut selected = draft.base == pref;
+                        if ui
+                            .add_enabled_ui(available, |ui| {
+                                ui.radio_value(&mut selected, true, title)
+                            })
+                            .inner
+                            .clicked()
+                        {
+                            draft.base = pref;
+                            *draft = draft.clone().sanitized();
+                        }
+                    }
+                    ui.separator();
+                    Self::path_field(ui, "Main ROM", &mut draft.custom_rom_path, "ROM");
+                    ui.label("Leave empty to use the default ROM for the base model.");
+                    ui.separator();
+                    ui.label("Input");
+                    ui.radio_value(&mut draft.joystick_mode, PrefJoystick::Kempston, "Kempston");
+                    ui.radio_value(
+                        &mut draft.joystick_mode,
+                        PrefJoystick::SinclairLeft,
+                        "Sinclair left",
+                    );
+                    ui.radio_value(
+                        &mut draft.joystick_mode,
+                        PrefJoystick::SinclairRight,
+                        "Sinclair right",
+                    );
+                    ui.radio_value(&mut draft.joystick_mode, PrefJoystick::Cursor, "Cursor");
+                    ui.checkbox(&mut draft.kempston_mouse, "Kempston mouse");
+                    let compat = hardware_compat(draft.base);
+                    if compat.ay_stereo {
+                        ui.separator();
+                        ui.label("AY stereo");
+                        ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Mono, "Mono");
+                        ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Acb, "ACB");
+                        ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Abc, "ABC");
+                    }
+                    ui.separator();
+                    ui.label("Hardware (saved with profile)");
+                    if compat.multiface {
+                        if ui
+                            .checkbox(&mut draft.attach_multiface, "Multiface 1")
+                            .changed()
+                            && !draft.attach_multiface
+                        {
+                            draft.multiface_rom_path = None;
+                        }
+                        if draft.attach_multiface {
+                            Self::path_field(
+                                ui,
+                                "Multiface ROM",
+                                &mut draft.multiface_rom_path,
+                                "Multiface",
+                            );
+                        }
+                    }
+                    if compat.divmmc {
+                        if ui.checkbox(&mut draft.attach_divmmc, "DivMMC").changed()
+                            && !draft.attach_divmmc
+                        {
+                            draft.divmmc_eeprom_path = None;
+                        }
+                        if draft.attach_divmmc {
+                            Self::path_field(
+                                ui,
+                                "ESXDOS EEPROM",
+                                &mut draft.divmmc_eeprom_path,
+                                "EEPROM",
+                            );
+                        }
+                    }
+                    if compat.interface1 {
+                        ui.checkbox(&mut draft.attach_interface1, "Interface 1 (stub)");
+                        if draft.attach_interface1 {
+                            Self::path_field(ui, "IF1 ROM", &mut draft.interface1_rom_path, "IF1");
+                        }
+                    }
+                    if compat.beta {
+                        if ui.checkbox(&mut draft.attach_beta, "Beta Disk").changed()
+                            && !draft.attach_beta
+                        {
+                            draft.trdos_rom_path = None;
+                        }
+                        if draft.attach_beta {
+                            Self::path_field(
+                                ui,
+                                "TR-DOS ROM",
+                                &mut draft.trdos_rom_path,
+                                "TR-DOS",
+                            );
+                        }
+                    }
+                    if !compat.multiface && !compat.divmmc && !compat.interface1 && !compat.beta {
+                        ui.label("No attachable hardware on this base model (AY stereo only).");
+                    }
+                    if let Some(err) = &self.config_editor_error {
+                        ui.colored_label(egui::Color32::RED, err);
+                    }
+                });
                 ui.separator();
-                ui.label("Optional hardware (partial where noted)");
-                if compat.multiface {
-                    if ui
-                        .checkbox(&mut draft.attach_multiface, "Multiface 1")
-                        .changed()
-                        && !draft.attach_multiface
-                    {
-                        draft.multiface_rom_path = None;
-                    }
-                    if draft.attach_multiface {
-                        Self::path_field(
-                            ui,
-                            "Multiface ROM",
-                            &mut draft.multiface_rom_path,
-                            "Multiface",
-                        );
-                    }
-                }
-                if compat.divmmc {
-                    if ui.checkbox(&mut draft.attach_divmmc, "DivMMC").changed()
-                        && !draft.attach_divmmc
-                    {
-                        draft.divmmc_eeprom_path = None;
-                    }
-                    if draft.attach_divmmc {
-                        Self::path_field(
-                            ui,
-                            "ESXDOS EEPROM",
-                            &mut draft.divmmc_eeprom_path,
-                            "EEPROM",
-                        );
-                    }
-                }
-                if compat.interface1 {
-                    ui.checkbox(&mut draft.attach_interface1, "Interface 1 (stub)");
-                    if draft.attach_interface1 {
-                        Self::path_field(ui, "IF1 ROM", &mut draft.interface1_rom_path, "IF1");
-                    }
-                }
-                if compat.beta {
-                    if ui.checkbox(&mut draft.attach_beta, "Beta Disk").changed()
-                        && !draft.attach_beta
-                    {
-                        draft.trdos_rom_path = None;
-                    }
-                    if draft.attach_beta {
-                        Self::path_field(ui, "TR-DOS ROM", &mut draft.trdos_rom_path, "TR-DOS");
-                    }
-                }
-                if !compat.multiface && !compat.divmmc && !compat.interface1 && !compat.beta {
-                    ui.label("No optional hardware on this base model.");
-                }
-                if let Some(err) = &self.config_editor_error {
-                    ui.colored_label(egui::Color32::RED, err);
-                }
                 ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() {
+                    let save_label = if self.config_editor_is_new {
+                        "Create"
+                    } else {
+                        "Save"
+                    };
+                    if ui.button(save_label).clicked() {
                         save = true;
                     }
                     if ui.button("Cancel").clicked() {
@@ -1399,7 +1419,7 @@ impl SpecChumApp {
                     ui.menu_button("Machine", |ui| {
                         let root = EmulatorSession::workspace_root();
                         ui.label("Built-in models");
-                        ui.weak("Default ROMs — optional hardware via Hardware menu.");
+                        ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
                         for pick in machine::ALL_MODELS {
                             let available =
                                 machine::rom_available_in(pick, std::slice::from_ref(&root));
@@ -1430,10 +1450,10 @@ impl SpecChumApp {
                         ui.separator();
                         ui.label("My configurations");
                         if ui.button("+ New configuration…").clicked() {
-                            let base = if self.prefs.active_config_id.is_none() {
-                                PrefModel::from_model(self.session.model)
+                            let base = if let Some(cfg) = self.prefs.active_custom_config() {
+                                cfg.base
                             } else {
-                                self.prefs.last_builtin_model
+                                PrefModel::from_model(self.session.model)
                             };
                             let mut draft = UserMachineConfig::new_named("My Spectrum", base);
                             draft.joystick_mode =
@@ -1453,25 +1473,48 @@ impl SpecChumApp {
                         let configs: Vec<UserMachineConfig> =
                             self.prefs.custom_configs.clone();
                         for cfg in &configs {
-                            let mut selected = self.prefs.active_config_id.as_deref() == Some(cfg.id.as_str());
-                            if ui.radio_value(&mut selected, true, &cfg.name).clicked() {
-                                self.prefs.select_custom_config(&cfg.id);
-                                if let Some(active) = self.prefs.active_custom_config().cloned() {
-                                    match self.session.apply_user_machine_config(&active) {
-                                        Ok(()) => {
-                                            self.sync_prefs_from_custom_config(&active);
-                                            self.session.joystick_mode =
-                                                active.joystick_mode.to_mode();
-                                            self.session.kempston_mouse = active.kempston_mouse;
-                                            self.apply_restored_machine_options();
-                                            self.mark_prefs_dirty();
+                            ui.horizontal(|ui| {
+                                let mut selected = self.prefs.active_config_id.as_deref()
+                                    == Some(cfg.id.as_str());
+                                if ui.radio_value(&mut selected, true, &cfg.name).clicked() {
+                                    self.prefs.select_custom_config(&cfg.id);
+                                    if let Some(active) = self.prefs.active_custom_config().cloned()
+                                    {
+                                        match self.session.apply_user_machine_config(&active) {
+                                            Ok(()) => {
+                                                self.sync_prefs_from_custom_config(&active);
+                                                self.session.joystick_mode =
+                                                    active.joystick_mode.to_mode();
+                                                self.session.kempston_mouse = active.kempston_mouse;
+                                                self.apply_restored_machine_options();
+                                                self.mark_prefs_dirty();
+                                            }
+                                            Err(e) => self.session.status = e.to_string(),
                                         }
-                                        Err(e) => self.session.status = e.to_string(),
                                     }
                                 }
-                            }
+                                if ui.small_button("Edit…").clicked() {
+                                    self.config_draft = Some(cfg.clone());
+                                    self.config_editor_is_new = false;
+                                    self.config_editor_error = None;
+                                    ui.close_menu();
+                                }
+                                if ui.small_button("Delete").clicked() {
+                                    let was_active =
+                                        self.prefs.active_config_id.as_deref() == Some(cfg.id.as_str());
+                                    self.prefs.delete_custom_config(&cfg.id);
+                                    if was_active {
+                                        self.prefs.model = self.prefs.last_builtin_model;
+                                        self.session.model = self.prefs.last_builtin_model.to_model();
+                                        self.session.try_autoload_rom();
+                                        self.apply_restored_machine_options();
+                                    }
+                                    self.mark_prefs_dirty();
+                                    ui.close_menu();
+                                }
+                            });
                         }
-                        let has_active = self.prefs.active_config_id.is_some();
+                        let has_active = self.prefs.is_custom_config_active();
                         if ui
                             .add_enabled(has_active, egui::Button::new("Edit configuration…"))
                             .clicked()

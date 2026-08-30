@@ -192,6 +192,9 @@ struct ContentView: View {
         ToolbarItem(placement: .status) {
             Menu {
                 Section("Built-in models") {
+                    Text("Select only — default ROMs. Session hardware via Hardware menu.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     ForEach(HostBridge.Model.pickerOrder) { pick in
                         Button {
                             chromeAction { host.selectBuiltinModel(pick) }
@@ -225,14 +228,26 @@ struct ContentView: View {
                             }
                         }
                     }
-                }
-                if host.activeConfigId != nil {
-                    Divider()
-                    Button("Edit configuration…") {
-                        chromeAction { host.beginEditActiveConfiguration() }
+                    if !host.customConfigs.isEmpty {
+                        Menu("Manage configuration…") {
+                            ForEach(host.customConfigs) { cfg in
+                                Button("Edit “\(cfg.name)”…") {
+                                    chromeAction { host.beginEditConfiguration(id: cfg.id) }
+                                }
+                                Button("Delete “\(cfg.name)”", role: .destructive) {
+                                    chromeAction { host.deleteConfiguration(id: cfg.id) }
+                                }
+                            }
+                        }
                     }
-                    Button("Delete configuration", role: .destructive) {
-                        chromeAction { host.deleteActiveConfiguration() }
+                    if host.isCustomConfigActive {
+                        Divider()
+                        Button("Edit configuration…") {
+                            chromeAction { host.beginEditActiveConfiguration() }
+                        }
+                        Button("Delete configuration", role: .destructive) {
+                            chromeAction { host.deleteActiveConfiguration() }
+                        }
                     }
                 }
             } label: {
@@ -243,7 +258,7 @@ struct ContentView: View {
                 maxWidth: HostBridge.Model.toolbarPickerMaxWidth,
                 alignment: .leading
             )
-            .help("Built-in models use default ROMs. Custom profiles can override ROM and hardware.")
+            .help("Built-ins: select only. Custom profiles: edit hardware & ROM.")
             .accessibilityLabel("Machine")
             .accessibilityValue(host.machineDisplayTitle)
         }

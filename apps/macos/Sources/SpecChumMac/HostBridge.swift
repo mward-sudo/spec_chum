@@ -298,6 +298,12 @@ final class HostBridge: ObservableObject {
     @Published var machineConfigEditorDraft: UserMachineConfig?
     @Published var machineConfigEditorIsNew = true
 
+    /// True when a saved custom profile (not a built-in model pick) is active.
+    var isCustomConfigActive: Bool {
+        guard let id = activeConfigId else { return false }
+        return customConfigs.contains { $0.id == id }
+    }
+
     /// Toolbar / window label: custom profile name or built-in short title.
     var machineDisplayTitle: String {
         if let id = activeConfigId,
@@ -557,25 +563,35 @@ final class HostBridge: ObservableObject {
         showMachineConfigEditor = true
     }
 
-    func beginEditActiveConfiguration() {
-        guard let id = activeConfigId,
-              let cfg = customConfigs.first(where: { $0.id == id })
-        else { return }
+    func beginEditConfiguration(id: String) {
+        guard let cfg = customConfigs.first(where: { $0.id == id }) else { return }
         machineConfigEditorDraft = cfg
         machineConfigEditorIsNew = false
         showMachineConfigEditor = true
     }
 
-    func deleteActiveConfiguration() {
-        guard let id = activeConfigId else { return }
+    func beginEditActiveConfiguration() {
+        guard let id = activeConfigId, isCustomConfigActive else { return }
+        beginEditConfiguration(id: id)
+    }
+
+    func deleteConfiguration(id: String) {
+        guard customConfigs.contains(where: { $0.id == id }) else { return }
         customConfigs.removeAll { $0.id == id }
         persistCustomConfigs()
-        activeConfigId = nil
-        persistActiveConfigId()
-        let fallback = Model(
-            rawValue: UInt32(UserDefaults.standard.integer(forKey: Self.lastBuiltinModelKey))
-        ) ?? .spectrum48
-        selectBuiltinModel(fallback)
+        if activeConfigId == id {
+            activeConfigId = nil
+            persistActiveConfigId()
+            let fallback = Model(
+                rawValue: UInt32(UserDefaults.standard.integer(forKey: Self.lastBuiltinModelKey))
+            ) ?? .spectrum48
+            selectBuiltinModel(fallback)
+        }
+    }
+
+    func deleteActiveConfiguration() {
+        guard let id = activeConfigId, isCustomConfigActive else { return }
+        deleteConfiguration(id: id)
     }
 
     @discardableResult
