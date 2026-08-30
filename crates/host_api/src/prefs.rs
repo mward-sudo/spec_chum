@@ -13,10 +13,11 @@ use std::time::Duration;
 use machine::{AyStereoMode, JoystickMode, Model, TapeLoadOptions};
 use serde::{Deserialize, Serialize};
 
+use crate::machine_config::{UserMachineConfig, MAX_CUSTOM_CONFIGS};
 use crate::session::ModelId;
 
 /// Bumped when the on-disk shape changes incompatibly.
-pub const PREFS_VERSION: u32 = 1;
+pub const PREFS_VERSION: u32 = 2;
 
 /// Cap for the recent-files list.
 pub const MAX_RECENT_FILES: usize = 12;
@@ -59,6 +60,12 @@ pub struct UiPreferences {
     pub recent_files: Vec<String>,
     #[serde(default = "default_true")]
     pub throttle: bool,
+    /// Saved user machine profiles (#187).
+    #[serde(default)]
+    pub custom_configs: Vec<UserMachineConfig>,
+    /// When set, boot this profile instead of the built-in `model`.
+    #[serde(default)]
+    pub active_config_id: Option<String>,
 }
 
 fn prefs_version() -> u32 {
@@ -96,6 +103,8 @@ impl Default for UiPreferences {
             window_height: DEFAULT_WINDOW_HEIGHT,
             recent_files: Vec::new(),
             throttle: true,
+            custom_configs: Vec::new(),
+            active_config_id: None,
         }
     }
 }
@@ -119,7 +128,70 @@ impl UiPreferences {
         self.window_height = self.window_height.max(MIN_WINDOW_HEIGHT);
         self.recent_files.retain(|p| !p.trim().is_empty());
         self.recent_files.truncate(MAX_RECENT_FILES);
+        self.custom_configs = self
+            .custom_configs
+            .drain(..)
+            .map(|c| c.sanitized())
+            .take(MAX_CUSTOM_CONFIGS)
+            .collect();
+        if let Some(id) = self.active_config_id.as_ref() {
+            if !self.custom_configs.iter().any(|c| &c.id == id) {
+                self.active_config_id = None;
+            }
+        }
         self
+    }
+
+    #[must_use]
+    pub fn active_custom_config(&self) -> Option<&UserMachineConfig> {
+        let id = self.active_config_id.as_ref()?;
+        self.custom_configs.iter().find(|c| &c.id == id)
+    }
+
+    pub fn select_builtin_model(&mut self, model: PrefModel) {
+        self.model = model;
+        self.active_config_id = None;
+    }
+
+    pub fn select_custom_config(&mut self, id: &str) -> bool {
+        if self.custom_configs.iter().any(|c| c.id == id) {
+            self.active_config_id = Some(id.to_string());
+            if let Some(cfg) = self.active_custom_config().cloned() {
+                self.sync_machine_fields_from_config(&cfg);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Copy profile machine/joystick fields into top-level prefs for restore paths.
+    pub fn sync_machine_fields_from_config(&mut self, cfg: &UserMachineConfig) {
+        let cfg = cfg.clone().sanitized();
+        self.model = cfg.base;
+        self.joystick_mode = cfg.joystick_mode;
+        self.kempston_mouse = cfg.kempston_mouse;
+        self.ay_stereo = cfg.ay_stereo;
+    }
+
+    pub fn upsert_custom_config(&mut self, config: UserMachineConfig) -> bool {
+        let config = config.sanitized();
+        if let Some(slot) = self.custom_configs.iter_mut().find(|c| c.id == config.id) {
+            *slot = config;
+            true
+        } else if self.custom_configs.len() < MAX_CUSTOM_CONFIGS {
+            self.custom_configs.push(config);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn delete_custom_config(&mut self, id: &str) {
+        self.custom_configs.retain(|c| c.id != id);
+        if self.active_config_id.as_deref() == Some(id) {
+            self.active_config_id = None;
+        }
     }
 
     #[must_use]
@@ -409,6 +481,7 @@ fn save_prefs_locked(path: &Path, prefs: &UiPreferences) -> std::io::Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::machine_config::UserMachineConfig;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_prefs_path(label: &str) -> PathBuf {
@@ -491,6 +564,45 @@ mod tests {
         assert!(!opts.flash_load);
         assert!(!opts.experience_load);
         assert_eq!(opts.speed, 1);
+    }
+
+    #[test]
+    fn sync_machine_fields_from_config_copies_ay_stereo() {
+        let mut p = UiPreferences::default();
+        let mut cfg = UserMachineConfig::new_named("128 ACB", PrefModel::Spectrum128);
+        cfg.ay_stereo = PrefAyStereo::Acb;
+        p.sync_machine_fields_from_config(&cfg);
+        assert_eq!(p.ay_stereo, PrefAyStereo::Acb);
+    }
+
+    #[test]
+    fn upsert_returns_false_at_cap() {
+        let mut p = UiPreferences::default();
+        for i in 0..MAX_CUSTOM_CONFIGS {
+            let mut c = UserMachineConfig::new_named(format!("C{i}"), PrefModel::Spectrum48);
+            c.id = format!("id-{i}");
+            assert!(p.upsert_custom_config(c));
+        }
+        let extra = UserMachineConfig::new_named("overflow", PrefModel::Spectrum48);
+        assert!(!p.upsert_custom_config(extra));
+        assert_eq!(p.custom_configs.len(), MAX_CUSTOM_CONFIGS);
+    }
+
+    #[test]
+    fn custom_configs_round_trip() {
+        let path = temp_prefs_path("custom");
+        let mut cfg = UserMachineConfig::new_named("Test 48K+Div", PrefModel::Spectrum48);
+        cfg.attach_divmmc = true;
+        let mut p = UiPreferences::default();
+        p.upsert_custom_config(cfg.clone());
+        p.select_custom_config(&cfg.id);
+        save_prefs(&path, &p).expect("save");
+        let loaded = load_prefs(&path);
+        let _ = fs::remove_file(&path);
+        assert_eq!(loaded.active_config_id.as_deref(), Some(cfg.id.as_str()));
+        assert_eq!(loaded.custom_configs.len(), 1);
+        assert_eq!(loaded.custom_configs[0].name, "Test 48K+Div");
+        assert!(loaded.custom_configs[0].attach_divmmc);
     }
 
     #[test]
