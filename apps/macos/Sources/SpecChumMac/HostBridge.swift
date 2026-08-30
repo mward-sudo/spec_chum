@@ -595,6 +595,17 @@ final class HostBridge: ObservableObject {
             refreshRomSetupQuiet()
             maybeAutoPresentRomSetup()
         }
+        reclaimKeyboardFocus()
+    }
+
+    /// Return keyboard focus to the Spectrum / living-room NSView after chrome interaction.
+    func reclaimKeyboardFocus() {
+        if livingRoomMode {
+            livingRoomPresentView?.claimFocus()
+        } else {
+            spectrumPresentView?.claimFocus()
+        }
+        FocusSpectrumView.postDelayed()
     }
 
     /// Open ROM setup manually or after a built-in model pick when files are missing.
@@ -698,7 +709,7 @@ final class HostBridge: ObservableObject {
         }
         showRomSetup = false
         romSetupError = nil
-        FocusSpectrumView.postDelayed()
+        reclaimKeyboardFocus()
     }
 
     func selectCustomConfiguration(id: String) {

@@ -30,7 +30,7 @@ struct ContentView: View {
         .onAppear {
             activateSpecChum()
             host.ensureAudioOutput()
-            FocusSpectrumView.post()
+            FocusSpectrumView.postDelayed()
         }
         .sheet(isPresented: $host.showInspector) {
             DebugInspectorView(host: host)
@@ -62,6 +62,9 @@ struct ContentView: View {
             if !showing {
                 FocusSpectrumView.postDelayed()
             }
+        }
+        .onChange(of: host.livingRoomMode) { _, _ in
+            FocusSpectrumView.postDelayed()
         }
     }
 
@@ -423,12 +426,22 @@ enum FocusSpectrumView {
         NotificationCenter.default.post(name: name, object: nil)
     }
 
-    /// Reclaim focus after SwiftUI chrome (toolbar menus, sheets) closes on the next run loop.
+    /// Reclaim focus after SwiftUI chrome (toolbar menus, sheets) closes.
+    /// Retries across run loops — Machine picker menus often steal first responder briefly.
     static func postDelayed() {
         post()
-        DispatchQueue.main.async {
-            post()
+        DispatchQueue.main.async { post() }
+        for delay in [0.05, 0.15, 0.35] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                post()
+            }
         }
+    }
+
+    /// While an AppKit menu is tracking, arrow keys must navigate the menu — not the Spectrum.
+    static var isMenuTracking: Bool {
+        guard let menu = NSApp.mainMenu else { return false }
+        return menu.items.contains(where: { $0.submenu?.isTracking == true })
     }
 }
 
