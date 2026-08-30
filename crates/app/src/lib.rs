@@ -172,68 +172,32 @@ impl EmulatorSession {
 
     pub fn try_autoload_rom(&mut self) {
         let root = Self::workspace_root();
-        match self.model {
-            Model::Spectrum48 => {
-                let rom48 = root.join("roms/spec48.rom");
-                if let Ok(data) = std::fs::read(&rom48) {
-                    match Machine::new_48k(&data) {
-                        Ok(m) => {
-                            self.machine = Some(m);
-                            self.status = format!("Loaded {}", rom48.display());
-                        }
-                        Err(e) => self.status = e,
+        let model = self.model;
+        if let Some(path) = machine::resolve_rom_path_in(model, std::slice::from_ref(&root)) {
+            if let Ok(data) = std::fs::read(&path) {
+                let built = match model {
+                    Model::Spectrum16K => Machine::new_16k(&data),
+                    Model::Spectrum48 => Machine::new_48k(&data),
+                    Model::Spectrum128 => Machine::new_128k(&data),
+                    Model::SpectrumPlus2 => Machine::new_plus2(&data),
+                    Model::SpectrumPlus2A => Machine::new_plus2a(&data),
+                    Model::SpectrumPlus3 => Machine::new_plus3(&data),
+                };
+                match built {
+                    Ok(m) => {
+                        self.machine = Some(m);
+                        self.status = format!("Loaded {}", path.display());
                     }
-                } else {
-                    self.status =
-                        format!("Missing {}. Run ./scripts/fetch_roms.sh", rom48.display());
+                    Err(e) => self.status = e,
                 }
-            }
-            Model::Spectrum128 => {
-                let rom128 = root.join("roms/128/spec128uk.rom");
-                if let Ok(data) = std::fs::read(&rom128) {
-                    match Machine::new_128k(&data) {
-                        Ok(m) => {
-                            self.machine = Some(m);
-                            self.status = format!("Loaded {}", rom128.display());
-                        }
-                        Err(e) => self.status = e,
-                    }
-                } else {
-                    self.status =
-                        format!("Missing {}. Run ./scripts/fetch_roms.sh", rom128.display());
-                }
-            }
-            Model::SpectrumPlus3 => {
-                let rom = root.join("roms/plus3/plus3.rom");
-                if let Ok(data) = std::fs::read(&rom) {
-                    match Machine::new_plus3(&data) {
-                        Ok(m) => {
-                            self.machine = Some(m);
-                            self.status = format!("Loaded {}", rom.display());
-                        }
-                        Err(e) => self.status = e,
-                    }
-                } else {
-                    self.status = "Missing +3 ROM. Run ./scripts/fetch_roms.sh".to_string();
-                }
-            }
-            Model::SpectrumPlus2A => {
-                let rom = root.join("roms/plus2a/plus2a.rom");
-                let rom_alt = root.join("roms/plus3/plus3.rom");
-                let path = if rom.exists() { rom } else { rom_alt };
-                if let Ok(data) = std::fs::read(&path) {
-                    match Machine::new_plus2a(&data) {
-                        Ok(m) => {
-                            self.machine = Some(m);
-                            self.status = format!("Loaded {}", path.display());
-                        }
-                        Err(e) => self.status = e,
-                    }
-                } else {
-                    self.status = "Missing +2A ROM. Run ./scripts/fetch_roms.sh".to_string();
-                }
+                return;
             }
         }
+        self.status = format!(
+            "Missing ROM for {} — {}",
+            machine::model_title(model),
+            machine::unavailable_reason(model)
+        );
     }
 
     pub fn load_snapshot(&mut self, path: &Path) {
@@ -456,7 +420,7 @@ impl EmulatorSession {
         // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
         self.pending_instant_play = pending_play;
         self.key_script = Some(match self.model {
-            Model::Spectrum48 => {
+            Model::Spectrum16K | Model::Spectrum48 => {
                 if with_code {
                     KeyScript::load_quotes_code_48k()
                 } else {
@@ -464,7 +428,7 @@ impl EmulatorSession {
                 }
             }
             Model::SpectrumPlus2A => KeyScript::load_quotes_plus2a(with_code),
-            Model::Spectrum128 | Model::SpectrumPlus3 => {
+            Model::Spectrum128 | Model::SpectrumPlus2 | Model::SpectrumPlus3 => {
                 KeyScript::load_quotes_128_or_plus3(with_code)
             }
         });
@@ -472,10 +436,10 @@ impl EmulatorSession {
             return;
         }
         self.status = match (self.model, with_code) {
-            (Model::Spectrum48, true) => {
+            (Model::Spectrum16K | Model::Spectrum48, true) => {
                 "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
             }
-            (Model::Spectrum48, false) => {
+            (Model::Spectrum16K | Model::Spectrum48, false) => {
                 "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
             }
             (Model::SpectrumPlus2A, false) => {
@@ -956,7 +920,10 @@ impl SpecChumApp {
             m.set_tape_load_options(prefs.tape_load_options());
             if matches!(
                 session.model,
-                Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
+                Model::Spectrum128
+                    | Model::SpectrumPlus2
+                    | Model::SpectrumPlus2A
+                    | Model::SpectrumPlus3
             ) {
                 m.set_ay_stereo_mode(prefs.ay_stereo.to_mode());
             }
@@ -1031,7 +998,10 @@ impl SpecChumApp {
             m.set_tape_load_options(self.prefs.tape_load_options());
             if matches!(
                 self.session.model,
-                Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
+                Model::Spectrum128
+                    | Model::SpectrumPlus2
+                    | Model::SpectrumPlus2A
+                    | Model::SpectrumPlus3
             ) {
                 m.set_ay_stereo_mode(self.prefs.ay_stereo.to_mode());
             }
@@ -1193,49 +1163,28 @@ impl SpecChumApp {
                         }
                     });
                     ui.menu_button("Machine", |ui| {
-                        if ui
-                            .radio_value(&mut self.session.model, Model::Spectrum48, "Spectrum 48K")
-                            .clicked()
-                        {
-                            self.session.try_autoload_rom();
-                            self.apply_restored_machine_options();
-                            self.mark_prefs_dirty();
-                        }
-                        if ui
-                            .radio_value(
-                                &mut self.session.model,
-                                Model::Spectrum128,
-                                "Spectrum 128K",
-                            )
-                            .clicked()
-                        {
-                            self.session.try_autoload_rom();
-                            self.apply_restored_machine_options();
-                            self.mark_prefs_dirty();
-                        }
-                        if ui
-                            .radio_value(
-                                &mut self.session.model,
-                                Model::SpectrumPlus2A,
-                                "Spectrum +2A",
-                            )
-                            .clicked()
-                        {
-                            self.session.try_autoload_rom();
-                            self.apply_restored_machine_options();
-                            self.mark_prefs_dirty();
-                        }
-                        if ui
-                            .radio_value(
-                                &mut self.session.model,
-                                Model::SpectrumPlus3,
-                                "Spectrum +3",
-                            )
-                            .clicked()
-                        {
-                            self.session.try_autoload_rom();
-                            self.apply_restored_machine_options();
-                            self.mark_prefs_dirty();
+                        let root = EmulatorSession::workspace_root();
+                        for pick in machine::ALL_MODELS {
+                            let available =
+                                machine::rom_available_in(pick, std::slice::from_ref(&root));
+                            let title = machine::model_title(pick);
+                            let mut picked = ui
+                                .add_enabled_ui(available, |ui| {
+                                    ui.radio_value(&mut self.session.model, pick, title)
+                                })
+                                .inner;
+                            if !available {
+                                picked = picked.on_hover_text(format!(
+                                    "{} — {}",
+                                    title,
+                                    machine::unavailable_reason(pick)
+                                ));
+                            }
+                            if picked.clicked() {
+                                self.session.try_autoload_rom();
+                                self.apply_restored_machine_options();
+                                self.mark_prefs_dirty();
+                            }
                         }
                         if ui.button("Reset").clicked() {
                             if let Some(m) = self.session.machine.as_mut() {
@@ -1310,7 +1259,10 @@ impl SpecChumApp {
                         }
                         if matches!(
                             self.session.model,
-                            Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3
+                            Model::Spectrum128
+                                | Model::SpectrumPlus2
+                                | Model::SpectrumPlus2A
+                                | Model::SpectrumPlus3
                         ) {
                             ui.separator();
                             ui.label("AY stereo");
@@ -1367,7 +1319,7 @@ impl SpecChumApp {
                         ui.label("Peripherals (partial where noted)");
                         ui.separator();
 
-                        if model == Model::Spectrum48 {
+                        if matches!(model, Model::Spectrum16K | Model::Spectrum48) {
                             if ui.button("Attach Multiface 1 ROM…").clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("Multiface ROM", &["rom", "bin"])
@@ -1388,11 +1340,17 @@ impl SpecChumApp {
                                 ui.label("Multiface: attached");
                             }
                         } else {
-                            ui.label("Multiface 1: 48K only");
+                            ui.label("Multiface 1: 48K / 16K only");
                         }
 
                         ui.separator();
-                        if matches!(model, Model::Spectrum48 | Model::Spectrum128) {
+                        if matches!(
+                            model,
+                            Model::Spectrum16K
+                                | Model::Spectrum48
+                                | Model::Spectrum128
+                                | Model::SpectrumPlus2
+                        ) {
                             if ui.button("Attach DivMMC").clicked() {
                                 self.session.attach_divmmc_stub();
                                 ui.close_menu();

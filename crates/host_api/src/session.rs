@@ -14,6 +14,10 @@ pub enum ModelId {
     SpectrumPlus3 = 2,
     /// Amstrad +2A (no disk interface). Added after Plus3; keep numeric id stable.
     SpectrumPlus2A = 3,
+    /// Amstrad grey +2 (#188). Added after +2A.
+    SpectrumPlus2 = 4,
+    /// 16 KiB RAM Spectrum (#188).
+    Spectrum16K = 5,
 }
 
 impl ModelId {
@@ -24,6 +28,8 @@ impl ModelId {
             1 => Some(Self::Spectrum128),
             2 => Some(Self::SpectrumPlus3),
             3 => Some(Self::SpectrumPlus2A),
+            4 => Some(Self::SpectrumPlus2),
+            5 => Some(Self::Spectrum16K),
             _ => None,
         }
     }
@@ -31,11 +37,33 @@ impl ModelId {
     #[must_use]
     pub fn to_model(self) -> Model {
         match self {
+            Self::Spectrum16K => Model::Spectrum16K,
             Self::Spectrum48 => Model::Spectrum48,
             Self::Spectrum128 => Model::Spectrum128,
+            Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
         }
+    }
+
+    /// All models in UI order.
+    pub const ALL: [Self; 6] = [
+        Self::Spectrum16K,
+        Self::Spectrum48,
+        Self::Spectrum128,
+        Self::SpectrumPlus2,
+        Self::SpectrumPlus2A,
+        Self::SpectrumPlus3,
+    ];
+
+    #[must_use]
+    pub fn rom_available(self) -> bool {
+        machine::rom_available(self.to_model())
+    }
+
+    #[must_use]
+    pub fn unavailable_reason(self) -> &'static str {
+        machine::unavailable_reason(self.to_model())
     }
 }
 
@@ -214,8 +242,10 @@ impl HostSession {
     /// Load ROM bytes for the current model.
     pub fn load_rom_bytes(&mut self, rom: &[u8]) -> Result<(), HostError> {
         let machine = match self.model {
+            ModelId::Spectrum16K => Machine::new_16k(rom),
             ModelId::Spectrum48 => Machine::new_48k(rom),
             ModelId::Spectrum128 => Machine::new_128k(rom),
+            ModelId::SpectrumPlus2 => Machine::new_plus2(rom),
             ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
             ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
         }
@@ -406,22 +436,12 @@ impl HostSession {
 
     /// Best-effort ROM load for the current model (workspace / `SPEC_CHUM_ROOT` / cwd).
     fn try_autoload_rom(&mut self) {
-        let candidates: &[&str] = match self.model {
-            ModelId::Spectrum48 => &["roms/spec48.rom"],
-            ModelId::Spectrum128 => &["roms/128/spec128uk.rom"],
-            ModelId::SpectrumPlus3 => &["roms/plus3/plus3.rom"],
-            ModelId::SpectrumPlus2A => &["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"],
-        };
-        for root in rom_search_roots() {
-            for rel in candidates {
-                let path = root.join(rel);
-                if path.is_file() {
-                    if let Ok(data) = std::fs::read(&path) {
-                        if self.load_rom_bytes(&data).is_ok() {
-                            self.status = format!("Loaded {}", path.display());
-                            return;
-                        }
-                    }
+        let model = self.model.to_model();
+        let roots = rom_search_roots();
+        if let Some(path) = machine::resolve_rom_path_in(model, &roots) {
+            if let Ok(data) = std::fs::read(&path) {
+                if self.load_rom_bytes(&data).is_ok() {
+                    self.status = format!("Loaded {}", path.display());
                 }
             }
         }
@@ -818,8 +838,9 @@ impl HostSession {
         }
         let audio = m.run_frame();
         let frame_t = match m.model() {
-            machine::Model::Spectrum48 => 69_888,
+            machine::Model::Spectrum16K | machine::Model::Spectrum48 => 69_888,
             machine::Model::Spectrum128
+            | machine::Model::SpectrumPlus2
             | machine::Model::SpectrumPlus2A
             | machine::Model::SpectrumPlus3 => 70_908,
         };
@@ -1209,8 +1230,12 @@ mod tests {
         assert_eq!(ModelId::from_u32(1), Some(ModelId::Spectrum128));
         assert_eq!(ModelId::from_u32(2), Some(ModelId::SpectrumPlus3));
         assert_eq!(ModelId::from_u32(3), Some(ModelId::SpectrumPlus2A));
+        assert_eq!(ModelId::from_u32(4), Some(ModelId::SpectrumPlus2));
+        assert_eq!(ModelId::from_u32(5), Some(ModelId::Spectrum16K));
         assert_eq!(ModelId::from_u32(9), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
+        assert_eq!(ModelId::SpectrumPlus2.to_model(), Model::SpectrumPlus2);
+        assert_eq!(ModelId::Spectrum16K.to_model(), Model::Spectrum16K);
         assert_eq!(ModelId::SpectrumPlus2A.to_model(), Model::SpectrumPlus2A);
     }
 
@@ -1218,8 +1243,10 @@ mod tests {
     fn select_model_keeps_session_model_in_sync() {
         let mut s = HostSession::new(ModelId::Spectrum48, true);
         for model in [
+            ModelId::Spectrum16K,
             ModelId::Spectrum48,
             ModelId::Spectrum128,
+            ModelId::SpectrumPlus2,
             ModelId::SpectrumPlus3,
             ModelId::SpectrumPlus2A,
             ModelId::Spectrum48,

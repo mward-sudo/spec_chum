@@ -98,6 +98,8 @@ impl Keyboard {
 pub struct Bus48 {
     pub rom: [u8; 16384],
     pub ram: [u8; 49152],
+    /// When true, only 16 KiB RAM is mapped at `0x4000..0x8000` (#188).
+    pub ram16k: bool,
     pub keyboard: Keyboard,
     pub ear: bool,
     pub mic: bool,
@@ -132,6 +134,7 @@ impl Bus48 {
         Self {
             rom: [0; 16384],
             ram: [0; 49152],
+            ram16k: false,
             keyboard: Keyboard::new(),
             ear: false,
             mic: false,
@@ -236,6 +239,8 @@ impl Bus48 {
         }
         if addr < 0x4000 {
             self.rom[addr as usize]
+        } else if self.ram16k && addr >= 0x8000 {
+            0xFF
         } else {
             self.ram[addr as usize - 0x4000]
         }
@@ -253,7 +258,7 @@ impl Bus48 {
                 return;
             }
         }
-        if addr >= 0x4000 {
+        if addr >= 0x4000 && !(self.ram16k && addr >= 0x8000) {
             self.ram[addr as usize - 0x4000] = value;
         }
     }
@@ -729,6 +734,21 @@ mod tests {
         assert_eq!(b.read(0x4000), 0x55);
         b.write(0x0000, 0x11);
         assert_eq!(b.read(0), 0xAA, "ROM not writable");
+    }
+
+    #[test]
+    fn ram16k_maps_only_low_ram() {
+        let mut b = Bus48::new();
+        b.ram16k = true;
+        b.write(0x4000, 0x12);
+        b.write(0x7fff, 0x34);
+        b.write(0x8000, 0x56);
+        assert_eq!(b.read(0x4000), 0x12);
+        assert_eq!(b.read(0x7fff), 0x34);
+        assert_eq!(b.read(0x8000), 0xFF, "16K RAM does not decode above 0x7FFF");
+        assert_eq!(b.ram[0], 0x12);
+        assert_eq!(b.ram[0x3fff], 0x34);
+        assert_eq!(b.ram[0x4000], 0, "writes above 16K RAM are ignored");
     }
 
     #[test]

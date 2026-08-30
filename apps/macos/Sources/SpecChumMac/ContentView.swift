@@ -182,9 +182,8 @@ struct ContentView: View {
         // Trailing cluster — separate placements so `.unified` does not cram/wrap one group.
         ToolbarItem(placement: .status) {
             Picker("Model", selection: $host.model) {
-                // Display order 48K → 128K → +2A → +3 (ABI raw values stay unchanged).
-                ForEach([HostBridge.Model.spectrum48, .spectrum128, .spectrumPlus2A, .spectrumPlus3]) { model in
-                    Text(model.title).tag(model)
+                ForEach(HostBridge.Model.pickerOrder) { model in
+                    Text(model.title).tag(model).disabled(!model.romAvailable)
                 }
             }
             .pickerStyle(.menu)
@@ -195,7 +194,7 @@ struct ContentView: View {
                 alignment: .leading
             )
             .fixedSize(horizontal: true, vertical: false)
-            .help("Machine model (48K / 128K / +2A / +3)")
+            .help("Machine model (16K / 48K / 128K / +2 / +2A / +3). Greyed when ROM missing.")
             .accessibilityLabel("Machine model")
             .accessibilityValue(host.model.title)
             .onChange(of: host.model) { _, _ in

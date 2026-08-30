@@ -13,7 +13,9 @@ enum {
     SC_MODEL_48K = 0,
     SC_MODEL_128K = 1,
     SC_MODEL_PLUS3 = 2,
-    SC_MODEL_PLUS2A = 3
+    SC_MODEL_PLUS2A = 3,
+    SC_MODEL_PLUS2 = 4,
+    SC_MODEL_16K = 5
 };
 
 void *sc_create(unsigned int model, int with_border);
@@ -22,6 +24,8 @@ void sc_destroy(void *handle);
 int sc_set_model(void *handle, unsigned int model);
 /* Active model id (SC_MODEL_*). Returns UINT_MAX on null handle. */
 unsigned int sc_get_model(void *handle);
+/* 1 when default ROM for model exists under workspace search roots (#188). */
+int sc_model_rom_available(unsigned int model);
 int sc_load_rom(void *handle, const char *path);
 int sc_load_rom_bytes(void *handle, const uint8_t *data, size_t len);
 int sc_reset(void *handle);

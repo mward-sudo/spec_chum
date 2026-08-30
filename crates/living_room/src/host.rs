@@ -18,12 +18,7 @@ const FRAME_PERIOD: Duration = Duration::from_millis(20);
 /// Short label for overlay / status (matches egui Machine menu naming).
 #[must_use]
 pub fn model_label(model: ModelId) -> &'static str {
-    match model {
-        ModelId::Spectrum48 => "48K",
-        ModelId::Spectrum128 => "128K",
-        ModelId::SpectrumPlus2A => "+2A",
-        ModelId::SpectrumPlus3 => "+3",
-    }
+    machine::model_label(model.to_model())
 }
 
 #[derive(Resource)]
@@ -263,8 +258,10 @@ mod tests {
             paused_overlay: false,
         };
         for model in [
+            ModelId::Spectrum16K,
             ModelId::Spectrum48,
             ModelId::Spectrum128,
+            ModelId::SpectrumPlus2,
             ModelId::SpectrumPlus3,
         ] {
             host.select_model(model);
@@ -279,8 +276,10 @@ mod tests {
 
     #[test]
     fn model_labels_match_menu_names() {
+        assert_eq!(model_label(ModelId::Spectrum16K), "16K");
         assert_eq!(model_label(ModelId::Spectrum48), "48K");
         assert_eq!(model_label(ModelId::Spectrum128), "128K");
+        assert_eq!(model_label(ModelId::SpectrumPlus2), "+2");
         assert_eq!(model_label(ModelId::SpectrumPlus2A), "+2A");
         assert_eq!(model_label(ModelId::SpectrumPlus3), "+3");
     }

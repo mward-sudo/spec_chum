@@ -19,8 +19,10 @@ enum ChromeAction {
     Mute,
     Pause,
     Reset,
+    Model16K,
     Model48,
     Model128,
+    ModelPlus2,
     ModelPlus3,
 }
 
@@ -99,8 +101,10 @@ fn setup_ui(mut commands: Commands) {
                 chrome_button(bar, "Pause", ChromeAction::Pause);
                 chrome_button(bar, "Reset", ChromeAction::Reset);
                 spacer(bar);
+                chrome_button(bar, "16K", ChromeAction::Model16K);
                 chrome_button(bar, "48K", ChromeAction::Model48);
                 chrome_button(bar, "128K", ChromeAction::Model128);
+                chrome_button(bar, "+2", ChromeAction::ModelPlus2);
                 chrome_button(bar, "+3", ChromeAction::ModelPlus3);
             });
 
@@ -229,17 +233,20 @@ fn chrome_buttons(
                     }
                     ChromeAction::Pause => toggle_pause(&mut host),
                     ChromeAction::Reset => host.reset(),
+                    ChromeAction::Model16K => {
+                        select_model_if_rom(&mut host, ModelId::Spectrum16K);
+                    }
                     ChromeAction::Model48 => {
-                        host.select_model(ModelId::Spectrum48);
-                        persist_living_room_model(ModelId::Spectrum48);
+                        select_model_if_rom(&mut host, ModelId::Spectrum48);
                     }
                     ChromeAction::Model128 => {
-                        host.select_model(ModelId::Spectrum128);
-                        persist_living_room_model(ModelId::Spectrum128);
+                        select_model_if_rom(&mut host, ModelId::Spectrum128);
+                    }
+                    ChromeAction::ModelPlus2 => {
+                        select_model_if_rom(&mut host, ModelId::SpectrumPlus2);
                     }
                     ChromeAction::ModelPlus3 => {
-                        host.select_model(ModelId::SpectrumPlus3);
-                        persist_living_room_model(ModelId::SpectrumPlus3);
+                        select_model_if_rom(&mut host, ModelId::SpectrumPlus3);
                     }
                 }
             }
@@ -266,6 +273,15 @@ fn persist_living_room_model(model: ModelId) {
     let _ = spec_chum_host::update_prefs(&path, |prefs| {
         prefs.set_model_from_id(model);
     });
+}
+
+fn select_model_if_rom(host: &mut EmulatorHost, model: ModelId) {
+    if !model.rom_available() {
+        host.status = format!("{} — {}", model_label(model), model.unavailable_reason());
+        return;
+    }
+    host.select_model(model);
+    persist_living_room_model(model);
 }
 
 /// ⌘ shortcuts mirroring SpecChumMac — never bare letters (those are Spectrum).
