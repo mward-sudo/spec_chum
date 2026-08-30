@@ -310,8 +310,10 @@ impl Inspect {
     pub fn to_json(&self) -> String {
         let r = &self.regs;
         let model = match self.model {
+            Model::Spectrum16K => "16k",
             Model::Spectrum48 => "48k",
             Model::Spectrum128 => "128k",
+            Model::SpectrumPlus2 => "plus2",
             Model::SpectrumPlus2A => "plus2a",
             Model::SpectrumPlus3 => "plus3",
         };

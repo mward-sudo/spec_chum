@@ -77,13 +77,22 @@ final class HostBridge: ObservableObject {
         case spectrum128 = 1
         case spectrumPlus3 = 2
         case spectrumPlus2A = 3
+        case spectrumPlus2 = 4
+        case spectrum16K = 5
+
+        /// UI order (matches egui Machine menu).
+        static let pickerOrder: [Model] = [
+            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3,
+        ]
 
         var id: UInt32 { rawValue }
 
         var title: String {
             switch self {
+            case .spectrum16K: "Spectrum 16K"
             case .spectrum48: "Spectrum 48K"
             case .spectrum128: "Spectrum 128K"
+            case .spectrumPlus2: "Spectrum +2 (grey)"
             case .spectrumPlus3: "Spectrum +3"
             case .spectrumPlus2A: "Spectrum +2A"
             }
@@ -92,23 +101,29 @@ final class HostBridge: ObservableObject {
         /// Short label for window titles.
         var shortTitle: String {
             switch self {
+            case .spectrum16K: "16K"
             case .spectrum48: "48K"
             case .spectrum128: "128K"
+            case .spectrumPlus2: "+2"
             case .spectrumPlus3: "+3"
             case .spectrumPlus2A: "+2A"
             }
         }
 
-        /// Toolbar machine picker: fit the longest `title` ("Spectrum 128K") plus chevron.
-        /// A 64pt cap clips the selected label so the control looks empty on launch (#184).
-        static let toolbarPickerMinWidth: CGFloat = 148
-        static let toolbarPickerMaxWidth: CGFloat = 180
+        /// Default ROM from fetch script present (#188).
+        var romAvailable: Bool { sc_model_rom_available(rawValue) != 0 }
 
         /// +3 has floppy; toolbar/File Open may include `.dsk`.
         var supportsDisk: Bool { self == .spectrumPlus3 }
 
-        /// Beta Disk / TR-DOS on 48K and 128K (not +2A/+3).
-        var supportsBeta: Bool { self == .spectrum48 || self == .spectrum128 }
+        /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
+        var supportsBeta: Bool {
+            self == .spectrum16K || self == .spectrum48 || self == .spectrum128 || self == .spectrumPlus2
+        }
+
+        /// Toolbar machine picker: fit the longest `title` ("Spectrum 128K") plus chevron.
+        static let toolbarPickerMinWidth: CGFloat = 148
+        static let toolbarPickerMaxWidth: CGFloat = 196
     }
 
     @Published private(set) var status: String = "Starting…"
@@ -1316,7 +1331,7 @@ final class HostBridge: ObservableObject {
     private func beginTypeLoadQuotes(withCode: Bool, pendingPlay: Bool) {
         pendingInstantPlay = pendingPlay
         switch model {
-        case .spectrum48:
+        case .spectrum16K, .spectrum48:
             keyScript = LoadKeyScript.loadQuotes48k(withCode: withCode)
             status = withCode
                 ? "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
@@ -1326,7 +1341,7 @@ final class HostBridge: ObservableObject {
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
                 : "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan"
-        case .spectrum128, .spectrumPlus3:
+        case .spectrum128, .spectrumPlus2, .spectrumPlus3:
             keyScript = LoadKeyScript.loadQuotes128OrPlus3(withCode: withCode)
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
@@ -1854,10 +1869,12 @@ final class HostBridge: ObservableObject {
     func tryAutoloadRom() {
         let candidates: [String] = {
             switch model {
-            case .spectrum48:
+            case .spectrum16K, .spectrum48:
                 return ["roms/spec48.rom"]
             case .spectrum128:
                 return ["roms/128/spec128uk.rom"]
+            case .spectrumPlus2:
+                return ["roms/plus2/plus2uk.rom"]
             case .spectrumPlus3:
                 return ["roms/plus3/plus3.rom"]
             case .spectrumPlus2A:

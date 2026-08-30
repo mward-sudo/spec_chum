@@ -106,18 +106,16 @@ fn parse_u16(s: &str) -> Result<u16> {
 }
 
 fn default_rom(model: Model) -> PathBuf {
-    match model {
-        Model::Spectrum48 => PathBuf::from("roms/spec48.rom"),
-        Model::Spectrum128 => PathBuf::from("roms/128/spec128uk.rom"),
-        Model::SpectrumPlus2A => PathBuf::from("roms/plus2a/plus2a.rom"),
-        Model::SpectrumPlus3 => PathBuf::from("roms/plus3/plus3.rom"),
-    }
+    machine::resolve_rom_path(model)
+        .unwrap_or_else(|| PathBuf::from(machine::rom_candidates(model)[0]))
 }
 
 fn parse_model(s: &str) -> Result<Model> {
     Ok(match s.to_ascii_lowercase().as_str() {
+        "16" | "16k" => Model::Spectrum16K,
         "48" | "48k" => Model::Spectrum48,
         "128" | "128k" => Model::Spectrum128,
+        "plus2" | "+2" => Model::SpectrumPlus2,
         "plus2a" | "+2a" => Model::SpectrumPlus2A,
         "plus3" | "+3" => Model::SpectrumPlus3,
         other => bail!("unknown model {other}"),
@@ -129,8 +127,10 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
     let rom_path = cli.rom.clone().unwrap_or_else(|| default_rom(model));
     let rom = std::fs::read(&rom_path).with_context(|| format!("ROM {}", rom_path.display()))?;
     let mut m = match model {
+        Model::Spectrum16K => Machine::new_16k(&rom),
         Model::Spectrum48 => Machine::new_48k(&rom),
         Model::Spectrum128 => Machine::new_128k(&rom),
+        Model::SpectrumPlus2 => Machine::new_plus2(&rom),
         Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
         Model::SpectrumPlus3 => Machine::new_plus3(&rom),
     }
@@ -206,7 +206,10 @@ fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
                         Model::SpectrumPlus3 => Machine::new_plus3(&rom),
                         Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
                         Model::Spectrum128 => Machine::new_128k(&rom),
-                        Model::Spectrum48 => unreachable!("128-family only"),
+                        Model::SpectrumPlus2 => Machine::new_plus2(&rom),
+                        Model::Spectrum48 | Model::Spectrum16K => {
+                            unreachable!("128-family only")
+                        }
                     }
                     .map_err(|e| anyhow::anyhow!(e))?;
                 }

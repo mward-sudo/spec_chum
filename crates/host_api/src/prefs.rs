@@ -182,7 +182,9 @@ impl UiPreferences {
 pub enum PrefModel {
     #[default]
     Spectrum48,
+    Spectrum16K,
     Spectrum128,
+    SpectrumPlus2,
     SpectrumPlus2A,
     SpectrumPlus3,
 }
@@ -191,8 +193,10 @@ impl PrefModel {
     #[must_use]
     pub fn from_model(m: Model) -> Self {
         match m {
+            Model::Spectrum16K => Self::Spectrum16K,
             Model::Spectrum48 => Self::Spectrum48,
             Model::Spectrum128 => Self::Spectrum128,
+            Model::SpectrumPlus2 => Self::SpectrumPlus2,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
         }
@@ -206,8 +210,10 @@ impl PrefModel {
     #[must_use]
     pub fn to_model(self) -> Model {
         match self {
+            Self::Spectrum16K => Model::Spectrum16K,
             Self::Spectrum48 => Model::Spectrum48,
             Self::Spectrum128 => Model::Spectrum128,
+            Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
         }
@@ -216,11 +222,18 @@ impl PrefModel {
     #[must_use]
     pub fn to_model_id(self) -> ModelId {
         match self {
+            Self::Spectrum16K => ModelId::Spectrum16K,
             Self::Spectrum48 => ModelId::Spectrum48,
             Self::Spectrum128 => ModelId::Spectrum128,
+            Self::SpectrumPlus2 => ModelId::SpectrumPlus2,
             Self::SpectrumPlus2A => ModelId::SpectrumPlus2A,
             Self::SpectrumPlus3 => ModelId::SpectrumPlus3,
         }
+    }
+
+    #[must_use]
+    pub fn rom_available(self) -> bool {
+        self.to_model_id().rom_available()
     }
 }
 

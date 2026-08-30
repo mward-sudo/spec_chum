@@ -12,10 +12,15 @@ mod system_tests;
 mod debugger;
 mod inspect;
 mod joystick;
+mod rom;
 
 pub use debugger::{BreakReason, Debugger, Watch};
 pub use inspect::{Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
+pub use rom::{
+    model_label, model_title, read_rom, resolve_rom_path, resolve_rom_path_in, rom_available,
+    rom_available_in, rom_candidates, unavailable_reason, ALL_MODELS,
+};
 
 use std::cell::Cell;
 
@@ -278,8 +283,12 @@ pub struct RzxPlayer {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Model {
+    /// 16 KiB RAM, same ROM and 48K ULA timing as 48K (#188).
+    Spectrum16K,
     Spectrum48,
     Spectrum128,
+    /// Amstrad grey +2 (128K hardware, +2 ROM / menu).
+    SpectrumPlus2,
     /// Amstrad +2A (gate array `1FFD`, no disk interface — menu Loader is tape).
     SpectrumPlus2A,
     /// Amstrad +3 (same gate array with µPD765 — menu Loader is +3DOS disk).
@@ -291,6 +300,18 @@ impl Model {
     #[must_use]
     pub fn is_amstrad_plus(self) -> bool {
         matches!(self, Self::SpectrumPlus2A | Self::SpectrumPlus3)
+    }
+
+    /// 128K-class bus (Sinclair 128 / grey +2).
+    #[must_use]
+    pub fn is_128k_class(self) -> bool {
+        matches!(self, Self::Spectrum128 | Self::SpectrumPlus2)
+    }
+
+    /// 48K-class bus (16K / 48K).
+    #[must_use]
+    pub fn is_48k_class(self) -> bool {
+        matches!(self, Self::Spectrum16K | Self::Spectrum48)
     }
 }
 
@@ -602,6 +623,8 @@ pub enum Machine {
         tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
         debugger: Debugger,
+        /// Grey +2 uses the same 128K core with a distinct ROM / menu.
+        plus2_rom: bool,
     },
     SpecPlus3 {
         cpu: Cpu,
@@ -654,6 +677,23 @@ impl Machine {
         })
     }
 
+    /// Spectrum 16K: 48K ULA / bus timing, 16 KiB RAM only (#188).
+    pub fn new_16k(rom: &[u8]) -> Result<Self, String> {
+        let mut bus = Bus48::new();
+        bus.ram16k = true;
+        bus.load_rom(rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 5 });
+        Ok(Self::Spec48 {
+            cpu: Cpu::new(),
+            bus: Box::new(bus),
+            ula: Ula48::new(),
+            tape: None,
+            tape_opts: TapeLoadOptions::default(),
+            rzx: None,
+            debugger: Debugger::default(),
+        })
+    }
+
     pub fn new_128k(rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus128::new();
         bus.load_rom128(rom)?;
@@ -666,6 +706,24 @@ impl Machine {
             tape_opts: TapeLoadOptions::default(),
             rzx: None,
             debugger: Debugger::default(),
+            plus2_rom: false,
+        })
+    }
+
+    /// Amstrad grey +2: 128K hardware with `roms/plus2/` ROM (#188).
+    pub fn new_plus2(rom: &[u8]) -> Result<Self, String> {
+        let mut bus = Bus128::new();
+        bus.load_rom128(rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 4 });
+        Ok(Self::Spec128 {
+            cpu: Cpu::new(),
+            bus: Box::new(bus),
+            ula: Ula48::new(),
+            tape: None,
+            tape_opts: TapeLoadOptions::default(),
+            rzx: None,
+            debugger: Debugger::default(),
+            plus2_rom: true,
         })
     }
 
@@ -697,7 +755,16 @@ impl Machine {
     #[must_use]
     pub fn model(&self) -> Model {
         match self {
-            Self::Spec48 { .. } => Model::Spectrum48,
+            Self::Spec48 { bus, .. } => {
+                if bus.ram16k {
+                    Model::Spectrum16K
+                } else {
+                    Model::Spectrum48
+                }
+            }
+            Self::Spec128 {
+                plus2_rom: true, ..
+            } => Model::SpectrumPlus2,
             Self::Spec128 { .. } => Model::Spectrum128,
             Self::SpecPlus3 { bus, .. } => {
                 if bus.disk_interface {
@@ -2891,11 +2958,17 @@ impl Machine {
         self.hold_keys(&[], 10);
     }
 
-    /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +2A Loader / +3 48 BASIC).
+    /// Grey +2 menu matches 128K (Calculator → 48 BASIC path).
+    pub fn type_load_quotes_plus2(&mut self, with_code: bool) {
+        self.type_load_quotes_128k(with_code);
+    }
+
+    /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +2 / +2A Loader / +3 48 BASIC).
     pub fn type_load_quotes(&mut self, with_code: bool) {
         match self.model() {
-            Model::Spectrum48 => self.type_load_quotes_48k(with_code),
+            Model::Spectrum16K | Model::Spectrum48 => self.type_load_quotes_48k(with_code),
             Model::Spectrum128 => self.type_load_quotes_128k(with_code),
+            Model::SpectrumPlus2 => self.type_load_quotes_plus2(with_code),
             Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
             Model::SpectrumPlus3 => self.type_load_quotes_plus3(with_code),
         }
@@ -4205,6 +4278,35 @@ mod tests {
         std::fs::read(p).ok()
     }
 
+    fn rom_plus2() -> Option<Vec<u8>> {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus2/plus2uk.rom");
+        std::fs::read(p).ok()
+    }
+
+    #[test]
+    fn model_16k_limits_ram_to_16k() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut m = Machine::new_16k(&rom).unwrap();
+        assert_eq!(m.model(), Model::Spectrum16K);
+        m.write_mem(0x4000, 0xAB);
+        m.write_mem(0x8000, 0xCD);
+        assert_eq!(m.read_mem(0x4000), 0xAB);
+        assert_eq!(m.read_mem(0x8000), 0xFF);
+    }
+
+    #[test]
+    fn model_plus2_tags_grey_plus2() {
+        let Some(rom) = rom_plus2() else {
+            eprintln!("skip: roms/plus2/plus2uk.rom missing");
+            return;
+        };
+        let m = Machine::new_plus2(&rom).unwrap();
+        assert_eq!(m.model(), Model::SpectrumPlus2);
+    }
+
     #[test]
     fn plus2a_model_has_no_disk_and_rejects_dsk() {
         let Some(rom) = rom_plus2a_only().or_else(rom_plus3_only) else {
@@ -5313,8 +5415,10 @@ mod tests {
             // Instant
             let (_m, ok) = run_typed_load(
                 match model {
+                    Model::Spectrum16K => Machine::new_16k(rom).unwrap(),
                     Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                 },
@@ -5352,8 +5456,10 @@ mod tests {
                 };
                 let (_m, ok) = run_typed_load(
                     match model {
+                        Model::Spectrum16K => Machine::new_16k(rom).unwrap(),
                         Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                         Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                        Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                         Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                         Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                     },
@@ -5433,8 +5539,10 @@ mod tests {
             }
             for (flash, speed, tag, max) in modes {
                 let mut m = match model {
+                    Model::Spectrum16K => Machine::new_16k(rom).unwrap(),
                     Model::Spectrum48 => Machine::new_48k(rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(rom).unwrap(),
+                    Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
                 };
@@ -5591,8 +5699,10 @@ mod tests {
             }
             for (flash, speed, tag, max) in modes {
                 let m = match model {
+                    Model::Spectrum16K => Machine::new_16k(&rom).unwrap(),
                     Model::Spectrum48 => Machine::new_48k(&rom).unwrap(),
                     Model::Spectrum128 => Machine::new_128k(&rom).unwrap(),
+                    Model::SpectrumPlus2 => Machine::new_plus2(&rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(&rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(&rom).unwrap(),
                 };
