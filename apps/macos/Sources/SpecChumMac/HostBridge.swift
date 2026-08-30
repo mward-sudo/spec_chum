@@ -148,6 +148,9 @@ final class HostBridge: ObservableObject {
             self == .spectrum16K || self == .spectrum48 || self == .timexTC2048 || self == .timexTS2068 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128
         }
 
+        /// Timex dock `.dck` cartridges (TS2068 / TC2068 horizontal MMU).
+        var supportsTimexDock: Bool { self == .timexTS2068 }
+
         /// Toolbar machine picker: fit the longest `title` ("Spectrum 128K") plus chevron.
         static let toolbarPickerMinWidth: CGFloat = 148
         static let toolbarPickerMaxWidth: CGFloat = 196
@@ -2032,6 +2035,31 @@ final class HostBridge: ObservableObject {
         } else {
             refreshStatus()
         }
+    }
+
+    func insertDck(at url: URL) {
+        guard let handle else { return }
+        let ok = url.path.withCString { sc_insert_dck(handle, $0) }
+        if ok != 0 {
+            status = HostBridge.takeLastError() ?? "DCK insert failed"
+        } else {
+            mediaTitle = url.lastPathComponent
+            refreshStatus()
+        }
+    }
+
+    func ejectDck() {
+        guard let handle else { return }
+        if sc_eject_dck(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "DCK eject failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    var hasTimexDock: Bool {
+        guard let handle else { return false }
+        return sc_has_timex_dock(handle) != 0
     }
 
     func attachDivmmc() {

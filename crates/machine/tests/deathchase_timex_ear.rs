@@ -2,8 +2,9 @@
 //!
 //! 3D Deathchase uses Spectrum-absolute `USR` addresses (PROG at `$5CCB`). Timex
 //! TS2068 places PROG at `$6856`, so the embedded loader never runs — that is
-//! authentic Timex incompatibility (use TC2048 / 48K, or a future Spectrum ROM
-//! cartridge). TC2048 keeps a Spectrum-compatible ROM and must still load.
+//! authentic Timex incompatibility (use TC2048 / 48K, or a HOME Spectrum `.dck`
+//! on TS2068 — see docs/TIMEX.md). TC2048 keeps a Spectrum-compatible ROM and
+//! must still load.
 
 use machine::{resolve_exrom_path, resolve_rom_path, Machine, Model, TapeLoadOptions};
 use tape::TzxPlayer;

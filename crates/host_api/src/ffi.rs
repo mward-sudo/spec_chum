@@ -961,6 +961,56 @@ pub extern "C" fn sc_insert_mdr(handle: *mut c_void, path: *const c_char) -> c_i
 }
 
 #[no_mangle]
+pub extern "C" fn sc_insert_dck(handle: *mut c_void, path: *const c_char) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    if path.is_null() {
+        set_last_error("null path");
+        return -1;
+    }
+    // SAFETY: caller provides a valid NUL-terminated C string.
+    let cstr = unsafe { CStr::from_ptr(path) };
+    let Ok(path) = cstr.to_str() else {
+        set_last_error("path not utf-8");
+        return -1;
+    };
+    match s.insert_dck(Path::new(path)) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_eject_dck(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    let Some(s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.eject_dck() {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_has_timex_dock(handle: *mut c_void) -> c_int {
+    let Some(s) = session_mut(handle) else {
+        return 0;
+    };
+    i32::from(s.has_timex_dock())
+}
+
+#[no_mangle]
 pub extern "C" fn sc_has_interface1(handle: *mut c_void) -> c_int {
     // Returns 1 if Interface 1 is attached, 0 if absent or handle is null.
     let Some(s) = session_mut(handle) else {

@@ -11,6 +11,7 @@ mod kempston_mouse;
 mod multiface;
 mod plus3;
 mod timex;
+mod timex_dock;
 
 pub use ay::{Ay8912, StereoMode};
 pub use beta_disk::{BetaDisk, TRDOS_ROM_SIZE};
@@ -27,6 +28,7 @@ pub use kempston_mouse::{
 pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 pub use timex::{timex_joystick_mask, TimexScld, TIMEX_EXROM_SIZE};
+pub use timex_dock::{TimexDock, TimexDockChunk};
 
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
@@ -109,6 +111,8 @@ pub struct Bus48 {
     pub timex_scld: TimexScld,
     /// EX-ROM image (8 KiB); mirrored into every paged EX-ROM chunk (Fuse-compatible).
     pub timex_exrom: [u8; TIMEX_EXROM_SIZE],
+    /// Optional Timex dock cartridge (`.dck`); TS2068 only.
+    pub timex_dock: Option<TimexDock>,
     /// AY-3-8912 (active on TS2068; unused on plain 48K / TC2048).
     pub ay: Ay8912,
     pub keyboard: Keyboard,
@@ -150,6 +154,7 @@ impl Bus48 {
             timex_2068: false,
             timex_scld: TimexScld::new(),
             timex_exrom: [0xFF; TIMEX_EXROM_SIZE],
+            timex_dock: None,
             ay: Ay8912::new(),
             keyboard: Keyboard::new(),
             ear: false,
@@ -188,7 +193,36 @@ impl Bus48 {
         Ok(())
     }
 
-    /// Horizontal MMU overlay: EX-ROM or empty DOCK when HSR bit is set.
+    /// Insert a Timex `.dck` cartridge (TS2068 / TC2068 only).
+    pub fn insert_timex_dock(&mut self, image: &formats::DckImage) -> Result<(), String> {
+        if !self.timex_2068 {
+            return Err("Timex dock requires TS2068 / TC2068".into());
+        }
+        self.timex_dock = Some(TimexDock::from_dck(image));
+        Ok(())
+    }
+
+    /// Remove the Timex dock cartridge.
+    pub fn eject_timex_dock(&mut self) {
+        self.timex_dock = None;
+    }
+
+    #[must_use]
+    pub fn has_timex_dock(&self) -> bool {
+        self.timex_dock
+            .as_ref()
+            .is_some_and(TimexDock::has_any_content)
+    }
+
+    /// HOME-bank overlay from an inserted `.dck` (Spectrum ROM cart, etc.).
+    #[inline]
+    fn timex_home_overlay_read(&self, addr: u16) -> Option<u8> {
+        let dock = self.timex_dock.as_ref()?;
+        let chunk = TimexScld::chunk_of(addr) as usize;
+        dock.home.get(chunk)?.read(addr as usize)
+    }
+
+    /// Horizontal MMU overlay: EX-ROM / DOCK when HSR bit is set.
     #[inline]
     fn timex_mmu_read(&self, addr: u16) -> Option<u8> {
         if !self.timex_2068 {
@@ -198,17 +232,49 @@ impl Bus48 {
         if !self.timex_scld.chunk_paged(chunk) {
             return None;
         }
+        let offset = (addr as usize) & (TIMEX_EXROM_SIZE - 1);
         if self.timex_scld.use_exrom() {
-            Some(self.timex_exrom[(addr as usize) & (TIMEX_EXROM_SIZE - 1)])
+            if let Some(dock) = self.timex_dock.as_ref() {
+                if let Some(v) = dock.exrom[chunk as usize].read(offset) {
+                    return Some(v);
+                }
+            }
+            Some(self.timex_exrom[offset])
+        } else if let Some(dock) = self.timex_dock.as_ref() {
+            // Present DOCK chunk, else empty dock — Fuse fills 0xFF.
+            Some(dock.dock[chunk as usize].read(offset).unwrap_or(0xFF))
         } else {
-            // Empty dock / no cartridge — Fuse fills 0xFF.
             Some(0xFF)
         }
     }
 
+    /// Returns true when the write was consumed by a dock RAM page.
     #[inline]
-    fn timex_mmu_blocks_write(&self, addr: u16) -> bool {
-        self.timex_2068 && self.timex_scld.chunk_paged(TimexScld::chunk_of(addr))
+    fn timex_mmu_write(&mut self, addr: u16, value: u8) -> bool {
+        if !self.timex_2068 {
+            return false;
+        }
+        let chunk = TimexScld::chunk_of(addr);
+        if !self.timex_scld.chunk_paged(chunk) {
+            return false;
+        }
+        let offset = (addr as usize) & (TIMEX_EXROM_SIZE - 1);
+        let Some(dock) = self.timex_dock.as_mut() else {
+            // Empty / ROM dock pages block home writes while paged.
+            return true;
+        };
+        if self.timex_scld.use_exrom() {
+            if dock.exrom[chunk as usize].write(offset, value) {
+                return true;
+            }
+            // EX-ROM ROM / absent still blocks through to home while paged.
+            return true;
+        }
+        if dock.dock[chunk as usize].write(offset, value) {
+            return true;
+        }
+        // Absent / ROM DOCK: swallow write (do not poke home under the overlay).
+        true
     }
 
     /// Attach Multiface 1 with an 8 KiB ROM image (creates the peripheral if absent).
@@ -292,10 +358,22 @@ impl Bus48 {
             return v;
         }
         if addr < 0x4000 {
+            if let Some(v) = self.timex_home_overlay_read(addr) {
+                return v;
+            }
             self.rom[addr as usize]
         } else if self.ram16k && addr >= 0x8000 {
             0xFF
         } else {
+            // HOME-bank RAM overlays (rare `.dck` expansions) above ROM.
+            if let Some(dock) = self.timex_dock.as_ref() {
+                let chunk = TimexScld::chunk_of(addr) as usize;
+                if chunk >= 2 {
+                    if let Some(v) = dock.home[chunk].read(addr as usize) {
+                        return v;
+                    }
+                }
+            }
             self.ram[addr as usize - 0x4000]
         }
     }
@@ -312,9 +390,18 @@ impl Bus48 {
                 return;
             }
         }
-        // Paged EX-ROM / empty DOCK are not writable; ULA screen still uses home RAM.
-        if self.timex_mmu_blocks_write(addr) {
+        // Paged EX-ROM / DOCK: write dock RAM or swallow (do not poke home under overlay).
+        if self.timex_mmu_write(addr, value) {
             return;
+        }
+        let chunk = TimexScld::chunk_of(addr) as usize;
+        if let Some(dock) = self.timex_dock.as_mut() {
+            if dock.home[chunk].write(addr as usize, value) {
+                return;
+            }
+            if dock.home[chunk].blocks_home_write() {
+                return;
+            }
         }
         if addr >= 0x4000 && !(self.ram16k && addr >= 0x8000) {
             self.ram[addr as usize - 0x4000] = value;
@@ -895,6 +982,65 @@ mod tests {
         b.out_port(0x00FF, 0x00); // DOCK
         b.out_port(0x00F4, 0x01);
         assert_eq!(b.read(0x0000), 0xFF);
+    }
+
+    #[test]
+    fn timex_2068_dock_spectrum_rom_pages_via_hsr() {
+        let mut b = Bus48::new();
+        b.timex = true;
+        b.timex_2068 = true;
+        b.rom[0] = 0x11;
+        let mut rom = [0u8; 16384];
+        rom[0] = 0xF3;
+        rom[1] = 0xAF;
+        rom[0x2000] = 0x55;
+        let dck = formats::DckImage::spectrum_rom_dock(&rom);
+        b.insert_timex_dock(&dck).unwrap();
+        assert!(!b.timex_scld.chunk_paged(0));
+        assert_eq!(b.read(0x0000), 0x11, "home until HSR pages dock");
+        b.out_port(0x00FF, 0x00); // DOCK bank
+        b.out_port(0x00F4, 0x03); // chunks 0+1
+        assert_eq!(b.read(0x0000), 0xF3);
+        assert_eq!(b.read(0x0001), 0xAF);
+        assert_eq!(b.read(0x2000), 0x55);
+        b.write(0x0000, 0x99);
+        assert_eq!(b.read(0x0000), 0xF3, "dock ROM not writable");
+    }
+
+    #[test]
+    fn timex_2068_home_bank_spectrum_rom_replace() {
+        let mut b = Bus48::new();
+        b.timex = true;
+        b.timex_2068 = true;
+        b.rom[0] = 0x11;
+        b.rom[1] = 0x22;
+        let mut rom = [0u8; 16384];
+        rom[0] = 0xF3;
+        rom[1] = 0xAF;
+        let dck = formats::DckImage::spectrum_rom_home(&rom);
+        b.insert_timex_dock(&dck).unwrap();
+        assert_eq!(b.read(0x0000), 0xF3, "HOME overlay replaces Timex ROM");
+        assert_eq!(b.read(0x0001), 0xAF);
+        b.write(0x0000, 0x00);
+        assert_eq!(b.read(0x0000), 0xF3);
+        assert_eq!(b.rom[0], 0x11, "stock Timex ROM preserved under overlay");
+        b.eject_timex_dock();
+        assert_eq!(b.read(0x0000), 0x11);
+    }
+
+    #[test]
+    fn timex_2068_dock_ram_chunk_writable() {
+        let mut b = Bus48::new();
+        b.timex = true;
+        b.timex_2068 = true;
+        // DOCK RAM empty in chunk 0.
+        let dck = formats::DckImage::parse(&[0, 1, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        b.insert_timex_dock(&dck).unwrap();
+        b.out_port(0x00FF, 0x00);
+        b.out_port(0x00F4, 0x01);
+        assert_eq!(b.read(0x0000), 0x00);
+        b.write(0x0000, 0xAB);
+        assert_eq!(b.read(0x0000), 0xAB);
     }
 
     #[test]
