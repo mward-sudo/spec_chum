@@ -30,7 +30,7 @@ struct ContentView: View {
         .onAppear {
             activateSpecChum()
             host.ensureAudioOutput()
-            FocusSpectrumView.post()
+            FocusSpectrumView.postDelayed()
         }
         .sheet(isPresented: $host.showInspector) {
             DebugInspectorView(host: host)
@@ -48,6 +48,23 @@ struct ContentView: View {
             if !showing {
                 FocusSpectrumView.post()
             }
+        }
+        .onChange(of: host.model) { _, _ in
+            // Toolbar Machine menus often keep an NSControl as first responder after pick.
+            FocusSpectrumView.postDelayed()
+        }
+        .onChange(of: host.showRomSetup) { _, showing in
+            if !showing {
+                FocusSpectrumView.postDelayed()
+            }
+        }
+        .onChange(of: host.showMachineConfigEditor) { _, showing in
+            if !showing {
+                FocusSpectrumView.postDelayed()
+            }
+        }
+        .onChange(of: host.livingRoomMode) { _, _ in
+            FocusSpectrumView.postDelayed()
         }
     }
 
@@ -201,12 +218,15 @@ struct ContentView: View {
                         } label: {
                             HStack {
                                 Text(pick.title)
+                                if !pick.romAvailable {
+                                    Image(systemName: "exclamationmark.circle")
+                                        .foregroundStyle(.secondary)
+                                }
                                 if host.activeConfigId == nil && host.model == pick {
                                     Image(systemName: "checkmark")
                                 }
                             }
                         }
-                        .disabled(!pick.romAvailable)
                     }
                 }
                 Section("My configurations") {
@@ -261,6 +281,20 @@ struct ContentView: View {
             .help("Built-ins: select only. Custom profiles: edit hardware & ROM.")
             .accessibilityLabel("Machine")
             .accessibilityValue(host.machineDisplayTitle)
+        }
+
+        // Separate ToolbarItem — conditional children inside ToolbarItemGroup often fail to
+        // appear or refresh on macOS unified toolbars (#188 Pentagon ROMs affordance).
+        if host.showRomsToolbarButton {
+            ToolbarItem(placement: .status) {
+                Button {
+                    chromeAction { host.presentRomSetup() }
+                } label: {
+                    Label("ROMs", systemImage: "memorychip")
+                }
+                .help("Choose ROM files required for the current model")
+                .accessibilityLabel("ROMs")
+            }
         }
 
         ToolbarItem(placement: .status) {
@@ -391,9 +425,43 @@ struct DebugInspectorView: View {
 /// Ask the embedded Spectrum `NSView` to take first responder (SwiftUI focus alone is not enough).
 enum FocusSpectrumView {
     static let name = Notification.Name("SpecChumFocusSpectrumView")
+    private(set) static var menuTrackingDepth = 0
+
+    static var isMenuTracking: Bool { menuTrackingDepth > 0 }
+
+    /// Register once at launch — gates the key monitor while AppKit menus are open.
+    static func installMenuTrackingObservers() {
+        NotificationCenter.default.addObserver(
+            forName: NSMenu.didBeginTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            menuTrackingDepth += 1
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSMenu.didEndTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            menuTrackingDepth = max(0, menuTrackingDepth - 1)
+            postDelayed()
+        }
+    }
 
     static func post() {
         NotificationCenter.default.post(name: name, object: nil)
+    }
+
+    /// Reclaim focus after SwiftUI chrome (toolbar menus, sheets) closes.
+    /// Retries across run loops — Machine picker menus often steal first responder briefly.
+    static func postDelayed() {
+        post()
+        DispatchQueue.main.async { post() }
+        for delay in [0.05, 0.15, 0.35] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                post()
+            }
+        }
     }
 }
 

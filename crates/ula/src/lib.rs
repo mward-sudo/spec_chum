@@ -17,6 +17,12 @@ pub const FRAME_TSTATES_128: u32 = T_LINE_128 * LINES_128; // 70908
 pub const INT_LENGTH_128: u32 = 36;
 pub const PAPER_START_128: u32 = 14361;
 
+/// Pentagon 128 PAL frame constants (320×224 T-states; no memory contention).
+pub const T_LINE_PENTAGON: u32 = 224;
+pub const LINES_PENTAGON: u32 = 320;
+pub const FRAME_TSTATES_PENTAGON: u32 = T_LINE_PENTAGON * LINES_PENTAGON; // 71680
+pub const INT_LENGTH_PENTAGON: u32 = 32;
+
 /// Contention pattern (48K/128K): delays for T-states within the 8-cycle window.
 const CONTENTION: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
 
@@ -384,6 +390,12 @@ pub fn int_active_48(frame_t: u32) -> bool {
     frame_t < INT_LENGTH_48
 }
 
+/// Pentagon 128 INT window (32 T-states at frame start; Unreal / JC test class).
+#[must_use]
+pub fn int_active_pentagon(frame_t: u32) -> bool {
+    frame_t < INT_LENGTH_PENTAGON
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,6 +404,7 @@ mod tests {
     fn frame_constants() {
         assert_eq!(FRAME_TSTATES_48, 69888);
         assert_eq!(FRAME_TSTATES_128, 70908);
+        assert_eq!(FRAME_TSTATES_PENTAGON, 71680);
     }
 
     #[test]

@@ -4,6 +4,7 @@
 //! fields in `UserDefaults` (`specChum.*` keys). Instant / flash-load is never
 //! persisted as a sticky Play default.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -69,6 +70,9 @@ pub struct UiPreferences {
     /// When set, boot this profile instead of the built-in `model`.
     #[serde(default)]
     pub active_config_id: Option<String>,
+    /// User-picked ROM paths keyed `{pref_model_slug}_{slot_id}` (e.g. `pentagon128_main`).
+    #[serde(default)]
+    pub model_rom_paths: BTreeMap<String, String>,
 }
 
 fn prefs_version() -> u32 {
@@ -109,8 +113,29 @@ impl Default for UiPreferences {
             throttle: true,
             custom_configs: Vec::new(),
             active_config_id: None,
+            model_rom_paths: BTreeMap::new(),
         }
     }
+}
+
+/// Stable prefs key segment for a built-in model (matches JSON `snake_case`).
+#[must_use]
+pub fn pref_model_slug(model: PrefModel) -> &'static str {
+    match model {
+        PrefModel::Spectrum16K => "spectrum16_k",
+        PrefModel::Spectrum48 => "spectrum48",
+        PrefModel::Spectrum128 => "spectrum128",
+        PrefModel::SpectrumPlus2 => "spectrum_plus2",
+        PrefModel::SpectrumPlus2A => "spectrum_plus2_a",
+        PrefModel::SpectrumPlus3 => "spectrum_plus3",
+        PrefModel::Pentagon128 => "pentagon128",
+    }
+}
+
+/// Prefs map key for one model ROM slot (`pentagon128_trdos`, `spectrum48_main`, …).
+#[must_use]
+pub fn model_rom_path_key(model: PrefModel, slot_id: &str) -> String {
+    format!("{}_{slot_id}", pref_model_slug(model))
 }
 
 impl UiPreferences {
@@ -145,7 +170,38 @@ impl UiPreferences {
                 self.active_config_id = None;
             }
         }
+        self.model_rom_paths
+            .retain(|_, path| !path.trim().is_empty());
         self
+    }
+
+    #[must_use]
+    pub fn model_rom_path(&self, model: PrefModel, slot_id: &str) -> Option<&str> {
+        self.model_rom_paths
+            .get(&model_rom_path_key(model, slot_id))
+            .map(String::as_str)
+    }
+
+    pub fn set_model_rom_path(&mut self, model: PrefModel, slot_id: &str, path: String) {
+        let key = model_rom_path_key(model, slot_id);
+        if path.trim().is_empty() {
+            self.model_rom_paths.remove(&key);
+        } else {
+            self.model_rom_paths.insert(key, path);
+        }
+    }
+
+    /// Per-slot override paths for `model` (`main`, `trdos`, …).
+    #[must_use]
+    pub fn slot_rom_paths_for_model(&self, model: PrefModel) -> BTreeMap<String, PathBuf> {
+        let prefix = format!("{}_", pref_model_slug(model));
+        self.model_rom_paths
+            .iter()
+            .filter_map(|(key, path)| {
+                key.strip_prefix(&prefix)
+                    .map(|slot| (slot.to_string(), PathBuf::from(path)))
+            })
+            .collect()
     }
 
     #[must_use]
@@ -284,17 +340,19 @@ pub enum PrefModel {
     SpectrumPlus2,
     SpectrumPlus2A,
     SpectrumPlus3,
+    Pentagon128,
 }
 
 impl PrefModel {
     /// Canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
         Self::SpectrumPlus2,
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
+        Self::Pentagon128,
     ];
 
     #[must_use]
@@ -306,6 +364,7 @@ impl PrefModel {
             Model::SpectrumPlus2 => Self::SpectrumPlus2,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
+            Model::Pentagon128 => Self::Pentagon128,
         }
     }
 
@@ -323,6 +382,7 @@ impl PrefModel {
             Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
+            Self::Pentagon128 => Model::Pentagon128,
         }
     }
 
@@ -335,6 +395,7 @@ impl PrefModel {
             Self::SpectrumPlus2 => ModelId::SpectrumPlus2,
             Self::SpectrumPlus2A => ModelId::SpectrumPlus2A,
             Self::SpectrumPlus3 => ModelId::SpectrumPlus3,
+            Self::Pentagon128 => ModelId::Pentagon128,
         }
     }
 
@@ -658,5 +719,42 @@ mod tests {
             p.recent_files,
             vec!["/a.tap".to_string(), "/b.tzx".to_string()]
         );
+    }
+
+    #[test]
+    fn model_rom_paths_round_trip() {
+        let path = temp_prefs_path("rom_paths");
+        let mut p = UiPreferences::default();
+        p.set_model_rom_path(PrefModel::Pentagon128, "main", "/tmp/pentagon.rom".into());
+        p.set_model_rom_path(PrefModel::Pentagon128, "trdos", "/tmp/trdos.rom".into());
+        save_prefs(&path, &p).expect("save");
+        let loaded = load_prefs(&path);
+        let _ = fs::remove_file(&path);
+        assert_eq!(
+            loaded.model_rom_path(PrefModel::Pentagon128, "main"),
+            Some("/tmp/pentagon.rom")
+        );
+        assert_eq!(
+            loaded
+                .slot_rom_paths_for_model(PrefModel::Pentagon128)
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn pref_model_slug_matches_json_snake_case() {
+        let cases = [
+            (PrefModel::Spectrum16K, "spectrum16_k"),
+            (PrefModel::Spectrum48, "spectrum48"),
+            (PrefModel::SpectrumPlus2, "spectrum_plus2"),
+            (PrefModel::SpectrumPlus2A, "spectrum_plus2_a"),
+            (PrefModel::Pentagon128, "pentagon128"),
+        ];
+        for (model, want) in cases {
+            assert_eq!(pref_model_slug(model), want);
+            let key = model_rom_path_key(model, "main");
+            assert_eq!(key, format!("{want}_main"));
+        }
     }
 }

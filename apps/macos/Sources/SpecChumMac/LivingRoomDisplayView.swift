@@ -17,6 +17,9 @@ struct LivingRoomDisplayView: NSViewRepresentable {
         let view = LivingRoomNSView()
         view.host = host
         host.attachLivingRoomPresentView(view)
+        DispatchQueue.main.async {
+            view.claimFocus()
+        }
         return view
     }
 
@@ -47,6 +50,7 @@ final class LivingRoomNSView: NSView {
     private var becomeKeyObserver: NSObjectProtocol?
     private var resignKeyObserver: NSObjectProtocol?
     private var focusRequestObserver: NSObjectProtocol?
+    private var menuEndTrackingObserver: NSObjectProtocol?
     private var presentSurface: IOSurface?
     private var presentBound = false
     private var presentWidth = 1920
@@ -55,7 +59,8 @@ final class LivingRoomNSView: NSView {
     private var resizeWorkItem: DispatchWorkItem?
 
     override var acceptsFirstResponder: Bool { true }
-    override var canBecomeKeyView: Bool { true }
+    /// Do not join the key-view loop — arrow keys must reach `keyDown`, not `moveLeft:` et al.
+    override var canBecomeKeyView: Bool { false }
     override var isFlipped: Bool { false }
 
     override init(frame frameRect: NSRect) {
@@ -110,6 +115,13 @@ final class LivingRoomNSView: NSView {
         }
         focusRequestObserver = NotificationCenter.default.addObserver(
             forName: FocusSpectrumView.name,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.claimFocus()
+        }
+        menuEndTrackingObserver = NotificationCenter.default.addObserver(
+            forName: NSMenu.didEndTrackingNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -421,6 +433,9 @@ final class LivingRoomNSView: NSView {
         var modifiers = SpectrumKeymap.modifierKeys(flags: flags, suppressCaps: suppressCaps)
         var matrixHeld: [(UInt32, UInt32)] = []
         for code in held {
+            if let cursor = SpectrumKeymap.cursorChord(keyCode: code) {
+                matrixHeld.append(contentsOf: cursor)
+            }
             if SpectrumKeymap.isJoystickRoutingKey(keyCode: code) {
                 continue
             }
@@ -451,20 +466,31 @@ final class LivingRoomNSView: NSView {
         host?.clearMouseButtons()
     }
 
-    private func claimFocus() {
+    func claimFocus() {
         activateSpecChum()
         guard let window else { return }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(self)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, window.isKeyWindow else { return }
+            if window.firstResponder !== self {
+                window.makeFirstResponder(self)
+            }
+        }
     }
 
-    /// Backup capture when we are not first responder but the window is key.
-    private func shouldMonitorCapture() -> Bool {
+    /// Backup capture when the window is key but AppKit would not deliver `keyDown` here.
+    private func shouldMonitorCapture(for event: NSEvent) -> Bool {
         guard let window, window.isKeyWindow else { return false }
+        if FocusSpectrumView.isMenuTracking { return false }
+        if event.type == .keyDown || event.type == .keyUp,
+           SpectrumKeymap.isJoystickRoutingKey(keyCode: event.keyCode)
+        {
+            return true
+        }
         guard let fr = window.firstResponder else { return true }
         if fr === self { return false }
         if fr is NSTextView || fr is NSTextField { return false }
-        if fr is NSControl { return false }
         return true
     }
 
@@ -479,7 +505,11 @@ final class LivingRoomNSView: NSView {
                 return event
             }
 
-            guard self.shouldMonitorCapture() else { return event }
+            if FocusSpectrumView.isMenuTracking {
+                return event
+            }
+
+            guard self.shouldMonitorCapture(for: event) else { return event }
 
             switch event.type {
             case .keyDown:
@@ -509,6 +539,10 @@ final class LivingRoomNSView: NSView {
         if let focusRequestObserver {
             NotificationCenter.default.removeObserver(focusRequestObserver)
             self.focusRequestObserver = nil
+        }
+        if let menuEndTrackingObserver {
+            NotificationCenter.default.removeObserver(menuEndTrackingObserver)
+            self.menuEndTrackingObserver = nil
         }
     }
 

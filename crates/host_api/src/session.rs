@@ -1,6 +1,6 @@
 //! Safe session wrapper around [`machine::Machine`] for host frontends.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use machine::{JoystickMode, JoystickState, Machine, Model};
 use thiserror::Error;
@@ -18,6 +18,8 @@ pub enum ModelId {
     SpectrumPlus2 = 4,
     /// 16 KiB RAM Spectrum (#188).
     Spectrum16K = 5,
+    /// Pentagon 128 clone (#188 Phase B).
+    Pentagon128 = 6,
 }
 
 impl ModelId {
@@ -30,6 +32,7 @@ impl ModelId {
             3 => Some(Self::SpectrumPlus2A),
             4 => Some(Self::SpectrumPlus2),
             5 => Some(Self::Spectrum16K),
+            6 => Some(Self::Pentagon128),
             _ => None,
         }
     }
@@ -43,6 +46,7 @@ impl ModelId {
             Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
+            Self::Pentagon128 => Model::Pentagon128,
         }
     }
 
@@ -55,22 +59,24 @@ impl ModelId {
             Model::SpectrumPlus2 => Self::SpectrumPlus2,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
+            Model::Pentagon128 => Self::Pentagon128,
         }
     }
 
     /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
         Self::SpectrumPlus2,
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
+        Self::Pentagon128,
     ];
 
     #[must_use]
     pub fn rom_available(self) -> bool {
-        machine::rom_available(self.to_model())
+        crate::rom_setup::model_rom_available(self, &crate::rom_setup::model_rom_paths_snapshot())
     }
 
     #[must_use]
@@ -253,20 +259,8 @@ impl HostSession {
 
     /// Load ROM bytes for the current model.
     pub fn load_rom_bytes(&mut self, rom: &[u8]) -> Result<(), HostError> {
-        let machine = match self.model {
-            ModelId::Spectrum16K => Machine::new_16k(rom),
-            ModelId::Spectrum48 => Machine::new_48k(rom),
-            ModelId::Spectrum128 => Machine::new_128k(rom),
-            ModelId::SpectrumPlus2 => Machine::new_plus2(rom),
-            ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
-            ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
-        }
-        .map_err(HostError::Message)?;
-        self.machine = Some(machine);
-        self.reapply_host_keys();
-        self.last_speaker_level = false;
-        self.status = "ROM loaded".into();
-        Ok(())
+        let overrides = crate::rom_setup::slot_rom_overrides_for_model(self.model);
+        self.load_rom_bytes_with_overrides(rom, &overrides)
     }
 
     pub fn load_rom_path(&mut self, path: &Path) -> Result<(), HostError> {
@@ -462,17 +456,49 @@ impl HostSession {
         Ok(())
     }
 
-    /// Best-effort ROM load for the current model (workspace / `SPEC_CHUM_ROOT` / cwd).
+    /// Best-effort ROM load for the current model (persisted paths, then workspace search).
     fn try_autoload_rom(&mut self) {
         let model = self.model.to_model();
         let roots = rom_search_roots();
-        if let Some(path) = machine::resolve_rom_path_in(model, &roots) {
+        let slot_overrides = crate::rom_setup::slot_rom_overrides_for_model(self.model);
+        if let Some(path) =
+            machine::resolve_rom_path_in_with_overrides(model, &roots, &slot_overrides)
+        {
             if let Ok(data) = std::fs::read(&path) {
-                if self.load_rom_bytes(&data).is_ok() {
+                if self
+                    .load_rom_bytes_with_overrides(&data, &slot_overrides)
+                    .is_ok()
+                {
                     self.status = format!("Loaded {}", path.display());
                 }
             }
         }
+    }
+
+    fn load_rom_bytes_with_overrides(
+        &mut self,
+        rom: &[u8],
+        overrides: &std::collections::BTreeMap<String, PathBuf>,
+    ) -> Result<(), HostError> {
+        let machine = match self.model {
+            ModelId::Spectrum16K => Machine::new_16k(rom),
+            ModelId::Spectrum48 => Machine::new_48k(rom),
+            ModelId::Spectrum128 => Machine::new_128k(rom),
+            ModelId::SpectrumPlus2 => Machine::new_plus2(rom),
+            ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
+            ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
+            ModelId::Pentagon128 => {
+                let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
+                    .map_err(HostError::Message)?;
+                Machine::new_pentagon128(rom, &trdos)
+            }
+        }
+        .map_err(HostError::Message)?;
+        self.machine = Some(machine);
+        self.reapply_host_keys();
+        self.last_speaker_level = false;
+        self.status = "ROM loaded".into();
+        Ok(())
     }
 
     pub fn play_tape(&mut self) -> Result<(), HostError> {
@@ -871,6 +897,7 @@ impl HostSession {
             | machine::Model::SpectrumPlus2
             | machine::Model::SpectrumPlus2A
             | machine::Model::SpectrumPlus3 => 70_908,
+            machine::Model::Pentagon128 => 71_680,
         };
         self.last_speaker_level = render_frame_pcm(
             &audio,

@@ -13,8 +13,10 @@ use std::time::{Duration, Instant};
 use eframe::egui;
 use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
 use spec_chum_host::{
-    apply_user_config, default_prefs_path, hardware_compat, load_prefs, save_prefs, PrefAyStereo,
-    PrefJoystick, PrefModel, UiPreferences, UserMachineConfig, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
+    apply_user_config, default_prefs_path, hardware_compat, install_model_rom, load_prefs,
+    model_requires_user_rom, model_rom_available, rom_setup_json, save_prefs,
+    slot_rom_overrides_for_model, sync_model_rom_paths, PrefAyStereo, PrefJoystick, PrefModel,
+    RomSetupJson, UiPreferences, UserMachineConfig, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
 };
 
 /// Session state shared by the GUI and headless tests.
@@ -174,9 +176,14 @@ impl EmulatorSession {
     pub fn try_autoload_rom(&mut self) {
         let root = Self::workspace_root();
         let model = self.model;
-        if let Some(path) = machine::resolve_rom_path_in(model, std::slice::from_ref(&root)) {
+        let overrides = slot_rom_overrides_for_model(PrefModel::from_model(model).to_model_id());
+        if let Some(path) = machine::resolve_rom_path_in_with_overrides(
+            model,
+            std::slice::from_ref(&root),
+            &overrides,
+        ) {
             if let Ok(data) = std::fs::read(&path) {
-                let built = Self::build_machine(model, &data);
+                let built = Self::build_machine(model, &data, &overrides);
                 match built {
                     Ok(m) => {
                         self.machine = Some(m);
@@ -194,14 +201,22 @@ impl EmulatorSession {
         );
     }
 
-    fn build_machine(model: Model, data: &[u8]) -> Result<Machine, String> {
+    fn build_machine(
+        model: Model,
+        data: &[u8],
+        overrides: &std::collections::BTreeMap<String, std::path::PathBuf>,
+    ) -> Result<Machine, String> {
         match model {
             Model::Spectrum16K => Machine::new_16k(data),
             Model::Spectrum48 => Machine::new_48k(data),
-            Model::Spectrum128 => Machine::new_128k(data),
             Model::SpectrumPlus2 => Machine::new_plus2(data),
             Model::SpectrumPlus2A => Machine::new_plus2a(data),
             Model::SpectrumPlus3 => Machine::new_plus3(data),
+            Model::Spectrum128 => Machine::new_128k(data),
+            Model::Pentagon128 => {
+                let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
+                Machine::new_pentagon128(data, &trdos)
+            }
         }
     }
 
@@ -448,9 +463,10 @@ impl EmulatorSession {
                 }
             }
             Model::SpectrumPlus2A => KeyScript::load_quotes_plus2a(with_code),
-            Model::Spectrum128 | Model::SpectrumPlus2 | Model::SpectrumPlus3 => {
-                KeyScript::load_quotes_128_or_plus3(with_code)
-            }
+            Model::Spectrum128
+            | Model::SpectrumPlus2
+            | Model::SpectrumPlus3
+            | Model::Pentagon128 => KeyScript::load_quotes_128_or_plus3(with_code),
         });
         if pending_play {
             return;
@@ -859,6 +875,10 @@ pub struct SpecChumApp {
     config_draft: Option<UserMachineConfig>,
     config_editor_is_new: bool,
     config_editor_error: Option<String>,
+    /// Built-in ROM picker when files under `roms/` are missing (#188).
+    show_rom_setup: bool,
+    rom_setup: Option<RomSetupJson>,
+    rom_setup_error: Option<String>,
 }
 
 impl std::fmt::Debug for SpecChumApp {
@@ -922,6 +942,7 @@ impl SpecChumApp {
     #[must_use]
     pub fn new_with_audio_prefs(start_audio: bool, prefs_path: PathBuf) -> Self {
         let mut prefs = load_prefs(&prefs_path);
+        sync_model_rom_paths(prefs.model_rom_paths.clone());
         let beeper = Arc::new(Mutex::new(BeeperState {
             frame_t_per_sample: 69888.0 / 44100.0,
             muted: prefs.muted,
@@ -964,6 +985,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
+                    | Model::Pentagon128
             ) {
                 m.set_ay_stereo_mode(prefs.effective_ay_stereo());
             }
@@ -976,7 +998,7 @@ impl SpecChumApp {
                 None
             }
         };
-        Self {
+        let mut app = Self {
             session,
             texture: None,
             beeper,
@@ -990,7 +1012,78 @@ impl SpecChumApp {
             config_draft: None,
             config_editor_is_new: false,
             config_editor_error: None,
+            show_rom_setup: false,
+            rom_setup: None,
+            rom_setup_error: None,
+        };
+        app.refresh_rom_setup();
+        app.maybe_auto_present_rom_setup();
+        app
+    }
+
+    fn needs_rom_setup(&self) -> bool {
+        if self.prefs.active_config_id.is_some() {
+            return false;
         }
+        if self.rom_setup.as_ref().is_some_and(|doc| !doc.complete) {
+            return true;
+        }
+        !model_rom_available(
+            PrefModel::from_model(self.session.model).to_model_id(),
+            &self.prefs.model_rom_paths,
+        )
+    }
+
+    /// Top-bar ROMs affordance for user-ROM models or when built-in ROM files are missing/invalid.
+    fn show_roms_toolbar_button(&self) -> bool {
+        if self.prefs.active_config_id.is_some() {
+            return false;
+        }
+        self.needs_rom_setup()
+            || model_requires_user_rom(PrefModel::from_model(self.session.model).to_model_id())
+    }
+
+    fn refresh_rom_setup(&mut self) {
+        self.rom_setup_error = None;
+        self.rom_setup = Some(rom_setup_json(
+            PrefModel::from_model(self.session.model).to_model_id(),
+            &self.prefs.model_rom_paths,
+        ));
+    }
+
+    /// Built-in model picked from Machine menu — sync session, prefs, and auto-open ROM dialog when needed.
+    fn on_builtin_model_selected(&mut self, pick: Model) {
+        self.prefs.select_builtin_model(PrefModel::from_model(pick));
+        self.session.model = pick;
+        sync_model_rom_paths(self.prefs.model_rom_paths.clone());
+        self.session.try_autoload_rom();
+        self.apply_restored_machine_options();
+        self.mark_prefs_dirty();
+        self.maybe_auto_present_rom_setup();
+    }
+
+    /// Auto-open ROM setup when the active built-in model still lacks valid ROM files.
+    fn maybe_auto_present_rom_setup(&mut self) {
+        self.refresh_rom_setup();
+        self.show_rom_setup = self.needs_rom_setup();
+        if !self.show_rom_setup {
+            return;
+        }
+        if let Some(doc) = &self.rom_setup {
+            if !doc.complete {
+                self.session.status = format!("ROMs required for {}", doc.model_title);
+            }
+        }
+    }
+
+    fn finish_rom_setup(&mut self) {
+        self.session.try_autoload_rom();
+        self.apply_restored_machine_options();
+        if self.session.machine.is_some() {
+            self.show_rom_setup = false;
+            self.rom_setup_error = None;
+        }
+        self.refresh_rom_setup();
     }
 
     fn mark_prefs_dirty(&mut self) {
@@ -1022,6 +1115,7 @@ impl SpecChumApp {
         }
         self.sync_prefs_from_session();
         if save_prefs(&self.prefs_path, &self.prefs).is_ok() {
+            sync_model_rom_paths(self.prefs.model_rom_paths.clone());
             self.prefs_dirty = false;
         }
     }
@@ -1051,6 +1145,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
+                    | Model::Pentagon128
             ) {
                 m.set_ay_stereo_mode(self.prefs.effective_ay_stereo());
             }
@@ -1141,6 +1236,103 @@ impl SpecChumApp {
         });
     }
 
+    fn rom_setup_window(&mut self, ctx: &egui::Context) {
+        let mut open = self.show_rom_setup;
+        let mut load_machine = false;
+        let mut close = false;
+        egui::Window::new("Required ROMs")
+            .open(&mut open)
+            .default_width(520.0)
+            .default_height(360.0)
+            .show(ctx, |ui| {
+                let Some(doc) = self.rom_setup.clone() else {
+                    ui.label("Could not load ROM requirements.");
+                    return;
+                };
+                ui.label(&doc.model_title);
+                ui.separator();
+                if doc.fetchable {
+                    ui.weak(
+                        "System ROMs are not shipped — run ./scripts/fetch_roms.sh or choose files below (path remembered across restarts).",
+                    );
+                } else {
+                    ui.weak(
+                        "User-provided ROM dumps — choose each file below (path remembered across restarts).",
+                    );
+                }
+                ui.separator();
+                for slot in &doc.slots {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.strong(&slot.label);
+                            let (label, color) = match slot.status.as_str() {
+                                "found" => ("Found", egui::Color32::GREEN),
+                                "wrong_size" => ("Wrong size", egui::Color32::YELLOW),
+                                _ => ("Missing", egui::Color32::RED),
+                            };
+                            ui.colored_label(color, label);
+                        });
+                        ui.monospace(format!(
+                            "→ {} ({} KiB)",
+                            slot.install_path,
+                            slot.expected_bytes / 1024
+                        ));
+                        if let Some(path) = &slot.resolved_path {
+                            ui.weak(path);
+                        }
+                        ui.weak(&slot.hint);
+                        if ui.button(format!("Choose {}…", slot.label)).clicked() {
+                            if let Some(picked) = rfd::FileDialog::new()
+                                .add_filter("ROM", &["rom", "bin"])
+                                .pick_file()
+                            {
+                                let model =
+                                    PrefModel::from_model(self.session.model).to_model_id();
+                                match install_model_rom(
+                                    model,
+                                    &slot.id,
+                                    &picked,
+                                    &mut self.prefs.model_rom_paths,
+                                ) {
+                                    Ok(dest) => {
+                                        sync_model_rom_paths(self.prefs.model_rom_paths.clone());
+                                        self.mark_prefs_dirty();
+                                        self.session.status = format!(
+                                            "Installed {} → {}",
+                                            picked.display(),
+                                            dest.display()
+                                        );
+                                        self.refresh_rom_setup();
+                                    }
+                                    Err(e) => self.rom_setup_error = Some(e),
+                                }
+                            }
+                        }
+                    });
+                    ui.add_space(6.0);
+                }
+                if doc.complete {
+                    ui.colored_label(egui::Color32::GREEN, "All required ROMs are present.");
+                }
+                if let Some(err) = &self.rom_setup_error {
+                    ui.colored_label(egui::Color32::RED, err);
+                }
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if doc.complete && ui.button("Load machine").clicked() {
+                        load_machine = true;
+                    }
+                    if ui.button("Close").clicked() {
+                        close = true;
+                    }
+                });
+            });
+        self.show_rom_setup = open && !close;
+        if load_machine {
+            self.finish_rom_setup();
+        }
+    }
+
     fn config_editor_window(&mut self, ctx: &egui::Context) {
         let Some(draft) = self.config_draft.as_mut() else {
             return;
@@ -1167,11 +1359,12 @@ impl SpecChumApp {
                     ui.text_edit_singleline(&mut draft.name);
                     ui.separator();
                     ui.label("Base model");
-                    let root = EmulatorSession::workspace_root();
                     for pick in machine::ALL_MODELS {
                         let pref = PrefModel::from_model(pick);
-                        let available = machine::rom_available_in(pick, std::slice::from_ref(&root))
-                            || draft.custom_rom_path.is_some();
+                        let available = model_rom_available(
+                            pref.to_model_id(),
+                            &self.prefs.model_rom_paths,
+                        ) || draft.custom_rom_path.is_some();
                         let title = machine::model_title(pick);
                         let mut selected = draft.base == pref;
                         if ui
@@ -1349,6 +1542,13 @@ impl SpecChumApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
+                    if self.show_roms_toolbar_button() {
+                        if ui.button("ROMs…").clicked() {
+                            self.show_rom_setup = true;
+                            self.refresh_rom_setup();
+                        }
+                        ui.separator();
+                    }
                     ui.menu_button("File", |ui| {
                         if ui.button("Open snapshot (SNA/Z80)…").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
@@ -1423,34 +1623,40 @@ impl SpecChumApp {
                         }
                     });
                     ui.menu_button("Machine", |ui| {
-                        let root = EmulatorSession::workspace_root();
+                        if self.prefs.active_config_id.is_none() {
+                            if ui.button("ROMs…").clicked() {
+                                self.show_rom_setup = true;
+                                self.refresh_rom_setup();
+                                ui.close_menu();
+                            }
+                            ui.separator();
+                        }
                         ui.label("Built-in models");
                         ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
                         for pick in machine::ALL_MODELS {
-                            let available =
-                                machine::rom_available_in(pick, std::slice::from_ref(&root));
+                            let pref = PrefModel::from_model(pick);
+                            let available = model_rom_available(
+                                pref.to_model_id(),
+                                &self.prefs.model_rom_paths,
+                            );
                             let title = machine::model_title(pick);
+                            let label = if available {
+                                title.to_string()
+                            } else {
+                                format!("{title} (ROMs required)")
+                            };
                             let mut selected = self.prefs.active_config_id.is_none()
                                 && self.session.model == pick;
-                            let mut picked = ui
-                                .add_enabled_ui(available, |ui| {
-                                    ui.radio_value(&mut selected, true, title)
-                                })
-                                .inner;
+                            let response = ui.radio_value(&mut selected, true, label);
                             if !available {
-                                picked = picked.on_hover_text(format!(
+                                response.clone().on_hover_text(format!(
                                     "{} — {}",
                                     title,
                                     machine::unavailable_reason(pick)
                                 ));
                             }
-                            if picked.clicked() {
-                                self.prefs
-                                    .select_builtin_model(PrefModel::from_model(pick));
-                                self.session.model = pick;
-                                self.session.try_autoload_rom();
-                                self.apply_restored_machine_options();
-                                self.mark_prefs_dirty();
+                            if response.clicked() {
+                                self.on_builtin_model_selected(pick);
                             }
                         }
                         ui.separator();
@@ -1483,6 +1689,7 @@ impl SpecChumApp {
                                 let mut selected = self.prefs.active_config_id.as_deref()
                                     == Some(cfg.id.as_str());
                                 if ui.radio_value(&mut selected, true, &cfg.name).clicked() {
+                                    self.show_rom_setup = false;
                                     self.prefs.select_custom_config(&cfg.id);
                                     if let Some(active) = self.prefs.active_custom_config().cloned()
                                     {
@@ -1511,9 +1718,9 @@ impl SpecChumApp {
                                     self.prefs.delete_custom_config(&cfg.id);
                                     if was_active {
                                         self.prefs.model = self.prefs.last_builtin_model;
-                                        self.session.model = self.prefs.last_builtin_model.to_model();
-                                        self.session.try_autoload_rom();
-                                        self.apply_restored_machine_options();
+                                        self.on_builtin_model_selected(
+                                            self.prefs.last_builtin_model.to_model(),
+                                        );
                                     }
                                     self.mark_prefs_dirty();
                                     ui.close_menu();
@@ -1542,11 +1749,9 @@ impl SpecChumApp {
                         {
                             if let Some(id) = self.prefs.active_config_id.clone() {
                                 self.prefs.delete_custom_config(&id);
-                                self.prefs.model = self.prefs.last_builtin_model;
-                                self.session.model = self.prefs.last_builtin_model.to_model();
-                                self.session.try_autoload_rom();
-                                self.apply_restored_machine_options();
-                                self.mark_prefs_dirty();
+                                self.on_builtin_model_selected(
+                                    self.prefs.last_builtin_model.to_model(),
+                                );
                             }
                             ui.close_menu();
                         }
@@ -1629,6 +1834,7 @@ impl SpecChumApp {
                                 | Model::SpectrumPlus2
                                 | Model::SpectrumPlus2A
                                 | Model::SpectrumPlus3
+                                | Model::Pentagon128
                         ) {
                             ui.separator();
                             ui.label("AY stereo");
@@ -1716,6 +1922,7 @@ impl SpecChumApp {
                                 | Model::Spectrum48
                                 | Model::Spectrum128
                                 | Model::SpectrumPlus2
+                                | Model::Pentagon128
                         ) {
                             if ui.button("Attach DivMMC").clicked() {
                                 self.session.attach_divmmc_stub();
@@ -2092,6 +2299,7 @@ of their copyrighted material but retain that copyright.",
 
         self.debug_window(ctx);
         self.config_editor_window(ctx);
+        self.rom_setup_window(ctx);
 
         let paused = self
             .session

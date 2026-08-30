@@ -3,6 +3,7 @@
 //! Serializable profiles: base model + optional hardware + ROM override.
 //! Apply logic is shared by egui and tests; macOS parity is follow-up #169.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use machine::{AyStereoMode, JoystickMode, Machine, Model};
@@ -52,7 +53,7 @@ pub const MAX_CUSTOM_CONFIGS: usize = 32;
 pub fn expected_rom_bytes(model: PrefModel) -> usize {
     match model {
         PrefModel::Spectrum16K | PrefModel::Spectrum48 => 16 * 1024,
-        PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 => 32 * 1024,
+        PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 | PrefModel::Pentagon128 => 32 * 1024,
         PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 => 64 * 1024,
     }
 }
@@ -90,15 +91,27 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
         multiface: matches!(m, Model::Spectrum16K | Model::Spectrum48),
         divmmc: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::Spectrum128 | Model::SpectrumPlus2
+            Model::Spectrum16K
+                | Model::Spectrum48
+                | Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::Pentagon128
         ),
         interface1: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::Spectrum128 | Model::SpectrumPlus2
+            Model::Spectrum16K
+                | Model::Spectrum48
+                | Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::Pentagon128
         ),
         beta: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::Spectrum128 | Model::SpectrumPlus2
+            Model::Spectrum16K
+                | Model::Spectrum48
+                | Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::Pentagon128
         ),
         ay_stereo: matches!(
             m,
@@ -106,6 +119,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::SpectrumPlus2
                 | Model::SpectrumPlus2A
                 | Model::SpectrumPlus3
+                | Model::Pentagon128
         ),
         kempston_mouse: true,
         joystick: true,
@@ -199,7 +213,9 @@ impl UserMachineConfig {
         }
         if !compat.beta {
             self.attach_beta = false;
-            self.trdos_rom_path = None;
+            if !machine::requires_trdos_rom(self.base.to_model()) {
+                self.trdos_rom_path = None;
+            }
         }
         if !compat.ay_stereo {
             self.ay_stereo = PrefAyStereo::Mono;
@@ -213,7 +229,7 @@ impl UserMachineConfig {
         if !self.attach_interface1 {
             self.interface1_rom_path = None;
         }
-        if !self.attach_beta {
+        if !self.attach_beta && !machine::requires_trdos_rom(self.base.to_model()) {
             self.trdos_rom_path = None;
         }
         self
@@ -281,10 +297,22 @@ fn validate_rom_file(path: &str, model: PrefModel) -> Result<(), MachineConfigEr
     validate_main_rom(&data, model)
 }
 
+fn slot_overrides_for_config(config: &UserMachineConfig) -> BTreeMap<String, PathBuf> {
+    let mut overrides = crate::rom_setup::slot_rom_overrides_for_model(config.base.to_model_id());
+    if let Some(path) = &config.custom_rom_path {
+        overrides.insert("main".into(), PathBuf::from(path));
+    }
+    if let Some(path) = &config.trdos_rom_path {
+        overrides.insert("trdos".into(), PathBuf::from(path));
+    }
+    overrides
+}
+
 /// Resolve main ROM bytes: custom path or default autoload for `base`.
 pub fn resolve_main_rom(
     config: &UserMachineConfig,
     roots: &[PathBuf],
+    overrides: &BTreeMap<String, PathBuf>,
 ) -> Result<(Vec<u8>, String), MachineConfigError> {
     let config = config.clone().sanitized();
     if let Some(custom) = &config.custom_rom_path {
@@ -296,12 +324,13 @@ pub fn resolve_main_rom(
         return Ok((data, custom.clone()));
     }
     let model = config.base.to_model();
-    let path = machine::resolve_rom_path_in(model, roots).ok_or_else(|| {
-        MachineConfigError::MissingRom {
-            model: machine::model_title(model).to_string(),
-            reason: machine::unavailable_reason(model).to_string(),
-        }
-    })?;
+    let path =
+        machine::resolve_rom_path_in_with_overrides(model, roots, overrides).ok_or_else(|| {
+            MachineConfigError::MissingRom {
+                model: machine::model_title(model).to_string(),
+                reason: machine::unavailable_reason(model).to_string(),
+            }
+        })?;
     let path_display = path.display().to_string();
     let data = std::fs::read(&path).map_err(|e| MachineConfigError::Io {
         path: path_display.clone(),
@@ -311,7 +340,11 @@ pub fn resolve_main_rom(
     Ok((data, path_display))
 }
 
-fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, MachineConfigError> {
+fn build_machine(
+    model: Model,
+    rom: &[u8],
+    overrides: &BTreeMap<String, PathBuf>,
+) -> Result<Machine, MachineConfigError> {
     match model {
         Model::Spectrum16K => Machine::new_16k(rom),
         Model::Spectrum48 => Machine::new_48k(rom),
@@ -319,6 +352,11 @@ fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, MachineConfigError
         Model::SpectrumPlus2 => Machine::new_plus2(rom),
         Model::SpectrumPlus2A => Machine::new_plus2a(rom),
         Model::SpectrumPlus3 => Machine::new_plus3(rom),
+        Model::Pentagon128 => {
+            let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
+                .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
+            Machine::new_pentagon128(rom, &trdos)
+        }
     }
     .map_err(MachineConfigError::Machine)
 }
@@ -333,8 +371,9 @@ pub fn apply_user_config(
     let config = config.clone().sanitized();
     config.validate()?;
     let model = config.base.to_model();
-    let (rom, rom_label) = resolve_main_rom(&config, roots)?;
-    let mut machine = build_machine(model, &rom)?;
+    let overrides = slot_overrides_for_config(&config);
+    let (rom, rom_label) = resolve_main_rom(&config, roots, &overrides)?;
+    let mut machine = build_machine(model, &rom, &overrides)?;
     let mut notes = Vec::new();
 
     if config.attach_multiface && hardware_compat(config.base).multiface {

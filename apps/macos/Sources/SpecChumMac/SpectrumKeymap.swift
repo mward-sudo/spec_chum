@@ -93,6 +93,18 @@ enum SpectrumKeymap {
         return mask
     }
 
+    /// Caps+5/6/7/8 cursor chords for 128K boot menus and BASIC (egui Cursor mode parity).
+    /// Arrows still feed Kempston via `kempstonMask`; matrix chords are injected separately.
+    static func cursorChord(keyCode: UInt16) -> [(UInt32, UInt32)]? {
+        switch keyCode {
+        case 123: return [caps, (3, 4)] // left — 5
+        case 125: return [caps, (4, 4)] // down — 6
+        case 126: return [caps, (4, 3)] // up — 7
+        case 124: return [caps, (4, 2)] // right — 8
+        default: return nil
+        }
+    }
+
     // MARK: - Private
 
     private static func letterDigit(keyCode: UInt16) -> (UInt32, UInt32)? {

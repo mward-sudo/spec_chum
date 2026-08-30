@@ -18,6 +18,14 @@ struct SpecChumMacApp: App {
         Window("Spec Chum", id: "main") {
             ContentView(host: host)
                 .frame(minWidth: 640, minHeight: 520)
+                .sheet(isPresented: $host.showRomSetup) {
+                    RomSetupView(host: host)
+                }
+                .onChange(of: host.showRomSetup) { _, showing in
+                    if !showing {
+                        FocusSpectrumView.postDelayed()
+                    }
+                }
         }
         .defaultSize(width: 780, height: 640)
         // Toolbar band is the draggable titlebar region (unified over full-bleed content).
@@ -86,6 +94,12 @@ struct SpecChumMacApp: App {
 
             // Machine — built-in models, custom profiles, reset
             CommandMenu("Machine") {
+                if host.showRomsToolbarButton {
+                    Button("ROMs…") {
+                        host.presentRomSetup()
+                    }
+                    Divider()
+                }
                 Menu("Built-in models") {
                     Text("Select only — default ROMs. Session hardware via Hardware menu.")
                         .font(.caption)
@@ -93,14 +107,16 @@ struct SpecChumMacApp: App {
                     ForEach(HostBridge.Model.pickerOrder) { pick in
                         Button {
                             host.selectBuiltinModel(pick)
+                            FocusSpectrumView.postDelayed()
                         } label: {
                             if host.activeConfigId == nil && host.model == pick {
                                 Text("✓ \(pick.title)")
+                            } else if !pick.romAvailable {
+                                Text("\(pick.title) (ROMs required)")
                             } else {
                                 Text(pick.title)
                             }
                         }
-                        .disabled(!pick.romAvailable)
                     }
                 }
                 Divider()

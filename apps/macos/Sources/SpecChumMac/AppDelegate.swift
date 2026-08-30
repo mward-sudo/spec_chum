@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        FocusSpectrumView.installMenuTrackingObservers()
         for window in NSApp.windows {
             WindowChrome.applyTabBarPolicy(to: window)
         }

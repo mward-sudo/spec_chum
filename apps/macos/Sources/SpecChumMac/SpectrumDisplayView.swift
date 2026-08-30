@@ -9,6 +9,9 @@ struct SpectrumDisplayView: NSViewRepresentable {
         let view = SpectrumNSView()
         view.host = host
         host.attachSpectrumPresentView(view)
+        DispatchQueue.main.async {
+            view.claimFocus()
+        }
         return view
     }
 
@@ -38,9 +41,11 @@ final class SpectrumNSView: NSView {
     private var becomeKeyObserver: NSObjectProtocol?
     private var resignKeyObserver: NSObjectProtocol?
     private var focusRequestObserver: NSObjectProtocol?
+    private var menuEndTrackingObserver: NSObjectProtocol?
 
     override var acceptsFirstResponder: Bool { true }
-    override var canBecomeKeyView: Bool { true }
+    /// Do not join the key-view loop — arrow keys must reach `keyDown`, not `moveLeft:` et al.
+    override var canBecomeKeyView: Bool { false }
     override var isFlipped: Bool { false }
 
     override init(frame frameRect: NSRect) {
@@ -87,6 +92,13 @@ final class SpectrumNSView: NSView {
         }
         focusRequestObserver = NotificationCenter.default.addObserver(
             forName: FocusSpectrumView.name,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.claimFocus()
+        }
+        menuEndTrackingObserver = NotificationCenter.default.addObserver(
+            forName: NSMenu.didEndTrackingNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -275,16 +287,29 @@ final class SpectrumNSView: NSView {
         guard let window else { return }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(self)
+        // Toolbar Machine pickers often steal first responder until the menu closes.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, window.isKeyWindow else { return }
+            if window.firstResponder !== self {
+                window.makeFirstResponder(self)
+            }
+        }
     }
 
-    /// Backup capture only when we are not first responder but the window is key.
-    private func shouldMonitorCapture() -> Bool {
+    /// Backup capture when the window is key but AppKit would not deliver `keyDown` here.
+    private func shouldMonitorCapture(for event: NSEvent) -> Bool {
         guard let window, window.isKeyWindow else { return false }
+        if FocusSpectrumView.isMenuTracking { return false }
+        // Arrows / Tab: always inject — even as first responder AppKit may route via key-view loop.
+        if event.type == .keyDown || event.type == .keyUp,
+           SpectrumKeymap.isJoystickRoutingKey(keyCode: event.keyCode)
+        {
+            return true
+        }
         guard let fr = window.firstResponder else { return true }
         if fr === self { return false }
+        // Only defer to real text fields — toolbar buttons/menus are NSControls too.
         if fr is NSTextView || fr is NSTextField { return false }
-        if fr is NSControl { return false }
-        // SwiftUI hosting views are plain NSViews — monitor fills the gap.
         return true
     }
 
@@ -299,8 +324,11 @@ final class SpectrumNSView: NSView {
                 return event
             }
 
-            // Prefer the first-responder path when we own focus.
-            guard self.shouldMonitorCapture() else { return event }
+            if FocusSpectrumView.isMenuTracking {
+                return event
+            }
+
+            guard self.shouldMonitorCapture(for: event) else { return event }
 
             switch event.type {
             case .keyDown:
@@ -340,6 +368,10 @@ final class SpectrumNSView: NSView {
         if let focusRequestObserver {
             NotificationCenter.default.removeObserver(focusRequestObserver)
             self.focusRequestObserver = nil
+        }
+        if let menuEndTrackingObserver {
+            NotificationCenter.default.removeObserver(menuEndTrackingObserver)
+            self.menuEndTrackingObserver = nil
         }
     }
 
@@ -382,6 +414,11 @@ final class SpectrumNSView: NSView {
             host?.setKey(row: row, bit: bit, pressed: true)
         }
         for code in held {
+            if let cursor = SpectrumKeymap.cursorChord(keyCode: code) {
+                for (row, bit) in cursor {
+                    host?.setKey(row: row, bit: bit, pressed: true)
+                }
+            }
             if SpectrumKeymap.isJoystickRoutingKey(keyCode: code) {
                 continue
             }
@@ -398,5 +435,6 @@ final class SpectrumNSView: NSView {
         }
         // Kempston mirror (egui: arrows + Tab fire) — OR’d with GCController in HostBridge.
         host?.setKeyboardJoystickMask(SpectrumKeymap.kempstonMask(held: held))
+        host?.flushInputFrame()
     }
 }
