@@ -317,6 +317,7 @@ impl Inspect {
             Model::SpectrumPlus2A => "plus2a",
             Model::SpectrumPlus3 => "plus3",
             Model::Pentagon128 => "pentagon128",
+            Model::TimexTC2048 => "timex_tc2048",
         };
         let tape = self.tape.as_ref().map_or("null".into(), tape_json);
         let ay = self.ay_regs.map_or("null".into(), |regs| {

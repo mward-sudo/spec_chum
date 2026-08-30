@@ -104,6 +104,9 @@ struct SpecChumMacApp: App {
                     Text("Select only — default ROMs. Session hardware via Hardware menu.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text("Timex TC2048: Phase 1 — 256×192 OK; hi-res / extended modes broken (docs/TIMEX.md).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     ForEach(HostBridge.Model.pickerOrder) { pick in
                         Button {
                             host.selectBuiltinModel(pick)

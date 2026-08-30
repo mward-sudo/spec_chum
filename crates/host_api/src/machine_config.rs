@@ -52,7 +52,7 @@ pub const MAX_CUSTOM_CONFIGS: usize = 32;
 #[must_use]
 pub fn expected_rom_bytes(model: PrefModel) -> usize {
     match model {
-        PrefModel::Spectrum16K | PrefModel::Spectrum48 => 16 * 1024,
+        PrefModel::Spectrum16K | PrefModel::Spectrum48 | PrefModel::TimexTC2048 => 16 * 1024,
         PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 | PrefModel::Pentagon128 => 32 * 1024,
         PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 => 64 * 1024,
     }
@@ -88,11 +88,15 @@ pub struct HardwareCompat {
 pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
     let m = model.to_model();
     HardwareCompat {
-        multiface: matches!(m, Model::Spectrum16K | Model::Spectrum48),
+        multiface: matches!(
+            m,
+            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048
+        ),
         divmmc: matches!(
             m,
             Model::Spectrum16K
                 | Model::Spectrum48
+                | Model::TimexTC2048
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
@@ -101,6 +105,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
             m,
             Model::Spectrum16K
                 | Model::Spectrum48
+                | Model::TimexTC2048
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
@@ -109,6 +114,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
             m,
             Model::Spectrum16K
                 | Model::Spectrum48
+                | Model::TimexTC2048
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
@@ -357,6 +363,7 @@ fn build_machine(
                 .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
             Machine::new_pentagon128(rom, &trdos)
         }
+        Model::TimexTC2048 => Machine::new_timex_tc2048(rom).map_err(|e| e.to_string()),
     }
     .map_err(MachineConfigError::Machine)
 }

@@ -56,6 +56,7 @@ pub struct RomSlotState {
 pub fn rom_candidates(model: Model) -> &'static [&'static str] {
     match model {
         Model::Spectrum16K | Model::Spectrum48 => &["roms/spec48.rom"],
+        Model::TimexTC2048 => &["roms/timex/tc2048.rom"],
         Model::Spectrum128 => &["roms/128/spec128uk.rom"],
         Model::SpectrumPlus2 => &["roms/plus2/plus2uk.rom"],
         Model::SpectrumPlus2A => &["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"],
@@ -78,7 +79,7 @@ pub fn trdos_rom_candidates(_model: Model) -> &'static [&'static str] {
 #[must_use]
 pub fn expected_main_rom_bytes(model: Model) -> usize {
     match model {
-        Model::Spectrum16K | Model::Spectrum48 => 16 * 1024,
+        Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 => 16 * 1024,
         Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 => 32 * 1024,
         Model::SpectrumPlus2A | Model::SpectrumPlus3 => 64 * 1024,
     }
@@ -107,6 +108,7 @@ pub fn model_label(model: Model) -> &'static str {
         Model::SpectrumPlus2A => "+2A",
         Model::SpectrumPlus3 => "+3",
         Model::Pentagon128 => "Pentagon",
+        Model::TimexTC2048 => "TC2048",
     }
 }
 
@@ -121,11 +123,12 @@ pub fn model_title(model: Model) -> &'static str {
         Model::SpectrumPlus2A => "Spectrum +2A",
         Model::SpectrumPlus3 => "Spectrum +3",
         Model::Pentagon128 => "Pentagon 128",
+        Model::TimexTC2048 => "Timex TC2048",
     }
 }
 
-/// Canonical UI order for every host picker / menu (16K → … → +3 → Pentagon).
-pub const ALL_MODELS: [Model; 7] = [
+/// Canonical UI order for every host picker / menu (16K → … → +3 → Pentagon → Timex).
+pub const ALL_MODELS: [Model; 8] = [
     Model::Spectrum16K,
     Model::Spectrum48,
     Model::Spectrum128,
@@ -133,6 +136,7 @@ pub const ALL_MODELS: [Model; 7] = [
     Model::SpectrumPlus2A,
     Model::SpectrumPlus3,
     Model::Pentagon128,
+    Model::TimexTC2048,
 ];
 
 /// Workspace / env / cwd roots tried when autoloading ROMs.
@@ -526,6 +530,7 @@ mod tests {
                 Model::SpectrumPlus2A,
                 Model::SpectrumPlus3,
                 Model::Pentagon128,
+                Model::TimexTC2048,
             ]
         );
     }
@@ -562,6 +567,15 @@ mod tests {
         assert_eq!(
             plus2.is_some(),
             rom_available_in(Model::SpectrumPlus2, &roots)
+        );
+    }
+
+    #[test]
+    fn timex_tc2048_uses_fetchable_rom_path() {
+        assert!(!requires_user_rom(Model::TimexTC2048));
+        assert_eq!(
+            rom_candidates(Model::TimexTC2048),
+            &["roms/timex/tc2048.rom"]
         );
     }
 

@@ -10,6 +10,7 @@ mod kempston;
 mod kempston_mouse;
 mod multiface;
 mod plus3;
+mod timex;
 
 pub use ay::{Ay8912, StereoMode};
 pub use beta_disk::{BetaDisk, TRDOS_ROM_SIZE};
@@ -25,6 +26,7 @@ pub use kempston_mouse::{
 };
 pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
+pub use timex::TimexScld;
 
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
@@ -100,6 +102,9 @@ pub struct Bus48 {
     pub ram: [u8; 49152],
     /// When true, only 16 KiB RAM is mapped at `0x4000..0x8000` (#188).
     pub ram16k: bool,
+    /// Timex TC2048 SCLD ports (#192).
+    pub timex: bool,
+    pub timex_scld: TimexScld,
     pub keyboard: Keyboard,
     pub ear: bool,
     pub mic: bool,
@@ -135,6 +140,8 @@ impl Bus48 {
             rom: [0; 16384],
             ram: [0; 49152],
             ram16k: false,
+            timex: false,
+            timex_scld: TimexScld::new(),
             keyboard: Keyboard::new(),
             ear: false,
             mic: false,
@@ -359,6 +366,11 @@ impl Bus48 {
         if let Some(v) = self.mouse.read_port(port) {
             return v;
         }
+        if self.timex {
+            if let Some(v) = self.timex_scld.in_port(port) {
+                return v;
+            }
+        }
         if port & 1 == 0 {
             return self.in_fe(port);
         }
@@ -389,6 +401,9 @@ impl Bus48 {
             if if1.out_port(port, value) {
                 return;
             }
+        }
+        if self.timex && self.timex_scld.out_port(port, value) {
+            return;
         }
         if port & 1 == 0 {
             self.out_fe(value);

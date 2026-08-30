@@ -20,6 +20,8 @@ pub enum ModelId {
     Spectrum16K = 5,
     /// Pentagon 128 clone (#188 Phase B).
     Pentagon128 = 6,
+    /// Timex TC2048 (#192 Phase 1).
+    TimexTC2048 = 7,
 }
 
 impl ModelId {
@@ -33,6 +35,7 @@ impl ModelId {
             4 => Some(Self::SpectrumPlus2),
             5 => Some(Self::Spectrum16K),
             6 => Some(Self::Pentagon128),
+            7 => Some(Self::TimexTC2048),
             _ => None,
         }
     }
@@ -47,6 +50,7 @@ impl ModelId {
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::Pentagon128 => Model::Pentagon128,
+            Self::TimexTC2048 => Model::TimexTC2048,
         }
     }
 
@@ -60,11 +64,12 @@ impl ModelId {
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::Pentagon128 => Self::Pentagon128,
+            Model::TimexTC2048 => Self::TimexTC2048,
         }
     }
 
     /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
@@ -72,6 +77,7 @@ impl ModelId {
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
         Self::Pentagon128,
+        Self::TimexTC2048,
     ];
 
     #[must_use]
@@ -492,6 +498,7 @@ impl HostSession {
                     .map_err(HostError::Message)?;
                 Machine::new_pentagon128(rom, &trdos)
             }
+            ModelId::TimexTC2048 => Machine::new_timex_tc2048(rom).map_err(|e| e.to_string()),
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
@@ -892,7 +899,9 @@ impl HostSession {
         }
         let audio = m.run_frame();
         let frame_t = match m.model() {
-            machine::Model::Spectrum16K | machine::Model::Spectrum48 => 69_888,
+            machine::Model::Spectrum16K
+            | machine::Model::Spectrum48
+            | machine::Model::TimexTC2048 => 69_888,
             machine::Model::Spectrum128
             | machine::Model::SpectrumPlus2
             | machine::Model::SpectrumPlus2A

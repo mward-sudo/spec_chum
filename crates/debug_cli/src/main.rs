@@ -12,7 +12,7 @@ use trace::DumpFilter;
 #[derive(Parser, Debug)]
 #[command(name = "spec-chum-debug", about = "Headless Spec Chum debugger")]
 struct Cli {
-    /// 48k, 128k, plus2a, or plus3
+    /// 16k, 48k, 128k, plus2, plus2a, plus3, pentagon, timex (aliases: tc2048, timex2048)
     #[arg(long, default_value = "48k")]
     model: String,
     #[arg(long)]
@@ -119,6 +119,7 @@ fn parse_model(s: &str) -> Result<Model> {
         "plus2a" | "+2a" => Model::SpectrumPlus2A,
         "plus3" | "+3" => Model::SpectrumPlus3,
         "pentagon" | "pentagon128" | "128p" => Model::Pentagon128,
+        "timex" | "tc2048" | "timex2048" => Model::TimexTC2048,
         other => bail!("unknown model {other}"),
     })
 }
@@ -139,6 +140,7 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
                 machine::read_trdos_rom(Model::Pentagon128).map_err(|e| anyhow::anyhow!(e))?;
             Machine::new_pentagon128(&rom, &trdos)
         }
+        Model::TimexTC2048 => Machine::new_timex_tc2048(&rom).map_err(|e| e.to_string()),
     }
     .map_err(|e| anyhow::anyhow!(e))?;
     if let Some(path) = &cli.snapshot {
@@ -213,7 +215,10 @@ fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
                         Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
                         Model::Spectrum128 => Machine::new_128k(&rom),
                         Model::SpectrumPlus2 => Machine::new_plus2(&rom),
-                        Model::Spectrum48 | Model::Spectrum16K | Model::Pentagon128 => {
+                        Model::Spectrum48
+                        | Model::Spectrum16K
+                        | Model::TimexTC2048
+                        | Model::Pentagon128 => {
                             unreachable!("128-family snapshot only")
                         }
                     }

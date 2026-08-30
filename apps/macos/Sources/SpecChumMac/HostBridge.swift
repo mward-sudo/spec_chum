@@ -80,10 +80,11 @@ final class HostBridge: ObservableObject {
         case spectrumPlus2 = 4
         case spectrum16K = 5
         case pentagon128 = 6
+        case timexTC2048 = 7
 
         /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
         static let pickerOrder: [Model] = [
-            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3, .pentagon128,
+            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3, .pentagon128, .timexTC2048,
         ]
 
         var id: UInt32 { rawValue }
@@ -97,6 +98,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus3: "Spectrum +3"
             case .spectrumPlus2A: "Spectrum +2A"
             case .pentagon128: "Pentagon 128"
+            case .timexTC2048: "Timex TC2048"
             }
         }
 
@@ -110,6 +112,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus3: "+3"
             case .spectrumPlus2A: "+2A"
             case .pentagon128: "Pentagon"
+            case .timexTC2048: "TC2048"
             }
         }
 
@@ -123,6 +126,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus2A: "spectrum_plus2_a"
             case .spectrumPlus3: "spectrum_plus3"
             case .pentagon128: "pentagon128"
+            case .timexTC2048: "timex_tc2048"
             }
         }
 
@@ -137,7 +141,7 @@ final class HostBridge: ObservableObject {
 
         /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
         var supportsBeta: Bool {
-            self == .spectrum16K || self == .spectrum48 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128
+            self == .spectrum16K || self == .spectrum48 || self == .timexTC2048 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128
         }
 
         /// Toolbar machine picker: fit the longest `title` ("Spectrum 128K") plus chevron.
@@ -1735,7 +1739,7 @@ final class HostBridge: ObservableObject {
     private func beginTypeLoadQuotes(withCode: Bool, pendingPlay: Bool) {
         pendingInstantPlay = pendingPlay
         switch model {
-        case .spectrum16K, .spectrum48:
+        case .spectrum16K, .spectrum48, .timexTC2048:
             keyScript = LoadKeyScript.loadQuotes48k(withCode: withCode)
             status = withCode
                 ? "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
@@ -2279,6 +2283,8 @@ final class HostBridge: ObservableObject {
                 return ["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"]
             case .pentagon128:
                 return ["roms/pentagon/pentagon.rom", "roms/pentagon/128p.rom"]
+            case .timexTC2048:
+                return ["roms/timex/tc2048.rom"]
             }
         }()
         for root in romSearchRoots {

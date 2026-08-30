@@ -217,6 +217,7 @@ impl EmulatorSession {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
                 Machine::new_pentagon128(data, &trdos)
             }
+            Model::TimexTC2048 => Machine::new_timex_tc2048(data).map_err(|e| e.to_string()),
         }
     }
 
@@ -455,7 +456,7 @@ impl EmulatorSession {
         // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
         self.pending_instant_play = pending_play;
         self.key_script = Some(match self.model {
-            Model::Spectrum16K | Model::Spectrum48 => {
+            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 => {
                 if with_code {
                     KeyScript::load_quotes_code_48k()
                 } else {
@@ -472,10 +473,10 @@ impl EmulatorSession {
             return;
         }
         self.status = match (self.model, with_code) {
-            (Model::Spectrum16K | Model::Spectrum48, true) => {
+            (Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048, true) => {
                 "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
             }
-            (Model::Spectrum16K | Model::Spectrum48, false) => {
+            (Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048, false) => {
                 "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
             }
             (Model::SpectrumPlus2A, false) => {
@@ -1633,6 +1634,9 @@ impl SpecChumApp {
                         }
                         ui.label("Built-in models");
                         ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
+                        ui.weak(
+                            "Timex TC2048 (Phase 1): 256×192 OK; 512×192 hi-res / extended SCLD modes not drawn — docs/TIMEX.md.",
+                        );
                         for pick in machine::ALL_MODELS {
                             let pref = PrefModel::from_model(pick);
                             let available = model_rom_available(
@@ -1654,6 +1658,11 @@ impl SpecChumApp {
                                     title,
                                     machine::unavailable_reason(pick)
                                 ));
+                            } else if pick == Model::TimexTC2048 {
+                                response.clone().on_hover_text(
+                                    "Phase 1: Timex ROM + SCLD port latches; standard 256×192 only — \
+                                     512×192 hi-res / extended modes broken (docs/TIMEX.md)",
+                                );
                             }
                             if response.clicked() {
                                 self.on_builtin_model_selected(pick);
@@ -1891,7 +1900,7 @@ impl SpecChumApp {
                         ui.label("Peripherals (partial where noted)");
                         ui.separator();
 
-                        if matches!(model, Model::Spectrum16K | Model::Spectrum48) {
+                        if matches!(model, Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048) {
                             if ui.button("Attach Multiface 1 ROM…").clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("Multiface ROM", &["rom", "bin"])
@@ -1920,6 +1929,7 @@ impl SpecChumApp {
                             model,
                             Model::Spectrum16K
                                 | Model::Spectrum48
+                                | Model::TimexTC2048
                                 | Model::Spectrum128
                                 | Model::SpectrumPlus2
                                 | Model::Pentagon128
