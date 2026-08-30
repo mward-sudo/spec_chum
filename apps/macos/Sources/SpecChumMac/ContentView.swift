@@ -421,6 +421,28 @@ struct DebugInspectorView: View {
 /// Ask the embedded Spectrum `NSView` to take first responder (SwiftUI focus alone is not enough).
 enum FocusSpectrumView {
     static let name = Notification.Name("SpecChumFocusSpectrumView")
+    private(set) static var menuTrackingDepth = 0
+
+    static var isMenuTracking: Bool { menuTrackingDepth > 0 }
+
+    /// Register once at launch — gates the key monitor while AppKit menus are open.
+    static func installMenuTrackingObservers() {
+        NotificationCenter.default.addObserver(
+            forName: NSMenu.didBeginTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            menuTrackingDepth += 1
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSMenu.didEndTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            menuTrackingDepth = max(0, menuTrackingDepth - 1)
+            postDelayed()
+        }
+    }
 
     static func post() {
         NotificationCenter.default.post(name: name, object: nil)
@@ -436,12 +458,6 @@ enum FocusSpectrumView {
                 post()
             }
         }
-    }
-
-    /// While an AppKit menu is tracking, arrow keys must navigate the menu — not the Spectrum.
-    static var isMenuTracking: Bool {
-        guard let menu = NSApp.mainMenu else { return false }
-        return menu.items.contains(where: { $0.submenu?.isTracking == true })
     }
 }
 
