@@ -24,11 +24,15 @@ mkdir -p "$ROM_DIR"
 copy_rom() {
   local src="$1" dest="$2"
   if [[ ! -f "$src" ]]; then
-    echo "warn: missing $src" >&2
+    echo "error: missing $src" >&2
     return 1
   fi
   mkdir -p "$(dirname "$dest")"
   cp -f "$src" "$dest"
+  if ! cmp -s "$src" "$dest"; then
+    echo "error: verify failed ${dest#"$ROM_DIR"/}" >&2
+    return 1
+  fi
   echo "  ok ${dest#"$ROM_DIR"/} ($(wc -c < "$dest" | tr -d ' ') bytes)"
 }
 
@@ -41,9 +45,8 @@ copy_dir_roms() {
   fi
   mkdir -p "$dest_dir"
   while IFS= read -r f; do
-    if copy_rom "$f" "$dest_dir/$(basename "$f")"; then
-      copied=$((copied + 1))
-    fi
+    copy_rom "$f" "$dest_dir/$(basename "$f")"
+    copied=$((copied + 1))
   done < <(find "$src_dir" -maxdepth 1 -name '*.rom' | sort)
   echo "  ${copied} file(s) in ${dest_dir#"$ROM_DIR"/}/"
 }
@@ -80,15 +83,13 @@ mkdir -p "$ROM_DIR/alternate"
 while IFS= read -r f; do
   base="$(basename "$f")"
   [[ "$base" == spec48.rom ]] && continue
-  copy_rom "$f" "$ROM_DIR/alternate/$base" || true
+  copy_rom "$f" "$ROM_DIR/alternate/$base"
 done < <(find "$CACHE/zx-roms/spectrum16-48" -maxdepth 1 -name '*.rom' | sort)
 
 copy_dir_roms "$CACHE/zx-roms/spectrum128-plus2/128" "$ROM_DIR/128"
 copy_dir_roms "$CACHE/zx-roms/spectrum128-plus2/plus2" "$ROM_DIR/plus2"
 copy_dir_roms "$CACHE/zx-roms/spectrum-plus3/plus2a" "$ROM_DIR/plus2a"
 copy_dir_roms "$CACHE/zx-roms/spectrum-plus3/plus3" "$ROM_DIR/plus3"
-
-echo "$ZX_ROMS_REF" > "$ROM_DIR/.zx-roms-ref"
 
 echo
 echo "=== Non-Amstrad distributable sets (Fuse roms/) ==="
@@ -102,38 +103,62 @@ echo "Fuse 16 KiB bank splits (official UK machines)"
 mkdir -p "$ROM_DIR/fuse-16k"
 for name in 48.rom 128-0.rom 128-1.rom plus2-0.rom plus2-1.rom \
   plus3-0.rom plus3-1.rom plus3-2.rom plus3-3.rom; do
-  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/fuse-16k/$name" || true
+  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/fuse-16k/$name"
 done
 
-echo "Timex TC2048 / TC2068 (Fuse README.copyright; Timex permission via Andrew Owen 2010)"
+echo "Timex TC2048 / TC2068 (Fuse README.copyright; tc2048 Amstrad, tc2068 Timex mods PD)"
 mkdir -p "$ROM_DIR/timex"
 for name in tc2048.rom tc2068-0.rom tc2068-1.rom; do
-  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/timex/$name" || true
+  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/timex/$name"
 done
 
 echo "OpenSE BASIC (GPL-2+)"
 mkdir -p "$ROM_DIR/opense"
 for name in se-0.rom se-1.rom; do
-  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/opense/$name" || true
+  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/opense/$name"
 done
 
 echo "+3e (Amstrad modify/distribute + Garry Lancaster; Fuse README.copyright)"
 mkdir -p "$ROM_DIR/plus3e"
 for name in plus3e-0.rom plus3e-1.rom plus3e-2.rom plus3e-3.rom; do
-  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/plus3e/$name" || true
+  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/plus3e/$name"
 done
 
 echo "Datel DISCiPLE / +D (https://www.shadowmagic.org.uk/spectrum/datel.html)"
 mkdir -p "$ROM_DIR/peripherals/datel"
 for name in disciple.rom plusd.rom; do
-  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/peripherals/datel/$name" || true
+  copy_rom "$FUSE_SRC/$name" "$ROM_DIR/peripherals/datel/$name"
 done
 
 echo "SpeccyBoot v1.4 (MIT)"
 mkdir -p "$ROM_DIR/peripherals/speccyboot"
-copy_rom "$FUSE_SRC/speccyboot-1.4.rom" "$ROM_DIR/peripherals/speccyboot/speccyboot-1.4.rom" || true
+copy_rom "$FUSE_SRC/speccyboot-1.4.rom" "$ROM_DIR/peripherals/speccyboot/speccyboot-1.4.rom"
+cat > "$ROM_DIR/peripherals/speccyboot/LICENSE" <<'EOF'
+SpeccyBoot v1.4 ROM — MIT License
 
-echo "$FUSE_ROMS_REF" > "$ROM_DIR/.fuse-roms-ref"
+Copyright Patrick Persson
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Source: Fuse roms/README.copyright — https://github.com/fuse-emulator/fuse
+EOF
 
 echo
 echo "=== Verify ==="
@@ -161,6 +186,9 @@ else
   echo "  Compare with docs/ROMS.md inventory; re-run or check upstream refs." >&2
   exit 1
 fi
+
+echo "$ZX_ROMS_REF" > "$ROM_DIR/.zx-roms-ref"
+echo "$FUSE_ROMS_REF" > "$ROM_DIR/.fuse-roms-ref"
 
 echo "Done. ROM dir: $ROM_DIR"
 echo "Refs: zx-roms=${ZX_ROMS_REF} fuse=${FUSE_ROMS_REF}"

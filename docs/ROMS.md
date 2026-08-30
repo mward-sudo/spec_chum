@@ -62,8 +62,8 @@ Sparse checkout **excludes** `peripherals/Interface1` and `zx80-81` (see
 
 | Destination | Grant | Notes |
 | --- | --- | --- |
-| `roms/timex/tc2048.rom` | Timex permission (Andrew Owen, 2010, via Fuse) + Amstrad base | For future Timex model ([#192](https://github.com/mward-sudo/spec_chum/issues/192)) |
-| `roms/timex/tc2068-0.rom`, `tc2068-1.rom` | Timex modifications PD per Fuse copyright file | TC2068; no separate TS2068 in Fuse |
+| `roms/timex/tc2048.rom` | Lawson 1999 / Amstrad copyright (Fuse README.copyright) | Unmodified Amstrad ROM in TC2048 hardware; future Timex model ([#192](https://github.com/mward-sudo/spec_chum/issues/192)) |
+| `roms/timex/tc2068-0.rom`, `tc2068-1.rom` | Lawson 1999 base + Timex modifications PD per Fuse copyright file | TC2068; no separate TS2068 in Fuse |
 
 ### OpenSE BASIC — Fuse `se-*.rom` (GPL-2+)
 
@@ -88,7 +88,7 @@ Sparse checkout **excludes** `peripherals/Interface1` and `zx80-81` (see
 
 | Destination | Grant | Notes |
 | --- | --- | --- |
-| `roms/peripherals/speccyboot/speccyboot-1.4.rom` | MIT (Patrik Persson) | Only if SpeccyBoot is emulated |
+| `roms/peripherals/speccyboot/speccyboot-1.4.rom` | MIT (Patrick Persson) | `LICENSE` in same directory; only if SpeccyBoot is emulated |
 
 ## User-provided only — not auto-fetched
 
