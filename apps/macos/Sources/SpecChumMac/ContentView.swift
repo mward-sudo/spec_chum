@@ -382,6 +382,10 @@ enum WindowChrome {
         // Document tab strip (single "Spec Chum" tab + "+") sits below the toolbar — hide it.
         window.titleVisibility = .hidden
         window.titlebarSeparatorStyle = .none
+        // Persist frame across relaunches (#186); clamp is handled by min window size.
+        if window.frameAutosaveName != "SpecChumMainWindow" {
+            window.setFrameAutosaveName("SpecChumMainWindow")
+        }
     }
 }
 

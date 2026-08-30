@@ -121,17 +121,25 @@ final class HostBridge: ObservableObject {
         didSet { pushTapeLoadOptions() }
     }
     /// EAR speed (1x…20x): while Play is active, that many Spectrum frames per host tick.
-    @Published var tapeSpeed: UInt32 = 1 {
+    @Published var tapeSpeed: UInt32 = HostBridge.loadPersistedTapeSpeed() {
         didSet {
             if !suppressTapeOptsPush, tapeSpeed != 0 {
                 experienceLoad = false
                 instantLoad = false
             }
             pushTapeLoadOptions()
+            if !suppressPrefsPersist {
+                UserDefaults.standard.set(Int(tapeSpeed), forKey: Self.tapeSpeedDefaultsKey)
+            }
         }
     }
-    @Published var experienceLoad: Bool = false {
-        didSet { pushTapeLoadOptions() }
+    @Published var experienceLoad: Bool = HostBridge.loadPersistedExperience() {
+        didSet {
+            pushTapeLoadOptions()
+            if !suppressPrefsPersist {
+                UserDefaults.standard.set(experienceLoad, forKey: Self.experienceDefaultsKey)
+            }
+        }
     }
     /// Host PCM output gain 0…1 (what the user hears). Does not affect EAR / flash-load.
     @Published var outputVolume: Float = HostBridge.loadPersistedVolume() {
@@ -220,14 +228,17 @@ final class HostBridge: ObservableObject {
     @Published private(set) var debugSp: UInt16 = 0
     @Published private(set) var debugAf: UInt16 = 0
     @Published private(set) var inspectJsonPreview: String = ""
-    @Published var joystickMode: JoystickMode = .kempston {
+    @Published var joystickMode: JoystickMode = HostBridge.loadPersistedJoystickMode() {
         didSet {
             guard oldValue != joystickMode else { return }
             _ = applyJoystickMode(joystickMode)
+            if !suppressPrefsPersist {
+                UserDefaults.standard.set(Int(joystickMode.rawValue), forKey: Self.joystickDefaultsKey)
+            }
         }
     }
     /// When true, Spectrum / living-room pointer motion feeds the Kempston mouse (egui parity).
-    @Published var kempstonMouse: Bool = false {
+    @Published var kempstonMouse: Bool = HostBridge.loadPersistedKempstonMouse() {
         didSet {
             guard oldValue != kempstonMouse else { return }
             if !kempstonMouse {
@@ -238,17 +249,27 @@ final class HostBridge: ObservableObject {
                 mouseMiddle = false
                 clearGuestMouseButtons()
             }
+            if !suppressPrefsPersist {
+                UserDefaults.standard.set(kempstonMouse, forKey: Self.kempstonMouseDefaultsKey)
+            }
         }
     }
-    @Published var model: Model = .spectrum48 {
+    @Published var model: Model = HostBridge.loadPersistedModel() {
         didSet {
-            guard let handle, oldValue != model, !suppressModelPush else { return }
+            guard oldValue != model else { return }
+            if !suppressPrefsPersist {
+                UserDefaults.standard.set(Int(model.rawValue), forKey: Self.modelDefaultsKey)
+            }
+            guard let handle, !suppressModelPush else { return }
             _ = sc_set_model(handle, model.rawValue)
             tryAutoloadRom()
             pushTapeLoadOptions()
             refreshStatus()
         }
     }
+
+    /// Recent media paths (most recent first); reopen from File menu — not auto-inserted on launch.
+    @Published private(set) var recentFiles: [URL] = HostBridge.loadPersistedRecentFiles()
 
     /// Document-style window title: media + machine (HIG).
     var windowTitle: String {
@@ -306,6 +327,8 @@ final class HostBridge: ObservableObject {
     private var instantFlashActive = false
     /// When syncing `model` from `sc_get_model` after snapshot load, skip `sc_set_model`.
     private var suppressModelPush = false
+    /// Skip UserDefaults writes while restoring published prefs in bulk.
+    private var suppressPrefsPersist = false
 
     /// Toolbar / File label: include Disk only on +3.
     var openMediaTitle: String {
@@ -317,7 +340,8 @@ final class HostBridge: ObservableObject {
 
     init(romSearchRoots: [URL] = HostBridge.defaultRomRoots()) {
         self.romSearchRoots = romSearchRoots
-        handle = sc_create(Model.spectrum48.rawValue, 1)
+        // Restore model before create so the first machine matches last session (#186).
+        handle = sc_create(model.rawValue, 1)
         if handle == nil {
             status = HostBridge.takeLastError() ?? "Failed to create host session"
             return
@@ -325,7 +349,8 @@ final class HostBridge: ObservableObject {
         sc_debug_init_from_env()
         tryAutoloadRom()
         refreshStatus()
-        syncTapeLoadOptionsFromHost()
+        // Prefer persisted tape prefs over host defaults after create.
+        pushTapeLoadOptions()
         _ = applyJoystickMode(joystickMode)
         startGamepadDiscovery()
         ensureAudioObserver = NotificationCenter.default.addObserver(
@@ -377,6 +402,13 @@ final class HostBridge: ObservableObject {
 
     private static let volumeDefaultsKey = "specChum.outputVolume"
     private static let mutedDefaultsKey = "specChum.outputMuted"
+    private static let modelDefaultsKey = "specChum.model"
+    private static let tapeSpeedDefaultsKey = "specChum.tapeEarSpeed"
+    private static let experienceDefaultsKey = "specChum.tapeExperience"
+    private static let joystickDefaultsKey = "specChum.joystickMode"
+    private static let kempstonMouseDefaultsKey = "specChum.kempstonMouse"
+    private static let recentFilesDefaultsKey = "specChum.recentFiles"
+    private static let maxRecentFiles = 12
 
     private static func loadPersistedVolume() -> Float {
         let defaults = UserDefaults.standard
@@ -388,6 +420,72 @@ final class HostBridge: ObservableObject {
 
     private static func loadPersistedMuted() -> Bool {
         UserDefaults.standard.bool(forKey: mutedDefaultsKey)
+    }
+
+    private static func loadPersistedModel() -> Model {
+        let raw = UInt32(UserDefaults.standard.integer(forKey: modelDefaultsKey))
+        return Model(rawValue: raw) ?? .spectrum48
+    }
+
+    private static func loadPersistedTapeSpeed() -> UInt32 {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: tapeSpeedDefaultsKey) == nil {
+            return 1
+        }
+        let speed = UInt32(max(1, min(defaults.integer(forKey: tapeSpeedDefaultsKey), 64)))
+        let offered: Set<UInt32> = [1, 2, 5, 10, 20]
+        return offered.contains(speed) ? speed : 1
+    }
+
+    private static func loadPersistedExperience() -> Bool {
+        UserDefaults.standard.bool(forKey: experienceDefaultsKey)
+    }
+
+    private static func loadPersistedJoystickMode() -> JoystickMode {
+        let raw = UInt32(UserDefaults.standard.integer(forKey: joystickDefaultsKey))
+        return JoystickMode(rawValue: raw) ?? .kempston
+    }
+
+    private static func loadPersistedKempstonMouse() -> Bool {
+        UserDefaults.standard.bool(forKey: kempstonMouseDefaultsKey)
+    }
+
+    private static func loadPersistedRecentFiles() -> [URL] {
+        let paths = UserDefaults.standard.stringArray(forKey: recentFilesDefaultsKey) ?? []
+        return paths.prefix(maxRecentFiles).map { URL(fileURLWithPath: $0) }
+    }
+
+    private func persistRecentFiles() {
+        let paths = recentFiles.prefix(Self.maxRecentFiles).map(\.path)
+        UserDefaults.standard.set(Array(paths), forKey: Self.recentFilesDefaultsKey)
+    }
+
+    func noteRecentFile(_ url: URL) {
+        var next = recentFiles.filter { $0.standardizedFileURL != url.standardizedFileURL }
+        next.insert(url, at: 0)
+        if next.count > Self.maxRecentFiles {
+            next = Array(next.prefix(Self.maxRecentFiles))
+        }
+        recentFiles = next
+        persistRecentFiles()
+    }
+
+    /// Reopen a recent path; missing files are dropped from the list without crashing.
+    func openRecentFile(_ url: URL) {
+        guard FileManager.default.isReadableFile(atPath: url.path) else {
+            status = "Recent file missing: \(url.lastPathComponent)"
+            recentFiles.removeAll { $0.standardizedFileURL == url.standardizedFileURL }
+            persistRecentFiles()
+            return
+        }
+        switch url.pathExtension.lowercased() {
+        case "sna", "z80":
+            openSnapshot(at: url)
+        case "rzx":
+            openRzx(at: url)
+        default:
+            openMedia(at: url)
+        }
     }
 
     deinit {
@@ -1087,6 +1185,7 @@ final class HostBridge: ObservableObject {
             hasTape = true
             tapePlaying = false
             refreshTapeProgress()
+            noteRecentFile(url)
         }
     }
 
@@ -1100,6 +1199,7 @@ final class HostBridge: ObservableObject {
             syncModelFromHost()
             pushTapeLoadOptions()
             refreshStatus()
+            noteRecentFile(url)
         }
     }
 
@@ -1121,6 +1221,7 @@ final class HostBridge: ObservableObject {
         } else {
             mediaTitle = url.lastPathComponent
             refreshStatus()
+            noteRecentFile(url)
         }
     }
 
@@ -1133,6 +1234,7 @@ final class HostBridge: ObservableObject {
             mediaTitle = url.lastPathComponent
             // Prefer a clear +3DOS hint over the raw host status string.
             status = "DSK inserted — use +3 Loader / +3DOS"
+            noteRecentFile(url)
         }
     }
 
