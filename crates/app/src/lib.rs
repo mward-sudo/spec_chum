@@ -857,6 +857,7 @@ pub struct SpecChumApp {
     prefs_size_deadline: Option<Instant>,
     /// Create/edit dialog for custom machine profiles (#187).
     config_draft: Option<UserMachineConfig>,
+    config_editor_is_new: bool,
     config_editor_error: Option<String>,
 }
 
@@ -987,6 +988,7 @@ impl SpecChumApp {
             prefs_dirty: false,
             prefs_size_deadline: None,
             config_draft: None,
+            config_editor_is_new: false,
             config_editor_error: None,
         }
     }
@@ -1146,7 +1148,12 @@ impl SpecChumApp {
         let mut open = true;
         let mut save = false;
         let mut cancel = false;
-        egui::Window::new("Machine configuration")
+        let title = if self.config_editor_is_new {
+            "New configuration"
+        } else {
+            "Edit configuration"
+        };
+        egui::Window::new(title)
             .open(&mut open)
             .default_width(420.0)
             .show(ctx, |ui| {
@@ -1392,6 +1399,7 @@ impl SpecChumApp {
                     ui.menu_button("Machine", |ui| {
                         let root = EmulatorSession::workspace_root();
                         ui.label("Built-in models");
+                        ui.weak("Default ROMs — optional hardware via Hardware menu.");
                         for pick in machine::ALL_MODELS {
                             let available =
                                 machine::rom_available_in(pick, std::slice::from_ref(&root));
@@ -1421,6 +1429,27 @@ impl SpecChumApp {
                         }
                         ui.separator();
                         ui.label("My configurations");
+                        if ui.button("+ New configuration…").clicked() {
+                            let base = if self.prefs.active_config_id.is_none() {
+                                PrefModel::from_model(self.session.model)
+                            } else {
+                                self.prefs.last_builtin_model
+                            };
+                            let mut draft = UserMachineConfig::new_named("My Spectrum", base);
+                            draft.joystick_mode =
+                                PrefJoystick::from_mode(self.session.joystick_mode);
+                            draft.kempston_mouse = self.session.kempston_mouse;
+                            if let Some(m) = self.session.machine.as_ref() {
+                                draft.ay_stereo = PrefAyStereo::from_mode(m.ay_stereo_mode());
+                            }
+                            self.config_draft = Some(draft);
+                            self.config_editor_is_new = true;
+                            self.config_editor_error = None;
+                            ui.close_menu();
+                        }
+                        if self.prefs.custom_configs.is_empty() {
+                            ui.weak("(none saved yet)");
+                        }
                         let configs: Vec<UserMachineConfig> =
                             self.prefs.custom_configs.clone();
                         for cfg in &configs {
@@ -1442,19 +1471,6 @@ impl SpecChumApp {
                                 }
                             }
                         }
-                        if ui.button("New configuration…").clicked() {
-                            let base = PrefModel::from_model(self.session.model);
-                            let mut draft = UserMachineConfig::new_named("My Spectrum", base);
-                            draft.joystick_mode =
-                                PrefJoystick::from_mode(self.session.joystick_mode);
-                            draft.kempston_mouse = self.session.kempston_mouse;
-                            if let Some(m) = self.session.machine.as_ref() {
-                                draft.ay_stereo = PrefAyStereo::from_mode(m.ay_stereo_mode());
-                            }
-                            self.config_draft = Some(draft);
-                            self.config_editor_error = None;
-                            ui.close_menu();
-                        }
                         let has_active = self.prefs.active_config_id.is_some();
                         if ui
                             .add_enabled(has_active, egui::Button::new("Edit configuration…"))
@@ -1465,6 +1481,7 @@ impl SpecChumApp {
                                     self.prefs.custom_configs.iter().find(|c| c.id == id)
                                 {
                                     self.config_draft = Some(cfg.clone());
+                                    self.config_editor_is_new = false;
                                     self.config_editor_error = None;
                                 }
                             }
@@ -1484,6 +1501,8 @@ impl SpecChumApp {
                             }
                             ui.close_menu();
                         }
+                        ui.separator();
+                        ui.label("Session");
                         if ui.button("Reset").clicked() {
                             if let Some(m) = self.session.machine.as_mut() {
                                 m.reset();
@@ -2023,6 +2042,7 @@ of their copyrighted material but retain that copyright.",
         });
 
         self.debug_window(ctx);
+        self.config_editor_window(ctx);
 
         let paused = self
             .session
@@ -2129,7 +2149,6 @@ of their copyrighted material but retain that copyright.",
                 }
             });
         self.session.debug_open = open;
-        self.config_editor_window(ctx);
     }
 }
 

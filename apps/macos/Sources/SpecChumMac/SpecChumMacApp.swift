@@ -53,11 +53,6 @@ struct SpecChumMacApp: App {
                 }
                 .disabled(!host.model.supportsBeta)
 
-                Button("Open ROM…") {
-                    openRom()
-                }
-                .keyboardShortcut("o", modifiers: [.command, .shift])
-
                 if !host.recentFiles.isEmpty {
                     Divider()
                     Menu("Open Recent") {
@@ -89,8 +84,52 @@ struct SpecChumMacApp: App {
                 }
             }
 
-            // Machine — Reset (+ model in Settings)
+            // Machine — built-in models, custom profiles, reset
             CommandMenu("Machine") {
+                Menu("Built-in models") {
+                    ForEach(HostBridge.Model.pickerOrder) { pick in
+                        Button {
+                            host.selectBuiltinModel(pick)
+                        } label: {
+                            if host.activeConfigId == nil && host.model == pick {
+                                Text("✓ \(pick.title)")
+                            } else {
+                                Text(pick.title)
+                            }
+                        }
+                        .disabled(!pick.romAvailable)
+                    }
+                }
+                Divider()
+                Menu("My configurations") {
+                    Button("+ New configuration…") {
+                        host.beginNewConfiguration()
+                    }
+                    if host.customConfigs.isEmpty {
+                        Text("(none saved yet)")
+                    }
+                    ForEach(host.customConfigs) { cfg in
+                        Button {
+                            host.selectCustomConfiguration(id: cfg.id)
+                        } label: {
+                            if host.activeConfigId == cfg.id {
+                                Text("✓ \(cfg.name)")
+                            } else {
+                                Text(cfg.name)
+                            }
+                        }
+                    }
+                    if host.activeConfigId != nil {
+                        Divider()
+                        Button("Edit configuration…") {
+                            host.beginEditActiveConfiguration()
+                        }
+                        Button("Delete configuration") {
+                            host.deleteActiveConfiguration()
+                        }
+                    }
+                }
+                Divider()
                 Button("Reset") { host.reset() }
                     .keyboardShortcut("r", modifiers: .command)
             }
@@ -333,17 +372,6 @@ struct SpecChumMacApp: App {
         panel.title = "Open Microdrive MDR"
         if panel.runModal() == .OK, let url = panel.url {
             host.insertMdr(at: url)
-        }
-    }
-
-    private func openRom() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [UTType(filenameExtension: "rom") ?? .data]
-        panel.title = "Open ROM"
-        if panel.runModal() == .OK, let url = panel.url {
-            host.loadRom(at: url)
         }
     }
 }
