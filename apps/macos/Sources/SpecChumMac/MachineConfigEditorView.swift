@@ -71,47 +71,48 @@ struct MachineConfigEditorView: View {
                     }
                 }
 
-                GroupBox("Hardware (saved with profile)") {
-                    if hardwareCompat.multiface {
-                        Toggle("Multiface 1", isOn: $draft.attachMultiface)
-                            .onChange(of: draft.attachMultiface) { _, on in
-                                if !on { draft.multifaceRomPath = nil }
-                            }
-                        if draft.attachMultiface {
-                            pathRow("Multiface ROM", path: $draft.multifaceRomPath)
-                        }
-                    }
-                    if hardwareCompat.divmmc {
-                        Toggle("DivMMC", isOn: $draft.attachDivmmc)
-                            .onChange(of: draft.attachDivmmc) { _, on in
-                                if !on { draft.divmmcEepromPath = nil }
-                            }
-                        if draft.attachDivmmc {
-                            pathRow("ESXDOS EEPROM", path: $draft.divmmcEepromPath)
-                        }
-                    }
-                    if hardwareCompat.interface1 {
-                        Toggle("Interface 1 (stub)", isOn: $draft.attachInterface1)
-                            .onChange(of: draft.attachInterface1) { _, on in
-                                if !on { draft.interface1RomPath = nil }
-                            }
-                        if draft.attachInterface1 {
-                            pathRow("IF1 ROM", path: $draft.interface1RomPath)
-                        }
-                    }
-                    if hardwareCompat.beta {
-                        Toggle("Beta Disk", isOn: $draft.attachBeta)
-                            .onChange(of: draft.attachBeta) { _, on in
-                                if !on { draft.trdosRomPath = nil }
-                            }
-                        if draft.attachBeta {
-                            pathRow("TR-DOS ROM", path: $draft.trdosRomPath)
-                        }
-                    }
-                    if !hardwareCompat.multiface && !hardwareCompat.divmmc && !hardwareCompat.interface1
-                        && !hardwareCompat.beta
+                GroupBox("Attach peripherals (saved with profile)") {
+                    if hardwareCompat.multiface || hardwareCompat.divmmc || hardwareCompat.interface1
+                        || hardwareCompat.beta
                     {
-                        Text("No attachable hardware on this base model (AY stereo only).")
+                        if hardwareCompat.multiface {
+                            Toggle("Multiface 1", isOn: $draft.attachMultiface)
+                                .onChange(of: draft.attachMultiface) { _, on in
+                                    if !on { draft.multifaceRomPath = nil }
+                                }
+                            if draft.attachMultiface {
+                                pathRow("Multiface ROM", path: $draft.multifaceRomPath)
+                            }
+                        }
+                        if hardwareCompat.divmmc {
+                            Toggle("DivMMC", isOn: $draft.attachDivmmc)
+                                .onChange(of: draft.attachDivmmc) { _, on in
+                                    if !on { draft.divmmcEepromPath = nil }
+                                }
+                            if draft.attachDivmmc {
+                                pathRow("ESXDOS EEPROM", path: $draft.divmmcEepromPath)
+                            }
+                        }
+                        if hardwareCompat.interface1 {
+                            Toggle("Interface 1 (stub)", isOn: $draft.attachInterface1)
+                                .onChange(of: draft.attachInterface1) { _, on in
+                                    if !on { draft.interface1RomPath = nil }
+                                }
+                            if draft.attachInterface1 {
+                                pathRow("IF1 ROM", path: $draft.interface1RomPath)
+                            }
+                        }
+                        if hardwareCompat.beta {
+                            Toggle("Beta Disk", isOn: $draft.attachBeta)
+                                .onChange(of: draft.attachBeta) { _, on in
+                                    if !on { draft.trdosRomPath = nil }
+                                }
+                            if draft.attachBeta {
+                                pathRow("TR-DOS ROM", path: $draft.trdosRomPath)
+                            }
+                        }
+                    } else {
+                        Text("No optional peripheral hardware on this base model.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

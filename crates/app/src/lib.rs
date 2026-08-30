@@ -1212,62 +1212,68 @@ impl SpecChumApp {
                         ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Abc, "ABC");
                     }
                     ui.separator();
-                    ui.label("Hardware (saved with profile)");
-                    if compat.multiface {
-                        if ui
-                            .checkbox(&mut draft.attach_multiface, "Multiface 1")
-                            .changed()
-                            && !draft.attach_multiface
-                        {
-                            draft.multiface_rom_path = None;
+                    ui.label("Attach peripherals (saved with profile)");
+                    if compat.multiface || compat.divmmc || compat.interface1 || compat.beta {
+                        if compat.multiface {
+                            if ui
+                                .checkbox(&mut draft.attach_multiface, "Multiface 1")
+                                .changed()
+                                && !draft.attach_multiface
+                            {
+                                draft.multiface_rom_path = None;
+                            }
+                            if draft.attach_multiface {
+                                Self::path_field(
+                                    ui,
+                                    "Multiface ROM",
+                                    &mut draft.multiface_rom_path,
+                                    "Multiface",
+                                );
+                            }
                         }
-                        if draft.attach_multiface {
-                            Self::path_field(
-                                ui,
-                                "Multiface ROM",
-                                &mut draft.multiface_rom_path,
-                                "Multiface",
-                            );
+                        if compat.divmmc {
+                            if ui.checkbox(&mut draft.attach_divmmc, "DivMMC").changed()
+                                && !draft.attach_divmmc
+                            {
+                                draft.divmmc_eeprom_path = None;
+                            }
+                            if draft.attach_divmmc {
+                                Self::path_field(
+                                    ui,
+                                    "ESXDOS EEPROM",
+                                    &mut draft.divmmc_eeprom_path,
+                                    "EEPROM",
+                                );
+                            }
                         }
-                    }
-                    if compat.divmmc {
-                        if ui.checkbox(&mut draft.attach_divmmc, "DivMMC").changed()
-                            && !draft.attach_divmmc
-                        {
-                            draft.divmmc_eeprom_path = None;
+                        if compat.interface1 {
+                            ui.checkbox(&mut draft.attach_interface1, "Interface 1 (stub)");
+                            if draft.attach_interface1 {
+                                Self::path_field(
+                                    ui,
+                                    "IF1 ROM",
+                                    &mut draft.interface1_rom_path,
+                                    "IF1",
+                                );
+                            }
                         }
-                        if draft.attach_divmmc {
-                            Self::path_field(
-                                ui,
-                                "ESXDOS EEPROM",
-                                &mut draft.divmmc_eeprom_path,
-                                "EEPROM",
-                            );
+                        if compat.beta {
+                            if ui.checkbox(&mut draft.attach_beta, "Beta Disk").changed()
+                                && !draft.attach_beta
+                            {
+                                draft.trdos_rom_path = None;
+                            }
+                            if draft.attach_beta {
+                                Self::path_field(
+                                    ui,
+                                    "TR-DOS ROM",
+                                    &mut draft.trdos_rom_path,
+                                    "TR-DOS",
+                                );
+                            }
                         }
-                    }
-                    if compat.interface1 {
-                        ui.checkbox(&mut draft.attach_interface1, "Interface 1 (stub)");
-                        if draft.attach_interface1 {
-                            Self::path_field(ui, "IF1 ROM", &mut draft.interface1_rom_path, "IF1");
-                        }
-                    }
-                    if compat.beta {
-                        if ui.checkbox(&mut draft.attach_beta, "Beta Disk").changed()
-                            && !draft.attach_beta
-                        {
-                            draft.trdos_rom_path = None;
-                        }
-                        if draft.attach_beta {
-                            Self::path_field(
-                                ui,
-                                "TR-DOS ROM",
-                                &mut draft.trdos_rom_path,
-                                "TR-DOS",
-                            );
-                        }
-                    }
-                    if !compat.multiface && !compat.divmmc && !compat.interface1 && !compat.beta {
-                        ui.label("No attachable hardware on this base model (AY stereo only).");
+                    } else {
+                        ui.weak("No optional peripheral hardware on this base model.");
                     }
                     if let Some(err) = &self.config_editor_error {
                         ui.colored_label(egui::Color32::RED, err);
