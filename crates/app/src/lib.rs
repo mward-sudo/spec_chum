@@ -1634,6 +1634,9 @@ impl SpecChumApp {
                         }
                         ui.label("Built-in models");
                         ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
+                        ui.weak(
+                            "Timex TC2048 (Phase 1): 256×192 OK; 512×192 hi-res / extended SCLD modes not drawn — docs/TIMEX.md.",
+                        );
                         for pick in machine::ALL_MODELS {
                             let pref = PrefModel::from_model(pick);
                             let available = model_rom_available(
@@ -1655,6 +1658,11 @@ impl SpecChumApp {
                                     title,
                                     machine::unavailable_reason(pick)
                                 ));
+                            } else if pick == Model::TimexTC2048 {
+                                response.clone().on_hover_text(
+                                    "Phase 1: Timex ROM + SCLD port latches; standard 256×192 only — \
+                                     512×192 hi-res / extended modes broken (docs/TIMEX.md)",
+                                );
                             }
                             if response.clicked() {
                                 self.on_builtin_model_selected(pick);
