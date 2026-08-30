@@ -18,6 +18,8 @@ pub enum ModelId {
     SpectrumPlus2 = 4,
     /// 16 KiB RAM Spectrum (#188).
     Spectrum16K = 5,
+    /// Pentagon 128 clone (#188 Phase B).
+    Pentagon128 = 6,
 }
 
 impl ModelId {
@@ -30,6 +32,7 @@ impl ModelId {
             3 => Some(Self::SpectrumPlus2A),
             4 => Some(Self::SpectrumPlus2),
             5 => Some(Self::Spectrum16K),
+            6 => Some(Self::Pentagon128),
             _ => None,
         }
     }
@@ -43,6 +46,7 @@ impl ModelId {
             Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
+            Self::Pentagon128 => Model::Pentagon128,
         }
     }
 
@@ -55,17 +59,19 @@ impl ModelId {
             Model::SpectrumPlus2 => Self::SpectrumPlus2,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
+            Model::Pentagon128 => Self::Pentagon128,
         }
     }
 
     /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
         Self::SpectrumPlus2,
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
+        Self::Pentagon128,
     ];
 
     #[must_use]
@@ -260,6 +266,11 @@ impl HostSession {
             ModelId::SpectrumPlus2 => Machine::new_plus2(rom),
             ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
             ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
+            ModelId::Pentagon128 => {
+                let trdos =
+                    machine::read_trdos_rom(Model::Pentagon128).map_err(HostError::Message)?;
+                Machine::new_pentagon128(rom, &trdos)
+            }
         }
         .map_err(HostError::Message)?;
         self.machine = Some(machine);
@@ -871,6 +882,7 @@ impl HostSession {
             | machine::Model::SpectrumPlus2
             | machine::Model::SpectrumPlus2A
             | machine::Model::SpectrumPlus3 => 70_908,
+            machine::Model::Pentagon128 => 71_680,
         };
         self.last_speaker_level = render_frame_pcm(
             &audio,

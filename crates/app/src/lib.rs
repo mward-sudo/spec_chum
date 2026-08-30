@@ -202,6 +202,10 @@ impl EmulatorSession {
             Model::SpectrumPlus2 => Machine::new_plus2(data),
             Model::SpectrumPlus2A => Machine::new_plus2a(data),
             Model::SpectrumPlus3 => Machine::new_plus3(data),
+            Model::Pentagon128 => {
+                let trdos = machine::read_trdos_rom(Model::Pentagon128)?;
+                Machine::new_pentagon128(data, &trdos)
+            }
         }
     }
 
@@ -448,9 +452,10 @@ impl EmulatorSession {
                 }
             }
             Model::SpectrumPlus2A => KeyScript::load_quotes_plus2a(with_code),
-            Model::Spectrum128 | Model::SpectrumPlus2 | Model::SpectrumPlus3 => {
-                KeyScript::load_quotes_128_or_plus3(with_code)
-            }
+            Model::Spectrum128
+            | Model::SpectrumPlus2
+            | Model::SpectrumPlus3
+            | Model::Pentagon128 => KeyScript::load_quotes_128_or_plus3(with_code),
         });
         if pending_play {
             return;
@@ -964,6 +969,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
+                    | Model::Pentagon128
             ) {
                 m.set_ay_stereo_mode(prefs.effective_ay_stereo());
             }
@@ -1051,6 +1057,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
+                    | Model::Pentagon128
             ) {
                 m.set_ay_stereo_mode(self.prefs.effective_ay_stereo());
             }
@@ -1629,6 +1636,7 @@ impl SpecChumApp {
                                 | Model::SpectrumPlus2
                                 | Model::SpectrumPlus2A
                                 | Model::SpectrumPlus3
+                                | Model::Pentagon128
                         ) {
                             ui.separator();
                             ui.label("AY stereo");
@@ -1716,6 +1724,7 @@ impl SpecChumApp {
                                 | Model::Spectrum48
                                 | Model::Spectrum128
                                 | Model::SpectrumPlus2
+                                | Model::Pentagon128
                         ) {
                             if ui.button("Attach DivMMC").clicked() {
                                 self.session.attach_divmmc_stub();

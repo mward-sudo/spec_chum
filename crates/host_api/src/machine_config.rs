@@ -52,7 +52,7 @@ pub const MAX_CUSTOM_CONFIGS: usize = 32;
 pub fn expected_rom_bytes(model: PrefModel) -> usize {
     match model {
         PrefModel::Spectrum16K | PrefModel::Spectrum48 => 16 * 1024,
-        PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 => 32 * 1024,
+        PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 | PrefModel::Pentagon128 => 32 * 1024,
         PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 => 64 * 1024,
     }
 }
@@ -90,15 +90,27 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
         multiface: matches!(m, Model::Spectrum16K | Model::Spectrum48),
         divmmc: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::Spectrum128 | Model::SpectrumPlus2
+            Model::Spectrum16K
+                | Model::Spectrum48
+                | Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::Pentagon128
         ),
         interface1: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::Spectrum128 | Model::SpectrumPlus2
+            Model::Spectrum16K
+                | Model::Spectrum48
+                | Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::Pentagon128
         ),
         beta: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::Spectrum128 | Model::SpectrumPlus2
+            Model::Spectrum16K
+                | Model::Spectrum48
+                | Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::Pentagon128
         ),
         ay_stereo: matches!(
             m,
@@ -106,6 +118,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::SpectrumPlus2
                 | Model::SpectrumPlus2A
                 | Model::SpectrumPlus3
+                | Model::Pentagon128
         ),
         kempston_mouse: true,
         joystick: true,
@@ -319,6 +332,11 @@ fn build_machine(model: Model, rom: &[u8]) -> Result<Machine, MachineConfigError
         Model::SpectrumPlus2 => Machine::new_plus2(rom),
         Model::SpectrumPlus2A => Machine::new_plus2a(rom),
         Model::SpectrumPlus3 => Machine::new_plus3(rom),
+        Model::Pentagon128 => {
+            let trdos = machine::read_trdos_rom(Model::Pentagon128)
+                .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
+            Machine::new_pentagon128(rom, &trdos)
+        }
     }
     .map_err(MachineConfigError::Machine)
 }

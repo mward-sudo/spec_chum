@@ -284,17 +284,19 @@ pub enum PrefModel {
     SpectrumPlus2,
     SpectrumPlus2A,
     SpectrumPlus3,
+    Pentagon128,
 }
 
 impl PrefModel {
     /// Canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
         Self::SpectrumPlus2,
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
+        Self::Pentagon128,
     ];
 
     #[must_use]
@@ -306,6 +308,7 @@ impl PrefModel {
             Model::SpectrumPlus2 => Self::SpectrumPlus2,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
+            Model::Pentagon128 => Self::Pentagon128,
         }
     }
 
@@ -323,6 +326,7 @@ impl PrefModel {
             Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
+            Self::Pentagon128 => Model::Pentagon128,
         }
     }
 
@@ -335,6 +339,7 @@ impl PrefModel {
             Self::SpectrumPlus2 => ModelId::SpectrumPlus2,
             Self::SpectrumPlus2A => ModelId::SpectrumPlus2A,
             Self::SpectrumPlus3 => ModelId::SpectrumPlus3,
+            Self::Pentagon128 => ModelId::Pentagon128,
         }
     }
 

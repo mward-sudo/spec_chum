@@ -18,8 +18,11 @@ pub use debugger::{BreakReason, Debugger, Watch};
 pub use inspect::{Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 pub use rom::{
-    model_label, model_title, read_rom, resolve_rom_path, resolve_rom_path_in, rom_available,
-    rom_available_in, rom_candidates, search_roots, unavailable_reason, ALL_MODELS,
+    main_rom_available, main_rom_available_in, model_label, model_title, read_rom, read_trdos_rom,
+    requires_trdos_rom, requires_user_rom, resolve_rom_path, resolve_rom_path_in,
+    resolve_trdos_rom_path, resolve_trdos_rom_path_in, rom_available, rom_available_in,
+    rom_candidates, search_roots, trdos_rom_available, trdos_rom_available_in, unavailable_reason,
+    ALL_MODELS,
 };
 
 use std::cell::Cell;
@@ -33,7 +36,10 @@ use tape::{
     TzxPlayer,
 };
 use thiserror::Error;
-use ula::{int_active_48, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48, INT_LENGTH_128};
+use ula::{
+    int_active_48, int_active_pentagon, Ula48, FRAME_TSTATES_128, FRAME_TSTATES_48,
+    FRAME_TSTATES_PENTAGON, INT_LENGTH_128,
+};
 
 /// Errors attaching Interface 1 or loading its shadow ROM.
 #[derive(Debug, Error)]
@@ -293,6 +299,8 @@ pub enum Model {
     SpectrumPlus2A,
     /// Amstrad +3 (same gate array with µPD765 — menu Loader is +3DOS disk).
     SpectrumPlus3,
+    /// Pentagon 128 clone (#188 Phase B / #193): user ROM + TR-DOS, distinct timing.
+    Pentagon128,
 }
 
 impl Model {
@@ -302,10 +310,13 @@ impl Model {
         matches!(self, Self::SpectrumPlus2A | Self::SpectrumPlus3)
     }
 
-    /// 128K-class bus (Sinclair 128 / grey +2).
+    /// 128K-class bus (Sinclair 128 / grey +2 / Pentagon banking).
     #[must_use]
     pub fn is_128k_class(self) -> bool {
-        matches!(self, Self::Spectrum128 | Self::SpectrumPlus2)
+        matches!(
+            self,
+            Self::Spectrum128 | Self::SpectrumPlus2 | Self::Pentagon128
+        )
     }
 
     /// 48K-class bus (16K / 48K).
@@ -419,13 +430,24 @@ pub struct MemIo128<'a> {
     pub(crate) t_step_start: u64,
     /// When set, the first `read` at this PC runs IF1 pre/post opcode-fetch paging.
     pub(crate) opcode_pc: Option<u16>,
+    /// Pentagon 128: 71680 T/frame, no memory or I/O contention.
+    pub(crate) pentagon: bool,
 }
 
 impl MemIo128<'_> {
     #[inline]
+    fn frame_len(&self) -> u32 {
+        if self.pentagon {
+            FRAME_TSTATES_PENTAGON
+        } else {
+            FRAME_TSTATES_128
+        }
+    }
+
+    #[inline]
     fn ula_t(&self, t: u64) -> u32 {
         let dt = t.wrapping_sub(self.t_step_start) as u32;
-        (self.bus.frame_t.wrapping_add(dt)) % FRAME_TSTATES_128
+        (self.bus.frame_t.wrapping_add(dt)) % self.frame_len()
     }
 }
 
@@ -442,7 +464,11 @@ impl Memory for MemIo128<'_> {
         let ft = self.ula_t(t);
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
-        let wait = self.bus.contend_at(addr);
+        let wait = if self.pentagon {
+            0
+        } else {
+            self.bus.contend_at(addr)
+        };
         self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
             emit_contend_sampled(addr, ft, wait);
@@ -463,7 +489,11 @@ impl Memory for MemIo128<'_> {
         let ft = self.ula_t(t);
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
-        let wait = self.bus.contend_at(addr);
+        let wait = if self.pentagon {
+            0
+        } else {
+            self.bus.contend_at(addr)
+        };
         self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
             emit_contend_sampled(addr, ft, wait);
@@ -479,8 +509,12 @@ impl Memory for MemIo128<'_> {
 impl Io for MemIo128<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
         let ft = self.ula_t(t);
-        let wait = ula::io_contention_extra_128(ft, port, self.bus.c000_contended());
-        let sample = ft.wrapping_add(3).wrapping_add(wait) % FRAME_TSTATES_128;
+        let wait = if self.pentagon {
+            0
+        } else {
+            ula::io_contention_extra_128(ft, port, self.bus.c000_contended())
+        };
+        let sample = ft.wrapping_add(3).wrapping_add(wait) % self.frame_len();
         let saved = self.bus.frame_t;
         self.bus.frame_t = sample;
         let v = self.bus.in_port(port);
@@ -493,7 +527,11 @@ impl Io for MemIo128<'_> {
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
         let ft = self.ula_t(t);
-        let wait = ula::io_contention_extra_128(ft, port, self.bus.c000_contended());
+        let wait = if self.pentagon {
+            0
+        } else {
+            ula::io_contention_extra_128(ft, port, self.bus.c000_contended())
+        };
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
         self.bus.out_port(port, value);
@@ -625,6 +663,8 @@ pub enum Machine {
         debugger: Debugger,
         /// Grey +2 uses the same 128K core with a distinct ROM / menu.
         plus2_rom: bool,
+        /// Pentagon 128 clone timing / no contention (#188 Phase B).
+        pentagon: bool,
     },
     SpecPlus3 {
         cpu: Cpu,
@@ -707,6 +747,7 @@ impl Machine {
             rzx: None,
             debugger: Debugger::default(),
             plus2_rom: false,
+            pentagon: false,
         })
     }
 
@@ -724,7 +765,28 @@ impl Machine {
             rzx: None,
             debugger: Debugger::default(),
             plus2_rom: true,
+            pentagon: false,
         })
+    }
+
+    /// Pentagon 128: 128K banking, user main ROM + TR-DOS (#188 Phase B / #193).
+    pub fn new_pentagon128(main_rom: &[u8], trdos_rom: &[u8]) -> Result<Self, String> {
+        let mut bus = Bus128::new();
+        bus.load_rom128(main_rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 6 });
+        let mut m = Self::Spec128 {
+            cpu: Cpu::new(),
+            bus: Box::new(bus),
+            ula: Ula48::new(),
+            tape: None,
+            tape_opts: TapeLoadOptions::default(),
+            rzx: None,
+            debugger: Debugger::default(),
+            plus2_rom: false,
+            pentagon: true,
+        };
+        m.attach_beta()?.load_rom(trdos_rom)?;
+        Ok(m)
     }
 
     pub fn new_plus3(rom: &[u8]) -> Result<Self, String> {
@@ -762,6 +824,7 @@ impl Machine {
                     Model::Spectrum48
                 }
             }
+            Self::Spec128 { pentagon: true, .. } => Model::Pentagon128,
             Self::Spec128 {
                 plus2_rom: true, ..
             } => Model::SpectrumPlus2,
@@ -1622,8 +1685,15 @@ impl Machine {
                 tape,
                 tape_opts,
                 debugger,
+                pentagon,
                 ..
             } => {
+                let is_pentagon = *pentagon;
+                let frame_len = if is_pentagon {
+                    FRAME_TSTATES_PENTAGON
+                } else {
+                    FRAME_TSTATES_128
+                };
                 bus.beeper_edges.clear();
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
@@ -1635,7 +1705,7 @@ impl Machine {
                     trace::emit(trace::EventKind::UlaFrame { frame });
                 }
                 const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
-                let t_per_sample = f64::from(FRAME_TSTATES_128) / AY_SAMPLES as f64;
+                let t_per_sample = f64::from(frame_len) / AY_SAMPLES as f64;
                 let mut ay_samples = Vec::with_capacity(AY_SAMPLES);
                 let mut ay_left = Vec::with_capacity(AY_SAMPLES);
                 let mut ay_right = Vec::with_capacity(AY_SAMPLES);
@@ -1652,18 +1722,24 @@ impl Machine {
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
                         ay_t = ay_t.saturating_add(HOLD_T);
-                        frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_128);
+                        frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, frame_len);
                         continue;
                     }
                     if tape_opts.flash_load && Self::try_flash_load_128(cpu, bus, tape) {
                         continue;
                     }
-                    if bus.frame_t < INT_LENGTH_128 {
+                    let int_window = if is_pentagon {
+                        int_active_pentagon(bus.frame_t)
+                    } else {
+                        bus.frame_t < INT_LENGTH_128
+                    };
+                    if int_window {
                         let mut mio = MemIo128 {
                             bus: bus.as_mut(),
                             watch: None,
                             t_step_start: cpu.t,
                             opcode_pc: None,
+                            pentagon: is_pentagon,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -1679,10 +1755,9 @@ impl Machine {
                             );
                             bus.ay.advance(irq_t);
                             ay_t = ay_t.saturating_add(irq_t);
-                            frame_done =
-                                advance_frame_t(&mut bus.frame_t, irq_t, FRAME_TSTATES_128);
+                            frame_done = advance_frame_t(&mut bus.frame_t, irq_t, frame_len);
                             while ay_samples.len() < AY_SAMPLES
-                                && f64::from(ay_t.min(FRAME_TSTATES_128))
+                                && f64::from(ay_t.min(frame_len))
                                     >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                             {
                                 push_ay_frame_sample(
@@ -1712,6 +1787,7 @@ impl Machine {
                             watch,
                             t_step_start: cpu.t,
                             opcode_pc: Some(pc),
+                            pentagon: is_pentagon,
                         };
                         cpu.step(&mut mio);
                     }
@@ -1745,9 +1821,9 @@ impl Machine {
                     );
                     bus.ay.advance(dt);
                     ay_t = ay_t.saturating_add(dt);
-                    frame_done = advance_frame_t(&mut bus.frame_t, dt, FRAME_TSTATES_128);
+                    frame_done = advance_frame_t(&mut bus.frame_t, dt, frame_len);
                     while ay_samples.len() < AY_SAMPLES
-                        && f64::from(ay_t.min(FRAME_TSTATES_128))
+                        && f64::from(ay_t.min(frame_len))
                             >= (ay_samples.len() as f64 + 1.0) * t_per_sample
                     {
                         push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
@@ -2406,8 +2482,15 @@ impl Machine {
                 tape,
                 tape_opts,
                 debugger,
+                pentagon,
                 ..
             } => {
+                let is_pentagon = *pentagon;
+                let frame_len = if is_pentagon {
+                    FRAME_TSTATES_PENTAGON
+                } else {
+                    FRAME_TSTATES_128
+                };
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
@@ -2424,19 +2507,25 @@ impl Machine {
                         tape_opts.flash_load,
                     );
                     bus.ay.advance(HOLD_T);
-                    bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_128;
+                    bus.frame_t = (bus.frame_t + HOLD_T) % frame_len;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
                 }
                 if tape_opts.flash_load && Self::try_flash_load_128(cpu, bus, tape) {
                     return;
                 }
-                if bus.frame_t < INT_LENGTH_128 {
+                let int_window = if is_pentagon {
+                    int_active_pentagon(bus.frame_t)
+                } else {
+                    bus.frame_t < INT_LENGTH_128
+                };
+                if int_window {
                     let mut mio = MemIo128 {
                         bus: bus.as_mut(),
                         watch: None,
                         t_step_start: cpu.t,
                         opcode_pc: None,
+                        pentagon: is_pentagon,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -2462,7 +2551,7 @@ impl Machine {
                             tape_opts.flash_load,
                         );
                         bus.ay.advance(irq_t);
-                        bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
+                        bus.frame_t = (bus.frame_t + irq_t) % frame_len;
                         return;
                     }
                 }
@@ -2484,6 +2573,7 @@ impl Machine {
                         watch,
                         t_step_start: cpu.t,
                         opcode_pc: Some(pc),
+                        pentagon: is_pentagon,
                     };
                     cpu.step(&mut mio);
                 }
@@ -2514,7 +2604,7 @@ impl Machine {
                     tape_opts.flash_load,
                 );
                 bus.ay.advance(dt);
-                bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
+                bus.frame_t = (bus.frame_t + dt) % frame_len;
             }
             Self::SpecPlus3 {
                 cpu,
@@ -2674,8 +2764,15 @@ impl Machine {
                 bus,
                 tape,
                 tape_opts,
+                pentagon,
                 ..
             } => {
+                let is_pentagon = *pentagon;
+                let frame_len = if is_pentagon {
+                    FRAME_TSTATES_PENTAGON
+                } else {
+                    FRAME_TSTATES_128
+                };
                 bus.notify_divmmc_m1(cpu.regs.pc);
                 bus.notify_beta_m1(cpu.regs.pc);
                 let last_t = cpu.t;
@@ -2684,6 +2781,7 @@ impl Machine {
                     watch: None,
                     t_step_start: cpu.t,
                     opcode_pc: Some(cpu.regs.pc),
+                    pentagon: is_pentagon,
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -2698,7 +2796,7 @@ impl Machine {
                     tape_opts.flash_load,
                 );
                 bus.ay.advance(dt);
-                bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
+                bus.frame_t = (bus.frame_t + dt) % frame_len;
             }
             Self::SpecPlus3 {
                 cpu,
@@ -2971,6 +3069,7 @@ impl Machine {
             Model::SpectrumPlus2 => self.type_load_quotes_plus2(with_code),
             Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
             Model::SpectrumPlus3 => self.type_load_quotes_plus3(with_code),
+            Model::Pentagon128 => self.type_load_quotes_128k(with_code),
         }
     }
 
@@ -3321,6 +3420,7 @@ mod tests {
                 watch: None,
                 t_step_start: 100,
                 opcode_pc: None,
+                pentagon: false,
             };
             let t = 100 + dt;
             assert_eq!(
@@ -5421,6 +5521,10 @@ mod tests {
                     Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                    Model::Pentagon128 => {
+                        let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
+                        Machine::new_pentagon128(rom, &trdos).unwrap()
+                    }
                 },
                 img.clone(),
                 true,
@@ -5462,6 +5566,10 @@ mod tests {
                         Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                         Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                         Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                        Model::Pentagon128 => {
+                            let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
+                            Machine::new_pentagon128(rom, &trdos).unwrap()
+                        }
                     },
                     img.clone(),
                     false,
@@ -5545,6 +5653,10 @@ mod tests {
                     Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                    Model::Pentagon128 => {
+                        let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
+                        Machine::new_pentagon128(rom, &trdos).unwrap()
+                    }
                 };
                 m.set_tape_load_options(TapeLoadOptions {
                     flash_load: flash,
@@ -5705,6 +5817,10 @@ mod tests {
                     Model::SpectrumPlus2 => Machine::new_plus2(&rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(&rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(&rom).unwrap(),
+                    Model::Pentagon128 => {
+                        let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
+                        Machine::new_pentagon128(&rom, &trdos).unwrap()
+                    }
                 };
                 let deck = TapPlayer::new(img.clone());
                 let mut machine = m;

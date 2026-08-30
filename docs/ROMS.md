@@ -102,6 +102,17 @@ Supply your own images (or wait for a new written grant). **Do not** extend
 | TR-DOS / Beta Disk | © Technology Research; Fuse dropped redistribution |
 | ESXDOS / DivMMC EEPROM | Public download ≠ redistribution grant ([#138](https://github.com/mward-sudo/spec_chum/issues/138)) |
 | Pentagon / Scorpion | Clone firmware; user dumps ([#193](https://github.com/mward-sudo/spec_chum/issues/193)) |
+
+### Pentagon 128 — user-provided paths (#188 Phase B)
+
+Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
+
+| File | Size | Notes |
+| --- | --- | --- |
+| `roms/pentagon/pentagon.rom` | 32 KiB | Main Pentagon firmware (also accepts `128p.rom`) |
+| `roms/pentagon/trdos.rom` | 16 KiB | TR-DOS for Beta Disk — both files required before the model enables |
+
+Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. TR-DOS boot depth still tracked in [#140](https://github.com/mward-sudo/spec_chum/issues/140).
 | Opus Discovery | No clear grant (Fuse dropped) |
 | TK90X / Didaktik / Inves clones | No public grant found ([#195](https://github.com/mward-sudo/spec_chum/issues/195)) |
 | ZX80 / ZX81 | Nine Tiles rights; zx-roms “kind permission” unverified ([#188](https://github.com/mward-sudo/spec_chum/issues/188)) |

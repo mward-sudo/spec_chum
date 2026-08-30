@@ -118,6 +118,7 @@ fn parse_model(s: &str) -> Result<Model> {
         "plus2" | "+2" => Model::SpectrumPlus2,
         "plus2a" | "+2a" => Model::SpectrumPlus2A,
         "plus3" | "+3" => Model::SpectrumPlus3,
+        "pentagon" | "pentagon128" | "128p" => Model::Pentagon128,
         other => bail!("unknown model {other}"),
     })
 }
@@ -133,6 +134,11 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
         Model::SpectrumPlus2 => Machine::new_plus2(&rom),
         Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
         Model::SpectrumPlus3 => Machine::new_plus3(&rom),
+        Model::Pentagon128 => {
+            let trdos =
+                machine::read_trdos_rom(Model::Pentagon128).map_err(|e| anyhow::anyhow!(e))?;
+            Machine::new_pentagon128(&rom, &trdos)
+        }
     }
     .map_err(|e| anyhow::anyhow!(e))?;
     if let Some(path) = &cli.snapshot {
@@ -207,8 +213,8 @@ fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
                         Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
                         Model::Spectrum128 => Machine::new_128k(&rom),
                         Model::SpectrumPlus2 => Machine::new_plus2(&rom),
-                        Model::Spectrum48 | Model::Spectrum16K => {
-                            unreachable!("128-family only")
+                        Model::Spectrum48 | Model::Spectrum16K | Model::Pentagon128 => {
+                            unreachable!("128-family snapshot only")
                         }
                     }
                     .map_err(|e| anyhow::anyhow!(e))?;

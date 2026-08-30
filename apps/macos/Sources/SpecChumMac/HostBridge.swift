@@ -79,10 +79,11 @@ final class HostBridge: ObservableObject {
         case spectrumPlus2A = 3
         case spectrumPlus2 = 4
         case spectrum16K = 5
+        case pentagon128 = 6
 
         /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
         static let pickerOrder: [Model] = [
-            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3,
+            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3, .pentagon128,
         ]
 
         var id: UInt32 { rawValue }
@@ -95,6 +96,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus2: "Spectrum +2 (grey)"
             case .spectrumPlus3: "Spectrum +3"
             case .spectrumPlus2A: "Spectrum +2A"
+            case .pentagon128: "Pentagon 128"
             }
         }
 
@@ -107,6 +109,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus2: "+2"
             case .spectrumPlus3: "+3"
             case .spectrumPlus2A: "+2A"
+            case .pentagon128: "Pentagon"
             }
         }
 
@@ -118,7 +121,7 @@ final class HostBridge: ObservableObject {
 
         /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
         var supportsBeta: Bool {
-            self == .spectrum16K || self == .spectrum48 || self == .spectrum128 || self == .spectrumPlus2
+            self == .spectrum16K || self == .spectrum48 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128
         }
 
         /// Toolbar machine picker: fit the longest `title` ("Spectrum 128K") plus chevron.

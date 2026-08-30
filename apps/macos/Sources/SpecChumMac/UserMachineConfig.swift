@@ -62,6 +62,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
     case spectrumPlus2 = "spectrum_plus2"
     case spectrumPlus2A = "spectrum_plus2a"
     case spectrumPlus3 = "spectrum_plus3"
+    case pentagon128 = "pentagon128"
 
     /// Canonical UI order (matches `machine::ALL_MODELS` / `HostBridge.Model.pickerOrder`).
     static let pickerOrder: [PrefModelSlug] = HostBridge.Model.pickerOrder.map { from($0) }
@@ -74,6 +75,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
         case .spectrumPlus2: .spectrumPlus2
         case .spectrumPlus2A: .spectrumPlus2A
         case .spectrumPlus3: .spectrumPlus3
+        case .pentagon128: .pentagon128
         }
     }
 
@@ -87,6 +89,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
         case .spectrumPlus2: .spectrumPlus2
         case .spectrumPlus2A: .spectrumPlus2A
         case .spectrumPlus3: .spectrumPlus3
+        case .pentagon128: .pentagon128
         }
     }
 }
@@ -135,7 +138,7 @@ struct HardwareCompatFlags {
             return HardwareCompatFlags(
                 multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: false
             )
-        case .spectrum128, .spectrumPlus2:
+        case .spectrum128, .spectrumPlus2, .pentagon128:
             return HardwareCompatFlags(
                 multiface: false, divmmc: true, interface1: true, beta: true, ayStereo: true
             )
