@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 use eframe::egui;
 use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
 use spec_chum_host::{
-    default_prefs_path, load_prefs, save_prefs, UiPreferences, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
+    apply_user_config, default_prefs_path, hardware_compat, load_prefs, save_prefs, PrefAyStereo,
+    PrefJoystick, PrefModel, UiPreferences, UserMachineConfig, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
 };
 
 /// Session state shared by the GUI and headless tests.
@@ -175,14 +176,7 @@ impl EmulatorSession {
         let model = self.model;
         if let Some(path) = machine::resolve_rom_path_in(model, std::slice::from_ref(&root)) {
             if let Ok(data) = std::fs::read(&path) {
-                let built = match model {
-                    Model::Spectrum16K => Machine::new_16k(&data),
-                    Model::Spectrum48 => Machine::new_48k(&data),
-                    Model::Spectrum128 => Machine::new_128k(&data),
-                    Model::SpectrumPlus2 => Machine::new_plus2(&data),
-                    Model::SpectrumPlus2A => Machine::new_plus2a(&data),
-                    Model::SpectrumPlus3 => Machine::new_plus3(&data),
-                };
+                let built = Self::build_machine(model, &data);
                 match built {
                     Ok(m) => {
                         self.machine = Some(m);
@@ -198,6 +192,32 @@ impl EmulatorSession {
             machine::model_title(model),
             machine::unavailable_reason(model)
         );
+    }
+
+    fn build_machine(model: Model, data: &[u8]) -> Result<Machine, String> {
+        match model {
+            Model::Spectrum16K => Machine::new_16k(data),
+            Model::Spectrum48 => Machine::new_48k(data),
+            Model::Spectrum128 => Machine::new_128k(data),
+            Model::SpectrumPlus2 => Machine::new_plus2(data),
+            Model::SpectrumPlus2A => Machine::new_plus2a(data),
+            Model::SpectrumPlus3 => Machine::new_plus3(data),
+        }
+    }
+
+    /// Boot from a saved user profile (#187).
+    pub fn apply_user_machine_config(
+        &mut self,
+        config: &UserMachineConfig,
+    ) -> Result<(), spec_chum_host::MachineConfigError> {
+        let roots = vec![Self::workspace_root()];
+        let applied = apply_user_config(config, &roots)?;
+        self.model = applied.model;
+        self.joystick_mode = applied.joystick_mode;
+        self.kempston_mouse = applied.kempston_mouse;
+        self.machine = Some(applied.machine);
+        self.status = applied.status;
+        Ok(())
     }
 
     pub fn load_snapshot(&mut self, path: &Path) {
@@ -835,6 +855,9 @@ pub struct SpecChumApp {
     prefs_dirty: bool,
     /// Debounce window-size writes so continuous resize does not save every frame.
     prefs_size_deadline: Option<Instant>,
+    /// Create/edit dialog for custom machine profiles (#187).
+    config_draft: Option<UserMachineConfig>,
+    config_editor_error: Option<String>,
 }
 
 impl std::fmt::Debug for SpecChumApp {
@@ -897,7 +920,7 @@ impl SpecChumApp {
     /// Like [`Self::new_with_audio`], but loads/saves prefs from `prefs_path` (tests).
     #[must_use]
     pub fn new_with_audio_prefs(start_audio: bool, prefs_path: PathBuf) -> Self {
-        let prefs = load_prefs(&prefs_path);
+        let mut prefs = load_prefs(&prefs_path);
         let beeper = Arc::new(Mutex::new(BeeperState {
             frame_t_per_sample: 69888.0 / 44100.0,
             muted: prefs.muted,
@@ -915,7 +938,23 @@ impl SpecChumApp {
         session.volume = prefs.volume;
         session.joystick_mode = prefs.joystick_mode.to_mode();
         session.kempston_mouse = prefs.kempston_mouse;
-        session.try_autoload_rom();
+        if let Some(cfg) = prefs.active_custom_config().cloned() {
+            match session.apply_user_machine_config(&cfg) {
+                Ok(()) => {
+                    prefs.sync_machine_fields_from_config(&cfg);
+                    session.joystick_mode = cfg.joystick_mode.to_mode();
+                    session.kempston_mouse = cfg.kempston_mouse;
+                }
+                Err(e) => {
+                    session.model = prefs.model.to_model();
+                    session.try_autoload_rom();
+                    session.status =
+                        format!("Config “{}” failed: {e} — {}", cfg.name, session.status);
+                }
+            }
+        } else {
+            session.try_autoload_rom();
+        }
         if let Some(m) = session.machine.as_mut() {
             m.set_tape_load_options(prefs.tape_load_options());
             if matches!(
@@ -925,7 +964,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
             ) {
-                m.set_ay_stereo_mode(prefs.ay_stereo.to_mode());
+                m.set_ay_stereo_mode(prefs.effective_ay_stereo());
             }
         }
         let gilrs = match gilrs::Gilrs::new() {
@@ -947,6 +986,8 @@ impl SpecChumApp {
             prefs_path,
             prefs_dirty: false,
             prefs_size_deadline: None,
+            config_draft: None,
+            config_editor_error: None,
         }
     }
 
@@ -954,8 +995,14 @@ impl SpecChumApp {
         self.prefs_dirty = true;
     }
 
+    fn sync_prefs_from_custom_config(&mut self, cfg: &UserMachineConfig) {
+        self.prefs.sync_machine_fields_from_config(cfg);
+    }
+
     fn sync_prefs_from_session(&mut self) {
-        self.prefs.set_model_from_machine(self.session.model);
+        if self.prefs.active_config_id.is_none() {
+            self.prefs.set_model_from_machine(self.session.model);
+        }
         self.prefs.throttle = self.session.throttle;
         self.prefs.muted = self.session.muted;
         self.prefs.volume = self.session.volume.clamp(0.0, 1.0);
@@ -1003,7 +1050,7 @@ impl SpecChumApp {
                     | Model::SpectrumPlus2A
                     | Model::SpectrumPlus3
             ) {
-                m.set_ay_stereo_mode(self.prefs.ay_stereo.to_mode());
+                m.set_ay_stereo_mode(self.prefs.effective_ay_stereo());
             }
         }
     }
@@ -1071,6 +1118,186 @@ impl SpecChumApp {
                 || gamepad.is_pressed(gilrs::Button::North);
         }
         stick
+    }
+
+    fn path_field(ui: &mut egui::Ui, label: &str, path: &mut Option<String>, filter: &str) {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            let display = path.as_deref().unwrap_or("(default / none)");
+            ui.label(display);
+            if ui.button("Browse…").clicked() {
+                if let Some(picked) = rfd::FileDialog::new()
+                    .add_filter(filter, &["rom", "bin", "img", "eeprom"])
+                    .pick_file()
+                {
+                    *path = picked.to_str().map(str::to_owned);
+                }
+            }
+            if path.is_some() && ui.button("Clear").clicked() {
+                *path = None;
+            }
+        });
+    }
+
+    fn config_editor_window(&mut self, ctx: &egui::Context) {
+        let Some(draft) = self.config_draft.as_mut() else {
+            return;
+        };
+        let mut open = true;
+        let mut save = false;
+        let mut cancel = false;
+        egui::Window::new("Machine configuration")
+            .open(&mut open)
+            .default_width(420.0)
+            .show(ctx, |ui| {
+                ui.label("Name");
+                ui.text_edit_singleline(&mut draft.name);
+                ui.separator();
+                ui.label("Base model");
+                let root = EmulatorSession::workspace_root();
+                for pick in machine::ALL_MODELS {
+                    let pref = PrefModel::from_model(pick);
+                    let available = machine::rom_available_in(pick, std::slice::from_ref(&root))
+                        || draft.custom_rom_path.is_some();
+                    let title = machine::model_title(pick);
+                    let mut selected = draft.base == pref;
+                    if ui
+                        .add_enabled_ui(available, |ui| ui.radio_value(&mut selected, true, title))
+                        .inner
+                        .clicked()
+                    {
+                        draft.base = pref;
+                        *draft = draft.clone().sanitized();
+                    }
+                }
+                ui.separator();
+                Self::path_field(ui, "Main ROM", &mut draft.custom_rom_path, "ROM");
+                ui.label("Leave empty to use the default ROM for the base model.");
+                ui.separator();
+                ui.label("Joystick");
+                ui.radio_value(&mut draft.joystick_mode, PrefJoystick::Kempston, "Kempston");
+                ui.radio_value(
+                    &mut draft.joystick_mode,
+                    PrefJoystick::SinclairLeft,
+                    "Sinclair left",
+                );
+                ui.radio_value(
+                    &mut draft.joystick_mode,
+                    PrefJoystick::SinclairRight,
+                    "Sinclair right",
+                );
+                ui.radio_value(&mut draft.joystick_mode, PrefJoystick::Cursor, "Cursor");
+                ui.checkbox(&mut draft.kempston_mouse, "Kempston mouse");
+                let compat = hardware_compat(draft.base);
+                if compat.ay_stereo {
+                    ui.separator();
+                    ui.label("AY stereo");
+                    ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Mono, "Mono");
+                    ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Acb, "ACB");
+                    ui.radio_value(&mut draft.ay_stereo, PrefAyStereo::Abc, "ABC");
+                }
+                ui.separator();
+                ui.label("Optional hardware (partial where noted)");
+                if compat.multiface {
+                    if ui
+                        .checkbox(&mut draft.attach_multiface, "Multiface 1")
+                        .changed()
+                        && !draft.attach_multiface
+                    {
+                        draft.multiface_rom_path = None;
+                    }
+                    if draft.attach_multiface {
+                        Self::path_field(
+                            ui,
+                            "Multiface ROM",
+                            &mut draft.multiface_rom_path,
+                            "Multiface",
+                        );
+                    }
+                }
+                if compat.divmmc {
+                    if ui.checkbox(&mut draft.attach_divmmc, "DivMMC").changed()
+                        && !draft.attach_divmmc
+                    {
+                        draft.divmmc_eeprom_path = None;
+                    }
+                    if draft.attach_divmmc {
+                        Self::path_field(
+                            ui,
+                            "ESXDOS EEPROM",
+                            &mut draft.divmmc_eeprom_path,
+                            "EEPROM",
+                        );
+                    }
+                }
+                if compat.interface1 {
+                    ui.checkbox(&mut draft.attach_interface1, "Interface 1 (stub)");
+                    if draft.attach_interface1 {
+                        Self::path_field(ui, "IF1 ROM", &mut draft.interface1_rom_path, "IF1");
+                    }
+                }
+                if compat.beta {
+                    if ui.checkbox(&mut draft.attach_beta, "Beta Disk").changed()
+                        && !draft.attach_beta
+                    {
+                        draft.trdos_rom_path = None;
+                    }
+                    if draft.attach_beta {
+                        Self::path_field(ui, "TR-DOS ROM", &mut draft.trdos_rom_path, "TR-DOS");
+                    }
+                }
+                if !compat.multiface && !compat.divmmc && !compat.interface1 && !compat.beta {
+                    ui.label("No optional hardware on this base model.");
+                }
+                if let Some(err) = &self.config_editor_error {
+                    ui.colored_label(egui::Color32::RED, err);
+                }
+                ui.horizontal(|ui| {
+                    if ui.button("Save").clicked() {
+                        save = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if !open || cancel {
+            self.config_draft = None;
+            self.config_editor_error = None;
+            return;
+        }
+        if save {
+            let to_save = draft.clone().sanitized();
+            match to_save.validate() {
+                Ok(()) => {
+                    let is_new = !self.prefs.custom_configs.iter().any(|c| c.id == to_save.id);
+                    if is_new
+                        && self.prefs.custom_configs.len() >= spec_chum_host::MAX_CUSTOM_CONFIGS
+                    {
+                        self.config_editor_error = Some(format!(
+                            "Cannot save more than {} configurations",
+                            spec_chum_host::MAX_CUSTOM_CONFIGS
+                        ));
+                    } else {
+                        match self.session.apply_user_machine_config(&to_save) {
+                            Ok(()) => {
+                                self.prefs.upsert_custom_config(to_save.clone());
+                                self.prefs.select_custom_config(&to_save.id);
+                                self.sync_prefs_from_custom_config(&to_save);
+                                self.session.joystick_mode = to_save.joystick_mode.to_mode();
+                                self.session.kempston_mouse = to_save.kempston_mouse;
+                                self.apply_restored_machine_options();
+                                self.mark_prefs_dirty();
+                                self.config_draft = None;
+                                self.config_editor_error = None;
+                            }
+                            Err(e) => self.config_editor_error = Some(e.to_string()),
+                        }
+                    }
+                }
+                Err(e) => self.config_editor_error = Some(e.to_string()),
+            }
+        }
     }
 
     /// egui UI body — callable from `App::update` or headless `Context::run`.
@@ -1164,13 +1391,16 @@ impl SpecChumApp {
                     });
                     ui.menu_button("Machine", |ui| {
                         let root = EmulatorSession::workspace_root();
+                        ui.label("Built-in models");
                         for pick in machine::ALL_MODELS {
                             let available =
                                 machine::rom_available_in(pick, std::slice::from_ref(&root));
                             let title = machine::model_title(pick);
+                            let mut selected = self.prefs.active_config_id.is_none()
+                                && self.session.model == pick;
                             let mut picked = ui
                                 .add_enabled_ui(available, |ui| {
-                                    ui.radio_value(&mut self.session.model, pick, title)
+                                    ui.radio_value(&mut selected, true, title)
                                 })
                                 .inner;
                             if !available {
@@ -1181,10 +1411,78 @@ impl SpecChumApp {
                                 ));
                             }
                             if picked.clicked() {
+                                self.prefs
+                                    .select_builtin_model(PrefModel::from_model(pick));
+                                self.session.model = pick;
                                 self.session.try_autoload_rom();
                                 self.apply_restored_machine_options();
                                 self.mark_prefs_dirty();
                             }
+                        }
+                        ui.separator();
+                        ui.label("My configurations");
+                        let configs: Vec<UserMachineConfig> =
+                            self.prefs.custom_configs.clone();
+                        for cfg in &configs {
+                            let mut selected = self.prefs.active_config_id.as_deref() == Some(cfg.id.as_str());
+                            if ui.radio_value(&mut selected, true, &cfg.name).clicked() {
+                                self.prefs.select_custom_config(&cfg.id);
+                                if let Some(active) = self.prefs.active_custom_config().cloned() {
+                                    match self.session.apply_user_machine_config(&active) {
+                                        Ok(()) => {
+                                            self.sync_prefs_from_custom_config(&active);
+                                            self.session.joystick_mode =
+                                                active.joystick_mode.to_mode();
+                                            self.session.kempston_mouse = active.kempston_mouse;
+                                            self.apply_restored_machine_options();
+                                            self.mark_prefs_dirty();
+                                        }
+                                        Err(e) => self.session.status = e.to_string(),
+                                    }
+                                }
+                            }
+                        }
+                        if ui.button("New configuration…").clicked() {
+                            let base = PrefModel::from_model(self.session.model);
+                            let mut draft = UserMachineConfig::new_named("My Spectrum", base);
+                            draft.joystick_mode =
+                                PrefJoystick::from_mode(self.session.joystick_mode);
+                            draft.kempston_mouse = self.session.kempston_mouse;
+                            if let Some(m) = self.session.machine.as_ref() {
+                                draft.ay_stereo = PrefAyStereo::from_mode(m.ay_stereo_mode());
+                            }
+                            self.config_draft = Some(draft);
+                            self.config_editor_error = None;
+                            ui.close_menu();
+                        }
+                        let has_active = self.prefs.active_config_id.is_some();
+                        if ui
+                            .add_enabled(has_active, egui::Button::new("Edit configuration…"))
+                            .clicked()
+                        {
+                            if let Some(id) = self.prefs.active_config_id.clone() {
+                                if let Some(cfg) =
+                                    self.prefs.custom_configs.iter().find(|c| c.id == id)
+                                {
+                                    self.config_draft = Some(cfg.clone());
+                                    self.config_editor_error = None;
+                                }
+                            }
+                            ui.close_menu();
+                        }
+                        if ui
+                            .add_enabled(has_active, egui::Button::new("Delete configuration"))
+                            .clicked()
+                        {
+                            if let Some(id) = self.prefs.active_config_id.clone() {
+                                self.prefs.delete_custom_config(&id);
+                                self.prefs.model = self.prefs.last_builtin_model;
+                                self.session.model = self.prefs.last_builtin_model.to_model();
+                                self.session.try_autoload_rom();
+                                self.apply_restored_machine_options();
+                                self.mark_prefs_dirty();
+                            }
+                            ui.close_menu();
                         }
                         if ui.button("Reset").clicked() {
                             if let Some(m) = self.session.machine.as_mut() {
@@ -1831,6 +2129,7 @@ of their copyrighted material but retain that copyright.",
                 }
             });
         self.session.debug_open = open;
+        self.config_editor_window(ctx);
     }
 }
 

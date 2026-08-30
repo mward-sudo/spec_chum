@@ -19,7 +19,7 @@ pub use inspect::{Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 pub use rom::{
     model_label, model_title, read_rom, resolve_rom_path, resolve_rom_path_in, rom_available,
-    rom_available_in, rom_candidates, unavailable_reason, ALL_MODELS,
+    rom_available_in, rom_candidates, search_roots, unavailable_reason, ALL_MODELS,
 };
 
 use std::cell::Cell;
