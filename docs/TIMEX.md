@@ -53,8 +53,24 @@ switches into **hi-res or extended display modes** will look wrong:
 - **512×192 hi-res** — garbled or incorrectly laid out (SCLD video deferred)
 - **Extended / dual-screen modes** — broken visually
 - Border / paging side effects of those modes — not modelled
-- Dock software — not yet
+- Dock / Spectrum ROM cartridges — not yet (empty DOCK reads `0xFF`)
 - Dedicated Timex joystick input modes (separate from Kempston) — not yet
+
+### Spectrum tape software on TS2068
+
+Timex BASIC `LOAD ""` over EAR works for ordinary PROGRAM/CODE that does not depend on
+Spectrum ROM addresses (e.g. fixture `print_ok.tap`).
+
+Two Spectrum habits still break on a stock TS2068 (same as real hardware without a
+Spectrum ROM cartridge — only ~7% of commercial Spectrum titles run):
+
+1. **`CALL $0556` (LD-BYTES)** — Timex home ROM has different code there; the relocated
+   loader is at `$00FC` in EX-ROM. Spec Chum redirects **RAM** callers that land on
+   `$0556` without the Spectrum prologue to that Timex entry (pages EX-ROM chunk 0').
+2. **Absolute `USR` / PROG layout** — Spectrum `PROG` is `$5CCB` (23755); Timex `PROG`
+   is `$6856` (26710). Titles such as **3D Deathchase** poke/run machine code at fixed
+   Spectrum addresses and will not start on TS2068. Use **Timex TC2048** or **48K** for
+   those, or a future Spectrum ROM dock cartridge (#192 follow-up).
 
 Do not expect Timex-specific demos, art packages, or games that depend on 512×192 to
 render correctly until SCLD video lands.

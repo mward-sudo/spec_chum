@@ -68,6 +68,13 @@ pub fn is_ld_bytes_trap_pc(pc: u16, mut read: impl FnMut(u16) -> u8) -> bool {
     if pc == LD_BYTES_TRAP_PC {
         return (0..4).all(|i| read(0x0556 + i) == LD_BYTES_PROLOGUE[i as usize]);
     }
+    // Timex EX-ROM LD-BYTES edge-detect (CALL LD-EDGE-1), same prologue offset as 48K.
+    let timex_edge = TIMEX_EXROM_LD_BYTES_PC.wrapping_add(LD_BYTES_EDGE_CALL_OFF);
+    if pc == timex_edge {
+        return (0..4).all(|i| {
+            read(TIMEX_EXROM_LD_BYTES_PC.wrapping_add(i)) == LD_BYTES_PROLOGUE[i as usize]
+        });
+    }
     if pc < 0x4000 || read(pc) != 0xCD {
         return false;
     }
@@ -80,6 +87,12 @@ pub fn is_ld_bytes_trap_pc(pc: u16, mut read: impl FnMut(u16) -> u8) -> bool {
 
 /// Spectrum ROM LD-BYTES entry used for flash-load traps.
 pub const LD_BYTES_TRAP_PC: u16 = 0x056C;
+
+/// Timex TS2068 / TC2068 EX-ROM LD-BYTES entry (when chunk 0' is paged).
+///
+/// Spectrum software often `CALL $0556`; on Timex that address is not LD-BYTES.
+/// The relocated Timex routine starts here (same `LD_BYTES_PROLOGUE`).
+pub const TIMEX_EXROM_LD_BYTES_PC: u16 = 0x00FC;
 
 /// Pilot / sync / data pulse timings (T-states), matching the 48K ROM loader.
 pub const PILOT_PULSE_T: u32 = 2168;
@@ -805,6 +818,27 @@ mod tests {
             .unwrap_or(0)));
         rom[0x0556] = 0x20; // 128K editor ROM 0
         assert!(!is_ld_bytes_trap_pc(LD_BYTES_TRAP_PC, |a| rom
+            .get(a as usize)
+            .copied()
+            .unwrap_or(0)));
+    }
+
+    #[test]
+    fn ld_bytes_trap_pc_matches_timex_exrom_entry() {
+        let mut rom = [0u8; 0x200];
+        let entry = TIMEX_EXROM_LD_BYTES_PC as usize;
+        rom[entry] = 0x14;
+        rom[entry + 1] = 0x08;
+        rom[entry + 2] = 0x15;
+        rom[entry + 3] = 0xF3;
+        let edge = TIMEX_EXROM_LD_BYTES_PC.wrapping_add(LD_BYTES_EDGE_CALL_OFF);
+        rom[edge as usize] = 0xCD;
+        assert!(is_ld_bytes_trap_pc(edge, |a| rom
+            .get(a as usize)
+            .copied()
+            .unwrap_or(0)));
+        rom[entry] = 0x00;
+        assert!(!is_ld_bytes_trap_pc(edge, |a| rom
             .get(a as usize)
             .copied()
             .unwrap_or(0)));
