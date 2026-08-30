@@ -38,9 +38,10 @@ pub use bus::StereoMode as AyStereoMode;
 use bus::{Bus128, Bus48, BusPlus3, Kempston, KempstonMouse};
 use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot128, Snapshot48};
 pub use tape::LD_BYTES_TRAP_PC;
+pub use tape::TIMEX_EXROM_LD_BYTES_PC;
 use tape::{
     evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, TapPlayer, TapeTrapResult,
-    TzxPlayer,
+    TzxPlayer, LD_BYTES_PROLOGUE,
 };
 use thiserror::Error;
 use ula::{
@@ -1666,6 +1667,7 @@ impl Machine {
                     if debugger.check_pc(cpu.regs.pc) {
                         break;
                     }
+                    Self::timex_redirect_spectrum_ld_bytes(cpu, bus);
                     if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
@@ -2196,6 +2198,32 @@ impl Machine {
         holding
     }
 
+    /// Spectrum games often `CALL $0556` (48K LD-BYTES). Timex home ROM has different
+    /// code there; the real loader lives at [`TIMEX_EXROM_LD_BYTES_PC`] in EX-ROM.
+    ///
+    /// When a RAM caller lands on `$0556` without the Spectrum prologue, page EX-ROM
+    /// chunk 0' and continue at the Timex entry so EAR / Instant can still load.
+    fn timex_redirect_spectrum_ld_bytes(cpu: &mut Cpu, bus: &mut Bus48) {
+        const SPECTRUM_LD_BYTES: u16 = 0x0556;
+        if !bus.timex_2068 || cpu.regs.pc != SPECTRUM_LD_BYTES {
+            return;
+        }
+        if (0..4).all(|i| bus.read(SPECTRUM_LD_BYTES + i) == LD_BYTES_PROLOGUE[i as usize]) {
+            return;
+        }
+        // Only rewrite CALLs from RAM — never Timex ROM fall-through at $0556.
+        let sp = cpu.regs.sp;
+        let ret = u16::from_le_bytes([bus.read(sp), bus.read(sp.wrapping_add(1))]);
+        if ret < 0x4000 {
+            return;
+        }
+        let ff = bus.timex_scld.port_ff() | 0x80;
+        let f4 = bus.timex_scld.port_f4() | 0x01;
+        bus.out_port(0x00FF, ff);
+        bus.out_port(0x00F4, f4);
+        cpu.regs.pc = TIMEX_EXROM_LD_BYTES_PC;
+    }
+
     fn ret_from_tape_trap(cpu: &mut Cpu, lo: u8, hi: u8, success: bool) {
         if success {
             cpu.regs.f |= flag::C;
@@ -2502,6 +2530,7 @@ impl Machine {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
+                Self::timex_redirect_spectrum_ld_bytes(cpu, bus);
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -4568,6 +4597,39 @@ mod tests {
             assert_eq!(bus.read(0x0000), exrom[0]);
         } else {
             panic!("expected Spec48 bus for TS2068");
+        }
+    }
+
+    #[test]
+    fn timex_ts2068_redirects_spectrum_ld_bytes_call_from_ram() {
+        let Some((home, exrom)) = rom_timex_ts2068() else {
+            eprintln!("skip: roms/timex/tc2068-*.rom missing");
+            return;
+        };
+        let mut m = Machine::new_timex_ts2068(&home, &exrom).unwrap();
+        // Simulate `CALL $0556` from RAM (Death Chase-style Spectrum loader).
+        if let Machine::Spec48 { cpu, bus, .. } = &mut m {
+            bus.write(0x8000, 0xC9); // RET landing pad for stack ret
+            cpu.regs.sp = 0xFFFD;
+            bus.write(0xFFFD, 0x00);
+            bus.write(0xFFFE, 0x80); // ret → $8000
+            cpu.regs.pc = 0x0556;
+        } else {
+            panic!("expected Spec48 bus for TS2068");
+        }
+        m.step_once();
+        assert_eq!(
+            m.cpu().regs.pc,
+            TIMEX_EXROM_LD_BYTES_PC.wrapping_add(1),
+            "after one opcode at Timex LD-BYTES entry"
+        );
+        if let Machine::Spec48 { bus, .. } = &m {
+            assert!(bus.timex_scld.use_exrom());
+            assert!(bus.timex_scld.chunk_paged(0));
+            assert_eq!(
+                bus.read(TIMEX_EXROM_LD_BYTES_PC),
+                tape::LD_BYTES_PROLOGUE[0]
+            );
         }
     }
 
