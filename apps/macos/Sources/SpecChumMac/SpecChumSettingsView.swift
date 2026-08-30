@@ -14,7 +14,7 @@ struct SpecChumSettingsView: View {
                 Text("Built-ins use default ROMs from ./scripts/fetch_roms.sh. Custom ROM overrides belong in a saved configuration only.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Timex TC2048 (Phase 1): standard 256×192 only — 512×192 hi-res and extended SCLD modes are not drawn yet. See docs/TIMEX.md.")
+                Text("Timex TC2048 / TS2068: standard 256×192 only — 512×192 hi-res and extended SCLD modes are not drawn yet. See docs/TIMEX.md.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -12,7 +12,7 @@ use trace::DumpFilter;
 #[derive(Parser, Debug)]
 #[command(name = "spec-chum-debug", about = "Headless Spec Chum debugger")]
 struct Cli {
-    /// 16k, 48k, 128k, plus2, plus2a, plus3, pentagon, timex (aliases: tc2048, timex2048)
+    /// 16k, 48k, 128k, plus2, plus2a, plus3, pentagon, timex/tc2048, ts2068/tc2068
     #[arg(long, default_value = "48k")]
     model: String,
     #[arg(long)]
@@ -120,6 +120,7 @@ fn parse_model(s: &str) -> Result<Model> {
         "plus3" | "+3" => Model::SpectrumPlus3,
         "pentagon" | "pentagon128" | "128p" => Model::Pentagon128,
         "timex" | "tc2048" | "timex2048" => Model::TimexTC2048,
+        "ts2068" | "tc2068" | "timex2068" => Model::TimexTS2068,
         other => bail!("unknown model {other}"),
     })
 }
@@ -141,6 +142,10 @@ fn load_machine(cli: &Cli) -> Result<Machine> {
             Machine::new_pentagon128(&rom, &trdos)
         }
         Model::TimexTC2048 => Machine::new_timex_tc2048(&rom).map_err(|e| e.to_string()),
+        Model::TimexTS2068 => {
+            let exrom = machine::read_exrom(Model::TimexTS2068).map_err(|e| anyhow::anyhow!(e))?;
+            Machine::new_timex_ts2068(&rom, &exrom).map_err(|e| e.to_string())
+        }
     }
     .map_err(|e| anyhow::anyhow!(e))?;
     if let Some(path) = &cli.snapshot {
@@ -218,6 +223,7 @@ fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
                         Model::Spectrum48
                         | Model::Spectrum16K
                         | Model::TimexTC2048
+                        | Model::TimexTS2068
                         | Model::Pentagon128 => {
                             unreachable!("128-family snapshot only")
                         }

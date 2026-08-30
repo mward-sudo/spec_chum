@@ -26,7 +26,7 @@ pub use kempston_mouse::{
 };
 pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
-pub use timex::TimexScld;
+pub use timex::{TimexScld, TIMEX_EXROM_SIZE};
 
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
@@ -102,9 +102,15 @@ pub struct Bus48 {
     pub ram: [u8; 49152],
     /// When true, only 16 KiB RAM is mapped at `0x4000..0x8000` (#188).
     pub ram16k: bool,
-    /// Timex TC2048 SCLD ports (#192).
+    /// Timex SCLD ports (#192) — TC2048 and TS2068.
     pub timex: bool,
+    /// Timex TS2068 / TC2068: horizontal MMU + EX-ROM + AY on F5/F6.
+    pub timex_2068: bool,
     pub timex_scld: TimexScld,
+    /// EX-ROM image (8 KiB); mirrored into every paged EX-ROM chunk (Fuse-compatible).
+    pub timex_exrom: [u8; TIMEX_EXROM_SIZE],
+    /// AY-3-8912 (active on TS2068; unused on plain 48K / TC2048).
+    pub ay: Ay8912,
     pub keyboard: Keyboard,
     pub ear: bool,
     pub mic: bool,
@@ -141,7 +147,10 @@ impl Bus48 {
             ram: [0; 49152],
             ram16k: false,
             timex: false,
+            timex_2068: false,
             timex_scld: TimexScld::new(),
+            timex_exrom: [0xFF; TIMEX_EXROM_SIZE],
+            ay: Ay8912::new(),
             keyboard: Keyboard::new(),
             ear: false,
             mic: false,
@@ -165,6 +174,41 @@ impl Bus48 {
         }
         self.rom.copy_from_slice(data);
         Ok(())
+    }
+
+    /// Load the 8 KiB Timex EX-ROM (TS2068 / TC2068).
+    pub fn load_timex_exrom(&mut self, data: &[u8]) -> Result<(), String> {
+        if data.len() != TIMEX_EXROM_SIZE {
+            return Err(format!(
+                "Timex EX-ROM must be {TIMEX_EXROM_SIZE} bytes, got {}",
+                data.len()
+            ));
+        }
+        self.timex_exrom.copy_from_slice(data);
+        Ok(())
+    }
+
+    /// Horizontal MMU overlay: EX-ROM or empty DOCK when HSR bit is set.
+    #[inline]
+    fn timex_mmu_read(&self, addr: u16) -> Option<u8> {
+        if !self.timex_2068 {
+            return None;
+        }
+        let chunk = TimexScld::chunk_of(addr);
+        if !self.timex_scld.chunk_paged(chunk) {
+            return None;
+        }
+        if self.timex_scld.use_exrom() {
+            Some(self.timex_exrom[(addr as usize) & (TIMEX_EXROM_SIZE - 1)])
+        } else {
+            // Empty dock / no cartridge — Fuse fills 0xFF.
+            Some(0xFF)
+        }
+    }
+
+    #[inline]
+    fn timex_mmu_blocks_write(&self, addr: u16) -> bool {
+        self.timex_2068 && self.timex_scld.chunk_paged(TimexScld::chunk_of(addr))
     }
 
     /// Attach Multiface 1 with an 8 KiB ROM image (creates the peripheral if absent).
@@ -244,6 +288,9 @@ impl Bus48 {
                 return v;
             }
         }
+        if let Some(v) = self.timex_mmu_read(addr) {
+            return v;
+        }
         if addr < 0x4000 {
             self.rom[addr as usize]
         } else if self.ram16k && addr >= 0x8000 {
@@ -264,6 +311,10 @@ impl Bus48 {
             if d.write_overlay(addr, value) {
                 return;
             }
+        }
+        // Paged EX-ROM / empty DOCK are not writable; ULA screen still uses home RAM.
+        if self.timex_mmu_blocks_write(addr) {
+            return;
         }
         if addr >= 0x4000 && !(self.ram16k && addr >= 0x8000) {
             self.ram[addr as usize - 0x4000] = value;
@@ -366,6 +417,13 @@ impl Bus48 {
         if let Some(v) = self.mouse.read_port(port) {
             return v;
         }
+        if self.timex_2068 {
+            match port & 0xff {
+                // Timex AY: register select (F5) / data (F6). Joystick on R14 deferred.
+                0xf5 | 0xf6 => return self.ay.read_data(),
+                _ => {}
+            }
+        }
         if self.timex {
             if let Some(v) = self.timex_scld.in_port(port) {
                 return v;
@@ -400,6 +458,19 @@ impl Bus48 {
         if let Some(if1) = self.interface1.as_mut() {
             if if1.out_port(port, value) {
                 return;
+            }
+        }
+        if self.timex_2068 {
+            match port & 0xff {
+                0xf5 => {
+                    self.ay.select(value);
+                    return;
+                }
+                0xf6 => {
+                    self.ay.write_data(value);
+                    return;
+                }
+                _ => {}
             }
         }
         if self.timex && self.timex_scld.out_port(port, value) {
@@ -764,6 +835,50 @@ mod tests {
         assert_eq!(b.ram[0], 0x12);
         assert_eq!(b.ram[0x3fff], 0x34);
         assert_eq!(b.ram[0x4000], 0, "writes above 16K RAM are ignored");
+    }
+
+    #[test]
+    fn timex_2068_exrom_pages_chunk0() {
+        let mut b = Bus48::new();
+        b.timex = true;
+        b.timex_2068 = true;
+        b.rom[0] = 0x11;
+        b.rom[0x2000] = 0x22;
+        b.timex_exrom[0] = 0xAA;
+        b.timex_exrom[1] = 0xBB;
+        assert_eq!(b.read(0x0000), 0x11, "home ROM before paging");
+        b.out_port(0x00FF, 0x80); // EX-ROM
+        b.out_port(0x00F4, 0x01); // chunk 0
+        assert_eq!(b.read(0x0000), 0xAA);
+        assert_eq!(b.read(0x0001), 0xBB);
+        assert_eq!(b.read(0x2000), 0x22, "chunk 1 still home when bit clear");
+        // Same EX-ROM mirrored when chunk 1 is also selected.
+        b.out_port(0x00F4, 0x03);
+        assert_eq!(b.read(0x2000), 0xAA);
+        b.write(0x0000, 0x55);
+        assert_eq!(b.read(0x0000), 0xAA, "EX-ROM not writable");
+    }
+
+    #[test]
+    fn timex_2068_empty_dock_reads_ff() {
+        let mut b = Bus48::new();
+        b.timex = true;
+        b.timex_2068 = true;
+        b.rom[0] = 0x11;
+        b.out_port(0x00FF, 0x00); // DOCK
+        b.out_port(0x00F4, 0x01);
+        assert_eq!(b.read(0x0000), 0xFF);
+    }
+
+    #[test]
+    fn timex_2068_ay_ports_f5_f6() {
+        let mut b = Bus48::new();
+        b.timex = true;
+        b.timex_2068 = true;
+        b.out_port(0x00F5, 0x07);
+        b.out_port(0x00F6, 0x38);
+        assert_eq!(b.ay.selected, 0x07);
+        assert_eq!(b.ay.regs[7], 0x38);
     }
 
     #[test]

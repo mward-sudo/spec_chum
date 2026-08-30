@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use bus::TRDOS_ROM_SIZE;
+use bus::{TIMEX_EXROM_SIZE, TRDOS_ROM_SIZE};
 
 use crate::Model;
 
@@ -19,6 +19,8 @@ use crate::Model;
 pub enum RomSlotKind {
     Main,
     Trdos,
+    /// Timex TS2068 / TC2068 EX-ROM (8 KiB).
+    ExRom,
 }
 
 /// Host picker / dialog status for one ROM slot.
@@ -57,12 +59,19 @@ pub fn rom_candidates(model: Model) -> &'static [&'static str] {
     match model {
         Model::Spectrum16K | Model::Spectrum48 => &["roms/spec48.rom"],
         Model::TimexTC2048 => &["roms/timex/tc2048.rom"],
+        Model::TimexTS2068 => &["roms/timex/tc2068-0.rom"],
         Model::Spectrum128 => &["roms/128/spec128uk.rom"],
         Model::SpectrumPlus2 => &["roms/plus2/plus2uk.rom"],
         Model::SpectrumPlus2A => &["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"],
         Model::SpectrumPlus3 => &["roms/plus3/plus3.rom"],
         Model::Pentagon128 => &["roms/pentagon/pentagon.rom", "roms/pentagon/128p.rom"],
     }
+}
+
+/// Relative EX-ROM search paths (TS2068 / TC2068; first hit wins).
+#[must_use]
+pub fn exrom_candidates(_model: Model) -> &'static [&'static str] {
+    &["roms/timex/tc2068-1.rom"]
 }
 
 /// Relative TR-DOS ROM search paths (Pentagon only; first hit wins).
@@ -79,7 +88,9 @@ pub fn trdos_rom_candidates(_model: Model) -> &'static [&'static str] {
 #[must_use]
 pub fn expected_main_rom_bytes(model: Model) -> usize {
     match model {
-        Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 => 16 * 1024,
+        Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068 => {
+            16 * 1024
+        }
         Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 => 32 * 1024,
         Model::SpectrumPlus2A | Model::SpectrumPlus3 => 64 * 1024,
     }
@@ -97,6 +108,12 @@ pub fn requires_trdos_rom(model: Model) -> bool {
     matches!(model, Model::Pentagon128)
 }
 
+/// True when the model needs the Timex EX-ROM (8 KiB) before boot.
+#[must_use]
+pub fn requires_exrom(model: Model) -> bool {
+    matches!(model, Model::TimexTS2068)
+}
+
 /// Short picker label.
 #[must_use]
 pub fn model_label(model: Model) -> &'static str {
@@ -109,6 +126,7 @@ pub fn model_label(model: Model) -> &'static str {
         Model::SpectrumPlus3 => "+3",
         Model::Pentagon128 => "Pentagon",
         Model::TimexTC2048 => "TC2048",
+        Model::TimexTS2068 => "TS2068",
     }
 }
 
@@ -124,11 +142,12 @@ pub fn model_title(model: Model) -> &'static str {
         Model::SpectrumPlus3 => "Spectrum +3",
         Model::Pentagon128 => "Pentagon 128",
         Model::TimexTC2048 => "Timex TC2048",
+        Model::TimexTS2068 => "Timex TS2068",
     }
 }
 
-/// Canonical UI order for every host picker / menu (16K → … → +3 → Pentagon → Timex).
-pub const ALL_MODELS: [Model; 8] = [
+/// Canonical UI order for every host picker / menu.
+pub const ALL_MODELS: [Model; 9] = [
     Model::Spectrum16K,
     Model::Spectrum48,
     Model::Spectrum128,
@@ -137,6 +156,7 @@ pub const ALL_MODELS: [Model; 8] = [
     Model::SpectrumPlus3,
     Model::Pentagon128,
     Model::TimexTC2048,
+    Model::TimexTS2068,
 ];
 
 /// Workspace / env / cwd roots tried when autoloading ROMs.
@@ -203,6 +223,20 @@ pub fn trdos_rom_available_in(model: Model, roots: &[PathBuf]) -> bool {
     resolve_first_in(roots, trdos_rom_candidates(model)).is_some()
 }
 
+/// True when a Timex EX-ROM exists for models that require one.
+#[must_use]
+pub fn exrom_available(model: Model) -> bool {
+    exrom_available_in(model, &search_roots())
+}
+
+#[must_use]
+pub fn exrom_available_in(model: Model, roots: &[PathBuf]) -> bool {
+    if !requires_exrom(model) {
+        return true;
+    }
+    resolve_first_in(roots, exrom_candidates(model)).is_some()
+}
+
 /// True when the model can boot (main ROM + any required TR-DOS ROM present).
 #[must_use]
 pub fn rom_available(model: Model) -> bool {
@@ -248,6 +282,14 @@ pub fn unavailable_reason(model: Model) -> &'static str {
         }
         if !trdos_rom_available(model) {
             return "Add roms/pentagon/trdos.rom (16 KiB TR-DOS; user-provided)";
+        }
+    }
+    if requires_exrom(model) {
+        if !main_rom_available(model) {
+            return "Add roms/timex/tc2068-0.rom or run ./scripts/fetch_roms.sh";
+        }
+        if !exrom_available(model) {
+            return "Add roms/timex/tc2068-1.rom or run ./scripts/fetch_roms.sh";
         }
     }
     if requires_user_rom(model) {
@@ -303,6 +345,17 @@ pub fn rom_slot_descriptors(model: Model) -> Vec<RomSlotDescriptor> {
             search_paths: trdos_rom_candidates(model),
             expected_bytes: TRDOS_ROM_SIZE,
             user_provided: true,
+        });
+    }
+    if requires_exrom(model) {
+        slots.push(RomSlotDescriptor {
+            kind: RomSlotKind::ExRom,
+            id: "exrom",
+            label: "EX-ROM",
+            install_path: exrom_candidates(model)[0],
+            search_paths: exrom_candidates(model),
+            expected_bytes: TIMEX_EXROM_SIZE,
+            user_provided: false,
         });
     }
     slots
@@ -419,6 +472,40 @@ pub fn resolve_trdos_rom_path_in_with_overrides(
     (state.status == RomSlotStatus::Found).then(|| state.resolved_path.expect("found path"))
 }
 
+/// First resolved EX-ROM path for Timex 2068 models, if any.
+#[must_use]
+pub fn resolve_exrom_path(model: Model) -> Option<PathBuf> {
+    resolve_exrom_path_in(model, &search_roots())
+}
+
+#[must_use]
+pub fn resolve_exrom_path_in(model: Model, roots: &[PathBuf]) -> Option<PathBuf> {
+    if !requires_exrom(model) {
+        return None;
+    }
+    resolve_first_in(roots, exrom_candidates(model))
+}
+
+#[must_use]
+pub fn resolve_exrom_path_in_with_overrides(
+    model: Model,
+    roots: &[PathBuf],
+    overrides: &BTreeMap<String, PathBuf>,
+) -> Option<PathBuf> {
+    if !requires_exrom(model) {
+        return None;
+    }
+    let state = rom_slot_state_with_override(
+        rom_slot_descriptors(model)
+            .into_iter()
+            .find(|d| d.kind == RomSlotKind::ExRom)
+            .expect("exrom slot"),
+        roots,
+        overrides.get("exrom").map(PathBuf::as_path),
+    );
+    (state.status == RomSlotStatus::Found).then(|| state.resolved_path.expect("found path"))
+}
+
 /// Pick the first workspace root suitable for installing ROM files.
 #[must_use]
 pub fn writable_install_root() -> PathBuf {
@@ -514,6 +601,38 @@ pub fn read_trdos_rom(model: Model) -> Result<Vec<u8>, String> {
     read_trdos_rom_with_overrides(model, &BTreeMap::new())
 }
 
+/// Load Timex EX-ROM bytes when required and available.
+pub fn read_exrom_with_overrides(
+    model: Model,
+    overrides: &BTreeMap<String, PathBuf>,
+) -> Result<Vec<u8>, String> {
+    if !requires_exrom(model) {
+        return Err(format!("{} does not use an EX-ROM", model_title(model)));
+    }
+    let roots = search_roots();
+    let path = resolve_exrom_path_in_with_overrides(model, &roots, overrides).ok_or_else(|| {
+        format!(
+            "EX-ROM for {} not found; {}",
+            model_title(model),
+            unavailable_reason(model)
+        )
+    })?;
+    let data = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    if data.len() != TIMEX_EXROM_SIZE {
+        return Err(format!(
+            "EX-ROM must be {TIMEX_EXROM_SIZE} bytes, got {} ({})",
+            data.len(),
+            path.display()
+        ));
+    }
+    Ok(data)
+}
+
+/// Load Timex EX-ROM bytes when required and available.
+pub fn read_exrom(model: Model) -> Result<Vec<u8>, String> {
+    read_exrom_with_overrides(model, &BTreeMap::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -531,6 +650,7 @@ mod tests {
                 Model::SpectrumPlus3,
                 Model::Pentagon128,
                 Model::TimexTC2048,
+                Model::TimexTS2068,
             ]
         );
     }
@@ -577,6 +697,21 @@ mod tests {
             rom_candidates(Model::TimexTC2048),
             &["roms/timex/tc2048.rom"]
         );
+    }
+
+    #[test]
+    fn timex_ts2068_requires_home_and_exrom_slots() {
+        assert!(!requires_user_rom(Model::TimexTS2068));
+        assert!(requires_exrom(Model::TimexTS2068));
+        assert_eq!(
+            rom_candidates(Model::TimexTS2068),
+            &["roms/timex/tc2068-0.rom"]
+        );
+        let slots = rom_slot_descriptors(Model::TimexTS2068);
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0].id, "main");
+        assert_eq!(slots[1].id, "exrom");
+        assert_eq!(slots[1].expected_bytes, TIMEX_EXROM_SIZE);
     }
 
     #[test]

@@ -218,6 +218,10 @@ impl EmulatorSession {
                 Machine::new_pentagon128(data, &trdos)
             }
             Model::TimexTC2048 => Machine::new_timex_tc2048(data).map_err(|e| e.to_string()),
+            Model::TimexTS2068 => {
+                let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)?;
+                Machine::new_timex_ts2068(data, &exrom).map_err(|e| e.to_string())
+            }
         }
     }
 
@@ -456,7 +460,7 @@ impl EmulatorSession {
         // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
         self.pending_instant_play = pending_play;
         self.key_script = Some(match self.model {
-            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 => {
+            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068 => {
                 if with_code {
                     KeyScript::load_quotes_code_48k()
                 } else {
@@ -473,12 +477,14 @@ impl EmulatorSession {
             return;
         }
         self.status = match (self.model, with_code) {
-            (Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048, true) => {
-                "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into()
-            }
-            (Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048, false) => {
-                "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
-            }
+            (
+                Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068,
+                true,
+            ) => "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into(),
+            (
+                Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068,
+                false,
+            ) => "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into(),
             (Model::SpectrumPlus2A, false) => {
                 "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan".into()
             }
@@ -1635,7 +1641,7 @@ impl SpecChumApp {
                         ui.label("Built-in models");
                         ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
                         ui.weak(
-                            "Timex TC2048 (Phase 1): 256×192 OK; 512×192 hi-res / extended SCLD modes not drawn — docs/TIMEX.md.",
+                            "Timex TC2048 / TS2068: 256×192 OK; 512×192 hi-res / extended SCLD modes not drawn — docs/TIMEX.md.",
                         );
                         for pick in machine::ALL_MODELS {
                             let pref = PrefModel::from_model(pick);
@@ -1658,10 +1664,10 @@ impl SpecChumApp {
                                     title,
                                     machine::unavailable_reason(pick)
                                 ));
-                            } else if pick == Model::TimexTC2048 {
+                            } else if pick == Model::TimexTC2048 || pick == Model::TimexTS2068 {
                                 response.clone().on_hover_text(
-                                    "Phase 1: Timex ROM + SCLD port latches; standard 256×192 only — \
-                                     512×192 hi-res / extended modes broken (docs/TIMEX.md)",
+                                    "Timex: home/EX-ROM + SCLD MMU (TS2068) / latches (TC2048); \
+                                     standard 256×192 only — hi-res / extended modes broken (docs/TIMEX.md)",
                                 );
                             }
                             if response.clicked() {
@@ -1844,6 +1850,7 @@ impl SpecChumApp {
                                 | Model::SpectrumPlus2A
                                 | Model::SpectrumPlus3
                                 | Model::Pentagon128
+                                | Model::TimexTS2068
                         ) {
                             ui.separator();
                             ui.label("AY stereo");
@@ -1900,7 +1907,7 @@ impl SpecChumApp {
                         ui.label("Peripherals (partial where noted)");
                         ui.separator();
 
-                        if matches!(model, Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048) {
+                        if matches!(model, Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068) {
                             if ui.button("Attach Multiface 1 ROM…").clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("Multiface ROM", &["rom", "bin"])
@@ -1930,6 +1937,7 @@ impl SpecChumApp {
                             Model::Spectrum16K
                                 | Model::Spectrum48
                                 | Model::TimexTC2048
+                                | Model::TimexTS2068
                                 | Model::Spectrum128
                                 | Model::SpectrumPlus2
                                 | Model::Pentagon128

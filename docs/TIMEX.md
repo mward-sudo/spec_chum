@@ -1,78 +1,71 @@
-# Timex TC2048 (Phase 1)
+# Timex TC2048 / TS2068
 
-Timex Sinclair **TC2048** support in Spec Chum is tracked in
-[#192](https://github.com/mward-sudo/spec_chum/issues/192). Phase 1 landed in
-PR [#203](https://github.com/mward-sudo/spec_chum/pull/203): enough to boot the
-Timex ROM and run common 48K-style software, but **not** the Timex display
-hardware.
+Timex Sinclair support in Spec Chum is tracked in
+[#192](https://github.com/mward-sudo/spec_chum/issues/192).
+
+| Phase | Model | Status |
+| --- | --- | --- |
+| **1** | **TC2048** | Shipped ([#203](https://github.com/mward-sudo/spec_chum/pull/203)): 48K-class + SCLD port latches |
+| **2a** | **TS2068 / TC2068** | Smoke-boot: home + EX-ROM, horizontal MMU, Timex AY ports |
+| **2b** | (same) | Full **SCLD video** (512×192, extended / dual-screen) — deferred |
+
+Portuguese **TC2068** and US **TS2068** share the same ROM set and memory model here;
+the picker label is **Timex TS2068**.
 
 ## ROM
 
-Fetch the official distributable image with:
+Fetch the distributable images with:
 
 ```bash
 ./scripts/fetch_roms.sh
 ```
 
-Expected path: `roms/timex/tc2048.rom` (16 KiB). Grant and attribution notes:
-[ROMS.md](ROMS.md) → Timex section.
-
-The model stays disabled in pickers until that file is present (or you choose an
-equivalent dump in the ROM setup dialog).
-
-## What Phase 1 includes
-
-| Piece | Phase 1 behaviour |
+| Model | Paths |
 | --- | --- |
-| CPU / RAM / contention | Same 48K-class core as Spectrum 48K |
+| TC2048 | `roms/timex/tc2048.rom` (16 KiB) |
+| TS2068 | `roms/timex/tc2068-0.rom` (16 KiB home) + `roms/timex/tc2068-1.rom` (8 KiB EX-ROM) |
+
+Grant and attribution notes: [ROMS.md](ROMS.md) → Timex section.
+
+Models stay disabled in pickers until the required file(s) are present (or you choose
+equivalent dumps in the ROM setup dialog).
+
+## What works today
+
+| Piece | Behaviour |
+| --- | --- |
+| CPU / RAM / contention | 48K-class core |
 | Display | Standard Sinclair **256×192** ULA path |
-| ROM | Timex TC2048 firmware (`tc2048.rom`) |
-| SCLD ports `0xFF` / `0xF4` | **Latched** — reads return last written values |
+| TC2048 ROM | Timex TC2048 firmware |
+| TS2068 ROMs | Home BASIC + EX-ROM bank 0′ |
+| SCLD ports `0xFF` / `0xF4` | Latched (both models) |
+| Horizontal MMU (TS2068) | HSR bits page EX-ROM (or empty DOCK) over 8K chunks; EX-ROM mirrored per Fuse |
+| AY (TS2068) | Ports `0xF5` / `0xF6` (Timex wiring); stereo pan selectable |
+| Timex joysticks on AY R14 | Not modelled yet |
+| Dock cartridges | Empty (reads `0xFF`); no `.dck` loader |
 | SCLD video | **Not implemented** — no Timex ULA / hi-res framebuffer |
-
-Phase 1 is deliberately **Timex ROM + SCLD port latches**, not SCLD video. The
-ports exist so Timex BASIC and setup code can configure modes without faulting;
-the emulator still draws through the ordinary 48K ULA.
-
-## What works
-
-- Boot to Timex copyright line and BASIC prompt
-- Standard **256×192** text and attribute modes (looks like a 48K Spectrum)
-- 48K-class session hardware where compat allows: Multiface 1
-  ([MULTIFACE.md](MULTIFACE.md)), DivMMC, Interface 1, Beta Disk / TR-DOS
-- Tape load, flash-load, and Type LOAD paths (same as 48K)
 
 ## Known limitations
 
-Software that stays on the normal Spectrum screen behaves as expected. Anything
-that switches the Timex into **hi-res or extended display modes** will look
-wrong:
+Software that stays on the normal Spectrum screen behaves as expected. Anything that
+switches into **hi-res or extended display modes** will look wrong:
 
 - **512×192 hi-res** — garbled or incorrectly laid out (SCLD video deferred)
 - **Extended / dual-screen modes** — broken visually
 - Border / paging side effects of those modes — not modelled
+- Dock software and Timex joystick ports — not yet
 
-Do not expect Timex-specific demos, art packages, or games that depend on
-512×192 to render correctly until SCLD video lands.
-
-## Phase 2 ([#192](https://github.com/mward-sudo/spec_chum/issues/192))
-
-Still open on the same issue:
-
-- **TS2068 / TC2068** machine types (dual ROM banks already fetched as
-  `tc2068-0.rom` / `tc2068-1.rom` — not wired yet)
-- **Horizontal MMU** paging and extended memory banking
-- Full **SCLD video** (512×192, extended modes, dual display)
-- Snapshot / header parity if Fuse Timex formats need it
+Do not expect Timex-specific demos, art packages, or games that depend on 512×192 to
+render correctly until SCLD video lands.
 
 ## Selecting the model
 
 | Host | How |
 | --- | --- |
-| egui | **Machine → Built-in models → Timex TC2048** |
-| macOS | **Machine → Built-in models → Timex TC2048** |
-| Headless | `spec-chum-debug --model tc2048 …` |
-| Custom profile | Base model **Timex TC2048** in a saved configuration (#187) |
+| egui | **Machine → Built-in models → Timex TC2048** / **Timex TS2068** |
+| macOS | **Machine → Built-in models → …** |
+| Headless | `spec-chum-debug --model tc2048 …` or `--model ts2068 …` |
+| Custom profile | Base model Timex TC2048 / TS2068 in a saved configuration (#187) |
 
-Custom profiles may override the main ROM; built-in selection always uses the
-fetched default unless you point the ROM setup dialog at another file.
+Custom profiles may override ROM slots; built-in selection uses the fetched defaults
+unless you point the ROM setup dialog at other files.

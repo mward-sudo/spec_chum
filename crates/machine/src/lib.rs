@@ -18,16 +18,18 @@ pub use debugger::{BreakReason, Debugger, Watch};
 pub use inspect::{Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 pub use rom::{
-    expected_main_rom_bytes, install_rom_slot, main_rom_available, main_rom_available_in,
-    model_label, model_title, read_rom, read_rom_with_overrides, read_trdos_rom,
-    read_trdos_rom_with_overrides, requires_trdos_rom, requires_user_rom, resolve_rom_path,
-    resolve_rom_path_in, resolve_rom_path_in_with_overrides, resolve_trdos_rom_path,
-    resolve_trdos_rom_path_in, resolve_trdos_rom_path_in_with_overrides, rom_available,
-    rom_available_in, rom_available_in_with_overrides, rom_candidates, rom_path_status,
-    rom_slot_descriptors, rom_slot_state, rom_slot_state_with_override, rom_slot_states,
-    rom_slot_states_with_overrides, search_roots, trdos_rom_available, trdos_rom_available_in,
-    unavailable_reason, writable_install_root, RomSlotDescriptor, RomSlotKind, RomSlotState,
-    RomSlotStatus, ALL_MODELS,
+    expected_main_rom_bytes, exrom_available, exrom_available_in, exrom_candidates,
+    install_rom_slot, main_rom_available, main_rom_available_in, model_label, model_title,
+    read_exrom, read_exrom_with_overrides, read_rom, read_rom_with_overrides, read_trdos_rom,
+    read_trdos_rom_with_overrides, requires_exrom, requires_trdos_rom, requires_user_rom,
+    resolve_exrom_path, resolve_exrom_path_in, resolve_exrom_path_in_with_overrides,
+    resolve_rom_path, resolve_rom_path_in, resolve_rom_path_in_with_overrides,
+    resolve_trdos_rom_path, resolve_trdos_rom_path_in, resolve_trdos_rom_path_in_with_overrides,
+    rom_available, rom_available_in, rom_available_in_with_overrides, rom_candidates,
+    rom_path_status, rom_slot_descriptors, rom_slot_state, rom_slot_state_with_override,
+    rom_slot_states, rom_slot_states_with_overrides, search_roots, trdos_rom_available,
+    trdos_rom_available_in, unavailable_reason, writable_install_root, RomSlotDescriptor,
+    RomSlotKind, RomSlotState, RomSlotStatus, ALL_MODELS,
 };
 
 use std::cell::Cell;
@@ -315,6 +317,8 @@ pub enum Model {
     Pentagon128,
     /// Timex TC2048 (#192 Phase 1): 48K-class + SCLD ports, distributable ROM.
     TimexTC2048,
+    /// Timex TS2068 / TC2068 (#192 Phase 2a): home + EX-ROM, horizontal MMU, AY.
+    TimexTS2068,
 }
 
 impl Model {
@@ -333,12 +337,12 @@ impl Model {
         )
     }
 
-    /// 48K-class bus (16K / 48K / Timex TC2048).
+    /// 48K-class bus (16K / 48K / Timex).
     #[must_use]
     pub fn is_48k_class(self) -> bool {
         matches!(
             self,
-            Self::Spectrum16K | Self::Spectrum48 | Self::TimexTC2048
+            Self::Spectrum16K | Self::Spectrum48 | Self::TimexTC2048 | Self::TimexTS2068
         )
     }
 }
@@ -768,6 +772,27 @@ impl Machine {
         })
     }
 
+    /// Timex TS2068 / TC2068: home ROM + EX-ROM, horizontal MMU, AY (#192 Phase 2a).
+    pub fn new_timex_ts2068(home_rom: &[u8], exrom: &[u8]) -> Result<Self, MachineBuildError> {
+        let mut bus = Bus48::new();
+        bus.timex = true;
+        bus.timex_2068 = true;
+        bus.load_rom(home_rom)
+            .map_err(MachineBuildError::InvalidRom)?;
+        bus.load_timex_exrom(exrom)
+            .map_err(MachineBuildError::InvalidRom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 8 });
+        Ok(Self::Spec48 {
+            cpu: Cpu::new(),
+            bus: Box::new(bus),
+            ula: Ula48::new(),
+            tape: None,
+            tape_opts: TapeLoadOptions::default(),
+            rzx: None,
+            debugger: Debugger::default(),
+        })
+    }
+
     pub fn new_128k(rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus128::new();
         bus.load_rom128(rom)?;
@@ -852,7 +877,9 @@ impl Machine {
     pub fn model(&self) -> Model {
         match self {
             Self::Spec48 { bus, .. } => {
-                if bus.timex {
+                if bus.timex_2068 {
+                    Model::TimexTS2068
+                } else if bus.timex {
                     Model::TimexTC2048
                 } else if bus.ram16k {
                     Model::Spectrum16K
@@ -905,6 +932,9 @@ impl Machine {
                 }
                 if bus.timex {
                     bus.timex_scld.reset();
+                }
+                if bus.timex_2068 {
+                    bus.ay.reset();
                 }
                 *ula = Ula48::new();
                 // Keep inserted tape/disk media across reset; pause the deck at its
@@ -1122,9 +1152,12 @@ impl Machine {
         }
     }
 
-    /// Set AY stereo pan mode (no-op on 48K).
+    /// Set AY stereo pan mode (no-op on 48K / TC2048 without AY).
     pub fn set_ay_stereo_mode(&mut self, mode: bus::StereoMode) {
         match self {
+            Self::Spec48 { bus, .. } if bus.timex_2068 => {
+                bus.ay.stereo_mode = mode;
+            }
             Self::Spec48 { .. } => {}
             Self::Spec128 { bus, .. } => {
                 bus.ay.stereo_mode = mode;
@@ -1138,6 +1171,7 @@ impl Machine {
     #[must_use]
     pub fn ay_stereo_mode(&self) -> bus::StereoMode {
         match self {
+            Self::Spec48 { bus, .. } if bus.timex_2068 => bus.ay.stereo_mode,
             Self::Spec48 { .. } => bus::StereoMode::Mono,
             Self::Spec128 { bus, .. } => bus.ay.stereo_mode,
             Self::SpecPlus3 { bus, .. } => bus.ay.stereo_mode,
@@ -1608,6 +1642,7 @@ impl Machine {
                 debugger,
                 ..
             } => {
+                let has_ay = bus.timex_2068;
                 bus.beeper_edges.clear();
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
@@ -1618,6 +1653,12 @@ impl Machine {
                     let frame = next_frame_n();
                     trace::emit(trace::EventKind::UlaFrame { frame });
                 }
+                const AY_SAMPLES: usize = 882; // ~44100 Hz / 50 Hz
+                let t_per_sample = f64::from(FRAME_TSTATES_48) / AY_SAMPLES as f64;
+                let mut ay_samples = Vec::with_capacity(if has_ay { AY_SAMPLES } else { 0 });
+                let mut ay_left = Vec::with_capacity(if has_ay { AY_SAMPLES } else { 0 });
+                let mut ay_right = Vec::with_capacity(if has_ay { AY_SAMPLES } else { 0 });
+                let mut ay_t = 0u32;
                 let mut last_t = cpu.t;
                 let mut broke_on_pc = false;
                 let mut frame_done = false;
@@ -1629,6 +1670,10 @@ impl Machine {
                         const HOLD_T: u32 = 4;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
+                        if has_ay {
+                            ay_t = ay_t.saturating_add(HOLD_T);
+                            bus.ay.advance(HOLD_T);
+                        }
                         frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_48);
                         continue;
                     }
@@ -1654,6 +1699,21 @@ impl Machine {
                                 tape_opts.speed,
                                 tape_opts.flash_load,
                             );
+                            if has_ay {
+                                ay_t = ay_t.saturating_add(irq_t);
+                                bus.ay.advance(irq_t);
+                                while ay_samples.len() < AY_SAMPLES
+                                    && f64::from(ay_t)
+                                        >= (ay_samples.len() as f64 + 1.0) * t_per_sample
+                                {
+                                    push_ay_frame_sample(
+                                        &bus.ay,
+                                        &mut ay_samples,
+                                        &mut ay_left,
+                                        &mut ay_right,
+                                    );
+                                }
+                            }
                             // INT only near t=0; wrap is vanishingly rare but keep carry semantics.
                             frame_done = advance_frame_t(&mut bus.frame_t, irq_t, FRAME_TSTATES_48);
                             last_t = cpu.t;
@@ -1707,14 +1767,33 @@ impl Machine {
                         tape_opts.speed,
                         tape_opts.flash_load,
                     );
+                    if has_ay {
+                        ay_t = ay_t.saturating_add(dt);
+                        bus.ay.advance(dt);
+                        while ay_samples.len() < AY_SAMPLES
+                            && f64::from(ay_t) >= (ay_samples.len() as f64 + 1.0) * t_per_sample
+                        {
+                            push_ay_frame_sample(
+                                &bus.ay,
+                                &mut ay_samples,
+                                &mut ay_left,
+                                &mut ay_right,
+                            );
+                        }
+                    }
                     frame_done = advance_frame_t(&mut bus.frame_t, dt, FRAME_TSTATES_48);
+                }
+                if has_ay {
+                    while ay_samples.len() < AY_SAMPLES {
+                        push_ay_frame_sample(&bus.ay, &mut ay_samples, &mut ay_left, &mut ay_right);
+                    }
                 }
                 // Keep border_events for render; next run_frame begin_frame clears them.
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
-                    ay_samples: Vec::new(),
-                    ay_left: Vec::new(),
-                    ay_right: Vec::new(),
+                    ay_samples,
+                    ay_left,
+                    ay_right,
                 }
             }
             Self::Spec128 {
@@ -3103,7 +3182,7 @@ impl Machine {
     /// Model-aware `LOAD ""` [CODE] (48K keyword / 128K / +2 / +2A Loader / +3 48 BASIC).
     pub fn type_load_quotes(&mut self, with_code: bool) {
         match self.model() {
-            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 => {
+            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068 => {
                 self.type_load_quotes_48k(with_code)
             }
             Model::Spectrum128 => self.type_load_quotes_128k(with_code),
@@ -4429,6 +4508,12 @@ mod tests {
         std::fs::read(path).ok()
     }
 
+    fn rom_timex_ts2068() -> Option<(Vec<u8>, Vec<u8>)> {
+        let home = resolve_rom_path(Model::TimexTS2068)?;
+        let exrom = resolve_exrom_path(Model::TimexTS2068)?;
+        Some((std::fs::read(home).ok()?, std::fs::read(exrom).ok()?))
+    }
+
     #[test]
     fn timex_tc2048_boot_smoke() {
         let Some(path) = resolve_rom_path(Model::TimexTC2048) else {
@@ -4440,6 +4525,27 @@ mod tests {
         assert_eq!(m.model(), Model::TimexTC2048);
         for _ in 0..50 {
             let _ = m.run_frame();
+        }
+    }
+
+    #[test]
+    fn timex_ts2068_boot_smoke() {
+        let Some((home, exrom)) = rom_timex_ts2068() else {
+            eprintln!("skip: roms/timex/tc2068-*.rom missing");
+            return;
+        };
+        let mut m = Machine::new_timex_ts2068(&home, &exrom).unwrap();
+        assert_eq!(m.model(), Model::TimexTS2068);
+        for _ in 0..50 {
+            let _ = m.run_frame();
+        }
+        // Horizontal MMU: page EX-ROM over chunk 0.
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.out_port(0x00FF, 0x80);
+            bus.out_port(0x00F4, 0x01);
+            assert_eq!(bus.read(0x0000), exrom[0]);
+        } else {
+            panic!("expected Spec48 bus for TS2068");
         }
     }
 
@@ -5570,7 +5676,10 @@ mod tests {
         let mut report = String::from("attr_mark matrix:\n");
         let mut failed = Vec::new();
         for (model, rom, label) in &cases {
-            let warmup = if matches!(model, Model::Spectrum48 | Model::TimexTC2048) {
+            let warmup = if matches!(
+                model,
+                Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068
+            ) {
                 200
             } else {
                 250
@@ -5589,6 +5698,10 @@ mod tests {
                         Machine::new_pentagon128(rom, &trdos).unwrap()
                     }
                     Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
+                    Model::TimexTS2068 => {
+                        let ex = read_exrom(Model::TimexTS2068).expect("ts2068 exrom");
+                        Machine::new_timex_ts2068(rom, &ex).unwrap()
+                    }
                 },
                 img.clone(),
                 true,
@@ -5609,7 +5722,13 @@ mod tests {
             for speed in speeds {
                 // EAR@1 is slow (~minutes of Spectrum time); default CI keeps it
                 // on 48K only. Set SPEC_CHUM_FULL_TAPE_MATRIX=1 for 128K/+3 @1×.
-                if speed == 1 && !matches!(model, Model::Spectrum48 | Model::TimexTC2048) && !full {
+                if speed == 1
+                    && !matches!(
+                        model,
+                        Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068
+                    )
+                    && !full
+                {
                     report.push_str(&format!(
                         "  {label} ear@{speed}: SKIP (set SPEC_CHUM_FULL_TAPE_MATRIX=1)\n"
                     ));
@@ -5635,6 +5754,10 @@ mod tests {
                             Machine::new_pentagon128(rom, &trdos).unwrap()
                         }
                         Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
+                        Model::TimexTS2068 => {
+                            let ex = read_exrom(Model::TimexTS2068).expect("ts2068 exrom");
+                            Machine::new_timex_ts2068(rom, &ex).unwrap()
+                        }
                     },
                     img.clone(),
                     false,
@@ -5690,7 +5813,10 @@ mod tests {
         let mut report = String::from("custom_loader matrix:\n");
         let mut failed = Vec::new();
         for (model, rom, label) in &cases {
-            let warmup = if matches!(model, Model::Spectrum48 | Model::TimexTC2048) {
+            let warmup = if matches!(
+                model,
+                Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068
+            ) {
                 200
             } else {
                 250
@@ -5706,7 +5832,11 @@ mod tests {
             ] {
                 modes.push((false, speed, tag, max));
             }
-            if matches!(model, Model::Spectrum48 | Model::TimexTC2048) || full {
+            if matches!(
+                model,
+                Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068
+            ) || full
+            {
                 modes.insert(1, (false, 1, "ear@1", 25_000));
             } else {
                 report.push_str(&format!(
@@ -5726,6 +5856,10 @@ mod tests {
                         Machine::new_pentagon128(rom, &trdos).unwrap()
                     }
                     Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
+                    Model::TimexTS2068 => {
+                        let ex = read_exrom(Model::TimexTS2068).expect("ts2068 exrom");
+                        Machine::new_timex_ts2068(rom, &ex).unwrap()
+                    }
                 };
                 m.set_tape_load_options(TapeLoadOptions {
                     flash_load: flash,
@@ -5891,6 +6025,10 @@ mod tests {
                         Machine::new_pentagon128(&rom, &trdos).unwrap()
                     }
                     Model::TimexTC2048 => Machine::new_timex_tc2048(&rom).unwrap(),
+                    Model::TimexTS2068 => {
+                        let ex = read_exrom(Model::TimexTS2068).expect("ts2068 exrom");
+                        Machine::new_timex_ts2068(&rom, &ex).unwrap()
+                    }
                 };
                 let deck = TapPlayer::new(img.clone());
                 let mut machine = m;

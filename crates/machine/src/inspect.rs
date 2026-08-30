@@ -80,8 +80,13 @@ impl Machine {
                 ..
             } => {
                 let frame_t = bus.frame_t;
+                let (ay_regs, ay_selected) = if bus.timex_2068 {
+                    (Some(bus.ay.regs), Some(bus.ay.selected))
+                } else {
+                    (None, None)
+                };
                 Inspect {
-                    model: Model::Spectrum48,
+                    model: self.model(),
                     regs,
                     cpu_t,
                     frame_t,
@@ -115,8 +120,8 @@ impl Machine {
                         block_index: t.block().unwrap_or(0) as u32,
                         block_count: t.block_count() as u32,
                     }),
-                    ay_regs: None,
-                    ay_selected: None,
+                    ay_regs,
+                    ay_selected,
                 }
             }
             Self::Spec128 {
@@ -318,6 +323,7 @@ impl Inspect {
             Model::SpectrumPlus3 => "plus3",
             Model::Pentagon128 => "pentagon128",
             Model::TimexTC2048 => "timex_tc2048",
+            Model::TimexTS2068 => "timex_ts2068",
         };
         let tape = self.tape.as_ref().map_or("null".into(), tape_json);
         let ay = self.ay_regs.map_or("null".into(), |regs| {

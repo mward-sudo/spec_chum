@@ -17,7 +17,8 @@ enum {
     SC_MODEL_PLUS2 = 4,
     SC_MODEL_16K = 5,
     SC_MODEL_PENTAGON = 6,
-    SC_MODEL_TIMEX_TC2048 = 7
+    SC_MODEL_TIMEX_TC2048 = 7,
+    SC_MODEL_TIMEX_TS2068 = 8
 };
 
 void *sc_create(unsigned int model, int with_border);
