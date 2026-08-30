@@ -1540,7 +1540,7 @@ final class HostBridge: ObservableObject {
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
                 : "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan"
-        case .spectrum128, .spectrumPlus2, .spectrumPlus3:
+        case .spectrum128, .spectrumPlus2, .spectrumPlus3, .pentagon128:
             keyScript = LoadKeyScript.loadQuotes128OrPlus3(withCode: withCode)
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
@@ -2065,6 +2065,8 @@ final class HostBridge: ObservableObject {
                 return ["roms/plus3/plus3.rom"]
             case .spectrumPlus2A:
                 return ["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"]
+            case .pentagon128:
+                return ["roms/pentagon/pentagon.rom", "roms/pentagon/128p.rom"]
             }
         }()
         for root in romSearchRoots {
