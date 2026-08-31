@@ -6,15 +6,15 @@ use spec_chum_host::{default_prefs_path, load_prefs, MIN_WINDOW_HEIGHT, MIN_WIND
 
 fn main() -> eframe::Result {
     trace::init_from_env();
-    // Transitional parallel agent session when SPEC_CHUM_AGENT=1 (not egui Debug
-    // state — see docs/AGENT_DEBUG_API.md Phase B / #221). Prefer standalone serve.
-    let _embedded_agent = match agent_server::embedded::spawn_from_env() {
-        Ok(server) => server,
-        Err(e) => {
-            eprintln!("spec-chum-agent embedded failed to start: {e}");
-            None
-        }
-    };
+    // egui Debug uses HostSession (same type as control_plane). Parallel
+    // SPEC_CHUM_AGENT=1 embed was removed (#221) — use standalone
+    // `spec-chum-agent` / `spec-chum-debug --serve` for HTTP agents.
+    if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() == Some("1") {
+        eprintln!(
+            "SPEC_CHUM_AGENT=1 is no longer supported in egui (dual-session removed; #221). \
+             Start standalone: cargo run -p agent_server --release"
+        );
+    }
     let prefs = load_prefs(&default_prefs_path());
     let width = prefs.window_width.max(MIN_WINDOW_WIDTH);
     let height = prefs.window_height.max(MIN_WINDOW_HEIGHT);

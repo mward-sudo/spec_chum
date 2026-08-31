@@ -1,12 +1,11 @@
-//! Background loopback agent server for hosts (#210 Phase B).
+//! Background loopback agent server for hosts (#210 Phase B / #221).
 
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use control_plane::{parse_model_slug, ControlPlane, ServerConfig};
-use spec_chum_host::ModelId;
+use control_plane::{ControlPlane, ServerConfig};
 
 use crate::routes::serve;
 
@@ -58,21 +57,26 @@ pub fn spawn(config: ServerConfig, plane: Arc<ControlPlane>) -> Result<EmbeddedS
     }
 }
 
-fn parse_model(s: &str) -> Result<ModelId> {
-    parse_model_slug(s).map_err(|e| anyhow::anyhow!("{e}"))
+/// When `SPEC_CHUM_AGENT=1`, start an embedded loopback server on the **shared**
+/// live [`ControlPlane`] (same machine as the host — #221).
+///
+/// egui no longer auto-spawns this (dual-session removed); call from a host that
+/// already owns the plane, or use standalone `spec-chum-agent`.
+pub fn spawn_from_env_with_plane(plane: Arc<ControlPlane>) -> Result<Option<EmbeddedServer>> {
+    if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() != Some("1") {
+        return Ok(None);
+    }
+    let config = ServerConfig::from_env();
+    spawn(config, plane).map(Some)
 }
 
-/// When `SPEC_CHUM_AGENT=1`, start an embedded loopback server with its own session.
+/// Backward-compatible helper: builds a **fresh** plane (not GUI-backed).
 ///
-/// **Transitional (Phase B / [#221](https://github.com/mward-sudo/spec_chum/issues/221)):**
-/// this is a **parallel debug session**, not wired to egui's `EmulatorSession`.
-/// Prefer standalone `spec-chum-agent` / `spec-chum-debug --serve` for agents.
-/// Removal plan: once egui Debug shares a live `Arc<ControlPlane>`, either delete
-/// this env path or pass that same plane into [`spawn`] instead of constructing a
-/// fresh one here.
-///
-/// Agents connect via `http://127.0.0.1:17384` (or `SPEC_CHUM_AGENT_PORT`).
+/// Prefer [`spawn_from_env_with_plane`] from egui so HTTP and Debug share state.
+#[deprecated(note = "use spawn_from_env_with_plane with the GUI ControlPlane (#221)")]
 pub fn spawn_from_env() -> Result<Option<EmbeddedServer>> {
+    use control_plane::parse_model_slug;
+
     if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() != Some("1") {
         return Ok(None);
     }
@@ -80,7 +84,7 @@ pub fn spawn_from_env() -> Result<Option<EmbeddedServer>> {
     let with_border = std::env::var("SPEC_CHUM_AGENT_BORDER")
         .ok()
         .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
-    let model = parse_model(&model_slug)?;
+    let model = parse_model_slug(&model_slug).map_err(|e| anyhow::anyhow!("{e}"))?;
     let config = ServerConfig::from_env();
     let plane = Arc::new(ControlPlane::new(model, with_border));
     plane
@@ -94,7 +98,7 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::Arc;
 
-    use control_plane::{ControlPlane, ServerConfig};
+    use control_plane::{parse_model_slug, ControlPlane, ServerConfig};
     use spec_chum_host::ModelId;
 
     use super::*;
@@ -102,7 +106,7 @@ mod tests {
     #[test]
     fn parse_model_accepts_timex_ts2068_alias() {
         assert_eq!(
-            parse_model("timex_ts2068").expect("alias"),
+            parse_model_slug("timex_ts2068").expect("alias"),
             ModelId::TimexTS2068
         );
     }
@@ -123,5 +127,14 @@ mod tests {
             result.is_err(),
             "spawn should fail when the listen port is already taken"
         );
+    }
+
+    #[test]
+    fn spawn_from_env_with_plane_skips_when_unset() {
+        // Ensure env is not forcing a listen in unit tests.
+        std::env::remove_var("SPEC_CHUM_AGENT");
+        let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+        let server = spawn_from_env_with_plane(plane).expect("spawn");
+        assert!(server.is_none());
     }
 }
