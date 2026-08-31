@@ -1,11 +1,18 @@
 //! Headless debugger: inspect, trace, step, and run-until-break.
 
-use std::path::{Path, PathBuf};
+mod agent_client;
 
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use agent_client::AgentClient;
+use agent_server::routes::serve;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use control_plane::{ControlPlane, ServerConfig};
 use formats::{Snapshot128, Snapshot128Model, Snapshot48};
 use machine::{BreakReason, Machine, Model, TapeLoadOptions, Watch};
+use spec_chum_host::{HostSession, ModelId};
 use tape::{TapPlayer, TzxPlayer};
 use trace::DumpFilter;
 
@@ -34,6 +41,15 @@ struct Cli {
     /// EAR speed: N Spectrum frames per run_frame while playing (ignored when flash-load/Instant).
     #[arg(long, default_value_t = 1)]
     speed: u32,
+    /// Run the loopback agent HTTP server instead of a one-shot command.
+    #[arg(long)]
+    serve: bool,
+    /// Agent API base URL (or set `SPEC_CHUM_AGENT_URL`) — routes commands over HTTP.
+    #[arg(long)]
+    agent_url: Option<String>,
+    /// Listen port when `--serve` (overrides `SPEC_CHUM_AGENT_PORT`).
+    #[arg(long)]
+    agent_port: Option<u16>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -108,6 +124,127 @@ fn parse_u16(s: &str) -> Result<u16> {
 fn default_rom(model: Model) -> PathBuf {
     machine::resolve_rom_path(model)
         .unwrap_or_else(|| PathBuf::from(machine::rom_candidates(model)[0]))
+}
+
+fn parse_model_id(s: &str) -> Result<ModelId> {
+    Ok(match s.to_ascii_lowercase().as_str() {
+        "16" | "16k" => ModelId::Spectrum16K,
+        "48" | "48k" => ModelId::Spectrum48,
+        "128" | "128k" => ModelId::Spectrum128,
+        "plus2" | "+2" => ModelId::SpectrumPlus2,
+        "plus2a" | "+2a" => ModelId::SpectrumPlus2A,
+        "plus3" | "+3" => ModelId::SpectrumPlus3,
+        "pentagon" | "pentagon128" | "128p" => ModelId::Pentagon128,
+        "timex" | "tc2048" | "timex2048" => ModelId::TimexTC2048,
+        "ts2068" | "tc2068" | "timex2068" => ModelId::TimexTS2068,
+        other => bail!("unknown model {other}"),
+    })
+}
+
+fn load_host_session(cli: &Cli) -> Result<HostSession> {
+    let model = parse_model_id(&cli.model)?;
+    let mut session = HostSession::new(model, false);
+    if let Some(path) = &cli.rom {
+        session.load_rom_path(path)?;
+    } else {
+        session.select_model(model)?;
+    }
+    if let Some(path) = &cli.snapshot {
+        session.load_snapshot(path)?;
+    }
+    if let Some(path) = &cli.tap {
+        session.open_tape(path)?;
+        session.play_tape()?;
+    }
+    if let Some(path) = &cli.tzx {
+        session.open_tape(path)?;
+        session.play_tape()?;
+    }
+    session.set_tape_load_options(TapeLoadOptions {
+        flash_load: !cli.ear_load,
+        speed: cli.speed,
+        ..Default::default()
+    })?;
+    Ok(session)
+}
+
+fn run_serve(cli: &Cli) -> Result<()> {
+    let session = load_host_session(cli)?;
+    let plane = Arc::new(ControlPlane::with_session(session));
+    let mut config = ServerConfig::from_env();
+    if let Some(port) = cli.agent_port {
+        config.port = port;
+    }
+    let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
+    rt.block_on(serve(config, plane))
+}
+
+fn run_remote(cli: &Cli, client: &AgentClient) -> Result<()> {
+    if let Some(list) = &cli.trace {
+        client.set_trace_categories(list)?;
+    }
+    client.set_model(&cli.model)?;
+    if cli.ear_load || cli.speed != 1 {
+        client.tape_load_options(cli.ear_load, cli.speed)?;
+    }
+    if let Some(path) = &cli.tap {
+        client.tape_open(&path.display().to_string())?;
+    }
+    if let Some(path) = &cli.tzx {
+        client.tape_open(&path.display().to_string())?;
+    }
+    match &cli.cmd {
+        Cmd::Run { frames } => {
+            client.run_frames(*frames)?;
+            print_remote_inspect(client, cli.json)?;
+        }
+        Cmd::DumpState => print_remote_inspect(client, cli.json)?,
+        Cmd::DumpTrace { last } => {
+            let s = client.dump_trace(cli.json, *last)?;
+            print!("{s}");
+        }
+        Cmd::Peek { addr, len } => {
+            print!("{}", client.peek(addr, *len)?);
+        }
+        Cmd::Disasm { addr, count } => {
+            print!("{}", client.disasm(addr.as_deref(), *count)?);
+        }
+        Cmd::TypeLoad { code, warmup, max } => {
+            if cli.tap.is_none() && cli.tzx.is_none() {
+                bail!("type-load requires --tap or --tzx");
+            }
+            let body = client.type_load(*code, *warmup, max.unwrap_or(0))?;
+            if cli.json {
+                println!("{body}");
+            } else {
+                let load_ok = body
+                    .get("load_ok")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                println!("load_ok={load_ok}");
+            }
+            if !body
+                .get("load_ok")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                exit_cli(2);
+            }
+        }
+        other => bail!("remote agent client does not support {other:?} yet"),
+    }
+    Ok(())
+}
+
+fn print_remote_inspect(client: &AgentClient, json: bool) -> Result<()> {
+    let text = client.inspect_json()?;
+    if json {
+        println!("{text}");
+    } else {
+        // Remote inspect is JSON-only today; still useful for agents.
+        println!("{text}");
+    }
+    Ok(())
 }
 
 fn parse_model(s: &str) -> Result<Model> {
@@ -291,6 +428,18 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     if let Some(list) = &cli.trace {
         trace::enable(trace::Category::parse_list(list));
+    }
+    if cli.serve {
+        return run_serve(&cli);
+    }
+    if let Some(url) = &cli.agent_url {
+        let token = std::env::var("SPEC_CHUM_AGENT_TOKEN").ok();
+        let client = AgentClient::new(url, token)?;
+        return run_remote(&cli, &client);
+    }
+    if std::env::var("SPEC_CHUM_AGENT_URL").is_ok() {
+        let client = AgentClient::from_env()?;
+        return run_remote(&cli, &client);
     }
     let mut m = load_machine(&cli)?;
     match cli.cmd {

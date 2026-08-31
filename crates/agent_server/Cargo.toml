@@ -1,0 +1,38 @@
+[package]
+name = "agent_server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Loopback HTTP agent debug server for Spec Chum (#210)"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "spec-chum-agent"
+path = "src/main.rs"
+
+[dependencies]
+control_plane = { workspace = true }
+host_api = { workspace = true }
+machine = { workspace = true }
+trace = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tape = { workspace = true }
+ureq = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+
+[lints]
+workspace = true

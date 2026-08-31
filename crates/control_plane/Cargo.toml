@@ -1,0 +1,23 @@
+[package]
+name = "control_plane"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared Spec Chum control / inspect / debug backend (#210)"
+publish = false
+
+[dependencies]
+host_api = { workspace = true }
+machine = { workspace = true }
+trace = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+png = { workspace = true }
+
+[dev-dependencies]
+formats = { workspace = true }
+tape = { workspace = true }
+
+[lints]
+workspace = true

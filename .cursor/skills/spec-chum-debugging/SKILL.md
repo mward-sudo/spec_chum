@@ -5,7 +5,8 @@ description: >-
   breakpoints, watches, disasm, tape load (flash vs EAR), and SPEC_CHUM_*
   trace categories. Use when debugging the emulator, tape load failures,
   LD-BYTES, EAR polarity, flash-load, type-load, inspect dumps, Fuse/z80test
-  mismatches, host_api sc_debug_*, or the egui Debug window.
+  mismatches, host_api sc_debug_*, egui Debug window, or the planned Agent
+  Debug HTTP API (localhost control plane).
 ---
 
 # Spec Chum debugging
@@ -16,13 +17,75 @@ Project debugger workflow for agents. Full detail: [`docs/DEBUGGING.md`](../../.
 
 | Goal | Use |
 | --- | --- |
-| Scripted repro, Inspect JSON, breakpoints, tape `type-load` | Headless **`spec-chum-debug`** (`debug_cli`) |
+| **Long-lived control + 1:1 framebuffer PNG** | **Agent Debug HTTP API** — `spec-chum-agent` or `spec-chum-debug --serve` |
+| Scripted repro via API client | `SPEC_CHUM_AGENT_URL=… spec-chum-debug …` (Phase B subset) |
+| Scripted repro, Inspect JSON, breakpoints, tape `type-load` | Headless **`spec-chum-debug`** (local one-shot process) |
 | Regression / harness / matrix | **`cargo test -p machine`** (and `tape` / `trace` / `z80`) |
 | Interactive Pause / Step / disasm UI | **egui** `cargo run -p app` → Menu **Debug** |
 | Native SwiftUI / C host | **`host_api`** `sc_debug_*` / `sc_inspect_json` |
 | macOS shell (limited inspector) | `./scripts/run_macos_app.sh` + same env; prefer CLI for deep steps |
 
 Each `spec-chum-debug` invocation is a **new process** (fresh machine + empty trace ring). Put `--trace`, `--tap`/`--tzx`, `--snapshot`, and the subcommand on the **same** command.
+
+## Agent Debug API (unified control plane)
+
+> **Implemented (Phase A):** loopback HTTP on `127.0.0.1:17384` (default).
+> Design: [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md).
+> Tracker: [#210](https://github.com/mward-sudo/spec_chum/issues/210).
+
+**Unification goal:** one shared Rust backend (`control_plane`) serves HTTP;
+`spec-chum-debug --serve` / `spec-chum-agent` ship today; egui Debug and
+SpecChumMac converge in Phase B/C.
+
+### Start server
+
+```bash
+./scripts/fetch_roms.sh
+cargo build -p agent_server --release
+./target/release/spec-chum-agent --model 48k
+# or: spec-chum-debug --serve --model 48k --tap path.tap
+```
+
+### When to prefer the API
+
+- Visual QA (Techdraw hi-res, Timex SCLD, border colour) — **export guest framebuffer
+  at 1:1**, not OS `screencapture` or living-room CRT.
+- Long sessions: tape load mid-run, breakpoints, grab PNG after N frames.
+- Avoid GUI automation (file pickers, ROM dialogs, multi-monitor).
+
+### HTTP client (Phase B subset)
+
+```bash
+export SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384
+spec-chum-debug --model 48k run --frames 1
+spec-chum-debug --tap tests/fixtures/tape/attr_mark.tap type-load --code
+```
+
+Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`.
+Other subcommands remain local-only until Phase B expands coverage.
+
+### Framebuffer export (not window capture)
+
+`GET /v1/framebuffer?border=false|true&format=png|rgba` returns the emulator RGBA
+buffer (`sc_framebuffer_*` / `ula::framebuffer_dims`) — **exact guest pixels**:
+
+| Mode | Paper | With border |
+| --- | --- | --- |
+| Lo-res | 256×192 | 352×296 |
+| Timex hi-res | 512×192 | 640×296 |
+
+- **Do** `Read` the saved PNG for visual assertions.
+- **Do not** capture the macOS/egui window or living-room Bevy view (scaled CRT).
+
+### Migration (summary)
+
+| Phase | What |
+| --- | --- |
+| A | Shared backend + HTTP server; parallel CLI/GUI |
+| B | `spec-chum-debug` + Debug UIs become API clients |
+| C | Dedupe redundant `host_api` debug paths where safe |
+
+Until Phase B ships, use `spec-chum-debug` + Inspect JSON below.
 
 ## Quick start
 
@@ -172,10 +235,12 @@ JSON: `--json dump-state` or `type-load --json` wraps `inspect` + `load_ok`.
 
 - **Read / Grep / Glob / StrReplace / Write** for files (not `cat`/`sed`/`rg`/`find` in Shell).
 - **Shell** for `cargo`, `./scripts/check.sh`, `./scripts/fetch_roms.sh`, running `spec-chum-debug`, and `gh`.
+- **Visual QA:** prefer API framebuffer PNG (`GET /v1/framebuffer`) when available; never `screencapture` / osascript for emulator pixels.
 - Before claiming Rust done: `./scripts/check.sh`.
 
 ## Deeper reference
 
+- [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md) — planned localhost control plane, framebuffer export, unification
 - [`docs/DEBUGGING.md`](../../../docs/DEBUGGING.md) — categories, flash-load event table, harness recipes, hot-path cost
 - [`tests/fixtures/tape/README.md`](../../../tests/fixtures/tape/README.md) — fixtures + load matrix
 - `crates/debug_cli/src/main.rs` — authoritative CLI flags

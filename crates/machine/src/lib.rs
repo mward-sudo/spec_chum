@@ -3092,9 +3092,23 @@ impl Machine {
     /// Host RGBA size for the current SCLD mode (`with_border` selects border chrome).
     #[must_use]
     pub fn framebuffer_dims(&self, with_border: bool) -> (usize, usize) {
-        let hires = matches!(self, Self::Spec48 { bus, .. } if bus.timex
-            && bus.timex_scld.screen_mode().is_hires());
+        let hires = self.framebuffer_hires();
         ula::framebuffer_dims(with_border, hires)
+    }
+
+    /// True when Timex SCLD is in a hi-res screen mode (512×192 paper).
+    #[must_use]
+    pub fn framebuffer_hires(&self) -> bool {
+        matches!(self, Self::Spec48 { bus, .. } if bus.timex && bus.timex_scld.screen_mode().is_hires())
+    }
+
+    /// Timex SCLD `port_ff` low three bits (screen mode), when Timex hardware is active.
+    #[must_use]
+    pub fn timex_scld_mode(&self) -> Option<u8> {
+        match self {
+            Self::Spec48 { bus, .. } if bus.timex => Some(bus.timex_scld.port_ff() & 0x07),
+            _ => None,
+        }
     }
 
     pub fn keyboard_mut(&mut self) -> &mut bus::Keyboard {
