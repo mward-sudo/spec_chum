@@ -367,6 +367,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "app"
 version = "0.4.1"
 dependencies = [
+ "agent_server",
  "anyhow",
  "control_plane",
  "cpal 0.15.3",
@@ -376,6 +377,7 @@ dependencies = [
  "gilrs",
  "host_api",
  "machine",
+ "parking_lot",
  "rfd",
  "tape",
  "trace",
@@ -2658,6 +2660,7 @@ dependencies = [
  "formats",
  "host_api",
  "machine",
+ "parking_lot",
  "png 0.17.16",
  "serde",
  "serde_json",
