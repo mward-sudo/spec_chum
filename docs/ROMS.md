@@ -129,9 +129,8 @@ After `./scripts/fetch_roms.sh`:
 | `roms/timex/tc2068-1.rom` | 8 KiB | **Timex TS2068** EX-ROM |
 
 Phase 1 (TC2048) + Phase 2a (TS2068 smoke-boot / horizontal MMU / AY ports) are
-wired. Display supports Sinclair **256×192** plus Timex **alt display file** and
-**hi-colour (8×1)**; **512×192** hi-res modes are still visually broken until the
-rest of Phase 2b. See [TIMEX.md](TIMEX.md).
+wired. Display supports Sinclair **256×192** plus Timex **alt display file**,
+**hi-colour (8×1)**, and **512×192 hi-res** (SCLD modes 4–7). See [TIMEX.md](TIMEX.md).
 
 Peripheral attach UX: Multiface ([MULTIFACE.md](MULTIFACE.md)), Interface 1,
 Beta, DivMMC — see GitHub issues #137–#140 / #169.

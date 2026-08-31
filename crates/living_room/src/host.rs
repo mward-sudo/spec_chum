@@ -233,8 +233,12 @@ fn tick_emulator(
             if let Some(mut image) = images.get_mut(&screen.0) {
                 if let Some(data) = image.data.as_mut() {
                     let src = host.session.framebuffer();
-                    let n = data.len().min(src.len());
-                    data[..n].copy_from_slice(&src[..n]);
+                    if let Some((w, h)) = crate::fb_scale::dims_from_rgba_len(src.len()) {
+                        crate::fb_scale::blit_to_crt(data, src, w, h);
+                    } else {
+                        let n = data.len().min(src.len());
+                        data[..n].copy_from_slice(&src[..n]);
+                    }
                 }
             }
         }

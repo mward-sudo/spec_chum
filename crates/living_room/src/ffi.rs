@@ -20,7 +20,6 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::sync::Mutex;
 
-use crate::crt::{SCREEN_H, SCREEN_W};
 use crate::headless::{HeadlessRoom, DEFAULT_ROOM_H, DEFAULT_ROOM_W};
 
 /// Process-wide last error (not thread-local) so AppKit can read failures after
@@ -127,7 +126,8 @@ pub extern "C" fn sc_room_destroy(handle: *mut c_void) {
     }));
 }
 
-/// Upload Spectrum RGBA (`sc_framebuffer_*`, typically 352×296).
+/// Upload Spectrum RGBA (`sc_framebuffer_*`: 256×192, 352×296, or Timex
+/// hi-res 512×192 / 640×296). Scaled to the CRT texture when needed.
 #[no_mangle]
 pub extern "C" fn sc_room_set_framebuffer(
     handle: *mut c_void,
@@ -144,14 +144,14 @@ pub extern "C" fn sc_room_set_framebuffer(
             set_last_error("null rgba");
             return -1;
         }
-        let expect = (SCREEN_W * SCREEN_H * 4) as usize;
         let len = len as usize;
-        if len < expect {
-            set_last_error(format!("framebuffer too short: {len} < {expect}"));
+        let min_lo = (256 * 192 * 4) as usize;
+        if len < min_lo {
+            set_last_error(format!("framebuffer too short: {len} < {min_lo}"));
             return -1;
         }
         // SAFETY: caller guarantees `len` bytes at `rgba`.
-        let slice = unsafe { std::slice::from_raw_parts(rgba, expect) };
+        let slice = unsafe { std::slice::from_raw_parts(rgba, len) };
         h.room.set_framebuffer(slice);
         0
     })

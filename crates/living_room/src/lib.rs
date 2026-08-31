@@ -8,6 +8,7 @@ pub mod audio;
 pub mod camera;
 pub mod crt;
 pub mod external_fb;
+pub mod fb_scale;
 pub mod ffi;
 #[cfg(feature = "standalone")]
 pub mod file_dialog;

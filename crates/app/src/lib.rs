@@ -883,16 +883,39 @@ impl EmulatorSession {
         if !self.running {
             return machine::FrameAudio::default();
         }
-        let Some(machine) = self.machine.as_mut() else {
-            return machine::FrameAudio::default();
-        };
-        if machine.debugger().paused {
-            machine.render_rgba(&mut self.framebuffer, self.with_border);
+        if self.machine.is_none() {
             return machine::FrameAudio::default();
         }
-        let audio = machine.run_frame();
-        machine.render_rgba(&mut self.framebuffer, self.with_border);
+        if self.machine.as_ref().is_some_and(|m| m.debugger().paused) {
+            self.sync_framebuffer_dims();
+            if let Some(machine) = self.machine.as_ref() {
+                machine.render_rgba(&mut self.framebuffer, self.with_border);
+            }
+            return machine::FrameAudio::default();
+        }
+        let audio = {
+            let machine = self.machine.as_mut().expect("machine checked above");
+            machine.run_frame()
+        };
+        self.sync_framebuffer_dims();
+        if let Some(machine) = self.machine.as_ref() {
+            machine.render_rgba(&mut self.framebuffer, self.with_border);
+        }
         audio
+    }
+
+    /// Grow/shrink the RGBA buffer when Timex SCLD switches between 256 and 512.
+    pub fn sync_framebuffer_dims(&mut self) {
+        let Some(machine) = self.machine.as_ref() else {
+            return;
+        };
+        let (w, h) = machine.framebuffer_dims(self.with_border);
+        if self.width == w && self.height == h && self.framebuffer.len() == w * h * 4 {
+            return;
+        }
+        self.width = w;
+        self.height = h;
+        self.framebuffer.resize(w * h * 4, 0);
     }
 }
 
@@ -1675,7 +1698,7 @@ impl SpecChumApp {
                         ui.label("Built-in models");
                         ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
                         ui.weak(
-                            "Timex TC2048 / TS2068: alt file + hi-colour OK; 512×192 hi-res not drawn — docs/TIMEX.md.",
+                            "Timex TC2048 / TS2068: SCLD alt file, hi-colour, and 512×192 hi-res — docs/TIMEX.md.",
                         );
                         for pick in machine::ALL_MODELS {
                             let pref = PrefModel::from_model(pick);
@@ -1701,7 +1724,7 @@ impl SpecChumApp {
                             } else if pick == Model::TimexTC2048 || pick == Model::TimexTS2068 {
                                 response.clone().on_hover_text(
                                     "Timex: home/EX-ROM + SCLD MMU (TS2068) / latches (TC2048); \
-                                     alt file + hi-colour OK — 512×192 hi-res deferred (docs/TIMEX.md)",
+                                     alt file, hi-colour, and 512×192 hi-res (docs/TIMEX.md)",
                                 );
                             }
                             if response.clicked() {
@@ -2430,6 +2453,15 @@ of their copyrighted material but retain that copyright.",
                         m.debugger_mut().paused = false;
                         m.step_once();
                         m.debugger_mut().paused = true;
+                        let (w, h) = m.framebuffer_dims(self.session.with_border);
+                        if self.session.width != w
+                            || self.session.height != h
+                            || self.session.framebuffer.len() != w * h * 4
+                        {
+                            self.session.width = w;
+                            self.session.height = h;
+                            self.session.framebuffer.resize(w * h * 4, 0);
+                        }
                         m.render_rgba(&mut self.session.framebuffer, self.session.with_border);
                     }
                 });

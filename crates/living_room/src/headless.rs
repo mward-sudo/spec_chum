@@ -173,15 +173,27 @@ impl HeadlessRoom {
             .insert_resource(crate::present::SimulatePresentPath(on));
     }
 
-    /// Upload Spectrum RGBA (`SCREEN_W`×`SCREEN_H`) onto the phosphor.
+    /// Upload Spectrum RGBA onto the phosphor (`SCREEN_W`×`SCREEN_H`).
+    ///
+    /// Accepts classic 256×192 / 352×296 and Timex hi-res 512×192 / 640×296;
+    /// other lengths are nearest-neighbour scaled when dimensions can be inferred,
+    /// otherwise the leading `SCREEN_W`×`SCREEN_H` bytes are copied (legacy).
     pub fn set_framebuffer(&mut self, rgba: &[u8]) {
         let mut fb = self
             .apps
             .main
             .world_mut()
             .resource_mut::<ExternalFramebuffer>();
-        let n = fb.rgba.len().min(rgba.len());
-        fb.rgba[..n].copy_from_slice(&rgba[..n]);
+        let expect = fb.rgba.len();
+        if let Some((w, h)) = crate::fb_scale::dims_from_rgba_len(rgba.len()) {
+            crate::fb_scale::blit_to_crt(&mut fb.rgba, rgba, w, h);
+        } else if rgba.len() >= expect {
+            fb.rgba.copy_from_slice(&rgba[..expect]);
+        } else {
+            let n = expect.min(rgba.len());
+            fb.rgba[..n].copy_from_slice(&rgba[..n]);
+            fb.rgba[n..].fill(0);
+        }
     }
 
     pub fn request_skip_intro(&mut self) {

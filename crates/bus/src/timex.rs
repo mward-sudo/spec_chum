@@ -9,8 +9,8 @@
 //! (Fuse-compatible bit layout). Dock cartridges: Warajevo `.dck` via
 //! [`crate::TimexDock`].
 //!
-//! Phase 2b (partial): port `0xFF` screen modes 0–3 drive 256×192 SCLD video
-//! (alt display file + hi-colour). Modes 4–7 (512×192 hi-res) remain deferred.
+//! Phase 2b: port `0xFF` screen modes 0–3 drive 256×192 SCLD video (alt display
+//! file + hi-colour); modes 4–7 drive 512×192 hi-res (Fuse-compatible).
 
 /// Size of the Timex TS2068 / TC2068 EX-ROM bank (chunk 0').
 pub const TIMEX_EXROM_SIZE: usize = 8192;
@@ -53,10 +53,13 @@ pub enum TimexScreenMode {
     ExtColour = 2,
     /// Hi-colour with bitmap + 8×1 attrs both from alt file.
     ExtColourAlt = 3,
-    /// 512×192 family (hi-res) — not rendered yet; hosts keep 256×192 path.
+    /// 512×192: odd columns from primary bitmap; even from primary attrs-as-bits.
     HiresAttr = 4,
+    /// 512×192: odd columns from primary bitmap; even from alt attrs-as-bits.
     HiresAttrAlt = 5,
+    /// 512×192: odd columns from primary bitmap; even from alt bitmap.
     Hires = 6,
+    /// 512×192: both columns from alt bitmap (doubled).
     HiresDoubleCol = 7,
 }
 
@@ -75,12 +78,21 @@ impl TimexScreenMode {
         }
     }
 
-    /// Modes that stay at 256×192 and are drawn by the Phase 2b slice.
+    /// Modes that stay at 256×192 (standard / alt / hi-colour).
     #[must_use]
     pub const fn is_lores_scld(self) -> bool {
         matches!(
             self,
             Self::Standard | Self::AltFile | Self::ExtColour | Self::ExtColourAlt
+        )
+    }
+
+    /// Modes 4–7: 512×192 hi-res (ink/paper from port `0xFF` bits 3–5).
+    #[must_use]
+    pub const fn is_hires(self) -> bool {
+        matches!(
+            self,
+            Self::HiresAttr | Self::HiresAttrAlt | Self::Hires | Self::HiresDoubleCol
         )
     }
 }
@@ -221,6 +233,8 @@ mod tests {
         assert_eq!(scld.screen_mode(), TimexScreenMode::Hires);
         assert!(scld.int_disabled());
         assert!(!scld.screen_mode().is_lores_scld());
+        assert!(scld.screen_mode().is_hires());
         assert!(TimexScreenMode::ExtColourAlt.is_lores_scld());
+        assert!(!TimexScreenMode::ExtColourAlt.is_hires());
     }
 }
