@@ -15,7 +15,16 @@ pub enum ApiError {
     #[error("png encode: {0}")]
     Png(String),
     #[error(transparent)]
-    Host(#[from] HostError),
+    Host(HostError),
+}
+
+impl From<HostError> for ApiError {
+    fn from(value: HostError) -> Self {
+        match value {
+            HostError::NoMachine => Self::NoMachine,
+            other => Self::Host(other),
+        }
+    }
 }
 
 impl ApiError {

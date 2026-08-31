@@ -147,23 +147,33 @@ async fn framebuffer(
     if let Err(e) = check_auth(&headers, &state.token) {
         return api_error(e);
     }
-    if let Some(border) = q.border {
+    let restore_border = if let Some(border) = q.border {
+        let prev = state.plane.framebuffer_meta().ok().map(|m| m.border);
         if let Err(e) = state.plane.set_border(border) {
             return api_error(e);
         }
-        let _ = state.plane.run_frames(0);
-    }
+        if let Err(e) = state.plane.run_frames(1) {
+            return api_error(e);
+        }
+        prev.filter(|p| *p != border)
+    } else {
+        None
+    };
     let meta = match state.plane.framebuffer_meta() {
         Ok(m) => m,
         Err(e) => return api_error(e),
     };
-    match q.format.to_ascii_lowercase().as_str() {
+    let response = match q.format.to_ascii_lowercase().as_str() {
         "rgba" => rgba_response(&state, meta),
         "png" | "" => png_response(&state, meta),
         other => api_error(ApiError::BadRequest(format!(
             "unknown framebuffer format: {other}"
         ))),
+    };
+    if let Some(prev) = restore_border {
+        let _ = state.plane.set_border(prev);
     }
+    response
 }
 
 fn rgba_response(state: &AppState, meta: FramebufferMeta) -> Response {
@@ -269,7 +279,8 @@ async fn run(
     headers: HeaderMap,
     Json(body): Json<RunBody>,
 ) -> Response {
-    auth_json(&state, &headers, || state.plane.run_frames(body.frames))
+    let plane = state.plane.clone();
+    auth_json_blocking(&state, &headers, move || plane.run_frames(body.frames)).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -283,7 +294,8 @@ async fn step(
     headers: HeaderMap,
     Json(body): Json<StepBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || state.plane.step(body.count))
+    let plane = state.plane.clone();
+    auth_empty_blocking(&state, &headers, move || plane.step(body.count)).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -301,9 +313,11 @@ async fn run_until(
     headers: HeaderMap,
     Json(body): Json<RunUntilBody>,
 ) -> Response {
-    auth_json(&state, &headers, || {
-        state.plane.run_until_break(body.max_insns)
+    let plane = state.plane.clone();
+    auth_json_blocking(&state, &headers, move || {
+        plane.run_until_break(body.max_insns)
     })
+    .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -467,9 +481,11 @@ async fn type_load(
     headers: HeaderMap,
     Json(body): Json<TypeLoadBody>,
 ) -> Response {
-    auth_json(&state, &headers, || {
-        state.plane.type_load(body.code, body.warmup, body.max)
+    let plane = state.plane.clone();
+    auth_json_blocking(&state, &headers, move || {
+        plane.type_load(body.code, body.warmup, body.max)
     })
+    .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -633,6 +649,35 @@ fn auth_json<T: Serialize>(
         Ok(()) => match f() {
             Ok(body) => Json(body).into_response(),
             Err(e) => api_error(e),
+        },
+        Err(e) => api_error(e),
+    }
+}
+
+async fn auth_json_blocking<T, F>(state: &AppState, headers: &HeaderMap, f: F) -> Response
+where
+    T: Serialize + Send + 'static,
+    F: FnOnce() -> Result<T, ApiError> + Send + 'static,
+{
+    match check_auth(headers, &state.token) {
+        Ok(()) => match tokio::task::spawn_blocking(f).await {
+            Ok(Ok(body)) => Json(body).into_response(),
+            Ok(Err(e)) => api_error(e),
+            Err(e) => api_error(ApiError::Message(format!("task join: {e}"))),
+        },
+        Err(e) => api_error(e),
+    }
+}
+
+async fn auth_empty_blocking<F>(state: &AppState, headers: &HeaderMap, f: F) -> Response
+where
+    F: FnOnce() -> Result<(), ApiError> + Send + 'static,
+{
+    match check_auth(headers, &state.token) {
+        Ok(()) => match tokio::task::spawn_blocking(f).await {
+            Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+            Ok(Err(e)) => api_error(e),
+            Err(e) => api_error(ApiError::Message(format!("task join: {e}"))),
         },
         Err(e) => api_error(e),
     }

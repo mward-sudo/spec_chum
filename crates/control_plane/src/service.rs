@@ -5,7 +5,7 @@ use machine::TapeLoadOptions;
 use serde::Serialize;
 use spec_chum_host::{
     rom_setup::{model_rom_paths_snapshot, rom_setup_json},
-    HostError, HostSession, ModelId,
+    HostSession, ModelId,
 };
 use trace::{Category, DumpFilter};
 
@@ -353,13 +353,6 @@ impl ControlPlane {
                 has_tape: s.has_tape(),
             })
         })
-    }
-
-    pub fn map_host_error(err: HostError) -> ApiError {
-        match err {
-            HostError::NoMachine => ApiError::NoMachine,
-            other => ApiError::Host(other),
-        }
     }
 }
 
