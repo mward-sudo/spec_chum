@@ -11,7 +11,7 @@ use axum::{
     Json, Router,
 };
 use control_plane::{
-    ApiError, ControlPlane, ErrorBody, FramebufferMeta, ServerConfig, TraceFormat,
+    ApiError, ControlPlane, ErrorBody, FramebufferMeta, PrefsPatch, ServerConfig, TraceFormat,
 };
 use machine::{TapeLoadOptions, Watch};
 use serde::{Deserialize, Serialize};
@@ -40,9 +40,12 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/reset", post(reset))
         .route("/v1/keys", post(set_keys))
         .route("/v1/joystick", post(set_joystick))
+        .route("/v1/mouse", post(set_mouse))
+        .route("/v1/prefs", get(get_prefs).patch(patch_prefs))
         .route("/v1/running", post(set_running))
         .route("/v1/run", post(run))
         .route("/v1/step", post(step))
+        .route("/v1/continue", post(continue_execution))
         .route("/v1/run-until", post(run_until))
         .route("/v1/peek", get(peek))
         .route("/v1/poke", post(poke))
@@ -56,6 +59,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/tape/play", post(tape_play))
         .route("/v1/tape/pause", post(tape_pause))
         .route("/v1/tape/rewind", post(tape_rewind))
+        .route("/v1/tape/eject", post(tape_eject))
         .route("/v1/tape/load", post(tape_load))
         .route("/v1/type-load", post(type_load))
         .route("/v1/border", post(set_border))
@@ -247,6 +251,59 @@ async fn set_joystick(
         );
     };
     auth_empty(&state, &headers, || state.plane.set_joystick(mask))
+}
+
+#[derive(Debug, Deserialize)]
+struct MouseBody {
+    #[serde(default)]
+    clear: bool,
+    #[serde(default)]
+    dx: Option<i8>,
+    #[serde(default)]
+    dy: Option<i8>,
+    #[serde(default)]
+    left: Option<bool>,
+    #[serde(default)]
+    right: Option<bool>,
+    #[serde(default)]
+    middle: Option<bool>,
+}
+
+async fn set_mouse(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<MouseBody>,
+) -> Response {
+    if body.clear {
+        return auth_empty(&state, &headers, || state.plane.clear_mouse());
+    }
+    let has_delta = body.dx.is_some() || body.dy.is_some();
+    let has_buttons = body.left.is_some() || body.right.is_some() || body.middle.is_some();
+    if !has_delta && !has_buttons {
+        return api_error(
+            &state.plane,
+            ApiError::BadRequest(
+                "mouse body requires clear, dx/dy, and/or left/right/middle".into(),
+            ),
+        );
+    }
+    auth_empty(&state, &headers, || {
+        state
+            .plane
+            .set_mouse(body.dx, body.dy, body.left, body.right, body.middle)
+    })
+}
+
+async fn get_prefs(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || state.plane.prefs())
+}
+
+async fn patch_prefs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PrefsPatch>,
+) -> Response {
+    auth_json(&state, &headers, || state.plane.patch_prefs(body))
 }
 
 async fn set_keys(
@@ -465,6 +522,10 @@ async fn step(
     auth_empty_blocking(&state, &headers, move || plane.step(body.count)).await
 }
 
+async fn continue_execution(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || state.plane.continue_execution())
+}
+
 #[derive(Debug, Deserialize)]
 struct RunUntilBody {
     #[serde(default = "default_max_insn")]
@@ -642,6 +703,10 @@ async fn tape_pause(State(state): State<AppState>, headers: HeaderMap) -> Respon
 
 async fn tape_rewind(State(state): State<AppState>, headers: HeaderMap) -> Response {
     auth_empty(&state, &headers, || state.plane.tape_rewind())
+}
+
+async fn tape_eject(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_empty(&state, &headers, || state.plane.tape_eject())
 }
 
 #[derive(Debug, Deserialize)]

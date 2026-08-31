@@ -547,6 +547,16 @@ impl HostSession {
         Ok(())
     }
 
+    /// Clear the inserted tape deck (no-op-ish success when empty).
+    pub fn eject_tape(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.eject_tape();
+        self.status = "Tape ejected".into();
+        Ok(())
+    }
+
     #[must_use]
     pub fn tape_load_options(&self) -> Option<machine::TapeLoadOptions> {
         self.machine.as_ref().map(Machine::tape_load_options)
@@ -643,6 +653,15 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         m.mouse_mut().set_buttons(left, right, middle);
+        Ok(())
+    }
+
+    /// Reset Kempston mouse axes and buttons to defaults.
+    pub fn clear_mouse(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.mouse_mut().reset();
         Ok(())
     }
 
@@ -912,6 +931,16 @@ impl HostSession {
     #[must_use]
     pub fn paused(&self) -> bool {
         self.machine.as_ref().is_some_and(|m| m.debugger().paused)
+    }
+
+    /// Resume after a debugger stop (`continue_from_pc` so a PC break is not re-hit).
+    pub fn continue_execution(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let pc = m.cpu().regs.pc;
+        m.debugger_mut().continue_from_pc(pc);
+        Ok(())
     }
 
     /// Add a PC breakpoint.
@@ -1404,6 +1433,12 @@ mod tests {
         assert_eq!(mouse.buttons_byte(), 0xfc); // D0+D1 clear
         s.set_mouse_buttons(false, false, false).unwrap();
         assert_eq!(s.machine.as_mut().unwrap().mouse_mut().buttons_byte(), 0xff);
+        s.set_mouse_delta(5, 0).unwrap();
+        s.clear_mouse().unwrap();
+        let mouse = s.machine.as_mut().unwrap().mouse_mut();
+        assert_eq!(mouse.x, 0);
+        assert_eq!(mouse.y, 0);
+        assert_eq!(mouse.buttons_byte(), 0xff);
     }
 
     #[test]
