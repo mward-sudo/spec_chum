@@ -26,7 +26,7 @@ layer — **no GUI automation required**.
 
 All debugging / control / inspect paths **converge** on one backend:
 
-```
+```text
                     ┌─────────────────────────────────────┐
                     │  control_plane (shared Rust crate)  │
                     │  HostSession + Machine + Debugger   │
@@ -77,6 +77,9 @@ follow-ups in the tracker issue.
   `SPEC_CHUM_AGENT_TOKEN` (or `--token`) **by default** — even on loopback. Set
   `SPEC_CHUM_AGENT_INSECURE=1` only on trusted dev machines to allow unauthenticated
   mutations (not recommended when a browser tab can reach the server).
+- **Startup without a token:** the server **refuses to start** unless
+  `SPEC_CHUM_AGENT_INSECURE=1` is set (or `--insecure` is passed). Mutating requests
+  without a valid bearer token return **`401 Unauthorized`**.
 - `GET` routes remain unauthenticated on loopback unless a token is configured (then
   all routes require it).
 - No TLS (localhost); document that the server must never be exposed publicly.
@@ -140,7 +143,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Media | `POST /v1/snapshot`, `/rzx`, `/dsk`, `/trd`, … |
 | Input | `POST /v1/keys` matrix press/release; `POST /v1/joystick`; Kempston mouse delta/buttons |
 | Hardware | Multiface, DivMMC, Interface 1, Timex `.dck` dock insert/eject, Beta/TR-DOS ROM attach |
-| Host prefs | `GET|PATCH /v1/prefs` — volume, mute, joystick mode, tape defaults, throttle, living-room toggle (host display only) |
+| Host prefs | `GET or PATCH /v1/prefs` — volume, mute, joystick mode, tape defaults, throttle, living-room toggle (host display only) |
 | Border | `POST /v1/border` — `with_border` flag (changes framebuffer dims) |
 
 ### Inspect
@@ -181,23 +184,24 @@ Remaining control/inspect/debug rows land in Phase A follow-ups before Phase B.
 
 ### `POST /v1/run` budget semantics
 
-`POST /v1/run` advances emulation until **one** of: the request budget is exhausted,
-the machine becomes idle (halted / waiting for input), or a debugger stop (breakpoint,
-watch, `run-until` predicate). Agents must supply a finite cap — unbounded run is
-rejected (`400`).
+`POST /v1/run` advances emulation within a **finite budget** until one of:
 
-Request body (at least one limit required):
+1. The budget is exhausted (`stopped_reason: "budget"`),
+2. `until_idle` is `true` and the machine becomes idle (`stopped_reason: "idle"`),
+3. A debugger stop fires — breakpoint, watch, or `run-until` predicate
+   (`stopped_reason: "debug"`).
+
+**Request body** — optional; omitted body is treated as `{ "frames": 100 }`. When a
+body is present it must include at least one of `frames` or `instructions` (both
+finite, positive); otherwise the server returns **`400`**.
 
 ```json
-{ "frames": 300 }
+{ "frames": 300, "until_idle": false }
 ```
 
-or `{ "instructions": 500000 }`. Optional `"until_idle": true` (default `false`) lets
-the server keep stepping within the budget until idle; when the budget is hit first,
-the response reports `stopped_reason: "budget"` with `frames_run` / `instructions_run`
-and current `inspect` snapshot — same shape as an idle stop, but `stopped_reason` differs.
-
-Default when the body is omitted: **`{ "frames": 100 }`** (safe agent default).
+`until_idle` defaults to **`false`** — idle is **not** an implicit stop unless the
+client opts in. When the budget is hit first, the response includes `frames_run` /
+`instructions_run` and the current `inspect` snapshot.
 
 ## Implementation sketch
 
