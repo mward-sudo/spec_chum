@@ -226,13 +226,19 @@ impl ControlPlane {
     }
 
     /// Run a session mutation that loads/replaces a machine, then re-apply prefs.
+    ///
+    /// Lock order: session → prefs (must match [`Self::patch_prefs`]).
     fn with_machine_load<R>(
         &self,
         f: impl FnOnce(&mut HostSession) -> ApiResult<R>,
     ) -> ApiResult<R> {
-        let prefs = self.prefs()?;
         self.with_session_mut(|s| {
             let out = f(s)?;
+            let prefs = self
+                .prefs
+                .lock()
+                .map_err(|_| ApiError::Message("prefs lock poisoned".into()))?
+                .clone();
             apply_prefs_to_session(s, &prefs)?;
             Ok(out)
         })
@@ -351,37 +357,39 @@ impl ControlPlane {
     }
 
     pub fn patch_prefs(&self, patch: PrefsPatch) -> ApiResult<SessionPrefs> {
-        let mut guard = self
-            .prefs
-            .lock()
-            .map_err(|_| ApiError::Message("prefs lock poisoned".into()))?;
-        if let Some(v) = patch.volume {
-            guard.volume = v;
-        }
-        if let Some(v) = patch.muted {
-            guard.muted = v;
-        }
-        if let Some(v) = patch.throttle {
-            guard.throttle = v;
-        }
-        if let Some(v) = patch.joystick_mode {
-            guard.joystick_mode = v;
-        }
-        if let Some(v) = patch.kempston_mouse {
-            guard.kempston_mouse = v;
-        }
-        if let Some(v) = patch.tape_experience {
-            guard.tape_experience = v;
-        }
-        if let Some(v) = patch.tape_ear_speed {
-            guard.tape_ear_speed = v;
-        }
-        *guard = guard.clone().sanitized();
-        let snapshot = guard.clone();
-        drop(guard);
-
-        self.with_session_mut(|s| apply_prefs_to_session(s, &snapshot))?;
-        Ok(snapshot)
+        // Lock order: session → prefs (must match [`Self::with_machine_load`]).
+        self.with_session_mut(|s| {
+            let mut guard = self
+                .prefs
+                .lock()
+                .map_err(|_| ApiError::Message("prefs lock poisoned".into()))?;
+            if let Some(v) = patch.volume {
+                guard.volume = v;
+            }
+            if let Some(v) = patch.muted {
+                guard.muted = v;
+            }
+            if let Some(v) = patch.throttle {
+                guard.throttle = v;
+            }
+            if let Some(v) = patch.joystick_mode {
+                guard.joystick_mode = v;
+            }
+            if let Some(v) = patch.kempston_mouse {
+                guard.kempston_mouse = v;
+            }
+            if let Some(v) = patch.tape_experience {
+                guard.tape_experience = v;
+            }
+            if let Some(v) = patch.tape_ear_speed {
+                guard.tape_ear_speed = v;
+            }
+            *guard = guard.clone().sanitized();
+            let snapshot = guard.clone();
+            drop(guard);
+            apply_prefs_to_session(s, &snapshot)?;
+            Ok(snapshot)
+        })
     }
 
     pub fn continue_execution(&self) -> ApiResult<LastBreakResponse> {
