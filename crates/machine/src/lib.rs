@@ -1727,7 +1727,7 @@ impl Machine {
                     if tape_opts.flash_load && Self::try_flash_load_48(cpu, bus, tape) {
                         continue;
                     }
-                    if int_active_48(bus.frame_t) {
+                    if int_active_48(bus.frame_t) && !(bus.timex && bus.timex_scld.int_disabled()) {
                         let mut mio = MemIo48 {
                             bus: bus.as_mut(),
                             watch: None,
@@ -2588,7 +2588,7 @@ impl Machine {
                 if tape_opts.flash_load && Self::try_flash_load_48(cpu, bus, tape) {
                     return;
                 }
-                if int_active_48(bus.frame_t) {
+                if int_active_48(bus.frame_t) && !(bus.timex && bus.timex_scld.int_disabled()) {
                     let mut mio = MemIo48 {
                         bus: bus.as_mut(),
                         watch: None,
@@ -3053,7 +3053,15 @@ impl Machine {
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
         match self {
             Self::Spec48 { bus, .. } => {
-                bus.ula.render_rgba(bus.screen_bytes(), out, with_border);
+                if bus.timex {
+                    let mode = ula::TimexLoresMode::from_scrnmode(bus.timex_scld.port_ff());
+                    // Timex lo-res SCLD modes need up to 16K of screen RAM (alt file).
+                    let screen = &bus.ram[..0x4000.min(bus.ram.len())];
+                    bus.ula
+                        .render_rgba_timex_lores(screen, out, with_border, mode);
+                } else {
+                    bus.ula.render_rgba(bus.screen_bytes(), out, with_border);
+                }
             }
             Self::Spec128 { bus, .. } => {
                 bus.ula.render_rgba_timed(
@@ -4612,6 +4620,25 @@ mod tests {
         for _ in 0..50 {
             let _ = m.run_frame();
         }
+    }
+
+    #[test]
+    fn timex_scld_ext_colour_render_uses_alt_attrs() {
+        // Screen-RAM / SCLD rendering only — no real Timex ROM required.
+        let mut m = Machine::new_timex_tc2048(&[0; 16 * 1024]).unwrap();
+        // Paint primary bitmap solid; primary 8×8 attr blue; alt 8×1 attr red.
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.write(0x4000, 0xFF);
+            bus.write(0x5800, 0x01); // blue ink — must not win in ext colour
+            bus.write(0x6000, 0x02); // red 8×1 attr (scrambled line 0)
+            bus.out_port(0x00FF, 0x02); // EXTCOLOUR
+        } else {
+            panic!("expected Spec48");
+        }
+        let mut out = vec![0u8; 256 * 192 * 4];
+        m.render_rgba(&mut out, false);
+        let red = ula::palette_rgb(2, false);
+        assert_eq!(&out[0..3], &red);
     }
 
     #[test]

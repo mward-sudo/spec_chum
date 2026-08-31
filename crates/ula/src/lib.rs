@@ -317,6 +317,37 @@ impl Ula48 {
         paper_start: u32,
         t_line: u32,
     ) {
+        self.render_rgba_timed_mode(
+            screen,
+            out,
+            with_border,
+            paper_start,
+            t_line,
+            TimexLoresMode::Standard,
+        );
+    }
+
+    /// Timex SCLD 256×192 modes (port `0xFF` bits 0–2 = 0..=3). Hi-res (4..=7) callers
+    /// should pass [`TimexLoresMode::Standard`] until 512×192 lands.
+    pub fn render_rgba_timex_lores(
+        &self,
+        screen: &[u8],
+        out: &mut [u8],
+        with_border: bool,
+        mode: TimexLoresMode,
+    ) {
+        self.render_rgba_timed_mode(screen, out, with_border, PAPER_START_48, T_LINE_48, mode);
+    }
+
+    fn render_rgba_timed_mode(
+        &self,
+        screen: &[u8],
+        out: &mut [u8],
+        with_border: bool,
+        paper_start: u32,
+        t_line: u32,
+        mode: TimexLoresMode,
+    ) {
         let (w, h, ox, oy) = if with_border {
             (352usize, 296usize, 48usize, 48usize)
         } else {
@@ -351,7 +382,8 @@ impl Ula48 {
             }
         }
 
-        if screen.len() < 6912 {
+        let need = mode.min_screen_len();
+        if screen.len() < need {
             return;
         }
         for py in 0..192usize {
@@ -361,8 +393,8 @@ impl Ula48 {
             for px in 0..256usize {
                 let col = px / 8;
                 let bit = 7 - (px % 8);
-                let bitmap_off = (third * 2048) + (yo * 32) + (yb * 256) + col;
-                let attr_off = 6144 + (py / 8) * 32 + col;
+                let line_base = (third * 2048) + (yo * 32) + (yb * 256) + col;
+                let (bitmap_off, attr_off) = mode.offsets(line_base, py, col);
                 let bits = screen[bitmap_off];
                 let attr = screen[attr_off];
                 let mut ink = attr & 7;
@@ -381,6 +413,56 @@ impl Ula48 {
                 out[i + 2] = rgb[2];
                 out[i + 3] = 255;
             }
+        }
+    }
+}
+
+/// Timex SCLD lo-res (256×192) screen modes from port `0xFF` bits 0–2.
+///
+/// Fuse-compatible: alt file at `+0x2000`; hi-colour attrs use scrambled
+/// `display_line_start` addresses in the alt file (8×1 colour cells).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TimexLoresMode {
+    #[default]
+    Standard,
+    AltFile,
+    ExtColour,
+    ExtColourAlt,
+}
+
+impl TimexLoresMode {
+    const ALTDFILE: usize = 0x2000;
+
+    #[must_use]
+    pub fn from_scrnmode(scrnmode: u8) -> Self {
+        match scrnmode & 0x07 {
+            1 => Self::AltFile,
+            2 => Self::ExtColour,
+            3 => Self::ExtColourAlt,
+            // 0 and hi-res 4..=7: standard layout until 512×192 lands.
+            _ => Self::Standard,
+        }
+    }
+
+    fn min_screen_len(self) -> usize {
+        match self {
+            Self::Standard => 6912,
+            Self::AltFile | Self::ExtColour | Self::ExtColourAlt => Self::ALTDFILE + 6912,
+        }
+    }
+
+    /// `(bitmap_off, attr_off)` within the 16K screen RAM page (`0x4000`-relative).
+    fn offsets(self, line_base: usize, py: usize, col: usize) -> (usize, usize) {
+        match self {
+            Self::Standard => (line_base, 6144 + (py / 8) * 32 + col),
+            Self::AltFile => (
+                line_base + Self::ALTDFILE,
+                Self::ALTDFILE + 6144 + (py / 8) * 32 + col,
+            ),
+            // Fuse: bitmap primary; attrs at `display_line_start[y] + x + ALTDFILE`.
+            Self::ExtColour => (line_base, line_base + Self::ALTDFILE),
+            // Fuse: both from alt (`altdfile` + `b1`).
+            Self::ExtColourAlt => (line_base + Self::ALTDFILE, line_base + Self::ALTDFILE),
         }
     }
 }
@@ -547,5 +629,60 @@ mod tests {
         let green = palette_rgb(4, false);
         assert_eq!(&out[before_i..before_i + 3], &black);
         assert_eq!(&out[after_i..after_i + 3], &green);
+    }
+
+    #[test]
+    fn timex_alt_file_uses_second_display() {
+        let ula = Ula48::new();
+        let mut screen = vec![0u8; 0x2000 + 6912];
+        // Primary: all ink black on black; alt file: solid ink white bright on black paper.
+        screen[0x2000] = 0xFF; // first bitmap byte of alt (row 0, col 0)
+        screen[0x2000 + 6144] = 0x47; // bright white ink, black paper
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba_timex_lores(&screen, &mut out, false, TimexLoresMode::AltFile);
+        let white = palette_rgb(7, true);
+        assert_eq!(
+            &out[0..3],
+            &white,
+            "alt-file ink pixel should be bright white"
+        );
+        // Standard mode must ignore alt file.
+        ula.render_rgba_timex_lores(&screen, &mut out, false, TimexLoresMode::Standard);
+        let black = palette_rgb(0, false);
+        assert_eq!(&out[0..3], &black);
+    }
+
+    #[test]
+    fn timex_ext_colour_uses_8x1_attrs_from_alt() {
+        let ula = Ula48::new();
+        let mut screen = vec![0u8; 0x2000 + 6912];
+        // Primary bitmap: solid ink bits on scanlines 0 and 1, col 0.
+        screen[0] = 0xFF;
+        screen[256] = 0xFF;
+        // Primary 8×8 attr (would be blue ink) — must be ignored in ext colour.
+        screen[6144] = 0x01;
+        // Alt file 8×1 attr for scrambled line 0 col 0: red ink (2), black paper.
+        screen[0x2000] = 0x02;
+        // Same column, scanline 1: green ink (4) — different 8×1 cell.
+        // line_base for py=1: third=0, yb=1, yo=0 → 256 + col
+        screen[0x2000 + 256] = 0x04;
+
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba_timex_lores(&screen, &mut out, false, TimexLoresMode::ExtColour);
+        let red = palette_rgb(2, false);
+        let green = palette_rgb(4, false);
+        assert_eq!(&out[0..3], &red, "scanline 0 uses alt 8×1 attr");
+        let row1 = 256 * 4;
+        assert_eq!(
+            &out[row1..row1 + 3],
+            &green,
+            "scanline 1 uses distinct 8×1 attr"
+        );
+    }
+
+    #[test]
+    fn timex_hires_scrnmode_falls_back_to_standard_layout() {
+        assert_eq!(TimexLoresMode::from_scrnmode(6), TimexLoresMode::Standard);
+        assert_eq!(TimexLoresMode::from_scrnmode(2), TimexLoresMode::ExtColour);
     }
 }
