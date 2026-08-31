@@ -64,7 +64,13 @@ fn parse_model(s: &str) -> Result<ModelId> {
 
 /// When `SPEC_CHUM_AGENT=1`, start an embedded loopback server with its own session.
 ///
-/// This is a **parallel debug session** (not yet wired to egui/macOS machine state).
+/// **Transitional (Phase B / [#221](https://github.com/mward-sudo/spec_chum/issues/221)):**
+/// this is a **parallel debug session**, not wired to egui's `EmulatorSession`.
+/// Prefer standalone `spec-chum-agent` / `spec-chum-debug --serve` for agents.
+/// Removal plan: once egui Debug shares a live `Arc<ControlPlane>`, either delete
+/// this env path or pass that same plane into [`spawn`] instead of constructing a
+/// fresh one here.
+///
 /// Agents connect via `http://127.0.0.1:17384` (or `SPEC_CHUM_AGENT_PORT`).
 pub fn spawn_from_env() -> Result<Option<EmbeddedServer>> {
     if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() != Some("1") {

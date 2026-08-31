@@ -6,7 +6,8 @@ use spec_chum_host::{default_prefs_path, load_prefs, MIN_WINDOW_HEIGHT, MIN_WIND
 
 fn main() -> eframe::Result {
     trace::init_from_env();
-    // Parallel debug session when SPEC_CHUM_AGENT=1 (see docs/AGENT_DEBUG_API.md).
+    // Transitional parallel agent session when SPEC_CHUM_AGENT=1 (not egui Debug
+    // state — see docs/AGENT_DEBUG_API.md Phase B / #221). Prefer standalone serve.
     let _embedded_agent = match agent_server::embedded::spawn_from_env() {
         Ok(server) => server,
         Err(e) => {
