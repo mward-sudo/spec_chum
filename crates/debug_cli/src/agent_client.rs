@@ -61,6 +61,17 @@ impl AgentClient {
         self.post_empty("/v1/debug/breakpoints", serde_json::json!({ "pc": pc }))
     }
 
+    pub fn add_mem_watch_write(&self, addr: &str) -> Result<()> {
+        self.post_empty(
+            "/v1/debug/watches",
+            serde_json::json!({
+                "addr": addr,
+                "read": false,
+                "write": true,
+            }),
+        )
+    }
+
     pub fn tape_play(&self) -> Result<()> {
         self.post_empty("/v1/tape/play", serde_json::json!({}))
     }

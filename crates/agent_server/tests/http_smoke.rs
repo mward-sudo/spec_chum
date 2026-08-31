@@ -97,3 +97,42 @@ async fn agent_api_run_inspect_and_framebuffer_png() {
     assert_eq!(meta.width, 256);
     assert_eq!(meta.height, 192);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_mem_watch_list_and_add() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+    });
+
+    let list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/debug/watches")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("list watches");
+    assert_eq!(list.status(), StatusCode::OK);
+
+    let add = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/debug/watches")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"addr":"4000","write":true}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("add watch");
+    assert_eq!(add.status(), StatusCode::NO_CONTENT);
+}

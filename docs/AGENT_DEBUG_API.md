@@ -56,7 +56,7 @@ All debugging / control / inspect paths **converge** on one backend:
 | Phase | Deliverable |
 | --- | --- |
 | **A — API + parallel surfaces** | Shared `control_plane` crate; localhost HTTP server (`spec-chum-agentd` or embedded in a long-lived host); MVP+ endpoints; existing CLI/GUI unchanged |
-| **B — clients adapt** | `spec-chum-debug` talks HTTP by default; egui Debug + macOS inspector route through backend; integration tests hit HTTP |
+| **B — clients adapt** | `spec-chum-debug` talks HTTP when `SPEC_CHUM_AGENT_URL` set; egui embeds parallel server when `SPEC_CHUM_AGENT=1`; integration tests hit HTTP |
 | **C — dedupe** | Deprecate duplicate direct `host_api` debug/control paths where safe; document remaining C ABI as FFI-only for non-Rust shells |
 
 Phase A is mergeable without breaking current workflows. Phases B/C are explicit
@@ -223,7 +223,9 @@ Hosts:
 - **Embedded CLI:** `spec-chum-debug --serve --model 48k` (same HTTP surface).
 - **HTTP client (Phase B):** `SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384 spec-chum-debug …`
   or `--agent-url …` on supported subcommands.
-- **Embedded GUI (planned):** egui / SpecChumMac when `SPEC_CHUM_AGENT=1` (default off).
+- **Embedded GUI (Phase B):** egui starts a parallel loopback server when
+  `SPEC_CHUM_AGENT=1` (default off). SpecChumMac: use standalone `spec-chum-agent`
+  or `spec-chum-debug --serve` until in-process host unification lands.
 
 ### Quick test (curl)
 

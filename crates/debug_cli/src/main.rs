@@ -260,8 +260,17 @@ fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {
                 exit_cli(2);
             }
         }
-        Cmd::WatchWrite { .. } => {
-            bail!("remote agent client does not support watch-write yet (no /v1/debug/watches API — see #210)");
+        Cmd::WatchWrite { addr, max } => {
+            client.add_mem_watch_write(addr)?;
+            let body = client.run_until(*max)?;
+            print_remote_run_result(client, cli.json, &body)?;
+            let reason = body
+                .get("break_reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !reason.contains("Mem") {
+                exit_cli(2);
+            }
         }
     }
     Ok(())

@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use machine::{JoystickMode, JoystickState, Machine, Model};
+use machine::{JoystickMode, JoystickState, Machine, Model, Watch};
 use thiserror::Error;
 
 /// Model identifiers for the C ABI (stable numeric values).
@@ -915,6 +915,15 @@ impl HostSession {
         Ok(())
     }
 
+    /// Add a memory access watch (read and/or write).
+    pub fn add_mem_watch(&mut self, watch: Watch) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.debugger_mut().add_mem_watch(watch);
+        Ok(())
+    }
+
     /// Run until breakpoint, halt, or instruction budget.
     pub fn run_until_break(&mut self, max_insns: u32) -> Result<machine::BreakReason, HostError> {
         let Some(m) = self.machine.as_mut() else {
@@ -1096,6 +1105,14 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         Ok(m.debugger().pc_breaks.clone())
+    }
+
+    pub fn list_watches(&self) -> Result<(Vec<Watch>, Vec<Watch>), HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        let dbg = m.debugger();
+        Ok((dbg.mem_watches.clone(), dbg.port_watches.clone()))
     }
 
     pub fn remove_breakpoint(&mut self, pc: u16) -> Result<(), HostError> {
