@@ -48,6 +48,14 @@ impl AgentClient {
         self.post_empty("/v1/model", serde_json::json!({ "model": model }))
     }
 
+    pub fn load_rom(&self, path: &str) -> Result<()> {
+        self.post_empty("/v1/rom", serde_json::json!({ "path": path }))
+    }
+
+    pub fn load_snapshot(&self, path: &str) -> Result<()> {
+        self.post_empty("/v1/snapshot", serde_json::json!({ "path": path }))
+    }
+
     pub fn run_frames(&self, frames: u32) -> Result<Value> {
         self.post_json("/v1/run", serde_json::json!({ "frames": frames }))
     }

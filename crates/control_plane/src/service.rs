@@ -150,6 +150,20 @@ impl ControlPlane {
         })
     }
 
+    pub fn load_rom_path(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_rom_path(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn load_snapshot(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_snapshot(path)?;
+            Ok(())
+        })
+    }
+
     pub fn reset(&self) -> ApiResult<()> {
         self.with_session_mut(|s| {
             s.reset()?;

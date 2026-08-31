@@ -59,6 +59,14 @@ All debugging / control / inspect paths **converge** on one backend:
 | **B — clients adapt** | `spec-chum-debug` talks HTTP when `SPEC_CHUM_AGENT_URL` set; egui embeds parallel server when `SPEC_CHUM_AGENT=1`; integration tests hit HTTP |
 | **C — dedupe** | Deprecate duplicate direct `host_api` debug/control paths where safe; document remaining C ABI as FFI-only for non-Rust shells |
 
+**Phase C (in progress):** `spec-chum-debug` local commands now route through
+[`HostSession`](../crates/host_api/src/session.rs) — the same type wrapped by
+`control_plane::ControlPlane` and the agent HTTP server. The one-shot CLI no longer
+constructs a parallel `machine::Machine` path. C ABI `sc_debug_*` / `sc_inspect_json`
+remain thin FFI wrappers over `HostSession` and the global `trace` ring (no
+`host_api` ↔ `control_plane` cycle). Remaining dedupe targets: egui Debug panel,
+SpecChumMac inspector, and optional in-process `ControlPlane` handle for GUI hosts.
+
 Phase A is mergeable without breaking current workflows. Phases B/C are explicit
 follow-ups in the tracker issue.
 
@@ -141,6 +149,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Execution | `POST /v1/step` — one `step_once`; `POST /v1/step` body `{ "count": N }`; `POST /v1/continue`; `POST /v1/run-until` — PC / budget (maps `Debugger::run_until`) |
 | Tape | `POST /v1/tape/open`, `/play`, `/pause`, `/rewind`, `/eject`; load options flash vs EAR vs experience + speed |
 | Type-load | `POST /v1/tape/type-load` — scripted LOAD "" [CODE] (today's `type-load` subcommand) |
+| ROM | `POST /v1/rom` — load ROM image from host filesystem path |
 | Media | `POST /v1/snapshot`, `/rzx`, `/dsk`, `/trd`, … |
 | Input | `POST /v1/keys` matrix press/release; `POST /v1/joystick`; Kempston mouse delta/buttons |
 | Hardware | Multiface, DivMMC, Interface 1, Timex `.dck` dock insert/eject, Beta/TR-DOS ROM attach |

@@ -867,6 +867,14 @@ impl HostSession {
         Ok(m.inspect().to_json())
     }
 
+    /// Human-readable inspect snapshot (`Inspect` display).
+    pub fn inspect_text(&self) -> Result<String, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(format!("{}", m.inspect()))
+    }
+
     /// Core registers for the C `sc_regs` ABI.
     pub fn regs(&self) -> Result<HostRegs, HostError> {
         let Some(m) = self.machine.as_ref() else {

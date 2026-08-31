@@ -40,6 +40,8 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/peek", get(peek))
         .route("/v1/poke", post(poke))
         .route("/v1/disasm", get(disasm))
+        .route("/v1/rom", post(load_rom))
+        .route("/v1/snapshot", post(load_snapshot))
         .route("/v1/tape/open", post(tape_open))
         .route("/v1/tape/play", post(tape_play))
         .route("/v1/tape/pause", post(tape_pause))
@@ -422,6 +424,26 @@ async fn disasm(
 #[derive(Debug, Deserialize)]
 struct PathBody {
     path: String,
+}
+
+async fn load_rom(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PathBody>,
+) -> Response {
+    auth_empty(&state, &headers, || {
+        state.plane.load_rom_path(body.path.as_ref())
+    })
+}
+
+async fn load_snapshot(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PathBody>,
+) -> Response {
+    auth_empty(&state, &headers, || {
+        state.plane.load_snapshot(body.path.as_ref())
+    })
 }
 
 async fn tape_open(
