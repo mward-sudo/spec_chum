@@ -52,8 +52,8 @@ pub fn parse_model_slug(s: &str) -> ApiResult<ModelId> {
         "plus2a" | "+2a" => ModelId::SpectrumPlus2A,
         "plus3" | "+3" => ModelId::SpectrumPlus3,
         "pentagon" | "pentagon128" | "128p" => ModelId::Pentagon128,
-        "timex" | "tc2048" | "timex2048" => ModelId::TimexTC2048,
-        "ts2068" | "tc2068" | "timex2068" => ModelId::TimexTS2068,
+        "timex" | "tc2048" | "timex2048" | "timex_tc2048" => ModelId::TimexTC2048,
+        "ts2068" | "tc2068" | "timex2068" | "timex_ts2068" => ModelId::TimexTS2068,
         other => {
             return Err(ApiError::BadRequest(format!("unknown model {other}")));
         }

@@ -488,6 +488,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_model_slug_accepts_canonical_timex_aliases() {
+        assert_eq!(
+            parse_model_slug("timex_ts2068").expect("ts2068"),
+            ModelId::TimexTS2068
+        );
+        assert_eq!(
+            parse_model_slug("timex_tc2048").expect("tc2048"),
+            ModelId::TimexTC2048
+        );
+    }
+
+    #[test]
     fn server_config_rejects_public_bind() {
         assert!(ServerConfig::validate_bind_host("0.0.0.0").is_err());
         assert!(ServerConfig::validate_bind_host("127.0.0.1").is_ok());

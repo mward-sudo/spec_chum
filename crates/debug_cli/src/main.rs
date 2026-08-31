@@ -176,7 +176,7 @@ fn run_serve(cli: &Cli) -> Result<()> {
         config.port = port;
     }
     let rt = tokio::runtime::Runtime::new().context("tokio runtime")?;
-    rt.block_on(serve(config, plane))
+    rt.block_on(serve(config, plane, None))
 }
 
 fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {

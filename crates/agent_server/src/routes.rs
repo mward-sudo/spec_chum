@@ -65,7 +65,14 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub async fn serve(config: ServerConfig, plane: SharedPlane) -> anyhow::Result<()> {
+/// Optional one-shot channel signaled after the listen socket binds successfully.
+pub type ReadySender = std::sync::mpsc::SyncSender<Result<(), String>>;
+
+pub async fn serve(
+    config: ServerConfig,
+    plane: SharedPlane,
+    ready: Option<ReadySender>,
+) -> anyhow::Result<()> {
     control_plane::ServerConfig::validate_bind_host(&config.host)?;
     let addr = (config.host.as_str(), config.port);
     let state = AppState {
@@ -73,7 +80,18 @@ pub async fn serve(config: ServerConfig, plane: SharedPlane) -> anyhow::Result<(
         token: config.token.clone(),
     };
     let app = router(state);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            if let Some(tx) = ready {
+                let _ = tx.send(Err(format!("bind failed: {e}")));
+            }
+            return Err(e.into());
+        }
+    };
+    if let Some(tx) = ready {
+        let _ = tx.send(Ok(()));
+    }
     eprintln!(
         "spec-chum-agent listening on http://{}:{}",
         config.host, config.port

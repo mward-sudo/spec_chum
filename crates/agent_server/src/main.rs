@@ -5,7 +5,7 @@ use std::sync::Arc;
 use agent_server::routes::serve;
 use anyhow::Context;
 use clap::Parser;
-use control_plane::{ControlPlane, ServerConfig};
+use control_plane::{parse_model_slug, ControlPlane, ServerConfig};
 use spec_chum_host::ModelId;
 
 #[derive(Parser, Debug)]
@@ -29,18 +29,7 @@ struct Cli {
 }
 
 fn parse_model(s: &str) -> anyhow::Result<ModelId> {
-    Ok(match s.to_ascii_lowercase().as_str() {
-        "16" | "16k" => ModelId::Spectrum16K,
-        "48" | "48k" => ModelId::Spectrum48,
-        "128" | "128k" => ModelId::Spectrum128,
-        "plus2" | "+2" => ModelId::SpectrumPlus2,
-        "plus2a" | "+2a" => ModelId::SpectrumPlus2A,
-        "plus3" | "+3" => ModelId::SpectrumPlus3,
-        "pentagon" | "pentagon128" | "128p" => ModelId::Pentagon128,
-        "timex" | "tc2048" | "timex2048" => ModelId::TimexTC2048,
-        "ts2068" | "tc2068" | "timex2068" => ModelId::TimexTS2068,
-        other => anyhow::bail!("unknown model {other}"),
-    })
+    parse_model_slug(s).map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 #[tokio::main]
@@ -59,5 +48,5 @@ async fn main() -> anyhow::Result<()> {
     plane
         .autoload_model(model)
         .context("autoload ROM for selected model")?;
-    serve(config, plane).await
+    serve(config, plane, None).await
 }
