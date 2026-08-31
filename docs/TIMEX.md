@@ -7,7 +7,7 @@ Timex Sinclair support in Spec Chum is tracked in
 | --- | --- | --- |
 | **1** | **TC2048** | Shipped ([#203](https://github.com/mward-sudo/spec_chum/pull/203)): 48K-class + SCLD port latches |
 | **2a** | **TS2068 / TC2068** | Smoke-boot: home + EX-ROM, horizontal MMU, Timex AY ports |
-| **2a+** | (same) | Warajevo **`.dck` dock** (DOCK / HOME / EX-ROM banks) |
+| **2a+** | (same) | Warajevo **`.dck` dock** — HOME Spectrum cart smoke (PROG/`$0556`) + optional Death Chase EAR |
 | **2b** | (same) | Full **SCLD video** (512×192, extended / dual-screen) — deferred |
 
 Portuguese **TC2068** and US **TS2068** share the same ROM set and memory model here;
@@ -77,16 +77,30 @@ Build a 16 KiB Spectrum ROM into a `.dck` with a 9-byte header + raw ROM:
 | DOCK Spectrum ROM | `0,2,2,0,0,0,0,0,0` | Page with `OUT 244,3` (chunks 0+1) |
 | HOME Spectrum replace | `255,2,2,0,0,0,0,0,0` | Boots as Spectrum-like home (Timex → Spectrum cart) |
 
-Example (HOME replace from fetched `roms/spec48.rom`):
+Helper (writes under `roms/timex/`, gitignored — never commit ROM/cart bytes):
 
 ```bash
-printf '\xff\x02\x02\x00\x00\x00\x00\x00\x00' | cat - roms/spec48.rom > spectrum-home.dck
+./scripts/make_spectrum_dck.sh home   # → roms/timex/spectrum-home.dck
+./scripts/make_spectrum_dck.sh dock   # → roms/timex/spectrum-dock.dck
+```
+
+Or by hand (HOME replace from fetched `roms/spec48.rom`):
+
+```bash
+{ printf '\xff\x02\x02\x00\x00\x00\x00\x00\x00'; head -c 16384 roms/spec48.rom; } > spectrum-home.dck
 ```
 
 With a HOME Spectrum cart inserted, Timex `PROG` / absolute `USR` titles that expect
 Spectrum ROM layout (e.g. **3D Deathchase**) can run on TS2068 the same way a real
 Spectrum ROM cartridge would. Stock Timex without a cart still needs **TC2048** / **48K**
 for those titles.
+
+Automated coverage (ROMs present; Death Chase TZX optional):
+
+| Test | Gate |
+| --- | --- |
+| `ts2068_home_spectrum_dck_boots_spectrum_prog` | fetched Timex + `spec48.rom` |
+| `deathchase_ear_loads_on_ts2068_with_home_spectrum_dck` | + `SPEC_CHUM_DEATHCHASE_TZX` |
 
 ## Known limitations
 
