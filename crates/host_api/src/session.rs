@@ -238,6 +238,7 @@ impl HostSession {
 
     /// Install a booted machine into this session.
     pub fn set_machine(&mut self, machine: Machine) {
+        self.model = ModelId::from_model(machine.model());
         self.machine = Some(machine);
         self.reapply_host_keys();
         self.last_speaker_level = false;
@@ -246,6 +247,7 @@ impl HostSession {
     /// Drop the live machine (model selection retained).
     pub fn clear_machine(&mut self) {
         self.machine = None;
+        self.audio_pcm.clear();
         self.last_speaker_level = false;
     }
 
