@@ -767,6 +767,36 @@ impl HostSession {
         Ok(())
     }
 
+    /// Insert a Timex `.dck` dock cartridge (TS2068 only). Soft-resets the machine.
+    pub fn insert_dck(&mut self, path: &Path) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let data = std::fs::read(path)?;
+        let image =
+            formats::DckImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
+        m.insert_timex_dock(&image)
+            .map_err(|e| HostError::Message(e.to_string()))?;
+        self.status = format!("Inserted DCK {}", path.display());
+        Ok(())
+    }
+
+    /// Eject Timex dock cartridge (TS2068 only). Soft-resets the machine.
+    pub fn eject_dck(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.eject_timex_dock()
+            .map_err(|e| HostError::Message(e.to_string()))?;
+        self.status = "Ejected Timex dock".into();
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn has_timex_dock(&self) -> bool {
+        self.machine.as_ref().is_some_and(Machine::has_timex_dock)
+    }
+
     #[must_use]
     pub fn has_interface1(&self) -> bool {
         self.machine.as_ref().is_some_and(Machine::has_interface1)

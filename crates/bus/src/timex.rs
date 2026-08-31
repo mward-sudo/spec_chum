@@ -4,9 +4,10 @@
 //! can configure display modes; extended 512×192 rendering is follow-up work.
 //!
 //! Phase 2a (TS2068 / TC2068): horizontal MMU uses those latches — bit 7 of
-//! port 0xFF selects EX-ROM vs empty DOCK; port 0xF4 selects which 8K chunks
+//! port 0xFF selects EX-ROM vs DOCK; port 0xF4 selects which 8K chunks
 //! are overlaid on the home bank. AY ports F5/F6 plus R14 Timex joysticks
-//! (Fuse-compatible bit layout).
+//! (Fuse-compatible bit layout). Dock cartridges: Warajevo `.dck` via
+//! [`crate::TimexDock`].
 
 /// Size of the Timex TS2068 / TC2068 EX-ROM bank (chunk 0').
 pub const TIMEX_EXROM_SIZE: usize = 8192;

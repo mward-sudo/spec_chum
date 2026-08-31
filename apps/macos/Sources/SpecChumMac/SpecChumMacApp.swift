@@ -190,6 +190,15 @@ struct SpecChumMacApp: App {
                 }
                 .disabled(!host.model.supportsBeta)
                 Divider()
+                Button("Insert Timex Dock DCK…") {
+                    openDck()
+                }
+                .disabled(!host.model.supportsTimexDock)
+                Button("Eject Timex Dock") {
+                    host.ejectDck()
+                }
+                .disabled(!host.model.supportsTimexDock || !host.hasTimexDock)
+                Divider()
                 Button("Attach DivMMC") {
                     host.attachDivmmc()
                 }
@@ -406,6 +415,19 @@ struct SpecChumMacApp: App {
         panel.title = "Open Microdrive MDR"
         if panel.runModal() == .OK, let url = panel.url {
             host.insertMdr(at: url)
+        }
+    }
+
+    private func openDck() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "dck") ?? .data,
+        ]
+        panel.title = "Insert Timex Dock DCK"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.insertDck(at: url)
         }
     }
 }

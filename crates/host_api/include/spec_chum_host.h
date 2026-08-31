@@ -114,6 +114,10 @@ int sc_has_divmmc(void *handle);
 int sc_attach_interface1(void *handle);
 int sc_load_interface1_rom(void *handle, const char *path);
 int sc_insert_mdr(void *handle, const char *path);
+/* Timex TS2068 dock cartridge (.dck). Soft-resets on insert/eject. */
+int sc_insert_dck(void *handle, const char *path);
+int sc_eject_dck(void *handle);
+int sc_has_timex_dock(void *handle);
 /* Returns 1 if Interface 1 is attached, 0 if absent or handle is null. */
 int sc_has_interface1(void *handle);
 

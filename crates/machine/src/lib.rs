@@ -1447,6 +1447,41 @@ impl Machine {
         }
     }
 
+    /// Insert a Timex `.dck` dock cartridge (TS2068 / TC2068 only). Soft-resets the machine.
+    pub fn insert_timex_dock(
+        &mut self,
+        image: &formats::DckImage,
+    ) -> Result<(), bus::TimexDockError> {
+        match self {
+            Self::Spec48 { bus, .. } if bus.timex_2068 => {
+                bus.insert_timex_dock(image)?;
+            }
+            _ => return Err(bus::TimexDockError::UnsupportedModel),
+        }
+        self.reset();
+        Ok(())
+    }
+
+    /// Eject Timex dock cartridge and soft-reset the machine (keep Timex ROMs).
+    pub fn eject_timex_dock(&mut self) -> Result<(), bus::TimexDockError> {
+        match self {
+            Self::Spec48 { bus, .. } if bus.timex_2068 => {
+                bus.eject_timex_dock();
+            }
+            _ => return Err(bus::TimexDockError::UnsupportedModel),
+        }
+        self.reset();
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn has_timex_dock(&self) -> bool {
+        match self {
+            Self::Spec48 { bus, .. } => bus.has_timex_dock(),
+            _ => false,
+        }
+    }
+
     /// Load an 8 KiB Interface 1 ROM into the attached peripheral (creates IF1 if needed).
     pub fn load_interface1_rom(&mut self, data: &[u8]) -> Result<(), Interface1Error> {
         let if1 = self.attach_interface1()?;
@@ -4598,6 +4633,38 @@ mod tests {
         } else {
             panic!("expected Spec48 bus for TS2068");
         }
+    }
+
+    #[test]
+    fn timex_ts2068_home_dck_replaces_rom_with_spectrum() {
+        let Some((home, exrom)) = rom_timex_ts2068() else {
+            eprintln!("skip: roms/timex/tc2068-*.rom missing");
+            return;
+        };
+        let Some(spec) = resolve_rom_path(Model::Spectrum48).and_then(|p| std::fs::read(p).ok())
+        else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut rom16 = [0u8; 16384];
+        rom16.copy_from_slice(&spec[..16384]);
+        let dck = formats::DckImage::spectrum_rom_home(&rom16);
+        let mut m = Machine::new_timex_ts2068(&home, &exrom).unwrap();
+        assert_ne!(
+            m.read_mem(0x0556),
+            rom16[0x0556],
+            "precondition: Timex LD-BYTES site ≠ Spectrum"
+        );
+        m.insert_timex_dock(&dck).unwrap();
+        assert!(m.has_timex_dock());
+        assert_eq!(m.read_mem(0x0000), rom16[0]);
+        assert_eq!(m.read_mem(0x0001), rom16[1]);
+        // Spectrum LD-BYTES entry lives at $0556 in the home ROM overlay.
+        assert_eq!(m.read_mem(0x0556), rom16[0x0556]);
+        assert_eq!(m.read_mem(0x0557), rom16[0x0557]);
+        m.eject_timex_dock().unwrap();
+        assert!(!m.has_timex_dock());
+        assert_eq!(m.read_mem(0x0556), home[0x0556]);
     }
 
     #[test]

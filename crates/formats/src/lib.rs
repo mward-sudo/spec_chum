@@ -1,13 +1,15 @@
-//! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK.
+//! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK, Timex DCK.
 
 #![allow(clippy::pedantic)]
 
+mod dck;
 mod dsk;
 mod fdc;
 mod mdr;
 mod rzx;
 mod trd;
 
+pub use dck::{DckBank, DckBankId, DckChunkAccess, DckImage, DCK_CHUNK_SIZE, DCK_HEADER_SIZE};
 pub use dsk::{DskImage, Sector};
 pub use fdc::Plus3Fdc;
 pub use mdr::{MdrImage, MDR_DATA_LEN, MDR_HEAD_LEN, MDR_IMAGE_SIZE, MDR_SECTORS, MDR_SECTOR_SIZE};

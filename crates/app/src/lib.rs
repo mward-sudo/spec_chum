@@ -718,6 +718,38 @@ impl EmulatorSession {
         }
     }
 
+    pub fn insert_dck(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(data) => match formats::DckImage::parse(&data) {
+                Ok(image) => {
+                    if let Some(m) = self.machine.as_mut() {
+                        match m.insert_timex_dock(&image) {
+                            Ok(()) => {
+                                self.status = format!("Inserted DCK {}", path.display());
+                            }
+                            Err(e) => self.status = e.to_string(),
+                        }
+                    } else {
+                        self.status = "Load a machine ROM first".into();
+                    }
+                }
+                Err(e) => self.status = format!("DCK error: {e}"),
+            },
+            Err(e) => self.status = format!("DCK error: {e}"),
+        }
+    }
+
+    pub fn eject_dck(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            match m.eject_timex_dock() {
+                Ok(()) => self.status = "Ejected Timex dock".into(),
+                Err(e) => self.status = e.to_string(),
+            }
+        } else {
+            self.status = "Load a machine ROM first".into();
+        }
+    }
+
     pub fn attach_beta_stub(&mut self) {
         if let Some(m) = self.machine.as_mut() {
             match m.attach_beta() {
@@ -1905,6 +1937,11 @@ impl SpecChumApp {
                             .as_ref()
                             .is_some_and(Machine::has_interface1);
                         let has_beta = self.session.machine.as_ref().is_some_and(Machine::has_beta);
+                        let has_dock = self
+                            .session
+                            .machine
+                            .as_ref()
+                            .is_some_and(Machine::has_timex_dock);
 
                         ui.label("Peripherals (partial where noted)");
                         ui.separator();
@@ -1931,6 +1968,31 @@ impl SpecChumApp {
                             }
                         } else {
                             ui.label("Multiface 1: 48K / 16K only");
+                        }
+
+                        if model == Model::TimexTS2068 {
+                            ui.separator();
+                            if ui.button("Insert Timex Dock DCK…").clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("Timex dock", &["dck"])
+                                    .pick_file()
+                                {
+                                    self.session.insert_dck(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(has_dock, egui::Button::new("Eject Timex Dock"))
+                                .clicked()
+                            {
+                                self.session.eject_dck();
+                                ui.close_menu();
+                            }
+                            ui.label(if has_dock {
+                                "Dock: cartridge inserted (HOME/DOCK/EX-ROM banks from .dck)"
+                            } else {
+                                "Dock: empty (reads 0xFF when paged)"
+                            });
                         }
 
                         ui.separator();
