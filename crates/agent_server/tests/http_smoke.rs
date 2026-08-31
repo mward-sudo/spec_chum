@@ -639,7 +639,7 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
     assert_eq!(hw["has_interface1"], false);
 
     let dir = std::env::temp_dir().join("spec_chum_agent_api_hw");
-    let _ = std::fs::create_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create hw fixture dir");
     let mf = dir.join("mf1.rom");
     std::fs::write(&mf, vec![0u8; 8 * 1024]).expect("mf rom");
 
