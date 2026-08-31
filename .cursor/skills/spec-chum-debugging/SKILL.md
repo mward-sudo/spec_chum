@@ -25,7 +25,12 @@ Project debugger workflow for agents. Full detail: [`docs/DEBUGGING.md`](../../.
 | Native SwiftUI / C host | **`host_api`** `sc_debug_*` / `sc_inspect_json` (**FFI-only** — not agent primary) |
 | macOS shell (limited inspector) | `./scripts/run_macos_app.sh` + same env; prefer CLI/HTTP for deep steps |
 
-Each `spec-chum-debug` invocation is a **new process** (fresh machine + empty trace ring). Put `--trace`, `--tap`/`--tzx`, `--snapshot`, and the subcommand on the **same** command.
+Each **local** `spec-chum-debug` invocation (no `SPEC_CHUM_AGENT_URL`) is a **new
+process** (fresh machine + empty trace ring). Put `--trace`, `--tap`/`--tzx`,
+`--snapshot`, and the subcommand on the **same** command. When
+`SPEC_CHUM_AGENT_URL` / `--agent-url` is set, the **HTTP server** owns the
+persistent machine and trace ring — resets use `POST /v1/reset` (or restart the
+server), not a new CLI process.
 
 ## Agent Debug API (unified control plane)
 

@@ -64,9 +64,11 @@ automation, run a **standalone** loopback server (no in-process embed yet —
 
 ```bash
 ./scripts/fetch_roms.sh
-cargo run -p agent_server --release -- --model 48k --insecure
-# or: cargo run -p debug_cli --release -- --serve --model 48k --insecure
-curl -sS http://127.0.0.1:17384/v1/health
+export SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)"
+cargo run -p agent_server --release -- --model 48k --token "$SPEC_CHUM_AGENT_TOKEN"
+# or: cargo run -p debug_cli --release -- --serve --model 48k --token "$SPEC_CHUM_AGENT_TOKEN"
+curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" http://127.0.0.1:17384/v1/health
+# Dev-only: --insecure / SPEC_CHUM_AGENT_INSECURE=1 skips the token (trusted machines only).
 ```
 
 Prefer HTTP over GUI automation or driving the SwiftUI shell. See
