@@ -296,9 +296,7 @@ impl EmulatorSession {
         let roots = vec![Self::workspace_root()];
         let applied = apply_user_config(config, &roots)?;
         self.set_model(applied.model);
-        self.host_mut()
-            .set_joystick_mode(applied.joystick_mode)
-            .ok();
+        self.host_mut().set_joystick_mode(applied.joystick_mode);
         self.kempston_mouse = applied.kempston_mouse;
         self.host_mut().set_machine(applied.machine);
         self.host_mut().set_status(applied.status);
@@ -1141,8 +1139,7 @@ impl SpecChumApp {
         session.volume = prefs.volume;
         session
             .host_mut()
-            .set_joystick_mode(prefs.joystick_mode.to_mode())
-            .ok();
+            .set_joystick_mode(prefs.joystick_mode.to_mode());
         session.kempston_mouse = prefs.kempston_mouse;
         if let Some(cfg) = prefs.active_custom_config().cloned() {
             match session.apply_user_machine_config(&cfg) {
@@ -1150,8 +1147,7 @@ impl SpecChumApp {
                     prefs.sync_machine_fields_from_config(&cfg);
                     session
                         .host_mut()
-                        .set_joystick_mode(cfg.joystick_mode.to_mode())
-                        .ok();
+                        .set_joystick_mode(cfg.joystick_mode.to_mode());
                     session.kempston_mouse = cfg.kempston_mouse;
                 }
                 Err(e) => {
@@ -1764,8 +1760,7 @@ impl SpecChumApp {
                                 self.sync_prefs_from_custom_config(&to_save);
                                 self.session
                                     .host_mut()
-                                    .set_joystick_mode(to_save.joystick_mode.to_mode())
-                                    .ok();
+                                    .set_joystick_mode(to_save.joystick_mode.to_mode());
                                 self.session.kempston_mouse = to_save.kempston_mouse;
                                 self.apply_restored_machine_options();
                                 self.mark_prefs_dirty();
@@ -1962,7 +1957,7 @@ impl SpecChumApp {
                                         match self.session.apply_user_machine_config(&active) {
                                             Ok(()) => {
                                                 self.sync_prefs_from_custom_config(&active);
-                                                self.session.host_mut().set_joystick_mode(active.joystick_mode.to_mode()).ok();
+                                                self.session.host_mut().set_joystick_mode(active.joystick_mode.to_mode());
                                                 self.session.kempston_mouse = active.kempston_mouse;
                                                 self.apply_restored_machine_options();
                                                 self.mark_prefs_dirty();
@@ -2022,8 +2017,17 @@ impl SpecChumApp {
                         }
                         ui.separator();
                         ui.label("Session");
-                        if ui.button("Reset").clicked() {
-                            let _ = self.session.host_mut().reset();
+                        if ui
+                            .add_enabled(
+                                self.session.host_mut().has_machine(),
+                                egui::Button::new("Reset"),
+                            )
+                            .clicked()
+                        {
+                            let reset_err = self.session.host_mut().reset().err();
+                            if let Some(e) = reset_err {
+                                self.session.host_mut().set_status(e.to_string());
+                            }
                             ui.close_menu();
                         }
                         {
@@ -2064,7 +2068,7 @@ impl SpecChumApp {
                                 .radio_value(&mut joy, JoystickMode::Cursor, "Cursor")
                                 .changed();
                             if joy_changed {
-                                let _ = self.session.host_mut().set_joystick_mode(joy);
+                                self.session.host_mut().set_joystick_mode(joy);
                                 self.mark_prefs_dirty();
                             }
                         }
@@ -2872,10 +2876,7 @@ mod tests {
         }
         let mut keys = std::collections::HashSet::new();
         keys.insert(egui::Key::ArrowLeft);
-        session
-            .host_mut()
-            .set_joystick_mode(JoystickMode::Kempston)
-            .ok();
+        session.host_mut().set_joystick_mode(JoystickMode::Kempston);
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         assert!(
             session
@@ -2886,10 +2887,7 @@ mod tests {
                 .left
         );
 
-        session
-            .host_mut()
-            .set_joystick_mode(JoystickMode::Cursor)
-            .ok();
+        session.host_mut().set_joystick_mode(JoystickMode::Cursor);
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let host = &mut *session.host_mut();
         let m = host.machine_mut().unwrap();
@@ -2910,8 +2908,7 @@ mod tests {
         keys.insert(egui::Key::Num1);
         session
             .host_mut()
-            .set_joystick_mode(JoystickMode::SinclairLeft)
-            .ok();
+            .set_joystick_mode(JoystickMode::SinclairLeft);
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let host = &mut *session.host_mut();
         let rows = host.machine_mut().unwrap().keyboard_mut().rows;
@@ -2928,10 +2925,7 @@ mod tests {
         }
         let mut keys = std::collections::HashSet::new();
         keys.insert(egui::Key::Num5);
-        session
-            .host_mut()
-            .set_joystick_mode(JoystickMode::Cursor)
-            .ok();
+        session.host_mut().set_joystick_mode(JoystickMode::Cursor);
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let host = &mut *session.host_mut();
         let rows = host.machine_mut().unwrap().keyboard_mut().rows;

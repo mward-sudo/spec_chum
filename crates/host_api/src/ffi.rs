@@ -761,13 +761,8 @@ pub extern "C" fn sc_set_joystick_mode(handle: *mut c_void, mode: c_uint) -> c_i
         set_last_error("invalid joystick mode");
         return -1;
     };
-    match s.set_joystick_mode(mode) {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(e.to_string());
-            -1
-        }
-    }
+    s.set_joystick_mode(mode);
+    0
 }
 
 #[no_mangle]

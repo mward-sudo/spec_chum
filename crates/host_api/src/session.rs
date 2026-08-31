@@ -638,12 +638,11 @@ impl HostSession {
 
     /// Set joystick presentation mode. Recomposes input when a machine is loaded;
     /// otherwise stores the preference for the next boot (egui prefs / pre-ROM).
-    pub fn set_joystick_mode(&mut self, mode: JoystickMode) -> Result<(), HostError> {
+    pub fn set_joystick_mode(&mut self, mode: JoystickMode) {
         self.joystick_mode = mode;
         if let Some(m) = self.machine.as_mut() {
             Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
         }
-        Ok(())
     }
 
     pub fn set_joystick(&mut self, mask: u8) -> Result<(), HostError> {
@@ -1515,7 +1514,7 @@ mod tests {
         };
         let mut s = HostSession::new(ModelId::Spectrum48, false);
         s.load_rom_bytes(&rom).expect("rom");
-        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick_mode(JoystickMode::Kempston);
         s.set_joystick(0x11).unwrap();
         assert_eq!(s.machine.as_mut().unwrap().kempston_mut().read(), 0x11);
         s.clear_joystick().unwrap();
@@ -1530,7 +1529,7 @@ mod tests {
         };
         let mut s = HostSession::new(ModelId::Spectrum48, false);
         s.load_rom_bytes(&rom).expect("rom");
-        s.set_joystick_mode(JoystickMode::SinclairLeft).unwrap();
+        s.set_joystick_mode(JoystickMode::SinclairLeft);
         // Num1 = row 3 bit 0 (also Sinclair-left left).
         s.set_key(3, 0, true).unwrap();
         s.set_joystick(0).unwrap(); // would clear Sinclair matrix without reapply
@@ -1546,7 +1545,7 @@ mod tests {
         };
         let mut s = HostSession::new(ModelId::Spectrum48, false);
         s.load_rom_bytes(&rom).expect("rom");
-        s.set_joystick_mode(JoystickMode::Cursor).unwrap();
+        s.set_joystick_mode(JoystickMode::Cursor);
         // Num5 = row 3 bit 4 (also Cursor left).
         s.set_key(3, 4, true).unwrap();
         s.set_joystick(0).unwrap();
@@ -1562,7 +1561,7 @@ mod tests {
         };
         let mut s = HostSession::new(ModelId::Spectrum48, false);
         s.load_rom_bytes(&rom).expect("rom");
-        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick_mode(JoystickMode::Kempston);
         s.set_joystick(0x02).unwrap(); // left
         let m = s.machine.as_mut().unwrap();
         assert!(m.kempston_mut().left);
@@ -1587,7 +1586,7 @@ mod tests {
         };
         let mut s = HostSession::new(ModelId::Spectrum48, false);
         s.load_rom_bytes(&rom).expect("rom");
-        s.set_joystick_mode(JoystickMode::Cursor).unwrap();
+        s.set_joystick_mode(JoystickMode::Cursor);
         s.set_joystick(0x02).unwrap(); // left
         let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
         assert_eq!(rows[0] & 1, 0, "Caps down for Cursor left");
@@ -1842,7 +1841,7 @@ mod tests {
             return;
         }
         assert_eq!(s.model(), ModelId::Spectrum128);
-        s.set_joystick_mode(JoystickMode::Kempston).unwrap();
+        s.set_joystick_mode(JoystickMode::Kempston);
         s.set_joystick(0x11).unwrap();
         let path = std::env::temp_dir().join("spec_chum_host_api_128_to_48.sna");
         std::fs::write(&path, synthetic_sna48_bytes()).expect("write sna");
