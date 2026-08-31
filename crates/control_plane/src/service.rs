@@ -18,6 +18,8 @@ pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub token: Option<String>,
+    /// Allow unauthenticated mutations when no token is configured (dev only).
+    pub insecure: bool,
 }
 
 impl ServerConfig {
@@ -30,10 +32,14 @@ impl ServerConfig {
         let token = std::env::var("SPEC_CHUM_AGENT_TOKEN")
             .ok()
             .filter(|s| !s.is_empty());
+        let insecure = std::env::var("SPEC_CHUM_AGENT_INSECURE")
+            .ok()
+            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
         Self {
             host: "127.0.0.1".into(),
             port,
             token,
+            insecure,
         }
     }
 
@@ -48,6 +54,18 @@ impl ServerConfig {
             other => Err(ApiError::BadRequest(format!(
                 "refusing non-loopback bind address: {other}"
             ))),
+        }
+    }
+
+    /// Refuse startup without a token unless explicit insecure opt-in (#210).
+    pub fn validate_auth_config(&self) -> ApiResult<()> {
+        if self.token.is_none() && !self.insecure {
+            Err(ApiError::Message(
+                "refusing to start agent server without SPEC_CHUM_AGENT_TOKEN;                  set SPEC_CHUM_AGENT_INSECURE=1 or pass --insecure only on trusted dev machines"
+                    .into(),
+            ))
+        } else {
+            Ok(())
         }
     }
 }
@@ -517,5 +535,27 @@ mod tests {
     fn server_config_rejects_public_bind() {
         assert!(ServerConfig::validate_bind_host("0.0.0.0").is_err());
         assert!(ServerConfig::validate_bind_host("127.0.0.1").is_ok());
+    }
+
+    #[test]
+    fn server_config_requires_token_or_insecure() {
+        let no_token = ServerConfig {
+            host: "127.0.0.1".into(),
+            port: 17_384,
+            token: None,
+            insecure: false,
+        };
+        assert!(no_token.validate_auth_config().is_err());
+        let insecure = ServerConfig {
+            insecure: true,
+            ..no_token.clone()
+        };
+        assert!(insecure.validate_auth_config().is_ok());
+        let with_token = ServerConfig {
+            token: Some("secret".into()),
+            insecure: false,
+            ..no_token
+        };
+        assert!(with_token.validate_auth_config().is_ok());
     }
 }
