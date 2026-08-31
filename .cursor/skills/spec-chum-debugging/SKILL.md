@@ -39,9 +39,9 @@ server), not a new CLI process.
 > Tracker: [#210](https://github.com/mward-sudo/spec_chum/issues/210).
 > Phase C docs: C ABI = FFI-only; HTTP/`control_plane` = primary for agents.
 
-**Unification goal:** one shared Rust backend (`control_plane`) serves HTTP;
-`spec-chum-debug --serve` / `spec-chum-agent` ship today; egui Debug / SpecChumMac
-live-session unification remains [#221](https://github.com/mward-sudo/spec_chum/issues/221).
+**Unification goal:** one shared Rust backend (`control_plane`) serves HTTP and
+egui Debug / embedded `SPEC_CHUM_AGENT=1`. SpecChumMac in-process remains
+[#221](https://github.com/mward-sudo/spec_chum/issues/221) deferred (cycle-safe).
 
 ### Start server
 
@@ -61,16 +61,26 @@ cargo build -p agent_server --release
 
 ### Embedded agent in egui (Phase B)
 
-`SPEC_CHUM_AGENT=1` in egui was **removed** (#221) — it used to start a parallel
-debug session. Prefer:
+`SPEC_CHUM_AGENT=1` starts loopback HTTP on the **same** live session as the egui
+Debug panel (`ControlPlane::from_shared` + `spawn_from_env_with_plane`).
+
+```bash
+export SPEC_CHUM_AGENT=1
+export SPEC_CHUM_AGENT_INSECURE=1   # or SPEC_CHUM_AGENT_TOKEN=…
+cargo run -p app --release
+# curl inspect PC matches the running GUI machine
+curl -sS http://127.0.0.1:17384/v1/inspect | jq '.regs.pc'
+```
+
+Standalone server (no GUI) remains:
 
 ```bash
 cargo run -p agent_server --release -- --model 48k
 # or: spec-chum-debug --serve --model 48k
 ```
 
-egui **Debug** uses `HostSession` (same type as `control_plane`). In-process HTTP
-share while the GUI runs remains a follow-up on #221.
+egui **Debug** and embedded HTTP share one `HostSession` behind `Arc` (#221).
+SpecChumMac in-process embed stays deferred (cycle-safe constraint).
 
 ### HTTP client (Phase B)
 

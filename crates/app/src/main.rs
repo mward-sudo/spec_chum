@@ -6,15 +6,9 @@ use spec_chum_host::{default_prefs_path, load_prefs, MIN_WINDOW_HEIGHT, MIN_WIND
 
 fn main() -> eframe::Result {
     trace::init_from_env();
-    // egui Debug uses HostSession (same type as control_plane). Parallel
-    // SPEC_CHUM_AGENT=1 embed was removed (#221) — use standalone
-    // `spec-chum-agent` / `spec-chum-debug --serve` for HTTP agents.
-    if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() == Some("1") {
-        eprintln!(
-            "SPEC_CHUM_AGENT=1 is no longer supported in egui (dual-session removed; #221). \
-             Start standalone: cargo run -p agent_server --release"
-        );
-    }
+    // When SPEC_CHUM_AGENT=1, SpecChumApp embeds loopback HTTP on the same
+    // Arc<ControlPlane> / HostSession as the GUI Debug panel (#221).
+    // Requires SPEC_CHUM_AGENT_TOKEN or SPEC_CHUM_AGENT_INSECURE=1.
     let prefs = load_prefs(&default_prefs_path());
     let width = prefs.window_width.max(MIN_WINDOW_WIDTH);
     let height = prefs.window_height.max(MIN_WINDOW_HEIGHT);

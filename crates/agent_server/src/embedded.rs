@@ -60,8 +60,8 @@ pub fn spawn(config: ServerConfig, plane: Arc<ControlPlane>) -> Result<EmbeddedS
 /// When `SPEC_CHUM_AGENT=1`, start an embedded loopback server on the **shared**
 /// live [`ControlPlane`] (same machine as the host — #221).
 ///
-/// egui no longer auto-spawns this (dual-session removed); call from a host that
-/// already owns the plane, or use standalone `spec-chum-agent`.
+/// egui builds `ControlPlane::from_shared(session.shared_host())` then calls this
+/// so HTTP and the Debug panel share one live session.
 pub fn spawn_from_env_with_plane(plane: Arc<ControlPlane>) -> Result<Option<EmbeddedServer>> {
     if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() != Some("1") {
         return Ok(None);
