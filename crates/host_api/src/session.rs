@@ -1004,8 +1004,11 @@ impl HostSession {
         }
         let mut last = machine::BreakReason::None;
         for _ in 0..frames {
-            if self.machine.as_ref().is_some_and(|m| m.debugger().paused) {
-                break;
+            if let Some(m) = self.machine.as_ref() {
+                if m.debugger().paused {
+                    last = m.debugger().last_hit;
+                    break;
+                }
             }
             self.run_frame();
             if let Some(m) = self.machine.as_ref() {

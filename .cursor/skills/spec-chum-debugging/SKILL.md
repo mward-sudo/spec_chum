@@ -5,8 +5,8 @@ description: >-
   breakpoints, watches, disasm, tape load (flash vs EAR), and SPEC_CHUM_*
   trace categories. Use when debugging the emulator, tape load failures,
   LD-BYTES, EAR polarity, flash-load, type-load, inspect dumps, Fuse/z80test
-  mismatches, host_api sc_debug_*, egui Debug window, or the planned Agent
-  Debug HTTP API (localhost control plane).
+  mismatches, host_api sc_debug_*, egui Debug window, or the Agent Debug HTTP
+  API (localhost control plane, Phase A implemented).
 ---
 
 # Spec Chum debugging
@@ -240,7 +240,7 @@ JSON: `--json dump-state` or `type-load --json` wraps `inspect` + `load_ok`.
 
 ## Deeper reference
 
-- [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md) — planned localhost control plane, framebuffer export, unification
+- [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md) — Phase A localhost control plane (implemented), framebuffer export, unification roadmap
 - [`docs/DEBUGGING.md`](../../../docs/DEBUGGING.md) — categories, flash-load event table, harness recipes, hot-path cost
 - [`tests/fixtures/tape/README.md`](../../../tests/fixtures/tape/README.md) — fixtures + load matrix
 - `crates/debug_cli/src/main.rs` — authoritative CLI flags

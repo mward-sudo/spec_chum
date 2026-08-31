@@ -180,6 +180,9 @@ fn run_serve(cli: &Cli) -> Result<()> {
 }
 
 fn run_remote(cli: &Cli, client: &AgentClient) -> Result<()> {
+    if cli.rom.is_some() || cli.snapshot.is_some() {
+        bail!("remote agent client does not support --rom or --snapshot yet");
+    }
     if let Some(list) = &cli.trace {
         client.set_trace_categories(list)?;
     }

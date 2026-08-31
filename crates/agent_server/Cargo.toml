@@ -29,10 +29,11 @@ anyhow = { workspace = true }
 
 [dev-dependencies]
 tape = { workspace = true }
-ureq = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
+tower = { workspace = true }
+machine = { workspace = true }
 
 [lints]
 workspace = true
