@@ -691,6 +691,80 @@ impl ControlPlane {
         })
     }
 
+    pub fn attach_multiface(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.attach_multiface(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn multiface_nmi(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.multiface_nmi()?;
+            Ok(())
+        })
+    }
+
+    pub fn attach_interface1(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.attach_interface1()?;
+            Ok(())
+        })
+    }
+
+    pub fn load_interface1_rom(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_interface1_rom(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn insert_mdr(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.insert_mdr(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn attach_divmmc(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.attach_divmmc()?;
+            Ok(())
+        })
+    }
+
+    pub fn load_divmmc_sd(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_divmmc_sd(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn load_divmmc_eeprom(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_divmmc_eeprom(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn load_trdos_rom(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_trdos_rom(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn hardware_status(&self) -> ApiResult<HardwareStatusResponse> {
+        self.with_session_ref(|s| {
+            Ok(HardwareStatusResponse {
+                has_multiface: s.has_multiface(),
+                has_interface1: s.has_interface1(),
+                has_divmmc: s.has_divmmc(),
+                has_timex_dock: s.has_timex_dock(),
+            })
+        })
+    }
+
     pub fn status(&self) -> ApiResult<StatusResponse> {
         self.with_session_ref(|s| {
             Ok(StatusResponse {
@@ -797,6 +871,14 @@ pub struct StatusResponse {
     pub status: String,
     pub tape_playing: bool,
     pub has_tape: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct HardwareStatusResponse {
+    pub has_multiface: bool,
+    pub has_interface1: bool,
+    pub has_divmmc: bool,
+    pub has_timex_dock: bool,
 }
 
 #[cfg(test)]

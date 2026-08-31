@@ -1,6 +1,6 @@
 # Agent debug control plane (proposed)
 
-> **Status:** Phases A–G partially landed — loopback HTTP API on `127.0.0.1:17384`
+> **Status:** Phases A–H partially landed — loopback HTTP API on `127.0.0.1:17384`
 > (default). Track remaining work in
 > [#210](https://github.com/mward-sudo/spec_chum/issues/210) and
 > [`.cursor/skills/spec-chum-debugging/SKILL.md`](../.cursor/skills/spec-chum-debugging/SKILL.md).
@@ -9,6 +9,10 @@
 > `GET`/`PATCH /v1/prefs` (session-scoped), `POST /v1/mouse`, `POST /v1/tape/eject`,
 > `POST /v1/continue`. Living-room display toggle deferred (not in `UiPreferences`).
 > Prefs are **not** written to `ui-prefs.json` from the agent server.
+>
+> **Phase H ([#220](https://github.com/mward-sudo/spec_chum/issues/220)):**
+> `/v1/hardware/*` Multiface / DivMMC / IF1 / MDR / TR-DOS ROM attach over HTTP
+> (wraps existing `HostSession` APIs). Accuracy follow-ups remain on #137–#140.
 
 ## Motivation
 
@@ -157,7 +161,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | ROM | `POST /v1/rom` — load ROM image from host filesystem path |
 | Media | `POST /v1/snapshot`, `/rzx`, `/dsk`, `/trd`, … |
 | Input | `POST /v1/keys` matrix press/release; `POST /v1/joystick`; `POST /v1/mouse` Kempston delta/buttons |
-| Hardware | Multiface, DivMMC, Interface 1, Timex `.dck` dock insert/eject, Beta/TR-DOS ROM attach |
+| Hardware | `GET /v1/hardware` — attach flags; `POST /v1/hardware/multiface` (+ `/nmi`); `POST /v1/hardware/interface1` (+ `/rom`, `/v1/hardware/mdr`); `POST /v1/hardware/divmmc` (+ `/sd`, `/eeprom`); `POST /v1/hardware/trdos/rom`; Timex `.dck` via `/v1/timex/dock` |
 | Host prefs | `GET` / `PATCH /v1/prefs` — volume, mute, joystick mode, tape defaults, throttle, Kempston mouse enable (session-scoped in agent server; living-room display toggle deferred) |
 | Border | `POST /v1/border` — `with_border` flag (changes framebuffer dims) |
 
@@ -208,6 +212,24 @@ Remaining control/inspect/debug rows land in later phases on [#210](https://gith
 | `POST /v1/continue` | `continue_from_pc` after a debugger stop; JSON `{ "reason", "paused" }` |
 
 Living-room display toggle is **deferred** (not modeled in shared prefs yet).
+
+### Phase H — peripherals HTTP attach
+
+| Route | Notes |
+| --- | --- |
+| `GET /v1/hardware` | `{ has_multiface, has_interface1, has_divmmc, has_timex_dock }` |
+| `POST /v1/hardware/multiface` | Body `{ "path" }` — 8 KiB Multiface 1 ROM (48K only); Refs [#137](https://github.com/mward-sudo/spec_chum/issues/137) |
+| `POST /v1/hardware/multiface/nmi` | Red-button NMI when attached |
+| `POST /v1/hardware/interface1` | Attach IF1 (loads `roms/if1*.rom` if present); Refs [#139](https://github.com/mward-sudo/spec_chum/issues/139) |
+| `POST /v1/hardware/interface1/rom` | Body `{ "path" }` — explicit IF1 ROM |
+| `POST /v1/hardware/mdr` | Body `{ "path" }` — Microdrive cartridge (attaches IF1) |
+| `POST /v1/hardware/divmmc` | Attach DivMMC (no media); Refs [#138](https://github.com/mward-sudo/spec_chum/issues/138) |
+| `POST /v1/hardware/divmmc/sd` | Body `{ "path" }` — flat SD image |
+| `POST /v1/hardware/divmmc/eeprom` | Body `{ "path" }` — ESXDOS EEPROM |
+| `POST /v1/hardware/trdos/rom` | Body `{ "path" }` — 16 KiB TR-DOS ROM / Beta attach; Refs [#140](https://github.com/mward-sudo/spec_chum/issues/140). Disk images remain `POST /v1/trd` |
+| `POST`/`DELETE /v1/timex/dock` | Unchanged Timex `.dck` insert/eject |
+
+HTTP wraps real `HostSession` attach APIs — model/ROM errors surface as structured API errors (no fake success).
 
 ### `POST /v1/run` budget semantics
 
