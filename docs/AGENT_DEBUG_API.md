@@ -68,16 +68,44 @@ All debugging / control / inspect paths **converge** on one backend:
 | **B — clients adapt** | `spec-chum-debug` talks HTTP when `SPEC_CHUM_AGENT_URL` set; egui embeds parallel server when `SPEC_CHUM_AGENT=1`; integration tests hit HTTP |
 | **C — dedupe** | Deprecate duplicate direct `host_api` debug/control paths where safe; document remaining C ABI as FFI-only for non-Rust shells |
 
-**Phase C (in progress):** `spec-chum-debug` local commands now route through
+**Phase C (docs complete — [#222](https://github.com/mward-sudo/spec_chum/issues/222)):**
+`spec-chum-debug` local commands route through
 [`HostSession`](../crates/host_api/src/session.rs) — the same type wrapped by
 `control_plane::ControlPlane` and the agent HTTP server. The one-shot CLI no longer
-constructs a parallel `machine::Machine` path. C ABI `sc_debug_*` / `sc_inspect_json`
-remain thin FFI wrappers over `HostSession` and the global `trace` ring (no
-`host_api` ↔ `control_plane` cycle). Remaining dedupe targets: egui Debug panel,
-SpecChumMac inspector, and optional in-process `ControlPlane` handle for GUI hosts.
+constructs a parallel `machine::Machine` path.
 
-Phase A is mergeable without breaking current workflows. Phases B/C are explicit
-follow-ups in the tracker issue.
+**Primary surfaces (prefer these):**
+
+| Consumer | Surface |
+| --- | --- |
+| Agents / automation | Loopback HTTP (`control_plane` + `agent_server`) |
+| Rust CLI | `spec-chum-debug` → `HostSession` locally, or HTTP client when `SPEC_CHUM_AGENT_URL` set |
+| Rust library hosts | `control_plane::ControlPlane` / `HostSession` (no C ABI) |
+
+**C ABI = FFI-only:** `sc_debug_*`, `sc_inspect_json`, `sc_peek` / `sc_poke`,
+`sc_step`, `sc_add_breakpoint`, `sc_run_until_break`, and related entry points in
+[`spec_chum_host.h`](../crates/host_api/include/spec_chum_host.h) remain **thin
+wrappers** over `HostSession` + the global `trace` ring for **non-Rust shells**
+(SpecChumMac Swift, future foreign-language hosts). They are **not** the agent
+primary API and must **not** gain a `host_api` → `control_plane` dependency
+(avoids a crate cycle).
+
+#### Remaining parallel-path inventory
+
+| Path | Disposition |
+| --- | --- |
+| C ABI `sc_debug_*` / inspect / step / breakpoints | **Keep as FFI-only** — SpecChumMac / non-Rust |
+| egui `EmulatorSession` Debug panel | **Tracked elsewhere** — Phase B remainder [#221](https://github.com/mward-sudo/spec_chum/issues/221); still owns a parallel live machine until unified |
+| egui `SPEC_CHUM_AGENT=1` embedded server | **Transitional** — thin HTTP transport over a second session today; unification with Debug panel is [#221](https://github.com/mward-sudo/spec_chum/issues/221) |
+| SpecChumMac inspector / `sc_*` | **Keep as FFI** — document agent workflow via standalone `spec-chum-agent` ([#221](https://github.com/mward-sudo/spec_chum/issues/221) docs); in-process `ControlPlane` only if cycle-safe |
+| `spec-chum-debug` local (no agent URL) | **Keep** — already on `HostSession` (same type as `control_plane`) |
+| Direct `machine::Machine` in debug CLI | **Removed** (Phase C partial / [#215](https://github.com/mward-sudo/spec_chum/pull/215)) |
+
+Phase A–H HTTP rows continue on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
+Host live-session unification remains [#221](https://github.com/mward-sudo/spec_chum/issues/221).
+
+Phase A is mergeable without breaking current workflows. Phase B remainder is an
+explicit follow-up.
 
 ## Technology choice: REST on loopback
 
