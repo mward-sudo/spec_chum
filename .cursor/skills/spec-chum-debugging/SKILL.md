@@ -91,7 +91,7 @@ spec-chum-debug --tap tests/fixtures/tape/attr_mark.tap type-load --code
 ```
 
 Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`,
-`until-pc`, `break-pc`, `watch-write`. Requires a running agent (`spec-chum-agent`,
+`until-pc`, `break-pc`, `watch-write` (mem or `--port`). Requires a running agent (`spec-chum-agent`,
 `spec-chum-debug --serve`, or egui with `SPEC_CHUM_AGENT=1`). `--rom` / `--snapshot`
 remain local-only (no HTTP upload yet — #210).
 
