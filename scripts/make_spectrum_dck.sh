@@ -48,6 +48,11 @@ case "$MODE" in
     ;;
 esac
 
+if [[ "$OUT" -ef "$ROM" ]]; then
+  echo "error: output must not overwrite $ROM" >&2
+  exit 2
+fi
+
 mkdir -p "$(dirname "$OUT")"
 # First 16 KiB only (Spectrum ROM); ignore any longer dumps.
 {
