@@ -126,7 +126,13 @@ char *sc_status(void *handle);
 char *sc_last_error(void);
 void sc_string_free(char *s);
 
-/* Debug / observability (see docs/DEBUGGING.md) */
+/* Debug / observability (see docs/DEBUGGING.md and docs/AGENT_DEBUG_API.md).
+ *
+ * FFI-only for non-Rust shells (SpecChumMac, etc.). Agents and Rust hosts should
+ * prefer the loopback HTTP agent API / control_plane — do not treat these as the
+ * primary automation surface. Thin wrappers over HostSession + trace; no
+ * host_api ↔ control_plane dependency.
+ */
 /* cats: bitmask — cpu=1 bus=2 tape=4 ula=8 machine=16 ay=32 disk=64 mem=128; 0 disables */
 void sc_debug_init_from_env(void);
 void sc_debug_set_categories(unsigned int cats);

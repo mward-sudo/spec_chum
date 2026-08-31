@@ -22,20 +22,26 @@ Project debugger workflow for agents. Full detail: [`docs/DEBUGGING.md`](../../.
 | Scripted repro, Inspect JSON, breakpoints, tape `type-load` | Headless **`spec-chum-debug`** (local one-shot process) |
 | Regression / harness / matrix | **`cargo test -p machine`** (and `tape` / `trace` / `z80`) |
 | Interactive Pause / Step / disasm UI | **egui** `cargo run -p app` → Menu **Debug** |
-| Native SwiftUI / C host | **`host_api`** `sc_debug_*` / `sc_inspect_json` |
-| macOS shell (limited inspector) | `./scripts/run_macos_app.sh` + same env; prefer CLI for deep steps |
+| Native SwiftUI / C host | **`host_api`** `sc_debug_*` / `sc_inspect_json` (**FFI-only** — not agent primary) |
+| macOS shell (limited inspector) | `./scripts/run_macos_app.sh` + same env; prefer CLI/HTTP for deep steps |
 
-Each `spec-chum-debug` invocation is a **new process** (fresh machine + empty trace ring). Put `--trace`, `--tap`/`--tzx`, `--snapshot`, and the subcommand on the **same** command.
+Each **local** `spec-chum-debug` invocation (no `SPEC_CHUM_AGENT_URL`) is a **new
+process** (fresh machine + empty trace ring). Put `--trace`, `--tap`/`--tzx`,
+`--snapshot`, and the subcommand on the **same** command. When
+`SPEC_CHUM_AGENT_URL` / `--agent-url` is set, the **HTTP server** owns the
+persistent machine and trace ring — resets use `POST /v1/reset` (or restart the
+server), not a new CLI process.
 
 ## Agent Debug API (unified control plane)
 
-> **Implemented (Phase A):** loopback HTTP on `127.0.0.1:17384` (default).
+> **Implemented (Phases A–H):** loopback HTTP on `127.0.0.1:17384` (default).
 > Design: [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md).
 > Tracker: [#210](https://github.com/mward-sudo/spec_chum/issues/210).
+> Phase C docs: C ABI = FFI-only; HTTP/`control_plane` = primary for agents.
 
 **Unification goal:** one shared Rust backend (`control_plane`) serves HTTP;
-`spec-chum-debug --serve` / `spec-chum-agent` ship today; egui Debug and
-SpecChumMac converge in Phase B/C.
+`spec-chum-debug --serve` / `spec-chum-agent` ship today; egui Debug / SpecChumMac
+live-session unification remains [#221](https://github.com/mward-sudo/spec_chum/issues/221).
 
 ### Start server
 

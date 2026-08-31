@@ -130,7 +130,10 @@ breakpoint is not re-taken immediately.
 - Same env vars (export before launching the wrapper).
 - Menu **Debug**: Enable default trace, dump to file / Desktop, clear ring.
 - No full Pause/Step inspector yet — use `spec-chum-debug` or the egui window.
-- C hooks: `sc_debug_*` in `spec_chum_host.h`.
+- C hooks: `sc_debug_*` in `spec_chum_host.h` — **FFI-only** for the native shell
+  (not the agent primary API). Prefer
+  [`docs/AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) HTTP / `spec-chum-agent` /
+  `spec-chum-debug --serve` for scripted control and 1:1 framebuffers.
 
 ## Recipes
 
