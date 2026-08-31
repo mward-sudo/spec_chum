@@ -221,8 +221,8 @@ impl EmulatorSession {
     #[must_use]
     pub fn model(&self) -> Model {
         match &self.host {
-            HostSlot::Direct(s) => s.model.to_model(),
-            HostSlot::Shared(a) => a.lock().model.to_model(),
+            HostSlot::Direct(s) => s.model().to_model(),
+            HostSlot::Shared(a) => a.lock().model().to_model(),
         }
     }
 
@@ -248,19 +248,20 @@ impl EmulatorSession {
                 let built = Self::build_machine(model, &data, &overrides);
                 match built {
                     Ok(m) => {
-                        self.host_mut().machine = Some(m);
-                        self.host_mut().status = format!("Loaded {}", path.display());
+                        self.host_mut().set_machine(m);
+                        self.host_mut()
+                            .set_status(format!("Loaded {}", path.display()));
                     }
-                    Err(e) => self.host_mut().status = e,
+                    Err(e) => self.host_mut().set_status(e),
                 }
                 return;
             }
         }
-        self.host_mut().status = format!(
+        self.host_mut().set_status(format!(
             "Missing ROM for {} — {}",
             machine::model_title(model),
             machine::unavailable_reason(model)
-        );
+        ));
     }
 
     fn build_machine(
@@ -295,10 +296,12 @@ impl EmulatorSession {
         let roots = vec![Self::workspace_root()];
         let applied = apply_user_config(config, &roots)?;
         self.set_model(applied.model);
-        self.host_mut().joystick_mode = applied.joystick_mode;
+        self.host_mut()
+            .set_joystick_mode(applied.joystick_mode)
+            .ok();
         self.kempston_mouse = applied.kempston_mouse;
-        self.host_mut().machine = Some(applied.machine);
-        self.host_mut().status = applied.status;
+        self.host_mut().set_machine(applied.machine);
+        self.host_mut().set_status(applied.status);
         Ok(())
     }
 
@@ -311,36 +314,36 @@ impl EmulatorSession {
                 formats::Snapshot128Model::SpectrumPlus2A => Model::SpectrumPlus2A,
                 formats::Snapshot128Model::Spectrum128 => Model::Spectrum128,
             };
-            if self.host_mut().machine.is_none() || self.model() != target {
+            if !self.host_mut().has_machine() || self.model() != target {
                 self.set_model(target);
-                self.host_mut().machine = None;
+                self.host_mut().clear_machine();
                 self.try_autoload_rom();
             }
             {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     m.apply_snapshot128(&snap);
-                    host.status = format!("Loaded 128K/+2A/+3 snapshot {}", path.display());
+                    host.set_status(format!("Loaded 128K/+2A/+3 snapshot {}", path.display()));
                 }
             }
             return;
         }
         match formats::Snapshot48::load_sna(path).or_else(|_| formats::Snapshot48::load_z80(path)) {
             Ok(snap) => {
-                if self.host_mut().machine.is_none() || self.model() != Model::Spectrum48 {
+                if !self.host_mut().has_machine() || self.model() != Model::Spectrum48 {
                     self.set_model(Model::Spectrum48);
-                    self.host_mut().machine = None;
+                    self.host_mut().clear_machine();
                     self.try_autoload_rom();
                 }
                 {
                     let host = &mut *self.host_mut();
-                    if let Some(m) = host.machine.as_mut() {
+                    if let Some(m) = host.machine_mut() {
                         m.apply_snapshot48(&snap);
-                        host.status = format!("Loaded snapshot {}", path.display());
+                        host.set_status(format!("Loaded snapshot {}", path.display()));
                     }
                 }
             }
-            Err(e) => self.host_mut().status = format!("Snapshot error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("Snapshot error: {e}")),
         }
     }
 
@@ -348,22 +351,22 @@ impl EmulatorSession {
         match tape::TapImage::load(path) {
             Ok(img) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     m.insert_tape(tape::TapPlayer::new(img));
                     let mut opts = m.tape_load_options();
                     if opts.flash_load || opts.experience_load {
                         opts.flash_load = false;
                         m.set_tape_load_options(opts);
                     }
-                    host.status = format!(
+                    host.set_status(format!(
                         "Inserted TAP {} (paused — Tape → Play for EAR, or Instant)",
                         path.display()
-                    );
+                    ));
                 } else {
-                    host.status = "Load a machine ROM before inserting tape".into();
+                    host.set_status("Load a machine ROM before inserting tape");
                 }
             }
-            Err(e) => self.host_mut().status = format!("TAP error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("TAP error: {e}")),
         }
     }
 
@@ -371,12 +374,13 @@ impl EmulatorSession {
         let data = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
-                self.host_mut().status = format!("TZX error: {e}");
+                self.host_mut().set_status(format!("TZX error: {e}"));
                 return;
             }
         };
-        if self.host_mut().machine.is_none() {
-            self.host_mut().status = "Load a machine ROM before inserting tape".into();
+        if !self.host_mut().has_machine() {
+            self.host_mut()
+                .set_status("Load a machine ROM before inserting tape");
             return;
         }
         // Standard-speed TZX → TAP deck so ROM/RAM LD-BYTES flash-load works (e.g. The Boggit).
@@ -387,19 +391,19 @@ impl EmulatorSession {
                     let n = player.image.blocks.len();
                     {
                         let host = &mut *self.host_mut();
-                        if let Some(m) = host.machine.as_mut() {
+                        if let Some(m) = host.machine_mut() {
                             m.insert_tape(player);
                         }
                     }
                     self.force_flash_load(false);
-                    self.host_mut().status = format!(
+                    self.host_mut().set_status(format!(
                         "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" then Play (EAR), or Instant. 128K/+3: Type LOAD enters 48 BASIC (+3 disk Loader is not tape). +2A: Type LOAD uses menu Loader (tape).",
                         path.display()
-                    );
+                    ));
                     return;
                 }
                 Err(e) => {
-                    self.host_mut().status = format!("TZX error: {e}");
+                    self.host_mut().set_status(format!("TZX error: {e}"));
                     return;
                 }
             }
@@ -408,17 +412,17 @@ impl EmulatorSession {
             Ok(player) => {
                 {
                     let host = &mut *self.host_mut();
-                    if let Some(m) = host.machine.as_mut() {
+                    if let Some(m) = host.machine_mut() {
                         m.insert_tzx(player);
                     }
                 }
                 self.force_flash_load(false);
-                self.host_mut().status = format!(
+                self.host_mut().set_status(format!(
                     "Inserted TZX {} (pulse playback, paused — Play when loader is ready)",
                     path.display()
-                );
+                ));
             }
-            Err(e) => self.host_mut().status = format!("TZX error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("TZX error: {e}")),
         }
     }
 
@@ -432,12 +436,12 @@ impl EmulatorSession {
     fn play_tape_keeping_options(&mut self) {
         {
             let host = &mut *self.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 if m.has_tape() {
                     m.set_tape_playing(true);
-                    host.status = "Tape playing".into();
+                    host.set_status("Tape playing");
                 } else {
-                    host.status = "No tape inserted".into();
+                    host.set_status("No tape inserted");
                 }
             }
         }
@@ -445,34 +449,34 @@ impl EmulatorSession {
 
     pub fn pause_tape(&mut self) {
         let host = &mut *self.host_mut();
-        if let Some(m) = host.machine.as_mut() {
+        if let Some(m) = host.machine_mut() {
             m.set_tape_playing(false);
             let mut opts = m.tape_load_options();
             if opts.flash_load || opts.experience_load {
                 opts.flash_load = false;
                 m.set_tape_load_options(opts);
             }
-            host.status = "Tape paused".into();
+            host.set_status("Tape paused");
         }
     }
 
     pub fn rewind_tape(&mut self) {
         let host = &mut *self.host_mut();
-        if let Some(m) = host.machine.as_mut() {
+        if let Some(m) = host.machine_mut() {
             m.rewind_tape();
             let mut opts = m.tape_load_options();
             if opts.flash_load || opts.experience_load {
                 opts.flash_load = false;
                 m.set_tape_load_options(opts);
             }
-            host.status = "Tape rewound (paused)".into();
+            host.set_status("Tape rewound (paused)");
         }
     }
 
     fn force_flash_load(&mut self, on: bool) {
         {
             let host = &mut *self.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 let mut opts = m.tape_load_options();
                 if opts.flash_load == on && (!on || !opts.experience_load) {
                     return;
@@ -501,7 +505,7 @@ impl EmulatorSession {
     pub fn instant_load_tape(&mut self) {
         let check = {
             let host = &*self.host_mut();
-            match host.machine.as_ref() {
+            match host.machine() {
                 None => None,
                 Some(m) if !m.has_tape() => Some(None),
                 Some(m) => Some(Some(m.cpu().regs.pc == tape::LD_BYTES_TRAP_PC)),
@@ -509,11 +513,11 @@ impl EmulatorSession {
         };
         let at_ld_bytes = match check {
             None => {
-                self.host_mut().status = "Instant: no machine".into();
+                self.host_mut().set_status("Instant: no machine");
                 return;
             }
             Some(None) => {
-                self.host_mut().status = "Instant: insert a tape first".into();
+                self.host_mut().set_status("Instant: insert a tape first");
                 return;
             }
             Some(Some(at)) => at,
@@ -522,12 +526,14 @@ impl EmulatorSession {
         if at_ld_bytes {
             self.pending_instant_play = false;
             self.play_tape_keeping_options();
-            self.host_mut().status = "Instant: flash-loading at LD-BYTES".into();
+            self.host_mut()
+                .set_status("Instant: flash-loading at LD-BYTES");
             return;
         }
 
         self.type_load_quotes_inner(false, true);
-        self.host_mut().status = "Instant: typing LOAD \"\" then flash-load Play".into();
+        self.host_mut()
+            .set_status("Instant: typing LOAD \"\" then flash-load Play");
     }
 
     /// Always-prompt Instant: insert the chosen image, then flash + Type LOAD + Play.
@@ -544,23 +550,13 @@ impl EmulatorSession {
             }
             "tzx" => {
                 self.load_tzx(path);
-                if self
-                    .host_mut()
-                    .machine
-                    .as_ref()
-                    .is_some_and(Machine::has_tape)
-                {
+                if self.host_mut().machine().is_some_and(Machine::has_tape) {
                     self.instant_load_tape();
                 }
             }
             _ => {
                 self.load_tap(path);
-                if self
-                    .host_mut()
-                    .machine
-                    .as_ref()
-                    .is_some_and(Machine::has_tape)
-                {
+                if self.host_mut().machine().is_some_and(Machine::has_tape) {
                     self.instant_load_tape();
                 }
             }
@@ -589,31 +585,31 @@ impl EmulatorSession {
         if pending_play {
             return;
         }
-        self.host_mut().status = match (self.model(), with_code) {
+        let msg = match (self.model(), with_code) {
             (
                 Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068,
                 true,
-            ) => "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan".into(),
+            ) => "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan",
             (
                 Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068,
                 false,
-            ) => "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan".into(),
+            ) => "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan",
             (Model::SpectrumPlus2A, false) => {
-                "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan".into()
+                "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan"
             }
             (_, true) => {
                 "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
-                    .into()
             }
             (_, false) => {
-                "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan".into()
+                "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan"
             }
         };
+        self.host_mut().set_status(msg);
     }
 
     /// Advance scripted keys if any; returns true when a script consumed input this frame.
     pub fn tick_key_script(&mut self) -> bool {
-        if self.host_mut().machine.is_none() {
+        if !self.host_mut().has_machine() {
             return false;
         }
         let Some(script) = self.key_script.as_mut() else {
@@ -638,7 +634,7 @@ impl EmulatorSession {
         }
         {
             let host = &mut *self.host_mut();
-            if let Some(machine) = host.machine.as_mut() {
+            if let Some(machine) = host.machine_mut() {
                 let kb = machine.keyboard_mut();
                 kb.reset();
                 for &(row, bit) in &keys {
@@ -655,21 +651,22 @@ impl EmulatorSession {
         }
         self.pending_instant_play = false;
         self.play_tape_keeping_options();
-        self.host_mut().status = "Instant: flash-loading after LOAD \"\"".into();
+        self.host_mut()
+            .set_status("Instant: flash-loading after LOAD \"\"");
     }
 
     pub fn load_rzx(&mut self, path: &Path) {
         match formats::RzxRecording::load(path) {
             Ok(rec) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     m.insert_rzx(rec);
-                    host.status = format!("Loaded RZX {}", path.display());
+                    host.set_status(format!("Loaded RZX {}", path.display()));
                 } else {
-                    host.status = "Load a machine ROM before RZX".into();
+                    host.set_status("Load a machine ROM before RZX");
                 }
             }
-            Err(e) => self.host_mut().status = format!("RZX error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("RZX error: {e}")),
         }
     }
 
@@ -677,21 +674,21 @@ impl EmulatorSession {
         match formats::DskImage::load(path) {
             Ok(img) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     match m.insert_disk(img) {
                         Ok(()) => {
-                            host.status = format!(
+                            host.set_status(format!(
                                 "DSK inserted ({}) — use +3 Loader / +3DOS",
                                 path.display()
-                            );
+                            ));
                         }
-                        Err(e) => host.status = e,
+                        Err(e) => host.set_status(e),
                     }
                 } else {
-                    host.status = "Load +3 ROM before inserting disk".into();
+                    host.set_status("Load +3 ROM before inserting disk");
                 }
             }
-            Err(e) => self.host_mut().status = format!("DSK error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("DSK error: {e}")),
         }
     }
 
@@ -699,27 +696,31 @@ impl EmulatorSession {
         match std::fs::read(path) {
             Ok(data) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     match m.attach_multiface(&data) {
-                        Ok(()) => host.status = format!("Attached Multiface 1 {}", path.display()),
-                        Err(e) => host.status = e,
+                        Ok(()) => {
+                            host.set_status(format!("Attached Multiface 1 {}", path.display()))
+                        }
+                        Err(e) => host.set_status(e),
                     }
                 } else {
-                    host.status = "Load a 48K ROM before Multiface".into();
+                    host.set_status("Load a 48K ROM before Multiface");
                 }
             }
-            Err(e) => self.host_mut().status = format!("Multiface ROM error: {e}"),
+            Err(e) => self
+                .host_mut()
+                .set_status(format!("Multiface ROM error: {e}")),
         }
     }
 
     pub fn multiface_nmi(&mut self) {
         {
             let host = &mut *self.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 if m.multiface_nmi().is_some() {
-                    host.status = "Multiface NMI".into();
+                    host.set_status("Multiface NMI");
                 } else {
-                    host.status = "Multiface not attached".into();
+                    host.set_status("Multiface not attached");
                 }
             }
         }
@@ -728,13 +729,13 @@ impl EmulatorSession {
     pub fn attach_divmmc_stub(&mut self) {
         {
             let host = &mut *self.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 match m.attach_divmmc() {
-                    Ok(_) => host.status = "DivMMC attached".into(),
-                    Err(e) => host.status = e,
+                    Ok(_) => host.set_status("DivMMC attached"),
+                    Err(e) => host.set_status(e),
                 }
             } else {
-                host.status = "Load a machine ROM first".into();
+                host.set_status("Load a machine ROM first");
             }
         }
     }
@@ -743,19 +744,19 @@ impl EmulatorSession {
         match std::fs::read(path) {
             Ok(data) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     match m.attach_divmmc() {
                         Ok(div) => {
                             div.attach_sd(data);
-                            host.status = format!("DivMMC SD {}", path.display());
+                            host.set_status(format!("DivMMC SD {}", path.display()));
                         }
-                        Err(e) => host.status = e,
+                        Err(e) => host.set_status(e),
                     }
                 } else {
-                    host.status = "Load a machine ROM first".into();
+                    host.set_status("Load a machine ROM first");
                 }
             }
-            Err(e) => self.host_mut().status = format!("SD image error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("SD image error: {e}")),
         }
     }
 
@@ -763,25 +764,25 @@ impl EmulatorSession {
         match std::fs::read(path) {
             Ok(data) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     match m.attach_divmmc_eeprom(&data) {
                         Ok(()) => {
-                            host.status = format!("DivMMC EEPROM {}", path.display());
+                            host.set_status(format!("DivMMC EEPROM {}", path.display()));
                         }
-                        Err(e) => host.status = e,
+                        Err(e) => host.set_status(e),
                     }
                 } else {
-                    host.status = "Load a machine ROM first".into();
+                    host.set_status("Load a machine ROM first");
                 }
             }
-            Err(e) => self.host_mut().status = format!("EEPROM error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("EEPROM error: {e}")),
         }
     }
 
     pub fn attach_interface1_stub(&mut self) {
         {
             let host = &mut *self.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 match m.attach_interface1() {
                     Ok(if1) => {
                         // Optional IF1 ROM — not shipped; try common local paths.
@@ -801,7 +802,7 @@ impl EmulatorSession {
                                                 break;
                                             }
                                             Err(e) => {
-                                                host.status = e.to_string();
+                                                host.set_status(e.to_string());
                                                 return;
                                             }
                                         }
@@ -812,16 +813,16 @@ impl EmulatorSession {
                                 }
                             }
                         }
-                        host.status = if loaded {
-                            "Interface 1 attached (ROM loaded)".into()
+                        host.set_status(if loaded {
+                            "Interface 1 attached (ROM loaded)"
                         } else {
-                            "Interface 1 attached (no roms/if1.rom — paging hooks ready)".into()
-                        };
+                            "Interface 1 attached (no roms/if1.rom — paging hooks ready)"
+                        });
                     }
-                    Err(e) => host.status = e.to_string(),
+                    Err(e) => host.set_status(e.to_string()),
                 }
             } else {
-                host.status = "Load a machine ROM first".into();
+                host.set_status("Load a machine ROM first");
             }
         }
     }
@@ -831,21 +832,21 @@ impl EmulatorSession {
             Ok(data) => match formats::MdrImage::parse(&data) {
                 Ok(cart) => {
                     let host = &mut *self.host_mut();
-                    if let Some(m) = host.machine.as_mut() {
+                    if let Some(m) = host.machine_mut() {
                         match m.attach_interface1() {
                             Ok(if1) => {
                                 if1.insert_mdr(cart);
-                                host.status = format!("Inserted MDR {}", path.display());
+                                host.set_status(format!("Inserted MDR {}", path.display()));
                             }
-                            Err(e) => host.status = e.to_string(),
+                            Err(e) => host.set_status(e.to_string()),
                         }
                     } else {
-                        host.status = "Load a machine ROM first".into();
+                        host.set_status("Load a machine ROM first");
                     }
                 }
-                Err(e) => self.host_mut().status = format!("MDR error: {e}"),
+                Err(e) => self.host_mut().set_status(format!("MDR error: {e}")),
             },
-            Err(e) => self.host_mut().status = format!("MDR error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("MDR error: {e}")),
         }
     }
 
@@ -854,33 +855,33 @@ impl EmulatorSession {
             Ok(data) => match formats::DckImage::parse(&data) {
                 Ok(image) => {
                     let host = &mut *self.host_mut();
-                    if let Some(m) = host.machine.as_mut() {
+                    if let Some(m) = host.machine_mut() {
                         match m.insert_timex_dock(&image) {
                             Ok(()) => {
-                                host.status = format!("Inserted DCK {}", path.display());
+                                host.set_status(format!("Inserted DCK {}", path.display()));
                             }
-                            Err(e) => host.status = e.to_string(),
+                            Err(e) => host.set_status(e.to_string()),
                         }
                     } else {
-                        host.status = "Load a machine ROM first".into();
+                        host.set_status("Load a machine ROM first");
                     }
                 }
-                Err(e) => self.host_mut().status = format!("DCK error: {e}"),
+                Err(e) => self.host_mut().set_status(format!("DCK error: {e}")),
             },
-            Err(e) => self.host_mut().status = format!("DCK error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("DCK error: {e}")),
         }
     }
 
     pub fn eject_dck(&mut self) {
         {
             let host = &mut *self.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 match m.eject_timex_dock() {
-                    Ok(()) => host.status = "Ejected Timex dock".into(),
-                    Err(e) => host.status = e.to_string(),
+                    Ok(()) => host.set_status("Ejected Timex dock"),
+                    Err(e) => host.set_status(e.to_string()),
                 }
             } else {
-                host.status = "Load a machine ROM first".into();
+                host.set_status("Load a machine ROM first");
             }
         }
     }
@@ -888,13 +889,13 @@ impl EmulatorSession {
     pub fn attach_beta_stub(&mut self) {
         {
             let host = &mut *self.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 match m.attach_beta() {
-                    Ok(_) => host.status = "Beta Disk attached".into(),
-                    Err(e) => host.status = e,
+                    Ok(_) => host.set_status("Beta Disk attached"),
+                    Err(e) => host.set_status(e),
                 }
             } else {
-                host.status = "Load a machine ROM first".into();
+                host.set_status("Load a machine ROM first");
             }
         }
     }
@@ -903,18 +904,18 @@ impl EmulatorSession {
         match std::fs::read(path) {
             Ok(data) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     match m.load_trdos_rom(&data) {
                         Ok(()) => {
-                            host.status = format!("Loaded TR-DOS ROM {}", path.display());
+                            host.set_status(format!("Loaded TR-DOS ROM {}", path.display()));
                         }
-                        Err(e) => host.status = e,
+                        Err(e) => host.set_status(e),
                     }
                 } else {
-                    host.status = "Load a machine ROM first".into();
+                    host.set_status("Load a machine ROM first");
                 }
             }
-            Err(e) => self.host_mut().status = format!("TR-DOS ROM error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("TR-DOS ROM error: {e}")),
         }
     }
 
@@ -922,19 +923,19 @@ impl EmulatorSession {
         match formats::TrdImage::load(path) {
             Ok(img) => {
                 let host = &mut *self.host_mut();
-                if let Some(m) = host.machine.as_mut() {
+                if let Some(m) = host.machine_mut() {
                     match m.attach_beta() {
                         Ok(beta) => {
                             beta.insert(img);
-                            host.status = format!("Inserted TRD {}", path.display());
+                            host.set_status(format!("Inserted TRD {}", path.display()));
                         }
-                        Err(e) => host.status = e,
+                        Err(e) => host.set_status(e),
                     }
                 } else {
-                    host.status = "Load a machine ROM first".into();
+                    host.set_status("Load a machine ROM first");
                 }
             }
-            Err(e) => self.host_mut().status = format!("TRD error: {e}"),
+            Err(e) => self.host_mut().set_status(format!("TRD error: {e}")),
         }
     }
 
@@ -950,8 +951,8 @@ impl EmulatorSession {
         pad: JoystickState,
     ) {
         let host = &mut *self.host_mut();
-        let joystick_mode = host.joystick_mode;
-        let Some(machine) = host.machine.as_mut() else {
+        let joystick_mode = host.joystick_mode();
+        let Some(machine) = host.machine_mut() else {
             return;
         };
         machine.keyboard_mut().reset();
@@ -994,7 +995,7 @@ impl EmulatorSession {
     pub fn apply_key(&mut self, key: egui::Key, pressed: bool) {
         let modifiers = egui::Modifiers::default();
         let host = &mut *self.host_mut();
-        let Some(machine) = host.machine.as_mut() else {
+        let Some(machine) = host.machine_mut() else {
             return;
         };
         let kb = machine.keyboard_mut();
@@ -1007,7 +1008,7 @@ impl EmulatorSession {
 
     pub fn apply_modifiers(&mut self, modifiers: egui::Modifiers) {
         let host = &mut *self.host_mut();
-        let Some(machine) = host.machine.as_mut() else {
+        let Some(machine) = host.machine_mut() else {
             return;
         };
         let kb = machine.keyboard_mut();
@@ -1138,21 +1139,28 @@ impl SpecChumApp {
         session.throttle = prefs.throttle;
         session.muted = prefs.muted;
         session.volume = prefs.volume;
-        session.host_mut().joystick_mode = prefs.joystick_mode.to_mode();
+        session
+            .host_mut()
+            .set_joystick_mode(prefs.joystick_mode.to_mode())
+            .ok();
         session.kempston_mouse = prefs.kempston_mouse;
         if let Some(cfg) = prefs.active_custom_config().cloned() {
             match session.apply_user_machine_config(&cfg) {
                 Ok(()) => {
                     prefs.sync_machine_fields_from_config(&cfg);
-                    session.host_mut().joystick_mode = cfg.joystick_mode.to_mode();
+                    session
+                        .host_mut()
+                        .set_joystick_mode(cfg.joystick_mode.to_mode())
+                        .ok();
                     session.kempston_mouse = cfg.kempston_mouse;
                 }
                 Err(e) => {
                     session.set_model(prefs.model.to_model());
                     session.try_autoload_rom();
-                    let prior = session.host_mut().status.clone();
-                    session.host_mut().status =
-                        format!("Config “{}” failed: {e} — {prior}", cfg.name);
+                    let prior = session.host_mut().status().to_owned();
+                    session
+                        .host_mut()
+                        .set_status(format!("Config “{}” failed: {e} — {prior}", cfg.name));
                 }
             }
         } else {
@@ -1160,10 +1168,11 @@ impl SpecChumApp {
         }
         {
             let host = &mut *session.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            let model = host.model().to_model();
+            if let Some(m) = host.machine_mut() {
                 m.set_tape_load_options(prefs.tape_load_options());
                 if matches!(
-                    host.model.to_model(),
+                    model,
                     Model::Spectrum128
                         | Model::SpectrumPlus2
                         | Model::SpectrumPlus2A
@@ -1179,8 +1188,10 @@ impl SpecChumApp {
             Ok(g) => Some(g),
             Err(gilrs::Error::NotImplemented(g)) => Some(g),
             Err(e) => {
-                let status = session.host_mut().status.clone();
-                session.host_mut().status = format!("{status} (gamepad unavailable: {e})");
+                let status = session.host_mut().status().to_owned();
+                session
+                    .host_mut()
+                    .set_status(format!("{status} (gamepad unavailable: {e})"));
                 None
             }
         };
@@ -1192,15 +1203,19 @@ impl SpecChumApp {
             match agent_server::embedded::spawn_from_env_with_plane(Arc::clone(&plane)) {
                 Ok(server) => {
                     if let Some(ref s) = server {
-                        let status = session.host_mut().status.clone();
-                        session.host_mut().status = format!("{status} — agent http://{}", s.addr);
+                        let status = session.host_mut().status().to_owned();
+                        session
+                            .host_mut()
+                            .set_status(format!("{status} — agent http://{}", s.addr));
                     }
                     (Some(plane), server)
                 }
                 Err(e) => {
                     eprintln!("spec-chum: embedded agent failed: {e}");
-                    let status = session.host_mut().status.clone();
-                    session.host_mut().status = format!("{status} — agent embed failed: {e}");
+                    let status = session.host_mut().status().to_owned();
+                    session
+                        .host_mut()
+                        .set_status(format!("{status} — agent embed failed: {e}"));
                     (Some(plane), None)
                 }
             }
@@ -1288,7 +1303,9 @@ impl SpecChumApp {
         }
         if let Some(doc) = &self.rom_setup {
             if !doc.complete {
-                self.session.host_mut().status = format!("ROMs required for {}", doc.model_title);
+                self.session
+                    .host_mut()
+                    .set_status(format!("ROMs required for {}", doc.model_title));
             }
         }
     }
@@ -1296,7 +1313,7 @@ impl SpecChumApp {
     fn finish_rom_setup(&mut self) {
         self.session.try_autoload_rom();
         self.apply_restored_machine_options();
-        if self.session.host_mut().machine.is_some() {
+        if self.session.host_mut().has_machine() {
             self.show_rom_setup = false;
             self.rom_setup_error = None;
         }
@@ -1319,11 +1336,11 @@ impl SpecChumApp {
         self.prefs.muted = self.session.muted;
         self.prefs.volume = self.session.volume.clamp(0.0, 1.0);
         self.prefs
-            .set_joystick(self.session.host_mut().joystick_mode);
+            .set_joystick(self.session.host_mut().joystick_mode());
         self.prefs.kempston_mouse = self.session.kempston_mouse;
         {
             let host = &mut *self.session.host_mut();
-            if let Some(m) = host.machine.as_ref() {
+            if let Some(m) = host.machine() {
                 self.prefs.set_tape_from_options(m.tape_load_options());
                 self.prefs.set_ay_stereo(m.ay_stereo_mode());
             }
@@ -1342,7 +1359,7 @@ impl SpecChumApp {
     }
 
     fn note_recent_if_ok(&mut self, path: &Path) {
-        let status = self.session.host_mut().status.clone();
+        let status = self.session.host_mut().status().to_owned();
         if status.starts_with("Inserted")
             || status.starts_with("Loaded")
             || status.starts_with("DSK inserted")
@@ -1360,10 +1377,11 @@ impl SpecChumApp {
     fn apply_restored_machine_options(&mut self) {
         {
             let host = &mut *self.session.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            let model = host.model().to_model();
+            if let Some(m) = host.machine_mut() {
                 m.set_tape_load_options(self.prefs.tape_load_options());
                 if matches!(
-                    host.model.to_model(),
+                    model,
                     Model::Spectrum128
                         | Model::SpectrumPlus2
                         | Model::SpectrumPlus2A
@@ -1379,7 +1397,9 @@ impl SpecChumApp {
 
     fn open_recent_path(&mut self, path: PathBuf) {
         if !path.is_file() {
-            self.session.host_mut().status = format!("Recent file missing: {}", path.display());
+            self.session
+                .host_mut()
+                .set_status(format!("Recent file missing: {}", path.display()));
             self.prefs
                 .recent_files
                 .retain(|p| Path::new(p) != path.as_path());
@@ -1398,18 +1418,20 @@ impl SpecChumApp {
             "rzx" => self.session.load_rzx(&path),
             "dsk" => self.session.load_dsk(&path),
             _ => {
-                self.session.host_mut().status = format!("Unknown recent type: {}", path.display());
+                self.session
+                    .host_mut()
+                    .set_status(format!("Unknown recent type: {}", path.display()));
                 return;
             }
         }
         if !self
             .session
             .host_mut()
-            .status
+            .status()
             .to_ascii_lowercase()
             .contains("error")
-            && !self.session.host_mut().status.contains("before")
-            && !self.session.host_mut().status.contains("Missing")
+            && !self.session.host_mut().status().contains("before")
+            && !self.session.host_mut().status().contains("Missing")
         {
             self.note_recent_if_ok(&path);
         }
@@ -1527,11 +1549,11 @@ impl SpecChumApp {
                                     Ok(dest) => {
                                         sync_model_rom_paths(self.prefs.model_rom_paths.clone());
                                         self.mark_prefs_dirty();
-                                        self.session.host_mut().status = format!(
+                                        self.session.host_mut().set_status(format!(
                                             "Installed {} → {}",
                                             picked.display(),
                                             dest.display()
-                                        );
+                                        ));
                                         self.refresh_rom_setup();
                                     }
                                     Err(e) => self.rom_setup_error = Some(e),
@@ -1740,8 +1762,10 @@ impl SpecChumApp {
                                 self.prefs.upsert_custom_config(to_save.clone());
                                 self.prefs.select_custom_config(&to_save.id);
                                 self.sync_prefs_from_custom_config(&to_save);
-                                self.session.host_mut().joystick_mode =
-                                    to_save.joystick_mode.to_mode();
+                                self.session
+                                    .host_mut()
+                                    .set_joystick_mode(to_save.joystick_mode.to_mode())
+                                    .ok();
                                 self.session.kempston_mouse = to_save.kempston_mouse;
                                 self.apply_restored_machine_options();
                                 self.mark_prefs_dirty();
@@ -1908,13 +1932,13 @@ impl SpecChumApp {
                             };
                             let mut draft = UserMachineConfig::new_named("My Spectrum", base);
                             draft.joystick_mode =
-                                PrefJoystick::from_mode(self.session.host_mut().joystick_mode);
+                                PrefJoystick::from_mode(self.session.host_mut().joystick_mode());
                             draft.kempston_mouse = self.session.kempston_mouse;
                             {
                                 let host = &mut *self.session.host_mut();
-                                if let Some(m) = host.machine.as_ref() {
-                                draft.ay_stereo = PrefAyStereo::from_mode(m.ay_stereo_mode());
-                                                            }
+                                if let Some(m) = host.machine() {
+                                    draft.ay_stereo = PrefAyStereo::from_mode(m.ay_stereo_mode());
+                                }
                             }
                             self.config_draft = Some(draft);
                             self.config_editor_is_new = true;
@@ -1938,13 +1962,12 @@ impl SpecChumApp {
                                         match self.session.apply_user_machine_config(&active) {
                                             Ok(()) => {
                                                 self.sync_prefs_from_custom_config(&active);
-                                                self.session.host_mut().joystick_mode =
-                                                    active.joystick_mode.to_mode();
+                                                self.session.host_mut().set_joystick_mode(active.joystick_mode.to_mode()).ok();
                                                 self.session.kempston_mouse = active.kempston_mouse;
                                                 self.apply_restored_machine_options();
                                                 self.mark_prefs_dirty();
                                             }
-                                            Err(e) => self.session.host_mut().status = e.to_string(),
+                                            Err(e) => self.session.host_mut().set_status(e.to_string()),
                                         }
                                     }
                                 }
@@ -2000,24 +2023,14 @@ impl SpecChumApp {
                         ui.separator();
                         ui.label("Session");
                         if ui.button("Reset").clicked() {
-                            {
-                                let host = &mut *self.session.host_mut();
-                                if let Some(m) = host.machine.as_mut() {
-                                m.reset();
-                                host.status = if m.has_tape() {
-                                    "Reset (tape still inserted, paused)".into()
-                                } else {
-                                    "Reset".into()
-                                };
-                                                            }
-                            }
+                            let _ = self.session.host_mut().reset();
                             ui.close_menu();
                         }
-                        if ui
-                            .checkbox(&mut self.session.host_mut().running, "Running")
-                            .changed()
                         {
-                            // not persisted
+                            let mut running = self.session.host_mut().running();
+                            if ui.checkbox(&mut running, "Running").changed() {
+                                self.session.host_mut().set_running(running);
+                            }
                         }
                         if ui
                             .checkbox(&mut self.session.throttle, "Throttle ~50Hz")
@@ -2027,45 +2040,33 @@ impl SpecChumApp {
                         }
                         ui.separator();
                         ui.label("Joystick");
-                        if ui
-                            .radio_value(
-                                &mut self.session.host_mut().joystick_mode,
-                                JoystickMode::Kempston,
-                                "Kempston",
-                            )
-                            .changed()
                         {
-                            self.mark_prefs_dirty();
-                        }
-                        if ui
-                            .radio_value(
-                                &mut self.session.host_mut().joystick_mode,
-                                JoystickMode::SinclairLeft,
-                                "Sinclair left (1–5)",
-                            )
-                            .changed()
-                        {
-                            self.mark_prefs_dirty();
-                        }
-                        if ui
-                            .radio_value(
-                                &mut self.session.host_mut().joystick_mode,
-                                JoystickMode::SinclairRight,
-                                "Sinclair right (6–0)",
-                            )
-                            .changed()
-                        {
-                            self.mark_prefs_dirty();
-                        }
-                        if ui
-                            .radio_value(
-                                &mut self.session.host_mut().joystick_mode,
-                                JoystickMode::Cursor,
-                                "Cursor",
-                            )
-                            .changed()
-                        {
-                            self.mark_prefs_dirty();
+                            let mut joy = self.session.host_mut().joystick_mode();
+                            let mut joy_changed = false;
+                            joy_changed |= ui
+                                .radio_value(&mut joy, JoystickMode::Kempston, "Kempston")
+                                .changed();
+                            joy_changed |= ui
+                                .radio_value(
+                                    &mut joy,
+                                    JoystickMode::SinclairLeft,
+                                    "Sinclair left (1–5)",
+                                )
+                                .changed();
+                            joy_changed |= ui
+                                .radio_value(
+                                    &mut joy,
+                                    JoystickMode::SinclairRight,
+                                    "Sinclair right (6–0)",
+                                )
+                                .changed();
+                            joy_changed |= ui
+                                .radio_value(&mut joy, JoystickMode::Cursor, "Cursor")
+                                .changed();
+                            if joy_changed {
+                                let _ = self.session.host_mut().set_joystick_mode(joy);
+                                self.mark_prefs_dirty();
+                            }
                         }
                         if ui
                             .checkbox(&mut self.session.kempston_mouse, "Kempston mouse")
@@ -2086,8 +2087,7 @@ impl SpecChumApp {
                             ui.label("AY stereo");
                             let mut mode = self
                                 .session
-                                .host_mut().machine
-                                .as_ref()
+                                .host_mut().machine()
                                 .map_or(AyStereoMode::Mono, Machine::ay_stereo_mode);
                             let before = mode;
                             ui.radio_value(&mut mode, AyStereoMode::Mono, "Mono");
@@ -2096,9 +2096,9 @@ impl SpecChumApp {
                             if mode != before {
                                 {
                                     let host = &mut *self.session.host_mut();
-                                    if let Some(m) = host.machine.as_mut() {
-                                    m.set_ay_stereo_mode(mode);
-                                                                    }
+                                    if let Some(m) = host.machine_mut() {
+                                        m.set_ay_stereo_mode(mode);
+                                    }
                                 }
                                 self.prefs.set_ay_stereo(mode);
                                 self.mark_prefs_dirty();
@@ -2122,24 +2122,20 @@ impl SpecChumApp {
                         let model = self.session.model();
                         let has_mf = self
                             .session
-                            .host_mut().machine
-                            .as_ref()
+                            .host_mut().machine()
                             .is_some_and(Machine::has_multiface);
                         let has_div = self
                             .session
-                            .host_mut().machine
-                            .as_ref()
+                            .host_mut().machine()
                             .is_some_and(Machine::has_divmmc);
                         let has_if1 = self
                             .session
-                            .host_mut().machine
-                            .as_ref()
+                            .host_mut().machine()
                             .is_some_and(Machine::has_interface1);
-                        let has_beta = self.session.host_mut().machine.as_ref().is_some_and(Machine::has_beta);
+                        let has_beta = self.session.host_mut().machine().is_some_and(Machine::has_beta);
                         let has_dock = self
                             .session
-                            .host_mut().machine
-                            .as_ref()
+                            .host_mut().machine()
                             .is_some_and(Machine::has_timex_dock);
 
                         ui.label("Peripherals (partial where noted)");
@@ -2308,8 +2304,7 @@ impl SpecChumApp {
                     ui.menu_button("Tape", |ui| {
                         let has_tape = self
                             .session
-                            .host_mut().machine
-                            .as_ref()
+                            .host_mut().machine()
                             .is_some_and(Machine::has_tape);
                         if has_tape {
                             if ui.button("Play tape").clicked() {
@@ -2352,45 +2347,52 @@ impl SpecChumApp {
                         }
                         if has_tape {
                             let mut tape_prefs_changed = false;
+                            let mut tape_status: Option<String> = None;
                             {
                                 let host = &mut *self.session.host_mut();
-                                if let Some(m) = host.machine.as_mut() {
-                                let mut opts = m.tape_load_options();
-                                ui.label("Load mode:");
-                                if ui
-                                    .selectable_label(opts.experience_load, "Experience (~20s)")
-                                    .on_hover_text(
-                                        "Abbreviated pauses on the EAR path at 16× (~20s-class; issue #82)",
-                                    )
-                                    .clicked()
-                                {
-                                    m.set_tape_load_options(TapeLoadOptions::experience());
-                                    host.status =
-                                        "Tape: experience load (~20s EAR)".into();
-                                    tape_prefs_changed = true;
-                                }
-                                ui.label("EAR speed:");
-                                for speed in [1u32, 2, 5, 10, 20] {
-                                    let selected = !opts.experience_load && opts.speed == speed;
-                                    if ui.selectable_label(selected, format!("{speed}x")).clicked()
+                                if let Some(m) = host.machine_mut() {
+                                    let mut opts = m.tape_load_options();
+                                    ui.label("Load mode:");
+                                    if ui
+                                        .selectable_label(opts.experience_load, "Experience (~20s)")
+                                        .on_hover_text(
+                                            "Abbreviated pauses on the EAR path at 16× (~20s-class; issue #82)",
+                                        )
+                                        .clicked()
                                     {
-                                        opts.experience_load = false;
-                                        opts.flash_load = false;
-                                        opts.speed = speed;
-                                        m.set_tape_load_options(opts);
-                                        host.status =
-                                            format!("Tape: EAR speed {speed}x");
+                                        m.set_tape_load_options(TapeLoadOptions::experience());
+                                        tape_status =
+                                            Some("Tape: experience load (~20s EAR)".into());
                                         tape_prefs_changed = true;
                                     }
+                                    ui.label("EAR speed:");
+                                    for speed in [1u32, 2, 5, 10, 20] {
+                                        let selected =
+                                            !opts.experience_load && opts.speed == speed;
+                                        if ui
+                                            .selectable_label(selected, format!("{speed}x"))
+                                            .clicked()
+                                        {
+                                            opts.experience_load = false;
+                                            opts.flash_load = false;
+                                            opts.speed = speed;
+                                            m.set_tape_load_options(opts);
+                                            tape_status =
+                                                Some(format!("Tape: EAR speed {speed}x"));
+                                            tape_prefs_changed = true;
+                                        }
+                                    }
                                 }
-                                                            }
+                                if let Some(s) = tape_status {
+                                    host.set_status(s);
+                                }
                             }
                             if tape_prefs_changed {
                                 {
                                     let host = &mut *self.session.host_mut();
-                                    if let Some(m) = host.machine.as_ref() {
-                                    self.prefs.set_tape_from_options(m.tape_load_options());
-                                                                    }
+                                    if let Some(m) = host.machine() {
+                                        self.prefs.set_tape_from_options(m.tape_load_options());
+                                    }
                                 }
                                 self.mark_prefs_dirty();
                             }
@@ -2437,21 +2439,20 @@ impl SpecChumApp {
                                 c |= trace::Category::AY;
                             }
                             trace::enable(c);
-                            self.session.host_mut().status = format!(
+                            self.session.host_mut().set_status(format!(
                                 "Trace categories=0x{:x} ({} events)",
                                 c.bits(),
                                 trace::len()
-                            );
+                            ));
                         }
                         if ui.button("Clear ring").clicked() {
                             trace::clear();
-                            self.session.host_mut().status = "Trace cleared".into();
+                            self.session.host_mut().set_status("Trace cleared");
                             ui.close_menu();
                         }
                         if ui.button("Dump to stderr").clicked() {
                             trace::dump_to_stderr();
-                            self.session.host_mut().status =
-                                format!("Dumped {} trace events to stderr", trace::len());
+                            self.session.host_mut().set_status(format!("Dumped {} trace events to stderr", trace::len()));
                             ui.close_menu();
                         }
                         if ui.button("Dump to file…").clicked() {
@@ -2461,11 +2462,10 @@ impl SpecChumApp {
                             {
                                 match trace::dump_to_file(&path) {
                                     Ok(()) => {
-                                        self.session.host_mut().status =
-                                            format!("Trace dump → {}", path.display());
+                                        self.session.host_mut().set_status(format!("Trace dump → {}", path.display()));
                                     }
                                     Err(e) => {
-                                        self.session.host_mut().status = format!("Trace dump failed: {e}");
+                                        self.session.host_mut().set_status(format!("Trace dump failed: {e}"));
                                     }
                                 }
                             }
@@ -2489,8 +2489,7 @@ of their copyrighted material but retain that copyright.",
                     ui.separator();
                     if let Some(p) = self
                         .session
-                        .host_mut().machine
-                        .as_ref()
+                        .host_mut().machine()
                         .and_then(Machine::tape_progress)
                     {
                         ui.add(
@@ -2510,13 +2509,12 @@ of their copyrighted material but retain that copyright.",
                     }
                     if self
                         .session
-                        .host_mut().machine
-                        .as_ref()
+                        .host_mut().machine()
                         .is_some_and(Machine::tape_playing)
                     {
                         ui.strong("▶ tape");
                     }
-                    ui.label(&self.session.host_mut().status);
+                    ui.label(self.session.host_mut().status());
                 });
             });
 
@@ -2529,7 +2527,7 @@ of their copyrighted material but retain that copyright.",
         if self.session.kempston_mouse {
             {
                 let host = &mut *self.session.host_mut();
-                if let Some(machine) = host.machine.as_mut() {
+                if let Some(machine) = host.machine_mut() {
                     let (dx, dy, primary, secondary, middle) = ctx.input(|i| {
                         let d = i.pointer.delta();
                         (
@@ -2553,7 +2551,7 @@ of their copyrighted material but retain that copyright.",
             }
         } else {
             let host = &mut *self.session.host_mut();
-            if let Some(machine) = host.machine.as_mut() {
+            if let Some(machine) = host.machine_mut() {
                 // Drop guest button state when host mouse input is toggled off mid-press.
                 machine.mouse_mut().set_buttons(false, false, false);
             }
@@ -2577,10 +2575,10 @@ of their copyrighted material but retain that copyright.",
             let (image, src) = {
                 let host = &*self.session.host_mut();
                 let image = egui::ColorImage::from_rgba_unmultiplied(
-                    [host.width, host.height],
-                    &host.framebuffer,
+                    [host.width(), host.height()],
+                    host.framebuffer(),
                 );
-                let src = egui::vec2(host.width as f32, host.height as f32);
+                let src = egui::vec2(host.width() as f32, host.height() as f32);
                 (image, src)
             };
             let tex = self.texture.get_or_insert_with(|| {
@@ -2601,10 +2599,9 @@ of their copyrighted material but retain that copyright.",
         let paused = self
             .session
             .host_mut()
-            .machine
-            .as_ref()
+            .machine()
             .is_some_and(|m| m.debugger().paused);
-        let advancing = self.session.host_mut().running && !paused;
+        let advancing = self.session.host_mut().running() && !paused;
         if advancing {
             if self.session.throttle {
                 ctx.request_repaint_after(std::time::Duration::from_millis(20));
@@ -2631,11 +2628,11 @@ of their copyrighted material but retain that copyright.",
                     if paused {
                         if ui.button("Run").clicked() {
                             let _ = self.session.host_mut().continue_execution();
-                            self.session.host_mut().running = true;
+                            self.session.host_mut().set_running(true);
                         }
                     } else if ui.button("Pause").clicked() {
                         self.session.host_mut().set_paused(true);
-                        self.session.host_mut().status = "Paused".into();
+                        self.session.host_mut().set_status("Paused");
                     }
                     if ui.button("Step").clicked() {
                         let _ = self.session.host_mut().debug_step();
@@ -2846,7 +2843,7 @@ mod tests {
     fn quote_maps_to_symbol_p_on_session() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         }
@@ -2858,7 +2855,7 @@ mod tests {
         };
         session.sync_keyboard(&keys, mods, JoystickState::empty());
         let host = &mut *session.host_mut();
-        let kb = host.machine.as_mut().unwrap().keyboard_mut();
+        let kb = host.machine_mut().unwrap().keyboard_mut();
         // Symbol (row7 bit1) and P (row5 bit0) active-low
         assert_eq!(kb.rows[7] & (1 << 1), 0);
         assert_eq!(kb.rows[5] & (1 << 0), 0);
@@ -2870,27 +2867,32 @@ mod tests {
     fn arrow_left_maps_joystick_kempston_and_cursor_mode() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             return;
         }
         let mut keys = std::collections::HashSet::new();
         keys.insert(egui::Key::ArrowLeft);
-        session.host_mut().joystick_mode = JoystickMode::Kempston;
+        session
+            .host_mut()
+            .set_joystick_mode(JoystickMode::Kempston)
+            .ok();
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         assert!(
             session
                 .host_mut()
-                .machine
-                .as_mut()
+                .machine_mut()
                 .unwrap()
                 .kempston_mut()
                 .left
         );
 
-        session.host_mut().joystick_mode = JoystickMode::Cursor;
+        session
+            .host_mut()
+            .set_joystick_mode(JoystickMode::Cursor)
+            .ok();
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let host = &mut *session.host_mut();
-        let m = host.machine.as_mut().unwrap();
+        let m = host.machine_mut().unwrap();
         let rows = m.keyboard_mut().rows;
         assert_eq!(rows[0] & 1, 0); // Caps
         assert_eq!(rows[3] & (1 << 4), 0); // 5
@@ -2901,15 +2903,18 @@ mod tests {
     fn physical_num1_survives_sinclair_left_joystick_clear() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             return;
         }
         let mut keys = std::collections::HashSet::new();
         keys.insert(egui::Key::Num1);
-        session.host_mut().joystick_mode = JoystickMode::SinclairLeft;
+        session
+            .host_mut()
+            .set_joystick_mode(JoystickMode::SinclairLeft)
+            .ok();
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let host = &mut *session.host_mut();
-        let rows = host.machine.as_mut().unwrap().keyboard_mut().rows;
+        let rows = host.machine_mut().unwrap().keyboard_mut().rows;
         // Num1 = row 3 bit 0 must stay pressed even though Sinclair clears that row first.
         assert_eq!(rows[3] & (1 << 0), 0);
     }
@@ -2918,15 +2923,18 @@ mod tests {
     fn physical_num5_survives_cursor_joystick_clear() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             return;
         }
         let mut keys = std::collections::HashSet::new();
         keys.insert(egui::Key::Num5);
-        session.host_mut().joystick_mode = JoystickMode::Cursor;
+        session
+            .host_mut()
+            .set_joystick_mode(JoystickMode::Cursor)
+            .ok();
         session.sync_keyboard(&keys, egui::Modifiers::default(), JoystickState::empty());
         let host = &mut *session.host_mut();
-        let rows = host.machine.as_mut().unwrap().keyboard_mut().rows;
+        let rows = host.machine_mut().unwrap().keyboard_mut().rows;
         // Num5 = row 3 bit 4 (also used as Cursor left); physical hold must remain.
         assert_eq!(rows[3] & (1 << 4), 0);
     }
@@ -2951,7 +2959,7 @@ mod tests {
         }
         let mut session = EmulatorSession::new(Model::Spectrum128, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: 128K ROM missing");
             return;
         }
@@ -2960,7 +2968,7 @@ mod tests {
         session.load_snapshot(&path);
         assert_eq!(session.model(), Model::Spectrum48);
         assert_eq!(
-            session.host_mut().machine.as_ref().map(Machine::model),
+            session.host_mut().machine().map(Machine::model),
             Some(Model::Spectrum48)
         );
         let _ = std::fs::remove_file(&path);
@@ -2975,7 +2983,7 @@ mod tests {
         }
         let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: +3 ROM missing");
             return;
         }
@@ -2984,7 +2992,7 @@ mod tests {
         session.load_snapshot(&path);
         assert_eq!(session.model(), Model::Spectrum48);
         assert_eq!(
-            session.host_mut().machine.as_ref().map(Machine::model),
+            session.host_mut().machine().map(Machine::model),
             Some(Model::Spectrum48)
         );
         let _ = std::fs::remove_file(&path);
@@ -2994,7 +3002,7 @@ mod tests {
     fn tzx_standard_inserts_as_paused_tap() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             return;
         }
         let boggit = PathBuf::from("/Users/michael/Downloads/BoggitThe/The Boggit - Side 1.tzx");
@@ -3003,19 +3011,19 @@ mod tests {
             let tap =
                 EmulatorSession::workspace_root().join("tests/fixtures/tape/minimal_code.tap");
             session.load_tap(&tap);
-            assert!(!session.host_mut().machine.as_ref().unwrap().tape_playing());
+            assert!(!session.host_mut().machine().unwrap().tape_playing());
             session.play_tape();
-            assert!(session.host_mut().machine.as_ref().unwrap().tape_playing());
+            assert!(session.host_mut().machine().unwrap().tape_playing());
             return;
         }
         session.load_tzx(&boggit);
         assert!(
-            session.host_mut().status.contains("as TAP"),
+            session.host_mut().status().contains("as TAP"),
             "status={}",
-            session.host_mut().status
+            session.host_mut().status()
         );
-        assert!(!session.host_mut().machine.as_ref().unwrap().tape_playing());
-        assert!(session.host_mut().machine.as_ref().unwrap().has_tape());
+        assert!(!session.host_mut().machine().unwrap().tape_playing());
+        assert!(session.host_mut().machine().unwrap().has_tape());
         session.type_load_quotes();
         assert!(session.key_script.is_some());
         // PRESS/GAP timings need more than 40 frames for the full script.
@@ -3031,7 +3039,7 @@ mod tests {
     fn type_load_quotes_code_script_finishes() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         }
@@ -3050,7 +3058,7 @@ mod tests {
     fn plus3_type_load_code_flash_loads_attr_mark() {
         let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: plus3/plus2a ROM missing");
             return;
         }
@@ -3067,11 +3075,11 @@ mod tests {
         assert!(
             !session
                 .host_mut()
-                .status
+                .status()
                 .to_lowercase()
                 .contains("tape loader"),
             "must not point +3 users at disk Loader; status={}",
-            session.host_mut().status
+            session.host_mut().status()
         );
         // Menu → 48 BASIC wait (~120) + LOAD "" CODE (~100) needs >300 frames.
         for _ in 0..500 {
@@ -3086,7 +3094,7 @@ mod tests {
             "plus3 Type LOAD script should finish"
         );
         // Instant-style flash for this regression (Play alone is EAR-only).
-        if let Some(m) = session.host_mut().machine.as_mut() {
+        if let Some(m) = session.host_mut().machine_mut() {
             let mut opts = m.tape_load_options();
             opts.flash_load = true;
             m.set_tape_load_options(opts);
@@ -3096,7 +3104,7 @@ mod tests {
         for _ in 0..400 {
             session.tick_frame();
             let host = &*session.host_mut();
-            let m = host.machine.as_ref().unwrap();
+            let m = host.machine().unwrap();
             let code_ok = m.read_mem(0x8000) == 0x21
                 && m.read_mem(0x8001) == 0x00
                 && m.read_mem(0x8002) == 0x58
@@ -3110,7 +3118,7 @@ mod tests {
         }
         {
             let host = &*session.host_mut();
-            let m = host.machine.as_ref().unwrap();
+            let m = host.machine().unwrap();
             assert!(
                 loaded,
                 "plus3 egui Type LOAD CODE + flash Play should load attr_mark at 0x8000 (PC={:04X} block={:?})",
@@ -3124,32 +3132,32 @@ mod tests {
     fn play_tape_advances_ear_on_fixture() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         }
         let tap = EmulatorSession::workspace_root().join("tests/fixtures/tape/minimal_code.tap");
         session.load_tap(&tap);
-        if let Some(m) = session.host_mut().machine.as_mut() {
+        if let Some(m) = session.host_mut().machine_mut() {
             let mut opts = m.tape_load_options();
             opts.flash_load = false;
             m.set_tape_load_options(opts);
         }
-        assert!(!session.host_mut().machine.as_ref().unwrap().tape_playing());
+        assert!(!session.host_mut().machine().unwrap().tape_playing());
         for _ in 0..3 {
             session.tick_frame();
         }
         assert!(
-            !session.host_mut().machine.as_ref().unwrap().ear(),
+            !session.host_mut().machine().unwrap().ear(),
             "paused tape must not drive EAR"
         );
         session.play_tape();
-        assert!(session.host_mut().machine.as_ref().unwrap().tape_playing());
-        assert!(session.host_mut().status.contains("playing"));
+        assert!(session.host_mut().machine().unwrap().tape_playing());
+        assert!(session.host_mut().status().contains("playing"));
         let mut saw_high = false;
         for _ in 0..8 {
             session.tick_frame();
-            if session.host_mut().machine.as_ref().unwrap().ear() {
+            if session.host_mut().machine().unwrap().ear() {
                 saw_high = true;
                 break;
             }
@@ -3161,35 +3169,31 @@ mod tests {
     fn session_loads_tap_fixture_headless() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         }
         let tap = EmulatorSession::workspace_root().join("tests/fixtures/tape/minimal_code.tap");
         session.load_tap(&tap);
         assert!(
-            session.host_mut().status.contains("Inserted TAP"),
+            session.host_mut().status().contains("Inserted TAP"),
             "status={}",
-            session.host_mut().status
+            session.host_mut().status()
         );
         assert_eq!(
-            session
-                .host_mut()
-                .machine
-                .as_ref()
-                .and_then(Machine::tape_block),
+            session.host_mut().machine().and_then(Machine::tape_block),
             Some(0)
         );
-        let before = session.host_mut().framebuffer.clone();
+        let before = session.host_mut().framebuffer().to_vec();
         for _ in 0..5 {
             session.tick_frame();
         }
         assert_ne!(
-            session.host_mut().framebuffer,
-            before,
+            session.host_mut().framebuffer(),
+            before.as_slice(),
             "framebuffer should update"
         );
-        assert!(session.host_mut().machine.as_ref().unwrap().cpu().t > 0);
+        assert!(session.host_mut().machine().unwrap().cpu().t > 0);
     }
 
     #[test]
@@ -3202,12 +3206,12 @@ mod tests {
         let _ = ctx.run(raw, |ctx| {
             app.ui(ctx);
             saw_file = true;
-            saw_machine = app.session.host_mut().status.contains("Loaded")
-                || app.session.host_mut().status.contains("Missing")
-                || app.session.host_mut().status.contains("ROM");
+            saw_machine = app.session.host_mut().status().contains("Loaded")
+                || app.session.host_mut().status().contains("Missing")
+                || app.session.host_mut().status().contains("ROM");
         });
         assert!(saw_file);
-        assert!(saw_machine, "status={}", app.session.host_mut().status);
+        assert!(saw_machine, "status={}", app.session.host_mut().status());
         // Second frame after menus exist — menu strip must reserve clickable height.
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             app.ui(ctx);
@@ -3216,7 +3220,7 @@ mod tests {
                 "menu bar must be tall enough to click"
             );
         });
-        assert_eq!(app.session.host_mut().framebuffer.len(), 352 * 296 * 4);
+        assert_eq!(app.session.host_mut().framebuffer().len(), 352 * 296 * 4);
         assert_eq!(ctx.style().visuals.panel_fill.a(), 255);
     }
 
@@ -3231,7 +3235,7 @@ mod tests {
         assert!(app.session.debug_open);
         {
             let host = &mut *app.session.host_mut();
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 let pc = m.cpu().regs.pc;
                 m.step_once();
                 assert_ne!(m.cpu().regs.pc, pc, "step_once should advance PC");
@@ -3269,10 +3273,10 @@ mod tests {
         assert!(app.session.muted);
         assert!(!app.session.throttle);
         assert!(app.session.kempston_mouse);
-        assert_eq!(app.session.host_mut().joystick_mode, JoystickMode::Cursor);
+        assert_eq!(app.session.host_mut().joystick_mode(), JoystickMode::Cursor);
         {
             let host = &*app.session.host_mut();
-            if let Some(m) = host.machine.as_ref() {
+            if let Some(m) = host.machine() {
                 let opts = m.tape_load_options();
                 assert!(opts.experience_load);
                 assert!(!opts.flash_load);
@@ -3283,8 +3287,8 @@ mod tests {
     #[test]
     fn emulator_session_uses_host_session() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
-        assert_eq!(session.host_mut().model, ModelId::Spectrum48);
-        assert!(session.host_mut().running);
+        assert_eq!(session.host_mut().model(), ModelId::Spectrum48);
+        assert!(session.host_mut().running());
         let _ = session.host_mut().inspect_text(); // HostSession debug API available
     }
 
@@ -3292,15 +3296,15 @@ mod tests {
     fn gui_and_control_plane_share_live_session() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();
-        if session.host_mut().machine.is_none() {
+        if !session.host_mut().has_machine() {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         }
         let plane = ControlPlane::from_shared(session.share_host());
-        session.host_mut().running = false;
+        session.host_mut().set_running(false);
         let after = {
             let host = &mut *session.host_mut();
-            let m = host.machine.as_mut().expect("machine");
+            let m = host.machine_mut().expect("machine");
             let before = m.cpu().regs.pc;
             m.step_once();
             let after = m.cpu().regs.pc;
@@ -3314,23 +3318,16 @@ mod tests {
             "control_plane inspect must see GUI PC={after}: {inspect}"
         );
         plane.with_host_mut(|host| {
-            if let Some(m) = host.machine.as_mut() {
+            if let Some(m) = host.machine_mut() {
                 m.step_once();
             }
         });
         let gui_pc = {
             let host = &*session.host_mut();
-            host.machine
-                .as_ref()
-                .map(|m| m.cpu().regs.pc)
-                .expect("machine")
+            host.machine().map(|m| m.cpu().regs.pc).expect("machine")
         };
-        let plane_pc = plane.with_host_ref(|host| {
-            host.machine
-                .as_ref()
-                .map(|m| m.cpu().regs.pc)
-                .expect("machine")
-        });
+        let plane_pc =
+            plane.with_host_ref(|host| host.machine().map(|m| m.cpu().regs.pc).expect("machine"));
         assert_eq!(
             gui_pc, plane_pc,
             "GUI and ControlPlane must share one machine"

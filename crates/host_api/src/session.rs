@@ -124,25 +124,24 @@ pub struct HostRegs {
 
 /// Host-owned emulator session: machine + RGBA framebuffer + status.
 ///
-/// Fields are `pub` for in-process hosts (egui / living_room) that need direct
-/// framebuffer and machine access on the hot path. Prefer the accessor methods
-/// from new code; a follow-up can re-privatize once egui fully delegates (#221).
+/// Fields are private; in-process hosts (egui / living_room) use accessors
+/// (`machine` / `machine_mut`, `framebuffer`, `set_status`, `set_border`, …).
 #[derive(Debug)]
 pub struct HostSession {
-    pub machine: Option<Machine>,
-    pub model: ModelId,
-    pub with_border: bool,
-    pub framebuffer: Vec<u8>,
-    pub width: usize,
-    pub height: usize,
-    pub running: bool,
-    pub status: String,
+    machine: Option<Machine>,
+    model: ModelId,
+    with_border: bool,
+    framebuffer: Vec<u8>,
+    width: usize,
+    height: usize,
+    running: bool,
+    status: String,
     /// Mono PCM for the last frame (~882 samples @ 44100 Hz / 50 fps).
     audio_pcm: Vec<f32>,
     /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
     last_speaker_level: bool,
     /// Host joystick presentation mode.
-    pub joystick_mode: JoystickMode,
+    joystick_mode: JoystickMode,
     /// Last applied host joystick mask state.
     joystick_state: JoystickState,
     /// Host-held Spectrum matrix keys so Sinclair/Cursor joystick clears do not drop them.
@@ -235,6 +234,19 @@ impl HostSession {
     /// Mutable borrow of the live machine (egui / in-process hosts).
     pub fn machine_mut(&mut self) -> Option<&mut Machine> {
         self.machine.as_mut()
+    }
+
+    /// Install a booted machine into this session.
+    pub fn set_machine(&mut self, machine: Machine) {
+        self.machine = Some(machine);
+        self.reapply_host_keys();
+        self.last_speaker_level = false;
+    }
+
+    /// Drop the live machine (model selection retained).
+    pub fn clear_machine(&mut self) {
+        self.machine = None;
+        self.last_speaker_level = false;
     }
 
     /// Replace the host status string (UI / debug surfaces).
@@ -624,12 +636,13 @@ impl HostSession {
         Ok(())
     }
 
+    /// Set joystick presentation mode. Recomposes input when a machine is loaded;
+    /// otherwise stores the preference for the next boot (egui prefs / pre-ROM).
     pub fn set_joystick_mode(&mut self, mode: JoystickMode) -> Result<(), HostError> {
-        let Some(m) = self.machine.as_mut() else {
-            return Err(HostError::NoMachine);
-        };
         self.joystick_mode = mode;
-        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        if let Some(m) = self.machine.as_mut() {
+            Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        }
         Ok(())
     }
 

@@ -60,7 +60,8 @@ SpecChumMac uses the C ABI (`sc_debug_*`, `sc_inspect_json`, …) for in-app Deb
 menus — those entry points are **FFI-only** (see
 [`AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) Phase C). For agents and headless
 automation, run a **standalone** loopback server (no in-process embed yet —
-[#221](https://github.com/mward-sudo/spec_chum/issues/221)):
+deferred on [#210](https://github.com/mward-sudo/spec_chum/issues/210) until
+cycle-safe):
 
 ```bash
 ./scripts/fetch_roms.sh
