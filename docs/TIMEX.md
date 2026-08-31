@@ -8,7 +8,7 @@ Timex Sinclair support in Spec Chum is tracked in
 | **1** | **TC2048** | Shipped ([#203](https://github.com/mward-sudo/spec_chum/pull/203)): 48K-class + SCLD port latches |
 | **2a** | **TS2068 / TC2068** | Smoke-boot: home + EX-ROM, horizontal MMU, Timex AY ports |
 | **2a+** | (same) | Warajevo **`.dck` dock** — HOME Spectrum cart smoke (PROG/`$0556`) + optional Death Chase EAR |
-| **2b** | (same) | Full **SCLD video** (512×192, extended / dual-screen) — deferred |
+| **2b** | (same) | **Partial:** alt display file + hi-colour (8×1) at 256×192 — shipped this slice; **512×192 hi-res still deferred** |
 
 Portuguese **TC2068** and US **TS2068** share the same ROM set and memory model here;
 the picker label is **Timex TS2068**.
@@ -36,15 +36,15 @@ equivalent dumps in the ROM setup dialog).
 | Piece | Behaviour |
 | --- | --- |
 | CPU / RAM / contention | 48K-class core |
-| Display | Standard Sinclair **256×192** ULA path |
+| Display | Sinclair **256×192** + Timex **alt file** / **hi-colour (8×1)** via port `0xFF` |
 | TC2048 ROM | Timex TC2048 firmware |
 | TS2068 ROMs | Home BASIC + EX-ROM bank 0′ |
-| SCLD ports `0xFF` / `0xF4` | Latched (both models) |
+| SCLD ports `0xFF` / `0xF4` | Latched (both models); screen modes 0–3 drawn |
 | Horizontal MMU (TS2068) | HSR bits page EX-ROM or DOCK over 8K chunks; EX-ROM mirrored per Fuse |
 | AY (TS2068) | Ports `0xF5` / `0xF6` (Timex wiring); stereo pan selectable |
 | Timex joysticks on AY R14 | Modelled (Fuse bit layout); host Kempston remapped to both sticks |
 | Dock cartridges | Warajevo `.dck` insert/eject (TS2068); empty dock reads `0xFF` |
-| SCLD video | **Not implemented** — no Timex ULA / hi-res framebuffer |
+| SCLD hi-res video | **Not implemented** — modes 4–7 (512×192) still fall back to standard layout |
 
 ## Dock cartridges (`.dck`)
 
@@ -104,12 +104,12 @@ Automated coverage (ROMs present; Death Chase TZX optional):
 
 ## Known limitations
 
-Software that stays on the normal Spectrum screen behaves as expected. Anything that
-switches into **hi-res or extended display modes** will look wrong:
+Software that stays on the normal Spectrum screen, **alt display file** (`OUT 255,1`),
+or **hi-colour** (`OUT 255,2` / `3`) behaves as expected at 256×192. **512×192 hi-res**
+modes (`OUT 255,4`–`7`) still look wrong:
 
-- **512×192 hi-res** — garbled or incorrectly laid out (SCLD video deferred)
-- **Extended / dual-screen modes** — broken visually
-- Border / paging side effects of those modes — not modelled
+- **512×192 hi-res** — still drawn as standard 256×192 (SCLD hi-res deferred)
+- Border colour override from hi-res ink/paper bits — not modelled
 - Dedicated Timex joystick input modes (separate from Kempston) — not yet
 - LROS/AROS autostart semantics beyond memory mapping — not specially modelled
   (cartridge bytes are mapped; Timex ROM still decides what to jump to)
@@ -131,8 +131,8 @@ Spectrum ROM cartridge — only ~7% of commercial Spectrum titles run):
    Spectrum addresses and will not start on stock Timex home. Use **Timex TC2048**,
    **48K**, or a **HOME Spectrum `.dck`** on TS2068.
 
-Do not expect Timex-specific demos, art packages, or games that depend on 512×192 to
-render correctly until SCLD video lands.
+Do not expect Timex demos or art packages that depend on **512×192** to render
+correctly until SCLD hi-res lands.
 
 ## Selecting the model
 

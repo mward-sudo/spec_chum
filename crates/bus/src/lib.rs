@@ -27,7 +27,9 @@ pub use kempston_mouse::{
 };
 pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
-pub use timex::{timex_joystick_mask, TimexScld, TIMEX_EXROM_SIZE};
+pub use timex::{
+    timex_joystick_mask, TimexScld, TimexScreenMode, TIMEX_ALTDFILE_OFFSET, TIMEX_EXROM_SIZE,
+};
 pub use timex_dock::{TimexDock, TimexDockChunk, TimexDockError};
 
 use ula::{

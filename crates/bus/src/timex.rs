@@ -1,13 +1,16 @@
 //! Timex SCLD ports for TC2048 / TS2068 (#192).
 //!
 //! Phase 1 (TC2048): latch ports 0xFF and 0xF4 so Timex ROM and BASIC extensions
-//! can configure display modes; extended 512×192 rendering is follow-up work.
+//! can configure display modes.
 //!
 //! Phase 2a (TS2068 / TC2068): horizontal MMU uses those latches — bit 7 of
 //! port 0xFF selects EX-ROM vs DOCK; port 0xF4 selects which 8K chunks
 //! are overlaid on the home bank. AY ports F5/F6 plus R14 Timex joysticks
 //! (Fuse-compatible bit layout). Dock cartridges: Warajevo `.dck` via
 //! [`crate::TimexDock`].
+//!
+//! Phase 2b (partial): port `0xFF` screen modes 0–3 drive 256×192 SCLD video
+//! (alt display file + hi-colour). Modes 4–7 (512×192 hi-res) remain deferred.
 
 /// Size of the Timex TS2068 / TC2068 EX-ROM bank (chunk 0').
 pub const TIMEX_EXROM_SIZE: usize = 8192;
@@ -32,6 +35,54 @@ pub fn timex_joystick_mask(up: bool, down: bool, left: bool, right: bool, fire: 
         v |= 0x80;
     }
     v
+}
+
+/// Offset of the Timex alternate display file within the 16K screen RAM page
+/// (Fuse `ALTDFILE_OFFSET`).
+pub const TIMEX_ALTDFILE_OFFSET: usize = 0x2000;
+
+/// Low 3 bits of port `0xFF` — Fuse `scrnmode` (SCLD DEC).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TimexScreenMode {
+    /// Standard Spectrum 256×192 (bitmap + 8×8 attrs at `0x4000`).
+    Standard = 0,
+    /// Second display file at `+0x2000` (bitmap + 8×8 attrs).
+    AltFile = 1,
+    /// Hi-colour: primary bitmap, 8×1 attrs from alt file (scrambled).
+    ExtColour = 2,
+    /// Hi-colour with bitmap + 8×1 attrs both from alt file.
+    ExtColourAlt = 3,
+    /// 512×192 family (hi-res) — not rendered yet; hosts keep 256×192 path.
+    HiresAttr = 4,
+    HiresAttrAlt = 5,
+    Hires = 6,
+    HiresDoubleCol = 7,
+}
+
+impl TimexScreenMode {
+    #[must_use]
+    pub fn from_port_ff(port_ff: u8) -> Self {
+        match port_ff & 0x07 {
+            1 => Self::AltFile,
+            2 => Self::ExtColour,
+            3 => Self::ExtColourAlt,
+            4 => Self::HiresAttr,
+            5 => Self::HiresAttrAlt,
+            6 => Self::Hires,
+            7 => Self::HiresDoubleCol,
+            _ => Self::Standard,
+        }
+    }
+
+    /// Modes that stay at 256×192 and are drawn by the Phase 2b slice.
+    #[must_use]
+    pub const fn is_lores_scld(self) -> bool {
+        matches!(
+            self,
+            Self::Standard | Self::AltFile | Self::ExtColour | Self::ExtColourAlt
+        )
+    }
 }
 
 /// Timex SCLD latch state (ports 0xFF and 0xF4).
@@ -59,6 +110,18 @@ impl TimexScld {
     #[must_use]
     pub fn port_f4(&self) -> u8 {
         self.port_f4
+    }
+
+    /// Screen mode from port `0xFF` bits 0–2 (Fuse `scrnmode`).
+    #[must_use]
+    pub fn screen_mode(&self) -> TimexScreenMode {
+        TimexScreenMode::from_port_ff(self.port_ff)
+    }
+
+    /// Bit 6 of port `0xFF`: when set, ULA interrupts are inhibited (Fuse `intdisable`).
+    #[must_use]
+    pub fn int_disabled(&self) -> bool {
+        self.port_ff & 0x40 != 0
     }
 
     /// Bit 7 of port 0xFF: `true` = EX-ROM bank, `false` = DOCK / cartridge.
@@ -145,5 +208,19 @@ mod tests {
         assert!(!scld.chunk_paged(1));
         assert_eq!(TimexScld::chunk_of(0x1FFF), 0);
         assert_eq!(TimexScld::chunk_of(0x2000), 1);
+    }
+
+    #[test]
+    fn screen_mode_and_int_disable_from_port_ff() {
+        let mut scld = TimexScld::new();
+        assert_eq!(scld.screen_mode(), TimexScreenMode::Standard);
+        assert!(!scld.int_disabled());
+        scld.out_port(0x00FF, 0x02);
+        assert_eq!(scld.screen_mode(), TimexScreenMode::ExtColour);
+        scld.out_port(0x00FF, 0x46);
+        assert_eq!(scld.screen_mode(), TimexScreenMode::Hires);
+        assert!(scld.int_disabled());
+        assert!(!scld.screen_mode().is_lores_scld());
+        assert!(TimexScreenMode::ExtColourAlt.is_lores_scld());
     }
 }

@@ -1675,7 +1675,7 @@ impl SpecChumApp {
                         ui.label("Built-in models");
                         ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
                         ui.weak(
-                            "Timex TC2048 / TS2068: 256×192 OK; 512×192 hi-res / extended SCLD modes not drawn — docs/TIMEX.md.",
+                            "Timex TC2048 / TS2068: alt file + hi-colour OK; 512×192 hi-res not drawn — docs/TIMEX.md.",
                         );
                         for pick in machine::ALL_MODELS {
                             let pref = PrefModel::from_model(pick);
@@ -1701,7 +1701,7 @@ impl SpecChumApp {
                             } else if pick == Model::TimexTC2048 || pick == Model::TimexTS2068 {
                                 response.clone().on_hover_text(
                                     "Timex: home/EX-ROM + SCLD MMU (TS2068) / latches (TC2048); \
-                                     standard 256×192 only — hi-res / extended modes broken (docs/TIMEX.md)",
+                                     alt file + hi-colour OK — 512×192 hi-res deferred (docs/TIMEX.md)",
                                 );
                             }
                             if response.clicked() {
