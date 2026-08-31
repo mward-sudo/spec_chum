@@ -25,6 +25,7 @@ async fn agent_api_run_inspect_and_framebuffer_png() {
     let app = router(AppState {
         plane: plane.clone(),
         token: None,
+        insecure: true,
     });
 
     let health = app
@@ -109,6 +110,7 @@ async fn agent_api_mem_watch_list_and_add() {
     let app = router(AppState {
         plane: plane.clone(),
         token: None,
+        insecure: true,
     });
 
     let list = app
@@ -135,4 +137,37 @@ async fn agent_api_mem_watch_list_and_add() {
         .await
         .expect("add watch");
     assert_eq!(add.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_load_rom_by_path() {
+    let rom_path = match machine::resolve_rom_path(Model::Spectrum48) {
+        Some(p) => p,
+        None => {
+            eprintln!("skip: Spectrum 48 ROM missing");
+            return;
+        }
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let load = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/rom")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": rom_path })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("load rom");
+    assert_eq!(load.status(), StatusCode::NO_CONTENT);
+    assert!(plane.health().expect("health").has_machine);
 }

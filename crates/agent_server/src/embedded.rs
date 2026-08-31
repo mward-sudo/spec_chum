@@ -22,6 +22,7 @@ const READY_TIMEOUT: Duration = Duration::from_secs(5);
 /// Spawn a loopback agent server on a background thread (non-blocking for UI hosts).
 pub fn spawn(config: ServerConfig, plane: Arc<ControlPlane>) -> Result<EmbeddedServer> {
     control_plane::ServerConfig::validate_bind_host(&config.host)?;
+    config.validate_auth_config()?;
     let addr = config.socket_addr();
     let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
     let thread = thread::Builder::new()
@@ -108,6 +109,7 @@ mod tests {
             host: "127.0.0.1".into(),
             port,
             token: None,
+            insecure: true,
         };
         let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
         let result = spawn(config, plane);

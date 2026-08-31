@@ -23,6 +23,7 @@ pub type SharedPlane = Arc<ControlPlane>;
 pub struct AppState {
     pub plane: SharedPlane,
     pub token: Option<String>,
+    pub insecure: bool,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -40,6 +41,8 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/peek", get(peek))
         .route("/v1/poke", post(poke))
         .route("/v1/disasm", get(disasm))
+        .route("/v1/rom", post(load_rom))
+        .route("/v1/snapshot", post(load_snapshot))
         .route("/v1/tape/open", post(tape_open))
         .route("/v1/tape/play", post(tape_play))
         .route("/v1/tape/pause", post(tape_pause))
@@ -74,10 +77,14 @@ pub async fn serve(
     ready: Option<ReadySender>,
 ) -> anyhow::Result<()> {
     control_plane::ServerConfig::validate_bind_host(&config.host)?;
+    config
+        .validate_auth_config()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     let addr = (config.host.as_str(), config.port);
     let state = AppState {
         plane,
         token: config.token.clone(),
+        insecure: config.insecure,
     };
     let app = router(state);
     let listener = match tokio::net::TcpListener::bind(addr).await {
@@ -100,9 +107,13 @@ pub async fn serve(
     Ok(())
 }
 
-fn check_auth(headers: &HeaderMap, token: &Option<String>) -> Result<(), ApiError> {
-    let Some(expected) = token else {
-        return Ok(());
+fn check_auth(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+    let Some(expected) = &state.token else {
+        return if state.insecure {
+            Ok(())
+        } else {
+            Err(ApiError::Unauthorized)
+        };
     };
     let auth = headers
         .get(header::AUTHORIZATION)
@@ -123,7 +134,7 @@ fn api_error(err: ApiError) -> Response {
 }
 
 async fn health(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    match check_auth(&headers, &state.token) {
+    match check_auth(&state, &headers) {
         Ok(()) => match state.plane.health() {
             Ok(body) => Json(body).into_response(),
             Err(e) => api_error(e),
@@ -137,7 +148,7 @@ async fn status(State(state): State<AppState>, headers: HeaderMap) -> Response {
 }
 
 async fn inspect(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    match check_auth(&headers, &state.token) {
+    match check_auth(&state, &headers) {
         Ok(()) => match state.plane.inspect_json() {
             Ok(json) => ([(header::CONTENT_TYPE, "application/json")], json).into_response(),
             Err(e) => api_error(e),
@@ -163,7 +174,7 @@ async fn framebuffer(
     headers: HeaderMap,
     Query(q): Query<FramebufferQuery>,
 ) -> Response {
-    if let Err(e) = check_auth(&headers, &state.token) {
+    if let Err(e) = check_auth(&state, &headers) {
         return api_error(e);
     }
     let restore_border = if let Some(border) = q.border {
@@ -359,7 +370,7 @@ async fn peek(
         Ok(a) => a,
         Err(e) => return api_error(e),
     };
-    match check_auth(&headers, &state.token) {
+    match check_auth(&state, &headers) {
         Ok(()) => match state.plane.peek(addr, q.len) {
             Ok(text) => {
                 ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response()
@@ -408,7 +419,7 @@ async fn disasm(
         Ok(a) => a,
         Err(e) => return api_error(e),
     };
-    match check_auth(&headers, &state.token) {
+    match check_auth(&state, &headers) {
         Ok(()) => match state.plane.disasm(addr, q.count) {
             Ok(text) => {
                 ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response()
@@ -422,6 +433,26 @@ async fn disasm(
 #[derive(Debug, Deserialize)]
 struct PathBody {
     path: String,
+}
+
+async fn load_rom(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PathBody>,
+) -> Response {
+    auth_empty(&state, &headers, || {
+        state.plane.load_rom_path(body.path.as_ref())
+    })
+}
+
+async fn load_snapshot(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PathBody>,
+) -> Response {
+    auth_empty(&state, &headers, || {
+        state.plane.load_snapshot(body.path.as_ref())
+    })
 }
 
 async fn tape_open(
@@ -637,7 +668,7 @@ async fn trace_dump(
             )))
         }
     };
-    match check_auth(&headers, &state.token) {
+    match check_auth(&state, &headers) {
         Ok(()) => match state.plane.trace_dump(format, q.last) {
             Ok(text) => {
                 let ctype = match format {
@@ -657,7 +688,7 @@ async fn trace_clear(State(state): State<AppState>, headers: HeaderMap) -> Respo
 }
 
 async fn rom_setup(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    match check_auth(&headers, &state.token) {
+    match check_auth(&state, &headers) {
         Ok(()) => match state.plane.rom_setup() {
             Ok(json) => ([(header::CONTENT_TYPE, "application/json")], json).into_response(),
             Err(e) => api_error(e),
@@ -685,7 +716,7 @@ fn auth_empty(
     headers: &HeaderMap,
     f: impl FnOnce() -> Result<(), ApiError>,
 ) -> Response {
-    match check_auth(headers, &state.token) {
+    match check_auth(state, headers) {
         Ok(()) => match f() {
             Ok(()) => StatusCode::NO_CONTENT.into_response(),
             Err(e) => api_error(e),
@@ -699,7 +730,7 @@ fn auth_json<T: Serialize>(
     headers: &HeaderMap,
     f: impl FnOnce() -> Result<T, ApiError>,
 ) -> Response {
-    match check_auth(headers, &state.token) {
+    match check_auth(state, headers) {
         Ok(()) => match f() {
             Ok(body) => Json(body).into_response(),
             Err(e) => api_error(e),
@@ -713,7 +744,7 @@ where
     T: Serialize + Send + 'static,
     F: FnOnce() -> Result<T, ApiError> + Send + 'static,
 {
-    match check_auth(headers, &state.token) {
+    match check_auth(state, headers) {
         Ok(()) => match tokio::task::spawn_blocking(f).await {
             Ok(Ok(body)) => Json(body).into_response(),
             Ok(Err(e)) => api_error(e),
@@ -727,7 +758,7 @@ async fn auth_empty_blocking<F>(state: &AppState, headers: &HeaderMap, f: F) -> 
 where
     F: FnOnce() -> Result<(), ApiError> + Send + 'static,
 {
-    match check_auth(headers, &state.token) {
+    match check_auth(state, headers) {
         Ok(()) => match tokio::task::spawn_blocking(f).await {
             Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
             Ok(Err(e)) => api_error(e),
@@ -770,7 +801,11 @@ mod tests {
 
     fn test_app() -> Router {
         let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
-        router(AppState { plane, token: None })
+        router(AppState {
+            plane,
+            token: None,
+            insecure: true,
+        })
     }
 
     #[tokio::test]

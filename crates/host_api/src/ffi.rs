@@ -1127,6 +1127,8 @@ pub extern "C" fn sc_string_free(s: *mut c_char) {
     drop(unsafe { CString::from_raw(s) });
 }
 
+/// Trace / debug observability (#210 Phase C): thin C ABI over the global `trace`
+/// ring and `HostSession` debug helpers — same sources as `control_plane` HTTP routes.
 /// Apply `SPEC_CHUM_DEBUG` / `SPEC_CHUM_TRACE` (idempotent).
 #[no_mangle]
 pub extern "C" fn sc_debug_init_from_env() {

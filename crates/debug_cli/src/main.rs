@@ -1,19 +1,20 @@
 //! Headless debugger: inspect, trace, step, and run-until-break.
+//!
+//! Local commands route through [`HostSession`] (same backend as `control_plane` / agent HTTP).
+//! Set `SPEC_CHUM_AGENT_URL` or `--agent-url` to drive a long-lived agent server instead.
 
 mod agent_client;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_client::AgentClient;
 use agent_server::routes::serve;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use control_plane::{ControlPlane, ServerConfig};
-use formats::{Snapshot128, Snapshot128Model, Snapshot48};
-use machine::{BreakReason, Machine, Model, TapeLoadOptions, Watch};
-use spec_chum_host::{HostSession, ModelId};
-use tape::{TapPlayer, TzxPlayer};
+use control_plane::{parse_model_slug, ControlPlane, ServerConfig};
+use machine::{BreakReason, TapeLoadOptions, Watch};
+use spec_chum_host::{HostError, HostSession, ModelId};
 use trace::DumpFilter;
 
 #[derive(Parser, Debug)]
@@ -121,50 +122,40 @@ fn parse_u16(s: &str) -> Result<u16> {
     }
 }
 
-fn default_rom(model: Model) -> PathBuf {
-    machine::resolve_rom_path(model)
-        .unwrap_or_else(|| PathBuf::from(machine::rom_candidates(model)[0]))
+fn parse_model_id(s: &str) -> Result<ModelId> {
+    parse_model_slug(s).map_err(|e| anyhow::anyhow!(e))
 }
 
-fn parse_model_id(s: &str) -> Result<ModelId> {
-    Ok(match s.to_ascii_lowercase().as_str() {
-        "16" | "16k" => ModelId::Spectrum16K,
-        "48" | "48k" => ModelId::Spectrum48,
-        "128" | "128k" => ModelId::Spectrum128,
-        "plus2" | "+2" => ModelId::SpectrumPlus2,
-        "plus2a" | "+2a" => ModelId::SpectrumPlus2A,
-        "plus3" | "+3" => ModelId::SpectrumPlus3,
-        "pentagon" | "pentagon128" | "128p" => ModelId::Pentagon128,
-        "timex" | "tc2048" | "timex2048" => ModelId::TimexTC2048,
-        "ts2068" | "tc2068" | "timex2068" => ModelId::TimexTS2068,
-        other => bail!("unknown model {other}"),
-    })
+fn host_err(e: HostError) -> anyhow::Error {
+    anyhow::Error::new(e)
 }
 
 fn load_host_session(cli: &Cli) -> Result<HostSession> {
     let model = parse_model_id(&cli.model)?;
     let mut session = HostSession::new(model, false);
     if let Some(path) = &cli.rom {
-        session.load_rom_path(path)?;
+        session.load_rom_path(path).map_err(host_err)?;
     } else {
-        session.select_model(model)?;
+        session.select_model(model).map_err(host_err)?;
     }
     if let Some(path) = &cli.snapshot {
-        session.load_snapshot(path)?;
+        session.load_snapshot(path).map_err(host_err)?;
     }
     if let Some(path) = &cli.tap {
-        session.open_tape(path)?;
-        session.play_tape()?;
+        session.open_tape(path).map_err(host_err)?;
+        session.play_tape().map_err(host_err)?;
     }
     if let Some(path) = &cli.tzx {
-        session.open_tape(path)?;
-        session.play_tape()?;
+        session.open_tape(path).map_err(host_err)?;
+        session.play_tape().map_err(host_err)?;
     }
-    session.set_tape_load_options(TapeLoadOptions {
-        flash_load: !cli.ear_load,
-        speed: cli.speed,
-        ..Default::default()
-    })?;
+    session
+        .set_tape_load_options(TapeLoadOptions {
+            flash_load: !cli.ear_load,
+            speed: cli.speed,
+            ..Default::default()
+        })
+        .map_err(host_err)?;
     Ok(session)
 }
 
@@ -180,13 +171,17 @@ fn run_serve(cli: &Cli) -> Result<()> {
 }
 
 fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {
-    if cli.rom.is_some() || cli.snapshot.is_some() {
-        bail!("remote agent client does not support --rom or --snapshot yet");
-    }
     if let Some(list) = &cli.trace {
         client.set_trace_categories(list)?;
     }
-    client.set_model(&cli.model)?;
+    if let Some(path) = &cli.rom {
+        client.load_rom(&path.display().to_string())?;
+    } else {
+        client.set_model(&cli.model)?;
+    }
+    if let Some(path) = &cli.snapshot {
+        client.load_snapshot(&path.display().to_string())?;
+    }
     if cli.ear_load || cli.speed != 1 {
         client.tape_load_options(cli.ear_load, cli.speed)?;
     }
@@ -306,164 +301,25 @@ fn print_remote_inspect(client: &AgentClient, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn parse_model(s: &str) -> Result<Model> {
-    Ok(match s.to_ascii_lowercase().as_str() {
-        "16" | "16k" => Model::Spectrum16K,
-        "48" | "48k" => Model::Spectrum48,
-        "128" | "128k" => Model::Spectrum128,
-        "plus2" | "+2" => Model::SpectrumPlus2,
-        "plus2a" | "+2a" => Model::SpectrumPlus2A,
-        "plus3" | "+3" => Model::SpectrumPlus3,
-        "pentagon" | "pentagon128" | "128p" => Model::Pentagon128,
-        "timex" | "tc2048" | "timex2048" => Model::TimexTC2048,
-        "ts2068" | "tc2068" | "timex2068" => Model::TimexTS2068,
-        other => bail!("unknown model {other}"),
-    })
-}
-
-fn load_machine(cli: &Cli) -> Result<Machine> {
-    let model = parse_model(&cli.model)?;
-    let rom_path = cli.rom.clone().unwrap_or_else(|| default_rom(model));
-    let rom = std::fs::read(&rom_path).with_context(|| format!("ROM {}", rom_path.display()))?;
-    let mut m = match model {
-        Model::Spectrum16K => Machine::new_16k(&rom),
-        Model::Spectrum48 => Machine::new_48k(&rom),
-        Model::Spectrum128 => Machine::new_128k(&rom),
-        Model::SpectrumPlus2 => Machine::new_plus2(&rom),
-        Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
-        Model::SpectrumPlus3 => Machine::new_plus3(&rom),
-        Model::Pentagon128 => {
-            let trdos =
-                machine::read_trdos_rom(Model::Pentagon128).map_err(|e| anyhow::anyhow!(e))?;
-            Machine::new_pentagon128(&rom, &trdos)
-        }
-        Model::TimexTC2048 => Machine::new_timex_tc2048(&rom).map_err(|e| e.to_string()),
-        Model::TimexTS2068 => {
-            let exrom = machine::read_exrom(Model::TimexTS2068).map_err(|e| anyhow::anyhow!(e))?;
-            Machine::new_timex_ts2068(&rom, &exrom).map_err(|e| e.to_string())
-        }
-    }
-    .map_err(|e| anyhow::anyhow!(e))?;
-    if let Some(path) = &cli.snapshot {
-        m = load_and_apply_snapshot(m, path)?;
-    }
-    if let Some(path) = &cli.tap {
-        let img = tape::TapImage::load(path).map_err(|e| anyhow::anyhow!("{e}"))?;
-        m.insert_tape(TapPlayer::new(img));
-        m.set_tape_playing(true);
-    }
-    if let Some(path) = &cli.tzx {
-        let data = std::fs::read(path)?;
-        if tape::TzxPlayer::is_standard_speed_only(&data) {
-            let player =
-                tape::TzxPlayer::to_tap_player(&data).map_err(|e| anyhow::anyhow!("{e}"))?;
-            m.insert_tape(player);
-        } else {
-            let player = TzxPlayer::parse(&data).map_err(|e| anyhow::anyhow!("{e}"))?;
-            m.insert_tzx(player);
-        }
-        m.set_tape_playing(true);
-    }
-    m.set_tape_load_options(TapeLoadOptions {
-        flash_load: !cli.ear_load,
-        speed: cli.speed,
-        ..Default::default()
-    });
-    Ok(m)
-}
-
-fn attr_mark_code_loaded(m: &Machine) -> bool {
-    m.read_mem(0x8000) == 0x21
-        && m.read_mem(0x8001) == 0x00
-        && m.read_mem(0x8002) == 0x58
-        && m.read_mem(0x8003) == 0x36
-        && m.read_mem(0x8004) == 0xd7
-        && m.read_mem(0x8005) == 0xc9
-}
-
-fn print_ok_loaded(m: &Machine) -> bool {
-    let prog = u16::from_le_bytes([m.read_mem(0x5C53), m.read_mem(0x5C54)]);
-    let eline = u16::from_le_bytes([m.read_mem(0x5C59), m.read_mem(0x5C5A)]);
-    for a in prog..eline {
-        if m.read_mem(a) == b'O' && m.read_mem(a.wrapping_add(1)) == b'K' {
-            return true;
-        }
-    }
-    false
-}
-
-fn load_and_apply_snapshot(mut m: Machine, path: &Path) -> Result<Machine> {
-    let ext = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    if ext == "z80" {
-        match Snapshot128::load_z80(path) {
-            Ok(snap) => {
-                // Z80 v3 encodes +2A/+3 via hw mode (+ modify-hardware bit).
-                let want = match snap.model {
-                    Snapshot128Model::SpectrumPlus3 => Model::SpectrumPlus3,
-                    Snapshot128Model::SpectrumPlus2A => Model::SpectrumPlus2A,
-                    Snapshot128Model::Spectrum128 => Model::Spectrum128,
-                };
-                if m.model() != want {
-                    let rom_path = default_rom(want);
-                    let rom = std::fs::read(&rom_path)
-                        .with_context(|| format!("ROM {}", rom_path.display()))?;
-                    m = match want {
-                        Model::SpectrumPlus3 => Machine::new_plus3(&rom),
-                        Model::SpectrumPlus2A => Machine::new_plus2a(&rom),
-                        Model::Spectrum128 => Machine::new_128k(&rom),
-                        Model::SpectrumPlus2 => Machine::new_plus2(&rom),
-                        Model::Spectrum48
-                        | Model::Spectrum16K
-                        | Model::TimexTC2048
-                        | Model::TimexTS2068
-                        | Model::Pentagon128 => {
-                            unreachable!("128-family snapshot only")
-                        }
-                    }
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                }
-                m.apply_snapshot128(&snap);
-                Ok(m)
-            }
-            Err(e128) => match Snapshot48::load_z80(path) {
-                Ok(snap) => {
-                    if m.model() != Model::Spectrum48 {
-                        let rom_path = default_rom(Model::Spectrum48);
-                        let rom = std::fs::read(&rom_path)
-                            .with_context(|| format!("ROM {}", rom_path.display()))?;
-                        m = Machine::new_48k(&rom).map_err(|e| anyhow::anyhow!(e))?;
-                    }
-                    m.apply_snapshot48(&snap);
-                    Ok(m)
-                }
-                Err(_) => Err(anyhow::anyhow!("{e128}")),
-            },
-        }
+fn print_inspect(session: &HostSession, json: bool) -> Result<()> {
+    if json {
+        println!("{}", session.inspect_json().map_err(host_err)?);
     } else {
-        // SNA128 has no 1FFD field — keep the CLI `--model` (cannot auto-detect +3).
-        match Snapshot128::load_sna(path) {
-            Ok(snap) => {
-                m.apply_snapshot128(&snap);
-                Ok(m)
-            }
-            Err(e128) => match Snapshot48::load_sna(path) {
-                Ok(snap) => {
-                    if m.model() != Model::Spectrum48 {
-                        let rom_path = default_rom(Model::Spectrum48);
-                        let rom = std::fs::read(&rom_path)
-                            .with_context(|| format!("ROM {}", rom_path.display()))?;
-                        m = Machine::new_48k(&rom).map_err(|e| anyhow::anyhow!(e))?;
-                    }
-                    m.apply_snapshot48(&snap);
-                    Ok(m)
-                }
-                Err(_) => Err(anyhow::anyhow!("{e128}")),
-            },
-        }
+        print!("{}", session.inspect_text().map_err(host_err)?);
+    }
+    Ok(())
+}
+
+fn dump_trace_local(json: bool, last: Option<usize>) -> String {
+    if json {
+        trace::dump_json()
+    } else if let Some(n) = last {
+        trace::dump_filtered(DumpFilter {
+            last_n: Some(n),
+            ..DumpFilter::default()
+        })
+    } else {
+        trace::dump_string()
     }
 }
 
@@ -473,6 +329,101 @@ fn print_reason(r: BreakReason, json: bool) {
     } else {
         println!("break: {r:?}");
     }
+}
+
+fn run_local(cli: &Cli, session: &mut HostSession, cmd: &Cmd) -> Result<()> {
+    match cmd {
+        Cmd::Run { frames } => {
+            let reason = session.run_frames(*frames).map_err(host_err)?;
+            print_inspect(session, cli.json)?;
+            if reason.is_stop() {
+                print_reason(reason, cli.json);
+                exit_cli(2);
+            }
+        }
+        Cmd::UntilPc { pc, max } => {
+            let pc = parse_u16(pc)?;
+            session.add_breakpoint(pc).map_err(host_err)?;
+            let max = u32::try_from(*max).unwrap_or(u32::MAX);
+            let reason = session.run_until_break(max).map_err(host_err)?;
+            print_inspect(session, cli.json)?;
+            print_reason(reason, cli.json);
+            if !matches!(reason, BreakReason::Pc(_)) {
+                exit_cli(2);
+            }
+        }
+        Cmd::DumpState => print_inspect(session, cli.json)?,
+        Cmd::DumpTrace { last } => {
+            let s = dump_trace_local(cli.json, *last);
+            print!("{s}");
+        }
+        Cmd::Peek { addr, len } => {
+            let addr = parse_u16(addr)?;
+            print!("{}", session.hexdump(addr, *len).map_err(host_err)?);
+        }
+        Cmd::Disasm { addr, count } => {
+            let addr = addr.as_deref().map(parse_u16).transpose()?;
+            print!("{}", session.disasm(addr, *count).map_err(host_err)?);
+        }
+        Cmd::BreakPc { pc, frames } => {
+            let pc = parse_u16(pc)?;
+            session.add_breakpoint(pc).map_err(host_err)?;
+            let reason = session.run_frames(*frames).map_err(host_err)?;
+            print_inspect(session, cli.json)?;
+            print_reason(reason, cli.json);
+            if !matches!(reason, BreakReason::Pc(_)) {
+                exit_cli(2);
+            }
+        }
+        Cmd::TypeLoad { code, warmup, max } => {
+            if cli.tap.is_none() && cli.tzx.is_none() {
+                bail!("type-load requires --tap or --tzx");
+            }
+            let result = session
+                .type_load(*code, *warmup, max.unwrap_or(0))
+                .map_err(host_err)?;
+            if cli.json {
+                let attr_mark = match result.attr_mark {
+                    Some(v) => v.to_string(),
+                    None => "null".to_string(),
+                };
+                println!(
+                    "{{\"inspect\":{},\"load_ok\":{},\"attr_mark\":{attr_mark}}}",
+                    session.inspect_json().map_err(host_err)?,
+                    result.load_ok,
+                );
+            } else {
+                print_inspect(session, false)?;
+                if *code {
+                    let attr = session.peek(0x5800).map_err(host_err)?;
+                    println!("load_ok={} attr_5800={attr:02X}", result.load_ok);
+                } else {
+                    println!("load_ok={}", result.load_ok);
+                }
+            }
+            if !result.load_ok {
+                exit_cli(2);
+            }
+        }
+        Cmd::WatchWrite { addr, max } => {
+            let addr = parse_u16(addr)?;
+            session
+                .add_mem_watch(Watch {
+                    addr,
+                    read: false,
+                    write: true,
+                })
+                .map_err(host_err)?;
+            let max = u32::try_from(*max).unwrap_or(u32::MAX);
+            let reason = session.run_until_break(max).map_err(host_err)?;
+            print_inspect(session, cli.json)?;
+            print_reason(reason, cli.json);
+            if !matches!(reason, BreakReason::Mem { .. }) {
+                exit_cli(2);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn exit_cli(code: i32) -> ! {
@@ -498,160 +449,18 @@ fn main() -> Result<()> {
     if let Some(url) = &cli.agent_url {
         let token = std::env::var("SPEC_CHUM_AGENT_TOKEN").ok();
         let client = AgentClient::new(url, token)?;
-        return run_remote(&cli, &client, cmd);
+        run_remote(&cli, &client, cmd)?;
+        trace::flush_append().context("flush SPEC_CHUM_TRACE_APPEND")?;
+        return Ok(());
     }
     if std::env::var("SPEC_CHUM_AGENT_URL").is_ok() {
         let client = AgentClient::from_env()?;
-        return run_remote(&cli, &client, cmd);
+        run_remote(&cli, &client, cmd)?;
+        trace::flush_append().context("flush SPEC_CHUM_TRACE_APPEND")?;
+        return Ok(());
     }
-    let mut m = load_machine(&cli)?;
-    match cmd.clone() {
-        Cmd::Run { frames } => {
-            for _ in 0..frames {
-                if m.debugger().paused {
-                    break;
-                }
-                let _ = m.run_frame();
-            }
-            if cli.json {
-                println!("{}", m.inspect().to_json());
-            } else {
-                print!("{}", m.inspect());
-            }
-            if m.debugger().last_hit.is_stop() {
-                print_reason(m.debugger().last_hit, cli.json);
-                exit_cli(2);
-            }
-        }
-        Cmd::UntilPc { pc, max } => {
-            let pc = parse_u16(&pc)?;
-            m.debugger_mut().add_pc_break(pc);
-            let reason = m.run_until_break(max);
-            if cli.json {
-                println!("{}", m.inspect().to_json());
-            } else {
-                print!("{}", m.inspect());
-            }
-            print_reason(reason, cli.json);
-            if !matches!(reason, BreakReason::Pc(_)) {
-                exit_cli(2);
-            }
-        }
-        Cmd::DumpState => {
-            if cli.json {
-                println!("{}", m.inspect().to_json());
-            } else {
-                print!("{}", m.inspect());
-            }
-        }
-        Cmd::DumpTrace { last } => {
-            let s = if cli.json {
-                trace::dump_json()
-            } else if let Some(n) = last {
-                trace::dump_filtered(DumpFilter {
-                    last_n: Some(n),
-                    ..DumpFilter::default()
-                })
-            } else {
-                trace::dump_string()
-            };
-            print!("{s}");
-        }
-        Cmd::Peek { addr, len } => {
-            let addr = parse_u16(&addr)?;
-            print!("{}", m.hexdump(addr, len));
-        }
-        Cmd::Disasm { addr, count } => {
-            let addr = match addr {
-                Some(s) => parse_u16(&s)?,
-                None => m.cpu().regs.pc,
-            };
-            print!("{}", m.disasm_window(addr, count));
-        }
-        Cmd::BreakPc { pc, frames } => {
-            let pc = parse_u16(&pc)?;
-            m.debugger_mut().add_pc_break(pc);
-            for _ in 0..frames {
-                if m.debugger().paused {
-                    break;
-                }
-                let _ = m.run_frame();
-            }
-            if cli.json {
-                println!("{}", m.inspect().to_json());
-            } else {
-                print!("{}", m.inspect());
-            }
-            print_reason(m.debugger().last_hit, cli.json);
-            if !m.debugger().last_hit.is_stop() {
-                exit_cli(2);
-            }
-        }
-        Cmd::TypeLoad { code, warmup, max } => {
-            if cli.tap.is_none() && cli.tzx.is_none() {
-                bail!("type-load requires --tap or --tzx");
-            }
-            m.set_tape_playing(false);
-            for _ in 0..warmup {
-                let _ = m.run_frame();
-            }
-            m.type_load_quotes(code);
-            m.set_tape_playing(true);
-            let limit = max.unwrap_or(if cli.ear_load { 200_000 } else { 200 });
-            let mut loaded = false;
-            for _ in 0..limit {
-                let _ = m.run_frame();
-                loaded = if code {
-                    attr_mark_code_loaded(&m)
-                } else {
-                    print_ok_loaded(&m)
-                };
-                if loaded {
-                    break;
-                }
-            }
-            if cli.json {
-                println!(
-                    "{{\"inspect\":{},\"load_ok\":{},\"attr_mark\":{}}}",
-                    m.inspect().to_json(),
-                    loaded,
-                    if code {
-                        m.read_mem(0x5800) == 0xd7
-                    } else {
-                        false
-                    }
-                );
-            } else {
-                print!("{}", m.inspect());
-                if code {
-                    println!("load_ok={loaded} attr_5800={:02X}", m.read_mem(0x5800));
-                } else {
-                    println!("load_ok={loaded}");
-                }
-            }
-            if !loaded {
-                exit_cli(2);
-            }
-        }
-        Cmd::WatchWrite { addr, max } => {
-            let addr = parse_u16(&addr)?;
-            m.debugger_mut().add_mem_watch(Watch {
-                addr,
-                read: false,
-                write: true,
-            });
-            let reason = m.run_until_break(max);
-            if cli.json {
-                println!("{}", m.inspect().to_json());
-            } else {
-                print!("{}", m.inspect());
-            }
-            print_reason(reason, cli.json);
-            if !matches!(reason, BreakReason::Mem { .. }) {
-                exit_cli(2);
-            }
-        }
-    }
+    let mut session = load_host_session(&cli)?;
+    run_local(&cli, &mut session, cmd)?;
     trace::flush_append().context("flush SPEC_CHUM_TRACE_APPEND")?;
     Ok(())
 }

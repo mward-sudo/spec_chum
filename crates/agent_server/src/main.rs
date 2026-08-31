@@ -26,6 +26,9 @@ struct Cli {
     /// Bearer token (overrides `SPEC_CHUM_AGENT_TOKEN`).
     #[arg(long)]
     token: Option<String>,
+    /// Allow unauthenticated mutations without a token (dev only).
+    #[arg(long)]
+    insecure: bool,
 }
 
 fn parse_model(s: &str) -> anyhow::Result<ModelId> {
@@ -42,6 +45,9 @@ async fn main() -> anyhow::Result<()> {
     }
     if let Some(token) = cli.token {
         config.token = Some(token);
+    }
+    if cli.insecure {
+        config.insecure = true;
     }
     let model = parse_model(&cli.model)?;
     let plane = Arc::new(ControlPlane::new(model, cli.border));
