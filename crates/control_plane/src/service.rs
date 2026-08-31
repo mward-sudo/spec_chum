@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use machine::{BreakReason, TapeLoadOptions, Watch};
@@ -95,9 +95,12 @@ pub struct LastBreakResponse {
 }
 
 /// Thread-safe wrapper around [`HostSession`].
+///
+/// The session mutex is an [`Arc`] so in-process hosts (egui) and the embedded
+/// HTTP server can share one live machine ([#221](https://github.com/mward-sudo/spec_chum/issues/221)).
 #[derive(Debug)]
 pub struct ControlPlane {
-    inner: Mutex<HostSession>,
+    inner: Arc<Mutex<HostSession>>,
     last_error: Mutex<Option<LastErrorRecord>>,
     /// Session-scoped host prefs for the agent API (not file-backed; see `/v1/prefs`).
     prefs: Mutex<SessionPrefs>,
@@ -171,21 +174,35 @@ pub struct PrefsPatch {
 impl ControlPlane {
     #[must_use]
     pub fn new(model: ModelId, with_border: bool) -> Self {
+        Self::with_session(HostSession::new(model, with_border))
+    }
+
+    pub fn with_session(session: HostSession) -> Self {
+        Self::from_shared(Arc::new(Mutex::new(session)))
+    }
+
+    /// Wrap an existing shared session (egui owns the same `Arc` as embedded HTTP).
+    #[must_use]
+    pub fn from_shared(inner: Arc<Mutex<HostSession>>) -> Self {
         trace::init_from_env();
         Self {
-            inner: Mutex::new(HostSession::new(model, with_border)),
+            inner,
             last_error: Mutex::new(None),
             prefs: Mutex::new(SessionPrefs::default()),
         }
     }
 
-    pub fn with_session(session: HostSession) -> Self {
-        trace::init_from_env();
-        Self {
-            inner: Mutex::new(session),
-            last_error: Mutex::new(None),
-            prefs: Mutex::new(SessionPrefs::default()),
-        }
+    /// Shared handle to the live [`HostSession`] (clone into hosts / embed).
+    #[must_use]
+    pub fn shared_host(&self) -> Arc<Mutex<HostSession>> {
+        Arc::clone(&self.inner)
+    }
+
+    /// Lock the live session for in-process host work (egui frame / Debug).
+    pub fn lock_host(&self) -> ApiResult<MutexGuard<'_, HostSession>> {
+        self.inner
+            .lock()
+            .map_err(|_| ApiError::Message("session lock poisoned".into()))
     }
 
     pub fn record_error(&self, err: &ApiError) {
@@ -218,10 +235,7 @@ impl ControlPlane {
         &self,
         f: impl FnOnce(&mut HostSession) -> ApiResult<R>,
     ) -> ApiResult<R> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| ApiError::Message("session lock poisoned".into()))?;
+        let mut guard = self.lock_host()?;
         f(&mut guard)
     }
 
@@ -245,11 +259,20 @@ impl ControlPlane {
     }
 
     fn with_session_ref<R>(&self, f: impl FnOnce(&HostSession) -> ApiResult<R>) -> ApiResult<R> {
-        let guard = self
-            .inner
-            .lock()
-            .map_err(|_| ApiError::Message("session lock poisoned".into()))?;
+        let guard = self.lock_host()?;
         f(&guard)
+    }
+
+    /// In-process host access to the live [`HostSession`] (egui Debug / shared embed).
+    pub fn with_host_mut<R>(&self, f: impl FnOnce(&mut HostSession) -> R) -> ApiResult<R> {
+        let mut guard = self.lock_host()?;
+        Ok(f(&mut guard))
+    }
+
+    /// In-process shared borrow of the live [`HostSession`].
+    pub fn with_host_ref<R>(&self, f: impl FnOnce(&HostSession) -> R) -> ApiResult<R> {
+        let guard = self.lock_host()?;
+        Ok(f(&guard))
     }
 
     pub fn health(&self) -> ApiResult<HealthResponse> {
@@ -909,7 +932,7 @@ mod tests {
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         {
-            let mut s = plane.inner.lock().expect("lock");
+            let mut s = plane.lock_host().expect("lock");
             s.load_rom_bytes(&rom).expect("rom");
         }
         let health = plane.health().expect("health");
@@ -926,7 +949,7 @@ mod tests {
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         {
-            let mut s = plane.inner.lock().expect("lock");
+            let mut s = plane.lock_host().expect("lock");
             s.load_rom_bytes(&rom).expect("rom");
         }
         plane.run_frames(1).expect("run");
@@ -1014,7 +1037,7 @@ mod tests {
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         {
-            let mut s = plane.inner.lock().expect("lock");
+            let mut s = plane.lock_host().expect("lock");
             s.load_rom_bytes(&rom).expect("rom");
         }
         plane.set_joystick(0x11).expect("set");
@@ -1068,12 +1091,12 @@ mod tests {
             .expect("patch before rom");
         plane.load_rom_bytes(&rom).expect("rom");
         let mode = {
-            let s = plane.inner.lock().expect("lock");
+            let s = plane.lock_host().expect("lock");
             s.joystick_mode()
         };
         assert_eq!(mode, machine::JoystickMode::Cursor);
         let opts = {
-            let s = plane.inner.lock().expect("lock");
+            let s = plane.lock_host().expect("lock");
             s.tape_load_options().expect("tape opts")
         };
         assert!(opts.experience_load);
@@ -1088,7 +1111,7 @@ mod tests {
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         {
-            let mut s = plane.inner.lock().expect("lock");
+            let mut s = plane.lock_host().expect("lock");
             s.load_rom_bytes(&rom).expect("rom");
         }
         assert!(matches!(

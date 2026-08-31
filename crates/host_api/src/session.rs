@@ -123,22 +123,26 @@ pub struct HostRegs {
 }
 
 /// Host-owned emulator session: machine + RGBA framebuffer + status.
+///
+/// Fields are `pub` for in-process hosts (egui / living_room) that need direct
+/// framebuffer and machine access on the hot path. Prefer the accessor methods
+/// from new code; a follow-up can re-privatize once egui fully delegates (#221).
 #[derive(Debug)]
 pub struct HostSession {
-    machine: Option<Machine>,
-    model: ModelId,
-    with_border: bool,
-    framebuffer: Vec<u8>,
-    width: usize,
-    height: usize,
-    running: bool,
-    status: String,
+    pub machine: Option<Machine>,
+    pub model: ModelId,
+    pub with_border: bool,
+    pub framebuffer: Vec<u8>,
+    pub width: usize,
+    pub height: usize,
+    pub running: bool,
+    pub status: String,
     /// Mono PCM for the last frame (~882 samples @ 44100 Hz / 50 fps).
     audio_pcm: Vec<f32>,
     /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
     last_speaker_level: bool,
     /// Host joystick presentation mode.
-    joystick_mode: JoystickMode,
+    pub joystick_mode: JoystickMode,
     /// Last applied host joystick mask state.
     joystick_state: JoystickState,
     /// Host-held Spectrum matrix keys so Sinclair/Cursor joystick clears do not drop them.
@@ -220,6 +224,22 @@ impl HostSession {
     #[must_use]
     pub fn has_machine(&self) -> bool {
         self.machine.is_some()
+    }
+
+    /// Borrow the live machine (egui / in-process hosts).
+    #[must_use]
+    pub fn machine(&self) -> Option<&Machine> {
+        self.machine.as_ref()
+    }
+
+    /// Mutable borrow of the live machine (egui / in-process hosts).
+    pub fn machine_mut(&mut self) -> Option<&mut Machine> {
+        self.machine.as_mut()
+    }
+
+    /// Replace the host status string (UI / debug surfaces).
+    pub fn set_status(&mut self, status: impl Into<String>) {
+        self.status = status.into();
     }
 
     #[must_use]
@@ -921,6 +941,24 @@ impl HostSession {
         Ok(())
     }
 
+    /// Debugger UI step: clear a PC re-hit, execute one instruction, leave paused, refresh pixels.
+    pub fn debug_step(&mut self) -> Result<(), HostError> {
+        {
+            let Some(m) = self.machine.as_mut() else {
+                return Err(HostError::NoMachine);
+            };
+            let pc = m.cpu().regs.pc;
+            if m.debugger().paused {
+                m.debugger_mut().continue_from_pc(pc);
+            }
+            m.debugger_mut().paused = false;
+            m.step_once();
+            m.debugger_mut().paused = true;
+        }
+        self.refresh_framebuffer();
+        Ok(())
+    }
+
     /// Set the debugger paused flag (no-op without a machine).
     pub fn set_paused(&mut self, paused: bool) {
         if let Some(m) = self.machine.as_mut() {
@@ -978,13 +1016,19 @@ impl HostSession {
     }
 
     /// Run one video frame into the RGBA framebuffer when `running`.
-    /// Skips advancing while the debugger is paused.
-    pub fn run_frame(&mut self) {
+    ///
+    /// Skips CPU/ULA advance while the debugger is paused, but still refreshes
+    /// pixels so hosts can show the current screen. Returns the raw
+    /// [`machine::FrameAudio`] (empty when not advancing) for hosts that mix
+    /// beeper edges themselves (egui); mono PCM is always updated in
+    /// [`Self::audio_pcm`] when a frame advances.
+    pub fn run_frame(&mut self) -> machine::FrameAudio {
         if !self.running || self.machine.is_none() {
-            return;
+            return machine::FrameAudio::default();
         }
         if self.machine.as_ref().is_some_and(|m| m.debugger().paused) {
-            return;
+            self.refresh_framebuffer();
+            return machine::FrameAudio::default();
         }
         let (audio, frame_t, w, h) = {
             let m = self.machine.as_mut().expect("machine checked above");
@@ -1014,6 +1058,15 @@ impl HostSession {
             self.height = h;
             self.framebuffer.resize(w * h * 4, 0);
         }
+        if let Some(m) = self.machine.as_ref() {
+            m.render_rgba(&mut self.framebuffer, self.with_border);
+        }
+        audio
+    }
+
+    /// Re-render the RGBA framebuffer from the current machine (e.g. after step).
+    pub fn refresh_framebuffer(&mut self) {
+        self.sync_framebuffer_dims();
         if let Some(m) = self.machine.as_ref() {
             m.render_rgba(&mut self.framebuffer, self.with_border);
         }

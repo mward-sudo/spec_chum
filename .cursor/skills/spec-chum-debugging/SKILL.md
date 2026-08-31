@@ -61,14 +61,16 @@ cargo build -p agent_server --release
 
 ### Embedded agent in egui (Phase B)
 
+`SPEC_CHUM_AGENT=1` in egui was **removed** (#221) — it used to start a parallel
+debug session. Prefer:
+
 ```bash
-SPEC_CHUM_AGENT=1 cargo run -p app --release
-# Optional: SPEC_CHUM_AGENT_MODEL=timex_ts2068 SPEC_CHUM_AGENT_PORT=17384
-curl -sS http://127.0.0.1:17384/v1/health | jq .
+cargo run -p agent_server --release -- --model 48k
+# or: spec-chum-debug --serve --model 48k
 ```
 
-This starts a **parallel** debug session (not yet the GUI's live machine). For shared
-host state, use standalone `spec-chum-agent` or macOS with a separate server process.
+egui **Debug** uses `HostSession` (same type as `control_plane`). In-process HTTP
+share while the GUI runs remains a follow-up on #221.
 
 ### HTTP client (Phase B)
 

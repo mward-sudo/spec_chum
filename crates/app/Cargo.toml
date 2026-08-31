@@ -19,8 +19,8 @@ machine = { workspace = true }
 formats = { workspace = true }
 tape = { workspace = true }
 trace = { workspace = true }
+control_plane = { workspace = true }
 host_api = { workspace = true }
-agent_server = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
 cpal = { workspace = true }
