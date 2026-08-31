@@ -87,7 +87,7 @@ Helper (writes under `roms/timex/`, gitignored — never commit ROM/cart bytes):
 Or by hand (HOME replace from fetched `roms/spec48.rom`):
 
 ```bash
-printf '\xff\x02\x02\x00\x00\x00\x00\x00\x00' | cat - roms/spec48.rom > spectrum-home.dck
+{ printf '\xff\x02\x02\x00\x00\x00\x00\x00\x00'; head -c 16384 roms/spec48.rom; } > spectrum-home.dck
 ```
 
 With a HOME Spectrum cart inserted, Timex `PROG` / absolute `USR` titles that expect
