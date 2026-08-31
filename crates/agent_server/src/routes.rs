@@ -964,9 +964,12 @@ async fn attach_multiface(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.attach_multiface(body.path.as_ref())
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || {
+        plane.attach_multiface(path.as_ref())
     })
+    .await
 }
 
 async fn multiface_nmi(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -974,7 +977,8 @@ async fn multiface_nmi(State(state): State<AppState>, headers: HeaderMap) -> Res
 }
 
 async fn attach_interface1(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    auth_empty(&state, &headers, || state.plane.attach_interface1())
+    let plane = state.plane.clone();
+    auth_empty_blocking(&state, &headers, move || plane.attach_interface1()).await
 }
 
 async fn load_interface1_rom(
@@ -982,9 +986,12 @@ async fn load_interface1_rom(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_interface1_rom(body.path.as_ref())
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || {
+        plane.load_interface1_rom(path.as_ref())
     })
+    .await
 }
 
 async fn insert_mdr(
@@ -992,9 +999,9 @@ async fn insert_mdr(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.insert_mdr(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.insert_mdr(path.as_ref())).await
 }
 
 async fn attach_divmmc(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -1006,9 +1013,12 @@ async fn load_divmmc_sd(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_divmmc_sd(body.path.as_ref())
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || {
+        plane.load_divmmc_sd(path.as_ref())
     })
+    .await
 }
 
 async fn load_divmmc_eeprom(
@@ -1016,9 +1026,12 @@ async fn load_divmmc_eeprom(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_divmmc_eeprom(body.path.as_ref())
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || {
+        plane.load_divmmc_eeprom(path.as_ref())
     })
+    .await
 }
 
 async fn load_trdos_rom(
@@ -1026,9 +1039,12 @@ async fn load_trdos_rom(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_trdos_rom(body.path.as_ref())
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || {
+        plane.load_trdos_rom(path.as_ref())
     })
+    .await
 }
 
 fn auth_empty(

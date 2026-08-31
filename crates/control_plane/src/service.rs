@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use spec_chum_host::{
     machine_config::UserMachineConfig,
     rom_setup::{model_rom_paths_snapshot, rom_setup_json},
-    HostSession, ModelId, PrefJoystick,
+    HostError, HostSession, ModelId, PrefJoystick,
 };
 use trace::{Category, DumpFilter};
 
@@ -693,7 +693,7 @@ impl ControlPlane {
 
     pub fn attach_multiface(&self, path: &Path) -> ApiResult<()> {
         self.with_session_mut(|s| {
-            s.attach_multiface(path)?;
+            s.attach_multiface(path).map_err(map_host_model_error)?;
             Ok(())
         })
     }
@@ -859,6 +859,16 @@ fn apply_prefs_to_session(s: &mut HostSession, prefs: &SessionPrefs) -> ApiResul
         s.set_tape_load_options(prefs.tape_load_options())?;
     }
     Ok(())
+}
+
+/// Map model-incompatible host errors to 400 for clearer agent feedback.
+fn map_host_model_error(err: HostError) -> ApiError {
+    let msg = err.to_string();
+    if msg.contains("only supported") || msg.contains("requires") {
+        ApiError::BadRequest(msg)
+    } else {
+        ApiError::from(err)
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]

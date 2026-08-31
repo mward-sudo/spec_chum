@@ -740,7 +740,7 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
         .await
         .expect("mf on 128");
         assert!(
-            bad.status().is_server_error() || bad.status().is_client_error(),
+            bad.status().is_client_error(),
             "128K must reject Multiface 1"
         );
     }
