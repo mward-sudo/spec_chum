@@ -3,11 +3,11 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use machine::{BreakReason, TapeLoadOptions, Watch};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use spec_chum_host::{
     machine_config::UserMachineConfig,
     rom_setup::{model_rom_paths_snapshot, rom_setup_json},
-    HostSession, ModelId,
+    HostSession, ModelId, PrefJoystick,
 };
 use trace::{Category, DumpFilter};
 
@@ -99,6 +99,73 @@ pub struct LastBreakResponse {
 pub struct ControlPlane {
     inner: Mutex<HostSession>,
     last_error: Mutex<Option<LastErrorRecord>>,
+    /// Session-scoped host prefs for the agent API (not file-backed; see `/v1/prefs`).
+    prefs: Mutex<SessionPrefs>,
+}
+
+/// Agent-visible host prefs snapshot (`GET`/`PATCH /v1/prefs`).
+///
+/// Session-scoped for `spec-chum-agent` / `--serve` (does not write `ui-prefs.json`).
+/// Living-room display toggle is intentionally omitted — host display only / not in
+/// [`spec_chum_host::UiPreferences`] yet.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SessionPrefs {
+    pub volume: f32,
+    pub muted: bool,
+    pub throttle: bool,
+    pub joystick_mode: PrefJoystick,
+    pub kempston_mouse: bool,
+    pub tape_experience: bool,
+    pub tape_ear_speed: u32,
+}
+
+impl Default for SessionPrefs {
+    fn default() -> Self {
+        Self {
+            volume: 1.0,
+            muted: false,
+            throttle: true,
+            joystick_mode: PrefJoystick::Kempston,
+            kempston_mouse: false,
+            tape_experience: false,
+            tape_ear_speed: 1,
+        }
+    }
+}
+
+impl SessionPrefs {
+    fn sanitized(mut self) -> Self {
+        self.volume = self.volume.clamp(0.0, 1.0);
+        if self.tape_experience {
+            self.tape_ear_speed = TapeLoadOptions::experience().speed;
+        } else {
+            const SPEEDS: &[u32] = &[1, 2, 5, 10, 20];
+            if !SPEEDS.contains(&self.tape_ear_speed) {
+                self.tape_ear_speed = 1;
+            }
+        }
+        self
+    }
+
+    fn tape_load_options(&self) -> TapeLoadOptions {
+        if self.tape_experience {
+            TapeLoadOptions::experience()
+        } else {
+            TapeLoadOptions::default().with_speed(self.tape_ear_speed)
+        }
+    }
+}
+
+/// Partial update for `PATCH /v1/prefs`.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct PrefsPatch {
+    pub volume: Option<f32>,
+    pub muted: Option<bool>,
+    pub throttle: Option<bool>,
+    pub joystick_mode: Option<PrefJoystick>,
+    pub kempston_mouse: Option<bool>,
+    pub tape_experience: Option<bool>,
+    pub tape_ear_speed: Option<u32>,
 }
 
 impl ControlPlane {
@@ -108,6 +175,7 @@ impl ControlPlane {
         Self {
             inner: Mutex::new(HostSession::new(model, with_border)),
             last_error: Mutex::new(None),
+            prefs: Mutex::new(SessionPrefs::default()),
         }
     }
 
@@ -116,6 +184,7 @@ impl ControlPlane {
         Self {
             inner: Mutex::new(session),
             last_error: Mutex::new(None),
+            prefs: Mutex::new(SessionPrefs::default()),
         }
     }
 
@@ -219,6 +288,102 @@ impl ControlPlane {
         self.with_session_mut(|s| {
             s.clear_joystick()?;
             Ok(())
+        })
+    }
+
+    pub fn set_mouse(
+        &self,
+        dx: Option<i8>,
+        dy: Option<i8>,
+        left: Option<bool>,
+        right: Option<bool>,
+        middle: Option<bool>,
+    ) -> ApiResult<()> {
+        let enabled = self.prefs()?.kempston_mouse;
+        if !enabled {
+            return Err(ApiError::BadRequest(
+                "kempston_mouse is disabled; PATCH /v1/prefs {\"kempston_mouse\":true} first"
+                    .into(),
+            ));
+        }
+        self.with_session_mut(|s| {
+            if dx.is_some() || dy.is_some() {
+                s.set_mouse_delta(dx.unwrap_or(0), dy.unwrap_or(0))?;
+            }
+            if left.is_some() || right.is_some() || middle.is_some() {
+                // Absolute button state when any button field is present.
+                s.set_mouse_buttons(
+                    left.unwrap_or(false),
+                    right.unwrap_or(false),
+                    middle.unwrap_or(false),
+                )?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn clear_mouse(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.clear_mouse()?;
+            Ok(())
+        })
+    }
+
+    pub fn prefs(&self) -> ApiResult<SessionPrefs> {
+        let guard = self
+            .prefs
+            .lock()
+            .map_err(|_| ApiError::Message("prefs lock poisoned".into()))?;
+        Ok(guard.clone())
+    }
+
+    pub fn patch_prefs(&self, patch: PrefsPatch) -> ApiResult<SessionPrefs> {
+        let mut guard = self
+            .prefs
+            .lock()
+            .map_err(|_| ApiError::Message("prefs lock poisoned".into()))?;
+        if let Some(v) = patch.volume {
+            guard.volume = v;
+        }
+        if let Some(v) = patch.muted {
+            guard.muted = v;
+        }
+        if let Some(v) = patch.throttle {
+            guard.throttle = v;
+        }
+        if let Some(v) = patch.joystick_mode {
+            guard.joystick_mode = v;
+        }
+        if let Some(v) = patch.kempston_mouse {
+            guard.kempston_mouse = v;
+        }
+        if let Some(v) = patch.tape_experience {
+            guard.tape_experience = v;
+        }
+        if let Some(v) = patch.tape_ear_speed {
+            guard.tape_ear_speed = v;
+        }
+        *guard = guard.clone().sanitized();
+        let snapshot = guard.clone();
+        drop(guard);
+
+        self.with_session_mut(|s| {
+            if s.has_machine() {
+                s.set_joystick_mode(snapshot.joystick_mode.to_mode())?;
+                s.set_tape_load_options(snapshot.tape_load_options())?;
+            }
+            Ok(())
+        })?;
+        Ok(snapshot)
+    }
+
+    pub fn continue_execution(&self) -> ApiResult<LastBreakResponse> {
+        self.with_session_mut(|s| {
+            s.continue_execution()?;
+            Ok(LastBreakResponse {
+                reason: format_break_reason(s.last_break_reason()?),
+                paused: s.paused(),
+            })
         })
     }
 
@@ -365,6 +530,13 @@ impl ControlPlane {
     pub fn tape_rewind(&self) -> ApiResult<()> {
         self.with_session_mut(|s| {
             s.rewind_tape()?;
+            Ok(())
+        })
+    }
+
+    pub fn tape_eject(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.eject_tape()?;
             Ok(())
         })
     }
@@ -608,6 +780,7 @@ pub struct StatusResponse {
 mod tests {
     use super::*;
     use machine::Model;
+    use spec_chum_host::PrefJoystick;
 
     fn rom48() -> Option<Vec<u8>> {
         machine::resolve_rom_path(Model::Spectrum48).and_then(|path| std::fs::read(path).ok())
@@ -731,5 +904,63 @@ mod tests {
         }
         plane.set_joystick(0x11).expect("set");
         plane.clear_joystick().expect("clear");
+    }
+
+    #[test]
+    fn prefs_patch_round_trip() {
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        let prefs = plane.prefs().expect("prefs");
+        assert!(prefs.throttle);
+        assert!(!prefs.muted);
+        let updated = plane
+            .patch_prefs(PrefsPatch {
+                muted: Some(true),
+                volume: Some(0.5),
+                throttle: Some(false),
+                joystick_mode: Some(PrefJoystick::Cursor),
+                ..PrefsPatch::default()
+            })
+            .expect("patch");
+        assert!(updated.muted);
+        assert!((updated.volume - 0.5).abs() < f32::EPSILON);
+        assert!(!updated.throttle);
+        assert_eq!(updated.joystick_mode, PrefJoystick::Cursor);
+        assert!(plane.prefs().expect("get").muted);
+    }
+
+    #[test]
+    fn continue_and_eject_require_machine() {
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        assert!(plane.continue_execution().is_err());
+        assert!(plane.tape_eject().is_err());
+        assert!(plane.clear_mouse().is_err());
+        assert!(plane.set_mouse(Some(1), Some(0), None, None, None).is_err());
+    }
+
+    #[test]
+    fn mouse_requires_kempston_pref_then_accepts_input() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: Spectrum 48 ROM missing");
+            return;
+        };
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        {
+            let mut s = plane.inner.lock().expect("lock");
+            s.load_rom_bytes(&rom).expect("rom");
+        }
+        assert!(matches!(
+            plane.set_mouse(Some(9), Some(0), Some(true), None, None),
+            Err(ApiError::BadRequest(_))
+        ));
+        plane
+            .patch_prefs(PrefsPatch {
+                kempston_mouse: Some(true),
+                ..PrefsPatch::default()
+            })
+            .expect("enable mouse");
+        plane
+            .set_mouse(Some(9), Some(-3), Some(true), None, None)
+            .expect("set");
+        plane.clear_mouse().expect("clear");
     }
 }

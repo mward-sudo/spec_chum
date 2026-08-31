@@ -1113,6 +1113,17 @@ impl Machine {
         }
     }
 
+    /// Remove any inserted tape image (TAP/TZX deck).
+    pub fn eject_tape(&mut self) {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => {
+                *tape = None;
+            }
+        }
+    }
+
     pub fn insert_rzx(&mut self, recording: RzxRecording) {
         match self {
             Self::Spec48 { rzx, .. } | Self::Spec128 { rzx, .. } | Self::SpecPlus3 { rzx, .. } => {

@@ -1,9 +1,14 @@
 # Agent debug control plane (proposed)
 
-> **Status:** Phase A implemented — loopback HTTP API on `127.0.0.1:17384`
-> (default). Track follow-ups in
+> **Status:** Phases A–G partially landed — loopback HTTP API on `127.0.0.1:17384`
+> (default). Track remaining work in
 > [#210](https://github.com/mward-sudo/spec_chum/issues/210) and
 > [`.cursor/skills/spec-chum-debugging/SKILL.md`](../.cursor/skills/spec-chum-debugging/SKILL.md).
+>
+> **Phase G ([#219](https://github.com/mward-sudo/spec_chum/issues/219)):**
+> `GET`/`PATCH /v1/prefs` (session-scoped), `POST /v1/mouse`, `POST /v1/tape/eject`,
+> `POST /v1/continue`. Living-room display toggle deferred (not in `UiPreferences`).
+> Prefs are **not** written to `ui-prefs.json` from the agent server.
 
 ## Motivation
 
@@ -146,14 +151,14 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Area | Operations |
 | --- | --- |
 | Machine | `POST /v1/model` — select built-in model; `POST /v1/config` — apply `#187` custom profile JSON; `POST /v1/reset`; `POST /v1/running` pause/run; `POST /v1/run` — advance within a **finite budget** (see below) |
-| Execution | `POST /v1/step` — one `step_once`; `POST /v1/step` body `{ "count": N }`; `POST /v1/continue`; `POST /v1/run-until` — PC / budget (maps `Debugger::run_until`) |
+| Execution | `POST /v1/step` — one `step_once`; `POST /v1/step` body `{ "count": N }`; `POST /v1/continue` — resume after debugger stop (`continue_from_pc`); `POST /v1/run-until` — PC / budget (maps `Debugger::run_until`) |
 | Tape | `POST /v1/tape/open`, `/play`, `/pause`, `/rewind`, `/eject`; load options flash vs EAR vs experience + speed |
-| Type-load | `POST /v1/tape/type-load` — scripted LOAD "" [CODE] (today's `type-load` subcommand) |
+| Type-load | `POST /v1/type-load` — scripted LOAD "" [CODE] (today's `type-load` subcommand) |
 | ROM | `POST /v1/rom` — load ROM image from host filesystem path |
 | Media | `POST /v1/snapshot`, `/rzx`, `/dsk`, `/trd`, … |
-| Input | `POST /v1/keys` matrix press/release; `POST /v1/joystick`; Kempston mouse delta/buttons |
+| Input | `POST /v1/keys` matrix press/release; `POST /v1/joystick`; `POST /v1/mouse` Kempston delta/buttons |
 | Hardware | Multiface, DivMMC, Interface 1, Timex `.dck` dock insert/eject, Beta/TR-DOS ROM attach |
-| Host prefs | `GET or PATCH /v1/prefs` — volume, mute, joystick mode, tape defaults, throttle, living-room toggle (host display only) |
+| Host prefs | `GET` / `PATCH /v1/prefs` — volume, mute, joystick mode, tape defaults, throttle, Kempston mouse enable (session-scoped in agent server; living-room display toggle deferred) |
 | Border | `POST /v1/border` — `with_border` flag (changes framebuffer dims) |
 
 ### Inspect
@@ -190,7 +195,19 @@ Smallest useful agent surface:
 6. `GET /v1/peek`, `GET /v1/disasm`
 7. `GET /v1/trace/categories`, `PUT /v1/trace/categories`, `GET /v1/trace`
 
-Remaining control/inspect/debug rows land in Phase A follow-ups before Phase B.
+Remaining control/inspect/debug rows land in later phases on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
+
+### Phase G — prefs / mouse / eject / continue
+
+| Route | Notes |
+| --- | --- |
+| `GET /v1/prefs` | Session snapshot: `volume`, `muted`, `throttle`, `joystick_mode`, `kempston_mouse`, `tape_experience`, `tape_ear_speed` |
+| `PATCH /v1/prefs` | Partial update; applies joystick mode + tape load options to the loaded machine when present. Does **not** persist `ui-prefs.json`. |
+| `POST /v1/mouse` | Requires `kempston_mouse: true` in prefs. Body `{ "dx", "dy", "left", "right", "middle" }` and/or `{ "clear": true }` (full axis+button reset) — Kempston mouse via `HostSession` ([#136](https://github.com/mward-sudo/spec_chum/issues/136)) |
+| `POST /v1/tape/eject` | Clears the inserted TAP/TZX deck |
+| `POST /v1/continue` | `continue_from_pc` after a debugger stop; JSON `{ "reason", "paused" }` |
+
+Living-room display toggle is **deferred** (not modeled in shared prefs yet).
 
 ### `POST /v1/run` budget semantics
 

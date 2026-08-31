@@ -1,5 +1,6 @@
 //! HTTP integration smoke test for the agent debug API (#210).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_server::routes::{router, AppState};
@@ -445,4 +446,161 @@ async fn agent_api_joystick_kempston_mask() {
     .await
     .expect("no machine");
     assert_eq!(no_machine.status(), StatusCode::CONFLICT);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_prefs_mouse_eject_and_continue() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let prefs = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/prefs")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("get prefs");
+    assert_eq!(prefs.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(prefs.into_body(), usize::MAX)
+        .await
+        .expect("prefs body");
+    let prefs: serde_json::Value = serde_json::from_slice(&body).expect("prefs json");
+    assert_eq!(prefs["throttle"], true);
+    assert_eq!(prefs["muted"], false);
+
+    let patched = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/prefs")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"muted":true,"volume":0.25,"joystick_mode":"cursor","kempston_mouse":true}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("patch prefs");
+    assert_eq!(patched.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(patched.into_body(), usize::MAX)
+        .await
+        .expect("patched body");
+    let prefs: serde_json::Value = serde_json::from_slice(&body).expect("patched json");
+    assert_eq!(prefs["muted"], true);
+    assert_eq!(prefs["volume"], 0.25);
+    assert_eq!(prefs["joystick_mode"], "cursor");
+    assert_eq!(prefs["kempston_mouse"], true);
+
+    let mouse = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/mouse")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"dx":5,"dy":-2,"left":true}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("mouse");
+    assert_eq!(mouse.status(), StatusCode::NO_CONTENT);
+
+    let clear_mouse = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/mouse")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"clear":true}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("clear mouse");
+    assert_eq!(clear_mouse.status(), StatusCode::NO_CONTENT);
+
+    let tap = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/tape/minimal_code.tap");
+    assert!(tap.is_file(), "fixture missing: {}", tap.display());
+    let open = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/tape/open")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": tap })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("tape open");
+    assert_eq!(open.status(), StatusCode::NO_CONTENT);
+    assert!(plane.status().expect("status").has_tape);
+
+    let eject = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/tape/eject")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("tape eject");
+    assert_eq!(eject.status(), StatusCode::NO_CONTENT);
+    assert!(!plane.status().expect("status").has_tape);
+
+    plane.add_breakpoint(0x0000).expect("bp");
+    let hit = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/run-until")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"max_insns":100000}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("run-until");
+    assert_eq!(hit.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(hit.into_body(), usize::MAX)
+        .await
+        .expect("run-until body");
+    let until: serde_json::Value = serde_json::from_slice(&body).expect("run-until json");
+    assert_eq!(until["paused"], true);
+
+    let cont = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/continue")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("continue");
+    assert_eq!(cont.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(cont.into_body(), usize::MAX)
+        .await
+        .expect("continue body");
+    let cont: serde_json::Value = serde_json::from_slice(&body).expect("continue json");
+    assert_eq!(cont["paused"], false);
+    assert_eq!(cont["reason"], "none");
 }
