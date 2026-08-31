@@ -39,6 +39,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/config", post(apply_config))
         .route("/v1/reset", post(reset))
         .route("/v1/keys", post(set_keys))
+        .route("/v1/joystick", post(set_joystick))
         .route("/v1/running", post(set_running))
         .route("/v1/run", post(run))
         .route("/v1/step", post(step))
@@ -221,6 +222,31 @@ struct KeysBody {
     pressed: Option<bool>,
     #[serde(default)]
     keys: Vec<KeyAction>,
+}
+
+#[derive(Debug, Deserialize)]
+struct JoystickBody {
+    #[serde(default)]
+    clear: bool,
+    #[serde(default)]
+    mask: Option<u8>,
+}
+
+async fn set_joystick(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<JoystickBody>,
+) -> Response {
+    if body.clear {
+        return auth_empty(&state, &headers, || state.plane.clear_joystick());
+    }
+    let Some(mask) = body.mask else {
+        return api_error(
+            &state.plane,
+            ApiError::BadRequest("joystick body requires clear or mask".into()),
+        );
+    };
+    auth_empty(&state, &headers, || state.plane.set_joystick(mask))
 }
 
 async fn set_keys(
