@@ -6,6 +6,14 @@ use spec_chum_host::{default_prefs_path, load_prefs, MIN_WINDOW_HEIGHT, MIN_WIND
 
 fn main() -> eframe::Result {
     trace::init_from_env();
+    // Parallel debug session when SPEC_CHUM_AGENT=1 (see docs/AGENT_DEBUG_API.md).
+    let _embedded_agent = match agent_server::embedded::spawn_from_env() {
+        Ok(server) => server,
+        Err(e) => {
+            eprintln!("spec-chum-agent embedded failed to start: {e}");
+            None
+        }
+    };
     let prefs = load_prefs(&default_prefs_path());
     let width = prefs.window_width.max(MIN_WINDOW_WIDTH);
     let height = prefs.window_height.max(MIN_WINDOW_HEIGHT);

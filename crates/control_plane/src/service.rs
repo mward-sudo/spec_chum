@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use machine::TapeLoadOptions;
+use machine::{TapeLoadOptions, Watch};
 use serde::Serialize;
 use spec_chum_host::{
     rom_setup::{model_rom_paths_snapshot, rom_setup_json},
@@ -273,6 +273,23 @@ impl ControlPlane {
         })
     }
 
+    pub fn add_mem_watch(&self, watch: Watch) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.add_mem_watch(watch)?;
+            Ok(())
+        })
+    }
+
+    pub fn list_watches(&self) -> ApiResult<WatchesResponse> {
+        self.with_session_ref(|s| {
+            let (mem, port) = s.list_watches()?;
+            Ok(WatchesResponse {
+                mem: mem.into_iter().map(WatchSpec::from).collect(),
+                port: port.into_iter().map(WatchSpec::from).collect(),
+            })
+        })
+    }
+
     pub fn clear_breakpoints(&self) -> ApiResult<()> {
         self.with_session_mut(|s| {
             s.clear_breakpoints()?;
@@ -385,6 +402,29 @@ pub struct TypeLoadResponse {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct WatchSpec {
+    pub addr: u16,
+    pub read: bool,
+    pub write: bool,
+}
+
+impl From<machine::Watch> for WatchSpec {
+    fn from(w: machine::Watch) -> Self {
+        Self {
+            addr: w.addr,
+            read: w.read,
+            write: w.write,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct WatchesResponse {
+    pub mem: Vec<WatchSpec>,
+    pub port: Vec<WatchSpec>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct StatusResponse {
     pub model: String,
     pub has_machine: bool,
@@ -445,6 +485,18 @@ mod tests {
     #[test]
     fn parse_model_slug_rejects_unknown() {
         assert!(parse_model_slug("not-a-model").is_err());
+    }
+
+    #[test]
+    fn parse_model_slug_accepts_canonical_timex_aliases() {
+        assert_eq!(
+            parse_model_slug("timex_ts2068").expect("ts2068"),
+            ModelId::TimexTS2068
+        );
+        assert_eq!(
+            parse_model_slug("timex_tc2048").expect("tc2048"),
+            ModelId::TimexTC2048
+        );
     }
 
     #[test]

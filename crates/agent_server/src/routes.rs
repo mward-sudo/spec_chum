@@ -13,7 +13,7 @@ use axum::{
 use control_plane::{
     ApiError, ControlPlane, ErrorBody, FramebufferMeta, ServerConfig, TraceFormat,
 };
-use machine::TapeLoadOptions;
+use machine::{TapeLoadOptions, Watch};
 use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;
 
@@ -52,6 +52,7 @@ pub fn router(state: AppState) -> Router {
             get(list_breakpoints).post(add_breakpoint),
         )
         .route("/v1/debug/breakpoints/{pc}", delete(remove_breakpoint))
+        .route("/v1/debug/watches", get(list_watches).post(add_watch))
         .route(
             "/v1/trace/categories",
             get(trace_categories).put(set_trace_categories),
@@ -64,7 +65,14 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub async fn serve(config: ServerConfig, plane: SharedPlane) -> anyhow::Result<()> {
+/// Optional one-shot channel signaled after the listen socket binds successfully.
+pub type ReadySender = std::sync::mpsc::SyncSender<Result<(), String>>;
+
+pub async fn serve(
+    config: ServerConfig,
+    plane: SharedPlane,
+    ready: Option<ReadySender>,
+) -> anyhow::Result<()> {
     control_plane::ServerConfig::validate_bind_host(&config.host)?;
     let addr = (config.host.as_str(), config.port);
     let state = AppState {
@@ -72,7 +80,18 @@ pub async fn serve(config: ServerConfig, plane: SharedPlane) -> anyhow::Result<(
         token: config.token.clone(),
     };
     let app = router(state);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            if let Some(tx) = ready {
+                let _ = tx.send(Err(format!("bind failed: {e}")));
+            }
+            return Err(e.into());
+        }
+    };
+    if let Some(tx) = ready {
+        let _ = tx.send(Ok(()));
+    }
     eprintln!(
         "spec-chum-agent listening on http://{}:{}",
         config.host, config.port
@@ -534,6 +553,41 @@ async fn remove_breakpoint(
         Err(e) => return api_error(e),
     };
     auth_empty(&state, &headers, || state.plane.remove_breakpoint(pc))
+}
+
+async fn list_watches(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || state.plane.list_watches())
+}
+
+#[derive(Debug, Deserialize)]
+struct WatchBody {
+    addr: String,
+    #[serde(default)]
+    read: bool,
+    #[serde(default)]
+    write: bool,
+}
+
+async fn add_watch(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<WatchBody>,
+) -> Response {
+    let addr = match parse_addr(&body.addr) {
+        Ok(a) => a,
+        Err(e) => return api_error(e),
+    };
+    if !body.read && !body.write {
+        return api_error(ApiError::BadRequest(
+            "watch must enable read and/or write".into(),
+        ));
+    }
+    let watch = Watch {
+        addr,
+        read: body.read,
+        write: body.write,
+    };
+    auth_empty(&state, &headers, || state.plane.add_mem_watch(watch))
 }
 
 async fn trace_categories(State(state): State<AppState>, headers: HeaderMap) -> Response {

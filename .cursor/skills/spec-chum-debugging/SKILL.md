@@ -53,7 +53,18 @@ cargo build -p agent_server --release
 - Long sessions: tape load mid-run, breakpoints, grab PNG after N frames.
 - Avoid GUI automation (file pickers, ROM dialogs, multi-monitor).
 
-### HTTP client (Phase B subset)
+### Embedded agent in egui (Phase B)
+
+```bash
+SPEC_CHUM_AGENT=1 cargo run -p app --release
+# Optional: SPEC_CHUM_AGENT_MODEL=timex_ts2068 SPEC_CHUM_AGENT_PORT=17384
+curl -sS http://127.0.0.1:17384/v1/health | jq .
+```
+
+This starts a **parallel** debug session (not yet the GUI's live machine). For shared
+host state, use standalone `spec-chum-agent` or macOS with a separate server process.
+
+### HTTP client (Phase B)
 
 ```bash
 export SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384
@@ -62,7 +73,9 @@ spec-chum-debug --tap tests/fixtures/tape/attr_mark.tap type-load --code
 ```
 
 Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`,
-`until-pc`, `break-pc`. `watch-write` remains local-only (no mem-watch HTTP API yet — #210).
+`until-pc`, `break-pc`, `watch-write`. Requires a running agent (`spec-chum-agent`,
+`spec-chum-debug --serve`, or egui with `SPEC_CHUM_AGENT=1`). `--rom` / `--snapshot`
+remain local-only (no HTTP upload yet — #210).
 
 ### Framebuffer export (not window capture)
 
