@@ -48,6 +48,9 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/disasm", get(disasm))
         .route("/v1/rom", post(load_rom))
         .route("/v1/snapshot", post(load_snapshot))
+        .route("/v1/rzx", post(load_rzx))
+        .route("/v1/dsk", post(load_dsk))
+        .route("/v1/trd", post(load_trd))
         .route("/v1/tape/open", post(tape_open))
         .route("/v1/tape/play", post(tape_play))
         .route("/v1/tape/pause", post(tape_pause))
@@ -560,6 +563,36 @@ async fn load_snapshot(
 ) -> Response {
     auth_empty(&state, &headers, || {
         state.plane.load_snapshot(body.path.as_ref())
+    })
+}
+
+async fn load_rzx(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PathBody>,
+) -> Response {
+    auth_empty(&state, &headers, || {
+        state.plane.load_rzx(body.path.as_ref())
+    })
+}
+
+async fn load_dsk(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PathBody>,
+) -> Response {
+    auth_empty(&state, &headers, || {
+        state.plane.load_dsk(body.path.as_ref())
+    })
+}
+
+async fn load_trd(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<PathBody>,
+) -> Response {
+    auth_empty(&state, &headers, || {
+        state.plane.load_trd(body.path.as_ref())
     })
 }
 
