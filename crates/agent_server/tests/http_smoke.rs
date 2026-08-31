@@ -254,6 +254,101 @@ async fn agent_api_mem_watch_list_and_add() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn agent_api_port_watch_crud() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/debug/port-watches")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("list port watches");
+    assert_eq!(list.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(list.into_body(), usize::MAX)
+        .await
+        .expect("port watch list body");
+    let watches: Vec<serde_json::Value> = serde_json::from_slice(&body).expect("port watch json");
+    assert!(watches.is_empty());
+
+    let add = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/debug/port-watches")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"addr":"fe","write":true}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("add port watch");
+    assert_eq!(add.status(), StatusCode::NO_CONTENT);
+
+    let list2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/debug/port-watches")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("list port watches after add");
+    assert_eq!(list2.status(), StatusCode::OK);
+    let body2 = axum::body::to_bytes(list2.into_body(), usize::MAX)
+        .await
+        .expect("port watch list body 2");
+    let watches2: Vec<serde_json::Value> =
+        serde_json::from_slice(&body2).expect("port watch json 2");
+    assert_eq!(watches2.len(), 1);
+    assert_eq!(watches2[0]["addr"], 254);
+
+    let del = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/v1/debug/port-watches/fe")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("delete port watch");
+    assert_eq!(del.status(), StatusCode::NO_CONTENT);
+
+    let list3 = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/debug/port-watches")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("list port watches after delete");
+    assert_eq!(list3.status(), StatusCode::OK);
+    let body3 = axum::body::to_bytes(list3.into_body(), usize::MAX)
+        .await
+        .expect("port watch list body 3");
+    let watches3: Vec<serde_json::Value> =
+        serde_json::from_slice(&body3).expect("port watch json 3");
+    assert!(watches3.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn agent_api_load_rom_by_path() {
     let rom_path = match machine::resolve_rom_path(Model::Spectrum48) {
         Some(p) => p,

@@ -91,7 +91,7 @@ spec-chum-debug --tap tests/fixtures/tape/attr_mark.tap type-load --code
 ```
 
 Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`,
-`until-pc`, `break-pc`, `watch-write`. Requires a running agent (`spec-chum-agent`,
+`until-pc`, `break-pc`, `watch-write` (mem or `--port`). Requires a running agent (`spec-chum-agent`,
 `spec-chum-debug --serve`, or egui with `SPEC_CHUM_AGENT=1`). `--rom` / `--snapshot`
 remain local-only (no HTTP upload yet — #210).
 
@@ -168,7 +168,7 @@ Global flags (before subcommand): `--model 48k|128k|plus3`, `--rom PATH`, `--tap
 | `disasm [--addr A] [--count N]` | Disasm at PC or addr |
 | `until-pc PC [--max N]` | Run until PC break |
 | `break-pc PC [--frames N]` | PC break over frames |
-| `watch-write ADDR [--max N]` | Break on mem write |
+| `watch-write ADDR [--port] [--max N]` | Break on mem or I/O port write (HTTP: `/v1/debug/watches` or `/v1/debug/port-watches`) |
 | `type-load [--code] [--warmup N] [--max N]` | Boot, type LOAD, wait for load |
 
 ## Tape debugging

@@ -101,6 +101,9 @@ enum Cmd {
     },
     WatchWrite {
         addr: String,
+        /// Watch an I/O port instead of a memory address.
+        #[arg(long)]
+        port: bool,
         #[arg(long, default_value_t = 10_000_000)]
         max: u64,
     },
@@ -255,15 +258,20 @@ fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {
                 exit_cli(2);
             }
         }
-        Cmd::WatchWrite { addr, max } => {
-            client.add_mem_watch_write(addr)?;
+        Cmd::WatchWrite { addr, port, max } => {
+            if *port {
+                client.add_port_watch_write(addr)?;
+            } else {
+                client.add_mem_watch_write(addr)?;
+            }
             let body = client.run_until(*max)?;
             print_remote_run_result(client, cli.json, &body)?;
             let reason = body
                 .get("break_reason")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if !reason.contains("Mem") {
+            let expected = if *port { "Port" } else { "Mem" };
+            if !reason.contains(expected) {
                 exit_cli(2);
             }
         }
@@ -405,20 +413,35 @@ fn run_local(cli: &Cli, session: &mut HostSession, cmd: &Cmd) -> Result<()> {
                 exit_cli(2);
             }
         }
-        Cmd::WatchWrite { addr, max } => {
+        Cmd::WatchWrite { addr, port, max } => {
             let addr = parse_u16(addr)?;
-            session
-                .add_mem_watch(Watch {
-                    addr,
-                    read: false,
-                    write: true,
-                })
-                .map_err(host_err)?;
+            if *port {
+                session
+                    .add_port_watch(Watch {
+                        addr,
+                        read: false,
+                        write: true,
+                    })
+                    .map_err(host_err)?;
+            } else {
+                session
+                    .add_mem_watch(Watch {
+                        addr,
+                        read: false,
+                        write: true,
+                    })
+                    .map_err(host_err)?;
+            }
             let max = u32::try_from(*max).unwrap_or(u32::MAX);
             let reason = session.run_until_break(max).map_err(host_err)?;
             print_inspect(session, cli.json)?;
             print_reason(reason, cli.json);
-            if !matches!(reason, BreakReason::Mem { .. }) {
+            let ok = if *port {
+                matches!(reason, BreakReason::Port { .. })
+            } else {
+                matches!(reason, BreakReason::Mem { .. })
+            };
+            if !ok {
                 exit_cli(2);
             }
         }

@@ -641,6 +641,27 @@ impl ControlPlane {
         })
     }
 
+    pub fn add_port_watch(&self, watch: Watch) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.add_port_watch(watch)?;
+            Ok(())
+        })
+    }
+
+    pub fn remove_mem_watch(&self, addr: u16) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            let _ = s.remove_mem_watch(addr)?;
+            Ok(())
+        })
+    }
+
+    pub fn remove_port_watch(&self, addr: u16) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            let _ = s.remove_port_watch(addr)?;
+            Ok(())
+        })
+    }
+
     pub fn list_watches(&self) -> ApiResult<WatchesResponse> {
         self.with_session_ref(|s| {
             let (mem, port) = s.list_watches()?;
@@ -649,6 +670,10 @@ impl ControlPlane {
                 port: port.into_iter().map(WatchSpec::from).collect(),
             })
         })
+    }
+
+    pub fn list_port_watches(&self) -> ApiResult<Vec<WatchSpec>> {
+        Ok(self.list_watches()?.port)
     }
 
     pub fn clear_breakpoints(&self) -> ApiResult<()> {

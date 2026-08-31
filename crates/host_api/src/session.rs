@@ -1013,6 +1013,31 @@ impl HostSession {
         Ok(())
     }
 
+    /// Add an I/O port access watch (read and/or write).
+    pub fn add_port_watch(&mut self, watch: Watch) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.debugger_mut().add_port_watch(watch);
+        Ok(())
+    }
+
+    /// Remove a memory watch at `addr`. Returns `false` when none matched.
+    pub fn remove_mem_watch(&mut self, addr: u16) -> Result<bool, HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.debugger_mut().remove_mem_watch(addr))
+    }
+
+    /// Remove a port watch at `addr`. Returns `false` when none matched.
+    pub fn remove_port_watch(&mut self, addr: u16) -> Result<bool, HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.debugger_mut().remove_port_watch(addr))
+    }
+
     /// Run until breakpoint, halt, or instruction budget.
     pub fn run_until_break(&mut self, max_insns: u32) -> Result<machine::BreakReason, HostError> {
         let Some(m) = self.machine.as_mut() else {
