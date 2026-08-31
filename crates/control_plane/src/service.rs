@@ -225,6 +225,19 @@ impl ControlPlane {
         f(&mut guard)
     }
 
+    /// Run a session mutation that loads/replaces a machine, then re-apply prefs.
+    fn with_machine_load<R>(
+        &self,
+        f: impl FnOnce(&mut HostSession) -> ApiResult<R>,
+    ) -> ApiResult<R> {
+        let prefs = self.prefs()?;
+        self.with_session_mut(|s| {
+            let out = f(s)?;
+            apply_prefs_to_session(s, &prefs)?;
+            Ok(out)
+        })
+    }
+
     fn with_session_ref<R>(&self, f: impl FnOnce(&HostSession) -> ApiResult<R>) -> ApiResult<R> {
         let guard = self
             .inner
@@ -257,7 +270,7 @@ impl ControlPlane {
     }
 
     pub fn apply_config(&self, config: &UserMachineConfig) -> ApiResult<()> {
-        self.with_session_mut(|s| {
+        self.with_machine_load(|s| {
             s.apply_user_config(config)?;
             Ok(())
         })
@@ -367,13 +380,7 @@ impl ControlPlane {
         let snapshot = guard.clone();
         drop(guard);
 
-        self.with_session_mut(|s| {
-            if s.has_machine() {
-                s.set_joystick_mode(snapshot.joystick_mode.to_mode())?;
-                s.set_tape_load_options(snapshot.tape_load_options())?;
-            }
-            Ok(())
-        })?;
+        self.with_session_mut(|s| apply_prefs_to_session(s, &snapshot))?;
         Ok(snapshot)
     }
 
@@ -407,35 +414,35 @@ impl ControlPlane {
 
     pub fn set_model(&self, model: &str) -> ApiResult<()> {
         let model = parse_model_slug(model)?;
-        self.with_session_mut(|s| {
+        self.with_machine_load(|s| {
             s.select_model(model)?;
             Ok(())
         })
     }
 
     pub fn autoload_model(&self, model: ModelId) -> ApiResult<()> {
-        self.with_session_mut(|s| {
+        self.with_machine_load(|s| {
             s.select_model(model)?;
             Ok(())
         })
     }
 
     pub fn load_rom_bytes(&self, rom: &[u8]) -> ApiResult<()> {
-        self.with_session_mut(|s| {
+        self.with_machine_load(|s| {
             s.load_rom_bytes(rom)?;
             Ok(())
         })
     }
 
     pub fn load_rom_path(&self, path: &Path) -> ApiResult<()> {
-        self.with_session_mut(|s| {
+        self.with_machine_load(|s| {
             s.load_rom_path(path)?;
             Ok(())
         })
     }
 
     pub fn load_snapshot(&self, path: &Path) -> ApiResult<()> {
-        self.with_session_mut(|s| {
+        self.with_machine_load(|s| {
             s.load_snapshot(path)?;
             Ok(())
         })
@@ -764,6 +771,14 @@ fn format_break_reason(reason: BreakReason) -> String {
     }
 }
 
+fn apply_prefs_to_session(s: &mut HostSession, prefs: &SessionPrefs) -> ApiResult<()> {
+    if s.has_machine() {
+        s.set_joystick_mode(prefs.joystick_mode.to_mode())?;
+        s.set_tape_load_options(prefs.tape_load_options())?;
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct StatusResponse {
     pub model: String,
@@ -935,6 +950,34 @@ mod tests {
         assert!(plane.tape_eject().is_err());
         assert!(plane.clear_mouse().is_err());
         assert!(plane.set_mouse(Some(1), Some(0), None, None, None).is_err());
+    }
+
+    #[test]
+    fn prefs_apply_after_rom_load() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: Spectrum 48 ROM missing");
+            return;
+        };
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        plane
+            .patch_prefs(PrefsPatch {
+                joystick_mode: Some(PrefJoystick::Cursor),
+                tape_experience: Some(true),
+                ..PrefsPatch::default()
+            })
+            .expect("patch before rom");
+        plane.load_rom_bytes(&rom).expect("rom");
+        let mode = {
+            let s = plane.inner.lock().expect("lock");
+            s.joystick_mode()
+        };
+        assert_eq!(mode, machine::JoystickMode::Cursor);
+        let opts = {
+            let s = plane.inner.lock().expect("lock");
+            s.tape_load_options().expect("tape opts")
+        };
+        assert!(opts.experience_load);
+        assert_eq!(opts.speed, TapeLoadOptions::experience().speed);
     }
 
     #[test]
