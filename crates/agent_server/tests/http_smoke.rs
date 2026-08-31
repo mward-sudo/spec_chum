@@ -372,3 +372,77 @@ async fn agent_api_dsk_rejects_non_plus3() {
         "expected model-rejection message, got {msg}"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_joystick_kempston_mask() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let set = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/joystick")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"mask":17}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("set joystick");
+    assert_eq!(set.status(), StatusCode::NO_CONTENT);
+
+    let clear = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/joystick")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"clear":true}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("clear joystick");
+    assert_eq!(clear.status(), StatusCode::NO_CONTENT);
+
+    let bad = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/joystick")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .expect("bad joystick body");
+    assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
+
+    let no_machine = router(AppState {
+        plane: Arc::new(ControlPlane::new(ModelId::Spectrum48, false)),
+        token: None,
+        insecure: true,
+    })
+    .oneshot(
+        Request::builder()
+            .method("POST")
+            .uri("/v1/joystick")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"mask":1}"#))
+            .unwrap(),
+    )
+    .await
+    .expect("no machine");
+    assert_eq!(no_machine.status(), StatusCode::CONFLICT);
+}

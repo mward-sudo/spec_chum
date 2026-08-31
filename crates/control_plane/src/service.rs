@@ -208,6 +208,20 @@ impl ControlPlane {
         })
     }
 
+    pub fn set_joystick(&self, mask: u8) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.set_joystick(mask)?;
+            Ok(())
+        })
+    }
+
+    pub fn clear_joystick(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.clear_joystick()?;
+            Ok(())
+        })
+    }
+
     pub fn last_break(&self) -> ApiResult<LastBreakResponse> {
         self.with_session_ref(|s| {
             let reason = s.last_break_reason()?;
@@ -695,5 +709,27 @@ mod tests {
     fn set_key_requires_machine() {
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         assert!(plane.set_key(0, 0, true).is_err());
+    }
+
+    #[test]
+    fn set_joystick_requires_machine() {
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        assert!(plane.set_joystick(0x11).is_err());
+        assert!(plane.clear_joystick().is_err());
+    }
+
+    #[test]
+    fn set_joystick_round_trip() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: Spectrum 48 ROM missing");
+            return;
+        };
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        {
+            let mut s = plane.inner.lock().expect("lock");
+            s.load_rom_bytes(&rom).expect("rom");
+        }
+        plane.set_joystick(0x11).expect("set");
+        plane.clear_joystick().expect("clear");
     }
 }
