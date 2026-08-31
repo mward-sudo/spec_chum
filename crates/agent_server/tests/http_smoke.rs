@@ -284,3 +284,91 @@ async fn agent_api_load_rom_by_path() {
     assert_eq!(load.status(), StatusCode::NO_CONTENT);
     assert!(plane.health().expect("health").has_machine);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_media_insert_requires_machine() {
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    for route in ["/v1/rzx", "/v1/dsk", "/v1/trd"] {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(route)
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"path":"/tmp/missing.media"}"#))
+                    .unwrap(),
+            )
+            .await
+            .expect(route);
+        assert_eq!(
+            resp.status(),
+            StatusCode::CONFLICT,
+            "{route} without machine should return 409"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_dsk_rejects_non_plus3() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    // Minimal parseable MV-CPC DSK (one empty track header).
+    let mut dsk = vec![0u8; 0x100];
+    dsk[0..8].copy_from_slice(b"MV - CPC");
+    dsk[0x30] = 1;
+    dsk[0x31] = 1;
+    let track_size: u16 = 0x100;
+    dsk[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+    let mut track = vec![0u8; track_size as usize];
+    track[0..12].copy_from_slice(b"Track-Info\r\n");
+    dsk.extend_from_slice(&track);
+
+    let dir = std::env::temp_dir().join("spec_chum_agent_api_dsk_reject");
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("reject.dsk");
+    std::fs::write(&path, &dsk).expect("write dsk");
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/dsk")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": path })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("load dsk");
+    assert!(
+        resp.status().is_server_error(),
+        "48K should reject DSK insert"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .expect("error body");
+    let err: serde_json::Value = serde_json::from_slice(&body).expect("error json");
+    let msg = err["error"].as_str().unwrap_or("");
+    assert!(
+        msg.contains("+3") || msg.contains("Plus3") || msg.contains("plus3"),
+        "expected model-rejection message, got {msg}"
+    );
+}

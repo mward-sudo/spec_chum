@@ -262,6 +262,27 @@ impl ControlPlane {
         })
     }
 
+    pub fn load_rzx(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_rzx(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn load_dsk(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_dsk(path)?;
+            Ok(())
+        })
+    }
+
+    pub fn load_trd(&self, path: &Path) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.load_trd(path)?;
+            Ok(())
+        })
+    }
+
     pub fn reset(&self) -> ApiResult<()> {
         self.with_session_mut(|s| {
             s.reset()?;
