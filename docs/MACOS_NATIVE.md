@@ -54,6 +54,24 @@ SPEC_CHUM_AUDIO_DEBUG=1 apps/macos/.build/release/SpecChumMac
 
 (ROMs: run from repo root or set `SPEC_CHUM_ROOT` to the checkout.)
 
+## Agent / scripted debugging (HTTP)
+
+SpecChumMac uses the C ABI (`sc_debug_*`, `sc_inspect_json`, …) for in-app Debug
+menus — those entry points are **FFI-only** (see
+[`AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) Phase C). For agents and headless
+automation, run a **standalone** loopback server (no in-process embed yet —
+[#221](https://github.com/mward-sudo/spec_chum/issues/221)):
+
+```bash
+./scripts/fetch_roms.sh
+cargo run -p agent_server --release -- --model 48k --insecure
+# or: cargo run -p debug_cli --release -- --serve --model 48k --insecure
+curl -sS http://127.0.0.1:17384/v1/health
+```
+
+Prefer HTTP over GUI automation or driving the SwiftUI shell. See
+[`AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md).
+
 ## What this vertical slice includes
 
 - Native `MenuBar` / `Commands` plus **Settings** (⌘,) — HIG split: **toolbar** = frequent (Open / Instant / Play / Rewind / volume / machine picker); **Settings** = EAR speed, volume, joystick, Kempston mouse; **menus** = File Open… counterparts, Tape Type LOAD, **Machine** (built-in models + custom configurations), Hardware Multiface, Debug (no Instant/Play/joystick clones)
