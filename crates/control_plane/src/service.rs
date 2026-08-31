@@ -1,9 +1,11 @@
 use std::path::Path;
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use machine::{TapeLoadOptions, Watch};
+use machine::{BreakReason, TapeLoadOptions, Watch};
 use serde::Serialize;
 use spec_chum_host::{
+    machine_config::UserMachineConfig,
     rom_setup::{model_rom_paths_snapshot, rom_setup_json},
     HostSession, ModelId,
 };
@@ -78,10 +80,25 @@ pub enum TraceFormat {
     Ndjson,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct LastErrorRecord {
+    pub error: String,
+    pub status: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at_unix_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LastBreakResponse {
+    pub reason: String,
+    pub paused: bool,
+}
+
 /// Thread-safe wrapper around [`HostSession`].
 #[derive(Debug)]
 pub struct ControlPlane {
     inner: Mutex<HostSession>,
+    last_error: Mutex<Option<LastErrorRecord>>,
 }
 
 impl ControlPlane {
@@ -90,6 +107,7 @@ impl ControlPlane {
         trace::init_from_env();
         Self {
             inner: Mutex::new(HostSession::new(model, with_border)),
+            last_error: Mutex::new(None),
         }
     }
 
@@ -97,7 +115,34 @@ impl ControlPlane {
         trace::init_from_env();
         Self {
             inner: Mutex::new(session),
+            last_error: Mutex::new(None),
         }
+    }
+
+    pub fn record_error(&self, err: &ApiError) {
+        let at_unix_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_millis().min(u64::MAX as u128) as u64);
+        if let Ok(mut slot) = self.last_error.lock() {
+            *slot = Some(LastErrorRecord {
+                error: err.to_string(),
+                status: err.status_code(),
+                at_unix_ms,
+            });
+        }
+    }
+
+    pub fn last_error(&self) -> LastErrorRecord {
+        self.last_error
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or(LastErrorRecord {
+                error: String::new(),
+                status: 0,
+                at_unix_ms: None,
+            })
     }
 
     fn with_session_mut<R>(
@@ -136,6 +181,41 @@ impl ControlPlane {
 
     pub fn framebuffer_meta(&self) -> ApiResult<FramebufferMeta> {
         self.with_session_ref(|s| Ok(FramebufferMeta::from_session(s)))
+    }
+
+    pub fn video_meta(&self) -> ApiResult<FramebufferMeta> {
+        self.framebuffer_meta()
+    }
+
+    pub fn apply_config(&self, config: &UserMachineConfig) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.apply_user_config(config)?;
+            Ok(())
+        })
+    }
+
+    pub fn set_key(&self, row: usize, bit: u8, pressed: bool) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.set_key(row, bit, pressed)?;
+            Ok(())
+        })
+    }
+
+    pub fn clear_keys(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.clear_keys()?;
+            Ok(())
+        })
+    }
+
+    pub fn last_break(&self) -> ApiResult<LastBreakResponse> {
+        self.with_session_ref(|s| {
+            let reason = s.last_break_reason()?;
+            Ok(LastBreakResponse {
+                reason: format_break_reason(reason),
+                paused: s.paused(),
+            })
+        })
     }
 
     pub fn framebuffer_rgba(&self) -> ApiResult<Vec<u8>> {
@@ -456,6 +536,27 @@ pub struct WatchesResponse {
     pub port: Vec<WatchSpec>,
 }
 
+fn format_break_reason(reason: BreakReason) -> String {
+    match reason {
+        BreakReason::None => "none".into(),
+        BreakReason::Pc(pc) => format!("pc:{pc:04X}"),
+        BreakReason::Mem { addr, write, value } => {
+            format!(
+                "mem:{addr:04X}:{}={value:02X}",
+                if write { "w" } else { "r" }
+            )
+        }
+        BreakReason::Port { port, write, value } => {
+            format!(
+                "port:{port:04X}:{}={value:02X}",
+                if write { "w" } else { "r" }
+            )
+        }
+        BreakReason::Halt => "halt".into(),
+        BreakReason::Budget => "budget".into(),
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct StatusResponse {
     pub model: String,
@@ -557,5 +658,21 @@ mod tests {
             ..no_token
         };
         assert!(with_token.validate_auth_config().is_ok());
+    }
+
+    #[test]
+    fn last_error_records_failures() {
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        assert!(plane.last_error().error.is_empty());
+        plane.record_error(&ApiError::BadRequest("test".into()));
+        let last = plane.last_error();
+        assert!(last.error.contains("test"));
+        assert_eq!(last.status, 400);
+    }
+
+    #[test]
+    fn set_key_requires_machine() {
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        assert!(plane.set_key(0, 0, true).is_err());
     }
 }

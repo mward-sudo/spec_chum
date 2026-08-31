@@ -15,6 +15,7 @@ use control_plane::{
 };
 use machine::{TapeLoadOptions, Watch};
 use serde::{Deserialize, Serialize};
+use spec_chum_host::UserMachineConfig;
 use tower_http::trace::TraceLayer;
 
 pub type SharedPlane = Arc<ControlPlane>;
@@ -31,9 +32,13 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/health", get(health))
         .route("/v1/status", get(status))
         .route("/v1/inspect", get(inspect))
+        .route("/v1/video", get(video))
+        .route("/v1/errors/last", get(last_error))
         .route("/v1/framebuffer", get(framebuffer))
         .route("/v1/model", post(set_model))
+        .route("/v1/config", post(apply_config))
         .route("/v1/reset", post(reset))
+        .route("/v1/keys", post(set_keys))
         .route("/v1/running", post(set_running))
         .route("/v1/run", post(run))
         .route("/v1/step", post(step))
@@ -54,6 +59,7 @@ pub fn router(state: AppState) -> Router {
             "/v1/debug/breakpoints",
             get(list_breakpoints).post(add_breakpoint),
         )
+        .route("/v1/debug/last-break", get(last_break))
         .route("/v1/debug/breakpoints/{pc}", delete(remove_breakpoint))
         .route("/v1/debug/watches", get(list_watches).post(add_watch))
         .route(
@@ -127,7 +133,8 @@ fn check_auth(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
     }
 }
 
-fn api_error(err: ApiError) -> Response {
+fn api_error(plane: &SharedPlane, err: ApiError) -> Response {
+    plane.record_error(&err);
     let status =
         StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     (status, Json(ErrorBody::from(err))).into_response()
@@ -137,9 +144,9 @@ async fn health(State(state): State<AppState>, headers: HeaderMap) -> Response {
     match check_auth(&state, &headers) {
         Ok(()) => match state.plane.health() {
             Ok(body) => Json(body).into_response(),
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -151,10 +158,110 @@ async fn inspect(State(state): State<AppState>, headers: HeaderMap) -> Response 
     match check_auth(&state, &headers) {
         Ok(()) => match state.plane.inspect_json() {
             Ok(json) => ([(header::CONTENT_TYPE, "application/json")], json).into_response(),
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
+}
+
+async fn video(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || state.plane.video_meta())
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct LastErrorResponse {
+    last: Option<control_plane::LastErrorRecord>,
+}
+
+async fn last_error(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || {
+        let record = state.plane.last_error();
+        Ok(LastErrorResponse {
+            last: if record.error.is_empty() {
+                None
+            } else {
+                Some(record)
+            },
+        })
+    })
+}
+
+async fn apply_config(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<UserMachineConfig>,
+) -> Response {
+    auth_empty(&state, &headers, || state.plane.apply_config(&body))
+}
+
+#[derive(Debug, Deserialize)]
+struct KeyAction {
+    row: usize,
+    bit: u8,
+    #[serde(default = "default_pressed")]
+    pressed: bool,
+}
+
+fn default_pressed() -> bool {
+    true
+}
+
+#[derive(Debug, Deserialize)]
+struct KeysBody {
+    #[serde(default)]
+    clear: bool,
+    #[serde(default)]
+    row: Option<usize>,
+    #[serde(default)]
+    bit: Option<u8>,
+    #[serde(default)]
+    pressed: Option<bool>,
+    #[serde(default)]
+    keys: Vec<KeyAction>,
+}
+
+async fn set_keys(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<KeysBody>,
+) -> Response {
+    if body.clear {
+        return auth_empty(&state, &headers, || state.plane.clear_keys());
+    }
+    if !body.keys.is_empty() {
+        for key in &body.keys {
+            if key.row > 7 || key.bit > 4 {
+                return api_error(
+                    &state.plane,
+                    ApiError::BadRequest("key row/bit out of range".into()),
+                );
+            }
+        }
+        match check_auth(&state, &headers) {
+            Ok(()) => {
+                for key in body.keys {
+                    if let Err(e) = state.plane.set_key(key.row, key.bit, key.pressed) {
+                        return api_error(&state.plane, e);
+                    }
+                }
+                StatusCode::NO_CONTENT.into_response()
+            }
+            Err(e) => api_error(&state.plane, e),
+        }
+    } else {
+        let (Some(row), Some(bit)) = (body.row, body.bit) else {
+            return api_error(
+                &state.plane,
+                ApiError::BadRequest("keys body requires clear, keys[], or row+bit".into()),
+            );
+        };
+        let pressed = body.pressed.unwrap_or(true);
+        auth_empty(&state, &headers, || state.plane.set_key(row, bit, pressed))
+    }
+}
+
+async fn last_break(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || state.plane.last_break())
 }
 
 #[derive(Debug, Deserialize)]
@@ -175,15 +282,15 @@ async fn framebuffer(
     Query(q): Query<FramebufferQuery>,
 ) -> Response {
     if let Err(e) = check_auth(&state, &headers) {
-        return api_error(e);
+        return api_error(&state.plane, e);
     }
     let restore_border = if let Some(border) = q.border {
         let prev = state.plane.framebuffer_meta().ok().map(|m| m.border);
         if let Err(e) = state.plane.set_border(border) {
-            return api_error(e);
+            return api_error(&state.plane, e);
         }
         if let Err(e) = state.plane.run_frames(1) {
-            return api_error(e);
+            return api_error(&state.plane, e);
         }
         prev.filter(|p| *p != border)
     } else {
@@ -191,14 +298,15 @@ async fn framebuffer(
     };
     let meta = match state.plane.framebuffer_meta() {
         Ok(m) => m,
-        Err(e) => return api_error(e),
+        Err(e) => return api_error(&state.plane, e),
     };
     let response = match q.format.to_ascii_lowercase().as_str() {
         "rgba" => rgba_response(&state, meta),
         "png" | "" => png_response(&state, meta),
-        other => api_error(ApiError::BadRequest(format!(
-            "unknown framebuffer format: {other}"
-        ))),
+        other => api_error(
+            &state.plane,
+            ApiError::BadRequest(format!("unknown framebuffer format: {other}")),
+        ),
     };
     if let Some(prev) = restore_border {
         let _ = state.plane.set_border(prev);
@@ -218,7 +326,7 @@ fn rgba_response(state: &AppState, meta: FramebufferMeta) -> Response {
             insert_meta_headers(h, &meta);
             resp
         }
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -231,7 +339,7 @@ fn png_response(state: &AppState, meta: FramebufferMeta) -> Response {
             insert_meta_headers(h, &meta);
             resp
         }
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -368,16 +476,16 @@ async fn peek(
 ) -> Response {
     let addr = match parse_addr(&q.addr) {
         Ok(a) => a,
-        Err(e) => return api_error(e),
+        Err(e) => return api_error(&state.plane, e),
     };
     match check_auth(&state, &headers) {
         Ok(()) => match state.plane.peek(addr, q.len) {
             Ok(text) => {
                 ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response()
             }
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -394,7 +502,7 @@ async fn poke(
 ) -> Response {
     let addr = match parse_addr(&body.addr) {
         Ok(a) => a,
-        Err(e) => return api_error(e),
+        Err(e) => return api_error(&state.plane, e),
     };
     auth_empty(&state, &headers, || state.plane.poke(addr, body.value))
 }
@@ -417,16 +525,16 @@ async fn disasm(
 ) -> Response {
     let addr = match q.addr.as_deref().map(parse_addr).transpose() {
         Ok(a) => a,
-        Err(e) => return api_error(e),
+        Err(e) => return api_error(&state.plane, e),
     };
     match check_auth(&state, &headers) {
         Ok(()) => match state.plane.disasm(addr, q.count) {
             Ok(text) => {
                 ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response()
             }
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -569,7 +677,7 @@ async fn add_breakpoint(
 ) -> Response {
     let pc = match parse_addr(&body.pc) {
         Ok(a) => a,
-        Err(e) => return api_error(e),
+        Err(e) => return api_error(&state.plane, e),
     };
     auth_empty(&state, &headers, || state.plane.add_breakpoint(pc))
 }
@@ -581,7 +689,7 @@ async fn remove_breakpoint(
 ) -> Response {
     let pc = match parse_addr(&pc) {
         Ok(a) => a,
-        Err(e) => return api_error(e),
+        Err(e) => return api_error(&state.plane, e),
     };
     auth_empty(&state, &headers, || state.plane.remove_breakpoint(pc))
 }
@@ -606,12 +714,13 @@ async fn add_watch(
 ) -> Response {
     let addr = match parse_addr(&body.addr) {
         Ok(a) => a,
-        Err(e) => return api_error(e),
+        Err(e) => return api_error(&state.plane, e),
     };
     if !body.read && !body.write {
-        return api_error(ApiError::BadRequest(
-            "watch must enable read and/or write".into(),
-        ));
+        return api_error(
+            &state.plane,
+            ApiError::BadRequest("watch must enable read and/or write".into()),
+        );
     }
     let watch = Watch {
         addr,
@@ -663,9 +772,10 @@ async fn trace_dump(
         "ndjson" => TraceFormat::Ndjson,
         "text" | "" => TraceFormat::Text,
         other => {
-            return api_error(ApiError::BadRequest(format!(
-                "unknown trace format: {other}"
-            )))
+            return api_error(
+                &state.plane,
+                ApiError::BadRequest(format!("unknown trace format: {other}")),
+            )
         }
     };
     match check_auth(&state, &headers) {
@@ -677,9 +787,9 @@ async fn trace_dump(
                 };
                 ([(header::CONTENT_TYPE, ctype)], text).into_response()
             }
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -691,9 +801,9 @@ async fn rom_setup(State(state): State<AppState>, headers: HeaderMap) -> Respons
     match check_auth(&state, &headers) {
         Ok(()) => match state.plane.rom_setup() {
             Ok(json) => ([(header::CONTENT_TYPE, "application/json")], json).into_response(),
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -719,9 +829,9 @@ fn auth_empty(
     match check_auth(state, headers) {
         Ok(()) => match f() {
             Ok(()) => StatusCode::NO_CONTENT.into_response(),
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -733,9 +843,9 @@ fn auth_json<T: Serialize>(
     match check_auth(state, headers) {
         Ok(()) => match f() {
             Ok(body) => Json(body).into_response(),
-            Err(e) => api_error(e),
+            Err(e) => api_error(&state.plane, e),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -747,10 +857,10 @@ where
     match check_auth(state, headers) {
         Ok(()) => match tokio::task::spawn_blocking(f).await {
             Ok(Ok(body)) => Json(body).into_response(),
-            Ok(Err(e)) => api_error(e),
-            Err(e) => api_error(ApiError::Message(format!("task join: {e}"))),
+            Ok(Err(e)) => api_error(&state.plane, e),
+            Err(e) => api_error(&state.plane, ApiError::Message(format!("task join: {e}"))),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 
@@ -761,10 +871,10 @@ where
     match check_auth(state, headers) {
         Ok(()) => match tokio::task::spawn_blocking(f).await {
             Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
-            Ok(Err(e)) => api_error(e),
-            Err(e) => api_error(ApiError::Message(format!("task join: {e}"))),
+            Ok(Err(e)) => api_error(&state.plane, e),
+            Err(e) => api_error(&state.plane, ApiError::Message(format!("task join: {e}"))),
         },
-        Err(e) => api_error(e),
+        Err(e) => api_error(&state.plane, e),
     }
 }
 

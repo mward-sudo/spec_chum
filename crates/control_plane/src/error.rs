@@ -1,5 +1,5 @@
 use serde::Serialize;
-use spec_chum_host::HostError;
+use spec_chum_host::{HostError, MachineConfigError};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -24,6 +24,12 @@ impl From<HostError> for ApiError {
             HostError::NoMachine => Self::NoMachine,
             other => Self::Host(other),
         }
+    }
+}
+
+impl From<MachineConfigError> for ApiError {
+    fn from(value: MachineConfigError) -> Self {
+        Self::BadRequest(value.to_string())
     }
 }
 
