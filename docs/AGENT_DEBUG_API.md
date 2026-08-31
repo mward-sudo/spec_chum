@@ -68,16 +68,16 @@ All debugging / control / inspect paths **converge** on one backend:
 | **B — clients adapt** | `spec-chum-debug` talks HTTP when `SPEC_CHUM_AGENT_URL` set; egui Debug on shared `HostSession`; `SPEC_CHUM_AGENT=1` embeds HTTP on that same plane; integration tests hit HTTP |
 | **C — dedupe** | Deprecate duplicate direct `host_api` debug/control paths where safe; document remaining C ABI as FFI-only for non-Rust shells |
 
-**Phase B (partial — [#221](https://github.com/mward-sudo/spec_chum/issues/221) open):**
+**Phase B (done — [#221](https://github.com/mward-sudo/spec_chum/issues/221) closed; SpecChumMac in-process deferred):**
 
 | Piece | Status |
 | --- | --- |
 | `spec-chum-debug` HTTP client (`SPEC_CHUM_AGENT_URL` / `--agent-url`) | Done ([#213](https://github.com/mward-sudo/spec_chum/pull/213) / [#214](https://github.com/mward-sudo/spec_chum/pull/214)) |
 | Mem watches over HTTP | Done |
 | SpecChumMac agent workflow docs | Done ([#225](https://github.com/mward-sudo/spec_chum/pull/225) / `MACOS_NATIVE.md`) |
-| egui `SPEC_CHUM_AGENT=1` embed | **Done** — thin transport over the GUI `Arc<ControlPlane>` / shared `HostSession` (same live machine as Debug) |
-| egui Debug panel live session | **Done** — Debug routes through shared [`HostSession`](../crates/host_api/src/session.rs) behind `EmulatorSession` / `ControlPlane` |
-| SpecChumMac in-process embed | **Deferred** — keep FFI + standalone agent; in-process only if cycle-safe (no `host_api` ↔ `control_plane`) |
+| egui `SPEC_CHUM_AGENT=1` embed | **Done** — thin transport over the GUI `Arc<ControlPlane>` / shared `HostSession` (same live machine as Debug) ([#229](https://github.com/mward-sudo/spec_chum/pull/229)) |
+| egui Debug panel live session | **Done** — Debug routes through shared [`HostSession`](../crates/host_api/src/session.rs) behind `EmulatorSession` / `ControlPlane` ([#228](https://github.com/mward-sudo/spec_chum/pull/228)) |
+| SpecChumMac in-process embed | **Deferred** — keep FFI + standalone agent; in-process only if cycle-safe (no `host_api` ↔ `control_plane`); tracked on epic [#210](https://github.com/mward-sudo/spec_chum/issues/210) |
 
 **Phase C (docs complete — [#222](https://github.com/mward-sudo/spec_chum/issues/222)):**
 `spec-chum-debug` local commands route through
@@ -113,7 +113,7 @@ primary API and must **not** gain a `host_api` → `control_plane` dependency
 | Direct `machine::Machine` in debug CLI | **Removed** (Phase C partial / [#215](https://github.com/mward-sudo/spec_chum/pull/215)) |
 
 Phase A–H HTTP rows continue on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
-egui in-process HTTP↔GUI share landed for #221; SpecChumMac in-process integration remains deferred.
+egui in-process HTTP↔GUI share landed for #221 ([#228](https://github.com/mward-sudo/spec_chum/pull/228) / [#229](https://github.com/mward-sudo/spec_chum/pull/229)); SpecChumMac in-process integration remains deferred on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
 Field privatize follow-up: [#227](https://github.com/mward-sudo/spec_chum/issues/227).
 
 Phase A is mergeable without breaking current workflows.

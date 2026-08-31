@@ -882,7 +882,7 @@ fn format_break_reason(reason: BreakReason) -> String {
 
 fn apply_prefs_to_session(s: &mut HostSession, prefs: &SessionPrefs) -> ApiResult<()> {
     if s.has_machine() {
-        s.set_joystick_mode(prefs.joystick_mode.to_mode())?;
+        s.set_joystick_mode(prefs.joystick_mode.to_mode());
         s.set_tape_load_options(prefs.tape_load_options())?;
     }
     Ok(())
