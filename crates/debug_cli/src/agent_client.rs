@@ -80,6 +80,27 @@ impl AgentClient {
         )
     }
 
+    pub fn add_port_watch_write(&self, addr: &str) -> Result<()> {
+        self.post_empty(
+            "/v1/debug/port-watches",
+            serde_json::json!({
+                "addr": addr,
+                "read": false,
+                "write": true,
+            }),
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn remove_mem_watch(&self, addr: &str) -> Result<()> {
+        self.delete_empty(&format!("/v1/debug/watches/{addr}"))
+    }
+
+    #[allow(dead_code)]
+    pub fn remove_port_watch(&self, addr: &str) -> Result<()> {
+        self.delete_empty(&format!("/v1/debug/port-watches/{addr}"))
+    }
+
     pub fn tape_play(&self) -> Result<()> {
         self.post_empty("/v1/tape/play", serde_json::json!({}))
     }
@@ -242,6 +263,22 @@ impl AgentClient {
         } else {
             let text = resp.into_body().read_to_string().unwrap_or_default();
             bail!("POST {path} failed ({status}): {text}");
+        }
+    }
+
+    fn delete_empty(&self, path: &str) -> Result<()> {
+        let resp = self
+            .agent
+            .delete(self.url(path))
+            .apply(self)
+            .call()
+            .with_context(|| format!("DELETE {path}"))?;
+        let status = resp.status();
+        if status == 204 || status == 200 {
+            Ok(())
+        } else {
+            let text = resp.into_body().read_to_string().unwrap_or_default();
+            bail!("DELETE {path} failed ({status}): {text}");
         }
     }
 }

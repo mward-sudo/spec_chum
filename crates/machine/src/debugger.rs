@@ -82,6 +82,18 @@ impl Debugger {
         self.port_watches.push(w);
     }
 
+    pub fn remove_mem_watch(&mut self, addr: u16) -> bool {
+        let before = self.mem_watches.len();
+        self.mem_watches.retain(|w| w.addr != addr);
+        self.mem_watches.len() < before
+    }
+
+    pub fn remove_port_watch(&mut self, addr: u16) -> bool {
+        let before = self.port_watches.len();
+        self.port_watches.retain(|w| w.addr != addr);
+        self.port_watches.len() < before
+    }
+
     pub fn clear_breaks(&mut self) {
         self.pc_breaks.clear();
         self.mem_watches.clear();

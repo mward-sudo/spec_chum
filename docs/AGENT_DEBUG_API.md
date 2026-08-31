@@ -212,7 +212,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Video | `GET /v1/framebuffer` — PNG or RGBA (see above); `GET /v1/video` — dims + SCLD mode without pixels |
 | Memory | `GET /v1/peek?addr=&len=`; `POST /v1/poke`; optional `GET /v1/memory/regions` for paged views |
 | Disasm | `GET /v1/disasm?addr=&count=` |
-| Debugger state | `GET /v1/debug/breakpoints`, `/watches`, `/last-break` |
+| Debugger state | `GET /v1/debug/breakpoints`, `/watches`, `/port-watches`, `/last-break` |
 | ROM | `GET /v1/rom/setup` — slots + availability (`sc_model_rom_setup_json` parity) |
 | Status | `GET /v1/status`, `/v1/health`; `GET /v1/errors/last` |
 | Prefs | `GET /v1/prefs` snapshot |
@@ -221,7 +221,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 
 | Area | Operations |
 | --- | --- |
-| Breakpoints | `POST /v1/debug/breakpoints/pc`; `DELETE`…; mem/port watches |
+| Breakpoints | `GET`/`POST /v1/debug/breakpoints` (body `{ "pc" }`); `DELETE /v1/debug/breakpoints/{pc}`; mem watches at `/v1/debug/watches`; port watches at `/v1/debug/port-watches` |
 | Trace | `GET /v1/trace/categories` — list enabled categories; `PUT /v1/trace/categories` — enable/disable; `POST /v1/trace/clear`; `GET /v1/trace` — ring text/JSON/ndjson |
 | Run control | `POST /v1/run-until` — PC, mem write, port, halt, insn budget |
 | Step semantics | `step` = one instruction; `step-over` deferred until call-stack support exists — document as optional |
@@ -249,6 +249,18 @@ Remaining control/inspect/debug rows land in later phases on [#210](https://gith
 | `POST /v1/mouse` | Requires `kempston_mouse: true` in prefs. Body `{ "dx", "dy", "left", "right", "middle" }` and/or `{ "clear": true }` (full axis+button reset) — Kempston mouse via `HostSession` ([#136](https://github.com/mward-sudo/spec_chum/issues/136)) |
 | `POST /v1/tape/eject` | Clears the inserted TAP/TZX deck |
 | `POST /v1/continue` | `continue_from_pc` after a debugger stop; JSON `{ "reason", "paused" }` |
+
+### Port watches
+
+| Route | Notes |
+| --- | --- |
+| `GET /v1/debug/port-watches` | List I/O port watches (`addr`, `read`, `write`) |
+| `POST /v1/debug/port-watches` | Body `{ "addr", "read"?, "write"? }` — at least one of read/write |
+| `DELETE /v1/debug/port-watches/{addr}` | Remove port watch (idempotent) |
+
+Mem watches remain on `/v1/debug/watches` (`GET` lists both mem and port; `POST` adds mem;
+`DELETE /v1/debug/watches/{addr}` removes mem). `spec-chum-debug watch-write --port` uses the
+port-watch HTTP path when `--agent-url` is set.
 
 Living-room display toggle is **deferred** (not modeled in shared prefs yet).
 

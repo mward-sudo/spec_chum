@@ -70,6 +70,12 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/debug/last-break", get(last_break))
         .route("/v1/debug/breakpoints/{pc}", delete(remove_breakpoint))
         .route("/v1/debug/watches", get(list_watches).post(add_watch))
+        .route("/v1/debug/watches/{addr}", delete(remove_mem_watch))
+        .route(
+            "/v1/debug/port-watches",
+            get(list_port_watches).post(add_port_watch),
+        )
+        .route("/v1/debug/port-watches/{addr}", delete(remove_port_watch))
         .route(
             "/v1/trace/categories",
             get(trace_categories).put(set_trace_categories),
@@ -862,6 +868,57 @@ async fn add_watch(
         write: body.write,
     };
     auth_empty(&state, &headers, || state.plane.add_mem_watch(watch))
+}
+
+async fn remove_mem_watch(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Path(addr): axum::extract::Path<String>,
+) -> Response {
+    let addr = match parse_addr(&addr) {
+        Ok(a) => a,
+        Err(e) => return api_error(&state.plane, e),
+    };
+    auth_empty(&state, &headers, || state.plane.remove_mem_watch(addr))
+}
+
+async fn list_port_watches(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || state.plane.list_port_watches())
+}
+
+async fn add_port_watch(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<WatchBody>,
+) -> Response {
+    let addr = match parse_addr(&body.addr) {
+        Ok(a) => a,
+        Err(e) => return api_error(&state.plane, e),
+    };
+    if !body.read && !body.write {
+        return api_error(
+            &state.plane,
+            ApiError::BadRequest("watch must enable read and/or write".into()),
+        );
+    }
+    let watch = Watch {
+        addr,
+        read: body.read,
+        write: body.write,
+    };
+    auth_empty(&state, &headers, || state.plane.add_port_watch(watch))
+}
+
+async fn remove_port_watch(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Path(addr): axum::extract::Path<String>,
+) -> Response {
+    let addr = match parse_addr(&addr) {
+        Ok(a) => a,
+        Err(e) => return api_error(&state.plane, e),
+    };
+    auth_empty(&state, &headers, || state.plane.remove_port_watch(addr))
 }
 
 async fn trace_categories(State(state): State<AppState>, headers: HeaderMap) -> Response {

@@ -168,7 +168,7 @@ Global flags (before subcommand): `--model 48k|128k|plus3`, `--rom PATH`, `--tap
 | `disasm [--addr A] [--count N]` | Disasm at PC or addr |
 | `until-pc PC [--max N]` | Run until PC break |
 | `break-pc PC [--frames N]` | PC break over frames |
-| `watch-write ADDR [--max N]` | Break on mem write |
+| `watch-write ADDR [--port] [--max N]` | Break on mem or I/O port write (HTTP: `/v1/debug/watches` or `/v1/debug/port-watches`) |
 | `type-load [--code] [--warmup N] [--max N]` | Boot, type LOAD, wait for load |
 
 ## Tape debugging
