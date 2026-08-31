@@ -104,7 +104,7 @@ struct SpecChumMacApp: App {
                     Text("Select only — default ROMs. Session hardware via Hardware menu.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("Timex TC2048 / TS2068: alt file + hi-colour OK; 512×192 hi-res not drawn (docs/TIMEX.md).")
+                    Text("Timex TC2048 / TS2068: SCLD alt file, hi-colour, and 512×192 hi-res (docs/TIMEX.md).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(HostBridge.Model.pickerOrder) { pick in

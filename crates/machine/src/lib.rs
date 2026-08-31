@@ -3054,11 +3054,16 @@ impl Machine {
         match self {
             Self::Spec48 { bus, .. } => {
                 if bus.timex {
-                    let mode = ula::TimexLoresMode::from_scrnmode(bus.timex_scld.port_ff());
-                    // Timex lo-res SCLD modes need up to 16K of screen RAM (alt file).
+                    let ff = bus.timex_scld.port_ff();
                     let screen = &bus.ram[..0x4000.min(bus.ram.len())];
-                    bus.ula
-                        .render_rgba_timex_lores(screen, out, with_border, mode);
+                    if let Some(hires) = ula::TimexHiresMode::from_scrnmode(ff) {
+                        bus.ula
+                            .render_rgba_timex_hires(screen, out, with_border, hires, ff);
+                    } else {
+                        let mode = ula::TimexLoresMode::from_scrnmode(ff);
+                        bus.ula
+                            .render_rgba_timex_lores(screen, out, with_border, mode);
+                    }
                 } else {
                     bus.ula.render_rgba(bus.screen_bytes(), out, with_border);
                 }
@@ -3082,6 +3087,14 @@ impl Machine {
                 );
             }
         }
+    }
+
+    /// Host RGBA size for the current SCLD mode (`with_border` selects border chrome).
+    #[must_use]
+    pub fn framebuffer_dims(&self, with_border: bool) -> (usize, usize) {
+        let hires = matches!(self, Self::Spec48 { bus, .. } if bus.timex
+            && bus.timex_scld.screen_mode().is_hires());
+        ula::framebuffer_dims(with_border, hires)
     }
 
     pub fn keyboard_mut(&mut self) -> &mut bus::Keyboard {
@@ -4639,6 +4652,26 @@ mod tests {
         m.render_rgba(&mut out, false);
         let red = ula::palette_rgb(2, false);
         assert_eq!(&out[0..3], &red);
+    }
+
+    #[test]
+    fn timex_scld_hires_render_interleaves_files() {
+        let mut m = Machine::new_timex_tc2048(&[0; 16 * 1024]).unwrap();
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.write(0x4000, 0xFF); // primary solid
+            bus.write(0x6000, 0x00); // alt empty
+                                     // Mode 6 + white ink / black paper (bits 3–5 = 7).
+            bus.out_port(0x00FF, 0x06 | (7 << 3));
+        } else {
+            panic!("expected Spec48");
+        }
+        assert_eq!(m.framebuffer_dims(false), (512, 192));
+        let mut out = vec![0u8; 512 * 192 * 4];
+        m.render_rgba(&mut out, false);
+        let white = ula::palette_rgb(7, true);
+        let black = ula::palette_rgb(0, true);
+        assert_eq!(&out[0..3], &white);
+        assert_eq!(&out[8 * 4..8 * 4 + 3], &black);
     }
 
     #[test]

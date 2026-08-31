@@ -206,10 +206,7 @@ impl HostSession {
             return;
         }
         self.with_border = with_border;
-        let (w, h) = dims(with_border);
-        self.width = w;
-        self.height = h;
-        self.framebuffer.resize(w * h * 4, 0);
+        self.sync_framebuffer_dims();
         if let Some(m) = self.machine.as_ref() {
             m.render_rgba(&mut self.framebuffer, self.with_border);
         }
@@ -929,26 +926,28 @@ impl HostSession {
     /// Run one video frame into the RGBA framebuffer when `running`.
     /// Skips advancing while the debugger is paused.
     pub fn run_frame(&mut self) {
-        if !self.running {
+        if !self.running || self.machine.is_none() {
             return;
         }
-        let Some(m) = self.machine.as_mut() else {
-            return;
-        };
-        if m.debugger().paused {
+        if self.machine.as_ref().is_some_and(|m| m.debugger().paused) {
             return;
         }
-        let audio = m.run_frame();
-        let frame_t = match m.model() {
-            machine::Model::Spectrum16K
-            | machine::Model::Spectrum48
-            | machine::Model::TimexTC2048
-            | machine::Model::TimexTS2068 => 69_888,
-            machine::Model::Spectrum128
-            | machine::Model::SpectrumPlus2
-            | machine::Model::SpectrumPlus2A
-            | machine::Model::SpectrumPlus3 => 70_908,
-            machine::Model::Pentagon128 => 71_680,
+        let (audio, frame_t, w, h) = {
+            let m = self.machine.as_mut().expect("machine checked above");
+            let audio = m.run_frame();
+            let frame_t = match m.model() {
+                machine::Model::Spectrum16K
+                | machine::Model::Spectrum48
+                | machine::Model::TimexTC2048
+                | machine::Model::TimexTS2068 => 69_888,
+                machine::Model::Spectrum128
+                | machine::Model::SpectrumPlus2
+                | machine::Model::SpectrumPlus2A
+                | machine::Model::SpectrumPlus3 => 70_908,
+                machine::Model::Pentagon128 => 71_680,
+            };
+            let (w, h) = m.framebuffer_dims(self.with_border);
+            (audio, frame_t, w, h)
         };
         self.last_speaker_level = render_frame_pcm(
             &audio,
@@ -956,7 +955,29 @@ impl HostSession {
             self.last_speaker_level,
             &mut self.audio_pcm,
         );
-        m.render_rgba(&mut self.framebuffer, self.with_border);
+        if self.width != w || self.height != h || self.framebuffer.len() != w * h * 4 {
+            self.width = w;
+            self.height = h;
+            self.framebuffer.resize(w * h * 4, 0);
+        }
+        if let Some(m) = self.machine.as_ref() {
+            m.render_rgba(&mut self.framebuffer, self.with_border);
+        }
+    }
+
+    /// Grow/shrink the RGBA buffer when Timex SCLD switches between 256 and 512.
+    fn sync_framebuffer_dims(&mut self) {
+        let (w, h) = if let Some(m) = self.machine.as_ref() {
+            m.framebuffer_dims(self.with_border)
+        } else {
+            dims(self.with_border)
+        };
+        if self.width == w && self.height == h && self.framebuffer.len() == w * h * 4 {
+            return;
+        }
+        self.width = w;
+        self.height = h;
+        self.framebuffer.resize(w * h * 4, 0);
     }
 }
 

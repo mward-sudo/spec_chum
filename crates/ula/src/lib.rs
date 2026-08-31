@@ -23,6 +23,43 @@ pub const LINES_PENTAGON: u32 = 320;
 pub const FRAME_TSTATES_PENTAGON: u32 = T_LINE_PENTAGON * LINES_PENTAGON; // 71680
 pub const INT_LENGTH_PENTAGON: u32 = 32;
 
+/// Lo-res paper / with-border framebuffer sizes (Spectrum class).
+pub const LORES_PAPER_W: usize = 256;
+pub const LORES_PAPER_H: usize = 192;
+pub const LORES_BORDER_X: usize = 48;
+/// Top paper origin in with-border mode (bottom border is taller: 296 − 48 − 192 = 56).
+pub const BORDER_Y: usize = 48;
+pub const LORES_FRAME_W: usize = 352;
+pub const LORES_FRAME_H: usize = 296;
+
+/// Timex hi-res paper / with-border sizes (Fuse `DISPLAY_*`: 16 px per column).
+pub const HIRES_PAPER_W: usize = 512;
+pub const HIRES_PAPER_H: usize = 192;
+pub const HIRES_BORDER_X: usize = 64;
+pub const HIRES_FRAME_W: usize = HIRES_PAPER_W + 2 * HIRES_BORDER_X; // 640
+/// Keep the same outer height as lores with-border so hosts only grow width.
+pub const HIRES_FRAME_H: usize = LORES_FRAME_H; // 296
+
+/// RGBA framebuffer dimensions for Spectrum / Timex SCLD output.
+#[must_use]
+pub const fn framebuffer_dims(with_border: bool, hires: bool) -> (usize, usize) {
+    match (with_border, hires) {
+        (false, false) => (LORES_PAPER_W, LORES_PAPER_H),
+        (true, false) => (LORES_FRAME_W, LORES_FRAME_H),
+        (false, true) => (HIRES_PAPER_W, HIRES_PAPER_H),
+        (true, true) => (HIRES_FRAME_W, HIRES_FRAME_H),
+    }
+}
+
+/// Ink / paper colour indices for Timex hi-res from port `0xFF` bits 3–5.
+///
+/// Fuse `hires_convert_dec`: ink = bits 3–5, paper = ink ⊕ 7, always bright.
+#[must_use]
+pub const fn timex_hires_ink_paper(port_ff: u8) -> (u8, u8) {
+    let ink = (port_ff >> 3) & 7;
+    (ink, ink ^ 7)
+}
+
 /// Contention pattern (48K/128K): delays for T-states within the 8-cycle window.
 const CONTENTION: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
 
@@ -327,8 +364,7 @@ impl Ula48 {
         );
     }
 
-    /// Timex SCLD 256×192 modes (port `0xFF` bits 0–2 = 0..=3). Hi-res (4..=7) callers
-    /// should pass [`TimexLoresMode::Standard`] until 512×192 lands.
+    /// Timex SCLD 256×192 modes (port `0xFF` bits 0–2 = 0..=3).
     pub fn render_rgba_timex_lores(
         &self,
         screen: &[u8],
@@ -337,6 +373,68 @@ impl Ula48 {
         mode: TimexLoresMode,
     ) {
         self.render_rgba_timed_mode(screen, out, with_border, PAPER_START_48, T_LINE_48, mode);
+    }
+
+    /// Timex SCLD 512×192 hi-res (port `0xFF` bits 0–2 = 4..=7).
+    ///
+    /// Framebuffer size is [`framebuffer_dims`]`(with_border, true)` — paper is
+    /// 512×192; with-border adds 64 px left/right (Fuse `DISPLAY_BORDER_WIDTH`)
+    /// and 48 px top/bottom. Ink/paper/border come from bits 3–5 of `port_ff`
+    /// (always bright; paper = ink ⊕ 7). Mid-line ULA border events are ignored
+    /// while hi-res is active (SCLD overrides border with the hi-res paper).
+    pub fn render_rgba_timex_hires(
+        &self,
+        screen: &[u8],
+        out: &mut [u8],
+        with_border: bool,
+        mode: TimexHiresMode,
+        port_ff: u8,
+    ) {
+        let (w, h) = framebuffer_dims(with_border, true);
+        let (ox, oy) = if with_border {
+            (HIRES_BORDER_X, BORDER_Y)
+        } else {
+            (0usize, 0usize)
+        };
+        assert!(out.len() >= w * h * 4);
+
+        let (ink, paper) = timex_hires_ink_paper(port_ff);
+        let ink_rgb = palette_rgb(ink, true);
+        let paper_rgb = palette_rgb(paper, true);
+
+        // Solid hi-res paper for border (and as backdrop).
+        for i in (0..w * h * 4).step_by(4) {
+            out[i] = paper_rgb[0];
+            out[i + 1] = paper_rgb[1];
+            out[i + 2] = paper_rgb[2];
+            out[i + 3] = 255;
+        }
+
+        if screen.len() < TimexHiresMode::MIN_SCREEN_LEN {
+            return;
+        }
+
+        for py in 0..192usize {
+            let third = py / 64;
+            let yb = py % 8;
+            let yo = (py / 8) % 8;
+            for col in 0..32usize {
+                let line_base = (third * 2048) + (yo * 32) + (yb * 256) + col;
+                let (data, data2) = mode.column_bytes(screen, line_base, py, col);
+                let word = u16::from(data) << 8 | u16::from(data2);
+                let x0 = ox + col * 16;
+                let y = oy + py;
+                for bit in 0..16usize {
+                    let on = word & (0x8000 >> bit) != 0;
+                    let rgb = if on { ink_rgb } else { paper_rgb };
+                    let i = (y * w + x0 + bit) * 4;
+                    out[i] = rgb[0];
+                    out[i + 1] = rgb[1];
+                    out[i + 2] = rgb[2];
+                    out[i + 3] = 255;
+                }
+            }
+        }
     }
 
     fn render_rgba_timed_mode(
@@ -439,7 +537,6 @@ impl TimexLoresMode {
             1 => Self::AltFile,
             2 => Self::ExtColour,
             3 => Self::ExtColourAlt,
-            // 0 and hi-res 4..=7: standard layout until 512×192 lands.
             _ => Self::Standard,
         }
     }
@@ -463,6 +560,59 @@ impl TimexLoresMode {
             Self::ExtColour => (line_base, line_base + Self::ALTDFILE),
             // Fuse: both from alt (`altdfile` + `b1`).
             Self::ExtColourAlt => (line_base + Self::ALTDFILE, line_base + Self::ALTDFILE),
+        }
+    }
+}
+
+/// Timex SCLD 512×192 hi-res modes from port `0xFF` bits 0–2 (= 4..=7).
+///
+/// Fuse `display_write_if_dirty_timex`: each Spectrum column yields 16 pixels —
+/// left 8 from `data`, right 8 from `data2` (`uidisplay_plot16`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimexHiresMode {
+    /// Odd cols: primary bitmap; even cols: primary 8×8 attr byte as bits.
+    HiresAttr,
+    /// Odd cols: primary bitmap; even cols: alt 8×8 attr byte as bits.
+    HiresAttrAlt,
+    /// Odd cols: primary bitmap; even cols: alt bitmap (true hi-res).
+    Hires,
+    /// Both cols: alt bitmap (doubled columns).
+    HiresDoubleCol,
+}
+
+impl TimexHiresMode {
+    const ALTDFILE: usize = 0x2000;
+    /// Primary + alt pixel files (attrs live in the gap; modes 4/5 still need them).
+    const MIN_SCREEN_LEN: usize = Self::ALTDFILE + 6912;
+
+    #[must_use]
+    pub fn from_scrnmode(scrnmode: u8) -> Option<Self> {
+        match scrnmode & 0x07 {
+            4 => Some(Self::HiresAttr),
+            5 => Some(Self::HiresAttrAlt),
+            6 => Some(Self::Hires),
+            7 => Some(Self::HiresDoubleCol),
+            _ => None,
+        }
+    }
+
+    /// `(left8, right8)` bitmap bytes for Spectrum column `col` on scanline `py`.
+    fn column_bytes(self, screen: &[u8], line_base: usize, py: usize, col: usize) -> (u8, u8) {
+        let attr_off = 6144 + (py / 8) * 32 + col;
+        match self {
+            Self::HiresAttr => (screen[line_base], screen[attr_off]),
+            // Fuse: “data taken from second display” — left from alt bitmap,
+            // right from alt 8×8 attr-as-bits (not primary).
+            Self::HiresAttrAlt => (
+                screen[Self::ALTDFILE + line_base],
+                screen[Self::ALTDFILE + attr_off],
+            ),
+            Self::Hires => (screen[line_base], screen[line_base + Self::ALTDFILE]),
+            // Fuse comment: data from second screen only, columns doubled.
+            Self::HiresDoubleCol => {
+                let b = screen[line_base + Self::ALTDFILE];
+                (b, b)
+            }
         }
     }
 }
@@ -681,8 +831,85 @@ mod tests {
     }
 
     #[test]
-    fn timex_hires_scrnmode_falls_back_to_standard_layout() {
-        assert_eq!(TimexLoresMode::from_scrnmode(6), TimexLoresMode::Standard);
+    fn timex_hires_scrnmode_maps_and_ink_paper() {
+        assert_eq!(
+            TimexHiresMode::from_scrnmode(6),
+            Some(TimexHiresMode::Hires)
+        );
+        assert_eq!(TimexHiresMode::from_scrnmode(2), None);
         assert_eq!(TimexLoresMode::from_scrnmode(2), TimexLoresMode::ExtColour);
+        assert_eq!(timex_hires_ink_paper(0x00), (0, 7)); // WHITEBLACK → black/white
+        assert_eq!(timex_hires_ink_paper(0x38), (7, 0)); // BLACKWHITE → white/black
+        assert_eq!(framebuffer_dims(false, true), (512, 192));
+        assert_eq!(framebuffer_dims(true, true), (640, 296));
+    }
+
+    #[test]
+    fn timex_hires_interleaves_primary_and_alt_bitmaps() {
+        let ula = Ula48::new();
+        let mut screen = vec![0u8; 0x2000 + 6912];
+        // Primary col 0: ink bits → left 8 of first 16; alt: paper → right 8.
+        screen[0] = 0xFF;
+        screen[0x2000] = 0x00;
+        // port FF = 6 | (7 << 3) → white ink, black paper, bright.
+        let mut out = vec![0u8; 512 * 192 * 4];
+        ula.render_rgba_timex_hires(
+            &screen,
+            &mut out,
+            false,
+            TimexHiresMode::Hires,
+            0x06 | (7 << 3),
+        );
+        let white = palette_rgb(7, true);
+        let black = palette_rgb(0, true);
+        assert_eq!(&out[0..3], &white, "left 8 from primary ink");
+        assert_eq!(&out[8 * 4..8 * 4 + 3], &black, "right 8 from alt paper");
+    }
+
+    #[test]
+    fn timex_hires_double_col_uses_alt_only() {
+        let ula = Ula48::new();
+        let mut screen = vec![0u8; 0x2000 + 6912];
+        screen[0] = 0x00; // primary ignored
+        screen[0x2000] = 0xFF; // alt solid ink → both halves
+        let mut out = vec![0u8; 512 * 192 * 4];
+        ula.render_rgba_timex_hires(
+            &screen,
+            &mut out,
+            false,
+            TimexHiresMode::HiresDoubleCol,
+            0x07 | (7 << 3),
+        );
+        let white = palette_rgb(7, true);
+        assert_eq!(&out[0..3], &white);
+        assert_eq!(&out[8 * 4..8 * 4 + 3], &white);
+    }
+
+    #[test]
+    fn timex_hires_attr_alt_reads_both_halves_from_alt() {
+        let ula = Ula48::new();
+        let mut screen = vec![0u8; 0x2000 + 6912];
+        // Primary bitmap solid — must not win for mode 5 left half.
+        screen[0] = 0xFF;
+        screen[6144] = 0xFF;
+        // Alt bitmap empty (paper); alt attr solid ink bits for right half.
+        screen[0x2000] = 0x00;
+        screen[0x2000 + 6144] = 0xFF;
+        let mut out = vec![0u8; 512 * 192 * 4];
+        ula.render_rgba_timex_hires(
+            &screen,
+            &mut out,
+            false,
+            TimexHiresMode::HiresAttrAlt,
+            0x05 | (7 << 3),
+        );
+        let white = palette_rgb(7, true);
+        let black = palette_rgb(0, true);
+        assert_eq!(&out[0..3], &black, "mode 5 left half from alt bitmap");
+        assert_eq!(
+            &out[8 * 4..8 * 4 + 3],
+            &white,
+            "mode 5 right half from alt attrs-as-bits"
+        );
     }
 }
