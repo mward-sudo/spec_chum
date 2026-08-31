@@ -48,8 +48,21 @@ impl AgentClient {
         self.post_empty("/v1/model", serde_json::json!({ "model": model }))
     }
 
-    pub fn run_frames(&self, frames: u32) -> Result<()> {
-        self.post_empty("/v1/run", serde_json::json!({ "frames": frames }))
+    pub fn run_frames(&self, frames: u32) -> Result<Value> {
+        self.post_json("/v1/run", serde_json::json!({ "frames": frames }))
+    }
+
+    pub fn run_until(&self, max_insns: u64) -> Result<Value> {
+        let max = u32::try_from(max_insns).unwrap_or(u32::MAX);
+        self.post_json("/v1/run-until", serde_json::json!({ "max_insns": max }))
+    }
+
+    pub fn add_breakpoint(&self, pc: &str) -> Result<()> {
+        self.post_empty("/v1/debug/breakpoints", serde_json::json!({ "pc": pc }))
+    }
+
+    pub fn tape_play(&self) -> Result<()> {
+        self.post_empty("/v1/tape/play", serde_json::json!({}))
     }
 
     pub fn type_load(&self, code: bool, warmup: u32, max: u32) -> Result<Value> {
