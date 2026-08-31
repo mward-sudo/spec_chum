@@ -113,7 +113,7 @@ primary API and must **not** gain a `host_api` → `control_plane` dependency
 | Direct `machine::Machine` in debug CLI | **Removed** (Phase C partial / [#215](https://github.com/mward-sudo/spec_chum/pull/215)) |
 
 Phase A–H HTTP rows continue on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
-egui in-process HTTP↔GUI share landed for #221; SpecChumMac in-process remain deferred.
+egui in-process HTTP↔GUI share landed for #221; SpecChumMac in-process integration remains deferred.
 Field privatize follow-up: [#227](https://github.com/mward-sudo/spec_chum/issues/227).
 
 Phase A is mergeable without breaking current workflows.
