@@ -219,8 +219,34 @@ Prefer this over `screencapture`, osascript, or computer-use GUI driving.
 
 ## Alternatives considered
 
+### Internal transports (rejected as primary)
+
 - **Extend `spec-chum-debug` only** — keeps one-shot process model; poor fit for
   framebuffer-after-N-frames, breakpoints, and GUI parity.
 - **Stdin/stdout JSON lines** — simple but weak for binary PNG payloads and concurrent agents.
 - **Expose raw `sc_*` over FFI from agents** — ties agents to in-process linking;
   HTTP keeps language-agnostic tooling.
+- **Unix domain socket + JSON-RPC** — lower overhead, but poorer agent ergonomics and
+  no standard file-download story for framebuffers.
+- **gRPC + protobuf** — heavy codegen/deps for localhost-only tooling.
+
+### External emulator protocols (surveyed — not adopted wholesale)
+
+| Protocol | Transport | Fit for Spec Chum agent QA |
+| --- | --- | --- |
+| **Fuse remote** | None shipped; [feature #100](https://sourceforge.net/p/fuse-emulator/feature-requests/100/) telnet mock-up stalled. GDB only via Spectranet *guest* stub + fork, not an emulator API. | Poor — no stable remote surface; nothing to wrap. |
+| **ZEsarUX ZRCP** | Telnet-like TCP (default port 10000); huge text command set (`cpu-step`, `disassemble`, snapshots, memory breakpoints). Used by [DeZog](https://github.com/maziac/DeZog) / VS Code plugins. | Partial for step/peek/disasm; **no** 1:1 PNG framebuffer, **no** `Inspect`-shaped JSON, **no** tape/type-load / Timex dock / SCLD metadata; text parsing is brittle for agents. |
+| **CSpect DZRP** | Binary request/response over socket (DeZogPlugin, port 11000). Toolkit protocol — remotes implement subsets; Next/TBBLUE/sprite oriented. | Good for IDE source-debug with DeZog; **no** framebuffer export, **no** tape automation, Timex/SCLD not covered; requires external plugin DLL. |
+| **MAME** | GDB Remote Serial Protocol (`debuggdbstub`, plugin `gdbstub`); Lua `-autoboot_script` for one-shot automation. [mame-mcp](https://github.com/astrobleem/mame-mcp) wraps live sessions in MCP JSON — external bridge, not MAME core. | GDB is CPU/step centric; no Spectrum-specific inspect, tape paths, or guest framebuffer with border/hi-res modes. |
+| **RetroArch NCI** | UDP commands (port 55355): `READ_CORE_MEMORY`, `FRAMEADVANCE`, `SCREENSHOT` (writes host screenshot dir). | `SCREENSHOT` is RetroArch-processed output, not guest 1:1 paper/border buffer; UDP hotkeys are flaky under load; core-dependent memory map. |
+| **GDB / Z80 RSP** | Serial/TCP GDB stub (`gdb/stubs/z80-stub.c`, [mini-gdbstub](https://github.com/RinHizakura/mini-gdbstub)). | Source-level debug for compiled Z80 targets; no model select, tape load, type-load, trace ring, or framebuffer QA. |
+| **Rust emulator patterns** | Ad hoc: JSON-RPC over stdio (plugin hosts), custom HTTP per project (e.g. wasm debugger services). No shared Spectrum/emulator standard. | Patterns confirm **custom localhost API** is normal; nothing to reuse. |
+
+**Conclusion:** existing protocols optimise for **human IDE debugging** (DeZog ↔ ZEsarUX/CSpect) or **generic CPU GDB**, not **agent automation** (long-lived session, rich `Inspect` JSON, tape/type-load, Timex hi-res framebuffer at native dims). None is a drop-in substitute for the planned REST surface.
+
+### Hybrid / compatibility (optional later, not MVP)
+
+- **REST facade over `control_plane`** remains the architecture — HTTP is transport only.
+- **ZRCP or DZRP adapter** on the same backend could help DeZog users, but doubles protocol maintenance; defer unless a concrete consumer appears.
+- **Fuse-compatible subset** — no published Fuse remote API to emulate; not worth inventing a faux-Fuse dialect.
+- **WebSocket push** (trace, breakpoints, tape progress) — complementary to REST; listed as Phase A+ optional in [#210](https://github.com/mward-sudo/spec_chum/issues/210).
