@@ -4624,12 +4624,8 @@ mod tests {
 
     #[test]
     fn timex_scld_ext_colour_render_uses_alt_attrs() {
-        let Some(path) = resolve_rom_path(Model::TimexTC2048) else {
-            eprintln!("skip: roms/timex/tc2048.rom missing");
-            return;
-        };
-        let rom = std::fs::read(path).expect("read timex rom");
-        let mut m = Machine::new_timex_tc2048(&rom).unwrap();
+        // Screen-RAM / SCLD rendering only — no real Timex ROM required.
+        let mut m = Machine::new_timex_tc2048(&[0; 16 * 1024]).unwrap();
         // Paint primary bitmap solid; primary 8×8 attr blue; alt 8×1 attr red.
         if let Machine::Spec48 { bus, .. } = &mut m {
             bus.write(0x4000, 0xFF);
