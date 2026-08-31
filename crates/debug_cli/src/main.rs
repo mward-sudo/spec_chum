@@ -174,9 +174,10 @@ fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {
     if let Some(list) = &cli.trace {
         client.set_trace_categories(list)?;
     }
-    client.set_model(&cli.model)?;
     if let Some(path) = &cli.rom {
         client.load_rom(&path.display().to_string())?;
+    } else {
+        client.set_model(&cli.model)?;
     }
     if let Some(path) = &cli.snapshot {
         client.load_snapshot(&path.display().to_string())?;
@@ -370,7 +371,7 @@ fn run_local(cli: &Cli, session: &mut HostSession, cmd: &Cmd) -> Result<()> {
             let reason = session.run_frames(*frames).map_err(host_err)?;
             print_inspect(session, cli.json)?;
             print_reason(reason, cli.json);
-            if !reason.is_stop() {
+            if !matches!(reason, BreakReason::Pc(_)) {
                 exit_cli(2);
             }
         }
@@ -382,10 +383,9 @@ fn run_local(cli: &Cli, session: &mut HostSession, cmd: &Cmd) -> Result<()> {
                 .type_load(*code, *warmup, max.unwrap_or(0))
                 .map_err(host_err)?;
             if cli.json {
-                let attr_mark = if *code {
-                    session.peek(0x5800).map_err(host_err)? == 0xd7
-                } else {
-                    false
+                let attr_mark = match result.attr_mark {
+                    Some(v) => v.to_string(),
+                    None => "null".to_string(),
                 };
                 println!(
                     "{{\"inspect\":{},\"load_ok\":{},\"attr_mark\":{attr_mark}}}",
