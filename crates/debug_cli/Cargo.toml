@@ -15,8 +15,14 @@ machine = { workspace = true }
 formats = { workspace = true }
 tape = { workspace = true }
 trace = { workspace = true }
+control_plane = { workspace = true }
+agent_server = { workspace = true }
+host_api = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
+serde_json = { workspace = true }
+ureq = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

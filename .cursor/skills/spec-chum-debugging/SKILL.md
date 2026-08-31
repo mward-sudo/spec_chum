@@ -17,8 +17,9 @@ Project debugger workflow for agents. Full detail: [`docs/DEBUGGING.md`](../../.
 
 | Goal | Use |
 | --- | --- |
-| **Target:** long-lived control + 1:1 framebuffer PNG | **Agent Debug HTTP API** (planned — see below) |
-| Scripted repro, Inspect JSON, breakpoints, tape `type-load` | Headless **`spec-chum-debug`** (`debug_cli`) — **today**; API client in Phase B |
+| **Long-lived control + 1:1 framebuffer PNG** | **Agent Debug HTTP API** — `spec-chum-agent` or `spec-chum-debug --serve` |
+| Scripted repro via API client | `SPEC_CHUM_AGENT_URL=… spec-chum-debug …` (Phase B subset) |
+| Scripted repro, Inspect JSON, breakpoints, tape `type-load` | Headless **`spec-chum-debug`** (local one-shot process) |
 | Regression / harness / matrix | **`cargo test -p machine`** (and `tape` / `trace` / `z80`) |
 | Interactive Pause / Step / disasm UI | **egui** `cargo run -p app` → Menu **Debug** |
 | Native SwiftUI / C host | **`host_api`** `sc_debug_*` / `sc_inspect_json` |
@@ -26,21 +27,42 @@ Project debugger workflow for agents. Full detail: [`docs/DEBUGGING.md`](../../.
 
 Each `spec-chum-debug` invocation is a **new process** (fresh machine + empty trace ring). Put `--trace`, `--tap`/`--tzx`, `--snapshot`, and the subcommand on the **same** command.
 
-## Agent Debug API (planned — unified control plane)
+## Agent Debug API (unified control plane)
 
-> **Not implemented yet.** Design: [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md).
-> Tracker: [#210](https://github.com/mward-sudo/spec_chum/issues/210) (agent debug control plane).
+> **Implemented (Phase A):** loopback HTTP on `127.0.0.1:17384` (default).
+> Design: [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md).
+> Tracker: [#210](https://github.com/mward-sudo/spec_chum/issues/210).
 
-**Unification goal:** one shared Rust backend (`control_plane`) serves HTTP on
-loopback; `spec-chum-debug`, egui Debug, and SpecChumMac converge on it (Phase B).
-Agents call HTTP; humans use CLI/GUI with the same semantics.
+**Unification goal:** one shared Rust backend (`control_plane`) serves HTTP;
+`spec-chum-debug --serve` / `spec-chum-agent` ship today; egui Debug and
+SpecChumMac converge in Phase B/C.
 
-### When to prefer the API (once shipped)
+### Start server
+
+```bash
+./scripts/fetch_roms.sh
+cargo build -p agent_server --release
+./target/release/spec-chum-agent --model 48k
+# or: spec-chum-debug --serve --model 48k --tap path.tap
+```
+
+### When to prefer the API
 
 - Visual QA (Techdraw hi-res, Timex SCLD, border colour) — **export guest framebuffer
   at 1:1**, not OS `screencapture` or living-room CRT.
 - Long sessions: tape load mid-run, breakpoints, grab PNG after N frames.
 - Avoid GUI automation (file pickers, ROM dialogs, multi-monitor).
+
+### HTTP client (Phase B subset)
+
+```bash
+export SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384
+spec-chum-debug --model 48k run --frames 1
+spec-chum-debug --tap tests/fixtures/tape/attr_mark.tap type-load --code
+```
+
+Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`.
+Other subcommands remain local-only until Phase B expands coverage.
 
 ### Framebuffer export (not window capture)
 

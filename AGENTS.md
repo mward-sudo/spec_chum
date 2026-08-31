@@ -21,7 +21,7 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 | `trace` | Structured debug ring buffer (env/host gated) |
 | `debug_cli` | Headless agent debugger binary `spec-chum-debug` |
 | `host_api` | C ABI host surface for native shells / future cores |
-| *(planned)* `control_plane` / `agent_server` | Localhost agent debug HTTP API ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — unified control/inspect/debug; see [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md) |
+| `control_plane` / `agent_server` | Localhost agent debug HTTP API ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec-chum-agent` / `spec-chum-debug --serve`; see [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md) |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 | `living_room` | Experimental Bevy 3D CRT host (`spec-chum-room`); excluded from default `./scripts/check.sh` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1` — see `docs/LIVING_ROOM.md` / #146. SpecChumMac **always links** the living_room staticlib for `host_api`; living-room is opt-in only as a *display mode*. |
 
@@ -102,6 +102,6 @@ Standard commands are in `README.md` and the "Agent workflow" / "Testing expecta
 - **ROMs are required for `app` / `spec-chum-debug` execution and ROM-dependent tests, and are not in git.** They live under `roms/` (gitignored) and are fetched by `./scripts/fetch_roms.sh` (already run by the update script). Without them those binaries error at ROM load, and ROM-dependent integration tests skip. Re-run the script if `roms/` is missing.
 - **Running the egui app (`spec_chum`) needs an X display.** In the cloud VM the desktop is on `DISPLAY=:1` with software GL (llvmpipe), which works fine. Launch with `DISPLAY=:1 ./target/release/spec_chum` (build release first for smooth interaction). Keep it in a tmux session so it survives.
 - **ALSA "cannot find card '0'" / "Unknown PCM default" warnings are harmless.** The VM has no sound card; the app (and `cpal`) degrade gracefully and keep running — do not treat these as failures.
-- **Headless emulator driving:** prefer the `spec-chum-debug` CLI (e.g. `./target/debug/spec-chum-debug --model 48k run --frames 100`, plus `dump-state`, `disasm`, `peek`, `until-pc`, `break-pc`, `type-load`) to exercise the core without a GUI. See `.cursor/skills/spec-chum-debugging/SKILL.md`. **Planned:** localhost [Agent Debug API](docs/AGENT_DEBUG_API.md) (unified backend; 1:1 framebuffer PNG export for visual QA — not OS screencapture).
+- **Headless emulator driving:** prefer `spec-chum-debug` locally or the **Agent Debug HTTP API** (`spec-chum-agent` / `spec-chum-debug --serve` on `127.0.0.1:17384`) for long-lived sessions and 1:1 framebuffer PNG export. See `.cursor/skills/spec-chum-debugging/SKILL.md` and [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md).
 - **Driving the GUI keyboard (computer-use):** the Spectrum uses single-key keyword entry — pressing `p` at the `K` cursor inserts the whole `PRINT` keyword, including its trailing space (do not type the word letter-by-letter). Symbol-layer chars via computer-use are flaky (`"` is Shift+apostrophe and often mis-types stray apostrophes); prefer simple numeric expressions like `PRINT 2+2` for reliable smoke tests. Host→matrix mapping lives in `crates/app/src/keymap.rs`.
 

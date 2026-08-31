@@ -979,6 +979,170 @@ impl HostSession {
         self.height = h;
         self.framebuffer.resize(w * h * 4, 0);
     }
+
+    /// Disassemble `count` instructions at `addr` (defaults to current PC).
+    pub fn disasm(&self, addr: Option<u16>, count: usize) -> Result<String, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        let addr = addr.unwrap_or_else(|| m.cpu().regs.pc);
+        Ok(m.disasm_window(addr, count))
+    }
+
+    /// Hexdump `len` bytes starting at `addr`.
+    pub fn hexdump(&self, addr: u16, len: u16) -> Result<String, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.hexdump(addr, len))
+    }
+
+    /// Run `frames` video frames (respects pause / running flag).
+    pub fn run_frames(&mut self, frames: u32) -> Result<machine::BreakReason, HostError> {
+        if self.machine.is_none() {
+            return Err(HostError::NoMachine);
+        }
+        let mut last = machine::BreakReason::None;
+        for _ in 0..frames {
+            if self.machine.as_ref().is_some_and(|m| m.debugger().paused) {
+                break;
+            }
+            self.run_frame();
+            if let Some(m) = self.machine.as_ref() {
+                last = m.debugger().last_hit;
+                if m.debugger().paused {
+                    break;
+                }
+            }
+        }
+        Ok(last)
+    }
+
+    /// Scripted LOAD "" [CODE] — tape must already be open; deck starts paused.
+    pub fn type_load(
+        &mut self,
+        with_code: bool,
+        warmup: u32,
+        max: u32,
+    ) -> Result<TypeLoadResult, HostError> {
+        {
+            let Some(m) = self.machine.as_mut() else {
+                return Err(HostError::NoMachine);
+            };
+            if !m.has_tape() {
+                return Err(HostError::Message("no tape inserted".into()));
+            }
+            m.set_tape_playing(false);
+        }
+        for _ in 0..warmup {
+            self.run_frame();
+        }
+        {
+            let Some(m) = self.machine.as_mut() else {
+                return Err(HostError::NoMachine);
+            };
+            m.type_load_quotes(with_code);
+            m.set_tape_playing(true);
+        }
+        let ear = self
+            .machine
+            .as_ref()
+            .is_some_and(|m| !m.tape_load_options().flash_load);
+        let limit = if max > 0 {
+            max
+        } else if ear {
+            200_000
+        } else {
+            200
+        };
+        let mut loaded = false;
+        for _ in 0..limit {
+            self.run_frame();
+            if let Some(m) = self.machine.as_ref() {
+                loaded = if with_code {
+                    Self::attr_mark_code_loaded(m)
+                } else {
+                    Self::print_ok_loaded(m)
+                };
+                if loaded {
+                    break;
+                }
+            }
+        }
+        let m = self.machine.as_ref().expect("machine");
+        Ok(TypeLoadResult {
+            load_ok: loaded,
+            attr_mark: if with_code {
+                Some(m.read_mem(0x5800))
+            } else {
+                None
+            },
+        })
+    }
+
+    pub fn clear_breakpoints(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.debugger_mut().clear_breaks();
+        Ok(())
+    }
+
+    pub fn list_pc_breakpoints(&self) -> Result<Vec<u16>, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.debugger().pc_breaks.clone())
+    }
+
+    pub fn remove_breakpoint(&mut self, pc: u16) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.debugger_mut().remove_pc_break(pc);
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn framebuffer_hires(&self) -> bool {
+        self.machine
+            .as_ref()
+            .is_some_and(machine::Machine::framebuffer_hires)
+    }
+
+    #[must_use]
+    pub fn timex_scld_mode(&self) -> Option<u8> {
+        self.machine
+            .as_ref()
+            .and_then(machine::Machine::timex_scld_mode)
+    }
+
+    fn attr_mark_code_loaded(m: &Machine) -> bool {
+        m.read_mem(0x8000) == 0x21
+            && m.read_mem(0x8001) == 0x00
+            && m.read_mem(0x8002) == 0x58
+            && m.read_mem(0x8003) == 0x36
+            && m.read_mem(0x8004) == 0xd7
+            && m.read_mem(0x8005) == 0xc9
+    }
+
+    fn print_ok_loaded(m: &Machine) -> bool {
+        let prog = u16::from_le_bytes([m.read_mem(0x5C53), m.read_mem(0x5C54)]);
+        let eline = u16::from_le_bytes([m.read_mem(0x5C59), m.read_mem(0x5C5A)]);
+        for a in prog..eline {
+            if m.read_mem(a) == b'O' && m.read_mem(a.wrapping_add(1)) == b'K' {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// Result of a scripted type-load.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeLoadResult {
+    pub load_ok: bool,
+    pub attr_mark: Option<u8>,
 }
 
 /// Host audio sample rate (matches egui cpal default path).

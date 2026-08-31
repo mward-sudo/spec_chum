@@ -1,6 +1,7 @@
 # Agent debug control plane (proposed)
 
-> **Status:** proposed / **not implemented yet**. Track implementation in
+> **Status:** Phase A implemented — loopback HTTP API on `127.0.0.1:17384`
+> (default). Track follow-ups in
 > [#210](https://github.com/mward-sudo/spec_chum/issues/210) and
 > [`.cursor/skills/spec-chum-debugging/SKILL.md`](../.cursor/skills/spec-chum-debugging/SKILL.md).
 
@@ -218,9 +219,29 @@ breakpoint debugging, and framebuffer grab **after** N frames without respawn.
 
 Hosts:
 
-- **Standalone:** `cargo run -p agent_server` (headless agent daemon).
-- **Embedded:** egui / SpecChumMac spawn server on startup when
-  `SPEC_CHUM_AGENT=1` (default off until stable).
+- **Standalone:** `cargo run -p agent_server -- --model 48k` (`spec-chum-agent` binary).
+- **Embedded CLI:** `spec-chum-debug --serve --model 48k` (same HTTP surface).
+- **HTTP client (Phase B):** `SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384 spec-chum-debug …`
+  or `--agent-url …` on supported subcommands.
+- **Embedded GUI (planned):** egui / SpecChumMac when `SPEC_CHUM_AGENT=1` (default off).
+
+### Quick test (curl)
+
+```bash
+./scripts/fetch_roms.sh
+cargo build -p agent_server --release
+./target/release/spec-chum-agent --model 48k &
+AGENT=http://127.0.0.1:17384
+
+curl -sS "$AGENT/v1/health" | jq .
+curl -sS -X POST "$AGENT/v1/run" -H 'Content-Type: application/json' -d '{"frames":1}'
+curl -sS "$AGENT/v1/inspect" | jq '.regs.pc'
+curl -sS "$AGENT/v1/framebuffer?border=false&format=png" -o /tmp/spec_paper.png
+file /tmp/spec_paper.png   # PNG image data, 256 x 192
+```
+
+Optional bearer token: set `SPEC_CHUM_AGENT_TOKEN` on server and pass
+`-H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN"` on requests.
 
 ## Agent workflow (target)
 
