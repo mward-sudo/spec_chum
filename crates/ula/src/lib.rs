@@ -601,7 +601,12 @@ impl TimexHiresMode {
         let attr_off = 6144 + (py / 8) * 32 + col;
         match self {
             Self::HiresAttr => (screen[line_base], screen[attr_off]),
-            Self::HiresAttrAlt => (screen[line_base], screen[Self::ALTDFILE + attr_off]),
+            // Fuse: “data taken from second display” — left from alt bitmap,
+            // right from alt 8×8 attr-as-bits (not primary).
+            Self::HiresAttrAlt => (
+                screen[Self::ALTDFILE + line_base],
+                screen[Self::ALTDFILE + attr_off],
+            ),
             Self::Hires => (screen[line_base], screen[line_base + Self::ALTDFILE]),
             // Fuse comment: data from second screen only, columns doubled.
             Self::HiresDoubleCol => {
@@ -878,5 +883,33 @@ mod tests {
         let white = palette_rgb(7, true);
         assert_eq!(&out[0..3], &white);
         assert_eq!(&out[8 * 4..8 * 4 + 3], &white);
+    }
+
+    #[test]
+    fn timex_hires_attr_alt_reads_both_halves_from_alt() {
+        let ula = Ula48::new();
+        let mut screen = vec![0u8; 0x2000 + 6912];
+        // Primary bitmap solid — must not win for mode 5 left half.
+        screen[0] = 0xFF;
+        screen[6144] = 0xFF;
+        // Alt bitmap empty (paper); alt attr solid ink bits for right half.
+        screen[0x2000] = 0x00;
+        screen[0x2000 + 6144] = 0xFF;
+        let mut out = vec![0u8; 512 * 192 * 4];
+        ula.render_rgba_timex_hires(
+            &screen,
+            &mut out,
+            false,
+            TimexHiresMode::HiresAttrAlt,
+            0x05 | (7 << 3),
+        );
+        let white = palette_rgb(7, true);
+        let black = palette_rgb(0, true);
+        assert_eq!(&out[0..3], &black, "mode 5 left half from alt bitmap");
+        assert_eq!(
+            &out[8 * 4..8 * 4 + 3],
+            &white,
+            "mode 5 right half from alt attrs-as-bits"
+        );
     }
 }
