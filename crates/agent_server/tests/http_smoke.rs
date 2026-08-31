@@ -604,3 +604,160 @@ async fn agent_api_prefs_mouse_eject_and_continue() {
     assert_eq!(cont["paused"], false);
     assert_eq!(cont["reason"], "none");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_hardware_attach_multiface_and_divmmc() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let status = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/hardware")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("hardware status");
+    assert_eq!(status.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(status.into_body(), usize::MAX)
+        .await
+        .expect("hw body");
+    let hw: serde_json::Value = serde_json::from_slice(&body).expect("hw json");
+    assert_eq!(hw["has_multiface"], false);
+    assert_eq!(hw["has_divmmc"], false);
+    assert_eq!(hw["has_interface1"], false);
+
+    let dir = std::env::temp_dir().join("spec_chum_agent_api_hw");
+    std::fs::create_dir_all(&dir).expect("create hw fixture dir");
+    let mf = dir.join("mf1.rom");
+    std::fs::write(&mf, vec![0u8; 8 * 1024]).expect("mf rom");
+
+    let attach = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/multiface")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": mf })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("attach mf");
+    assert_eq!(attach.status(), StatusCode::NO_CONTENT);
+
+    let nmi = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/multiface/nmi")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("nmi");
+    assert_eq!(nmi.status(), StatusCode::NO_CONTENT);
+
+    let div = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/divmmc")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("divmmc");
+    assert_eq!(div.status(), StatusCode::NO_CONTENT);
+
+    let if1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/interface1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("if1");
+    assert_eq!(if1.status(), StatusCode::NO_CONTENT);
+
+    let status = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/hardware")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("hardware status after");
+    let body = axum::body::to_bytes(status.into_body(), usize::MAX)
+        .await
+        .expect("hw body");
+    let hw: serde_json::Value = serde_json::from_slice(&body).expect("hw json");
+    assert_eq!(hw["has_multiface"], true);
+    assert_eq!(hw["has_divmmc"], true);
+    assert_eq!(hw["has_interface1"], true);
+
+    // Multiface is 48K-only — reject on 128K.
+    let plane128 = Arc::new(ControlPlane::new(ModelId::Spectrum128, false));
+    if let Some(rom128) =
+        machine::resolve_rom_path(Model::Spectrum128).and_then(|p| std::fs::read(p).ok())
+    {
+        plane128.load_rom_bytes(&rom128).expect("128 rom");
+        let bad = router(AppState {
+            plane: plane128,
+            token: None,
+            insecure: true,
+        })
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/multiface")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": mf })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("mf on 128");
+        assert!(
+            bad.status().is_client_error(),
+            "128K must reject Multiface 1"
+        );
+    }
+
+    let no_machine = router(AppState {
+        plane: Arc::new(ControlPlane::new(ModelId::Spectrum48, false)),
+        token: None,
+        insecure: true,
+    })
+    .oneshot(
+        Request::builder()
+            .method("POST")
+            .uri("/v1/hardware/divmmc")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+    .expect("no machine");
+    assert_eq!(no_machine.status(), StatusCode::CONFLICT);
+}
