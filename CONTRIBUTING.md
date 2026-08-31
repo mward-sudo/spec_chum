@@ -36,6 +36,7 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 - Before coding, agents should consult open issues, so implementations do not drift from tracked acceptance criteria.
 - Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
+- **Agent debugging:** today use `spec-chum-debug` + [DEBUGGING.md](docs/DEBUGGING.md). **Planned:** unified localhost [Agent Debug API](docs/AGENT_DEBUG_API.md) ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — agents export the guest framebuffer as 1:1 PNG (not window capture); `spec-chum-debug` becomes an API client.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
 - **Before merge / finish PR:** mark ready if still draft; run local CR (Cursor plugin / CLI); request GitHub CodeRabbit when merge-candidate if not rate-limited; then run `./scripts/check_pr_reviews.sh`. **Hold** on pending/missing/error CodeRabbit or unresolved **actionable** bot threads unless the user explicitly waives. **Rate-limited / skipped** soft-passes gate 1 (not “Review completed”) when local CR was clean and threads are dispositioned. See below.
 

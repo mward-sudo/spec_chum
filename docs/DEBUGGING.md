@@ -3,6 +3,11 @@
 Structured emulator tracing lives in the `trace` crate: a category-gated ring
 buffer with dump APIs for tests, the egui app, and the native macOS shell.
 
+**Planned:** a localhost [Agent Debug HTTP API](AGENT_DEBUG_API.md) ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) will unify
+control, inspect, and debug for agents (including **1:1 framebuffer PNG export**
+— guest pixels only, not OS window capture). Until it ships, use `spec-chum-debug`
+below.
+
 When tracing is **off**, each emit site is a single `AtomicU64` load (`Relaxed`)
 and an early return — no allocation and no lock on the hot path.
 
