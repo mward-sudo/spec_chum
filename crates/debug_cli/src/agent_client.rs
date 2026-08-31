@@ -164,6 +164,39 @@ impl AgentClient {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn video_meta(&self) -> Result<Value> {
+        self.get_json("/v1/video")
+    }
+
+    #[allow(dead_code)]
+    pub fn last_error(&self) -> Result<Value> {
+        self.get_json("/v1/errors/last")
+    }
+
+    #[allow(dead_code)]
+    pub fn set_key(&self, row: usize, bit: u8, pressed: bool) -> Result<()> {
+        self.post_empty(
+            "/v1/keys",
+            serde_json::json!({ "row": row, "bit": bit, "pressed": pressed }),
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn clear_keys(&self) -> Result<()> {
+        self.post_empty("/v1/keys", serde_json::json!({ "clear": true }))
+    }
+
+    #[allow(dead_code)]
+    pub fn last_break(&self) -> Result<Value> {
+        self.get_json("/v1/debug/last-break")
+    }
+
+    #[allow(dead_code)]
+    pub fn apply_config(&self, config: &Value) -> Result<()> {
+        self.post_empty("/v1/config", config.clone())
+    }
+
     fn url(&self, path: &str) -> String {
         format!("{}{path}", self.base)
     }

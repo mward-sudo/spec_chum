@@ -11,4 +11,4 @@ mod service;
 
 pub use error::{ApiError, ApiResult, ErrorBody};
 pub use framebuffer::{encode_framebuffer_png, model_slug, parse_model_slug, FramebufferMeta};
-pub use service::{ControlPlane, ServerConfig, TraceFormat};
+pub use service::{ControlPlane, LastBreakResponse, LastErrorRecord, ServerConfig, TraceFormat};

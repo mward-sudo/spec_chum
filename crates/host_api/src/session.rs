@@ -940,6 +940,14 @@ impl HostSession {
         Ok(m.run_until_break(u64::from(max_insns)))
     }
 
+    /// Last debugger stop reason (`BreakReason::None` when nothing has stopped yet).
+    pub fn last_break_reason(&self) -> Result<machine::BreakReason, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        Ok(m.debugger().last_hit)
+    }
+
     /// Run one video frame into the RGBA framebuffer when `running`.
     /// Skips advancing while the debugger is paused.
     pub fn run_frame(&mut self) {

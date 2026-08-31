@@ -100,6 +100,119 @@ async fn agent_api_run_inspect_and_framebuffer_png() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn agent_api_video_metadata_and_last_error() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let video = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/video")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("video");
+    assert_eq!(video.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(video.into_body(), usize::MAX)
+        .await
+        .expect("video body");
+    let video: serde_json::Value = serde_json::from_slice(&body).expect("video json");
+    assert_eq!(video["width"], 256);
+    assert_eq!(video["height"], 192);
+    assert_eq!(video["border"], false);
+    assert_eq!(video["hires"], false);
+
+    let bad = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/keys")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"row":99,"bit":0}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("bad key");
+    assert!(bad.status().is_client_error() || bad.status().is_server_error());
+
+    let err = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/errors/last")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("last error");
+    assert_eq!(err.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(err.into_body(), usize::MAX)
+        .await
+        .expect("error body");
+    let last: serde_json::Value = serde_json::from_slice(&body).expect("last error json");
+    assert!(
+        last.get("last").and_then(|v| v.as_object()).is_some(),
+        "expected last error object"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_keys_and_last_break() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let key = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/keys")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"row":6,"bit":3,"pressed":true}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("set key");
+    assert_eq!(key.status(), StatusCode::NO_CONTENT);
+
+    let brk = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/debug/last-break")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("last break");
+    assert_eq!(brk.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(brk.into_body(), usize::MAX)
+        .await
+        .expect("break body");
+    let brk: serde_json::Value = serde_json::from_slice(&body).expect("break json");
+    assert_eq!(brk["reason"], "none");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn agent_api_mem_watch_list_and_add() {
     let Some(rom) = rom48() else {
         eprintln!("skip: Spectrum 48 ROM missing");
