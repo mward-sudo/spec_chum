@@ -73,11 +73,15 @@ follow-ups in the tracker issue.
 ### Security
 
 - Bind **`127.0.0.1` only** (or `::1`); reject other interfaces.
-- Optional bearer token via `SPEC_CHUM_AGENT_TOKEN` (or `--token`); default off on
-  trusted dev machines.
+- **Mutating routes** (`POST`, `PUT`, `PATCH`, `DELETE`) require a bearer token via
+  `SPEC_CHUM_AGENT_TOKEN` (or `--token`) **by default** — even on loopback. Set
+  `SPEC_CHUM_AGENT_INSECURE=1` only on trusted dev machines to allow unauthenticated
+  mutations (not recommended when a browser tab can reach the server).
+- `GET` routes remain unauthenticated on loopback unless a token is configured (then
+  all routes require it).
 - No TLS (localhost); document that the server must never be exposed publicly.
 
-Default port: **`17384`** (`SPEC_CHUM_AGENT_PORT`, mnemonic *SPEC* on phone keypad)
+Default port: **`17732`** (`SPEC_CHUM_AGENT_PORT`; `1` + phone-keypad *SPEC* `7732`)
 — configurable; single-instance lock file to avoid port clashes.
 
 ## Framebuffer export (visual QA)
@@ -116,7 +120,7 @@ Example (once implemented):
 
 ```bash
 curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
-  'http://127.0.0.1:17384/v1/framebuffer?border=false&format=png' \
+  'http://127.0.0.1:17732/v1/framebuffer?border=false&format=png' \
   -o /tmp/spec_paper.png
 # Agent: Read /tmp/spec_paper.png for Techdraw hi-res QA
 ```
@@ -129,7 +133,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 
 | Area | Operations |
 | --- | --- |
-| Machine | `POST /v1/model` — select built-in model; `POST /v1/config` — apply `#187` custom profile JSON; `POST /v1/reset`; `POST /v1/running` pause/run; `POST /v1/run` — advance *N* frames or until idle |
+| Machine | `POST /v1/model` — select built-in model; `POST /v1/config` — apply `#187` custom profile JSON; `POST /v1/reset`; `POST /v1/running` pause/run; `POST /v1/run` — advance within a **finite budget** (see below) |
 | Execution | `POST /v1/step` — one `step_once`; `POST /v1/step` body `{ "count": N }`; `POST /v1/continue`; `POST /v1/run-until` — PC / budget (maps `Debugger::run_until`) |
 | Tape | `POST /v1/tape/open`, `/play`, `/pause`, `/rewind`, `/eject`; load options flash vs EAR vs experience + speed |
 | Type-load | `POST /v1/tape/type-load` — scripted LOAD "" [CODE] (today's `type-load` subcommand) |
@@ -157,7 +161,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Area | Operations |
 | --- | --- |
 | Breakpoints | `POST /v1/debug/breakpoints/pc`; `DELETE`…; mem/port watches |
-| Trace | `GET|PUT /v1/trace/categories`; `POST /v1/trace/clear`; `GET /v1/trace` — ring text/JSON/ndjson |
+| Trace | `GET /v1/trace/categories` — list enabled categories; `PUT /v1/trace/categories` — enable/disable; `POST /v1/trace/clear`; `GET /v1/trace` — ring text/JSON/ndjson |
 | Run control | `POST /v1/run-until` — PC, mem write, port, halt, insn budget |
 | Step semantics | `step` = one instruction; `step-over` deferred until call-stack support exists — document as optional |
 
@@ -171,9 +175,29 @@ Smallest useful agent surface:
 4. `POST /v1/model`, `/reset`, `/run`
 5. `POST /v1/tape/open`, `/play`, `/pause`, load-options, `/type-load`
 6. `GET /v1/peek`, `GET /v1/disasm`
-7. `POST /v1/trace/categories`, `GET /v1/trace`
+7. `GET /v1/trace/categories`, `PUT /v1/trace/categories`, `GET /v1/trace`
 
 Remaining control/inspect/debug rows land in Phase A follow-ups before Phase B.
+
+### `POST /v1/run` budget semantics
+
+`POST /v1/run` advances emulation until **one** of: the request budget is exhausted,
+the machine becomes idle (halted / waiting for input), or a debugger stop (breakpoint,
+watch, `run-until` predicate). Agents must supply a finite cap — unbounded run is
+rejected (`400`).
+
+Request body (at least one limit required):
+
+```json
+{ "frames": 300 }
+```
+
+or `{ "instructions": 500000 }`. Optional `"until_idle": true` (default `false`) lets
+the server keep stepping within the budget until idle; when the budget is hit first,
+the response reports `stopped_reason: "budget"` with `frames_run` / `instructions_run`
+and current `inspect` snapshot — same shape as an idle stop, but `stopped_reason` differs.
+
+Default when the body is omitted: **`{ "frames": 100 }`** (safe agent default).
 
 ## Implementation sketch
 
