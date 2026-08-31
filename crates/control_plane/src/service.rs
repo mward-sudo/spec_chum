@@ -399,21 +399,16 @@ pub struct StatusResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
-    fn workspace_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-    }
+    use machine::Model;
 
     fn rom48() -> Option<Vec<u8>> {
-        let path = workspace_root().join("roms/48.rom");
-        std::fs::read(path).ok()
+        machine::resolve_rom_path(Model::Spectrum48).and_then(|path| std::fs::read(path).ok())
     }
 
     #[test]
     fn health_and_inspect_after_rom_load() {
         let Some(rom) = rom48() else {
-            eprintln!("skip: roms/48.rom missing");
+            eprintln!("skip: Spectrum 48 ROM missing");
             return;
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
@@ -430,7 +425,7 @@ mod tests {
     #[test]
     fn run_frames_and_framebuffer_dims() {
         let Some(rom) = rom48() else {
-            eprintln!("skip: roms/48.rom missing");
+            eprintln!("skip: Spectrum 48 ROM missing");
             return;
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);

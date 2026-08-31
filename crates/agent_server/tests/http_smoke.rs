@@ -1,82 +1,99 @@
 //! HTTP integration smoke test for the agent debug API (#210).
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use agent_server::routes::{router, AppState};
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
 use control_plane::ControlPlane;
+use machine::Model;
 use spec_chum_host::ModelId;
-
-fn workspace_root() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
+use tower::ServiceExt;
 
 fn rom48() -> Option<Vec<u8>> {
-    std::fs::read(workspace_root().join("roms/48.rom")).ok()
+    machine::resolve_rom_path(Model::Spectrum48).and_then(|path| std::fs::read(path).ok())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn agent_api_run_inspect_and_framebuffer_png() {
     let Some(rom) = rom48() else {
-        eprintln!("skip: roms/48.rom missing");
+        eprintln!("skip: Spectrum 48 ROM missing");
         return;
     };
     let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
     plane.load_rom_bytes(&rom).expect("rom");
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind");
-    let addr = listener.local_addr().expect("addr");
-    let state = AppState {
+    let app = router(AppState {
         plane: plane.clone(),
         token: None,
-    };
-    let app = router(state);
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.expect("serve");
     });
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    let base = format!("http://{addr}");
-    let client = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(5)))
-        .build()
-        .new_agent();
-    let health: serde_json::Value = client
-        .get(format!("{base}/v1/health"))
-        .call()
-        .expect("health")
-        .into_body()
-        .read_json()
-        .expect("health json");
+
+    let health = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("health");
+    assert_eq!(health.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(health.into_body(), usize::MAX)
+        .await
+        .expect("health body");
+    let health: serde_json::Value = serde_json::from_slice(&body).expect("health json");
     assert_eq!(health["ok"], true);
     assert_eq!(health["has_machine"], true);
-    client
-        .post(format!("{base}/v1/run"))
-        .send_json(serde_json::json!({ "frames": 1 }))
+
+    let run = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/run")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"frames":1}"#))
+                .unwrap(),
+        )
+        .await
         .expect("run");
-    let inspect: serde_json::Value = client
-        .get(format!("{base}/v1/inspect"))
-        .call()
-        .expect("inspect")
-        .into_body()
-        .read_json()
-        .expect("inspect json");
-    assert!(inspect.get("regs").is_some());
-    let png = client
-        .get(format!("{base}/v1/framebuffer?border=false&format=png"))
-        .call()
-        .expect("framebuffer")
-        .into_body()
-        .read_to_vec()
-        .expect("png bytes");
-    assert!(png.starts_with(&[0x89, b'P', b'N', b'G']));
-    let width = client
-        .get(format!("{base}/v1/framebuffer?border=false&format=png"))
-        .call()
-        .expect("headers")
-        .headers()
-        .get("x-specchum-width")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<usize>().ok());
-    assert_eq!(width, Some(256));
+    assert_eq!(run.status(), StatusCode::OK);
+
+    let inspect = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/inspect")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("inspect");
+    assert_eq!(inspect.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(inspect.into_body(), usize::MAX)
+        .await
+        .expect("inspect body");
+    let inspect: serde_json::Value = serde_json::from_slice(&body).expect("inspect json");
+    assert!(
+        inspect.get("pc").is_some(),
+        "inspect json should include pc"
+    );
+
+    let fb = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/framebuffer?border=false&format=png")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("framebuffer");
+    assert_eq!(fb.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(fb.into_body(), usize::MAX)
+        .await
+        .expect("png body");
+    assert!(body.starts_with(&[0x89, b'P', b'N', b'G']));
+    let meta = plane.framebuffer_meta().expect("meta");
+    assert_eq!(meta.width, 256);
+    assert_eq!(meta.height, 192);
 }
