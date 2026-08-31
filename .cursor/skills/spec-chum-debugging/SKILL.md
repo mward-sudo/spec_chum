@@ -61,8 +61,8 @@ spec-chum-debug --model 48k run --frames 1
 spec-chum-debug --tap tests/fixtures/tape/attr_mark.tap type-load --code
 ```
 
-Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`.
-Other subcommands remain local-only until Phase B expands coverage.
+Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`,
+`until-pc`, `break-pc`. `watch-write` remains local-only (no mem-watch HTTP API yet — #210).
 
 ### Framebuffer export (not window capture)
 

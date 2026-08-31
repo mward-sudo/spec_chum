@@ -85,7 +85,7 @@ follow-ups in the tracker issue.
   all routes require it).
 - No TLS (localhost); document that the server must never be exposed publicly.
 
-Default port: **`17732`** (`SPEC_CHUM_AGENT_PORT`; `1` + phone-keypad *SPEC* `7732`)
+Default port: **`17384`** (`SPEC_CHUM_AGENT_PORT`; `1` + phone-keypad *SPEC* `7384`)
 — configurable; single-instance lock file to avoid port clashes.
 
 ## Framebuffer export (visual QA)
@@ -124,7 +124,7 @@ Example (once implemented):
 
 ```bash
 curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
-  'http://127.0.0.1:17732/v1/framebuffer?border=false&format=png' \
+  'http://127.0.0.1:17384/v1/framebuffer?border=false&format=png' \
   -o /tmp/spec_paper.png
 # Agent: Read /tmp/spec_paper.png for Techdraw hi-res QA
 ```

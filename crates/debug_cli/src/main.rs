@@ -51,10 +51,10 @@ struct Cli {
     #[arg(long)]
     agent_port: Option<u16>,
     #[command(subcommand)]
-    cmd: Cmd,
+    cmd: Option<Cmd>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum Cmd {
     /// Run N video frames
     Run {
@@ -179,7 +179,7 @@ fn run_serve(cli: &Cli) -> Result<()> {
     rt.block_on(serve(config, plane))
 }
 
-fn run_remote(cli: &Cli, client: &AgentClient) -> Result<()> {
+fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {
     if cli.rom.is_some() || cli.snapshot.is_some() {
         bail!("remote agent client does not support --rom or --snapshot yet");
     }
@@ -192,11 +192,13 @@ fn run_remote(cli: &Cli, client: &AgentClient) -> Result<()> {
     }
     if let Some(path) = &cli.tap {
         client.tape_open(&path.display().to_string())?;
+        client.tape_play()?;
     }
     if let Some(path) = &cli.tzx {
         client.tape_open(&path.display().to_string())?;
+        client.tape_play()?;
     }
-    match &cli.cmd {
+    match cmd {
         Cmd::Run { frames } => {
             client.run_frames(*frames)?;
             print_remote_inspect(client, cli.json)?;
@@ -234,7 +236,52 @@ fn run_remote(cli: &Cli, client: &AgentClient) -> Result<()> {
                 exit_cli(2);
             }
         }
-        other => bail!("remote agent client does not support {other:?} yet"),
+        Cmd::UntilPc { pc, max } => {
+            client.add_breakpoint(pc)?;
+            let body = client.run_until(*max)?;
+            print_remote_run_result(client, cli.json, &body)?;
+            let reason = body
+                .get("break_reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !reason.contains("Pc(") {
+                exit_cli(2);
+            }
+        }
+        Cmd::BreakPc { pc, frames } => {
+            client.add_breakpoint(pc)?;
+            let body = client.run_frames(*frames)?;
+            print_remote_run_result(client, cli.json, &body)?;
+            let reason = body
+                .get("break_reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !reason.contains("Pc(") {
+                exit_cli(2);
+            }
+        }
+        Cmd::WatchWrite { .. } => {
+            bail!("remote agent client does not support watch-write yet (no /v1/debug/watches API — see #210)");
+        }
+    }
+    Ok(())
+}
+
+fn print_remote_run_result(
+    client: &AgentClient,
+    json: bool,
+    body: &serde_json::Value,
+) -> Result<()> {
+    if json {
+        let inspect = client.inspect_json()?;
+        println!("{{\"run\":{body},\"inspect\":{inspect}}}");
+    } else {
+        let reason = body
+            .get("break_reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?");
+        println!("break: {reason}");
+        print_remote_inspect(client, false)?;
     }
     Ok(())
 }
@@ -435,17 +482,21 @@ fn main() -> Result<()> {
     if cli.serve {
         return run_serve(&cli);
     }
+    let cmd = cli
+        .cmd
+        .as_ref()
+        .context("subcommand required (or pass --serve to run the HTTP server)")?;
     if let Some(url) = &cli.agent_url {
         let token = std::env::var("SPEC_CHUM_AGENT_TOKEN").ok();
         let client = AgentClient::new(url, token)?;
-        return run_remote(&cli, &client);
+        return run_remote(&cli, &client, cmd);
     }
     if std::env::var("SPEC_CHUM_AGENT_URL").is_ok() {
         let client = AgentClient::from_env()?;
-        return run_remote(&cli, &client);
+        return run_remote(&cli, &client, cmd);
     }
     let mut m = load_machine(&cli)?;
-    match cli.cmd {
+    match cmd.clone() {
         Cmd::Run { frames } => {
             for _ in 0..frames {
                 if m.debugger().paused {
@@ -599,6 +650,17 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::parse_u16;
+    use clap::Parser;
+
+    use super::Cli;
+
+    #[test]
+    fn serve_without_subcommand() {
+        let cli =
+            Cli::try_parse_from(["spec-chum-debug", "--serve", "--model", "48k"]).expect("parse");
+        assert!(cli.serve);
+        assert!(cli.cmd.is_none());
+    }
 
     #[test]
     fn parse_u16_hex_prefix_and_dollar() {
