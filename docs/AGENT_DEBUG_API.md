@@ -68,6 +68,17 @@ All debugging / control / inspect paths **converge** on one backend:
 | **B — clients adapt** | `spec-chum-debug` talks HTTP when `SPEC_CHUM_AGENT_URL` set; egui embeds parallel server when `SPEC_CHUM_AGENT=1`; integration tests hit HTTP |
 | **C — dedupe** | Deprecate duplicate direct `host_api` debug/control paths where safe; document remaining C ABI as FFI-only for non-Rust shells |
 
+**Phase B (partial — [#221](https://github.com/mward-sudo/spec_chum/issues/221) open):**
+
+| Piece | Status |
+| --- | --- |
+| `spec-chum-debug` HTTP client (`SPEC_CHUM_AGENT_URL` / `--agent-url`) | Done ([#213](https://github.com/mward-sudo/spec_chum/pull/213) / [#214](https://github.com/mward-sudo/spec_chum/pull/214)) |
+| Mem watches over HTTP | Done |
+| SpecChumMac agent workflow docs | Done ([#225](https://github.com/mward-sudo/spec_chum/pull/225) / `MACOS_NATIVE.md`) |
+| egui `SPEC_CHUM_AGENT=1` embed | **Transitional** — starts a **second** `ControlPlane` session (not the Debug panel machine). Prefer standalone `spec-chum-agent` / `spec-chum-debug --serve` for agents. **Removal plan:** once egui Debug routes through a shared live `ControlPlane`/`HostSession`, drop the parallel embed or make it a thin transport over that same `Arc<ControlPlane>` |
+| egui Debug panel live session | **Open** — still uses `EmulatorSession` / `Option<Machine>` in-process; dual source of truth vs HTTP until unified |
+| SpecChumMac in-process embed | **Deferred** — keep FFI + standalone agent; in-process only if cycle-safe (no `host_api` ↔ `control_plane`) |
+
 **Phase C (docs complete — [#222](https://github.com/mward-sudo/spec_chum/issues/222)):**
 `spec-chum-debug` local commands route through
 [`HostSession`](../crates/host_api/src/session.rs) — the same type wrapped by
