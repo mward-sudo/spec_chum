@@ -805,7 +805,11 @@ mod tests {
         assert_eq!(beta.in_port(0x00ff), Some(0x00), "reset clears DRQ/INTRQ");
         assert_eq!(beta.in_port(0x001f).unwrap() & STAT_DRQ, 0);
         beta.out_port(0x001f, 0x80);
-        assert_eq!(beta.in_port(0x00ff), Some(0x00), "commands ignored while /RES low");
+        assert_eq!(
+            beta.in_port(0x00ff),
+            Some(0x00),
+            "commands ignored while /RES low"
+        );
         assert_eq!(beta.sector_read_count, 1, "no second read while /RES held");
         beta.out_port(0x00ff, SYS_DEFAULT);
         beta.out_port(0x001f, 0x80);
