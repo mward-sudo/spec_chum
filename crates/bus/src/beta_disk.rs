@@ -31,6 +31,14 @@ enum Xfer {
     Read,
     Write,
     ReadAddress,
+    WriteTrack,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WriteTrackParse {
+    Hunt,
+    Id { i: u8, buf: [u8; 4] },
+    Data { size: usize, chs: (u8, u8, u8) },
 }
 
 #[derive(Clone, Debug)]
@@ -60,8 +68,14 @@ pub struct BetaDisk {
     pub cmd_count: u32,
     /// Successful Type II sector loads.
     pub sector_read_count: u32,
+    /// Completed WRITE TRACK / format passes.
+    pub write_track_count: u32,
     /// Most recent command bytes (oldest → newest in `[..cmd_count.min(4)]` order is not kept; last four).
     pub recent_cmds: [u8; 4],
+    wt_parse: WriteTrackParse,
+    wt_pending_id: Option<(u8, u8, u8, u8)>,
+    wt_sectors_done: u8,
+    wt_fill: u8,
 }
 
 impl Default for BetaDisk {
@@ -93,7 +107,12 @@ impl BetaDisk {
             type_i_status: true,
             cmd_count: 0,
             sector_read_count: 0,
+            write_track_count: 0,
             recent_cmds: [0; 4],
+            wt_parse: WriteTrackParse::Hunt,
+            wt_pending_id: None,
+            wt_sectors_done: 0,
+            wt_fill: 0xe5,
         }
     }
 
@@ -217,6 +236,9 @@ impl BetaDisk {
         self.buffer_i = 0;
         self.multiple = false;
         self.type_i_status = true;
+        self.wt_parse = WriteTrackParse::Hunt;
+        self.wt_pending_id = None;
+        self.wt_sectors_done = 0;
         self.status = self.type_i_status_value();
     }
 
@@ -290,12 +312,15 @@ impl BetaDisk {
         self.recent_cmds[3] = cmd;
 
         if cmd & 0xf0 == 0xd0 {
+            let was_write_track = self.xfer == Xfer::WriteTrack;
             self.xfer = Xfer::Idle;
             self.buffer.clear();
             self.buffer_i = 0;
             self.drq = false;
             let immediate = cmd & 0x08 != 0;
-            if self.type_i_status {
+            if was_write_track {
+                self.finish_write_track();
+            } else if self.type_i_status {
                 self.set_type_i_status();
             } else {
                 self.status &= !STAT_BUSY;
@@ -347,9 +372,7 @@ impl BetaDisk {
             }
             0xe0 | 0xf0 => {
                 self.type_i_status = false;
-                self.xfer = Xfer::Idle;
-                self.intrq = true;
-                self.status = 0;
+                self.start_write_track();
             }
             _ => {
                 self.status = 0;
@@ -369,6 +392,108 @@ impl BetaDisk {
             }
         }
         self.set_type_i_status();
+    }
+
+    fn start_write_track(&mut self) {
+        self.wt_parse = WriteTrackParse::Hunt;
+        self.wt_pending_id = None;
+        self.wt_sectors_done = 0;
+        self.buffer.clear();
+        self.buffer_i = 0;
+        self.xfer = Xfer::WriteTrack;
+        self.drq = true;
+        self.intrq = false;
+        self.status = STAT_DRQ;
+    }
+
+    fn finish_write_track(&mut self) {
+        self.xfer = Xfer::Idle;
+        self.drq = false;
+        self.intrq = true;
+        self.status = 0;
+        self.wt_parse = WriteTrackParse::Hunt;
+        self.wt_pending_id = None;
+        self.buffer.clear();
+        self.buffer_i = 0;
+        if self.wt_sectors_done > 0 {
+            self.write_track_count = self.write_track_count.saturating_add(1);
+        }
+        self.wt_sectors_done = 0;
+    }
+
+    fn sector_size_from_code(n: u8) -> usize {
+        match n {
+            0 => 128,
+            1 => 256,
+            2 => 512,
+            3 => 1024,
+            _ => TRD_SECTOR_SIZE,
+        }
+    }
+
+    fn commit_write_track_sector(&mut self, track: u8, side: u8, sector_id: u8, data: &[u8]) {
+        if sector_id == 0 || sector_id as usize > TRD_SECTORS_PER_TRACK {
+            return;
+        }
+        let mut sec = [0u8; TRD_SECTOR_SIZE];
+        let n = data.len().min(TRD_SECTOR_SIZE);
+        sec[..n].copy_from_slice(&data[..n]);
+        if sec[n..].iter().all(|&b| b == 0) && n < TRD_SECTOR_SIZE {
+            sec[n..].fill(self.wt_fill);
+        }
+        if self
+            .image
+            .as_mut()
+            .is_some_and(|img| img.write_sector_chs(track, side, sector_id - 1, &sec))
+        {
+            self.wt_sectors_done = self.wt_sectors_done.saturating_add(1);
+        }
+    }
+
+    fn write_track_byte(&mut self, value: u8) {
+        match self.wt_parse {
+            WriteTrackParse::Hunt => {
+                if value == 0xfe {
+                    self.wt_parse = WriteTrackParse::Id { i: 0, buf: [0; 4] };
+                } else if value == 0xfb {
+                    let (c, h, r, n) = self.wt_pending_id.take().unwrap_or((
+                        self.track,
+                        self.side(),
+                        self.sector.max(1),
+                        0x01,
+                    ));
+                    let size = Self::sector_size_from_code(n);
+                    self.buffer.clear();
+                    self.wt_parse = WriteTrackParse::Data {
+                        size,
+                        chs: (c, h, r),
+                    };
+                }
+            }
+            WriteTrackParse::Id { i, mut buf } => {
+                buf[i as usize] = value;
+                if i < 3 {
+                    self.wt_parse = WriteTrackParse::Id { i: i + 1, buf };
+                } else {
+                    self.wt_pending_id = Some((buf[0], buf[1], buf[2], buf[3]));
+                    self.wt_parse = WriteTrackParse::Hunt;
+                }
+            }
+            WriteTrackParse::Data { size, chs } => {
+                if self.buffer.len() < size {
+                    self.buffer.push(value);
+                }
+                if self.buffer.len() >= size {
+                    let data = self.buffer.clone();
+                    self.commit_write_track_sector(chs.0, chs.1, chs.2, &data);
+                    self.buffer.clear();
+                    self.wt_parse = WriteTrackParse::Hunt;
+                }
+            }
+        }
+        if self.wt_sectors_done >= TRD_SECTORS_PER_TRACK as u8 {
+            self.finish_write_track();
+        }
     }
 
     fn start_read_sector(&mut self) {
@@ -454,6 +579,14 @@ impl BetaDisk {
 
     fn write_data(&mut self, value: u8) {
         match self.xfer {
+            Xfer::WriteTrack => {
+                self.write_track_byte(value);
+                self.data_reg = value;
+                if self.xfer == Xfer::WriteTrack {
+                    self.drq = true;
+                    self.status = STAT_DRQ;
+                }
+            }
             Xfer::Write => {
                 if self.buffer_i < self.buffer.len() {
                     self.buffer[self.buffer_i] = value;
@@ -830,5 +963,62 @@ mod tests {
         assert_eq!(beta.in_port(0x007f), Some(0x17));
         assert_eq!(beta.in_port(0x007f), Some(0x00));
         assert_eq!(beta.in_port(0x007f), Some(0xf4)); // POKE
+    }
+
+    fn feed_write_track_sector(beta: &mut BetaDisk, track: u8, sector: u8, fill: u8) {
+        beta.out_port(0x007f, 0xfe);
+        beta.out_port(0x007f, track);
+        beta.out_port(0x007f, 0);
+        beta.out_port(0x007f, sector);
+        beta.out_port(0x007f, 0x01);
+        beta.out_port(0x007f, 0xf7);
+        beta.out_port(0x007f, 0xfb);
+        for _ in 0..TRD_SECTOR_SIZE {
+            beta.out_port(0x007f, fill);
+        }
+        beta.out_port(0x007f, 0xf7);
+    }
+
+    #[test]
+    fn write_track_formats_sector_with_data() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0, 0));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x001f, 0xe0);
+        assert_eq!(beta.in_port(0x00ff), Some(0x40));
+        feed_write_track_sector(&mut beta, 0, 2, 0xcd);
+        beta.out_port(0x001f, 0xd8);
+        assert_eq!(beta.in_port(0x00ff), Some(0x80));
+        assert_eq!(beta.write_track_count, 1);
+        let sec = beta.image.as_ref().unwrap().read_sector(0, 1).unwrap();
+        assert_eq!(sec[0], 0xcd);
+        assert_eq!(sec[255], 0xcd);
+    }
+
+    #[test]
+    fn write_track_auto_completes_full_track() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0xaa, 0xbb));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x001f, 0xe0);
+        for sec in 1..=TRD_SECTORS_PER_TRACK as u8 {
+            feed_write_track_sector(&mut beta, 0, sec, sec);
+        }
+        assert_eq!(beta.in_port(0x00ff), Some(0x80));
+        assert_eq!(beta.write_track_count, 1);
+        let img = beta.image.as_ref().unwrap();
+        for sec in 0..TRD_SECTORS_PER_TRACK {
+            assert_eq!(img.read_sector(0, sec).unwrap()[0], (sec + 1) as u8);
+        }
+    }
+
+    #[test]
+    fn write_track_rnf_without_image() {
+        let mut beta = BetaDisk::new();
+        beta.page_trdos(true);
+        beta.out_port(0x001f, 0xe0);
+        assert_eq!(beta.status, STAT_NOT_READY);
     }
 }

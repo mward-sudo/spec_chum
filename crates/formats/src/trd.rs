@@ -159,6 +159,39 @@ impl TrdImage {
         true
     }
 
+    /// Replace sectors on a physical track (VG93 WRITE TRACK / TR-DOS `NEW`).
+    ///
+    /// `entries` are `(C, H, R, N)` ID fields from the format stream; `R` is the
+    /// WD179x sector number (`1..=16`). Clears the whole track to `fill` first.
+    #[must_use]
+    pub fn format_track(
+        &mut self,
+        track: u8,
+        side: u8,
+        fill: u8,
+        entries: &[(u8, u8, u8, u8)],
+    ) -> bool {
+        if side >= self.sides || usize::from(track) >= usize::from(self.tracks) {
+            return false;
+        }
+        for sec in 0..TRD_SECTORS_PER_TRACK {
+            let mut data = [0u8; TRD_SECTOR_SIZE];
+            data.fill(fill);
+            if !self.write_sector_chs(track, side, sec as u8, &data) {
+                return false;
+            }
+        }
+        for &(c, h, r, _n) in entries {
+            if r == 0 || r as usize > TRD_SECTORS_PER_TRACK {
+                continue;
+            }
+            let mut data = [0u8; TRD_SECTOR_SIZE];
+            data.fill(fill);
+            let _ = self.write_sector_chs(c, h, r - 1, &data);
+        }
+        true
+    }
+
     /// 40-track SS TR-DOS disk with BASIC `boot` (`10 POKE 32768,165`).
     ///
     /// `RUN` with no filename (Beta manual / TR-DOS 5) loads and runs this
@@ -263,6 +296,17 @@ mod tests {
         let sec = img.read_sector(0, 1).unwrap();
         assert_eq!([sec[0], sec[1]], [0xbe, 0xef]);
         assert!(!img.write_sector(0, 16, &data));
+    }
+
+    #[test]
+    fn format_track_clears_and_sets_sectors() {
+        let mut img = TrdImage::parse(&synthetic_trd()).unwrap();
+        assert!(img.format_track(0, 0, 0xe5, &[(0, 0, 1, 1), (0, 0, 2, 1)]));
+        let s0 = img.read_sector(0, 0).unwrap();
+        let s1 = img.read_sector(0, 1).unwrap();
+        assert_eq!(s0[0], 0xe5);
+        assert_eq!(s1[0], 0xe5);
+        assert_eq!(s0[0xe3], 0xe5, "info byte in sector 0 cleared");
     }
 
     #[test]
