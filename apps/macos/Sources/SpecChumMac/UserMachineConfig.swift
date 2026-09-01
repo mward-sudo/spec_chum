@@ -55,12 +55,13 @@ struct UserMachineConfig: Codable, Identifiable, Equatable {
     }
 }
 
+/// Raw values must match `host_api::PrefModel` serde (`rename_all = "snake_case"`).
 enum PrefModelSlug: String, Codable, CaseIterable {
-    case spectrum16K = "spectrum_16k"
-    case spectrum48 = "spectrum_48"
-    case spectrum128 = "spectrum_128"
+    case spectrum16K = "spectrum16_k"
+    case spectrum48 = "spectrum48"
+    case spectrum128 = "spectrum128"
     case spectrumPlus2 = "spectrum_plus2"
-    case spectrumPlus2A = "spectrum_plus2a"
+    case spectrumPlus2A = "spectrum_plus2_a"
     case spectrumPlus3 = "spectrum_plus3"
     case pentagon128 = "pentagon128"
     case timexTC2048 = "timex_tc2048"

@@ -606,6 +606,63 @@ mod tests {
     }
 
     #[test]
+    fn apply_diagrom_succeeds_on_16k_class_models() {
+        let dir = std::env::temp_dir();
+        let rom = dir.join(format!("spec-chum-diagrom-{}", std::process::id()));
+        std::fs::write(&rom, vec![0u8; 16 * 1024]).expect("write");
+        let roots = machine::search_roots();
+        let ok_models = [
+            PrefModel::Spectrum16K,
+            PrefModel::Spectrum48,
+            PrefModel::TimexTC2048,
+            PrefModel::TimexTS2068,
+        ];
+        for base in ok_models {
+            let cfg = UserMachineConfig {
+                custom_rom_path: Some(rom.to_string_lossy().into_owned()),
+                ..UserMachineConfig::new_named("DiagROM", base)
+            };
+            apply_user_config(&cfg, &roots).unwrap_or_else(|e| panic!("{base:?}: {e}"));
+        }
+        let _ = std::fs::remove_file(&rom);
+    }
+
+    #[test]
+    fn apply_diagrom_rejects_128k_class_rom_size() {
+        let dir = std::env::temp_dir();
+        let rom = dir.join(format!("spec-chum-diagrom-bad-{}", std::process::id()));
+        std::fs::write(&rom, vec![0u8; 16 * 1024]).expect("write");
+        let roots = machine::search_roots();
+        let cfg = UserMachineConfig {
+            custom_rom_path: Some(rom.to_string_lossy().into_owned()),
+            ..UserMachineConfig::new_named("DiagROM", PrefModel::Spectrum128)
+        };
+        let err = apply_user_config(&cfg, &roots).expect_err("128K needs 32 KiB main ROM");
+        assert!(
+            matches!(
+                err,
+                MachineConfigError::RomSize {
+                    expected: 32768,
+                    actual: 16384,
+                    ..
+                }
+            ),
+            "{err}"
+        );
+        let _ = std::fs::remove_file(&rom);
+    }
+
+    #[test]
+    fn canonical_base_slug_decodes_for_custom_config_json() {
+        let json = r#"{"id":"x","name":"t","base":"spectrum48"}"#;
+        let cfg: UserMachineConfig = serde_json::from_str(json).expect("decode");
+        assert_eq!(cfg.base, PrefModel::Spectrum48);
+        let json = r#"{"id":"x","name":"t","base":"spectrum_plus2_a"}"#;
+        let cfg: UserMachineConfig = serde_json::from_str(json).expect("decode +2A");
+        assert_eq!(cfg.base, PrefModel::SpectrumPlus2A);
+    }
+
+    #[test]
     fn apply_rejects_bad_custom_rom_size() {
         let roots = machine::search_roots();
         let dir = std::env::temp_dir();

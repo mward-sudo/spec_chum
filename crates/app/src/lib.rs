@@ -1484,6 +1484,8 @@ impl SpecChumApp {
             if ui.button("Browse…").clicked() {
                 if let Some(picked) = rfd::FileDialog::new()
                     .add_filter(filter, &["rom", "bin", "img", "eeprom"])
+                    // DiagROM and similar dumps often ship without an extension.
+                    .add_filter("All files", &["*"])
                     .pick_file()
                 {
                     *path = picked.to_str().map(str::to_owned);
@@ -1620,19 +1622,9 @@ impl SpecChumApp {
                     ui.label("Base model");
                     for pick in machine::ALL_MODELS {
                         let pref = PrefModel::from_model(pick);
-                        let available = model_rom_available(
-                            pref.to_model_id(),
-                            &self.prefs.model_rom_paths,
-                        ) || draft.custom_rom_path.is_some();
                         let title = machine::model_title(pick);
                         let mut selected = draft.base == pref;
-                        if ui
-                            .add_enabled_ui(available, |ui| {
-                                ui.radio_value(&mut selected, true, title)
-                            })
-                            .inner
-                            .clicked()
-                        {
+                        if ui.radio_value(&mut selected, true, title).clicked() {
                             draft.base = pref;
                             *draft = draft.clone().sanitized();
                         }

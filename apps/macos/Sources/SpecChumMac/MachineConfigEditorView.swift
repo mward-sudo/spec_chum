@@ -180,6 +180,8 @@ struct MachineConfigEditorView: View {
             UTType(filenameExtension: "bin") ?? .data,
             UTType(filenameExtension: "eeprom") ?? .data,
         ]
+        // DiagROM and similar dumps often ship without an extension.
+        panel.allowsOtherFileTypes = true
         if panel.runModal() == .OK, let url = panel.url {
             path.wrappedValue = url.path
         }
