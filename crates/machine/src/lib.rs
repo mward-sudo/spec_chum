@@ -566,11 +566,8 @@ impl Memory for MemIo128<'_> {
             return;
         };
         let src_bank = ula::snow_source_bank_128(i_bank, screen_bank);
-        let corrupt_vec = if src_bank == screen_bank {
-            None
-        } else {
-            Some(self.bus.banks[src_bank][..6912].to_vec())
-        };
+        // Borrow banks by index (shared refs) — never allocate 6912 bytes in the M1 hot path.
+        let corrupt_source = (src_bank != screen_bank).then(|| &self.bus.banks[src_bank][..6912]);
         let screen = &self.bus.banks[screen_bank][..6912];
         let ovs = ula::snow_overrides(
             frame_t,
@@ -579,7 +576,7 @@ impl Memory for MemIo128<'_> {
             true,
             ula::SnowTiming::Class128,
             screen,
-            corrupt_vec.as_deref(),
+            corrupt_source,
         );
         for o in ovs {
             self.bus.ula.record_snow(o.line, o.col, o.kind, o.byte);
