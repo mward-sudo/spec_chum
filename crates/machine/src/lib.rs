@@ -425,7 +425,15 @@ impl Memory for MemIo48<'_> {
         let frame_t = self.ula_t(t);
         let m1_contended = self.m1_contended;
         let screen = &self.bus.ram[..6912];
-        let ovs = ula::snow_overrides(frame_t, i, r, m1_contended, screen);
+        let ovs = ula::snow_overrides(
+            frame_t,
+            r,
+            m1_contended,
+            ula::snow_possible(i),
+            ula::SnowTiming::Class48,
+            screen,
+            None,
+        );
         for o in ovs {
             self.bus.ula.record_snow(o.offset, o.byte);
         }
@@ -470,8 +478,10 @@ pub struct MemIo128<'a> {
     pub(crate) t_step_start: u64,
     /// When set, the first `read` at this PC runs IF1 pre/post opcode-fetch paging.
     pub(crate) opcode_pc: Option<u16>,
-    /// Pentagon 128: 71680 T/frame, no memory or I/O contention.
+    /// Pentagon 128: 71680 T/frame, no memory or I/O contention (no ULA snow).
     pub(crate) pentagon: bool,
+    /// True when the current M1 opcode fetch at T1 was contended (blocks snow).
+    pub(crate) m1_contended: bool,
 }
 
 impl MemIo128<'_> {
@@ -494,7 +504,8 @@ impl MemIo128<'_> {
 impl Memory for MemIo128<'_> {
     fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
         let mut unpage_after = false;
-        if self.opcode_pc == Some(addr) {
+        let is_opcode = self.opcode_pc == Some(addr);
+        if is_opcode {
             if let Some(if1) = self.bus.interface1.as_mut() {
                 if1.pre_opcode_fetch(addr);
                 unpage_after = addr == 0x0700;
@@ -510,6 +521,9 @@ impl Memory for MemIo128<'_> {
             self.bus.contend_at(addr)
         };
         self.bus.frame_t = saved;
+        if is_opcode {
+            self.m1_contended = wait > 0;
+        }
         if wait > 0 && trace::enabled(trace::Category::BUS) {
             emit_contend_sampled(addr, ft, wait);
         }
@@ -543,6 +557,44 @@ impl Memory for MemIo128<'_> {
             w.mem_access(addr, true, value);
         }
         wait
+    }
+
+    fn m1_refresh(&mut self, refresh_addr: u16, t: u64) {
+        // Pentagon and Amstrad +2A/+3 paths omit this hook — no original-ULA snow.
+        if self.pentagon {
+            return;
+        }
+        let i = (refresh_addr >> 8) as u8;
+        let r = (refresh_addr & 0x7f) as u8;
+        let frame_t = self.ula_t(t);
+        let c000_contended = self.bus.c000_contended();
+        if !ula::snow_possible_128(i, c000_contended) {
+            return;
+        }
+        let screen_bank = if self.bus.page & 0x08 != 0 { 7 } else { 5 };
+        let c000_bank = usize::from(self.bus.page & 7);
+        let Some(i_bank) = ula::i_pointed_bank_128(i, c000_bank) else {
+            return;
+        };
+        let src_bank = ula::snow_source_bank_128(i_bank, screen_bank);
+        let corrupt_vec = if src_bank == screen_bank {
+            None
+        } else {
+            Some(self.bus.banks[src_bank][..6912].to_vec())
+        };
+        let screen = &self.bus.banks[screen_bank][..6912];
+        let ovs = ula::snow_overrides(
+            frame_t,
+            r,
+            self.m1_contended,
+            true,
+            ula::SnowTiming::Class128,
+            screen,
+            corrupt_vec.as_deref(),
+        );
+        for o in ovs {
+            self.bus.ula.record_snow(o.offset, o.byte);
+        }
     }
 }
 
@@ -584,6 +636,7 @@ impl Io for MemIo128<'_> {
 }
 
 #[derive(Debug)]
+/// Amstrad +2A/+3 memory+I/O — **no** original-ULA snow (`m1_refresh` stays default no-op).
 pub struct MemIoPlus3<'a> {
     pub bus: &'a mut BusPlus3,
     pub(crate) watch: Option<debugger::WatchHook<'a>>,
@@ -1937,6 +1990,7 @@ impl Machine {
                             t_step_start: cpu.t,
                             opcode_pc: None,
                             pentagon: is_pentagon,
+                            m1_contended: false,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -1985,6 +2039,7 @@ impl Machine {
                             t_step_start: cpu.t,
                             opcode_pc: Some(pc),
                             pentagon: is_pentagon,
+                            m1_contended: false,
                         };
                         cpu.step(&mut mio);
                     }
@@ -2761,6 +2816,7 @@ impl Machine {
                         t_step_start: cpu.t,
                         opcode_pc: None,
                         pentagon: is_pentagon,
+                        m1_contended: false,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -2809,6 +2865,7 @@ impl Machine {
                         t_step_start: cpu.t,
                         opcode_pc: Some(pc),
                         pentagon: is_pentagon,
+                        m1_contended: false,
                     };
                     cpu.step(&mut mio);
                 }
@@ -3021,6 +3078,7 @@ impl Machine {
                     t_step_start: cpu.t,
                     opcode_pc: Some(cpu.regs.pc),
                     pentagon: is_pentagon,
+                    m1_contended: false,
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -3698,6 +3756,7 @@ mod tests {
                 t_step_start: 100,
                 opcode_pc: None,
                 pentagon: false,
+                m1_contended: false,
             };
             let t = 100 + dt;
             assert_eq!(
@@ -3760,6 +3819,91 @@ mod tests {
             mem.read(ADDR, 53).1,
             6,
             "ULA time = frame_t+3 lands on first contended cycle"
+        );
+    }
+
+    /// Original Sinclair ULA snow: M1 refresh hook records overrides on 48K/128K paths.
+    #[test]
+    fn m1_refresh_records_snow_48k() {
+        use z80::Memory;
+        let mut bus = Bus48::new();
+        bus.frame_t = ula::PAPER_START_48 + 3;
+        bus.ram[0] = 0xAA;
+        bus.ram[1] = 0x55;
+        let mut mem = MemIo48 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 0,
+            opcode_pc: None,
+            m1_contended: false,
+        };
+        mem.m1_refresh(0x4001, 0);
+        assert!(
+            !bus.ula.snow_overrides.is_empty(),
+            "48K-class ULA must record snow overrides"
+        );
+    }
+
+    #[test]
+    fn m1_refresh_records_snow_128k() {
+        use z80::Memory;
+        let mut bus = Bus128::new();
+        bus.frame_t = ula::PAPER_START_128 + 3;
+        bus.banks[5][0] = 0xAA;
+        bus.banks[5][1] = 0x55;
+        let mut mem = MemIo128 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 0,
+            opcode_pc: None,
+            pentagon: false,
+            m1_contended: false,
+        };
+        mem.m1_refresh(0x4001, 0);
+        assert!(
+            !bus.ula.snow_overrides.is_empty(),
+            "128K/grey+2 ULA must record snow overrides"
+        );
+    }
+
+    /// Pentagon 128: no memory contention → no ULA snow hook effect.
+    #[test]
+    fn m1_refresh_pentagon128_skips_snow() {
+        use z80::Memory;
+        let mut bus = Bus128::new();
+        bus.frame_t = ula::PAPER_START_128 + 3;
+        bus.banks[5][0] = 0xAA;
+        bus.banks[5][1] = 0x55;
+        let mut mem = MemIo128 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 0,
+            opcode_pc: None,
+            pentagon: true,
+            m1_contended: false,
+        };
+        mem.m1_refresh(0x4001, 0);
+        assert!(
+            bus.ula.snow_overrides.is_empty(),
+            "Pentagon must not apply ULA snow"
+        );
+    }
+
+    /// Amstrad +2A/+3: different ULA — default `m1_refresh` is a no-op.
+    #[test]
+    fn m1_refresh_plus3_skips_snow() {
+        use z80::Memory;
+        let mut bus = BusPlus3::new_with_disk(true);
+        bus.frame_t = ula::PAPER_START_128 + 3;
+        let mut mem = MemIoPlus3 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 0,
+        };
+        mem.m1_refresh(0x4001, 0);
+        assert!(
+            bus.ula.snow_overrides.is_empty(),
+            "+3 Amstrad ULA must not apply snow"
         );
     }
 

@@ -4,7 +4,10 @@
 
 mod snow;
 
-pub use snow::{snow_overrides, snow_possible, SnowOverride, SnowPattern, UlaFetch};
+pub use snow::{
+    i_pointed_bank_128, snow_overrides, snow_possible, snow_possible_128, snow_source_bank_128,
+    SnowOverride, SnowPattern, SnowTiming, UlaFetch,
+};
 
 /// 48K PAL frame constants.
 pub const T_LINE_48: u32 = 224;
