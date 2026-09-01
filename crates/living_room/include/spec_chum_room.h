@@ -77,6 +77,14 @@ int sc_room_perf_snapshot(void *handle, ScRoomPerfSnapshot *out);
  */
 void sc_room_perf_set_thread_hint(uint32_t hint);
 
+/*
+ * Agent debug HTTP on the live sc_* session (#210). Requires SPEC_CHUM_AGENT_TOKEN
+ * or SPEC_CHUM_AGENT_INSECURE=1 (same as egui SPEC_CHUM_AGENT=1). Pass the sc_create
+ * handle — not a sc_room_* handle.
+ */
+int sc_agent_embed_start(void *sc_handle);
+int sc_agent_embed_stop(void *sc_handle);
+
 char *sc_room_last_error(void);
 void sc_room_string_free(char *s);
 

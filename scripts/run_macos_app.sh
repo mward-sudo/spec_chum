@@ -64,6 +64,15 @@ fi
 if [[ -n "${SPEC_CHUM_INPUT_LATENCY:-}" ]]; then
   printf 'export SPEC_CHUM_INPUT_LATENCY=%q\n' "$SPEC_CHUM_INPUT_LATENCY" >> "$MACOS_DIR/SpecChumMac"
 fi
+if [[ -n "${SPEC_CHUM_AGENT:-}" ]]; then
+  printf 'export SPEC_CHUM_AGENT=%q\n' "$SPEC_CHUM_AGENT" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_AGENT_INSECURE:-}" ]]; then
+  printf 'export SPEC_CHUM_AGENT_INSECURE=%q\n' "$SPEC_CHUM_AGENT_INSECURE" >> "$MACOS_DIR/SpecChumMac"
+fi
+if [[ -n "${SPEC_CHUM_AGENT_PORT:-}" ]]; then
+  printf 'export SPEC_CHUM_AGENT_PORT=%q\n' "$SPEC_CHUM_AGENT_PORT" >> "$MACOS_DIR/SpecChumMac"
+fi
 cat >> "$MACOS_DIR/SpecChumMac" <<EOF
 cd "$ROOT"
 exec "\$(dirname "\$0")/SpecChumMac.bin" "\$@"

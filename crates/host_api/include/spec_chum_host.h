@@ -126,6 +126,9 @@ char *sc_status(void *handle);
 char *sc_last_error(void);
 void sc_string_free(char *s);
 
+/* Promote session to shared storage for embedded agent HTTP (SpecChumMac / #210). */
+int sc_share_session(void *handle);
+
 /* Debug / observability (see docs/DEBUGGING.md and docs/AGENT_DEBUG_API.md).
  *
  * FFI-only for non-Rust shells (SpecChumMac, etc.). Agents and Rust hosts should

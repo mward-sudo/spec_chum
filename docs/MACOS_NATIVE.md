@@ -59,17 +59,33 @@ SPEC_CHUM_AUDIO_DEBUG=1 apps/macos/.build/release/SpecChumMac
 SpecChumMac uses the C ABI (`sc_debug_*`, `sc_inspect_json`, …) for in-app Debug
 menus — those entry points are **FFI-only** (see
 [`AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) Phase C). For agents and headless
-automation, run a **standalone** loopback server (no in-process embed yet —
-deferred on [#210](https://github.com/mward-sudo/spec_chum/issues/210) until
-cycle-safe):
+automation, prefer the **embedded** loopback server on the live GUI session:
 
 ```bash
 ./scripts/fetch_roms.sh
-export SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)"
+export SPEC_CHUM_AGENT=1
+export SPEC_CHUM_AGENT_INSECURE=1   # dev-only; token auth: see below
+./scripts/run_macos_app.sh   # bakes agent env into the .app launcher (Launch Services does not forward shell env)
+curl -sS http://127.0.0.1:17384/v1/health
+```
+
+For **token** auth (do not bake tokens into the staged `.app` wrapper), export
+`SPEC_CHUM_AGENT_TOKEN` in the shell and run the binary directly:
+
+```bash
+export SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)"
+apps/macos/.build/release/SpecChumMac
+```
+
+`HostBridge` calls `sc_agent_embed_start` when `SPEC_CHUM_AGENT=1` is set at launch
+(same auth env vars as `spec-chum-agent` / egui). Agents see the **same** running
+machine as the SwiftUI shell — no separate process.
+
+Standalone server (separate machine / headless) remains available:
+
+```bash
 cargo run -p agent_server --release -- --model 48k --token "$SPEC_CHUM_AGENT_TOKEN"
 # or: cargo run -p debug_cli --release -- --serve --model 48k --token "$SPEC_CHUM_AGENT_TOKEN"
-curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" http://127.0.0.1:17384/v1/health
-# Dev-only: --insecure / SPEC_CHUM_AGENT_INSECURE=1 skips the token (trusted machines only).
 ```
 
 Prefer HTTP over GUI automation or driving the SwiftUI shell. See

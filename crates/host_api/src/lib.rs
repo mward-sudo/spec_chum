@@ -6,6 +6,7 @@
 #![allow(clippy::pedantic)]
 
 pub mod ffi;
+pub mod handle;
 pub mod keymap;
 pub mod machine_config;
 pub mod prefs;
