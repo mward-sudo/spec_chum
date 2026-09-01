@@ -61,18 +61,66 @@ pub fn expected_rom_bytes(model: PrefModel) -> usize {
     }
 }
 
+const ROM_BANK_BYTES: usize = 16 * 1024;
+
 /// Validate ROM size for `model` before booting.
+///
+/// Accepts a full main-ROM image, or a single 16 KiB bank on multi-ROM models
+/// (DiagROM-style external ROM substitution at reset).
 pub fn validate_main_rom(data: &[u8], model: PrefModel) -> Result<(), MachineConfigError> {
     let expected = expected_rom_bytes(model);
     if data.len() == expected {
-        Ok(())
-    } else {
-        Err(MachineConfigError::RomSize {
+        return Ok(());
+    }
+    if data.len() == ROM_BANK_BYTES && expected > ROM_BANK_BYTES {
+        return Ok(());
+    }
+    Err(MachineConfigError::RomSize {
+        model: machine::model_title(model.to_model()).to_string(),
+        expected,
+        actual: data.len(),
+    })
+}
+
+/// Expand a 16 KiB custom ROM to the layout expected by multi-bank models.
+fn expand_main_rom_image(
+    data: &[u8],
+    model: PrefModel,
+    roots: &[PathBuf],
+) -> Result<Vec<u8>, MachineConfigError> {
+    let expected = expected_rom_bytes(model);
+    if data.len() == expected {
+        return Ok(data.to_vec());
+    }
+    if data.len() != ROM_BANK_BYTES || expected <= ROM_BANK_BYTES {
+        return Err(MachineConfigError::RomSize {
             model: machine::model_title(model.to_model()).to_string(),
             expected,
             actual: data.len(),
-        })
+        });
     }
+
+    let mut out = vec![0u8; expected];
+    out[..ROM_BANK_BYTES].copy_from_slice(data);
+
+    // ROM1+ from stock firmware when available (real hardware keeps upper ROM banks).
+    let stock_tail = machine::resolve_rom_path_in(model.to_model(), roots).and_then(|path| {
+        std::fs::read(&path)
+            .ok()
+            .filter(|stock| stock.len() >= expected)
+            .map(|stock| stock[ROM_BANK_BYTES..expected].to_vec())
+    });
+
+    if let Some(tail) = stock_tail {
+        out[ROM_BANK_BYTES..expected].copy_from_slice(&tail);
+    } else {
+        // No stock ROM — duplicate the boot bank into remaining slots.
+        for bank in (1..expected / ROM_BANK_BYTES).map(|i| i * ROM_BANK_BYTES) {
+            out[bank..bank + ROM_BANK_BYTES].copy_from_slice(data);
+        }
+    }
+
+    Ok(out)
 }
 
 /// Which optional hardware toggles are valid for a base model.
@@ -334,7 +382,8 @@ pub fn resolve_main_rom(
             source: e,
         })?;
         validate_main_rom(&data, config.base)?;
-        return Ok((data, custom.clone()));
+        let rom = expand_main_rom_image(&data, config.base, roots)?;
+        return Ok((rom, custom.clone()));
     }
     let model = config.base.to_model();
     let path =
@@ -603,6 +652,93 @@ mod tests {
         let applied = apply_user_config(&cfg, &roots).expect("apply");
         assert_eq!(applied.model, Model::Spectrum48);
         assert!(!applied.machine.has_divmmc());
+    }
+
+    #[test]
+    fn apply_diagrom_succeeds_on_16k_class_models() {
+        let dir = std::env::temp_dir();
+        let rom = dir.join(format!("spec-chum-diagrom-{}", std::process::id()));
+        std::fs::write(&rom, vec![0u8; 16 * 1024]).expect("write");
+        let roots = machine::search_roots();
+        let ok_models = [
+            PrefModel::Spectrum16K,
+            PrefModel::Spectrum48,
+            PrefModel::TimexTC2048,
+            PrefModel::TimexTS2068,
+        ];
+        for base in ok_models {
+            let cfg = UserMachineConfig {
+                custom_rom_path: Some(rom.to_string_lossy().into_owned()),
+                ..UserMachineConfig::new_named("DiagROM", base)
+            };
+            apply_user_config(&cfg, &roots).unwrap_or_else(|e| panic!("{base:?}: {e}"));
+        }
+        let _ = std::fs::remove_file(&rom);
+    }
+
+    #[test]
+    fn validate_main_rom_accepts_16k_on_128k_class() {
+        assert!(validate_main_rom(&[0u8; 16384], PrefModel::Spectrum128).is_ok());
+        assert!(validate_main_rom(&[0u8; 32768], PrefModel::Spectrum128).is_ok());
+        assert!(validate_main_rom(&[0u8; 100], PrefModel::Spectrum128).is_err());
+    }
+
+    #[test]
+    fn expand_main_rom_duplicates_boot_bank_without_stock() {
+        let data = vec![0xABu8; ROM_BANK_BYTES];
+        let expanded = expand_main_rom_image(&data, PrefModel::Spectrum128, &[]).expect("expand");
+        assert_eq!(expanded.len(), 32768);
+        assert_eq!(&expanded[..ROM_BANK_BYTES], &data[..]);
+        assert_eq!(&expanded[ROM_BANK_BYTES..], &data[..]);
+    }
+
+    #[test]
+    fn apply_diagrom_succeeds_on_128k_class_models() {
+        let dir = std::env::temp_dir();
+        let rom = dir.join(format!("spec-chum-diagrom-128k-{}", std::process::id()));
+        std::fs::write(&rom, vec![0u8; 16 * 1024]).expect("write");
+        let roots = machine::search_roots();
+        let ok_models = [PrefModel::Spectrum128, PrefModel::SpectrumPlus2];
+        for base in ok_models {
+            let cfg = UserMachineConfig {
+                custom_rom_path: Some(rom.to_string_lossy().into_owned()),
+                ..UserMachineConfig::new_named("DiagROM", base)
+            };
+            apply_user_config(&cfg, &roots).unwrap_or_else(|e| panic!("{base:?}: {e}"));
+        }
+        // Pentagon128 needs user TR-DOS ROM — skip when absent (CI has no pentagon dumps).
+        if machine::read_trdos_rom(Model::Pentagon128).is_ok() {
+            let cfg = UserMachineConfig {
+                custom_rom_path: Some(rom.to_string_lossy().into_owned()),
+                ..UserMachineConfig::new_named("DiagROM", PrefModel::Pentagon128)
+            };
+            apply_user_config(&cfg, &roots).expect("Pentagon128 DiagROM");
+        }
+        let _ = std::fs::remove_file(&rom);
+    }
+
+    #[test]
+    fn apply_diagrom_succeeds_on_plus3_with_16k_rom() {
+        let dir = std::env::temp_dir();
+        let rom = dir.join(format!("spec-chum-diagrom-plus3-{}", std::process::id()));
+        std::fs::write(&rom, vec![0u8; 16 * 1024]).expect("write");
+        let roots = machine::search_roots();
+        let cfg = UserMachineConfig {
+            custom_rom_path: Some(rom.to_string_lossy().into_owned()),
+            ..UserMachineConfig::new_named("DiagROM", PrefModel::SpectrumPlus3)
+        };
+        apply_user_config(&cfg, &roots).expect("16K DiagROM expands for +3");
+        let _ = std::fs::remove_file(&rom);
+    }
+
+    #[test]
+    fn canonical_base_slug_decodes_for_custom_config_json() {
+        let json = r#"{"id":"x","name":"t","base":"spectrum48"}"#;
+        let cfg: UserMachineConfig = serde_json::from_str(json).expect("decode");
+        assert_eq!(cfg.base, PrefModel::Spectrum48);
+        let json = r#"{"id":"x","name":"t","base":"spectrum_plus2_a"}"#;
+        let cfg: UserMachineConfig = serde_json::from_str(json).expect("decode +2A");
+        assert_eq!(cfg.base, PrefModel::SpectrumPlus2A);
     }
 
     #[test]
