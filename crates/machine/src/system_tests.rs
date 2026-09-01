@@ -137,7 +137,14 @@ fn load_program_tap(machine: &mut Machine, tap: &Path) {
     machine.insert_tape(TapPlayer::new(image));
     match machine.model() {
         Model::Spectrum48 => wait_48_basic_prompt(machine, 500),
-        Model::Spectrum128 | Model::SpectrumPlus2A | Model::SpectrumPlus3 => {
+        Model::Spectrum128
+        | Model::Spectrum16K
+        | Model::SpectrumPlus2
+        | Model::SpectrumPlus2A
+        | Model::SpectrumPlus3
+        | Model::Pentagon128
+        | Model::TimexTC2048
+        | Model::TimexTS2068 => {
             for _ in 0..200 {
                 let _ = machine.run_frame();
             }
@@ -256,9 +263,19 @@ fn new_model(model: Model) -> Option<Machine> {
             let rom = std::fs::read(rom48_path()).ok()?;
             Machine::new_48k(&rom).ok()
         }
+        Model::Spectrum16K => {
+            let rom = std::fs::read(rom48_path()).ok()?;
+            Machine::new_16k(&rom).ok()
+        }
         Model::Spectrum128 => {
             let rom = std::fs::read(rom128_path()).ok()?;
             Machine::new_128k(&rom).ok()
+        }
+        Model::SpectrumPlus2 => {
+            let path =
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus2/plus2uk.rom");
+            let rom = std::fs::read(path).ok()?;
+            Machine::new_plus2(&rom).ok()
         }
         Model::SpectrumPlus3 => {
             let rom = rom_plus3()?;
@@ -268,6 +285,8 @@ fn new_model(model: Model) -> Option<Machine> {
             let rom = rom_plus2a().or_else(rom_plus3)?;
             Machine::new_plus2a(&rom).ok()
         }
+        // System-test TAPs target Sinclair UK machines; other models are out of scope here.
+        Model::Pentagon128 | Model::TimexTC2048 | Model::TimexTS2068 => None,
     }
 }
 
