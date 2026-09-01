@@ -434,9 +434,15 @@ final class HostBridge: ObservableObject {
     /// Skip UserDefaults writes while restoring published prefs in bulk.
     private var suppressPrefsPersist = false
 
-    /// Toolbar / File label: include Disk only on +3.
+    /// Toolbar / File label: Disk on +3, TRD on Beta-capable models.
     var openMediaTitle: String {
-        model.supportsDisk ? "Open Tape / Disk" : "Open Tape"
+        if model.supportsDisk {
+            "Open Tape / Disk"
+        } else if model.supportsBeta {
+            "Open Tape / TRD"
+        } else {
+            "Open Tape"
+        }
     }
 
     /// Menu item with ellipsis.
@@ -947,6 +953,8 @@ final class HostBridge: ObservableObject {
             openSnapshot(at: url)
         case "rzx":
             openRzx(at: url)
+        case "trd":
+            openTrd(at: url)
         default:
             openMedia(at: url)
         }
@@ -1712,7 +1720,8 @@ final class HostBridge: ObservableObject {
             status = HostBridge.takeLastError() ?? "TRD load failed"
         } else {
             mediaTitle = url.lastPathComponent
-            status = "TRD inserted — attach TR-DOS ROM, then RANDOMIZE USR 15616"
+            refreshStatus()
+            noteRecentFile(url)
         }
     }
 
@@ -1724,6 +1733,20 @@ final class HostBridge: ObservableObject {
         } else {
             refreshStatus()
         }
+    }
+
+    func attachBeta() {
+        guard let handle else { return }
+        if sc_attach_beta(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Beta Disk attach failed"
+        } else {
+            refreshStatus()
+        }
+    }
+
+    var hasBeta: Bool {
+        guard let handle else { return false }
+        return sc_has_beta(handle) != 0
     }
 
     /// Queue egui-parity `LOAD ""` [CODE] via `sc_set_key`.
@@ -1739,7 +1762,7 @@ final class HostBridge: ObservableObject {
         presentInstantMediaPanel()
     }
 
-    /// Tape-only filters; Instant is flash Type LOAD. Use Open Tape / Disk for `.dsk`.
+    /// Tape-only filters; Instant is flash Type LOAD. Use Open for `.dsk` / `.trd`.
     private func presentInstantMediaPanel() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -1801,7 +1824,8 @@ final class HostBridge: ObservableObject {
         }
     }
 
-    /// NSOpenPanel for tape (and `.dsk` on +3). Snapshots/RZX stay separate File items.
+    /// NSOpenPanel for tape (`.dsk` on +3, `.trd` on Beta-capable models).
+    /// Snapshots/RZX stay separate File items.
     func presentOpenMediaPanel() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -1813,6 +1837,9 @@ final class HostBridge: ObservableObject {
         if model.supportsDisk {
             types.append(UTType(filenameExtension: "dsk") ?? .data)
             panel.title = "Open TAP / TZX / DSK"
+        } else if model.supportsBeta {
+            types.append(UTType(filenameExtension: "trd") ?? .data)
+            panel.title = "Open TAP / TZX / TRD"
         } else {
             panel.title = "Open TAP / TZX"
         }
@@ -1822,11 +1849,14 @@ final class HostBridge: ObservableObject {
         }
     }
 
-    /// Route by extension: `.dsk` → disk (+3), else tape.
+    /// Route by extension: `.dsk` → +3 disk, `.trd` → Beta, else tape.
     func openMedia(at url: URL) {
-        if url.pathExtension.lowercased() == "dsk" {
+        switch url.pathExtension.lowercased() {
+        case "dsk":
             openDsk(at: url)
-        } else {
+        case "trd":
+            openTrd(at: url)
+        default:
             openTape(at: url)
         }
     }

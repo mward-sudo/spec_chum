@@ -732,6 +732,7 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
     assert_eq!(hw["has_multiface"], false);
     assert_eq!(hw["has_divmmc"], false);
     assert_eq!(hw["has_interface1"], false);
+    assert_eq!(hw["has_beta"], false);
 
     let dir = std::env::temp_dir().join("spec_chum_agent_api_hw");
     std::fs::create_dir_all(&dir).expect("create hw fixture dir");
@@ -793,6 +794,19 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
         .expect("if1");
     assert_eq!(if1.status(), StatusCode::NO_CONTENT);
 
+    let beta = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/beta")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("beta");
+    assert_eq!(beta.status(), StatusCode::NO_CONTENT);
+
     let status = app
         .clone()
         .oneshot(
@@ -810,6 +824,7 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
     assert_eq!(hw["has_multiface"], true);
     assert_eq!(hw["has_divmmc"], true);
     assert_eq!(hw["has_interface1"], true);
+    assert_eq!(hw["has_beta"], true);
 
     // Multiface is 48K-only — reject on 128K.
     let plane128 = Arc::new(ControlPlane::new(ModelId::Spectrum128, false));

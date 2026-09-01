@@ -3,8 +3,9 @@
 //! Ports (low byte, when TR-DOS is paged): `0x1F` cmd/status, `0x3F` track,
 //! `0x5F` sector, `0x7F` data, `0xFF` system.
 //!
-//! System port `0xFF` (Fuse / Beta 128): write selects drive (`D0–D1`), HLT
-//! (`D3`), side (`D4` set = side 0), MFM (`D5`). Read: `D7` = INTRQ, `D6` = DRQ.
+//! System port `0xFF` (Fuse / Beta 128): write selects drive (`D0–D1`), VG93
+//! `/RES` (`D2` low = reset), HLT (`D3`), side (`D4` set = side 0), MFM (`D5`).
+//! Read: `D7` = INTRQ, `D6` = DRQ.
 //!
 //! Opcode-fetch (M1) paging: ROM in at `0x3C00–0x3DFF` (48K) or `0x3D00–0x3DFF`
 //! (128K), out at `PC >= 0x4000`.
@@ -55,6 +56,12 @@ pub struct BetaDisk {
     multiple: bool,
     /// Last command was Type I (status bits TRACK0 / HEAD).
     type_i_status: bool,
+    /// VG93 commands issued (catalog / RUN diagnostics).
+    pub cmd_count: u32,
+    /// Successful Type II sector loads.
+    pub sector_read_count: u32,
+    /// Most recent command bytes (oldest → newest in `[..cmd_count.min(4)]` order is not kept; last four).
+    pub recent_cmds: [u8; 4],
 }
 
 impl Default for BetaDisk {
@@ -84,6 +91,9 @@ impl BetaDisk {
             xfer: Xfer::Idle,
             multiple: false,
             type_i_status: true,
+            cmd_count: 0,
+            sector_read_count: 0,
+            recent_cmds: [0; 4],
         }
     }
 
@@ -158,7 +168,11 @@ impl BetaDisk {
                 true
             }
             0xff => {
+                // D2 low holds VG93 /RES (Beta 128; TR-DOS `XOR A; OUT (#FF),A`).
                 self.system = value;
+                if value & 0x04 == 0 {
+                    self.reset_vg93();
+                }
                 true
             }
             _ => false,
@@ -190,6 +204,28 @@ impl BetaDisk {
             }
             _ => None,
         }
+    }
+
+    fn reset_vg93(&mut self) {
+        self.xfer = Xfer::Idle;
+        self.drq = false;
+        self.intrq = false;
+        self.buffer.clear();
+        self.buffer_i = 0;
+        self.multiple = false;
+        self.type_i_status = true;
+        self.status = self.type_i_status_value();
+    }
+
+    fn type_i_status_value(&self) -> u8 {
+        let mut s = 0u8;
+        if !self.disk_ready() {
+            s |= STAT_NOT_READY;
+        }
+        if self.track == 0 {
+            s |= STAT_TRACK0;
+        }
+        s | STAT_HEAD
     }
 
     fn drive(&self) -> u8 {
@@ -240,20 +276,15 @@ impl BetaDisk {
         self.xfer = Xfer::Idle;
         self.drq = false;
         self.intrq = true;
-        let mut s = 0u8;
-        if !self.disk_ready() {
-            s |= STAT_NOT_READY;
-        }
-        if self.track == 0 {
-            s |= STAT_TRACK0;
-        }
-        s |= STAT_HEAD;
-        self.status = s;
+        self.status = self.type_i_status_value();
     }
 
     fn write_command(&mut self, cmd: u8) {
         self.intrq = false;
         self.drq = false;
+        self.cmd_count = self.cmd_count.saturating_add(1);
+        self.recent_cmds.rotate_left(1);
+        self.recent_cmds[3] = cmd;
 
         if cmd & 0xf0 == 0xd0 {
             self.xfer = Xfer::Idle;
@@ -413,6 +444,7 @@ impl BetaDisk {
         self.drq = true;
         self.intrq = false;
         self.status = STAT_DRQ;
+        self.sector_read_count = self.sector_read_count.saturating_add(1);
         debug_assert_eq!(self.buffer.len(), TRD_SECTOR_SIZE);
         true
     }
@@ -754,5 +786,39 @@ mod tests {
         assert!(!beta.paged);
         beta.notify_m1(0x3c00, 0x3c00);
         assert!(beta.paged, "48K window pages at 0x3C00");
+    }
+
+    #[test]
+    fn system_port_bit2_low_resets_vg93() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0xaa, 0xbb));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x80);
+        assert_eq!(beta.in_port(0x00ff), Some(0x40), "DRQ during Type II");
+        assert_eq!(beta.cmd_count, 1);
+        beta.out_port(0x00ff, 0x00);
+        assert_eq!(beta.in_port(0x00ff), Some(0x00), "reset clears DRQ/INTRQ");
+        assert_eq!(beta.in_port(0x001f).unwrap() & STAT_DRQ, 0);
+        beta.out_port(0x00ff, SYS_DEFAULT);
+        beta.out_port(0x001f, 0x80);
+        assert_eq!(beta.in_port(0x007f), Some(0xaa));
+        assert_eq!(beta.sector_read_count, 2);
+    }
+
+    #[test]
+    fn read_synthetic_boot_basic_from_track_1() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 1);
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x80);
+        assert_eq!(beta.in_port(0x007f), Some(0x00));
+        assert_eq!(beta.in_port(0x007f), Some(0x0a));
+        assert_eq!(beta.in_port(0x007f), Some(0x17));
+        assert_eq!(beta.in_port(0x007f), Some(0x00));
+        assert_eq!(beta.in_port(0x007f), Some(0xf4)); // POKE
     }
 }

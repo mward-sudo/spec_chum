@@ -1,7 +1,7 @@
 //! User-defined machine configurations (#187).
 //!
 //! Serializable profiles: base model + optional hardware + ROM override.
-//! Apply logic is shared by egui and tests; macOS parity is follow-up #169.
+//! Apply logic is shared by egui and SpecChumMac (`sc_apply_user_config_json`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -667,6 +667,10 @@ mod tests {
             PrefModel::TimexTS2068,
         ];
         for base in ok_models {
+            if base == PrefModel::TimexTS2068 && machine::read_exrom(Model::TimexTS2068).is_err() {
+                eprintln!("skip TimexTS2068: EX-ROM missing");
+                continue;
+            }
             let cfg = UserMachineConfig {
                 custom_rom_path: Some(rom.to_string_lossy().into_owned()),
                 ..UserMachineConfig::new_named("DiagROM", base)

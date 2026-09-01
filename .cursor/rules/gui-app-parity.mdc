@@ -18,7 +18,7 @@ Spec Chum has **two** first-party GUI hosts that must stay feature-aligned:
 - Shared behaviour lives in shared Rust (`control_plane`, `host_api`, `machine`, …). Hosts are thin adapters.
 - Agent Debug HTTP, tape/disk/media, input, Debug/inspect, prefs that map to `UiPreferences` / session prefs, and host screenshots (`/v1/framebuffer`, `/v1/host/display`, `/v1/host/window`) are **not** egui-only or Mac-only.
 - When adding or changing a GUI-visible or agent-visible feature: **update both hosts** (or the shared backend both use) in the **same PR**, plus docs (`docs/MACOS_NATIVE.md`, `docs/AGENT_DEBUG_API.md`, `AGENTS.md` as needed).
-- Do **not** ship “works in egui, SpecChumMac later” without an explicit follow-up issue linked from the PR (`Refs #N`) and a note in the PR body.
+- **Never defer host parity.** Do not ship “works in egui, SpecChumMac later” (or the reverse), even with a follow-up issue. Media, hardware attach, agent HTTP, and inspect/status land on both hosts before the change is done.
 
 ## Platform-specific (allowed divergence)
 
@@ -31,3 +31,4 @@ Spec Chum has **two** first-party GUI hosts that must stay feature-aligned:
 - Grep both `crates/app` and `apps/macos` (and `living_room` agent FFI) for the feature.
 - If `SPEC_CHUM_AGENT=1` embed is involved, verify SpecChumMac `HostBridge` + `sc_agent_*` as well as egui.
 - Rebuild SpecChumMac when living_room / host_api / agent routes change (`./scripts/build_macos_app.sh` / `run_macos_app.sh`).
+- If either host is missing the feature, the work is not finished — do not file a follow-up and move on.

@@ -499,6 +499,21 @@ impl HostSession {
         Ok(())
     }
 
+    /// Attach Beta Disk / TR-DOS with no media (48K/128K).
+    pub fn attach_beta(&mut self) -> Result<(), HostError> {
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        m.attach_beta().map_err(HostError::Message)?;
+        self.status = "Beta Disk attached".into();
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn has_beta(&self) -> bool {
+        self.machine.as_ref().is_some_and(Machine::has_beta)
+    }
+
     /// Best-effort ROM load for the current model (persisted paths, then workspace search).
     fn try_autoload_rom(&mut self) {
         let model = self.model.to_model();
@@ -2033,6 +2048,38 @@ mod tests {
         std::fs::write(&path, &raw).expect("write trd");
 
         let err = s.load_trd(&path).expect_err("+3 must reject TRD");
+        match err {
+            HostError::Message(msg) => {
+                assert!(
+                    msg.contains("Beta") || msg.contains("+2A") || msg.contains("+3"),
+                    "expected Beta rejection, got {msg}"
+                );
+            }
+            other => panic!("expected Message rejection, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn attach_beta_on_48k_and_reject_plus3() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        assert!(!s.has_beta());
+        s.attach_beta().expect("attach");
+        assert!(s.has_beta());
+        assert!(s.status().contains("Beta"));
+
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus3/plus3.rom");
+        let Ok(rom) = std::fs::read(&p) else {
+            eprintln!("skip: roms/plus3/plus3.rom missing");
+            return;
+        };
+        let mut plus3 = HostSession::new(ModelId::SpectrumPlus3, false);
+        plus3.load_rom_bytes(&rom).expect("rom");
+        let err = plus3.attach_beta().expect_err("+3 must reject Beta");
         match err {
             HostError::Message(msg) => {
                 assert!(

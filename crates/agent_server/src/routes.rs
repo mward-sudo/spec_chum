@@ -97,6 +97,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/hardware/divmmc", post(attach_divmmc))
         .route("/v1/hardware/divmmc/sd", post(load_divmmc_sd))
         .route("/v1/hardware/divmmc/eeprom", post(load_divmmc_eeprom))
+        .route("/v1/hardware/beta", post(attach_beta))
         .route("/v1/hardware/trdos/rom", post(load_trdos_rom))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -1170,6 +1171,10 @@ async fn insert_mdr(
 
 async fn attach_divmmc(State(state): State<AppState>, headers: HeaderMap) -> Response {
     auth_empty(&state, &headers, || state.plane.attach_divmmc())
+}
+
+async fn attach_beta(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_empty(&state, &headers, || state.plane.attach_beta())
 }
 
 async fn load_divmmc_sd(

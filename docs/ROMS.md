@@ -116,7 +116,7 @@ Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
 | `roms/pentagon/pentagon.rom` | 32 KiB | Main Pentagon firmware (also accepts `128p.rom`) |
 | `roms/pentagon/trdos.rom` | 16 KiB | TR-DOS for Beta Disk — both files required before the model enables |
 
-Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. TR-DOS boot depth still tracked in [#140](https://github.com/mward-sudo/spec_chum/issues/140).
+Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. A synthetic TR-DOS `boot` BASIC disk is the always-on fixture in [#140](https://github.com/mward-sudo/spec_chum/issues/140) (`tests/fixtures/trdos/README.md`); real `trdos.rom` `RUN` is still open. Pentagon auto-boot depth can follow once that path is green.
 
 ### Timex TC2048 / TS2068 — fetched paths (#192)
 
