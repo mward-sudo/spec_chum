@@ -3,6 +3,7 @@
 // Bevy system signatures use elided lifetimes extensively; workspace rust_2018_idioms warns.
 #![allow(elided_lifetimes_in_paths)]
 
+pub mod agent_embed;
 #[cfg(feature = "standalone")]
 pub mod audio;
 pub mod camera;
@@ -46,6 +47,8 @@ mod ensure_host_api_linked {
         // Reference the FFI module so its `#[no_mangle]` symbols land in the .a.
         let _ = spec_chum_host::ffi::sc_create
             as unsafe extern "C" fn(u32, i32) -> *mut std::ffi::c_void;
+        let _ = crate::agent_embed::sc_agent_embed_start
+            as unsafe extern "C" fn(*mut std::ffi::c_void) -> i32;
     }
 
     #[used]

@@ -12,17 +12,23 @@
 #![allow(unsafe_code)]
 // C ABI entry points cannot be `unsafe fn` for C callers; validity is documented.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(unused_mut)] // SessionAccess mut binding required for mutating calls; many sc_* are read-only.
 
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::path::Path;
 use std::ptr;
 use std::sync::Mutex;
 
+use crate::handle::{SessionHandle, SessionInner};
 use crate::session::{HostSession, ModelId};
 
 thread_local! {
     static LAST_ERROR: Mutex<Option<CString>> = const { Mutex::new(None) };
+    static FB_SNAPSHOT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static FB_META: RefCell<(usize, c_uint, c_uint)> = const { RefCell::new((0, 0, 0)) };
+    static AUDIO_SNAPSHOT: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
 }
 
 fn set_last_error(msg: impl Into<String>) {
@@ -42,12 +48,19 @@ fn clear_last_error() {
     });
 }
 
-fn session_mut<'a>(handle: *mut c_void) -> Option<&'a mut HostSession> {
-    if handle.is_null() {
-        None
+fn session_mut(handle: *mut c_void) -> Option<crate::handle::SessionAccess<'static>> {
+    crate::handle::session_access(handle)
+}
+
+/// Promote session for embedded agent HTTP. Returns 0 on success.
+#[no_mangle]
+pub extern "C" fn sc_share_session(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    if crate::handle::share_session_arc(handle).is_some() {
+        0
     } else {
-        // SAFETY: handle was created by `sc_create` as `Box<HostSession>`.
-        Some(unsafe { &mut *(handle.cast::<HostSession>()) })
+        set_last_error("null handle");
+        -1
     }
 }
 
@@ -60,7 +73,10 @@ pub extern "C" fn sc_create(model: c_uint, with_border: c_int) -> *mut c_void {
         return ptr::null_mut();
     };
     let session = HostSession::new(model, with_border != 0);
-    Box::into_raw(Box::new(session)).cast()
+    Box::into_raw(Box::new(SessionHandle {
+        inner: SessionInner::Local(std::cell::RefCell::new(session)),
+    }))
+    .cast()
 }
 
 /// Destroy a session created by [`sc_create`].
@@ -70,13 +86,13 @@ pub extern "C" fn sc_destroy(handle: *mut c_void) {
         return;
     }
     // SAFETY: handle from `sc_create`; unique ownership.
-    drop(unsafe { Box::from_raw(handle.cast::<HostSession>()) });
+    drop(unsafe { Box::from_raw(handle.cast::<SessionHandle>()) });
 }
 
 #[no_mangle]
 pub extern "C" fn sc_set_model(handle: *mut c_void, model: c_uint) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -92,7 +108,7 @@ pub extern "C" fn sc_set_model(handle: *mut c_void, model: c_uint) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_get_model(handle: *mut c_void) -> c_uint {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return c_uint::MAX;
     };
@@ -219,7 +235,7 @@ pub extern "C" fn sc_install_model_rom(
 #[no_mangle]
 pub extern "C" fn sc_load_rom(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -245,7 +261,7 @@ pub extern "C" fn sc_load_rom(handle: *mut c_void, path: *const c_char) -> c_int
 #[no_mangle]
 pub extern "C" fn sc_load_rom_bytes(handle: *mut c_void, data: *const u8, len: usize) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -267,7 +283,7 @@ pub extern "C" fn sc_load_rom_bytes(handle: *mut c_void, data: *const u8, len: u
 #[no_mangle]
 pub extern "C" fn sc_reset(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -282,45 +298,85 @@ pub extern "C" fn sc_reset(handle: *mut c_void) -> c_int {
 
 #[no_mangle]
 pub extern "C" fn sc_set_running(handle: *mut c_void, running: c_int) {
-    if let Some(s) = session_mut(handle) {
+    if let Some(mut s) = session_mut(handle) {
         s.set_running(running != 0);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn sc_set_border(handle: *mut c_void, with_border: c_int) {
-    if let Some(s) = session_mut(handle) {
+    if let Some(mut s) = session_mut(handle) {
         s.set_border(with_border != 0);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn sc_run_frame(handle: *mut c_void) {
-    if let Some(s) = session_mut(handle) {
+    if let Some(mut s) = session_mut(handle) {
         s.run_frame();
     }
 }
 
-/// Pointer to RGBA8 framebuffer (row-major). Invalidated by destroy / border change.
+/// Pointer to RGBA8 framebuffer snapshot (row-major). Valid until the next call.
 #[no_mangle]
 pub extern "C" fn sc_framebuffer_ptr(handle: *mut c_void) -> *const u8 {
-    session_mut(handle).map_or(ptr::null(), |s| s.framebuffer().as_ptr())
+    let Some(s) = session_mut(handle) else {
+        return ptr::null();
+    };
+    let fb = s.framebuffer();
+    let w = s.width() as c_uint;
+    let h = s.height() as c_uint;
+    let key = handle as usize;
+    FB_META.with(|meta| *meta.borrow_mut() = (key, w, h));
+    FB_SNAPSHOT.with(|cell| {
+        let mut buf = cell.borrow_mut();
+        buf.clear();
+        buf.extend_from_slice(fb);
+        buf.as_ptr()
+    })
+}
+
+fn snapshotted_fb_dims(handle: *mut c_void) -> Option<(c_uint, c_uint)> {
+    if handle.is_null() {
+        return None;
+    }
+    let key = handle as usize;
+    FB_SNAPSHOT.with(|cell| {
+        if cell.borrow().is_empty() {
+            None
+        } else {
+            FB_META.with(|meta| {
+                let (cached_key, w, h) = *meta.borrow();
+                if cached_key == key {
+                    Some((w, h))
+                } else {
+                    None
+                }
+            })
+        }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn sc_framebuffer_width(handle: *mut c_void) -> c_uint {
+    if let Some((w, _)) = snapshotted_fb_dims(handle) {
+        return w;
+    }
     session_mut(handle).map_or(0, |s| s.width() as c_uint)
 }
 
 #[no_mangle]
 pub extern "C" fn sc_framebuffer_height(handle: *mut c_void) -> c_uint {
+    if let Some((_, h)) = snapshotted_fb_dims(handle) {
+        return h;
+    }
     session_mut(handle).map_or(0, |s| s.height() as c_uint)
 }
 
 #[no_mangle]
 pub extern "C" fn sc_open_tape(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -346,7 +402,7 @@ pub extern "C" fn sc_open_tape(handle: *mut c_void, path: *const c_char) -> c_in
 #[no_mangle]
 pub extern "C" fn sc_load_snapshot(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -372,7 +428,7 @@ pub extern "C" fn sc_load_snapshot(handle: *mut c_void, path: *const c_char) -> 
 #[no_mangle]
 pub extern "C" fn sc_load_rzx(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -398,7 +454,7 @@ pub extern "C" fn sc_load_rzx(handle: *mut c_void, path: *const c_char) -> c_int
 #[no_mangle]
 pub extern "C" fn sc_load_dsk(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -424,7 +480,7 @@ pub extern "C" fn sc_load_dsk(handle: *mut c_void, path: *const c_char) -> c_int
 #[no_mangle]
 pub extern "C" fn sc_load_trd(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -450,7 +506,7 @@ pub extern "C" fn sc_load_trd(handle: *mut c_void, path: *const c_char) -> c_int
 #[no_mangle]
 pub extern "C" fn sc_load_trdos_rom(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -476,7 +532,7 @@ pub extern "C" fn sc_load_trdos_rom(handle: *mut c_void, path: *const c_char) ->
 #[no_mangle]
 pub extern "C" fn sc_tape_play(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -492,7 +548,7 @@ pub extern "C" fn sc_tape_play(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_tape_pause(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -508,7 +564,7 @@ pub extern "C" fn sc_tape_pause(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_tape_rewind(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -540,7 +596,7 @@ pub extern "C" fn sc_tape_progress(
     pulse_index: *mut c_uint,
     pulse_count: *mut c_uint,
 ) -> c_int {
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return -1;
     };
     let Some(p) = s.tape_progress() else {
@@ -574,7 +630,7 @@ pub extern "C" fn sc_tape_get_load_options(
     flash_load: *mut c_int,
     speed: *mut c_uint,
 ) -> c_int {
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return -1;
     };
     let Some(opts) = s.tape_load_options() else {
@@ -600,7 +656,7 @@ pub extern "C" fn sc_tape_get_load_options_ex(
     speed: *mut c_uint,
     experience_load: *mut c_int,
 ) -> c_int {
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return -1;
     };
     let Some(opts) = s.tape_load_options() else {
@@ -635,7 +691,7 @@ pub extern "C" fn sc_tape_set_load_options(
     speed: c_uint,
 ) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -669,7 +725,7 @@ pub extern "C" fn sc_tape_set_load_options_ex(
     experience_load: c_int,
 ) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -686,12 +742,19 @@ pub extern "C" fn sc_tape_set_load_options_ex(
     }
 }
 
-/// Pointer to mono f32 PCM from the last `sc_run_frame` (valid until next mutating call).
+/// Pointer to mono f32 PCM snapshot from the last `sc_run_frame` (valid until next call).
 #[no_mangle]
 pub extern "C" fn sc_audio_ptr(handle: *mut c_void) -> *const f32 {
-    session_mut(handle)
-        .map(|s| s.audio_pcm().as_ptr())
-        .unwrap_or(ptr::null())
+    let Some(s) = session_mut(handle) else {
+        return ptr::null();
+    };
+    let pcm = s.audio_pcm();
+    AUDIO_SNAPSHOT.with(|cell| {
+        let mut buf = cell.borrow_mut();
+        buf.clear();
+        buf.extend_from_slice(pcm);
+        buf.as_ptr()
+    })
 }
 
 /// Number of mono samples in [`sc_audio_ptr`].
@@ -716,7 +779,7 @@ pub extern "C" fn sc_set_key(
     pressed: c_int,
 ) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -732,7 +795,7 @@ pub extern "C" fn sc_set_key(
 #[no_mangle]
 pub extern "C" fn sc_clear_keys(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -748,7 +811,7 @@ pub extern "C" fn sc_clear_keys(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_set_joystick_mode(handle: *mut c_void, mode: c_uint) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -768,7 +831,7 @@ pub extern "C" fn sc_set_joystick_mode(handle: *mut c_void, mode: c_uint) -> c_i
 #[no_mangle]
 pub extern "C" fn sc_set_joystick(handle: *mut c_void, mask: c_uint) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -784,7 +847,7 @@ pub extern "C" fn sc_set_joystick(handle: *mut c_void, mask: c_uint) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_clear_joystick(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -800,7 +863,7 @@ pub extern "C" fn sc_clear_joystick(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_set_mouse_delta(handle: *mut c_void, dx: c_int, dy: c_int) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -823,7 +886,7 @@ pub extern "C" fn sc_set_mouse_buttons(
     middle: c_int,
 ) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -839,7 +902,7 @@ pub extern "C" fn sc_set_mouse_buttons(
 #[no_mangle]
 pub extern "C" fn sc_attach_multiface(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -865,7 +928,7 @@ pub extern "C" fn sc_attach_multiface(handle: *mut c_void, path: *const c_char) 
 #[no_mangle]
 pub extern "C" fn sc_multiface_nmi(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -880,7 +943,7 @@ pub extern "C" fn sc_multiface_nmi(handle: *mut c_void) -> c_int {
 
 #[no_mangle]
 pub extern "C" fn sc_has_multiface(handle: *mut c_void) -> c_int {
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return 0;
     };
     i32::from(s.has_multiface())
@@ -890,7 +953,7 @@ pub extern "C" fn sc_has_multiface(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_attach_interface1(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -906,7 +969,7 @@ pub extern "C" fn sc_attach_interface1(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_load_interface1_rom(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -932,7 +995,7 @@ pub extern "C" fn sc_load_interface1_rom(handle: *mut c_void, path: *const c_cha
 #[no_mangle]
 pub extern "C" fn sc_insert_mdr(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -958,7 +1021,7 @@ pub extern "C" fn sc_insert_mdr(handle: *mut c_void, path: *const c_char) -> c_i
 #[no_mangle]
 pub extern "C" fn sc_insert_dck(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -984,7 +1047,7 @@ pub extern "C" fn sc_insert_dck(handle: *mut c_void, path: *const c_char) -> c_i
 #[no_mangle]
 pub extern "C" fn sc_eject_dck(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -999,7 +1062,7 @@ pub extern "C" fn sc_eject_dck(handle: *mut c_void) -> c_int {
 
 #[no_mangle]
 pub extern "C" fn sc_has_timex_dock(handle: *mut c_void) -> c_int {
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return 0;
     };
     i32::from(s.has_timex_dock())
@@ -1008,7 +1071,7 @@ pub extern "C" fn sc_has_timex_dock(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_has_interface1(handle: *mut c_void) -> c_int {
     // Returns 1 if Interface 1 is attached, 0 if absent or handle is null.
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return 0;
     };
     i32::from(s.has_interface1())
@@ -1017,7 +1080,7 @@ pub extern "C" fn sc_has_interface1(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_attach_divmmc(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1033,7 +1096,7 @@ pub extern "C" fn sc_attach_divmmc(handle: *mut c_void) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_load_divmmc_sd(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1059,7 +1122,7 @@ pub extern "C" fn sc_load_divmmc_sd(handle: *mut c_void, path: *const c_char) ->
 #[no_mangle]
 pub extern "C" fn sc_load_divmmc_eeprom(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1084,7 +1147,7 @@ pub extern "C" fn sc_load_divmmc_eeprom(handle: *mut c_void, path: *const c_char
 
 #[no_mangle]
 pub extern "C" fn sc_has_divmmc(handle: *mut c_void) -> c_int {
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return 0;
     };
     i32::from(s.has_divmmc())
@@ -1093,7 +1156,7 @@ pub extern "C" fn sc_has_divmmc(handle: *mut c_void) -> c_int {
 /// Heap-allocated UTF-8 C string; free with [`sc_string_free`].
 #[no_mangle]
 pub extern "C" fn sc_status(handle: *mut c_void) -> *mut c_char {
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         return ptr::null_mut();
     };
     CString::new(s.status().replace('\0', ""))
@@ -1213,7 +1276,7 @@ fn require_u16(addr: c_uint, what: &str) -> Option<u16> {
 #[no_mangle]
 pub extern "C" fn sc_peek(handle: *mut c_void, addr: c_uint, out: *mut u8) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1243,7 +1306,7 @@ pub extern "C" fn sc_peek(handle: *mut c_void, addr: c_uint, out: *mut u8) -> c_
 #[no_mangle]
 pub extern "C" fn sc_poke(handle: *mut c_void, addr: c_uint, value: u8) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1263,7 +1326,7 @@ pub extern "C" fn sc_poke(handle: *mut c_void, addr: c_uint, value: u8) -> c_int
 #[no_mangle]
 pub extern "C" fn sc_inspect_json(handle: *mut c_void) -> *mut c_char {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return ptr::null_mut();
     };
@@ -1291,7 +1354,7 @@ pub extern "C" fn sc_regs(
     iy: *mut u16,
 ) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1336,7 +1399,7 @@ pub extern "C" fn sc_regs(
 #[no_mangle]
 pub extern "C" fn sc_step(handle: *mut c_void) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1352,7 +1415,7 @@ pub extern "C" fn sc_step(handle: *mut c_void) -> c_int {
 /// Set debugger paused (no-op on null handle / no machine).
 #[no_mangle]
 pub extern "C" fn sc_set_paused(handle: *mut c_void, paused: c_int) {
-    if let Some(s) = session_mut(handle) {
+    if let Some(mut s) = session_mut(handle) {
         s.set_paused(paused != 0);
     }
 }
@@ -1361,7 +1424,7 @@ pub extern "C" fn sc_set_paused(handle: *mut c_void, paused: c_int) {
 #[no_mangle]
 pub extern "C" fn sc_add_breakpoint(handle: *mut c_void, pc: c_uint) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1381,7 +1444,7 @@ pub extern "C" fn sc_add_breakpoint(handle: *mut c_void, pc: c_uint) -> c_int {
 #[no_mangle]
 pub extern "C" fn sc_run_until_break(handle: *mut c_void, max_insns: c_uint) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };
@@ -1404,7 +1467,7 @@ pub extern "C" fn sc_debug_dump_json() -> *mut c_char {
 #[no_mangle]
 pub extern "C" fn sc_apply_user_config_json(handle: *mut c_void, json: *const c_char) -> c_int {
     clear_last_error();
-    let Some(s) = session_mut(handle) else {
+    let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
         return -1;
     };

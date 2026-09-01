@@ -469,6 +469,7 @@ final class HostBridge: ObservableObject {
         refreshRomSetupQuiet()
         maybeAutoPresentRomSetup()
         refreshStatus()
+        maybeEmbedAgentServer()
         // Prefer persisted tape prefs over host defaults after create.
         pushTapeLoadOptions()
         _ = applyJoystickMode(joystickMode)
@@ -517,6 +518,19 @@ final class HostBridge: ObservableObject {
             } else {
                 NSLog("spec-chum-audio: automation opened tape %@", url.lastPathComponent)
             }
+        }
+    }
+
+    /// When `SPEC_CHUM_AGENT=1`, embed loopback HTTP on the live session (parity with egui #221).
+    private func maybeEmbedAgentServer() {
+        guard let handle else { return }
+        guard ProcessInfo.processInfo.environment["SPEC_CHUM_AGENT"] == "1" else { return }
+        if sc_agent_embed_start(handle) == 0 {
+            let port = ProcessInfo.processInfo.environment["SPEC_CHUM_AGENT_PORT"] ?? "17384"
+            status = "\(status) — agent http://127.0.0.1:\(port)"
+        } else {
+            let detail = HostBridge.takeLastError() ?? "agent embed failed (need SPEC_CHUM_AGENT_TOKEN or SPEC_CHUM_AGENT_INSECURE=1)"
+            status = "\(status) — \(detail)"
         }
     }
 
@@ -933,6 +947,7 @@ final class HostBridge: ObservableObject {
         stopFrameTimer()
         destroyLivingRoom(syncTeardown: true)
         if let handle {
+            _ = sc_agent_embed_stop(handle)
             sc_destroy(handle)
         }
     }

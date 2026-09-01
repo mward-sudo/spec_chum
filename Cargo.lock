@@ -4011,6 +4011,7 @@ dependencies = [
  "directories",
  "formats",
  "machine",
+ "parking_lot",
  "serde",
  "serde_json",
  "tape",
@@ -4564,8 +4565,10 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 name = "living_room"
 version = "0.4.1"
 dependencies = [
+ "agent_server",
  "anyhow",
  "bevy",
+ "control_plane",
  "cpal 0.15.3",
  "crossbeam-channel",
  "host_api",

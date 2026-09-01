@@ -35,6 +35,8 @@ standalone = ["dep:cpal", "dep:rfd"]
 
 [dependencies]
 host_api = { workspace = true }
+control_plane = { workspace = true }
+agent_server = { workspace = true }
 machine = { workspace = true }
 bevy = { workspace = true, features = ["jpeg"] }
 cpal = { workspace = true, optional = true }
