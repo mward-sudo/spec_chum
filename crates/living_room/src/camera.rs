@@ -312,9 +312,7 @@ pub(crate) fn setup_camera(mut commands: Commands) {
         ClusterConfig::Single,
         // Midway between INDOOR (7.0) and BLENDER (9.7): furniture readable,
         // CRT phosphor not crushed by room glare when zoomed out (#233).
-        Exposure {
-            ev100: 8.2,
-        },
+        Exposure { ev100: 8.2 },
         quality::msaa_samples(),
         Camera {
             clear_color: ClearColorConfig::Custom(if crate::crt::bright_debug_enabled() {
