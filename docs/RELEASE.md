@@ -34,14 +34,26 @@ That is exactly:
    cargo test -p machine --features slow-tests --release z80doc_all_tests_passed -- --nocapture
    ```
 
-2. **system-tests** — third-party ULA/ROM TAP suite (`--features system-tests`;
+2. **z80ccf** — SCF/CCF after every instruction (Q-sensitive Zilog behaviour):
+
+   ```bash
+   cargo test -p machine --features slow-tests --release z80ccf_all_tests_passed -- --nocapture
+   ```
+
+3. **z80memptr** — MEMPTR register via `BIT n,(HL)` after each instruction:
+
+   ```bash
+   cargo test -p machine --features slow-tests --release z80memptr_all_tests_passed -- --nocapture
+   ```
+
+4. **system-tests** — third-party ULA/ROM TAP suite (`--features system-tests`;
    fixtures fetched into `.rom-cache/system-tests/`):
 
    ```bash
    ./scripts/run_system_tests.sh
    ```
 
-3. **z80full** — full Patrik Rak CPU suite under `--features slow-tests`
+5. **z80full** — full Patrik Rak CPU suite under `--features slow-tests`
    (fixture checked in at `tests/fixtures/z80test/z80full.tap`; **required for
    release**). Included when you use `run_slow_tests.sh`, or:
 

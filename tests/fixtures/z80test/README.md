@@ -30,7 +30,7 @@ cargo test -p machine --features slow-tests --release z80ccf_all_tests_passed --
 cargo test -p machine --features slow-tests --release z80memptr_all_tests_passed -- --nocapture
 ```
 
-PR CI runs `z80doc` only. Before a `vX.Y.Z` release, run the full slow suite (includes `z80doc` + `z80full`):
+PR CI runs `z80doc` only. Before a `vX.Y.Z` release, run the full slow suite (includes `z80doc`, `z80ccf`, `z80memptr`, and `z80full`):
 
 ```bash
 ./scripts/run_slow_tests.sh
