@@ -4,6 +4,25 @@ use serde::Serialize;
 
 use crate::error::{ApiError, ApiResult};
 
+/// Upper bound for in-process host-display RGBA buffers (agent `/v1/host/display`).
+const MAX_RGBA_BYTES: usize = 64 * 1024 * 1024;
+
+fn rgba_len_checked(w: usize, h: usize) -> ApiResult<usize> {
+    let pixels = w
+        .checked_mul(h)
+        .ok_or_else(|| ApiError::BadRequest("display canvas dimensions overflow".into()))?;
+    let bytes = pixels
+        .checked_mul(4)
+        .ok_or_else(|| ApiError::BadRequest("display canvas dimensions overflow".into()))?;
+    if bytes > MAX_RGBA_BYTES {
+        return Err(ApiError::BadRequest(format!(
+            "display canvas too large (max {} MiB rgba)",
+            MAX_RGBA_BYTES / (1024 * 1024)
+        )));
+    }
+    Ok(bytes)
+}
+
 /// Largest size that fits `avail` while preserving `src` aspect ratio.
 ///
 /// Matches [`app::display::fit_size`] (egui central panel).
@@ -50,16 +69,12 @@ pub fn compose_nearest_letterbox(
             "display present size must be non-zero".into(),
         ));
     }
-    if src.len()
-        != sw
-            .checked_mul(sh)
-            .and_then(|n| n.checked_mul(4))
-            .unwrap_or(0)
-    {
+    let src_bytes = rgba_len_checked(sw, sh)?;
+    if src.len() != src_bytes {
         return Err(ApiError::Png(format!(
             "source rgba size mismatch: got {} want {}",
             src.len(),
-            sw * sh * 4
+            src_bytes
         )));
     }
     let (fw, fh) = fit_size(sw as f32, sh as f32, dw as f32, dh as f32);
@@ -70,7 +85,8 @@ pub fn compose_nearest_letterbox(
     let ox = (dw - fitted_w) / 2;
     let oy = (dh - fitted_h) / 2;
 
-    let mut out = vec![0u8; dw * dh * 4];
+    let out_bytes = rgba_len_checked(dw, dh)?;
+    let mut out = vec![0u8; out_bytes];
     for dy in 0..fitted_h {
         let sy = (dy as u64 * sh as u64) / fitted_h as u64;
         for dx in 0..fitted_w {
@@ -84,11 +100,12 @@ pub fn compose_nearest_letterbox(
 }
 
 pub fn encode_rgba_png(rgba: &[u8], w: usize, h: usize) -> ApiResult<Vec<u8>> {
-    if rgba.len() != w * h * 4 {
+    let expected = rgba_len_checked(w, h)?;
+    if rgba.len() != expected {
         return Err(ApiError::Png(format!(
             "rgba size mismatch: got {} want {}",
             rgba.len(),
-            w * h * 4
+            expected
         )));
     }
     let mut out = Vec::new();
@@ -130,5 +147,13 @@ mod tests {
         let out = compose_nearest_letterbox(&src, 2, 2, 4, 4).unwrap();
         assert_eq!(out.len(), 4 * 4 * 4);
         assert_eq!(&out[0..4], &[255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn rejects_oversized_canvas() {
+        let src = vec![0u8; 4];
+        let err =
+            compose_nearest_letterbox(&src, 1, 1, usize::MAX, 4).expect_err("overflow canvas");
+        assert!(matches!(err, ApiError::BadRequest(_)));
     }
 }
