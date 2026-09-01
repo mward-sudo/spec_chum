@@ -2,6 +2,10 @@
 
 #![allow(clippy::pedantic)]
 
+mod snow;
+
+pub use snow::{snow_overrides, snow_possible, SnowOverride, SnowPattern, UlaFetch};
+
 /// 48K PAL frame constants.
 pub const T_LINE_48: u32 = 224;
 pub const LINES_48: u32 = 312;
@@ -265,6 +269,8 @@ pub struct Ula48 {
     pub border: u8,
     pub flash_phase: bool,
     pub frame: u64,
+    /// Transient 48K snow overrides (offset in 6912-byte screen → byte shown).
+    pub snow_overrides: Vec<SnowOverride>,
 }
 
 impl Default for Ula48 {
@@ -281,7 +287,25 @@ impl Ula48 {
             border: 0,
             flash_phase: false,
             frame: 0,
+            snow_overrides: Vec::new(),
         }
+    }
+
+    /// Record a snow override (last write wins for a given offset).
+    pub fn record_snow(&mut self, offset: usize, byte: u8) {
+        if let Some(o) = self.snow_overrides.iter_mut().find(|o| o.offset == offset) {
+            o.byte = byte;
+        } else {
+            self.snow_overrides.push(SnowOverride { offset, byte });
+        }
+    }
+
+    #[inline]
+    fn snow_byte(&self, screen: &[u8], offset: usize) -> u8 {
+        self.snow_overrides
+            .iter()
+            .find(|o| o.offset == offset)
+            .map_or_else(|| screen.get(offset).copied().unwrap_or(0), |o| o.byte)
     }
 
     pub fn set_border(&mut self, frame_t: u32, color: u8) {
@@ -300,6 +324,7 @@ impl Ula48 {
         }
         self.border_events.clear();
         self.border_events.push((0, self.border));
+        self.snow_overrides.clear();
     }
 
     /// Deprecated alias — prefer `begin_frame` at frame start.
@@ -493,8 +518,8 @@ impl Ula48 {
                 let bit = 7 - (px % 8);
                 let line_base = (third * 2048) + (yo * 32) + (yb * 256) + col;
                 let (bitmap_off, attr_off) = mode.offsets(line_base, py, col);
-                let bits = screen[bitmap_off];
-                let attr = screen[attr_off];
+                let bits = self.snow_byte(screen, bitmap_off);
+                let attr = self.snow_byte(screen, attr_off);
                 let mut ink = attr & 7;
                 let mut paper = (attr >> 3) & 7;
                 let bright = attr & 0x40 != 0;

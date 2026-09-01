@@ -133,5 +133,43 @@ fetch "$ZXE/ULA%20128%20Timing%20Test%20%282012-10-06%29%28azesmbog%29%5B%21%5D.
 fetch "$ZXE/ULA%20128E%20%2B3%20Test%20%282012-10-10%29%28azesmbog%29%5B%21%5D.tap" \
   "$DEST/ula128e_plus3.tap" "$SHA_ULA128E_PLUS3"
 
+# Weiv snow effect tests (48K ULA bug when I=$40–$7F) — #246.
+SHA_WEIV_SNOW_ZIP="907ee0c8d40203de7e058c70a4100a9d414cf5a7e0936ffb31861131c6233be7"
+SHA_SNOW_TAP="d930335f0455604c0e0082f20105f82cc0d85f1e2a4daa30f124132cd041e74a"
+WEIV_SNOW_ZIP=.rom-cache/weiv-snow-tests.zip
+fetch "https://zxe.io/depot/software/ZX%20Spectrum/Snow%20Tests%20%282022-10-19%29%28Weiv%29%5B%21%5D.zip" \
+  "$WEIV_SNOW_ZIP" "$SHA_WEIV_SNOW_ZIP"
+if [[ ! -f "$DEST/snow.tap" || "$FORCE" == 1 ]]; then
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$WEIV_SNOW_ZIP" -d "$TMP"
+  cp -f "$TMP"/SnowTests/snow.tap "$DEST/snow.tap.tmp.$$"
+  if ! verify_sha "$DEST/snow.tap.tmp.$$" "$SHA_SNOW_TAP"; then
+    rm -f "$DEST/snow.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/snow.tap.tmp.$$" "$DEST/snow.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+elif ! verify_sha "$DEST/snow.tap" "$SHA_SNOW_TAP"; then
+  echo "cached snow.tap failed digest check; re-extract from zip" >&2
+  rm -f "$DEST/snow.tap"
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$WEIV_SNOW_ZIP" -d "$TMP"
+  cp -f "$TMP"/SnowTests/snow.tap "$DEST/snow.tap.tmp.$$"
+  if ! verify_sha "$DEST/snow.tap.tmp.$$" "$SHA_SNOW_TAP"; then
+    rm -f "$DEST/snow.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/snow.tap.tmp.$$" "$DEST/snow.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+fi
+
 echo "System-test TAPs in $DEST (gitignored via .rom-cache/)"
 ls -la "$DEST"/*.tap

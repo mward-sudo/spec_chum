@@ -101,6 +101,28 @@ fn screen_nonzero(machine: &Machine) -> usize {
         .count()
 }
 
+fn screen_ram(machine: &Machine) -> Vec<u8> {
+    (0x4000..0x5b00).map(|a| machine.read_mem(a)).collect()
+}
+
+/// RGBA paper (256×192) from RAM alone — no ULA snow overrides.
+fn render_ram_only(screen: &[u8]) -> Vec<u8> {
+    let mut out = vec![0u8; 256 * 192 * 4];
+    ula::Ula48::new().render_rgba(screen, &mut out, false);
+    out
+}
+
+/// Count RGBA paper pixels that differ between two renders.
+fn rgba_paper_diff(a: &[u8], b: &[u8]) -> usize {
+    assert_eq!(a.len(), b.len());
+    (0..256 * 192)
+        .filter(|&px| {
+            let i = px * 4;
+            a[i..i + 3] != b[i..i + 3]
+        })
+        .count()
+}
+
 fn hold_keys(machine: &mut Machine, keys: &[(usize, u8)], frames: u32) {
     for _ in 0..frames {
         machine.keyboard_mut().reset();
@@ -624,4 +646,82 @@ fn azesmbog_ula128_timing_paints() {
 #[test]
 fn azesmbog_ula128e_plus3_paints() {
     azesmbog_loads_and_paints(Model::SpectrumPlus3, "ula128e_plus3.tap", "ULA 128E +3");
+}
+
+/// Weiv `snow.tap`: with I=$40–$7F the 48K ULA snow bug must corrupt the test
+/// card — rendered pixels differ from a RAM-only paint (#246).
+#[test]
+fn weiv_snow_48k_disrupts_testcard() {
+    let Some(mut machine) = skip_no_rom(Model::Spectrum48) else {
+        return;
+    };
+    let Some(tap) = tap_path("snow.tap") else {
+        return;
+    };
+    load_program_tap(&mut machine, &tap);
+    // Let the test program paint its checkerboard / test card.
+    let mut painted = 0usize;
+    for _ in 0..AFTER_LOAD_FRAMES {
+        let _ = machine.run_frame();
+        painted = screen_nonzero(&machine);
+        if painted > 400 {
+            break;
+        }
+    }
+    assert!(
+        painted > 400,
+        "snow.tap should paint a test card, got {painted} nonzero screen bytes"
+    );
+    machine.cpu_mut().regs.i = 0x40;
+    // Uncontended loop at $8000 maximises M1/ULA overlap opportunities.
+    for _ in 0..8_000 {
+        let _ = machine.run_frame();
+    }
+    let ram = screen_ram(&machine);
+    let clean = render_ram_only(&ram);
+    let mut snow = vec![0u8; 256 * 192 * 4];
+    machine.render_rgba(&mut snow, false);
+    let diff = rgba_paper_diff(&clean, &snow);
+    assert!(
+        diff > 32,
+        "48K snow (I=$40–$7F) must corrupt the display vs RAM-only render; \
+         got {diff} differing pixels (painted={painted})"
+    );
+}
+
+/// 16K uses the same 48K-class ULA snow path.
+#[test]
+fn weiv_snow_16k_disrupts_testcard() {
+    let Some(mut machine) = skip_no_rom(Model::Spectrum16K) else {
+        return;
+    };
+    let Some(tap) = tap_path("snow.tap") else {
+        return;
+    };
+    load_program_tap(&mut machine, &tap);
+    let mut painted = 0usize;
+    for _ in 0..AFTER_LOAD_FRAMES {
+        let _ = machine.run_frame();
+        painted = screen_nonzero(&machine);
+        if painted > 400 {
+            break;
+        }
+    }
+    assert!(
+        painted > 400,
+        "snow.tap should paint on 16K, got {painted} bytes"
+    );
+    machine.cpu_mut().regs.i = 0x40;
+    for _ in 0..8_000 {
+        let _ = machine.run_frame();
+    }
+    let ram = screen_ram(&machine);
+    let clean = render_ram_only(&ram);
+    let mut snow = vec![0u8; 256 * 192 * 4];
+    machine.render_rgba(&mut snow, false);
+    let diff = rgba_paper_diff(&clean, &snow);
+    assert!(
+        diff > 32,
+        "16K snow must corrupt display vs RAM-only render; got {diff} pixels"
+    );
 }
