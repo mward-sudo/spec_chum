@@ -481,8 +481,8 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
 - Living-room camera uses **`Exposure` ev100 8.2** (between Bevy `INDOOR` 7.0
   and default `BLENDER` 9.7). Pure `BLENDER` crushed furniture; full `INDOOR` plus
   high spill/bloom washed the CRT when zoomed out ([#233](https://github.com/mward-sudo/spec_chum/issues/233)).
-- Soft CRT spill (~1.2k–4.4k lm) tints walls from the framebuffer; TV-wall
-  sconces ~16k lm tungsten; warm `GlobalAmbientLight` keeps sofa / wallpaper
+- Soft CRT spill (~1.1k–4.0k lm) tints walls from the framebuffer; TV-wall
+  sconces ~14.4k lm tungsten; warm `GlobalAmbientLight` keeps sofa / wallpaper
   readable. Pull-back bloom stays mild so the tube face stays legible.
 - **Fidelity gaps** (tier 3): Nyquist-limited mask/scanlines, energy-conserving
   beam rebuild, single gamma path — see **Roadmap → Tier 3**.
