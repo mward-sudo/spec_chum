@@ -276,9 +276,8 @@ fn spawn_polyhaven_wall_sconces(commands: &mut Commands, asset_server: &AssetSer
             commands.spawn((
                 PointLight {
                     color: Color::srgb(1.0, 0.72, 0.38),
-                    // Modest tungsten under Exposure::INDOOR — room readable, CRT
-                    // still the hero when zoomed out (#233).
-                    intensity: 14_400.0,
+                    // Room fill only — keep CRT exposure/spill at #238 (#233).
+                    intensity: 6_500.0,
                     range: 6.0,
                     radius: 0.08,
                     shadow_maps_enabled: false,

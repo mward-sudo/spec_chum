@@ -162,7 +162,7 @@ fn spawn_fill_lights(mut commands: Commands) {
             // Warm tungsten fill — readable furniture without CRT glare (#233).
             Color::srgb(0.26, 0.20, 0.13)
         },
-        brightness: 180.0 * ambient_mul,
+        brightness: 76.5 * ambient_mul,
         ..default()
     });
 }
