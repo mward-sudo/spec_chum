@@ -1,18 +1,19 @@
-# Agent debug control plane (proposed)
+# Agent debug control plane
 
-> **Status:** Phases A–H partially landed — loopback HTTP API on `127.0.0.1:17384`
-> (default). Track remaining work in
-> [#210](https://github.com/mward-sudo/spec_chum/issues/210) and
-> [`.cursor/skills/spec-chum-debugging/SKILL.md`](../.cursor/skills/spec-chum-debugging/SKILL.md).
+> **Status:** **Implemented** — loopback HTTP API on `127.0.0.1:17384` (default).
+> Phases A–H + SpecChumMac/egui live embed + port watches + `GET /v1/memory/regions`
+> are on `main`. Optional later: WebSocket push / OpenAPI schema
+> ([#236](https://github.com/mward-sudo/spec_chum/issues/236)). Release single-binary
+> packaging is [#231](https://github.com/mward-sudo/spec_chum/issues/231) (not API).
 >
-> **Phase G ([#219](https://github.com/mward-sudo/spec_chum/issues/219)):**
-> `GET`/`PATCH /v1/prefs` (session-scoped), `POST /v1/mouse`, `POST /v1/tape/eject`,
-> `POST /v1/continue`. Living-room display toggle deferred (not in `UiPreferences`).
-> Prefs are **not** written to `ui-prefs.json` from the agent server.
+> Skill: [`.cursor/skills/spec-chum-debugging/SKILL.md`](../.cursor/skills/spec-chum-debugging/SKILL.md).
 >
-> **Phase H ([#220](https://github.com/mward-sudo/spec_chum/issues/220)):**
-> `/v1/hardware/*` Multiface / DivMMC / IF1 / MDR / TR-DOS ROM attach over HTTP
-> (wraps existing `HostSession` APIs). Accuracy follow-ups remain on #137–#140.
+> **Phase G ([#219](https://github.com/mward-sudo/spec_chum/issues/219)):** done —
+> `GET`/`PATCH /v1/prefs`, `POST /v1/mouse`, `POST /v1/tape/eject`, `POST /v1/continue`.
+> Living-room display toggle deferred (not in `UiPreferences`).
+>
+> **Phase H ([#220](https://github.com/mward-sudo/spec_chum/issues/220)):** done —
+> `/v1/hardware/*` Multiface / DivMMC / IF1 / MDR / TR-DOS ROM attach.
 
 ## Motivation
 
@@ -210,7 +211,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | --- | --- |
 | Core | `GET /v1/inspect` — full `Inspect` JSON (CPU, raster, paging, tape, AY, Timex fields) |
 | Video | `GET /v1/framebuffer` — PNG or RGBA (see above); `GET /v1/video` — dims + SCLD mode without pixels |
-| Memory | `GET /v1/peek?addr=&len=`; `POST /v1/poke`; optional `GET /v1/memory/regions` for paged views |
+| Memory | `GET /v1/peek?addr=&len=`; `POST /v1/poke`; `GET /v1/memory/regions` (CPU map + paging) |
 | Disasm | `GET /v1/disasm?addr=&count=` |
 | Debugger state | `GET /v1/debug/breakpoints`, `/watches`, `/port-watches`, `/last-break` |
 | ROM | `GET /v1/rom/setup` — slots + availability (`sc_model_rom_setup_json` parity) |
@@ -400,4 +401,5 @@ Prefer this over `screencapture`, osascript, or computer-use GUI driving.
 - **REST facade over `control_plane`** remains the architecture — HTTP is transport only.
 - **ZRCP or DZRP adapter** on the same backend could help DeZog users, but doubles protocol maintenance; defer unless a concrete consumer appears.
 - **Fuse-compatible subset** — no published Fuse remote API to emulate; not worth inventing a faux-Fuse dialect.
-- **WebSocket push** (trace, breakpoints, tape progress) — complementary to REST; listed as Phase A+ optional in [#210](https://github.com/mward-sudo/spec_chum/issues/210).
+- **WebSocket push** (trace, breakpoints, tape progress) — complementary to REST; tracked in [#236](https://github.com/mward-sudo/spec_chum/issues/236) (optional).
+- **OpenAPI schema** — machine-readable route catalog; same [#236](https://github.com/mward-sudo/spec_chum/issues/236).
