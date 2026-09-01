@@ -1,15 +1,90 @@
-//! 48K/16K ULA snow effect — original Sinclair hardware bug when `I` is `$40–$7F`.
+//! Sinclair ULA snow effect — hardware bug when M1 refresh overlaps video fetch.
 //!
-//! When an M1 refresh cycle overlaps ULA video fetch, the low byte of the display
-//! read address is replaced with register R (snow), or the previous column is
-//! duplicated (double effect). See Weiv / MAME `spectrum_refresh_w`.
+//! **Models with snow** (original / contended ULA): 16K, 48K, 128K, grey +2,
+//! Timex TC2048 / TS2068 (48K-class timing). **No snow:** +2A, +3 (Amstrad ULA),
+//! Pentagon 128 (no contention / different ULA class).
+//!
+//! When `I` points at slow/contended RAM (`$40–$7F`, and on 128K also `$C0–$FF`
+//! when a contended bank is at `C000`), M1 refresh T4 can corrupt the display
+//! read address (snow) or duplicate the previous column (double). See Weiv /
+//! MAME `spectrum_refresh_w`.
 
-use crate::{PAPER_START_48, T_LINE_48};
+use crate::{PAPER_START_128, PAPER_START_48, T_LINE_128, T_LINE_48};
 
-/// True when the I register points at contended RAM (snow prerequisite).
+/// Line timing for ULA snow fetch detection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SnowTiming {
+    /// 16K / 48K / Timex (224 T/line, paper at 14335).
+    Class48,
+    /// 128K / grey +2 (228 T/line, paper at 14361).
+    Class128,
+}
+
+impl SnowTiming {
+    #[inline]
+    fn paper_start(self) -> u32 {
+        match self {
+            Self::Class48 => PAPER_START_48,
+            Self::Class128 => PAPER_START_128,
+        }
+    }
+
+    #[inline]
+    fn t_line(self) -> u32 {
+        match self {
+            Self::Class48 => T_LINE_48,
+            Self::Class128 => T_LINE_128,
+        }
+    }
+}
+
+/// True when refresh address high byte points at 48K-class slow RAM (`$4000–$7FFF`).
 #[must_use]
 pub fn snow_possible(i: u8) -> bool {
     i & 0xC0 == 0x40
+}
+
+/// 128K / grey +2: slow refresh when `I` is `$40–$7F` or `$C0–$FF` with contended
+/// RAM bank at `C000` (banks 1/3/5/7).
+#[must_use]
+pub fn snow_possible_128(i: u8, c000_contended: bool) -> bool {
+    match i & 0xC0 {
+        0x40 => true,
+        0xC0 => c000_contended,
+        _ => false,
+    }
+}
+
+/// Contended RAM bank implied by refresh address `I` on 128K.
+#[must_use]
+pub fn i_pointed_bank_128(i: u8, c000_bank: usize) -> Option<usize> {
+    match i & 0xC0 {
+        0x40 => Some(5),
+        0xC0 if matches!(c000_bank, 1 | 3 | 5 | 7) => Some(c000_bank),
+        _ => None,
+    }
+}
+
+/// Which 128K RAM bank supplies snow corrupt bytes (Weiv 2023 table).
+#[must_use]
+pub fn snow_source_bank_128(i_bank: usize, screen_bank: usize) -> usize {
+    match i_bank {
+        1 | 3 => {
+            if screen_bank == 5 {
+                1
+            } else {
+                3
+            }
+        }
+        5 | 7 => {
+            if screen_bank == 5 {
+                5
+            } else {
+                7
+            }
+        }
+        _ => screen_bank,
+    }
 }
 
 /// Snow / double pattern within the 8T ULA fetch window.
@@ -33,13 +108,7 @@ pub struct UlaFetch {
     pub addr_lo: u8,
 }
 
-/// Locate the ULA display fetch at `frame_t` (48K PAL timing).
-#[must_use]
-pub fn ula_fetch_at(frame_t: u32) -> Option<UlaFetch> {
-    ula_fetch_at_timed(frame_t, PAPER_START_48, T_LINE_48)
-}
-
-/// Locate ULA fetch with explicit line timing (48K only — snow is not modelled on 128K+).
+/// Locate ULA fetch with explicit line timing.
 #[must_use]
 pub fn ula_fetch_at_timed(frame_t: u32, paper_start: u32, t_line: u32) -> Option<UlaFetch> {
     if frame_t < paper_start {
@@ -96,28 +165,36 @@ pub struct SnowOverride {
     pub byte: u8,
 }
 
-/// Compute snow overrides for one M1 refresh at `frame_t` (48K).
+/// Compute snow overrides for one M1 refresh at `frame_t`.
 ///
-/// `screen` is the 6912-byte display file (`0x4000` relative). `m1_contended`
-/// must be true when the opcode fetch at T1 was contended (snow requires an
-/// uncontended M1 overlapping ULA fetch).
+/// `screen` is the active 6912-byte display file. `corrupt_source`, when set,
+/// supplies bytes for snow-pattern corrupt reads (128K bank routing); otherwise
+/// `screen` is used (48K / 16K / Timex).
 #[must_use]
 pub fn snow_overrides(
     frame_t: u32,
-    i: u8,
     r: u8,
     m1_contended: bool,
+    allowed: bool,
+    timing: SnowTiming,
     screen: &[u8],
+    corrupt_source: Option<&[u8]>,
 ) -> Vec<SnowOverride> {
-    if m1_contended || !snow_possible(i) || screen.len() < 6912 {
+    if m1_contended || !allowed || screen.len() < 6912 {
         return Vec::new();
     }
-    let Some(fetch) = ula_fetch_at(frame_t) else {
+    let paper_start = timing.paper_start();
+    let t_line = timing.t_line();
+    let Some(fetch) = ula_fetch_at_timed(frame_t, paper_start, t_line) else {
         return Vec::new();
     };
     let Some(pattern) = pattern_at_phase(fetch.phase) else {
         return Vec::new();
     };
+    let source = corrupt_source.unwrap_or(screen);
+    if source.len() < 6912 {
+        return Vec::new();
+    }
     let mut out = Vec::with_capacity(2);
     match pattern {
         SnowPattern::Corrupt => {
@@ -132,8 +209,8 @@ pub fn snow_overrides(
             if corrupt_bm >= 6912 || corrupt_at >= 6912 {
                 return out;
             }
-            let bm_byte = screen[corrupt_bm];
-            let at_byte = screen[corrupt_at];
+            let bm_byte = source[corrupt_bm];
+            let at_byte = source[corrupt_at];
             if bm_byte != screen[fetch.bitmap_off] {
                 out.push(SnowOverride {
                     offset: fetch.bitmap_off,
@@ -185,13 +262,27 @@ mod tests {
     }
 
     #[test]
+    fn snow_possible_128_c000_depends_on_bank() {
+        assert!(snow_possible_128(0x40, false));
+        assert!(!snow_possible_128(0xc0, false));
+        assert!(snow_possible_128(0xc1, true));
+    }
+
+    #[test]
+    fn snow_source_bank_128_weiv_table() {
+        assert_eq!(snow_source_bank_128(1, 5), 1);
+        assert_eq!(snow_source_bank_128(1, 7), 3);
+        assert_eq!(snow_source_bank_128(5, 5), 5);
+        assert_eq!(snow_source_bank_128(7, 7), 7);
+    }
+
+    #[test]
     fn corrupt_uses_refresh_low_byte_not_display() {
         let mut screen = vec![0u8; 6912];
-        // Row 0 col 0: intended bitmap 0xAA; byte at (hi|r) = 0x55 when r=1.
         screen[0] = 0xAA;
         screen[1] = 0x55;
-        let t = PAPER_START_48 + 3; // phase 0, first bm fetch
-        let ovs = snow_overrides(t, 0x40, 1, false, &screen);
+        let t = PAPER_START_48 + 3;
+        let ovs = snow_overrides(t, 1, false, true, SnowTiming::Class48, &screen, None);
         assert_eq!(ovs.len(), 1);
         assert_eq!(ovs[0].offset, 0);
         assert_eq!(ovs[0].byte, 0x55);
@@ -199,11 +290,22 @@ mod tests {
     }
 
     #[test]
+    fn corrupt_128_uses_alternate_bank_source() {
+        let mut screen = vec![0u8; 6912];
+        let mut alt = vec![0u8; 6912];
+        screen[0] = 0xAA;
+        alt[1] = 0x55;
+        let t = PAPER_START_128 + 3;
+        let ovs = snow_overrides(t, 1, false, true, SnowTiming::Class128, &screen, Some(&alt));
+        assert_eq!(ovs.len(), 1);
+        assert_eq!(ovs[0].byte, 0x55);
+    }
+
+    #[test]
     fn corrupt_skipped_when_r_matches_addr_lo() {
         let screen = vec![0u8; 6912];
         let t = PAPER_START_48 + 3;
-        // Row 0 col 0 → addr_lo = 0.
-        let ovs = snow_overrides(t, 0x40, 0, false, &screen);
+        let ovs = snow_overrides(t, 0, false, true, SnowTiming::Class48, &screen, None);
         assert!(ovs.is_empty());
     }
 
@@ -212,18 +314,18 @@ mod tests {
         let mut screen = vec![0u8; 6912];
         screen[1] = 0x11;
         screen[2] = 0x22;
-        // phase 4 → col 2 in 8T window: t = paper_start + 3 + 4
         let t = PAPER_START_48 + 7;
-        let ovs = snow_overrides(t, 0x40, 0, false, &screen);
+        let ovs = snow_overrides(t, 0, false, true, SnowTiming::Class48, &screen, None);
         assert!(ovs.iter().any(|o| o.offset == 2 && o.byte == 0x11));
     }
 
     #[test]
-    fn no_snow_when_m1_contended() {
+    fn no_snow_when_m1_contended_or_disallowed() {
         let mut screen = vec![0u8; 6912];
         screen[0] = 0xAA;
         screen[1] = 0x55;
         let t = PAPER_START_48 + 3;
-        assert!(snow_overrides(t, 0x40, 1, true, &screen).is_empty());
+        assert!(snow_overrides(t, 1, true, true, SnowTiming::Class48, &screen, None).is_empty());
+        assert!(snow_overrides(t, 1, false, false, SnowTiming::Class48, &screen, None).is_empty());
     }
 }

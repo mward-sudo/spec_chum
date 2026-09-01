@@ -648,18 +648,16 @@ fn azesmbog_ula128e_plus3_paints() {
     azesmbog_loads_and_paints(Model::SpectrumPlus3, "ula128e_plus3.tap", "ULA 128E +3");
 }
 
-/// Weiv `snow.tap`: with I=$40–$7F the 48K ULA snow bug must corrupt the test
-/// card — rendered pixels differ from a RAM-only paint (#246).
-#[test]
-fn weiv_snow_48k_disrupts_testcard() {
-    let Some(mut machine) = skip_no_rom(Model::Spectrum48) else {
+/// Weiv `snow.tap`: with I=$40–$7F the original-ULA snow bug must corrupt the
+/// test card — rendered pixels differ from a RAM-only paint (#246).
+fn assert_snow_disrupts_testcard(model: Model, label: &str) {
+    let Some(mut machine) = skip_no_rom(model) else {
         return;
     };
     let Some(tap) = tap_path("snow.tap") else {
         return;
     };
     load_program_tap(&mut machine, &tap);
-    // Let the test program paint its checkerboard / test card.
     let mut painted = 0usize;
     for _ in 0..AFTER_LOAD_FRAMES {
         let _ = machine.run_frame();
@@ -670,10 +668,9 @@ fn weiv_snow_48k_disrupts_testcard() {
     }
     assert!(
         painted > 400,
-        "snow.tap should paint a test card, got {painted} nonzero screen bytes"
+        "{label}: snow.tap should paint a test card, got {painted} nonzero bytes"
     );
     machine.cpu_mut().regs.i = 0x40;
-    // Uncontended loop at $8000 maximises M1/ULA overlap opportunities.
     for _ in 0..8_000 {
         let _ = machine.run_frame();
     }
@@ -684,44 +681,59 @@ fn weiv_snow_48k_disrupts_testcard() {
     let diff = rgba_paper_diff(&clean, &snow);
     assert!(
         diff > 32,
-        "48K snow (I=$40–$7F) must corrupt the display vs RAM-only render; \
-         got {diff} differing pixels (painted={painted})"
+        "{label}: snow (I=$40–$7F) must corrupt display vs RAM-only render; got {diff} pixels"
     );
 }
 
-/// 16K uses the same 48K-class ULA snow path.
-#[test]
-fn weiv_snow_16k_disrupts_testcard() {
-    let Some(mut machine) = skip_no_rom(Model::Spectrum16K) else {
+/// Amstrad +2A/+3 and Pentagon must not apply original-ULA snow.
+fn assert_no_snow_with_i_40(model: Model, label: &str) {
+    let Some(mut machine) = skip_no_rom(model) else {
         return;
     };
-    let Some(tap) = tap_path("snow.tap") else {
-        return;
-    };
-    load_program_tap(&mut machine, &tap);
-    let mut painted = 0usize;
-    for _ in 0..AFTER_LOAD_FRAMES {
+    for _ in 0..500 {
         let _ = machine.run_frame();
-        painted = screen_nonzero(&machine);
-        if painted > 400 {
-            break;
-        }
     }
-    assert!(
-        painted > 400,
-        "snow.tap should paint on 16K, got {painted} bytes"
-    );
     machine.cpu_mut().regs.i = 0x40;
     for _ in 0..8_000 {
         let _ = machine.run_frame();
     }
     let ram = screen_ram(&machine);
     let clean = render_ram_only(&ram);
-    let mut snow = vec![0u8; 256 * 192 * 4];
-    machine.render_rgba(&mut snow, false);
-    let diff = rgba_paper_diff(&clean, &snow);
-    assert!(
-        diff > 32,
-        "16K snow must corrupt display vs RAM-only render; got {diff} pixels"
+    let mut rendered = vec![0u8; 256 * 192 * 4];
+    machine.render_rgba(&mut rendered, false);
+    let diff = rgba_paper_diff(&clean, &rendered);
+    assert_eq!(
+        diff, 0,
+        "{label}: Amstrad/Pentagon ULA must not snow when I=$40–$7F (got {diff} pixel diffs)"
     );
+}
+
+#[test]
+fn weiv_snow_48k_disrupts_testcard() {
+    assert_snow_disrupts_testcard(Model::Spectrum48, "48K");
+}
+
+#[test]
+fn weiv_snow_16k_disrupts_testcard() {
+    assert_snow_disrupts_testcard(Model::Spectrum16K, "16K");
+}
+
+#[test]
+fn weiv_snow_128k_disrupts_testcard() {
+    assert_snow_disrupts_testcard(Model::Spectrum128, "128K");
+}
+
+#[test]
+fn weiv_snow_grey_plus2_disrupts_testcard() {
+    assert_snow_disrupts_testcard(Model::SpectrumPlus2, "grey +2");
+}
+
+#[test]
+fn amstrad_plus3_no_snow_with_i_40() {
+    assert_no_snow_with_i_40(Model::SpectrumPlus3, "+3");
+}
+
+#[test]
+fn amstrad_plus2a_no_snow_with_i_40() {
+    assert_no_snow_with_i_40(Model::SpectrumPlus2A, "+2A");
 }
