@@ -11,24 +11,22 @@ use spec_chum_host::handle::share_session_arc;
 static EMBEDDED: LazyLock<Mutex<HashMap<usize, EmbeddedServer>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn handle_key(handle: *mut c_void) -> Option<usize> {
-    if handle.is_null() {
-        None
-    } else {
-        Some(handle as usize)
-    }
+fn session_key(handle: *mut c_void) -> Option<usize> {
+    let shared = share_session_arc(handle)?;
+    Some(Arc::as_ptr(&shared) as usize)
 }
 
 /// Start loopback agent HTTP on the live `sc_*` session (same machine as the GUI).
 ///
 /// Reads `SPEC_CHUM_AGENT_TOKEN`, `SPEC_CHUM_AGENT_INSECURE`, and `SPEC_CHUM_AGENT_PORT`
-/// from the environment (same as egui `SPEC_CHUM_AGENT=1`). Idempotent per handle.
+/// from the environment (same as egui `SPEC_CHUM_AGENT=1`). Idempotent per session.
 #[no_mangle]
 #[allow(unsafe_code)] // C ABI export; callers honor handle lifetime.
 pub extern "C" fn sc_agent_embed_start(handle: *mut c_void) -> c_int {
-    let Some(key) = handle_key(handle) else {
+    let Some(shared) = share_session_arc(handle) else {
         return -1;
     };
+    let key = Arc::as_ptr(&shared) as usize;
     let Ok(guard) = EMBEDDED.lock() else {
         return -1;
     };
@@ -36,9 +34,6 @@ pub extern "C" fn sc_agent_embed_start(handle: *mut c_void) -> c_int {
         return 0;
     }
     drop(guard);
-    let Some(shared) = share_session_arc(handle) else {
-        return -1;
-    };
     let plane = Arc::new(ControlPlane::from_shared(shared));
     let config = ServerConfig::from_env();
     match spawn(config, plane) {
@@ -64,7 +59,7 @@ pub extern "C" fn sc_agent_embed_start(handle: *mut c_void) -> c_int {
 #[no_mangle]
 #[allow(unsafe_code)] // C ABI export; callers honor handle lifetime.
 pub extern "C" fn sc_agent_embed_stop(handle: *mut c_void) -> c_int {
-    let Some(key) = handle_key(handle) else {
+    let Some(key) = session_key(handle) else {
         return -1;
     };
     let Ok(mut g) = EMBEDDED.lock() else {

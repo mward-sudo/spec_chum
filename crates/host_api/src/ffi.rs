@@ -27,6 +27,7 @@ use crate::session::{HostSession, ModelId};
 thread_local! {
     static LAST_ERROR: Mutex<Option<CString>> = const { Mutex::new(None) };
     static FB_SNAPSHOT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static FB_DIMS: RefCell<(c_uint, c_uint)> = const { RefCell::new((0, 0)) };
     static AUDIO_SNAPSHOT: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -323,6 +324,9 @@ pub extern "C" fn sc_framebuffer_ptr(handle: *mut c_void) -> *const u8 {
         return ptr::null();
     };
     let fb = s.framebuffer();
+    let w = s.width() as c_uint;
+    let h = s.height() as c_uint;
+    FB_DIMS.with(|dims| *dims.borrow_mut() = (w, h));
     FB_SNAPSHOT.with(|cell| {
         let mut buf = cell.borrow_mut();
         buf.clear();
@@ -331,13 +335,29 @@ pub extern "C" fn sc_framebuffer_ptr(handle: *mut c_void) -> *const u8 {
     })
 }
 
+fn snapshotted_fb_dims() -> Option<(c_uint, c_uint)> {
+    FB_SNAPSHOT.with(|cell| {
+        if cell.borrow().is_empty() {
+            None
+        } else {
+            FB_DIMS.with(|dims| Some(*dims.borrow()))
+        }
+    })
+}
+
 #[no_mangle]
 pub extern "C" fn sc_framebuffer_width(handle: *mut c_void) -> c_uint {
+    if let Some((w, _)) = snapshotted_fb_dims() {
+        return w;
+    }
     session_mut(handle).map_or(0, |s| s.width() as c_uint)
 }
 
 #[no_mangle]
 pub extern "C" fn sc_framebuffer_height(handle: *mut c_void) -> c_uint {
+    if let Some((_, h)) = snapshotted_fb_dims() {
+        return h;
+    }
     session_mut(handle).map_or(0, |s| s.height() as c_uint)
 }
 
