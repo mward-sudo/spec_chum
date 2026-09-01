@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use bevy::anti_alias::fxaa::{Fxaa, Sensitivity};
-use bevy::camera::ShadowLodOrigin;
+use bevy::camera::{Exposure, ShadowLodOrigin};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::light::cluster::ClusterConfig;
@@ -310,6 +310,9 @@ pub(crate) fn setup_camera(mut commands: Commands) {
         ShadowLodOrigin,
         // Few lights in a small room — skip tiled cluster allocation (cheap win on Metal).
         ClusterConfig::Single,
+        // Midway between INDOOR (7.0) and BLENDER (9.7): furniture readable,
+        // CRT phosphor not crushed by room glare when zoomed out (#233).
+        Exposure { ev100: 8.2 },
         quality::msaa_samples(),
         Camera {
             clear_color: ClearColorConfig::Custom(if crate::crt::bright_debug_enabled() {
@@ -337,7 +340,7 @@ pub(crate) fn setup_camera(mut commands: Commands) {
     }
     if quality::bloom_enabled() {
         cam.insert(Bloom {
-            intensity: 0.10,
+            intensity: 0.08,
             max_mip_dimension: quality::bloom_max_mip_dimension(),
             ..Bloom::NATURAL
         });
@@ -479,8 +482,8 @@ pub(crate) fn apply_zoom_camera(
     if let Ok((mut tf, bloom)) = cams.single_mut() {
         *tf = pose_at_zoom(zoom.display, look);
         if let Some(mut bloom) = bloom {
-            // Stronger halation when zoomed out (CRT glow into the room plate).
-            bloom.intensity = 0.05 + t * 0.14;
+            // Mild pull-back halation — strong bloom washes the CRT face (#233).
+            bloom.intensity = 0.04 + t * 0.06;
         }
     }
     // Slightly flatten the tube when CRT-fill (readable glyphs); full soft dome
@@ -504,6 +507,17 @@ pub(crate) fn apply_zoom_camera(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn living_room_exposure_between_indoor_and_blender() {
+        // setup_camera inserts ev100 8.2 (#233 glare balance).
+        const EV: f32 = 8.2;
+        const {
+            assert!(EV > Exposure::EV100_INDOOR);
+            assert!(EV < Exposure::EV100_BLENDER);
+        }
+        let _ = EV;
+    }
 
     #[test]
     fn ease_out_cubic_endpoints() {
