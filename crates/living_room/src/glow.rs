@@ -41,9 +41,9 @@ impl FrameGlow {
         let bf = (b as f32 / n as f32) / 255.0;
         let lum = 0.2126 * rf + 0.7152 * gf + 0.0722 * bf;
         self.color = LinearRgba::rgb(rf.max(0.02), gf.max(0.02), bf.max(0.02));
-        // Bevy 0.19 PointLight intensities are physical lumens under Exposure::INDOOR.
-        // Keep CRT spill readable on wallpaper/sofa without overpowering the tube (#233).
-        self.intensity = 8_000.0 + lum * 22_000.0;
+        // Soft room spill only — high values wash the phosphor via bloom when
+        // zoomed out (#233). CRT emissive carries the tube; spill tints walls.
+        self.intensity = 1_200.0 + lum * 3_200.0;
     }
 }
 
@@ -89,9 +89,9 @@ fn spawn_fill_lights(mut commands: Commands) {
         commands.spawn((
             PointLight {
                 color: Color::srgb(0.4, 0.45, 0.35),
-                // Placeholder until first FrameGlow sync (~8k–30k lm).
-                intensity: 12_000.0,
-                range: 6.0,
+                // Placeholder until first FrameGlow sync (~1.2k–4.4k lm).
+                intensity: 2_000.0,
+                range: 5.0,
                 shadow_maps_enabled: false,
                 ..default()
             },
@@ -107,8 +107,8 @@ fn spawn_fill_lights(mut commands: Commands) {
             commands.spawn((
                 PointLight {
                     color: Color::srgb(0.35, 0.38, 0.32),
-                    intensity: 5_400.0,
-                    range: 8.0,
+                    intensity: 900.0,
+                    range: 7.0,
                     shadow_maps_enabled: false,
                     ..default()
                 },
@@ -159,10 +159,10 @@ fn spawn_fill_lights(mut commands: Commands) {
         color: if bright {
             Color::srgb(0.55, 0.55, 0.58)
         } else {
-            // Slightly lifted warm fill so sofa/wallpaper stay readable under INDOOR (#233).
-            Color::srgb(0.32, 0.24, 0.16)
+            // Warm tungsten fill — readable furniture without CRT glare (#233).
+            Color::srgb(0.26, 0.20, 0.13)
         },
-        brightness: 280.0 * ambient_mul,
+        brightness: 200.0 * ambient_mul,
         ..default()
     });
 }
@@ -216,6 +216,6 @@ mod tests {
         glow.update_from_rgba(&rgba, 8, 8);
         assert!(glow.color.red > glow.color.green);
         assert!(glow.color.red > glow.color.blue);
-        assert!(glow.intensity > 8_000.0);
+        assert!(glow.intensity > 1_200.0);
     }
 }

@@ -310,9 +310,11 @@ pub(crate) fn setup_camera(mut commands: Commands) {
         ShadowLodOrigin,
         // Few lights in a small room — skip tiled cluster allocation (cheap win on Metal).
         ClusterConfig::Single,
-        // Default Exposure::BLENDER (ev100 9.7) crushes our artistic lumen scale so
-        // PBR furniture reads near-black while the custom CRT phosphor still glows (#233).
-        Exposure::INDOOR,
+        // Midway between INDOOR (7.0) and BLENDER (9.7): furniture readable,
+        // CRT phosphor not crushed by room glare when zoomed out (#233).
+        Exposure {
+            ev100: 8.2,
+        },
         quality::msaa_samples(),
         Camera {
             clear_color: ClearColorConfig::Custom(if crate::crt::bright_debug_enabled() {
@@ -340,7 +342,7 @@ pub(crate) fn setup_camera(mut commands: Commands) {
     }
     if quality::bloom_enabled() {
         cam.insert(Bloom {
-            intensity: 0.10,
+            intensity: 0.08,
             max_mip_dimension: quality::bloom_max_mip_dimension(),
             ..Bloom::NATURAL
         });
@@ -482,8 +484,8 @@ pub(crate) fn apply_zoom_camera(
     if let Ok((mut tf, bloom)) = cams.single_mut() {
         *tf = pose_at_zoom(zoom.display, look);
         if let Some(mut bloom) = bloom {
-            // Stronger halation when zoomed out (CRT glow into the room plate).
-            bloom.intensity = 0.05 + t * 0.14;
+            // Mild pull-back halation — strong bloom washes the CRT face (#233).
+            bloom.intensity = 0.04 + t * 0.06;
         }
     }
     // Slightly flatten the tube when CRT-fill (readable glyphs); full soft dome
@@ -509,12 +511,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn indoor_exposure_is_brighter_than_blender_default() {
-        // Living-room camera inserts Exposure::INDOOR (#233). Guard the ratio we rely on.
+    fn living_room_exposure_between_indoor_and_blender() {
+        // setup_camera inserts ev100 8.2 (#233 glare balance).
+        const EV: f32 = 8.2;
         const {
-            assert!(Exposure::INDOOR.ev100 < Exposure::BLENDER.ev100);
+            assert!(EV > Exposure::EV100_INDOOR);
+            assert!(EV < Exposure::EV100_BLENDER);
         }
-        assert!((Exposure::INDOOR.ev100 - Exposure::EV100_INDOOR).abs() < f32::EPSILON);
+        let _ = EV;
     }
 
     #[test]
