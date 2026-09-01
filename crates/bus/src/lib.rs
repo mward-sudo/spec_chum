@@ -615,6 +615,13 @@ pub struct Bus128 {
     pub ay: Ay8912,
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
+    /// T-states after `OUT #7FFD` before the ULA display bank updates (Sinclair
+    /// 128 / grey +2: 3; Amstrad models use BusPlus3 with 2).
+    pub screen_switch_delay: u32,
+    /// Frame length used when a delayed screen switch spills into the next frame.
+    pub frame_tstates: u32,
+    /// `(t, bank)` applied at the start of the next frame after `begin_frame`.
+    pub pending_screen_switch: Option<(u32, u8)>,
     pub kempston: Kempston,
     pub mouse: KempstonMouse,
     pub divmmc: Option<DivMmc>,
@@ -644,6 +651,9 @@ impl Bus128 {
             ay: Ay8912::new(),
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
+            screen_switch_delay: 3,
+            frame_tstates: ula::FRAME_TSTATES_128,
+            pending_screen_switch: None,
             kempston: Kempston::new(),
             mouse: KempstonMouse::new(),
             divmmc: None,
@@ -793,12 +803,36 @@ impl Bus128 {
         if self.locked {
             return;
         }
+        let old_screen = self.page & 0x08;
         self.page = value;
         if value & 0x20 != 0 {
             self.locked = true;
         }
+        let new_screen = value & 0x08;
+        if old_screen != new_screen {
+            let bank = if new_screen != 0 { 7u8 } else { 5 };
+            self.schedule_display_screen_bank(bank);
+        }
         if trace::enabled(trace::Category::BUS) {
             trace::emit(trace::EventKind::BusPort7ffd { value });
+        }
+    }
+
+    /// Schedule ULA display bank change `screen_switch_delay` T after `frame_t`.
+    fn schedule_display_screen_bank(&mut self, bank: u8) {
+        let t = self.frame_t.saturating_add(self.screen_switch_delay);
+        let fl = self.frame_tstates.max(1);
+        if t >= fl {
+            self.pending_screen_switch = Some((t - fl, bank));
+        } else {
+            self.ula.set_display_screen_bank(t, bank);
+        }
+    }
+
+    /// Apply a screen-bank switch that spilled past the previous frame boundary.
+    pub fn apply_pending_screen_switch(&mut self) {
+        if let Some((t, bank)) = self.pending_screen_switch.take() {
+            self.ula.set_display_screen_bank(t, bank);
         }
     }
 
@@ -1105,6 +1139,47 @@ mod tests {
         assert_eq!(b.page & 7, 0); // still locked at previous? lock after write
                                    // actually we locked with bank 0 from 0x20
         assert!(b.locked);
+    }
+
+    #[test]
+    fn out_7ffd_records_display_screen_events() {
+        let mut b = Bus128::new();
+        b.ula.begin_frame();
+        assert_eq!(b.ula.screen_events, vec![(0, 5)]);
+        b.frame_t = 1000;
+        b.out_7ffd(0x08); // screen bank 7
+        assert_eq!(b.page & 0x08, 0x08);
+        assert_eq!(
+            b.ula.screen_events.last().copied(),
+            Some((1000 + b.screen_switch_delay, 7))
+        );
+        b.frame_t = 2000;
+        b.out_7ffd(0x00);
+        assert_eq!(
+            b.ula.screen_events.last().copied(),
+            Some((2000 + b.screen_switch_delay, 5))
+        );
+    }
+
+    #[test]
+    fn out_7ffd_screen_switch_spills_into_next_frame() {
+        let mut b = Bus128::new();
+        b.ula.begin_frame();
+        let fl = b.frame_tstates;
+        b.frame_t = fl - 1;
+        b.out_7ffd(0x08);
+        assert!(b.ula.screen_events.last().is_some_and(|&(t, _)| t == 0)); // only seed
+        assert_eq!(
+            b.pending_screen_switch,
+            Some((b.screen_switch_delay.saturating_sub(1), 7))
+        );
+        b.ula.begin_frame();
+        b.apply_pending_screen_switch();
+        assert_eq!(
+            b.ula.screen_events.last().copied(),
+            Some((b.screen_switch_delay.saturating_sub(1), 7))
+        );
+        assert!(b.pending_screen_switch.is_none());
     }
 
     #[test]

@@ -21,13 +21,19 @@ Do not add commercial game TAPs.
 | `ula128_timing.tap` | ULA 128 Timing Test (azesmbog) | freeware | [zxe.io](https://zxe.io/depot/software/ZX%20Spectrum/ULA%20128%20Timing%20Test%20%282012-10-06%29%28azesmbog%29%5B%21%5D.tap) | `59578bae6352d6a92b1887b392ee786aa9f162624a1ddef9541037b517b0c90f` |
 | `ula128e_plus3.tap` | ULA 128E +3 Test (azesmbog) | freeware | [zxe.io](https://zxe.io/depot/software/ZX%20Spectrum/ULA%20128E%20%2B3%20Test%20%282012-10-10%29%28azesmbog%29%5B%21%5D.tap) | `60b3aaeca5b9d45c712d874fafa136c97d373c1569964cb87703ddf53911a8d5` |
 | `snow.tap` | Weiv snow effect (48K ULA bug, I=$40–$7F) | GFDL (Weiv bundle) | [zxe.io Snow Tests zip](https://zxe.io/depot/software/ZX%20Spectrum/Snow%20Tests%20%282022-10-19%29%28Weiv%29%5B%21%5D.zip) (`SnowTests/snow.tap`) | `d930335f0455604c0e0082f20105f82cc0d85f1e2a4daa30f124132cd041e74a` |
+| `ptime.tap` | Patrik Rak screen-paging timing (ZXTests v3p) | GPL | [zxe.io ZXTests v3p zip](https://zxe.io/depot/software/ZX%20Spectrum/ZXTests%20v3p%20%282014-03-20%29%28Rak%2C%20Patrik%29%5B%21%5D.zip) (`ptime.tap`) | `b52a7e55ce47b01e3792d40050858918a022d3f4c66871bd6b74c988351cdce7` |
+| `ptime-128.tap` | Weiv screen-switching timings (128K contended ports) | GFDL | [zxe.io](https://zxe.io/depot/software/ZX%20Spectrum/Test%20of%20Screen%20Switching%20Timings%20%282017-11-15%29%28Weiv%29%5B%21%5D.zip) (`ptime-128.tap`) | `388dde0cc8e8948bcc2a4c219036f4f73f333f32a7f7edc0b6eed5a530cf3aaa` |
 
 ZIP intermediates (also verified): `timingtest-0.3.zip` SHA-256
 `bacff01453a01c14754c167b5b02695ec29a0a5960c2f202b52b26494c2e8dff`;
 `floating-spy-0.33.zip` SHA-256
 `3663cfc76b0733491c69faf088dfacda9294aa76e828600070380086138747ed`;
 `weiv-snow-tests.zip` SHA-256
-`907ee0c8d40203de7e058c70a4100a9d414cf5a7e0936ffb31861131c6233be7`.
+`907ee0c8d40203de7e058c70a4100a9d414cf5a7e0936ffb31861131c6233be7`;
+`zxtests-v3p.zip` SHA-256
+`911bffcab0d5c424c7a1e97cb8c179445637117c3c6bf6797f790f34599bb0c0`;
+`ptime-128-weiv.zip` SHA-256
+`7a204ce47b4466d4f46ae6d1073520421455f67082eddf467602d03b3621339c`.
 Bobrowski fixtures use HTTPS; the raxoft ZIP host is HTTP-only, so integrity
 rests on the committed digests.
 

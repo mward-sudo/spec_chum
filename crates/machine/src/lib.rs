@@ -889,6 +889,7 @@ impl Machine {
     /// Pentagon 128: 128K banking, user main ROM + TR-DOS (#188 Phase B / #193).
     pub fn new_pentagon128(main_rom: &[u8], trdos_rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus128::new();
+        bus.frame_tstates = FRAME_TSTATES_PENTAGON;
         bus.load_rom128(main_rom)?;
         trace::emit(trace::EventKind::MachineModel { model: 6 });
         let mut m = Self::Spec128 {
@@ -1931,7 +1932,9 @@ impl Machine {
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
                 bus.ula.begin_frame();
+                bus.apply_pending_screen_switch();
                 ula.border = bus.border;
+                ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
                 if trace::enabled(trace::Category::ULA) {
                     let frame = next_frame_n();
@@ -2085,7 +2088,9 @@ impl Machine {
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
                 bus.ula.begin_frame();
+                bus.apply_pending_screen_switch();
                 ula.border = bus.border;
+                ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
                 if trace::enabled(trace::Category::ULA) {
                     let frame = next_frame_n();
@@ -3137,8 +3142,9 @@ impl Machine {
                 }
             }
             Self::Spec128 { bus, .. } => {
-                bus.ula.render_rgba_timed(
-                    bus.screen_bytes(),
+                bus.ula.render_rgba_timed_dual(
+                    &bus.banks[5][..6912],
+                    &bus.banks[7][..6912],
                     out,
                     with_border,
                     ula::PAPER_START_128,
@@ -3146,8 +3152,9 @@ impl Machine {
                 );
             }
             Self::SpecPlus3 { bus, .. } => {
-                bus.ula.render_rgba_timed(
-                    bus.screen_bytes(),
+                bus.ula.render_rgba_timed_dual(
+                    &bus.banks[5][..6912],
+                    &bus.banks[7][..6912],
                     out,
                     with_border,
                     ula::PAPER_START_128,
