@@ -698,17 +698,21 @@ mod tests {
         let rom = dir.join(format!("spec-chum-diagrom-128k-{}", std::process::id()));
         std::fs::write(&rom, vec![0u8; 16 * 1024]).expect("write");
         let roots = machine::search_roots();
-        let ok_models = [
-            PrefModel::Spectrum128,
-            PrefModel::SpectrumPlus2,
-            PrefModel::Pentagon128,
-        ];
+        let ok_models = [PrefModel::Spectrum128, PrefModel::SpectrumPlus2];
         for base in ok_models {
             let cfg = UserMachineConfig {
                 custom_rom_path: Some(rom.to_string_lossy().into_owned()),
                 ..UserMachineConfig::new_named("DiagROM", base)
             };
             apply_user_config(&cfg, &roots).unwrap_or_else(|e| panic!("{base:?}: {e}"));
+        }
+        // Pentagon128 needs user TR-DOS ROM — skip when absent (CI has no pentagon dumps).
+        if machine::read_trdos_rom(Model::Pentagon128).is_ok() {
+            let cfg = UserMachineConfig {
+                custom_rom_path: Some(rom.to_string_lossy().into_owned()),
+                ..UserMachineConfig::new_named("DiagROM", PrefModel::Pentagon128)
+            };
+            apply_user_config(&cfg, &roots).expect("Pentagon128 DiagROM");
         }
         let _ = std::fs::remove_file(&rom);
     }
