@@ -105,9 +105,11 @@ Refs [#146](https://github.com/mward-sudo/spec_chum/issues/146).
 
 ### Automated test coverage gap
 
-`./scripts/check_living_room.sh` runs `cargo fmt/clippy/test -p living_room` and the
-**headless** `room_perf` example. It times the **shipping present path** (`SimulatePresentPath` —
-no blocking CPU readback). It does **not** exercise:
+`./scripts/check_living_room.sh` runs `cargo fmt/clippy/test -p living_room` in
+**release** by default (Bevy debug is multi‑GB) and the **headless** `room_perf`
+example. Set `SPEC_CHUM_ROOM_DEBUG=1` for debug clippy/test. It times the
+**shipping present path** (`SimulatePresentPath` — no blocking CPU readback). It
+does **not** exercise:
 
 - SpecChumMac Swift embed (`LivingRoomDisplayView`, `CADisplayLink`, `CALayer.contents`)
 - IOSurface GPU blit → Core Animation present (the path that regressed with stale frames)
@@ -447,12 +449,13 @@ Do **not** start tier 3 until tier-2 lighting/perf baseline is stable.
 ## Quality gate
 
 Bevy is **excluded** from the default `./scripts/check.sh` / Linux CI `check` job
-(compile cost). CI runs `./scripts/check_living_room.sh` on **macOS** (`living-room` job).
-Opt in locally:
+(compile cost). CI runs `./scripts/check_living_room.sh` on **macOS** (`living-room` job)
+with **release** clippy/test. Opt in locally:
 
 ```bash
 ./scripts/check_living_room.sh
 # or: SPEC_CHUM_CHECK_LIVING_ROOM=1 ./scripts/check.sh
+# SPEC_CHUM_ROOM_DEBUG=1 ./scripts/check_living_room.sh   # disk-heavy Bevy debug
 ```
 
 `SPEC_CHUM_LIVING_ROOM=1` is **app boot** (start SpecChumMac in living-room display mode) —

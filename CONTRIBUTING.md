@@ -21,8 +21,11 @@
 Local quality gate (same as CI intent):
 
 ```bash
-./scripts/check.sh
+./scripts/check_crates.sh    # while iterating — debug clippy/test for changed crates only
+./scripts/check.sh           # before merge — full workspace (excl. living_room)
 ```
+
+Living room / SpecChumMac Bevy gate uses **release** by default (`./scripts/check_living_room.sh`; set `SPEC_CHUM_ROOM_DEBUG=1` only if you need debug Bevy symbols).
 
 Optional native macOS SwiftUI shell compile ([#68](https://github.com/mward-sudo/spec_chum/issues/68)): CI job **`macos-shell`** on `macos-latest` runs `./scripts/build_macos_app.sh`. It is a separate job from Linux **`check`** (does not block Rust fmt/clippy/test). See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
@@ -34,7 +37,7 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 - Read `AGENTS.md` for crate boundaries and hard constraints.
 - Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync and `pr-review-merge.mdc` for bot review gates.
 - Before coding, agents should consult open issues, so implementations do not drift from tracked acceptance criteria.
-- Agents should be **clippy-first**: run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
+- Agents should be **clippy-first**: iterate with `./scripts/check_crates.sh`, then run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
 - **Agent debugging:** today use `spec-chum-debug` + [DEBUGGING.md](docs/DEBUGGING.md). **Planned:** unified localhost [Agent Debug API](docs/AGENT_DEBUG_API.md) ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — agents export the guest framebuffer as 1:1 PNG (not window capture); `spec-chum-debug` becomes an API client.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
