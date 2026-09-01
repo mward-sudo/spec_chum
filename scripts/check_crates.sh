@@ -42,8 +42,11 @@ infer_crates() {
   } | while IFS= read -r f; do
     [[ -z "$f" ]] && continue
     case "$f" in
-      Cargo.toml|Cargo.lock|scripts/check.sh)
+      Cargo.toml|Cargo.lock|scripts/check.sh|scripts/check_crates.sh)
         echo "WORKSPACE_ROOT"
+        ;;
+      scripts/check_living_room.sh)
+        echo "living_room"
         ;;
       crates/*/Cargo.toml|crates/*/src/*|crates/*/tests/*|crates/*/examples/*|crates/*/benches/*|crates/*/include/*)
         pkg="${f#crates/}"
