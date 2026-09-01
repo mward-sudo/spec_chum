@@ -158,6 +158,76 @@ impl TrdImage {
         self.sectors[idx] = *data;
         true
     }
+
+    /// 40-track SS TR-DOS disk with BASIC `boot` (`10 POKE 32768,165`).
+    ///
+    /// `RUN` with no filename (Beta manual / TR-DOS 5) loads and runs this
+    /// program. Geometry: 40T SS 16×256 (`disk_type = 0x19`). Directory + info
+    /// on track 0; file body at track 1 sector 0. In-repo fixture — not a
+    /// committed `.trd` blob ([#140](https://github.com/mward-sudo/spec_chum/issues/140)).
+    #[must_use]
+    pub fn synthetic_trdos_boot_basic() -> Self {
+        const TRACKS: u8 = 40;
+        const DISK_TYPE: u8 = 0x19; // 40-track single-sided
+        let total_sectors = usize::from(TRACKS) * TRD_SECTORS_PER_TRACK;
+        let mut raw = vec![0u8; total_sectors * TRD_SECTOR_SIZE];
+
+        let program = trdos_basic_poke_marker();
+        let mut file = Vec::with_capacity(program.len() + 4);
+        file.extend_from_slice(&program);
+        file.push(0x80); // empty VARS
+        file.extend_from_slice(&[0xAA, 0x0A, 0x00]); // autostart LINE 10
+
+        let prog_plus_vars = (program.len() + 1) as u16; // minus 0xAA line bytes
+        let vars_off = program.len() as u16;
+        let mut dirent = [0u8; 16];
+        dirent[0..8].copy_from_slice(b"boot    ");
+        dirent[8] = b'B';
+        dirent[9..11].copy_from_slice(&prog_plus_vars.to_le_bytes());
+        dirent[11..13].copy_from_slice(&vars_off.to_le_bytes());
+        dirent[13] = 1; // one sector
+        dirent[14] = 0; // start sector
+        dirent[15] = 1; // start track
+        raw[..16].copy_from_slice(&dirent);
+
+        let info_off = 8 * TRD_SECTOR_SIZE;
+        let info = &mut raw[info_off..info_off + TRD_SECTOR_SIZE];
+        info[0xe1] = 1; // first free sector
+        info[0xe2] = 1; // first free track
+        info[0xe3] = DISK_TYPE;
+        info[0xe4] = 1; // file count
+        let free = (total_sectors - TRD_SECTORS_PER_TRACK - 1) as u16;
+        info[0xe5..0xe7].copy_from_slice(&free.to_le_bytes());
+        info[0xe7] = 0x10; // TR-DOS ID
+        info[0xe9..0xf2].fill(b' ');
+        info[0xf5..0xfd].copy_from_slice(b"BOOTDISK");
+
+        let data_off = TRD_SECTORS_PER_TRACK * TRD_SECTOR_SIZE; // track 1 sector 0
+        let n = file.len().min(TRD_SECTOR_SIZE);
+        raw[data_off..data_off + n].copy_from_slice(&file[..n]);
+
+        let mut sectors = Vec::with_capacity(total_sectors);
+        for chunk in raw.as_chunks::<TRD_SECTOR_SIZE>().0 {
+            let mut s = [0u8; TRD_SECTOR_SIZE];
+            s.copy_from_slice(chunk);
+            sectors.push(s);
+        }
+        Self {
+            tracks: TRACKS,
+            sides: 1,
+            disk_type: DISK_TYPE,
+            label: *b"BOOTDISK",
+            sectors,
+        }
+    }
+}
+
+/// `10 POKE 32768,165` — same ZX float encoding as the +3DOS `DISK` fixture.
+fn trdos_basic_poke_marker() -> Vec<u8> {
+    vec![
+        0x00, 0x0A, 0x17, 0x00, 0xF4, b'3', b'2', b'7', b'6', b'8', 0x0E, 0x90, 0x00, 0x00, 0x00,
+        0x00, b',', b'1', b'6', b'5', 0x0E, 0x00, 0x00, 0xA5, 0x00, 0x00, 0x0D,
+    ]
 }
 
 #[cfg(test)]
@@ -193,5 +263,37 @@ mod tests {
         let sec = img.read_sector(0, 1).unwrap();
         assert_eq!([sec[0], sec[1]], [0xbe, 0xef]);
         assert!(!img.write_sector(0, 16, &data));
+    }
+
+    #[test]
+    fn synthetic_trdos_boot_basic_has_boot_file() {
+        let img = TrdImage::synthetic_trdos_boot_basic();
+        assert_eq!(img.tracks, 40);
+        assert_eq!(img.sides, 1);
+        assert_eq!(img.disk_type, 0x19);
+        assert_eq!(&img.label, b"BOOTDISK");
+
+        let dir = img.read_sector(0, 0).unwrap();
+        assert_eq!(&dir[0..8], b"boot    ");
+        assert_eq!(dir[8], b'B');
+        assert_eq!(&dir[9..11], 28u16.to_le_bytes()); // program + empty VARS
+        assert_eq!(&dir[11..13], 27u16.to_le_bytes()); // variables offset
+        assert_eq!(dir[13], 1);
+        assert_eq!(dir[14], 0);
+        assert_eq!(dir[15], 1);
+
+        let info = img.read_sector(0, 8).unwrap();
+        assert_eq!(info[0xe1], 1);
+        assert_eq!(info[0xe2], 1);
+        assert_eq!(info[0xe3], 0x19);
+        assert_eq!(info[0xe4], 1);
+        assert_eq!(&info[0xe5..0xe7], 623u16.to_le_bytes());
+        assert_eq!(info[0xe7], 0x10);
+
+        let body = img.read_sector_chs(1, 0, 0).unwrap();
+        assert_eq!(&body[0..4], [0x00, 0x0A, 0x17, 0x00]);
+        assert_eq!(&body[11..16], [0x90, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(body[27], 0x80);
+        assert_eq!(&body[28..31], [0xAA, 0x0A, 0x00]);
     }
 }

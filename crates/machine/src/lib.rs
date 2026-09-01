@@ -3580,19 +3580,10 @@ mod tests {
             eprintln!("skip: roms/spec48.rom missing");
             return;
         };
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/trdos.rom");
-        let Ok(trdos) = std::fs::read(&path) else {
+        let Some(trdos) = trdos_rom_bytes() else {
             eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
             return;
         };
-        if trdos.len() != bus::TRDOS_ROM_SIZE {
-            eprintln!(
-                "skip: roms/trdos.rom is {} bytes, expected {}",
-                trdos.len(),
-                bus::TRDOS_ROM_SIZE
-            );
-            return;
-        }
         let mut m = Machine::new_48k(&spec).unwrap();
         m.load_trdos_rom(&trdos).unwrap();
         m.insert_trd(synthetic_trd_with_marker(0, 0)).unwrap();
@@ -3612,6 +3603,73 @@ mod tests {
             saw_paged,
             "fetch at 0x3D00 should page TR-DOS ROM (USR 15616)"
         );
+    }
+
+    fn trdos_rom_bytes() -> Option<Vec<u8>> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for rel in [
+            "roms/pentagon/trdos.rom",
+            "roms/trdos/trdos.rom",
+            "roms/trdos.rom",
+        ] {
+            let path = root.join(rel);
+            let Ok(data) = std::fs::read(&path) else {
+                continue;
+            };
+            if data.len() == bus::TRDOS_ROM_SIZE {
+                return Some(data);
+            }
+        }
+        None
+    }
+
+    /// Synthetic TR-DOS ROM: read track 1 sector 1 (BASIC `boot`) into `8000h`.
+    fn trdos_read_boot_basic_rom() -> [u8; bus::TRDOS_ROM_SIZE] {
+        let mut rom = [0u8; bus::TRDOS_ROM_SIZE];
+        let code: &[u8] = &[
+            0x3e, 0x3c, // LD A,3Ch
+            0xd3, 0xff, // OUT (FFh),A
+            0x3e, 0x01, // LD A,1
+            0xd3, 0x3f, // OUT (3Fh),A  track 1
+            0x3e, 0x01, // LD A,1
+            0xd3, 0x5f, // OUT (5Fh),A  sector 1
+            0x3e, 0x80, // LD A,80h
+            0xd3, 0x1f, // OUT (1Fh),A
+            0x21, 0x00, 0x80, // LD HL,8000h
+            0x01, 0x7f, 0x00, // LD BC,007Fh
+            0xdb, 0xff, // IN A,(FFh)
+            0xe6, 0xc0, // AND C0h
+            0x28, 0xfa, // JR Z, wait
+            0xfa, 0x23, 0x3d, // JP M, HALT (LD A,track is one byte longer than XOR A)
+            0xed, 0xa2, // INI
+            0x18, 0xf3, // JR wait
+            0x76, // HALT
+        ];
+        rom[0x3d00..0x3d00 + code.len()].copy_from_slice(code);
+        rom
+    }
+
+    #[test]
+    fn beta_reads_synthetic_boot_basic_into_ram() {
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        m.load_trdos_rom(&trdos_read_boot_basic_rom()).unwrap();
+        m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
+            .unwrap();
+        m.cpu_mut().regs.pc = 0x3d00;
+        m.cpu_mut().regs.sp = 0xfffd;
+        for _ in 0..4000 {
+            if m.cpu().regs.halted {
+                break;
+            }
+            m.step_once();
+        }
+        assert!(m.cpu().regs.halted, "synthetic TR-DOS loop should HALT");
+        assert_eq!(m.read_mem(0x8000), 0x00);
+        assert_eq!(m.read_mem(0x8001), 0x0a);
+        assert_eq!(m.read_mem(0x8002), 0x17);
+        assert_eq!(m.read_mem(0x8003), 0x00);
+        assert_eq!(m.read_mem(0x8004), 0xf4); // POKE
+        assert_eq!(m.beta_mut().map(|b| b.sector_read_count), Some(1));
     }
 
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.

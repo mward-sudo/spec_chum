@@ -226,7 +226,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | ROM | `POST /v1/rom` — load ROM image from host filesystem path |
 | Media | `POST /v1/snapshot`, `/rzx`, `/dsk`, `/trd`, … |
 | Input | `POST /v1/keys` matrix press/release; `POST /v1/joystick`; `POST /v1/mouse` Kempston delta/buttons |
-| Hardware | `GET /v1/hardware` — attach flags; `POST /v1/hardware/multiface` (+ `/nmi`); `POST /v1/hardware/interface1` (+ `/rom`, `/v1/hardware/mdr`); `POST /v1/hardware/divmmc` (+ `/sd`, `/eeprom`); `POST /v1/hardware/trdos/rom`; Timex `.dck` via `/v1/timex/dock` |
+| Hardware | `GET /v1/hardware` — attach flags; `POST /v1/hardware/multiface` (+ `/nmi`); `POST /v1/hardware/interface1` (+ `/rom`, `/v1/hardware/mdr`); `POST /v1/hardware/divmmc` (+ `/sd`, `/eeprom`); `POST /v1/hardware/beta`; `POST /v1/hardware/trdos/rom`; Timex `.dck` via `/v1/timex/dock` |
 | Host prefs | `GET` / `PATCH /v1/prefs` — volume, mute, joystick mode, tape defaults, throttle, Kempston mouse enable (session-scoped in agent server; living-room display toggle deferred) |
 | Border | `POST /v1/border` — `with_border` flag (changes framebuffer dims) |
 
@@ -294,7 +294,7 @@ Living-room display toggle is **deferred** (not modeled in shared prefs yet).
 
 | Route | Notes |
 | --- | --- |
-| `GET /v1/hardware` | `{ has_multiface, has_interface1, has_divmmc, has_timex_dock }` |
+| `GET /v1/hardware` | `{ has_multiface, has_interface1, has_divmmc, has_timex_dock, has_beta }` |
 | `POST /v1/hardware/multiface` | Body `{ "path" }` — 8 KiB Multiface 1 ROM (48K only); Refs [#137](https://github.com/mward-sudo/spec_chum/issues/137) |
 | `POST /v1/hardware/multiface/nmi` | Red-button NMI when attached |
 | `POST /v1/hardware/interface1` | Attach IF1 (loads `roms/if1*.rom` if present); Refs [#139](https://github.com/mward-sudo/spec_chum/issues/139) |
@@ -303,6 +303,7 @@ Living-room display toggle is **deferred** (not modeled in shared prefs yet).
 | `POST /v1/hardware/divmmc` | Attach DivMMC (no media); Refs [#138](https://github.com/mward-sudo/spec_chum/issues/138) |
 | `POST /v1/hardware/divmmc/sd` | Body `{ "path" }` — flat SD image |
 | `POST /v1/hardware/divmmc/eeprom` | Body `{ "path" }` — ESXDOS EEPROM |
+| `POST /v1/hardware/beta` | Attach Beta Disk (no media); Refs [#140](https://github.com/mward-sudo/spec_chum/issues/140) |
 | `POST /v1/hardware/trdos/rom` | Body `{ "path" }` — 16 KiB TR-DOS ROM / Beta attach; Refs [#140](https://github.com/mward-sudo/spec_chum/issues/140). Disk images remain `POST /v1/trd` |
 | `POST`/`DELETE /v1/timex/dock` | Unchanged Timex `.dck` insert/eject |
 

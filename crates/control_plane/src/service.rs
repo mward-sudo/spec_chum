@@ -981,6 +981,13 @@ impl ControlPlane {
         })
     }
 
+    pub fn attach_beta(&self) -> ApiResult<()> {
+        self.with_session_mut(|s| {
+            s.attach_beta()?;
+            Ok(())
+        })
+    }
+
     pub fn hardware_status(&self) -> ApiResult<HardwareStatusResponse> {
         self.with_session_ref(|s| {
             Ok(HardwareStatusResponse {
@@ -988,6 +995,7 @@ impl ControlPlane {
                 has_interface1: s.has_interface1(),
                 has_divmmc: s.has_divmmc(),
                 has_timex_dock: s.has_timex_dock(),
+                has_beta: s.has_beta(),
             })
         })
     }
@@ -1191,6 +1199,7 @@ pub struct HardwareStatusResponse {
     pub has_interface1: bool,
     pub has_divmmc: bool,
     pub has_timex_dock: bool,
+    pub has_beta: bool,
 }
 
 #[cfg(test)]

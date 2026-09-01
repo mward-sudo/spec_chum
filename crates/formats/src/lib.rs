@@ -1,4 +1,4 @@
-//! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK, Timex DCK.
+//! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK, TRD, Timex DCK.
 
 #![allow(clippy::pedantic)]
 

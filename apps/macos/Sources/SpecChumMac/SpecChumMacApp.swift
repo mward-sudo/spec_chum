@@ -168,7 +168,7 @@ struct SpecChumMacApp: App {
                     .keyboardShortcut("r", modifiers: .command)
             }
 
-            // Hardware — Multiface / IF1; Joystick mode lives in Settings
+            // Hardware — Multiface / IF1 / DivMMC / Beta; Joystick mode lives in Settings
             CommandMenu("Hardware") {
                 Button("Attach Multiface 1 ROM…") {
                     openMultifaceRom()
@@ -212,12 +212,18 @@ struct SpecChumMacApp: App {
                 }
                 .disabled(!host.model.supportsBeta)
                 Divider()
+                Button("Attach Beta Disk") {
+                    host.attachBeta()
+                }
+                .disabled(!host.model.supportsBeta)
                 Button("Load TR-DOS ROM…") {
                     openTrdosRom()
                 }
                 .disabled(!host.model.supportsBeta)
-                Button("Beta: use egui (stubs)") {}
-                    .disabled(true)
+                Button("Open TRD…") {
+                    openTrd()
+                }
+                .disabled(!host.model.supportsBeta)
             }
 
             CommandMenu("Debug") {

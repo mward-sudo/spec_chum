@@ -530,6 +530,30 @@ pub extern "C" fn sc_load_trdos_rom(handle: *mut c_void, path: *const c_char) ->
 }
 
 #[no_mangle]
+pub extern "C" fn sc_attach_beta(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    let Some(mut s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.attach_beta() {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sc_has_beta(handle: *mut c_void) -> c_int {
+    let Some(mut s) = session_mut(handle) else {
+        return 0;
+    };
+    i32::from(s.has_beta())
+}
+
+#[no_mangle]
 pub extern "C" fn sc_tape_play(handle: *mut c_void) -> c_int {
     clear_last_error();
     let Some(mut s) = session_mut(handle) else {

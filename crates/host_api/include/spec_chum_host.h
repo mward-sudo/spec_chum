@@ -56,9 +56,11 @@ int sc_open_tape(void *handle, const char *path);
 int sc_load_snapshot(void *handle, const char *path);
 int sc_load_rzx(void *handle, const char *path);
 int sc_load_dsk(void *handle, const char *path);
-/* Beta Disk / TR-DOS (48K/128K): TRD image + optional 16 KiB TR-DOS ROM */
+/* Beta Disk / TR-DOS (48K/128K): attach, TRD image, optional 16 KiB TR-DOS ROM */
 int sc_load_trd(void *handle, const char *path);
 int sc_load_trdos_rom(void *handle, const char *path);
+int sc_attach_beta(void *handle);
+int sc_has_beta(void *handle);
 int sc_tape_play(void *handle);
 int sc_tape_pause(void *handle);
 int sc_tape_rewind(void *handle);
