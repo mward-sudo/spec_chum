@@ -40,6 +40,8 @@ pub struct BusPlus3 {
     pub ay: Ay8912,
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
+    /// T-states after `OUT #7FFD` before the ULA display bank updates (Amstrad: 2).
+    pub screen_switch_delay: u32,
     pub kempston: crate::Kempston,
     pub mouse: crate::KempstonMouse,
     pub fdc: formats::Plus3Fdc,
@@ -76,6 +78,7 @@ impl BusPlus3 {
             ay: Ay8912::new(),
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
+            screen_switch_delay: 2,
             kempston: crate::Kempston::new(),
             mouse: crate::KempstonMouse::new(),
             fdc: formats::Plus3Fdc::new(),
@@ -192,9 +195,16 @@ impl BusPlus3 {
         if self.locked {
             return;
         }
+        let old_screen = self.page_7ffd & 0x08;
         self.page_7ffd = value;
         if value & 0x20 != 0 {
             self.locked = true;
+        }
+        let new_screen = value & 0x08;
+        if old_screen != new_screen {
+            let bank = if new_screen != 0 { 7 } else { 5 };
+            let t = self.frame_t.wrapping_add(self.screen_switch_delay);
+            self.ula.set_display_screen_bank(t, bank as u8);
         }
         if trace::enabled(trace::Category::BUS) {
             trace::emit(trace::EventKind::BusPort7ffd { value });

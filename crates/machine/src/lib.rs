@@ -1930,8 +1930,10 @@ impl Machine {
                 bus.beeper_edges.clear();
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
+                bus.ula.display_screen_bank = if bus.page & 0x08 != 0 { 7 } else { 5 };
                 bus.ula.begin_frame();
                 ula.border = bus.border;
+                ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
                 if trace::enabled(trace::Category::ULA) {
                     let frame = next_frame_n();
@@ -2084,8 +2086,10 @@ impl Machine {
                 bus.beeper_edges.clear();
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
+                bus.ula.display_screen_bank = if bus.page_7ffd & 0x08 != 0 { 7 } else { 5 };
                 bus.ula.begin_frame();
                 ula.border = bus.border;
+                ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
                 if trace::enabled(trace::Category::ULA) {
                     let frame = next_frame_n();
@@ -3137,8 +3141,9 @@ impl Machine {
                 }
             }
             Self::Spec128 { bus, .. } => {
-                bus.ula.render_rgba_timed(
-                    bus.screen_bytes(),
+                bus.ula.render_rgba_timed_dual(
+                    &bus.banks[5][..6912],
+                    &bus.banks[7][..6912],
                     out,
                     with_border,
                     ula::PAPER_START_128,
@@ -3146,8 +3151,9 @@ impl Machine {
                 );
             }
             Self::SpecPlus3 { bus, .. } => {
-                bus.ula.render_rgba_timed(
-                    bus.screen_bytes(),
+                bus.ula.render_rgba_timed_dual(
+                    &bus.banks[5][..6912],
+                    &bus.banks[7][..6912],
                     out,
                     with_border,
                     ula::PAPER_START_128,

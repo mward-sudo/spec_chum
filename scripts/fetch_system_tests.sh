@@ -171,5 +171,80 @@ elif ! verify_sha "$DEST/snow.tap" "$SHA_SNOW_TAP"; then
   trap - EXIT
 fi
 
+# Patrik Rak ptime (ZXTests v3p) + Weiv ptime-128 — #247 screen-switch timing.
+SHA_ZXTESTS_V3P_ZIP="911bffcab0d5c424c7a1e97cb8c179445637117c3c6bf6797f790f34599bb0c0"
+SHA_PTIME_TAP="b52a7e55ce47b01e3792d40050858918a022d3f4c66871bd6b74c988351cdce7"
+SHA_PTIME128_ZIP="7a204ce47b4466d4f46ae6d1073520421455f67082eddf467602d03b3621339c"
+SHA_PTIME128_TAP="388dde0cc8e8948bcc2a4c219036f4f73f333f32a7f7edc0b6eed5a530cf3aaa"
+ZXTESTS_V3P_ZIP=.rom-cache/zxtests-v3p.zip
+fetch "$ZXE/ZXTests%20v3p%20%282014-03-20%29%28Rak%2C%20Patrik%29%5B%21%5D.zip" \
+  "$ZXTESTS_V3P_ZIP" "$SHA_ZXTESTS_V3P_ZIP"
+if [[ ! -f "$DEST/ptime.tap" || "$FORCE" == 1 ]]; then
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$ZXTESTS_V3P_ZIP" -d "$TMP"
+  cp -f "$TMP"/ptime.tap "$DEST/ptime.tap.tmp.$$"
+  if ! verify_sha "$DEST/ptime.tap.tmp.$$" "$SHA_PTIME_TAP"; then
+    rm -f "$DEST/ptime.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/ptime.tap.tmp.$$" "$DEST/ptime.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+elif ! verify_sha "$DEST/ptime.tap" "$SHA_PTIME_TAP"; then
+  echo "cached ptime.tap failed digest check; re-extract from zip" >&2
+  rm -f "$DEST/ptime.tap"
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$ZXTESTS_V3P_ZIP" -d "$TMP"
+  cp -f "$TMP"/ptime.tap "$DEST/ptime.tap.tmp.$$"
+  if ! verify_sha "$DEST/ptime.tap.tmp.$$" "$SHA_PTIME_TAP"; then
+    rm -f "$DEST/ptime.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/ptime.tap.tmp.$$" "$DEST/ptime.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+fi
+
+PTIME128_ZIP=.rom-cache/ptime-128-weiv.zip
+fetch "$ZXE/Test%20of%20Screen%20Switching%20Timings%20%282017-11-15%29%28Weiv%29%5B%21%5D.zip" \
+  "$PTIME128_ZIP" "$SHA_PTIME128_ZIP"
+if [[ ! -f "$DEST/ptime-128.tap" || "$FORCE" == 1 ]]; then
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$PTIME128_ZIP" -d "$TMP"
+  cp -f "$TMP"/ptime-128.tap "$DEST/ptime-128.tap.tmp.$$"
+  if ! verify_sha "$DEST/ptime-128.tap.tmp.$$" "$SHA_PTIME128_TAP"; then
+    rm -f "$DEST/ptime-128.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/ptime-128.tap.tmp.$$" "$DEST/ptime-128.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+elif ! verify_sha "$DEST/ptime-128.tap" "$SHA_PTIME128_TAP"; then
+  echo "cached ptime-128.tap failed digest check; re-extract from zip" >&2
+  rm -f "$DEST/ptime-128.tap"
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+  unzip -qo "$PTIME128_ZIP" -d "$TMP"
+  cp -f "$TMP"/ptime-128.tap "$DEST/ptime-128.tap.tmp.$$"
+  if ! verify_sha "$DEST/ptime-128.tap.tmp.$$" "$SHA_PTIME128_TAP"; then
+    rm -f "$DEST/ptime-128.tap.tmp.$$"
+    rm -rf "$TMP"
+    trap - EXIT
+    exit 1
+  fi
+  mv -f "$DEST/ptime-128.tap.tmp.$$" "$DEST/ptime-128.tap"
+  rm -rf "$TMP"
+  trap - EXIT
+fi
+
 echo "System-test TAPs in $DEST (gitignored via .rom-cache/)"
 ls -la "$DEST"/*.tap

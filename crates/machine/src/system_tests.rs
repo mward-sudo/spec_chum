@@ -737,3 +737,109 @@ fn amstrad_plus3_no_snow_with_i_40() {
 fn amstrad_plus2a_no_snow_with_i_40() {
     assert_no_snow_with_i_40(Model::SpectrumPlus2A, "+2A");
 }
+
+/// Patrik Rak `ptime.tap`: loads on 128K, flash-loads CODE, shows title (#247).
+#[test]
+fn ptime_128k_loads_and_shows_title() {
+    let Some(mut machine) = skip_no_rom(Model::Spectrum128) else {
+        return;
+    };
+    let Some(tap) = tap_path("ptime.tap") else {
+        return;
+    };
+    load_program_tap(&mut machine, &tap);
+    // Wait for BASIC autostart (LINE 9000) to flash-load the CODE block to $C000.
+    let mut code0 = 0u8;
+    for _ in 0..AFTER_LOAD_FRAMES {
+        let _ = machine.run_frame();
+        code0 = machine.read_mem(49152);
+        if code0 == 0xc3 {
+            break;
+        }
+    }
+    assert_eq!(
+        code0, 0xc3,
+        "ptime CODE should flash-load to $C000 (jp RUN = 0xC3), got {code0:#x}"
+    );
+    let text = run_until_contains(&mut machine, "screen paging test", AFTER_LOAD_FRAMES);
+    assert_screen_has(&text, "screen paging test");
+    assert_screen_has(&text, "Patrik Rak");
+
+    // The TAP's BASIC setup pokes via OUT #7FFD; also assert the dual-bank render
+    // path ptime needs (3T Sinclair delay is on Bus128::screen_switch_delay).
+    match &mut machine {
+        crate::Machine::Spec128 { bus, .. } => {
+            assert_eq!(
+                bus.screen_switch_delay, 3,
+                "Sinclair 128 screen-switch delay"
+            );
+            bus.banks[5][..6144].fill(0xff);
+            bus.banks[5][6144..6912].fill(0x47);
+            bus.banks[7][..6912].fill(0);
+            bus.ula.display_screen_bank = 7;
+            bus.ula.begin_frame();
+            let switch_t = ula::PAPER_START_128 + 3 + 8 * 4;
+            bus.ula.set_display_screen_bank(switch_t, 5);
+        }
+        _ => return,
+    }
+    let mut out = vec![0u8; 256 * 192 * 4];
+    machine.render_rgba(&mut out, false);
+    let black = [0u8, 0, 0];
+    let white = ula::palette_rgb(7, true);
+    assert_eq!(
+        &out[0..3],
+        &black,
+        "col0 should still be bank7 (black) before switch"
+    );
+    let right = (16 * 8) * 4;
+    assert_eq!(
+        &out[right..right + 3],
+        &white,
+        "col16 should be bank5 (white) after mid-frame switch\n{text}"
+    );
+}
+
+/// Weiv `ptime-128.tap`: 128K contended-port screen-switch test (#247).
+#[test]
+fn ptime128_loads_and_runs() {
+    let Some(mut machine) = skip_no_rom(Model::Spectrum128) else {
+        return;
+    };
+    let Some(tap) = tap_path("ptime-128.tap") else {
+        return;
+    };
+    load_program_tap(&mut machine, &tap);
+    // Weiv's TAP retains the "btime" REM banner; wait for painted UI / nonzero paper.
+    let mut best = 0usize;
+    let mut text = String::new();
+    for _ in 0..AFTER_LOAD_FRAMES {
+        let _ = machine.run_frame();
+        text = screen_text(&machine);
+        let nz = screen_nonzero(&machine);
+        if nz > best {
+            best = nz;
+        }
+        if best > 80 && (text.contains("ptime") || text.contains("Q:") || text.contains("port")) {
+            break;
+        }
+    }
+    assert!(
+        best > 80,
+        "ptime-128 should paint after load, got {best} nonzero bytes\n{text}"
+    );
+    for _ in 0..200 {
+        let _ = machine.run_frame();
+    }
+    let mut out = vec![0u8; 256 * 192 * 4];
+    machine.render_rgba(&mut out, false);
+    // Contended-port switching must exercise dual-bank render (not a blank paper).
+    let lit = out
+        .chunks(4)
+        .filter(|px| px[0] | px[1] | px[2] != 0)
+        .count();
+    assert!(
+        lit > 64,
+        "ptime-128 should leave a non-blank rendered paper ({lit} lit pixels)\n{text}"
+    );
+}
