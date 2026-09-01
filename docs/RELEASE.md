@@ -82,6 +82,27 @@ Distinguish cache vs fixture paths:
 
 Failures are real accuracy misses — do not stub them to ship.
 
+## Version numbers (semver)
+
+Workspace crates and GitHub Release tags ship together as `vX.Y.Z` (root
+`[workspace.package] version` in `Cargo.toml`).
+
+| Bump | When |
+| --- | --- |
+| **Patch** | Bug fixes, accuracy corrections, refactors, tuning that does **not** add new user- or agent-visible capability. |
+| **Minor** | New user-facing or agent-visible capability since the last **published** tag — Agent Debug HTTP routes, host screenshot capture, new machine models, major living-room work, new tape/disk surfaces, etc. |
+| **Major** | Breaking changes to supported platforms, default behaviour, or the Agent Debug API contract. |
+
+Before tagging, compare against the previous **published** release (not an
+intermediate mistaken tag). Keep workspace crate versions, macOS bundle numeric
+version (derived from the tag in `stage-macos-egui-app.sh`), and archive names
+aligned.
+
+If a tag shipped at the wrong semver level: delete the GitHub Release and remote
+tag (`gh release delete vX.Y.Z --yes`; `git push origin :refs/tags/vX.Y.Z`),
+bump to the correct version, re-run the gates above, tag again, and note
+supersession in the replacement release body (v0.4.2 → v0.5.0).
+
 ## Cut a release
 
 1. Version is `[workspace.package] version` in the root `Cargo.toml` (currently
