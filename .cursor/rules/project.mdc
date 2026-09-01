@@ -9,7 +9,7 @@ alwaysApply: true
 - Prefer additive changes inside the owning crate; avoid drive-by refactors across crates.
 - Never edit plan files under `.cursor/plans/` (or similar).
 - Never commit ROM binaries; fetch with `./scripts/fetch_roms.sh`.
-- Before finishing Rust work, run `./scripts/check.sh` (fmt + clippy `-D warnings` + tests).
+- Before finishing Rust work: while iterating prefer `./scripts/check_crates.sh` (debug, scoped crates); before merge run `./scripts/check.sh` (fmt + clippy `-D warnings` + tests). Living room uses `./scripts/check_living_room.sh` (**release** by default — avoid Bevy debug).
 - Before tagging a `vX.Y.Z` release: run `./scripts/run_slow_tests.sh` (z80doc + system-tests + z80full) — see `docs/RELEASE.md`. Default CI is not enough.
 - Follow `AGENTS.md` and `CONTRIBUTING.md` for TDD and PR expectations.
 - Before implementing, check GitHub Issues (`gh issue list` / related `gh issue view`); see `github-issues.mdc`.

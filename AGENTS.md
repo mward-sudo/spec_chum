@@ -46,14 +46,30 @@ notarisation remain [#68](https://github.com/mward-sudo/spec_chum/issues/68).
 
 ## Agent workflow (clippy-first)
 
-Before claiming a task done:
+**While iterating** — debug-build only crates relevant to the task:
+
+```bash
+./scripts/check_crates.sh                 # infer from git diff vs origin/main
+./scripts/check_crates.sh control_plane agent_server host_api
+```
+
+**Before claiming a task done / merge** — full workspace gate (debug, excludes `living_room`):
 
 ```bash
 ./scripts/check.sh
 ```
 
-Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
-`living_room` is excluded unless `SPEC_CHUM_CHECK_LIVING_ROOM=1`; use `./scripts/check_living_room.sh` for that crate.
+Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets --exclude living_room -- -D warnings`, `cargo test --workspace --exclude living_room`.
+
+**Living room / SpecChumMac** — Bevy is **release** by default (debug Bevy is multi‑GB):
+
+```bash
+./scripts/check_living_room.sh            # clippy+test --release + room_perf
+# SPEC_CHUM_ROOM_DEBUG=1 ./scripts/check_living_room.sh   # opt-in disk-heavy debug
+./scripts/build_macos_app.sh              # always release staticlib
+```
+
+Do not run `cargo check -p living_room` (debug) unless you intentionally need Bevy debug symbols — prefer `--release` or `check_living_room.sh`. Set `SPEC_CHUM_CHECK_LIVING_ROOM=1` only when `./scripts/check.sh` should also run the living-room release gate.
 
 ## Testing expectations
 
