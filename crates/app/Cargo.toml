@@ -29,6 +29,7 @@ cpal = { workspace = true }
 gilrs = { workspace = true }
 rfd = "0.15"
 anyhow = { workspace = true }
+raw-window-handle = "0.6"
 
 [lints]
 workspace = true

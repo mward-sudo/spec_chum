@@ -909,3 +909,70 @@ async fn agent_api_memory_regions_48k() {
     .expect("no machine");
     assert_eq!(empty.status(), StatusCode::CONFLICT);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_host_display_and_window_unavailable() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let _ = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/run")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"frames":1}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("run");
+
+    let disp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/host/display?scale=2&format=png")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("host display");
+    assert_eq!(disp.status(), StatusCode::OK);
+    assert_eq!(
+        disp.headers()
+            .get("x-specchum-panel")
+            .and_then(|v| v.to_str().ok()),
+        Some("scale")
+    );
+    assert_eq!(
+        disp.headers()
+            .get("x-specchum-width")
+            .and_then(|v| v.to_str().ok()),
+        Some("512")
+    );
+    let body = axum::body::to_bytes(disp.into_body(), usize::MAX)
+        .await
+        .expect("png");
+    assert!(body.starts_with(&[0x89, b'P', b'N', b'G']));
+
+    let win = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/host/window")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("host window");
+    assert_eq!(win.status(), StatusCode::SERVICE_UNAVAILABLE);
+}

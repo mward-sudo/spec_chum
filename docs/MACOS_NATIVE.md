@@ -79,7 +79,9 @@ apps/macos/.build/release/SpecChumMac
 
 `HostBridge` calls `sc_agent_embed_start` when `SPEC_CHUM_AGENT=1` is set at launch
 (same auth env vars as `spec-chum-agent` / egui). Agents see the **same** running
-machine as the SwiftUI shell — no separate process.
+machine as the SwiftUI shell — no separate process. Host screenshots match egui:
+`GET /v1/framebuffer`, `GET /v1/host/display`, and `GET /v1/host/window` (own
+window id only; no focus / z-order change) — see [#239](https://github.com/mward-sudo/spec_chum/issues/239).
 
 Standalone server (separate machine / headless) remains available:
 

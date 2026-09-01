@@ -1,0 +1,33 @@
+---
+description: Keep egui and SpecChumMac GUI feature parity (shared surfaces)
+alwaysApply: true
+---
+
+# GUI app feature parity (egui ↔ SpecChumMac)
+
+Spec Chum has **two** first-party GUI hosts that must stay feature-aligned:
+
+| Host | Path |
+| --- | --- |
+| egui | `crates/app` (`spec_chum`) |
+| SpecChumMac | `apps/macos` + `living_room` / `host_api` FFI |
+
+## Rule
+
+- **Same product features on both** unless a capability is **genuinely platform-specific** (e.g. IOSurface present, AppKit-only chrome, Windows/Linux absence).
+- Shared behaviour lives in shared Rust (`control_plane`, `host_api`, `machine`, …). Hosts are thin adapters.
+- Agent Debug HTTP, tape/disk/media, input, Debug/inspect, prefs that map to `UiPreferences` / session prefs, and host screenshots (`/v1/framebuffer`, `/v1/host/display`, `/v1/host/window`) are **not** egui-only or Mac-only.
+- When adding or changing a GUI-visible or agent-visible feature: **update both hosts** (or the shared backend both use) in the **same PR**, plus docs (`docs/MACOS_NATIVE.md`, `docs/AGENT_DEBUG_API.md`, `AGENTS.md` as needed).
+- Do **not** ship “works in egui, SpecChumMac later” without an explicit follow-up issue linked from the PR (`Refs #N`) and a note in the PR body.
+
+## Platform-specific (allowed divergence)
+
+- Presentation path only: egui texture vs SpecChumMac `SpectrumDisplayView` / living-room IOSurface.
+- OS window chrome / menu bar / sandbox / signing.
+- Capture plumbing may differ (eframe `NSView` vs `sc_agent_set_host_window_id`) but the **HTTP surface and semantics** must match.
+
+## Check before finishing
+
+- Grep both `crates/app` and `apps/macos` (and `living_room` agent FFI) for the feature.
+- If `SPEC_CHUM_AGENT=1` embed is involved, verify SpecChumMac `HostBridge` + `sc_agent_*` as well as egui.
+- Rebuild SpecChumMac when living_room / host_api / agent routes change (`./scripts/build_macos_app.sh` / `run_macos_app.sh`).

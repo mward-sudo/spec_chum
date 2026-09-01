@@ -13,4 +13,5 @@ alwaysApply: true
 - Before tagging a `vX.Y.Z` release: run `./scripts/run_slow_tests.sh` (z80doc + system-tests + z80full) — see `docs/RELEASE.md`. Default CI is not enough.
 - Follow `AGENTS.md` and `CONTRIBUTING.md` for TDD and PR expectations.
 - Before implementing, check GitHub Issues (`gh issue list` / related `gh issue view`); see `github-issues.mdc`.
+- **GUI parity:** egui (`crates/app`) and SpecChumMac (`apps/macos`) stay feature-aligned unless truly platform-specific — see `gui-app-parity.mdc`.
 - Before finish/merge of a PR: undraft if needed, run local CR, request GitHub CodeRabbit when quota allows, run `./scripts/check_pr_reviews.sh`. Drafts skip CR completeness; ready PRs hard-fail on pending/missing/error CR or unresolved bot threads; **rate-limited / skipped** soft-passes gate 1 (local CR + threads still required) — see `pr-review-merge.mdc` (lesson #83).

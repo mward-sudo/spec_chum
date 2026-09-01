@@ -11,7 +11,8 @@ use axum::{
     Json, Router,
 };
 use control_plane::{
-    ApiError, ControlPlane, ErrorBody, FramebufferMeta, PrefsPatch, ServerConfig, TraceFormat,
+    ApiError, ControlPlane, ErrorBody, FramebufferMeta, PrefsPatch, PresentMeta, ServerConfig,
+    TraceFormat,
 };
 use machine::{TapeLoadOptions, Watch};
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,8 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/memory/regions", get(memory_regions))
         .route("/v1/errors/last", get(last_error))
         .route("/v1/framebuffer", get(framebuffer))
+        .route("/v1/host/display", get(host_display))
+        .route("/v1/host/window", get(host_window))
         .route("/v1/model", post(set_model))
         .route("/v1/config", post(apply_config))
         .route("/v1/reset", post(reset))
@@ -448,6 +451,105 @@ fn png_response(state: &AppState, meta: FramebufferMeta) -> Response {
         }
         Err(e) => api_error(&state.plane, e),
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct HostDisplayQuery {
+    #[serde(default)]
+    width: Option<u32>,
+    #[serde(default)]
+    height: Option<u32>,
+    #[serde(default)]
+    scale: Option<u32>,
+    #[serde(default = "default_png")]
+    format: String,
+}
+
+async fn host_display(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<HostDisplayQuery>,
+) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
+    match q.format.to_ascii_lowercase().as_str() {
+        "rgba" => match state
+            .plane
+            .host_display_presented_rgba(q.width, q.height, q.scale)
+        {
+            Ok((bytes, meta)) => {
+                let mut resp = Response::new(Body::from(bytes));
+                let h = resp.headers_mut();
+                h.insert(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/octet-stream"),
+                );
+                insert_present_headers(h, &meta);
+                resp
+            }
+            Err(e) => api_error(&state.plane, e),
+        },
+        "png" | "" => match state
+            .plane
+            .host_display_presented(q.width, q.height, q.scale)
+        {
+            Ok((bytes, meta)) => {
+                let mut resp = Response::new(Body::from(bytes));
+                let h = resp.headers_mut();
+                h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+                insert_present_headers(h, &meta);
+                resp
+            }
+            Err(e) => api_error(&state.plane, e),
+        },
+        other => api_error(
+            &state.plane,
+            ApiError::BadRequest(format!("unknown host display format: {other}")),
+        ),
+    }
+}
+
+async fn host_window(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
+    match state.plane.host_window_png() {
+        Ok(bytes) => {
+            let mut resp = Response::new(Body::from(bytes));
+            let h = resp.headers_mut();
+            h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+            h.insert(
+                "x-specchum-source",
+                HeaderValue::from_static("os-window-own-id"),
+            );
+            resp
+        }
+        Err(e) => api_error(&state.plane, e),
+    }
+}
+
+fn insert_present_headers(h: &mut header::HeaderMap, meta: &PresentMeta) {
+    if let Ok(v) = HeaderValue::from_str(&meta.width.to_string()) {
+        h.insert("x-specchum-width", v);
+    }
+    if let Ok(v) = HeaderValue::from_str(&meta.height.to_string()) {
+        h.insert("x-specchum-height", v);
+    }
+    if let Ok(v) = HeaderValue::from_str(&meta.source_width.to_string()) {
+        h.insert("x-specchum-source-width", v);
+    }
+    if let Ok(v) = HeaderValue::from_str(&meta.source_height.to_string()) {
+        h.insert("x-specchum-source-height", v);
+    }
+    h.insert("x-specchum-filter", HeaderValue::from_static(meta.filter));
+    let panel = match meta.panel {
+        control_plane::PresentPanelSource::Explicit => "explicit",
+        control_plane::PresentPanelSource::Live => "live",
+        control_plane::PresentPanelSource::Scale => "scale",
+        control_plane::PresentPanelSource::Default => "default",
+    };
+    h.insert("x-specchum-panel", HeaderValue::from_static(panel));
 }
 
 fn insert_meta_headers(headers: &mut HeaderMap, meta: &FramebufferMeta) {

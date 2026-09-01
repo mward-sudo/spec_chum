@@ -528,9 +528,29 @@ final class HostBridge: ObservableObject {
         if sc_agent_embed_start(handle) == 0 {
             let port = ProcessInfo.processInfo.environment["SPEC_CHUM_AGENT_PORT"] ?? "17384"
             status = "\(status) — agent http://127.0.0.1:\(port)"
+            publishAgentHostView()
         } else {
             let detail = HostBridge.takeLastError() ?? "agent embed failed (need SPEC_CHUM_AGENT_TOKEN or SPEC_CHUM_AGENT_INSECURE=1)"
             status = "\(status) — \(detail)"
+        }
+    }
+
+    /// Publish own-window id + display panel size for `/v1/host/*` (#239).
+    ///
+    /// Read-only: does **not** activate, makeKey, or reorder windows.
+    func publishAgentHostView() {
+        guard let handle else { return }
+        guard ProcessInfo.processInfo.environment["SPEC_CHUM_AGENT"] == "1" else { return }
+        let present: NSView? = spectrumPresentView ?? livingRoomPresentView
+        if let window = present?.window {
+            // windowNumber == CGWindowID; capture path verifies owning PID == self.
+            _ = sc_agent_set_host_window_id(handle, UInt32(window.windowNumber))
+        }
+        if let view = present {
+            let b = view.bounds
+            let w = UInt32(max(1, b.width.rounded()))
+            let h = UInt32(max(1, b.height.rounded()))
+            _ = sc_agent_set_display_panel_size(handle, w, h)
         }
     }
 
@@ -1483,6 +1503,7 @@ final class HostBridge: ObservableObject {
             syncTapePublished()
             enqueueAudio()
             publishLivingRoomFramebuffer()
+            publishAgentHostView()
             // Flat spectrum presents via direct NSView refresh; living room uses DisplayLink + IOSurface.
             if !livingRoomMode {
                 spectrumPresentView?.presentFrame()
@@ -1509,6 +1530,7 @@ final class HostBridge: ObservableObject {
         if ran > 0 {
             syncTapePublished()
             publishLivingRoomFramebuffer()
+            publishAgentHostView()
             if !livingRoomMode {
                 spectrumPresentView?.presentFrame()
             }

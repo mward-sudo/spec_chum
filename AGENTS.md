@@ -27,6 +27,8 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 
 Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`). Models include distinct **+2A** (tape Loader) and **+3** (disk Loader).
 
+**GUI parity:** egui (`crates/app`) and SpecChumMac must stay feature-aligned unless a capability is genuinely platform-specific. Shared logic in `control_plane` / `host_api`; both hosts get the same agent HTTP surface. See `.cursor/rules/gui-app-parity.mdc`.
+
 ## Hard constraints
 
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
