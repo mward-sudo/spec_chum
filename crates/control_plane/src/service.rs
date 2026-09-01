@@ -302,6 +302,83 @@ impl ControlPlane {
         self.framebuffer_meta()
     }
 
+    /// Z80 address-space regions + banking snapshot for agents (`GET /v1/memory/regions`).
+    pub fn memory_map(&self) -> ApiResult<MemoryMapResponse> {
+        self.with_session_ref(|s| {
+            let Some(m) = s.machine() else {
+                return Err(ApiError::NoMachine);
+            };
+            let inspect = m.inspect();
+            let paging = &inspect.paging;
+            let model = model_slug(s.model()).to_string();
+            let paged = paging.page_7ffd.is_some() || paging.page_1ffd.is_some();
+
+            let regions = if paged {
+                vec![
+                    MemoryRegion {
+                        name: "rom".into(),
+                        start: 0x0000,
+                        len: 0x4000,
+                        writable: false,
+                        bank: Some(paging.rom_bank),
+                    },
+                    MemoryRegion {
+                        name: "ram_4000".into(),
+                        start: 0x4000,
+                        len: 0x4000,
+                        writable: true,
+                        bank: Some(5),
+                    },
+                    MemoryRegion {
+                        name: "ram_8000".into(),
+                        start: 0x8000,
+                        len: 0x4000,
+                        writable: true,
+                        bank: Some(2),
+                    },
+                    MemoryRegion {
+                        name: "ram_c000".into(),
+                        start: 0xC000,
+                        len: 0x4000,
+                        writable: true,
+                        bank: paging.ram_c000.or(Some(0)),
+                    },
+                ]
+            } else {
+                vec![
+                    MemoryRegion {
+                        name: "rom".into(),
+                        start: 0x0000,
+                        len: 0x4000,
+                        writable: false,
+                        bank: Some(0),
+                    },
+                    MemoryRegion {
+                        name: "ram".into(),
+                        start: 0x4000,
+                        len: 0xC000,
+                        writable: true,
+                        bank: None,
+                    },
+                ]
+            };
+
+            Ok(MemoryMapResponse {
+                model,
+                paging: PagingSnapshot {
+                    page_7ffd: paging.page_7ffd,
+                    page_1ffd: paging.page_1ffd,
+                    rom_bank: paging.rom_bank,
+                    ram_c000: paging.ram_c000,
+                    screen_bank: paging.screen_bank,
+                    special: paging.special,
+                    locked: paging.locked,
+                },
+                regions,
+            })
+        })
+    }
+
     pub fn apply_config(&self, config: &UserMachineConfig) -> ApiResult<()> {
         self.with_machine_load(|s| {
             s.apply_user_config(config)?;
@@ -839,6 +916,34 @@ pub struct HealthResponse {
     pub model: String,
     pub has_machine: bool,
     pub status: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct MemoryRegion {
+    pub name: String,
+    pub start: u16,
+    pub len: u32,
+    pub writable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bank: Option<u8>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PagingSnapshot {
+    pub page_7ffd: Option<u8>,
+    pub page_1ffd: Option<u8>,
+    pub rom_bank: u8,
+    pub ram_c000: Option<u8>,
+    pub screen_bank: Option<u8>,
+    pub special: bool,
+    pub locked: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct MemoryMapResponse {
+    pub model: String,
+    pub paging: PagingSnapshot,
+    pub regions: Vec<MemoryRegion>,
 }
 
 #[derive(Clone, Debug, Serialize)]

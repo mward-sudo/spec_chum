@@ -34,9 +34,9 @@ server), not a new CLI process.
 
 ## Agent Debug API (unified control plane)
 
-> **Implemented (Phases A–H):** loopback HTTP on `127.0.0.1:17384` (default).
+> **Implemented (Phases A–H + memory regions):** loopback HTTP on `127.0.0.1:17384` (default).
 > Design: [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md).
-> Tracker: [#210](https://github.com/mward-sudo/spec_chum/issues/210).
+> Optional later: WebSocket / OpenAPI — [#236](https://github.com/mward-sudo/spec_chum/issues/236).
 > Phase C docs: C ABI = FFI-only; HTTP/`control_plane` = primary for agents.
 
 **Unification goal:** one shared Rust backend (`control_plane`) serves HTTP and

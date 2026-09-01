@@ -856,3 +856,56 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
     .expect("no machine");
     assert_eq!(no_machine.status(), StatusCode::CONFLICT);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_api_memory_regions_48k() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/memory/regions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("memory regions");
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    let json: serde_json::Value = serde_json::from_slice(&body).expect("json");
+    assert_eq!(json["model"], "48k");
+    assert_eq!(json["regions"][0]["name"], "rom");
+    assert_eq!(json["regions"][0]["start"], 0);
+    assert_eq!(json["regions"][0]["len"], 0x4000);
+    assert_eq!(json["regions"][1]["name"], "ram");
+    assert_eq!(json["regions"][1]["start"], 0x4000);
+    assert_eq!(json["regions"][1]["len"], 0xC000);
+
+    let empty = router(AppState {
+        plane: Arc::new(ControlPlane::new(ModelId::Spectrum48, false)),
+        token: None,
+        insecure: true,
+    })
+    .oneshot(
+        Request::builder()
+            .uri("/v1/memory/regions")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+    .expect("no machine");
+    assert_eq!(empty.status(), StatusCode::CONFLICT);
+}

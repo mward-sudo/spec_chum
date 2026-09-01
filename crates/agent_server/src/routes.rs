@@ -33,6 +33,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/status", get(status))
         .route("/v1/inspect", get(inspect))
         .route("/v1/video", get(video))
+        .route("/v1/memory/regions", get(memory_regions))
         .route("/v1/errors/last", get(last_error))
         .route("/v1/framebuffer", get(framebuffer))
         .route("/v1/model", post(set_model))
@@ -190,6 +191,10 @@ async fn inspect(State(state): State<AppState>, headers: HeaderMap) -> Response 
 
 async fn video(State(state): State<AppState>, headers: HeaderMap) -> Response {
     auth_json(&state, &headers, || state.plane.video_meta())
+}
+
+async fn memory_regions(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    auth_json(&state, &headers, || state.plane.memory_map())
 }
 
 #[derive(Clone, Debug, Serialize)]
