@@ -5,8 +5,6 @@ mod keymap;
 mod theme;
 mod window_capture;
 
-pub use window_capture::OwnWindowCapturer;
-
 pub use keymap::MAPPING_DOC;
 
 use std::ops::{Deref, DerefMut};
@@ -1041,7 +1039,7 @@ pub struct SpecChumApp {
     plane: Option<Arc<ControlPlane>>,
     _agent: Option<agent_server::embedded::EmbeddedServer>,
     /// Own-window capturer for `GET /v1/host/window` (#239); registered on `plane`.
-    window_capturer: Option<Arc<window_capture::OwnWindowCapturer>>,
+    window_capturer: Option<Arc<control_plane::OwnWindowCapturer>>,
     texture: Option<egui::TextureHandle>,
     beeper: Arc<std::sync::Mutex<BeeperState>>,
     _stream: Option<cpal::Stream>,
@@ -1224,7 +1222,7 @@ impl SpecChumApp {
             (None, None)
         };
         let window_capturer = plane.as_ref().map(|p| {
-            let cap = window_capture::OwnWindowCapturer::new();
+            let cap = control_plane::OwnWindowCapturer::new();
             p.set_window_capture(Some(
                 Arc::clone(&cap) as Arc<dyn control_plane::HostWindowCapture>
             ));

@@ -81,9 +81,16 @@ void sc_room_perf_set_thread_hint(uint32_t hint);
  * Agent debug HTTP on the live sc_* session (#210). Requires SPEC_CHUM_AGENT_TOKEN
  * or SPEC_CHUM_AGENT_INSECURE=1 (same as egui SPEC_CHUM_AGENT=1). Pass the sc_create
  * handle — not a sc_room_* handle.
+ *
+ * Host view (#239): after embed, publish window id + display panel size from Swift
+ * without activating / reordering the window (parity with egui).
  */
 int sc_agent_embed_start(void *sc_handle);
 int sc_agent_embed_stop(void *sc_handle);
+/** CGWindowID / NSWindow.windowNumber for GET /v1/host/window (own window only). */
+int sc_agent_set_host_window_id(void *sc_handle, uint32_t window_id);
+/** Central display panel size in points for GET /v1/host/display live sizing. */
+int sc_agent_set_display_panel_size(void *sc_handle, uint32_t width, uint32_t height);
 
 char *sc_room_last_error(void);
 void sc_room_string_free(char *s);

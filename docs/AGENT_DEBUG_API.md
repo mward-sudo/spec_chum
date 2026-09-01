@@ -194,10 +194,10 @@ curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
 
 | Endpoint | Source | Notes |
 | --- | --- | --- |
-| `GET /v1/host/display` | **In-process** software NEAREST + letterbox of the guest RGBA (matches egui `TextureOptions::NEAREST` + `fit_size`) | Query: `scale=1..16` **or** `width`+`height`; default `scale` behaviour is 2× when no live panel. With `SPEC_CHUM_AGENT=1` egui publishes the last central-panel size (`X-SpecChum-Panel: live`). |
-| `GET /v1/host/window` | **OS capture of this process’s own window only** | macOS: `CGWindowListCreateImage` + registered `CGWindowID`, after owning PID == self. **Does not** activate, focus, or change z-order. Standalone agent / unset id → `503`. |
+| `GET /v1/host/display` | **In-process** software NEAREST + letterbox of the guest RGBA (matches egui `TextureOptions::NEAREST` + `fit_size`) | Query: `scale=1..16` **or** `width`+`height`; default 2× when no live panel. **egui and SpecChumMac** (when agent embedded) publish live panel size (`X-SpecChum-Panel: live`). |
+| `GET /v1/host/window` | **OS capture of this process’s own window only** | Shared `OwnWindowCapturer` in `control_plane`. macOS: `CGWindowListCreateImage` + registered `CGWindowID`, PID-checked. **Does not** activate, focus, or change z-order. SpecChumMac publishes via `sc_agent_set_host_window_id`; egui via eframe `NSView`. Standalone / unset id → `503`. |
 
-**Hard rules for `/v1/host/window`:** never frontmost/desktop/focused-window APIs; never bring the window forward to capture; fail closed on missing/stale/wrong-PID id.
+**Hard rules for `/v1/host/window`:** never frontmost/desktop/focused-window APIs; never bring the window forward to capture; fail closed on missing/stale/wrong-PID id. egui and SpecChumMac expose the **same** `/v1/host/*` surface (not platform-divergent feature sets).
 
 ```bash
 # Presented display (works on standalone agent too)
@@ -205,7 +205,7 @@ curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
   'http://127.0.0.1:17384/v1/host/display?scale=2&format=png' \
   -o /tmp/spec_display.png
 
-# Full egui window (requires SPEC_CHUM_AGENT=1 embedded GUI)
+# Full host window (requires embedded GUI: egui or SpecChumMac + SPEC_CHUM_AGENT=1)
 curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
   'http://127.0.0.1:17384/v1/host/window' \
   -o /tmp/spec_window.png

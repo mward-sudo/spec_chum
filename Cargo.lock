@@ -370,8 +370,6 @@ dependencies = [
  "agent_server",
  "anyhow",
  "control_plane",
- "core-foundation",
- "core-graphics",
  "cpal 0.15.3",
  "eframe",
  "egui",
@@ -379,7 +377,6 @@ dependencies = [
  "gilrs",
  "host_api",
  "machine",
- "objc2 0.6.4",
  "parking_lot",
  "raw-window-handle",
  "rfd",
@@ -2661,9 +2658,12 @@ dependencies = [
 name = "control_plane"
 version = "0.4.1"
 dependencies = [
+ "core-foundation",
+ "core-graphics",
  "formats",
  "host_api",
  "machine",
+ "objc2 0.6.4",
  "parking_lot",
  "png 0.17.16",
  "serde",
