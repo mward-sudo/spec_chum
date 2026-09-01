@@ -207,7 +207,7 @@ impl TrdImage {
         raw[data_off..data_off + n].copy_from_slice(&file[..n]);
 
         let mut sectors = Vec::with_capacity(total_sectors);
-        for chunk in raw.chunks_exact(TRD_SECTOR_SIZE) {
+        for chunk in raw.as_chunks::<TRD_SECTOR_SIZE>().0 {
             let mut s = [0u8; TRD_SECTOR_SIZE];
             s.copy_from_slice(chunk);
             sectors.push(s);
