@@ -71,6 +71,8 @@ pub extern "C" fn sc_agent_embed_stop(handle: *mut c_void) -> c_int {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unsafe_code)] // test-owned handle drop + env restore
+
     use std::cell::RefCell;
 
     use spec_chum_host::handle::{SessionHandle, SessionInner};
