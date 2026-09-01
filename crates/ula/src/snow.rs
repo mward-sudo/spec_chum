@@ -158,10 +158,19 @@ pub fn pattern_at_phase(phase: u8) -> Option<SnowPattern> {
     }
 }
 
-/// Screen-RAM offsets corrupted by snow at M1 refresh T4.
+/// Bitmap vs attribute half of a ULA display fetch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SnowCellKind {
+    Bitmap,
+    Attr,
+}
+
+/// One snow-corrupted ULA fetch (keyed by raster line/column, not screen offset).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SnowOverride {
-    pub offset: usize,
+    pub line: u32,
+    pub col: usize,
+    pub kind: SnowCellKind,
     pub byte: u8,
 }
 
@@ -199,9 +208,6 @@ pub fn snow_overrides(
     match pattern {
         SnowPattern::Corrupt => {
             let r_lo = r & 0x7f;
-            if r_lo == fetch.addr_lo {
-                return out;
-            }
             let bm_hi = fetch.bitmap_off & !0xff;
             let at_hi = fetch.attr_off & !0xff;
             let corrupt_bm = bm_hi | usize::from(r_lo);
@@ -209,17 +215,26 @@ pub fn snow_overrides(
             if corrupt_bm >= 6912 || corrupt_at >= 6912 {
                 return out;
             }
+            // Skip when corrupt addresses match intended fetch (not `r == addr_lo` — bit 7
+            // of `bitmap_off` is lost in MAME's `addr_lo` formula, e.g. row 32 col 0).
+            if corrupt_bm == fetch.bitmap_off && corrupt_at == fetch.attr_off {
+                return out;
+            }
             let bm_byte = source[corrupt_bm];
             let at_byte = source[corrupt_at];
             if bm_byte != screen[fetch.bitmap_off] {
                 out.push(SnowOverride {
-                    offset: fetch.bitmap_off,
+                    line: fetch.line,
+                    col: fetch.col,
+                    kind: SnowCellKind::Bitmap,
                     byte: bm_byte,
                 });
             }
             if at_byte != screen[fetch.attr_off] {
                 out.push(SnowOverride {
-                    offset: fetch.attr_off,
+                    line: fetch.line,
+                    col: fetch.col,
+                    kind: SnowCellKind::Attr,
                     byte: at_byte,
                 });
             }
@@ -234,13 +249,17 @@ pub fn snow_overrides(
             let at_byte = screen[prev_at];
             if bm_byte != screen[fetch.bitmap_off] {
                 out.push(SnowOverride {
-                    offset: fetch.bitmap_off,
+                    line: fetch.line,
+                    col: fetch.col,
+                    kind: SnowCellKind::Bitmap,
                     byte: bm_byte,
                 });
             }
             if at_byte != screen[fetch.attr_off] {
                 out.push(SnowOverride {
-                    offset: fetch.attr_off,
+                    line: fetch.line,
+                    col: fetch.col,
+                    kind: SnowCellKind::Attr,
                     byte: at_byte,
                 });
             }
@@ -284,9 +303,25 @@ mod tests {
         let t = PAPER_START_48 + 3;
         let ovs = snow_overrides(t, 1, false, true, SnowTiming::Class48, &screen, None);
         assert_eq!(ovs.len(), 1);
-        assert_eq!(ovs[0].offset, 0);
+        assert_eq!(ovs[0].line, 0);
+        assert_eq!(ovs[0].col, 0);
+        assert_eq!(ovs[0].kind, SnowCellKind::Bitmap);
         assert_eq!(ovs[0].byte, 0x55);
         assert_ne!(ovs[0].byte, screen[0]);
+    }
+
+    #[test]
+    fn corrupt_row32_col0_r_zero_not_skipped() {
+        let mut screen = vec![0u8; 6912];
+        screen[128] = 0xAA;
+        screen[0] = 0x55;
+        let t = PAPER_START_48 + 32 * T_LINE_48 + 3;
+        let ovs = snow_overrides(t, 0, false, true, SnowTiming::Class48, &screen, None);
+        assert!(
+            ovs.iter()
+                .any(|o| o.line == 32 && o.col == 0 && o.byte == 0x55),
+            "row 32 col 0: bitmap_off=0x80 but addr_lo=0 — must not skip on r=0"
+        );
     }
 
     #[test]
@@ -316,7 +351,9 @@ mod tests {
         screen[2] = 0x22;
         let t = PAPER_START_48 + 7;
         let ovs = snow_overrides(t, 0, false, true, SnowTiming::Class48, &screen, None);
-        assert!(ovs.iter().any(|o| o.offset == 2 && o.byte == 0x11));
+        assert!(ovs
+            .iter()
+            .any(|o| o.line == 0 && o.col == 2 && o.byte == 0x11));
     }
 
     #[test]
