@@ -3,6 +3,9 @@
 mod display;
 mod keymap;
 mod theme;
+mod window_capture;
+
+pub use window_capture::OwnWindowCapturer;
 
 pub use keymap::MAPPING_DOC;
 
@@ -1037,6 +1040,8 @@ pub struct SpecChumApp {
     /// Present when embedded agent HTTP shares the session (#221).
     plane: Option<Arc<ControlPlane>>,
     _agent: Option<agent_server::embedded::EmbeddedServer>,
+    /// Own-window capturer for `GET /v1/host/window` (#239); registered on `plane`.
+    window_capturer: Option<Arc<window_capture::OwnWindowCapturer>>,
     texture: Option<egui::TextureHandle>,
     beeper: Arc<std::sync::Mutex<BeeperState>>,
     _stream: Option<cpal::Stream>,
@@ -1218,10 +1223,18 @@ impl SpecChumApp {
         } else {
             (None, None)
         };
+        let window_capturer = plane.as_ref().map(|p| {
+            let cap = window_capture::OwnWindowCapturer::new();
+            p.set_window_capture(Some(
+                Arc::clone(&cap) as Arc<dyn control_plane::HostWindowCapture>
+            ));
+            cap
+        });
         let mut app = Self {
             session,
             plane,
             _agent: agent,
+            window_capturer,
             texture: None,
             beeper,
             _stream: stream,
@@ -2591,6 +2604,11 @@ of their copyrighted material but retain that copyright.",
             tex.set(image, egui::TextureOptions::NEAREST);
             let avail = ui.available_size();
             let fitted = display::fit_size(src, avail);
+            if let Some(plane) = self.plane.as_ref() {
+                let pw = avail.x.round().max(1.0) as u32;
+                let ph = avail.y.round().max(1.0) as u32;
+                plane.set_display_panel_size(pw, ph);
+            }
             ui.centered_and_justified(|ui| {
                 ui.image((tex.id(), fitted));
             });
@@ -2730,7 +2748,10 @@ impl eframe::App for SpecChumApp {
         theme::clear_color()
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if let Some(cap) = self.window_capturer.as_ref() {
+            window_capture::refresh_window_id_from_frame(cap, frame);
+        }
         let size = ctx.input(|i| i.viewport().inner_rect.map(|r| r.size()));
         if let Some(size) = size {
             let w = size.x.max(MIN_WINDOW_WIDTH);

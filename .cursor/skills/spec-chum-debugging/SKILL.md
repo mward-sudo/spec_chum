@@ -55,7 +55,10 @@ cargo build -p agent_server --release
 ### When to prefer the API
 
 - Visual QA (Techdraw hi-res, Timex SCLD, border colour) — **export guest framebuffer
-  at 1:1**, not OS `screencapture` or living-room CRT.
+  at 1:1** (`GET /v1/framebuffer`), not OS `screencapture` of arbitrary displays.
+- Host presentation (egui letterbox / chrome) — `GET /v1/host/display` (in-process
+  NEAREST compose) and `GET /v1/host/window` (own-window OS snapshot only; no focus
+  change) with `SPEC_CHUM_AGENT=1` — see [#239](https://github.com/mward-sudo/spec_chum/issues/239).
 - Long sessions: tape load mid-run, breakpoints, grab PNG after N frames.
 - Avoid GUI automation (file pickers, ROM dialogs, multi-monitor).
 

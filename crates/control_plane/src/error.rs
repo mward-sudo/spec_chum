@@ -14,6 +14,9 @@ pub enum ApiError {
     BadRequest(String),
     #[error("png encode: {0}")]
     Png(String),
+    /// Feature needs an attached host / is temporarily unavailable (#239).
+    #[error("{0}")]
+    Unavailable(String),
     #[error(transparent)]
     Host(HostError),
 }
@@ -40,6 +43,7 @@ impl ApiError {
             Self::Unauthorized => 401,
             Self::BadRequest(_) => 400,
             Self::NoMachine => 409,
+            Self::Unavailable(_) => 503,
             Self::Message(_) | Self::Host(_) | Self::Png(_) => 500,
         }
     }

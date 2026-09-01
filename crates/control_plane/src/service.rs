@@ -15,6 +15,8 @@ use trace::{Category, DumpFilter};
 
 use crate::error::{ApiError, ApiResult};
 use crate::framebuffer::{encode_framebuffer_png, model_slug, parse_model_slug, FramebufferMeta};
+use crate::host_view::{new_shared_host_view, HostWindowCapture, SharedHostView};
+use crate::present::{compose_nearest_letterbox, encode_rgba_png, PresentMeta, PresentPanelSource};
 
 /// Loopback HTTP server configuration.
 #[derive(Clone, Debug)]
@@ -107,6 +109,8 @@ pub struct ControlPlane {
     last_error: Mutex<Option<LastErrorRecord>>,
     /// Session-scoped host prefs for the agent API (not file-backed; see `/v1/prefs`).
     prefs: Mutex<SessionPrefs>,
+    /// Optional host UI / window capture state (#239).
+    host_view: SharedHostView,
 }
 
 /// Agent-visible host prefs snapshot (`GET`/`PATCH /v1/prefs`).
@@ -192,7 +196,101 @@ impl ControlPlane {
             inner,
             last_error: Mutex::new(None),
             prefs: Mutex::new(SessionPrefs::default()),
+            host_view: new_shared_host_view(),
         }
+    }
+
+    /// Shared host-view slot (panel size + window capturer) for egui embed (#239).
+    #[must_use]
+    pub fn host_view(&self) -> SharedHostView {
+        Arc::clone(&self.host_view)
+    }
+
+    /// Publish last central-panel size from the live egui host (points).
+    pub fn set_display_panel_size(&self, w: u32, h: u32) {
+        self.host_view.lock().set_panel_size(w, h);
+    }
+
+    /// Register / clear OS window capturer (own window id only; no focus change).
+    pub fn set_window_capture(&self, capture: Option<Arc<dyn HostWindowCapture>>) {
+        self.host_view.lock().set_window_capture(capture);
+    }
+
+    /// OS window PNG via registered capturer, or `Unavailable` if none.
+    pub fn host_window_png(&self) -> ApiResult<Vec<u8>> {
+        self.host_view.lock().capture_window_png()
+    }
+
+    /// Software NEAREST + letterbox presentation matching egui's flat display path (#239).
+    pub fn host_display_presented(
+        &self,
+        width: Option<u32>,
+        height: Option<u32>,
+        scale: Option<u32>,
+    ) -> ApiResult<(Vec<u8>, PresentMeta)> {
+        let (src, sw, sh) = self.with_session_ref(|session| {
+            if !session.has_machine() {
+                return Err(ApiError::NoMachine);
+            }
+            let w = session.width();
+            let h = session.height();
+            let rgba = session.framebuffer().to_vec();
+            Ok((rgba, w, h))
+        })?;
+
+        let (panel_w, panel_h) = {
+            let hv = self.host_view.lock();
+            (hv.panel_w, hv.panel_h)
+        };
+        let (dw, dh, panel) = resolve_present_size(sw, sh, width, height, scale, panel_w, panel_h)?;
+        let rgba = compose_nearest_letterbox(&src, sw, sh, dw, dh)?;
+        let png = encode_rgba_png(&rgba, dw, dh)?;
+        Ok((
+            png,
+            PresentMeta {
+                width: dw,
+                height: dh,
+                source_width: sw,
+                source_height: sh,
+                filter: "nearest",
+                panel,
+            },
+        ))
+    }
+
+    /// RGBA bytes for presented display (same sizing rules as [`Self::host_display_presented`]).
+    pub fn host_display_presented_rgba(
+        &self,
+        width: Option<u32>,
+        height: Option<u32>,
+        scale: Option<u32>,
+    ) -> ApiResult<(Vec<u8>, PresentMeta)> {
+        let (src, sw, sh) = self.with_session_ref(|session| {
+            if !session.has_machine() {
+                return Err(ApiError::NoMachine);
+            }
+            let w = session.width();
+            let h = session.height();
+            let rgba = session.framebuffer().to_vec();
+            Ok((rgba, w, h))
+        })?;
+        let (panel_w, panel_h) = {
+            let hv = self.host_view.lock();
+            (hv.panel_w, hv.panel_h)
+        };
+        let (dw, dh, panel) = resolve_present_size(sw, sh, width, height, scale, panel_w, panel_h)?;
+        let rgba = compose_nearest_letterbox(&src, sw, sh, dw, dh)?;
+        Ok((
+            rgba,
+            PresentMeta {
+                width: dw,
+                height: dh,
+                source_width: sw,
+                source_height: sh,
+                filter: "nearest",
+                panel,
+            },
+        ))
     }
 
     /// Shared handle to the live [`HostSession`] (clone into hosts / embed).
@@ -907,6 +1005,53 @@ impl ControlPlane {
                 has_tape: s.has_tape(),
             })
         })
+    }
+}
+
+fn resolve_present_size(
+    sw: usize,
+    sh: usize,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale: Option<u32>,
+    live_w: Option<u32>,
+    live_h: Option<u32>,
+) -> ApiResult<(usize, usize, PresentPanelSource)> {
+    match (width, height, scale) {
+        (Some(w), Some(h), _) => {
+            if w == 0 || h == 0 {
+                return Err(ApiError::BadRequest(
+                    "width and height must be non-zero".into(),
+                ));
+            }
+            Ok((w as usize, h as usize, PresentPanelSource::Explicit))
+        }
+        (Some(_), None, _) | (None, Some(_), _) => Err(ApiError::BadRequest(
+            "width and height must both be set".into(),
+        )),
+        (None, None, Some(s)) => {
+            if !(1..=16).contains(&s) {
+                return Err(ApiError::BadRequest("scale must be 1..=16".into()));
+            }
+            Ok((
+                sw.saturating_mul(s as usize),
+                sh.saturating_mul(s as usize),
+                PresentPanelSource::Scale,
+            ))
+        }
+        (None, None, None) => {
+            if let (Some(w), Some(h)) = (live_w, live_h) {
+                if w > 0 && h > 0 {
+                    return Ok((w as usize, h as usize, PresentPanelSource::Live));
+                }
+            }
+            // Standalone default: 2× guest (readable without a GUI).
+            Ok((
+                sw.saturating_mul(2),
+                sh.saturating_mul(2),
+                PresentPanelSource::Default,
+            ))
+        }
     }
 }
 

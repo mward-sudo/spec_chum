@@ -147,11 +147,15 @@ Default port: **`17384`** (`SPEC_CHUM_AGENT_PORT`; `1` + phone-keypad *SPEC* `73
 
 ## Framebuffer export (visual QA)
 
-> **“Screenshots” means guest framebuffer export — not OS window capture.**
+> Guest **1:1** pixels live at `GET /v1/framebuffer`. Host presentation / OS window
+> shots are separate — see [Host view screenshots](#host-view-screenshots-239) below.
 
-Agents must **not** use `screencapture`, multi-monitor grabs, or living-room CRT
-photos for emulator visual QA. The API exports the same RGBA buffer hosts already
-expose via `sc_framebuffer_ptr` / `HostSession::framebuffer()`:
+Agents must **not** use unconstrained `screencapture` / multi-monitor grabs for
+emulator visual QA. Prefer these API endpoints (guest buffer or carefully scoped
+own-window capture).
+
+The guest export is the same RGBA buffer hosts already expose via
+`sc_framebuffer_ptr` / `HostSession::framebuffer()`:
 
 | Query | Meaning |
 | --- | --- |
@@ -171,19 +175,40 @@ filter, no living-room post-process):
 Response headers / JSON metadata include `width`, `height`, `border`, `hires`,
 `scld_mode` (when Timex), and `model` so agents validate size before visual diff.
 
-**Not this endpoint:**
+**Not `/v1/framebuffer`:**
 
 - Living-room Bevy CRT (experimental display mode) — scaled, shaded, halation.
-- egui/macOS window bitmap — host DPI, chrome, optional zoom.
+- egui chrome / letterboxed display — use `/v1/host/*` below.
 - Audio waveform or border-event trace (use `/v1/inspect` + trace instead).
 
-Example (once implemented):
+Example:
 
 ```bash
 curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
   'http://127.0.0.1:17384/v1/framebuffer?border=false&format=png' \
   -o /tmp/spec_paper.png
 # Agent: Read /tmp/spec_paper.png for Techdraw hi-res QA
+```
+
+## Host view screenshots (#239)
+
+| Endpoint | Source | Notes |
+| --- | --- | --- |
+| `GET /v1/host/display` | **In-process** software NEAREST + letterbox of the guest RGBA (matches egui `TextureOptions::NEAREST` + `fit_size`) | Query: `scale=1..16` **or** `width`+`height`; default `scale` behaviour is 2× when no live panel. With `SPEC_CHUM_AGENT=1` egui publishes the last central-panel size (`X-SpecChum-Panel: live`). |
+| `GET /v1/host/window` | **OS capture of this process’s own window only** | macOS: `CGWindowListCreateImage` + registered `CGWindowID`, after owning PID == self. **Does not** activate, focus, or change z-order. Standalone agent / unset id → `503`. |
+
+**Hard rules for `/v1/host/window`:** never frontmost/desktop/focused-window APIs; never bring the window forward to capture; fail closed on missing/stale/wrong-PID id.
+
+```bash
+# Presented display (works on standalone agent too)
+curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
+  'http://127.0.0.1:17384/v1/host/display?scale=2&format=png' \
+  -o /tmp/spec_display.png
+
+# Full egui window (requires SPEC_CHUM_AGENT=1 embedded GUI)
+curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
+  'http://127.0.0.1:17384/v1/host/window' \
+  -o /tmp/spec_window.png
 ```
 
 ## API surface (full end-state)
