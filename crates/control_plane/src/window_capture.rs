@@ -86,6 +86,23 @@ mod macos {
     use crate::error::{ApiError, ApiResult};
     use crate::present::encode_rgba_png;
 
+    /// Own-window captures can be Retina-sized; keep a separate cap from `/v1/host/display`.
+    const MAX_WINDOW_RGBA_BYTES: usize = 256 * 1024 * 1024;
+
+    fn window_rgba_len_checked(w: usize, h: usize) -> ApiResult<usize> {
+        let bytes = w
+            .checked_mul(h)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .ok_or_else(|| ApiError::Png("window capture dimensions overflow".into()))?;
+        if bytes > MAX_WINDOW_RGBA_BYTES {
+            return Err(ApiError::Unavailable(format!(
+                "window capture too large (max {} MiB rgba)",
+                MAX_WINDOW_RGBA_BYTES / (1024 * 1024)
+            )));
+        }
+        Ok(bytes)
+    }
+
     pub fn cg_window_id_from_ns_view(ns_view: *mut c_void) -> Option<u32> {
         if ns_view.is_null() {
             return None;
@@ -176,10 +193,11 @@ mod macos {
         if w == 0 || h == 0 {
             return Err(ApiError::Png("empty CGImage".into()));
         }
+        let rgba_len = window_rgba_len_checked(w, h)?;
         let bytes_per_row = image.bytes_per_row();
         let data = image.data();
         let slice = data.bytes();
-        let mut rgba = vec![0u8; w * h * 4];
+        let mut rgba = vec![0u8; rgba_len];
         for y in 0..h {
             let row = y * bytes_per_row;
             for x in 0..w {

@@ -5,19 +5,20 @@ use serde::Serialize;
 use crate::error::{ApiError, ApiResult};
 
 /// Upper bound for in-process host-display RGBA buffers (agent `/v1/host/display`).
-const MAX_RGBA_BYTES: usize = 64 * 1024 * 1024;
+const MAX_HOST_DISPLAY_RGBA_BYTES: usize = 64 * 1024 * 1024;
 
-fn rgba_len_checked(w: usize, h: usize) -> ApiResult<usize> {
-    let pixels = w
-        .checked_mul(h)
-        .ok_or_else(|| ApiError::BadRequest("display canvas dimensions overflow".into()))?;
-    let bytes = pixels
-        .checked_mul(4)
-        .ok_or_else(|| ApiError::BadRequest("display canvas dimensions overflow".into()))?;
-    if bytes > MAX_RGBA_BYTES {
+fn rgba_bytes_checked(w: usize, h: usize) -> ApiResult<usize> {
+    w.checked_mul(h)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| ApiError::BadRequest("rgba dimensions overflow".into()))
+}
+
+fn host_display_rgba_len_checked(w: usize, h: usize) -> ApiResult<usize> {
+    let bytes = rgba_bytes_checked(w, h)?;
+    if bytes > MAX_HOST_DISPLAY_RGBA_BYTES {
         return Err(ApiError::BadRequest(format!(
             "display canvas too large (max {} MiB rgba)",
-            MAX_RGBA_BYTES / (1024 * 1024)
+            MAX_HOST_DISPLAY_RGBA_BYTES / (1024 * 1024)
         )));
     }
     Ok(bytes)
@@ -69,7 +70,7 @@ pub fn compose_nearest_letterbox(
             "display present size must be non-zero".into(),
         ));
     }
-    let src_bytes = rgba_len_checked(sw, sh)?;
+    let src_bytes = host_display_rgba_len_checked(sw, sh)?;
     if src.len() != src_bytes {
         return Err(ApiError::Png(format!(
             "source rgba size mismatch: got {} want {}",
@@ -85,7 +86,7 @@ pub fn compose_nearest_letterbox(
     let ox = (dw - fitted_w) / 2;
     let oy = (dh - fitted_h) / 2;
 
-    let out_bytes = rgba_len_checked(dw, dh)?;
+    let out_bytes = host_display_rgba_len_checked(dw, dh)?;
     let mut out = vec![0u8; out_bytes];
     for dy in 0..fitted_h {
         let sy = (dy as u64 * sh as u64) / fitted_h as u64;
@@ -100,7 +101,7 @@ pub fn compose_nearest_letterbox(
 }
 
 pub fn encode_rgba_png(rgba: &[u8], w: usize, h: usize) -> ApiResult<Vec<u8>> {
-    let expected = rgba_len_checked(w, h)?;
+    let expected = rgba_bytes_checked(w, h)?;
     if rgba.len() != expected {
         return Err(ApiError::Png(format!(
             "rgba size mismatch: got {} want {}",
