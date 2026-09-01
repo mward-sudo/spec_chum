@@ -42,6 +42,10 @@ pub struct BusPlus3 {
     pub ula: Ula48,
     /// T-states after `OUT #7FFD` before the ULA display bank updates (Amstrad: 2).
     pub screen_switch_delay: u32,
+    /// Frame length used when a delayed screen switch spills into the next frame.
+    pub frame_tstates: u32,
+    /// `(t, bank)` applied at the start of the next frame after `begin_frame`.
+    pub pending_screen_switch: Option<(u32, u8)>,
     pub kempston: crate::Kempston,
     pub mouse: crate::KempstonMouse,
     pub fdc: formats::Plus3Fdc,
@@ -79,6 +83,8 @@ impl BusPlus3 {
             beeper_edges: Vec::new(),
             ula: Ula48::new(),
             screen_switch_delay: 2,
+            frame_tstates: FRAME_TSTATES_128,
+            pending_screen_switch: None,
             kempston: crate::Kempston::new(),
             mouse: crate::KempstonMouse::new(),
             fdc: formats::Plus3Fdc::new(),
@@ -202,12 +208,28 @@ impl BusPlus3 {
         }
         let new_screen = value & 0x08;
         if old_screen != new_screen {
-            let bank = if new_screen != 0 { 7 } else { 5 };
-            let t = self.frame_t.wrapping_add(self.screen_switch_delay);
-            self.ula.set_display_screen_bank(t, bank as u8);
+            let bank = if new_screen != 0 { 7u8 } else { 5 };
+            self.schedule_display_screen_bank(bank);
         }
         if trace::enabled(trace::Category::BUS) {
             trace::emit(trace::EventKind::BusPort7ffd { value });
+        }
+    }
+
+    fn schedule_display_screen_bank(&mut self, bank: u8) {
+        let t = self.frame_t.saturating_add(self.screen_switch_delay);
+        let fl = self.frame_tstates.max(1);
+        if t >= fl {
+            self.pending_screen_switch = Some((t - fl, bank));
+        } else {
+            self.ula.set_display_screen_bank(t, bank);
+        }
+    }
+
+    /// Apply a screen-bank switch that spilled past the previous frame boundary.
+    pub fn apply_pending_screen_switch(&mut self) {
+        if let Some((t, bank)) = self.pending_screen_switch.take() {
+            self.ula.set_display_screen_bank(t, bank);
         }
     }
 

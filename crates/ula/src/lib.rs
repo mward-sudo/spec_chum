@@ -614,7 +614,6 @@ impl Ula48 {
                 return;
             }
         }
-        let dual = screen_bank7.filter(|_| self.screen_events.len() > 1);
         for py in 0..192usize {
             let third = py / 64;
             let yb = py % 8;
@@ -625,18 +624,27 @@ impl Ula48 {
                 let line_base = (third * 2048) + (yo * 32) + (yb * 256) + col;
                 let (bitmap_off, attr_off) = mode.offsets(line_base, py, col);
                 let line = py as u32;
-                let src = if let Some(b7) = dual {
-                    let fetch_t = Self::paper_fetch_tstate(px, py, paper_start, t_line);
-                    if self.display_screen_bank_at(fetch_t) == 7 {
+                let (bits_src, attr_src) = if let Some(b7) = screen_bank7 {
+                    // ULA fetches bitmap then attribute on consecutive T-states;
+                    // a mid-window 7FFD switch can select different banks.
+                    let bm_t = Self::paper_fetch_tstate(px, py, paper_start, t_line);
+                    let at_t = bm_t.saturating_add(1);
+                    let bm = if self.display_screen_bank_at(bm_t) == 7 {
                         b7
                     } else {
                         screen
-                    }
+                    };
+                    let at = if self.display_screen_bank_at(at_t) == 7 {
+                        b7
+                    } else {
+                        screen
+                    };
+                    (bm, at)
                 } else {
-                    screen
+                    (screen, screen)
                 };
-                let bits = self.snow_byte(src, bitmap_off, line, col, SnowCellKind::Bitmap);
-                let attr = self.snow_byte(src, attr_off, line, col, SnowCellKind::Attr);
+                let bits = self.snow_byte(bits_src, bitmap_off, line, col, SnowCellKind::Bitmap);
+                let attr = self.snow_byte(attr_src, attr_off, line, col, SnowCellKind::Attr);
                 let mut ink = attr & 7;
                 let mut paper = (attr >> 3) & 7;
                 let bright = attr & 0x40 != 0;
@@ -950,6 +958,45 @@ mod tests {
         // Column 16 fetched after switch → bank 5 (white).
         let right = (16 * 8) * 4;
         assert_eq!(&out[right..right + 3], &white);
+    }
+
+    #[test]
+    fn stable_bank7_frame_uses_secondary_without_new_out() {
+        let mut ula = Ula48::new();
+        ula.display_screen_bank = 7;
+        ula.begin_frame();
+        assert_eq!(ula.screen_events.len(), 1);
+        let bank5 = vec![0xffu8; 6912];
+        let mut bank7 = vec![0u8; 6912];
+        bank7[..6144].fill(0xff);
+        bank7[6144..].fill(0x47); // bright white on black
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba_timed_dual(&bank5, &bank7, &mut out, false, PAPER_START_128, T_LINE_128);
+        let white = palette_rgb(7, true);
+        assert_eq!(
+            &out[0..3],
+            &white,
+            "stable bank-7 frame must use bank7 buffer"
+        );
+    }
+
+    #[test]
+    fn bank_switch_between_bitmap_and_attr_fetch() {
+        let mut ula = Ula48::new();
+        ula.display_screen_bank = 5;
+        ula.begin_frame();
+        let mut bank5 = vec![0u8; 6912];
+        let mut bank7 = vec![0u8; 6912];
+        bank5[0] = 0xff;
+        bank5[6144] = 0x07; // white ink, black paper
+        bank7[0] = 0xff;
+        bank7[6144] = 0x00; // black ink
+        let bm_t = Ula48::paper_fetch_tstate(0, 0, PAPER_START_128, T_LINE_128);
+        ula.set_display_screen_bank(bm_t + 1, 7);
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba_timed_dual(&bank5, &bank7, &mut out, false, PAPER_START_128, T_LINE_128);
+        let black = palette_rgb(0, false);
+        assert_eq!(&out[0..3], &black);
     }
 
     #[test]

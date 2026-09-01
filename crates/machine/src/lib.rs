@@ -889,6 +889,7 @@ impl Machine {
     /// Pentagon 128: 128K banking, user main ROM + TR-DOS (#188 Phase B / #193).
     pub fn new_pentagon128(main_rom: &[u8], trdos_rom: &[u8]) -> Result<Self, String> {
         let mut bus = Bus128::new();
+        bus.frame_tstates = FRAME_TSTATES_PENTAGON;
         bus.load_rom128(main_rom)?;
         trace::emit(trace::EventKind::MachineModel { model: 6 });
         let mut m = Self::Spec128 {
@@ -1930,8 +1931,8 @@ impl Machine {
                 bus.beeper_edges.clear();
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
-                bus.ula.display_screen_bank = if bus.page & 0x08 != 0 { 7 } else { 5 };
                 bus.ula.begin_frame();
+                bus.apply_pending_screen_switch();
                 ula.border = bus.border;
                 ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
@@ -2086,8 +2087,8 @@ impl Machine {
                 bus.beeper_edges.clear();
                 // Keep any overshoot remainder from the previous frame (do not zero).
                 bus.ula.border = bus.border;
-                bus.ula.display_screen_bank = if bus.page_7ffd & 0x08 != 0 { 7 } else { 5 };
                 bus.ula.begin_frame();
+                bus.apply_pending_screen_switch();
                 ula.border = bus.border;
                 ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
