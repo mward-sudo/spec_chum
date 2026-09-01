@@ -14,6 +14,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(unused_mut)] // SessionAccess mut binding required for mutating calls; many sc_* are read-only.
 
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::path::Path;
@@ -25,6 +26,8 @@ use crate::session::{HostSession, ModelId};
 
 thread_local! {
     static LAST_ERROR: Mutex<Option<CString>> = const { Mutex::new(None) };
+    static FB_SNAPSHOT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static AUDIO_SNAPSHOT: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
 }
 
 fn set_last_error(msg: impl Into<String>) {
@@ -313,10 +316,19 @@ pub extern "C" fn sc_run_frame(handle: *mut c_void) {
     }
 }
 
-/// Pointer to RGBA8 framebuffer (row-major). Invalidated by destroy / border change.
+/// Pointer to RGBA8 framebuffer snapshot (row-major). Valid until the next call.
 #[no_mangle]
 pub extern "C" fn sc_framebuffer_ptr(handle: *mut c_void) -> *const u8 {
-    session_mut(handle).map_or(ptr::null(), |s| s.framebuffer().as_ptr())
+    let Some(s) = session_mut(handle) else {
+        return ptr::null();
+    };
+    let fb = s.framebuffer();
+    FB_SNAPSHOT.with(|cell| {
+        let mut buf = cell.borrow_mut();
+        buf.clear();
+        buf.extend_from_slice(fb);
+        buf.as_ptr()
+    })
 }
 
 #[no_mangle]
@@ -698,12 +710,19 @@ pub extern "C" fn sc_tape_set_load_options_ex(
     }
 }
 
-/// Pointer to mono f32 PCM from the last `sc_run_frame` (valid until next mutating call).
+/// Pointer to mono f32 PCM snapshot from the last `sc_run_frame` (valid until next call).
 #[no_mangle]
 pub extern "C" fn sc_audio_ptr(handle: *mut c_void) -> *const f32 {
-    session_mut(handle)
-        .map(|s| s.audio_pcm().as_ptr())
-        .unwrap_or(ptr::null())
+    let Some(s) = session_mut(handle) else {
+        return ptr::null();
+    };
+    let pcm = s.audio_pcm();
+    AUDIO_SNAPSHOT.with(|cell| {
+        let mut buf = cell.borrow_mut();
+        buf.clear();
+        buf.extend_from_slice(pcm);
+        buf.as_ptr()
+    })
 }
 
 /// Number of mono samples in [`sc_audio_ptr`].

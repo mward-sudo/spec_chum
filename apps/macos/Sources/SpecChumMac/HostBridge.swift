@@ -456,7 +456,6 @@ final class HostBridge: ObservableObject {
             return
         }
         sc_debug_init_from_env()
-        maybeEmbedAgentServer()
         if let id = activeConfigId,
            let cfg = customConfigs.first(where: { $0.id == id }),
            applyCustomConfiguration(cfg)
@@ -470,6 +469,7 @@ final class HostBridge: ObservableObject {
         refreshRomSetupQuiet()
         maybeAutoPresentRomSetup()
         refreshStatus()
+        maybeEmbedAgentServer()
         // Prefer persisted tape prefs over host defaults after create.
         pushTapeLoadOptions()
         _ = applyJoystickMode(joystickMode)

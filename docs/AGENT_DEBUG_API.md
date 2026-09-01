@@ -68,7 +68,7 @@ All debugging / control / inspect paths **converge** on one backend:
 | **B — clients adapt** | `spec-chum-debug` talks HTTP when `SPEC_CHUM_AGENT_URL` set; egui Debug on shared `HostSession`; `SPEC_CHUM_AGENT=1` embeds HTTP on that same plane; integration tests hit HTTP |
 | **C — dedupe** | Deprecate duplicate direct `host_api` debug/control paths where safe; document remaining C ABI as FFI-only for non-Rust shells |
 
-**Phase B (done — [#221](https://github.com/mward-sudo/spec_chum/issues/221) closed; SpecChumMac in-process deferred):**
+**Phase B (done — [#221](https://github.com/mward-sudo/spec_chum/issues/221) closed; SpecChumMac in-process embed landed):**
 
 | Piece | Status |
 | --- | --- |
@@ -108,12 +108,12 @@ primary API and must **not** gain a `host_api` → `control_plane` dependency
 | C ABI `sc_debug_*` / inspect / step / breakpoints | **Keep as FFI-only** — SpecChumMac / non-Rust |
 | egui `EmulatorSession` Debug panel | **Uses shared `HostSession`** via `Arc` + `ControlPlane` (#221) |
 | egui `SPEC_CHUM_AGENT=1` embedded server | **Thin transport** over the GUI plane (same live session as Debug) |
-| SpecChumMac inspector / `sc_*` | **Keep as FFI** — document agent workflow via standalone `spec-chum-agent` ([#221](https://github.com/mward-sudo/spec_chum/issues/221) docs); in-process `ControlPlane` only if cycle-safe |
+| SpecChumMac inspector / `sc_*` | **Keep as FFI** for menus; optional in-process agent via `SPEC_CHUM_AGENT=1` + `sc_agent_embed_start` (same live session) |
 | `spec-chum-debug` local (no agent URL) | **Keep** — already on `HostSession` (same type as `control_plane`) |
 | Direct `machine::Machine` in debug CLI | **Removed** (Phase C partial / [#215](https://github.com/mward-sudo/spec_chum/pull/215)) |
 
 Phase A–H HTTP rows continue on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
-egui in-process HTTP↔GUI share landed for #221 ([#228](https://github.com/mward-sudo/spec_chum/pull/228) / [#229](https://github.com/mward-sudo/spec_chum/pull/229)); SpecChumMac in-process integration remains deferred on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
+egui in-process HTTP↔GUI share landed for #221 ([#228](https://github.com/mward-sudo/spec_chum/pull/228) / [#229](https://github.com/mward-sudo/spec_chum/pull/229)); SpecChumMac in-process embed landed via `living_room` agent FFI ([#234](https://github.com/mward-sudo/spec_chum/pull/234)).
 Field privatize follow-up: [#227](https://github.com/mward-sudo/spec_chum/issues/227).
 
 Phase A is mergeable without breaking current workflows.
@@ -324,8 +324,8 @@ Hosts:
   or `--agent-url …` on supported subcommands.
 - **Embedded GUI (Phase B):** egui Debug and optional `SPEC_CHUM_AGENT=1` HTTP share
   one `Arc<ControlPlane>` / `HostSession` (same live PC). Requires
-  `SPEC_CHUM_AGENT_TOKEN` or `SPEC_CHUM_AGENT_INSECURE=1`. SpecChumMac: standalone
-  `spec-chum-agent` / `spec-chum-debug --serve` until in-process is cycle-safe.
+  `SPEC_CHUM_AGENT_TOKEN` or `SPEC_CHUM_AGENT_INSECURE=1`. SpecChumMac: same via
+  `SPEC_CHUM_AGENT=1` + embedded server on the live `sc_*` session (see `MACOS_NATIVE.md`).
 
 ### Quick test (curl)
 
