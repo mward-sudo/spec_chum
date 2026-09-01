@@ -41,8 +41,9 @@ impl FrameGlow {
         let bf = (b as f32 / n as f32) / 255.0;
         let lum = 0.2126 * rf + 0.7152 * gf + 0.0722 * bf;
         self.color = LinearRgba::rgb(rf.max(0.02), gf.max(0.02), bf.max(0.02));
-        // Bright enough to paint wallpaper/sofa; CRT still dominates.
-        self.intensity = 160.0 + lum * 420.0;
+        // Bevy 0.19 PointLight intensities are physical lumens under Exposure::INDOOR.
+        // Keep CRT spill readable on wallpaper/sofa without overpowering the tube (#233).
+        self.intensity = 8_000.0 + lum * 22_000.0;
     }
 }
 
@@ -88,7 +89,8 @@ fn spawn_fill_lights(mut commands: Commands) {
         commands.spawn((
             PointLight {
                 color: Color::srgb(0.4, 0.45, 0.35),
-                intensity: 220.0,
+                // Placeholder until first FrameGlow sync (~8k–30k lm).
+                intensity: 12_000.0,
                 range: 6.0,
                 shadow_maps_enabled: false,
                 ..default()
@@ -105,7 +107,7 @@ fn spawn_fill_lights(mut commands: Commands) {
             commands.spawn((
                 PointLight {
                     color: Color::srgb(0.35, 0.38, 0.32),
-                    intensity: 80.0,
+                    intensity: 5_400.0,
                     range: 8.0,
                     shadow_maps_enabled: false,
                     ..default()
@@ -157,9 +159,10 @@ fn spawn_fill_lights(mut commands: Commands) {
         color: if bright {
             Color::srgb(0.55, 0.55, 0.58)
         } else {
-            Color::srgb(0.24, 0.18, 0.12)
+            // Slightly lifted warm fill so sofa/wallpaper stay readable under INDOOR (#233).
+            Color::srgb(0.32, 0.24, 0.16)
         },
-        brightness: 175.0 * ambient_mul,
+        brightness: 280.0 * ambient_mul,
         ..default()
     });
 }
@@ -213,6 +216,6 @@ mod tests {
         glow.update_from_rgba(&rgba, 8, 8);
         assert!(glow.color.red > glow.color.green);
         assert!(glow.color.red > glow.color.blue);
-        assert!(glow.intensity > 160.0);
+        assert!(glow.intensity > 8_000.0);
     }
 }

@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use bevy::anti_alias::fxaa::{Fxaa, Sensitivity};
-use bevy::camera::ShadowLodOrigin;
+use bevy::camera::{Exposure, ShadowLodOrigin};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::light::cluster::ClusterConfig;
@@ -310,6 +310,9 @@ pub(crate) fn setup_camera(mut commands: Commands) {
         ShadowLodOrigin,
         // Few lights in a small room — skip tiled cluster allocation (cheap win on Metal).
         ClusterConfig::Single,
+        // Default Exposure::BLENDER (ev100 9.7) crushes our artistic lumen scale so
+        // PBR furniture reads near-black while the custom CRT phosphor still glows (#233).
+        Exposure::INDOOR,
         quality::msaa_samples(),
         Camera {
             clear_color: ClearColorConfig::Custom(if crate::crt::bright_debug_enabled() {
@@ -504,6 +507,15 @@ pub(crate) fn apply_zoom_camera(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn indoor_exposure_is_brighter_than_blender_default() {
+        // Living-room camera inserts Exposure::INDOOR (#233). Guard the ratio we rely on.
+        const {
+            assert!(Exposure::INDOOR.ev100 < Exposure::BLENDER.ev100);
+        }
+        assert!((Exposure::INDOOR.ev100 - Exposure::EV100_INDOOR).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn ease_out_cubic_endpoints() {

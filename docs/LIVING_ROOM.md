@@ -478,11 +478,15 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
   in-shader halation/diffusion only.
 - Bevy `Bloom` is the main room halation at pull-back zoom (intensity ramps with
   `CrtLookBlend` in `camera.rs`).
-- Room fill light follows framebuffer dominant colour (border LOAD glow).
-- Constant **incandescent** tungsten lamp (left of TV) + warm ambient so sofa /
-  wallpaper stay readable; CRT spill still tints on top.
+- Living-room camera uses **`Exposure::INDOOR`** (ev100 7.0). Default Bevy
+  `Exposure::BLENDER` (9.7) crushed artistic lumen scales so PBR furniture went
+  near-black while the custom CRT phosphor still glowed ([#233](https://github.com/mward-sudo/spec_chum/issues/233)).
+- Room fill light follows framebuffer dominant colour (border LOAD glow) at
+  ~8k–30k lm; TV-wall sconce bulbs ~55k lm tungsten; warm
+  `GlobalAmbientLight` keeps sofa / wallpaper readable in CRT shadow.
 - **Fidelity gaps** (tier 3): Nyquist-limited mask/scanlines, energy-conserving
   beam rebuild, single gamma path — see **Roadmap → Tier 3**.
+  Lightmaps / `EnvironmentMapLight` remain [#149](https://github.com/mward-sudo/spec_chum/issues/149).
 
 ## Out of scope (v1)
 
