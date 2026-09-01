@@ -7,7 +7,7 @@ pub trait Memory {
     fn write(&mut self, addr: u16, value: u8, t: u64) -> u32;
 
     /// M1 refresh at T4 of opcode fetch (48K ULA snow hook).
-    fn m1_refresh(&mut self, _refresh_addr: u16, _t: u64) {}
+    fn m1_refresh(&mut self, _refresh_addr: u16, _t: u64, _m1_contended: bool) {}
 }
 
 /// Host I/O ports.

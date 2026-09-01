@@ -4,7 +4,10 @@
 
 mod snow;
 
-pub use snow::{snow_overrides, snow_possible, SnowOverride, SnowPattern, UlaFetch};
+pub use snow::{
+    i_pointed_bank_128, snow_overrides, snow_possible, snow_possible_128, snow_source_bank_128,
+    SnowCellKind, SnowOverride, SnowPattern, SnowTiming, UlaFetch,
+};
 
 /// 48K PAL frame constants.
 pub const T_LINE_48: u32 = 224;
@@ -269,8 +272,8 @@ pub struct Ula48 {
     pub border: u8,
     pub flash_phase: bool,
     pub frame: u64,
-    /// Transient 48K snow overrides (offset in 6912-byte screen → byte shown).
-    pub snow_overrides: Vec<SnowOverride>,
+    /// Transient snow overrides (raster line/col → byte shown this frame).
+    snow_overrides: Vec<SnowOverride>,
 }
 
 impl Default for Ula48 {
@@ -291,20 +294,42 @@ impl Ula48 {
         }
     }
 
-    /// Record a snow override (last write wins for a given offset).
-    pub fn record_snow(&mut self, offset: usize, byte: u8) {
-        if let Some(o) = self.snow_overrides.iter_mut().find(|o| o.offset == offset) {
+    /// Record a snow override (last write wins for a given raster fetch).
+    pub fn record_snow(&mut self, line: u32, col: usize, kind: SnowCellKind, byte: u8) {
+        if let Some(o) = self
+            .snow_overrides
+            .iter_mut()
+            .find(|o| o.line == line && o.col == col && o.kind == kind)
+        {
             o.byte = byte;
         } else {
-            self.snow_overrides.push(SnowOverride { offset, byte });
+            self.snow_overrides.push(SnowOverride {
+                line,
+                col,
+                kind,
+                byte,
+            });
         }
     }
 
+    /// Read-only view of active snow overrides (tests / diagnostics).
+    #[must_use]
+    pub fn snow_overrides(&self) -> &[SnowOverride] {
+        &self.snow_overrides
+    }
+
     #[inline]
-    fn snow_byte(&self, screen: &[u8], offset: usize) -> u8 {
+    fn snow_byte(
+        &self,
+        screen: &[u8],
+        offset: usize,
+        line: u32,
+        col: usize,
+        kind: SnowCellKind,
+    ) -> u8 {
         self.snow_overrides
             .iter()
-            .find(|o| o.offset == offset)
+            .find(|o| o.line == line && o.col == col && o.kind == kind)
             .map_or_else(|| screen.get(offset).copied().unwrap_or(0), |o| o.byte)
     }
 
@@ -518,8 +543,9 @@ impl Ula48 {
                 let bit = 7 - (px % 8);
                 let line_base = (third * 2048) + (yo * 32) + (yb * 256) + col;
                 let (bitmap_off, attr_off) = mode.offsets(line_base, py, col);
-                let bits = self.snow_byte(screen, bitmap_off);
-                let attr = self.snow_byte(screen, attr_off);
+                let line = py as u32;
+                let bits = self.snow_byte(screen, bitmap_off, line, col, SnowCellKind::Bitmap);
+                let attr = self.snow_byte(screen, attr_off, line, col, SnowCellKind::Attr);
                 let mut ink = attr & 7;
                 let mut paper = (attr >> 3) & 7;
                 let bright = attr & 0x40 != 0;

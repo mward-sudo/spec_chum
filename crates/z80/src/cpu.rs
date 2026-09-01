@@ -239,6 +239,7 @@ impl Cpu {
         mem.m1_refresh(
             refresh_addr,
             self.t.wrapping_add(3).wrapping_add(u64::from(wait)),
+            wait > 0,
         );
         self.add_t(4 + wait);
         self.fuse_push(FuseEventKind::Mr, pc, Some(v));
