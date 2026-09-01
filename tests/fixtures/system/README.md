@@ -20,11 +20,14 @@ Do not add commercial game TAPs.
 | `ula48_simple.tap` | ULA 48 Simple Test (azesmbog) | freeware | [zxe.io](https://zxe.io/depot/software/ZX%20Spectrum/ULA%2048%20Simple%20Test%20%282012-10-06%29%28azesmbog%29%5B%21%5D.tap) | `1bcd04d0dda815eb8ae49014b828752288551f596a82c7ffd46662d6f82f2c4e` |
 | `ula128_timing.tap` | ULA 128 Timing Test (azesmbog) | freeware | [zxe.io](https://zxe.io/depot/software/ZX%20Spectrum/ULA%20128%20Timing%20Test%20%282012-10-06%29%28azesmbog%29%5B%21%5D.tap) | `59578bae6352d6a92b1887b392ee786aa9f162624a1ddef9541037b517b0c90f` |
 | `ula128e_plus3.tap` | ULA 128E +3 Test (azesmbog) | freeware | [zxe.io](https://zxe.io/depot/software/ZX%20Spectrum/ULA%20128E%20%2B3%20Test%20%282012-10-10%29%28azesmbog%29%5B%21%5D.tap) | `60b3aaeca5b9d45c712d874fafa136c97d373c1569964cb87703ddf53911a8d5` |
+| `snow.tap` | Weiv snow effect (48K ULA bug, I=$40–$7F) | GFDL (Weiv bundle) | [zxe.io Snow Tests zip](https://zxe.io/depot/software/ZX%20Spectrum/Snow%20Tests%20%282022-10-19%29%28Weiv%29%5B%21%5D.zip) (`SnowTests/snow.tap`) | `d930335f0455604c0e0082f20105f82cc0d85f1e2a4daa30f124132cd041e74a` |
 
 ZIP intermediates (also verified): `timingtest-0.3.zip` SHA-256
 `bacff01453a01c14754c167b5b02695ec29a0a5960c2f202b52b26494c2e8dff`;
 `floating-spy-0.33.zip` SHA-256
-`3663cfc76b0733491c69faf088dfacda9294aa76e828600070380086138747ed`.
+`3663cfc76b0733491c69faf088dfacda9294aa76e828600070380086138747ed`;
+`weiv-snow-tests.zip` SHA-256
+`907ee0c8d40203de7e058c70a4100a9d414cf5a7e0936ffb31861131c6233be7`.
 Bobrowski fixtures use HTTPS; the raxoft ZIP host is HTTP-only, so integrity
 rests on the committed digests.
 

@@ -234,6 +234,12 @@ impl Cpu {
         let (v, wait) = mem.read(pc, self.t);
         self.regs.pc = pc.wrapping_add(1);
         self.regs.inc_r();
+        // Refresh at M1 T4 — 48K ULA snow when I=$40–$7F overlaps video fetch.
+        let refresh_addr = u16::from(self.regs.i) << 8 | u16::from(self.regs.r & 0x7f);
+        mem.m1_refresh(
+            refresh_addr,
+            self.t.wrapping_add(3).wrapping_add(u64::from(wait)),
+        );
         self.add_t(4 + wait);
         self.fuse_push(FuseEventKind::Mr, pc, Some(v));
         v

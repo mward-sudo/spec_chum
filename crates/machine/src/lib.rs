@@ -357,6 +357,8 @@ pub struct MemIo48<'a> {
     pub(crate) t_step_start: u64,
     /// When set, the first `read` at this PC runs IF1 pre/post opcode-fetch paging.
     pub(crate) opcode_pc: Option<u16>,
+    /// True when the current M1 opcode fetch at T1 was contended (blocks snow).
+    pub(crate) m1_contended: bool,
 }
 
 impl MemIo48<'_> {
@@ -370,7 +372,8 @@ impl MemIo48<'_> {
 impl Memory for MemIo48<'_> {
     fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
         let mut unpage_after = false;
-        if self.opcode_pc == Some(addr) {
+        let is_opcode = self.opcode_pc == Some(addr);
+        if is_opcode {
             if let Some(if1) = self.bus.interface1.as_mut() {
                 if1.pre_opcode_fetch(addr);
                 unpage_after = addr == 0x0700;
@@ -382,6 +385,9 @@ impl Memory for MemIo48<'_> {
         } else {
             0
         };
+        if is_opcode {
+            self.m1_contended = wait > 0;
+        }
         if wait > 0 && trace::enabled(trace::Category::BUS) {
             emit_contend_sampled(addr, self.ula_t(t), wait);
         }
@@ -411,6 +417,18 @@ impl Memory for MemIo48<'_> {
             w.mem_access(addr, true, value);
         }
         wait
+    }
+
+    fn m1_refresh(&mut self, refresh_addr: u16, t: u64) {
+        let i = (refresh_addr >> 8) as u8;
+        let r = (refresh_addr & 0x7f) as u8;
+        let frame_t = self.ula_t(t);
+        let m1_contended = self.m1_contended;
+        let screen = &self.bus.ram[..6912];
+        let ovs = ula::snow_overrides(frame_t, i, r, m1_contended, screen);
+        for o in ovs {
+            self.bus.ula.record_snow(o.offset, o.byte);
+        }
     }
 }
 
@@ -1378,6 +1396,7 @@ impl Machine {
                         watch: None,
                         t_step_start,
                         opcode_pc: None,
+                        m1_contended: false,
                     };
                     cpu.nmi(&mut mio)
                 };
@@ -1744,6 +1763,7 @@ impl Machine {
                             watch: None,
                             t_step_start: cpu.t,
                             opcode_pc: None,
+                            m1_contended: false,
                         };
                         let irq_t = cpu.interrupt(&mut mio);
                         if irq_t > 0 {
@@ -1794,6 +1814,7 @@ impl Machine {
                             watch,
                             t_step_start: cpu.t,
                             opcode_pc: Some(pc),
+                            m1_contended: false,
                         };
                         cpu.step(&mut mio);
                     }
@@ -2605,6 +2626,7 @@ impl Machine {
                         watch: None,
                         t_step_start: cpu.t,
                         opcode_pc: None,
+                        m1_contended: false,
                     };
                     let irq_t = cpu.interrupt(&mut mio);
                     if irq_t > 0 {
@@ -2654,6 +2676,7 @@ impl Machine {
                         watch,
                         t_step_start: cpu.t,
                         opcode_pc: Some(pc),
+                        m1_contended: false,
                     };
                     cpu.step(&mut mio);
                 }
@@ -2956,6 +2979,7 @@ impl Machine {
                     watch: None,
                     t_step_start: cpu.t,
                     opcode_pc: Some(cpu.regs.pc),
+                    m1_contended: false,
                 };
                 cpu.step(&mut mio);
                 let dt = (cpu.t - last_t) as u32;
@@ -3631,6 +3655,7 @@ mod tests {
                 watch: None,
                 t_step_start: 100,
                 opcode_pc: None,
+                m1_contended: false,
             };
             let t = 100 + dt;
             assert_eq!(
@@ -3729,6 +3754,7 @@ mod tests {
             watch: None,
             t_step_start: 50,
             opcode_pc: None,
+            m1_contended: false,
         };
         assert_eq!(
             mem.read(ADDR, 53).1,
