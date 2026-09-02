@@ -588,9 +588,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788367668.304806,
-    "seen": 1788367697.673918,
-    "ast_hash": "97d122d8a07be8b86cc1b8e152886fa4",
+    "mtime": 1788387256.0401528,
+    "seen": 1788387259.777405,
+    "ast_hash": "4242a56baa9b80f968fa553bbb33487f",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
@@ -1014,9 +1014,9 @@
     "semantic_hash": ""
   },
   "tests/fixtures/trdos/README.md": {
-    "mtime": 1788367668.6348913,
-    "seen": 1788367697.674882,
-    "ast_hash": "1563cbe761d57a1d04d57f84bb8e30a7",
+    "mtime": 1788387251.2499104,
+    "seen": 1788387259.7783282,
+    "ast_hash": "94d534723218a05c49b9a74f8f29d3c4",
     "semantic_hash": ""
   },
   "scripts/graphify_install_hooks.sh": {
