@@ -27,7 +27,7 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 | ROM-gated test | When `trdos.rom` present |
 | --- | --- |
 | `trdos_rom_reads_boot_when_128k_chans_ok_and_fixture_present` | After DOS entry, VG93 can still read track 1 / sector 1 (`boot` body) |
-| `trdos_rom_run_boot_basic_when_fixture_present` | **Open (#266):** `RUN` → `POKE 32768,165`. Harness: patches `3D94h`/`3D9Dh`/`02D4h`/`3DFFh`/`2155h`/`213Eh`, seeds `5CC2`/`5D16`/`PROG="RUN\\r"`, enters `0239h`. Reaches `3032h` + seek/`C0h` + `1E74h`, but **`B=0` skips Type-II** (`RET Z`); hard `0x8000==0xA5` still open |
+| `trdos_rom_run_boot_basic_when_fixture_present` | **Open (#266):** catalog find-boot match + VG93 `boot` body read (track 1). Harness fixes misaligned CHS patches, keeps name at `5EE0h` (not overlapping `5D25h`), `RET`s on first match, FDC-loads body at `08D2h` FF hole into `(PROG)`. Hard `0x8000==0xA5` still open — next is TR-DOS `012Ah` BASIC run / sysvars |
 
 `RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
 
