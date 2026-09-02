@@ -207,7 +207,6 @@ impl BetaDisk {
             }
             0x5f => {
                 self.sector = value;
-                self.data_reg = value;
                 true
             }
             0x7f => {
@@ -375,6 +374,9 @@ impl BetaDisk {
     }
 
     fn write_command(&mut self, cmd: u8) {
+        // A new command supersedes any pending Type I completion pulse; otherwise a
+        // Type II status read would spuriously report bit 0x04.
+        self.seek_complete_pulse = false;
         self.intrq = false;
         self.drq = false;
         self.cmd_count = self.cmd_count.saturating_add(1);

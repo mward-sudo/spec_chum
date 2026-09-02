@@ -3775,15 +3775,10 @@ mod tests {
         m.write_mem(0x5d0f, 0x00);
     }
 
-    /// Map PC to TR-DOS ROM offset (ROM at `0000–3FFF` or common `C000+` RAM copy).
+    /// Map PC to a TR-DOS ROM offset. [`BetaDisk::read_rom`] only overlays
+    /// `0000–3FFF`, so any higher PC is RAM and must not be treated as ROM.
     fn trdos_rom_pc(pc: u16) -> Option<u16> {
-        if (0x0000..0x4000).contains(&pc) {
-            Some(pc)
-        } else if pc >= 0xC000 {
-            Some(pc - 0xC000)
-        } else {
-            None
-        }
+        (pc < 0x4000).then_some(pc)
     }
 
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
@@ -3791,14 +3786,23 @@ mod tests {
     /// TR-DOS expects the Spectrum keyword token `0xF4` at `5CB6h`, not typed ASCII
     /// (`trdos.rom` `0x20F2`: `LD A,(#5CB6); CP #F4`). Dispatch via `3D80h`.
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
-        wait_for_trdos_command_prompt(m);
+        if !wait_for_trdos_command_prompt(m) {
+            eprintln!(
+                "  TR-DOS command prompt never reached (PC={:#06x}) — not dispatching RUN",
+                m.cpu().regs.pc
+            );
+            return false;
+        }
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
         m.cpu_mut().regs.pc = 0x3d80;
         wait_for_trdos_boot_marker(m, 2_000)
     }
 
-    fn wait_for_trdos_command_prompt(m: &mut Machine) {
+    /// Returns `true` only when the prompt was actually observed; callers must not
+    /// treat budget exhaustion as success.
+    #[must_use]
+    fn wait_for_trdos_command_prompt(m: &mut Machine) -> bool {
         let mut stable = 0u32;
         for _ in 0..20_000_000 {
             m.step_once();
@@ -3817,12 +3821,13 @@ mod tests {
             if at_prompt && idle && !in_disk_loader {
                 stable += 1;
                 if stable >= 10_000 {
-                    return;
+                    return true;
                 }
             } else {
                 stable = 0;
             }
         }
+        false
     }
 
     fn manual_read_track1_sector1(m: &mut Machine) -> bool {
@@ -3854,16 +3859,21 @@ mod tests {
     }
 
     /// Enter TR-DOS command mode via `USR 15616` (`3D00h` → `3D31h`).
-    fn enter_trdos_command_mode(m: &mut Machine) {
+    ///
+    /// Paging is asserted (it works today); reaching the `3D31h` command loop is
+    /// returned rather than asserted because #140 RUN boot is still open.
+    fn enter_trdos_command_mode(m: &mut Machine) -> bool {
         init_trdos_usr_call_frame(m);
         m.cpu_mut().regs.pc = 0x3d00;
         let mut saw_paged = false;
+        let mut at_prompt = false;
         for _ in 0..20_000_000 {
             m.step_once();
             if m.beta_mut().is_some_and(|b| b.paged) {
                 saw_paged = true;
             }
             if saw_paged && trdos_rom_pc(m.cpu().regs.pc) == Some(0x3D31) {
+                at_prompt = true;
                 break;
             }
         }
@@ -3872,6 +3882,7 @@ mod tests {
             "TR-DOS should page (PC={:#06x})",
             m.cpu().regs.pc
         );
+        at_prompt
     }
 
     fn wait_for_trdos_boot_marker(m: &mut Machine, max_frames: u32) -> bool {
@@ -3906,10 +3917,10 @@ mod tests {
             .unwrap();
         enter_128k_basic_from_menu(&mut m);
         ensure_trdos_beta128_prog(&mut m);
-        enter_trdos_command_mode(&mut m);
+        let at_prompt = enter_trdos_command_mode(&mut m);
         assert!(
             manual_read_track1_sector1(&mut m),
-            "FDC should read boot sector after TR-DOS entry (PC={:#06x})",
+            "FDC should read boot sector after TR-DOS entry (PC={:#06x}, at_prompt={at_prompt})",
             m.cpu().regs.pc
         );
     }
@@ -3930,7 +3941,7 @@ mod tests {
             .unwrap();
         enter_128k_basic_from_menu(&mut m);
         ensure_trdos_beta128_prog(&mut m);
-        enter_trdos_command_mode(&mut m);
+        let _ = enter_trdos_command_mode(&mut m);
         if !invoke_trdos_run_boot(&mut m) {
             let pc = m.cpu().regs.pc;
             let inspect = m.inspect();
