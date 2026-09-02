@@ -3837,21 +3837,34 @@ mod tests {
         // harness seeds `RUN\\r` at `(PROG)` instead.
         beta.patch_rom(0x213e, &[0x00, 0x00, 0x00])
             .expect("TR-DOS ROM loaded for RUN harness");
-        // Find-boot (`195Ch`) saves caller `DE` (PROG pointer → track 94) as catalog
-        // CHS. Force `LD DE,0` at the sector-read reload (`1977h`) and `RET` on the
-        // first dirent match (`199Ah`) so we do not scan empty catalog sectors.
-        // `1988h` `LD HL,(5CD7)` → `LD HL,5EE0h` (name above `5D25h` buffer).
-        // `1968h` `LD C,0` → `LD C,16` (one dirent).
-        beta.patch_rom(0x1968, &[0x0e, 0x10])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        beta.patch_rom(0x1977, &[0x11, 0x00, 0x00, 0x00])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        beta.patch_rom(0x1988, &[0x21, 0xe0, 0x5e])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        beta.patch_rom(0x199a, &[0xc9])
-            .expect("TR-DOS ROM loaded for RUN harness");
+        // Find-boot (`195Ch`/`1968h`/`1977h`/`1988h`/`199Ah`) stays stock — see
+        // [`apply_trdos_find_boot_native_abi`].
         // `19DDh` → `08D2h` is FF padding; leave it and let the harness FDC-load the
         // matched `boot` body when PC hits the hole (see `wait_for_trdos_boot_marker`).
+    }
+
+    /// Stock find-boot ABI so catalog ROM stays unpatched (#140 / #266).
+    ///
+    /// `195Ch` stores caller `DE` as catalog CHS (`1964h`) then `LD C,0` (`1968h`).
+    /// The sibling entry `1946h` skips that and loads `C` from `(5CDB)`. Seed name
+    /// `HL=5EE0h`, CHS `DE=0`, one catalog sector `B=1` at `195Ch`, and `C=16` at
+    /// `196Ah` (after `LD C,0`) so the 16-byte dirent compare / `DJNZ` RET need no
+    /// ROM writes.
+    fn apply_trdos_find_boot_native_abi(m: &mut Machine) {
+        const NAME: u16 = 0x5ee0;
+        match m.cpu().regs.pc {
+            0x195c => {
+                m.cpu_mut().regs.set_hl(NAME);
+                m.cpu_mut().regs.set_de(0);
+                m.cpu_mut().regs.b = 1;
+            }
+            0x196a => {
+                m.cpu_mut().regs.set_hl(NAME);
+                m.cpu_mut().regs.set_de(0);
+                m.cpu_mut().regs.set_bc(0x0110); // B=1, C=16
+            }
+            _ => {}
+        }
     }
 
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
@@ -3877,10 +3890,11 @@ mod tests {
         // Re-assert find-boot catalog gate after `USR 15616` / warm path.
         m.write_mem(0x5cf6, 0xff);
         m.write_mem(0x5cf9, 0xff);
-        // Sector count for find-boot outer `B` (`5CDC`) + `194Fh` gate (`5CDB`).
-        m.write_mem(0x5cdb, 0x01);
+        // Sector count for find-boot outer `B` (`5CDC`) + `1946h` `C` from `(5CDB)`
+        // (dirent length; `195Ch` still `LD C,0` and is fixed at `196Ah`).
+        m.write_mem(0x5cdb, 0x10);
         m.write_mem(0x5cdc, 0x08);
-        // Catalog start CHS (`5CD9` / `5CF4`) — find-boot stores are NOP'd so these stick.
+        // Catalog start CHS (`5CD9` / `5CF4`); `195Ch` `LD (5CF4),DE` needs `DE=0`.
         m.write_mem(0x5cd9, 0x00);
         m.write_mem(0x5cda, 0x00);
         m.write_mem(0x5cf4, 0x00);
@@ -4112,6 +4126,7 @@ mod tests {
                 m.cpu_mut().regs.pc = 0x1b76;
                 continue;
             }
+            apply_trdos_find_boot_native_abi(m);
             m.step_once();
             if m.read_mem(0x8000) == 0xa5 {
                 return true;
@@ -4165,7 +4180,7 @@ mod tests {
         // the DOS path and inspect Spectrum BASIC state.
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
-        m.write_mem(0x5cc2, 0xc9);
+        install_trdos_rst20_5cc2_hook(&mut m);
         m.write_mem(0x5d0f, 0);
         m.write_mem(0x5d10, 0xff);
         let prog0 = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
@@ -4174,7 +4189,7 @@ mod tests {
         }
         m.write_mem(0x5cf6, 0xff);
         m.write_mem(0x5cf9, 0xff);
-        m.write_mem(0x5cdb, 0x01);
+        m.write_mem(0x5cdb, 0x10);
         m.write_mem(0x5cdc, 0x08);
         m.write_mem(0x5cd9, 0x00);
         m.write_mem(0x5cda, 0x00);
@@ -4208,6 +4223,7 @@ mod tests {
                 m.cpu_mut().regs.pc = 0x1b76;
                 break;
             }
+            apply_trdos_find_boot_native_abi(&mut m);
             m.step_once();
         }
         assert!(loaded, "did not reach 08D2h FDC handoff");
@@ -4335,7 +4351,7 @@ mod tests {
         // Same setup as invoke_trdos_run_boot without waiting.
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
-        m.write_mem(0x5cc2, 0xc9);
+        install_trdos_rst20_5cc2_hook(&mut m);
         m.write_mem(0x5d0f, 0);
         m.write_mem(0x5d10, 0xff);
         let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
@@ -4344,7 +4360,7 @@ mod tests {
         }
         m.write_mem(0x5cf6, 0xff);
         m.write_mem(0x5cf9, 0xff);
-        m.write_mem(0x5cdb, 0x01);
+        m.write_mem(0x5cdb, 0x10);
         m.write_mem(0x5cdc, 0x08);
         m.write_mem(0x5cd9, 0x00);
         m.write_mem(0x5cda, 0x00);
@@ -4444,6 +4460,7 @@ mod tests {
                 }
                 last = pc;
             }
+            apply_trdos_find_boot_native_abi(&mut m);
             m.step_once();
             if m.read_mem(0x8000) == 0xa5 {
                 eprintln!("MARKER at step={step}");
@@ -4520,6 +4537,64 @@ mod tests {
         assert!(
             returned,
             "3D94h RST #20 should return with 5CC2h hook (PC={final_pc:#06x}, paged={final_paged})"
+        );
+    }
+
+    /// ROM-gated: find-boot catalog opcodes stay stock (ABI fixup, not ROM RET/NOP).
+    #[test]
+    fn trdos_find_boot_rom_unpatched_when_fixture_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        assert_eq!(
+            trdos.get(0x1968).copied(),
+            Some(0x0e),
+            "stock LD C,0 at 1968h"
+        );
+        assert_eq!(
+            trdos.get(0x1977).copied(),
+            Some(0xed),
+            "stock LD DE,(nn) at 1977h"
+        );
+        assert_eq!(
+            trdos.get(0x1988).copied(),
+            Some(0x2a),
+            "stock LD HL,(nn) at 1988h"
+        );
+        assert_eq!(
+            trdos.get(0x199a).copied(),
+            Some(0x10),
+            "stock DJNZ at 199Ah"
+        );
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        patch_trdos_run_harness_rom(&mut m);
+        assert_eq!(
+            m.read_mem(0x1968),
+            0x0e,
+            "harness must not patch 1968h LD C,0"
+        );
+        assert_eq!(
+            m.read_mem(0x1977),
+            0xed,
+            "harness must not patch 1977h LD DE,(5CD9)"
+        );
+        assert_eq!(
+            m.read_mem(0x1988),
+            0x2a,
+            "harness must not patch 1988h LD HL,(5CD7)"
+        );
+        assert_eq!(
+            m.read_mem(0x199a),
+            0x10,
+            "harness must not RET-patch 199Ah DJNZ"
         );
     }
 
