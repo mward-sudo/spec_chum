@@ -3695,7 +3695,7 @@ mod tests {
             0xd3, 0x7f, // loop: OUT (7Fh),A
             0x10, 0xfc, // DJNZ loop (-4 → 3D29h)
             0x3e, 0xf7, 0xd3, 0x7f, 0x3e, 0xd8, // Force interrupt
-            0xd3, 0x1f, 0x3e, 0x01, // read sector index 1 (CHS ID 2)
+            0xd3, 0x1f, 0x3e, 0x02, // read sector ID 2 (VG93 sector register)
             0xd3, 0x5f, 0x3e, 0x80, 0xd3, 0x1f, 0x21, 0x00, 0x60, // HL=6000h
             0x01, 0x7f, 0x00, 0xdb, 0xff, 0xe6, 0xc0, 0x28, 0xfa, 0xfa, 0x50,
             0x3d, // JP M, HALT
@@ -3775,46 +3775,54 @@ mod tests {
         m.write_mem(0x5d0f, 0x00);
     }
 
-    /// Type `RUN` + Enter at the TR-DOS command prompt (`RUN` with no filename → `boot`).
-    fn type_trdos_run_command(m: &mut Machine) {
-        const PRESS: u32 = 15;
-        const GAP: u32 = 8;
-        for key in [(2, 3), (5, 3), (7, 3)] {
-            m.hold_keys(&[key], PRESS);
-            m.hold_keys(&[], GAP);
+    /// Map PC to TR-DOS ROM offset (ROM at `0000–3FFF` or common `C000+` RAM copy).
+    fn trdos_rom_pc(pc: u16) -> Option<u16> {
+        if (0x0000..0x4000).contains(&pc) {
+            Some(pc)
+        } else if pc >= 0xC000 {
+            Some(pc - 0xC000)
+        } else {
+            None
         }
-        m.hold_keys(&[(6, 0)], PRESS);
-        m.hold_keys(&[], GAP);
     }
 
-    /// Wait until TR-DOS is at the command prompt (paged, low ROM PC, FDC idle).
+    /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
+    ///
+    /// TR-DOS expects the Spectrum keyword token `0xF4` at `5CB6h`, not typed ASCII
+    /// (`trdos.rom` `0x20F2`: `LD A,(#5CB6); CP #F4`). Dispatch via `3D80h`.
+    fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
+        wait_for_trdos_command_prompt(m);
+        m.write_mem(0x5cb6, 0xf4);
+        m.write_mem(0x5cb7, 0x0d);
+        m.cpu_mut().regs.pc = 0x3d80;
+        wait_for_trdos_boot_marker(m, 2_000)
+    }
+
     fn wait_for_trdos_command_prompt(m: &mut Machine) {
         let mut stable = 0u32;
-        for _ in 0..2_000_000 {
+        for _ in 0..20_000_000 {
             m.step_once();
             let pc = m.cpu().regs.pc;
             let Some(beta) = m.beta_mut() else {
                 stable = 0;
                 continue;
             };
-            let idle = beta.status & 0x02 == 0;
-            let in_trdos = beta.paged && (0x3c00..0x3e00).contains(&pc);
-            if in_trdos && idle {
+            let Some(rom_pc) = trdos_rom_pc(pc) else {
+                stable = 0;
+                continue;
+            };
+            let idle = beta.status & 0x01 == 0;
+            let at_prompt = beta.paged && (0x3D31..=0x3D60).contains(&rom_pc);
+            let in_disk_loader = (0x3E00..0x3F80).contains(&rom_pc);
+            if at_prompt && idle && !in_disk_loader {
                 stable += 1;
-                if stable >= 50_000 {
+                if stable >= 10_000 {
                     return;
                 }
             } else {
                 stable = 0;
             }
         }
-    }
-
-    /// Invoke TR-DOS `RUN` with no filename (loads `boot`) via keyboard `RUN` + Enter.
-    fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
-        wait_for_trdos_command_prompt(m);
-        type_trdos_run_command(m);
-        wait_for_trdos_boot_marker(m, 2_000)
     }
 
     fn manual_read_track1_sector1(m: &mut Machine) -> bool {
@@ -3824,7 +3832,7 @@ mod tests {
         beta.page_trdos(true);
         beta.out_port(0x00ff, 0x3c);
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         if beta.sector_read_count == 0 {
             return false;
@@ -3850,24 +3858,13 @@ mod tests {
         init_trdos_usr_call_frame(m);
         m.cpu_mut().regs.pc = 0x3d00;
         let mut saw_paged = false;
-        let mut stable = 0u32;
-        let mut last_cmds = 0u32;
-        for _ in 0..5_000_000 {
+        for _ in 0..20_000_000 {
             m.step_once();
             if m.beta_mut().is_some_and(|b| b.paged) {
                 saw_paged = true;
             }
-            if saw_paged {
-                let cmds = m.beta_mut().map(|b| b.cmd_count).unwrap_or(0);
-                if cmds == last_cmds {
-                    stable += 1;
-                    if stable >= 100_000 {
-                        break;
-                    }
-                } else {
-                    stable = 0;
-                    last_cmds = cmds;
-                }
+            if saw_paged && trdos_rom_pc(m.cpu().regs.pc) == Some(0x3D31) {
+                break;
             }
         }
         assert!(
