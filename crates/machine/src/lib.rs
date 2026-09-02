@@ -3680,7 +3680,7 @@ mod tests {
             0xd3, 0xff, // OUT (FFh),A
             0xaf, // XOR A
             0xd3, 0x3f, // OUT (3Fh),A  track 0
-            0x3e, 0xe0, // LD A,E0h
+            0x3e, 0xf0, // LD A,F0h
             0xd3, 0x1f, // OUT (1Fh),A  WRITE TRACK
             0x3e, 0xfe, // ID: FE
             0xd3, 0x7f, // OUT (7Fh),A
@@ -3775,14 +3775,25 @@ mod tests {
         m.write_mem(0x5d0f, 0x00);
     }
 
-    /// Type `R` + Enter at the TR-DOS command prompt (`RUN` with no filename → `boot`).
+    /// Type `RUN` + Enter at the TR-DOS command prompt (`RUN` with no filename → `boot`).
     fn type_trdos_run_command(m: &mut Machine) {
-        const PRESS: u32 = 10;
-        const GAP: u32 = 5;
-        m.hold_keys(&[(2, 3)], PRESS); // R
+        const PRESS: u32 = 15;
+        const GAP: u32 = 8;
+        for key in [(2, 3), (5, 3), (7, 3)] {
+            m.hold_keys(&[key], PRESS);
+            m.hold_keys(&[], GAP);
+        }
+        m.hold_keys(&[(6, 0)], PRESS);
         m.hold_keys(&[], GAP);
-        m.hold_keys(&[(6, 0)], PRESS); // Enter
-        m.hold_keys(&[], GAP);
+    }
+
+    /// Invoke TR-DOS `RUN` with no filename (loads `boot`) via keyboard `RUN` + Enter.
+    fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
+        for _ in 0..100 {
+            let _ = m.run_frame();
+        }
+        type_trdos_run_command(m);
+        wait_for_trdos_boot_marker(m, 2_000)
     }
 
     fn manual_read_track1_sector1(m: &mut Machine) -> bool {
@@ -3818,10 +3829,24 @@ mod tests {
         init_trdos_usr_call_frame(m);
         m.cpu_mut().regs.pc = 0x3d00;
         let mut saw_paged = false;
-        for _ in 0..3_000_000 {
+        let mut stable = 0u32;
+        let mut last_cmds = 0u32;
+        for _ in 0..5_000_000 {
             m.step_once();
             if m.beta_mut().is_some_and(|b| b.paged) {
                 saw_paged = true;
+            }
+            if saw_paged {
+                let cmds = m.beta_mut().map(|b| b.cmd_count).unwrap_or(0);
+                if cmds == last_cmds {
+                    stable += 1;
+                    if stable >= 100_000 {
+                        break;
+                    }
+                } else {
+                    stable = 0;
+                    last_cmds = cmds;
+                }
             }
         }
         assert!(
@@ -3831,19 +3856,14 @@ mod tests {
         );
     }
 
-    /// Invoke TR-DOS `RUN` with no filename (loads `boot`) via keyboard `R` + Enter.
-    fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
-        if let Some(beta) = m.beta_mut() {
-            beta.out_port(0x00ff, 0x3c);
-        }
-        type_trdos_run_command(m);
-        for _ in 0..1_500 {
+    fn wait_for_trdos_boot_marker(m: &mut Machine, max_frames: u32) -> bool {
+        for _ in 0..max_frames {
             let _ = m.run_frame();
             if m.read_mem(0x8000) == 0xa5 {
                 return true;
             }
         }
-        for _ in 0..4_000_000 {
+        for _ in 0..2_000_000 {
             m.step_once();
             if m.read_mem(0x8000) == 0xa5 {
                 return true;
@@ -3895,9 +3915,12 @@ mod tests {
         enter_trdos_command_mode(&mut m);
         if !invoke_trdos_run_boot(&mut m) {
             let pc = m.cpu().regs.pc;
-            let sectors = m.beta_mut().map(|b| b.sector_read_count).unwrap_or(0);
+            let (sectors, cmd_total) = m
+                .beta_mut()
+                .map(|b| (b.sector_read_count, b.cmd_count))
+                .unwrap_or((0, 0));
             eprintln!(
-                "skip: TR-DOS RUN marker not set (PC={pc:#06x}, sector_reads={sectors}); #140 RUN still open"
+                "skip: TR-DOS RUN marker not set (PC={pc:#06x}, sector_reads={sectors}, cmd_total={cmd_total}); #140 RUN still open"
             );
         }
     }

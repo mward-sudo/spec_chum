@@ -27,7 +27,7 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 | ROM-gated test | When `trdos.rom` present |
 | --- | --- |
 | `trdos_rom_reads_boot_when_128k_chans_ok_and_fixture_present` | After DOS entry, VG93 can still read track 1 / sector 1 (`boot` body) |
-| `trdos_rom_run_boot_basic_when_fixture_present` | **Open:** `RUN` → `POKE 32768,165` (`0x8000 == 0xA5`); soft-skips with message until catalog/RUN path is complete |
+| `trdos_rom_run_boot_basic_when_fixture_present` | **Open:** `RUN` → `POKE 32768,165` (`0x8000 == 0xA5`); soft-skips when `roms/trdos.rom` present until TR-DOS seek/catalog completes |
 
 `RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
 
