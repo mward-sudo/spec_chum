@@ -3953,8 +3953,8 @@ mod tests {
 
     /// After find-boot matches `boot`, this TR-DOS image's `08D2h` epilogue is FF
     /// padding. Load the file body through the real VG93 path into `(PROG)`, wire
-    /// Spectrum sysvars / `NEWPPC`, unpage TR-DOS, page 48K BASIC ROM, and enter
-    /// `LINE-NEW` (`1B76h`).
+    /// Spectrum sysvars / `NEWPPC` / FLAGS bit 7 (running), unpage TR-DOS, page
+    /// 48K BASIC ROM, and enter `LINE-NEW` (`1B76h`).
     ///
     /// Why not TR-DOS `012Ah`:
     /// - Beta keeps the TR-DOS latch across RAM, so stock `5CC2h`→`1B76h` would still
@@ -4066,7 +4066,12 @@ mod tests {
         };
         write_u16(m, 0x5c42, newppc); // NEWPPC
         m.write_mem(0x5c44, 0); // NSPPC = first statement
-                                // Leave DOS + select 48K BASIC ROM so `1B76h` is LINE-NEW.
+                                // SYNTAX-Z (`1C11h`) is `BIT 7,(IY+1)`: Z set when bit 7 is
+                                // clear, i.e. syntax-checking. TR-DOS/128 editor leftover FLAGS
+                                // `1Dh` keeps DECIMAL inserting a second `0x0E` (`00 00 00 80 00`
+                                // for 32768) in front of the stored `90…` float → Report C.
+        m.write_mem(0x5c3b, m.read_mem(0x5c3b) | 0x80);
+        // Leave DOS + select 48K BASIC ROM so `1B76h` is LINE-NEW.
         if let Some(beta) = m.beta_mut() {
             beta.page_trdos(false);
         }
@@ -4471,14 +4476,11 @@ mod tests {
             .beta_mut()
             .map(|b| (b.sector_read_count, b.track, b.command_ring().to_vec()))
             .unwrap_or((0, 0, Vec::new()));
-        if !ok {
-            // Still open (#266): BANK_M sync lets ROM1 `3B4Dh` reach ROM0 Statement
-            // Return, but POKE still Report-C (re-embeds `0x0E` into the line).
-            eprintln!(
-                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 BANK_M/LINE-NEW ok, POKE marker open"
-            );
-            return;
-        }
+        assert!(
+            ok,
+            "TR-DOS RUN boot should POKE 32768,165 (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}, 8000={:#04x})",
+            m.read_mem(0x8000)
+        );
         assert_eq!(m.read_mem(0x8000), 0xa5, "boot BASIC POKE 32768,165");
     }
 
