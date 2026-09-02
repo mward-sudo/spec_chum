@@ -3723,17 +3723,140 @@ mod tests {
         assert_eq!(m.beta_mut().map(|b| b.write_track_count), Some(1));
     }
 
-    /// TR-DOS 5.04 Beta 128 rejects 48K sysvar layout when `(CHANS) < 5D25h`.
-    fn init_trdos_beta128_sysvars(m: &mut Machine) {
-        m.write_mem(0x5c4d, 0x25);
-        m.write_mem(0x5c4e, 0x5d);
+    fn rom_pentagon() -> Option<Vec<u8>> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for rel in ["roms/pentagon/pentagon.rom", "roms/pentagon/128p.rom"] {
+            if let Ok(data) = std::fs::read(root.join(rel)) {
+                if data.len() == 32768 {
+                    return Some(data);
+                }
+            }
+        }
+        None
+    }
+
+    fn init_trdos_usr_call_frame(m: &mut Machine) {
+        m.cpu_mut().regs.sp = 0xfffe;
+        m.cpu_mut().regs.set_hl(0);
+    }
+
+    fn enter_128k_basic_from_menu(m: &mut Machine) {
+        const PRESS: u32 = 15;
+        const GAP: u32 = 5;
+        for _ in 0..250 {
+            let _ = m.run_frame();
+        }
+        m.hold_keys(&[(0, 0), (4, 4)], PRESS);
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(6, 0)], PRESS);
+        m.hold_keys(&[], 30);
+        for _ in 0..400 {
+            let _ = m.run_frame();
+        }
+    }
+
+    fn ensure_trdos_beta128_prog(m: &mut Machine) {
+        let prog = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
+        let chans = u16::from(m.read_mem(0x5c4d)) | (u16::from(m.read_mem(0x5c4e)) << 8);
+        if chans == 0 {
+            const CHANS: u16 = 0x5d25;
+            m.write_mem(0x5c4d, (CHANS & 0xff) as u8);
+            m.write_mem(0x5c4e, (CHANS >> 8) as u8);
+        }
+        if prog < 0x5d25 {
+            const PROG: u16 = 0x5d30;
+            m.write_mem(0x5c4f, (PROG & 0xff) as u8);
+            m.write_mem(0x5c50, (PROG >> 8) as u8);
+            m.write_mem(0x5c51, ((PROG + 1) & 0xff) as u8);
+            m.write_mem(0x5c52, ((PROG + 1) >> 8) as u8);
+            m.write_mem(PROG, 0x80);
+        }
+        m.write_mem(0x5d17, 0xaa);
+        m.write_mem(0x5d0f, 0x00);
+    }
+
+    /// Type `R` + Enter at the TR-DOS command prompt (`RUN` with no filename → `boot`).
+    fn type_trdos_run_command(m: &mut Machine) {
+        const PRESS: u32 = 10;
+        const GAP: u32 = 5;
+        m.hold_keys(&[(2, 3)], PRESS); // R
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(6, 0)], PRESS); // Enter
+        m.hold_keys(&[], GAP);
+    }
+
+    fn manual_read_track1_sector1(m: &mut Machine) -> bool {
+        let Some(beta) = m.beta_mut() else {
+            return false;
+        };
+        beta.page_trdos(true);
+        beta.out_port(0x00ff, 0x3c);
+        beta.out_port(0x003f, 1);
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x80);
+        if beta.sector_read_count == 0 {
+            return false;
+        }
+        let mut ok = true;
+        for _ in 0..256 {
+            let Some(st) = beta.in_port(0x001f) else {
+                ok = false;
+                break;
+            };
+            if st & 0x02 != 0 {
+                let _ = beta.in_port(0x007f);
+            }
+            if st & 0x80 != 0 {
+                break;
+            }
+        }
+        ok
+    }
+
+    /// Enter TR-DOS command mode via `USR 15616` (`3D00h` → `3D31h`).
+    fn enter_trdos_command_mode(m: &mut Machine) {
+        init_trdos_usr_call_frame(m);
+        m.cpu_mut().regs.pc = 0x3d00;
+        let mut saw_paged = false;
+        for _ in 0..3_000_000 {
+            m.step_once();
+            if m.beta_mut().is_some_and(|b| b.paged) {
+                saw_paged = true;
+            }
+        }
+        assert!(
+            saw_paged,
+            "TR-DOS should page (PC={:#06x})",
+            m.cpu().regs.pc
+        );
+    }
+
+    /// Invoke TR-DOS `RUN` with no filename (loads `boot`) via keyboard `R` + Enter.
+    fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
+        if let Some(beta) = m.beta_mut() {
+            beta.out_port(0x00ff, 0x3c);
+        }
+        type_trdos_run_command(m);
+        for _ in 0..1_500 {
+            let _ = m.run_frame();
+            if m.read_mem(0x8000) == 0xa5 {
+                return true;
+            }
+        }
+        for _ in 0..4_000_000 {
+            m.step_once();
+            if m.read_mem(0x8000) == 0xa5 {
+                return true;
+            }
+        }
+        false
     }
 
     /// Optional: real `roms/trdos.rom` + 128K main ROM. Skips when either is missing.
     #[test]
     fn trdos_rom_reads_boot_when_128k_chans_ok_and_fixture_present() {
-        let Some(main) = rom128() else {
-            eprintln!("skip: roms/128/spec128uk.rom missing");
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
             return;
         };
         let Some(trdos) = trdos_rom_bytes() else {
@@ -3743,23 +3866,38 @@ mod tests {
         let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
         m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
             .unwrap();
-        init_trdos_beta128_sysvars(&mut m);
-        m.cpu_mut().regs.pc = 0x3d00;
-        m.cpu_mut().regs.sp = 0xfffd;
-        let mut sector_reads = 0u32;
-        for _ in 0..2_000_000 {
-            m.step_once();
-            if let Some(b) = m.beta_mut() {
-                sector_reads = b.sector_read_count;
-                if sector_reads > 0 {
-                    break;
-                }
-            }
-        }
-        if sector_reads == 0 {
+        enter_128k_basic_from_menu(&mut m);
+        ensure_trdos_beta128_prog(&mut m);
+        enter_trdos_command_mode(&mut m);
+        assert!(
+            manual_read_track1_sector1(&mut m),
+            "FDC should read boot sector after TR-DOS entry (PC={:#06x})",
+            m.cpu().regs.pc
+        );
+    }
+
+    /// ROM-gated: TR-DOS `RUN` (no filename) loads synthetic `boot` → `POKE 32768,165`.
+    #[test]
+    fn trdos_rom_run_boot_basic_when_fixture_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
+            .unwrap();
+        enter_128k_basic_from_menu(&mut m);
+        ensure_trdos_beta128_prog(&mut m);
+        enter_trdos_command_mode(&mut m);
+        if !invoke_trdos_run_boot(&mut m) {
+            let pc = m.cpu().regs.pc;
+            let sectors = m.beta_mut().map(|b| b.sector_read_count).unwrap_or(0);
             eprintln!(
-                "skip: real TR-DOS did not read boot disk yet (PC={:#06x}); #140 RUN still open",
-                m.cpu().regs.pc
+                "skip: TR-DOS RUN marker not set (PC={pc:#06x}, sector_reads={sectors}); #140 RUN still open"
             );
         }
     }

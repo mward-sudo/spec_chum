@@ -17,14 +17,19 @@ TR-DOS `NEW` / format, commits sectors into `TrdImage`, auto-completes after 16
 sectors/track. Always-on smokes: `write_track_formats_sector_with_data`,
 `write_track_auto_completes_full_track`, `beta_write_track_via_synthetic_rom`.
 
-48K + Beta enters TR-DOS from Sinclair BASIC with `RANDOMIZE USR 15616` (command
-mode) or `RANDOMIZE USR 15619: REM: …` (one command, then back to BASIC). `RUN`
-with no filename loads the BASIC program named `boot` (Beta 128 manual). TR-DOS
-5.04 (`BETA 128`) still returns through the 48K Interface 1 trampoline when
-`CHANS < 5D25h`, so a working ROM-gated `RUN` needs 128K sysvars / trampolines
-(`init_trdos_beta128_sysvars` in machine tests sets `(CHANS)=5D25h` as a spike).
-Optional ROM test `trdos_rom_reads_boot_when_128k_chans_ok_and_fixture_present`
-checks catalog/data reads after that fix; full `RUN` → POKE marker remains open.
+**Beta 128 entry:** TR-DOS 5.04 compares `(PROG)` against `5D25h` at `3D21h` (not
+`(CHANS)`). ROM-gated machine tests boot 128 BASIC from the menu, patch `(PROG)` into
+the 128K workspace when needed, and enter via `USR 15616` (`3D00h`). The Beta paging
+latch in `crates/bus/src/beta_disk.rs` stays set across RAM execution so mixed
+ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
+`3D00–3DFF`.
+
+| ROM-gated test | When `trdos.rom` present |
+| --- | --- |
+| `trdos_rom_reads_boot_when_128k_chans_ok_and_fixture_present` | After DOS entry, VG93 can still read track 1 / sector 1 (`boot` body) |
+| `trdos_rom_run_boot_basic_when_fixture_present` | **Open:** `RUN` → `POKE 32768,165` (`0x8000 == 0xA5`); soft-skips with message until catalog/RUN path is complete |
+
+`RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
 
 | Fixture | Licence | Path | Marker |
 | --- | --- | --- | --- |
