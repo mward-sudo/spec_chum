@@ -8,7 +8,8 @@
 //! Read: `D7` = INTRQ, `D6` = DRQ.
 //!
 //! Opcode-fetch (M1) paging: ROM in at `0x3C00–0x3DFF` (48K) or `0x3D00–0x3DFF`
-//! (128K), out at `PC >= 0x4000`.
+//! (128K). The latch stays set across RAM execution until [`BetaDisk::page_trdos`]
+//! clears it.
 
 use formats::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 
@@ -141,17 +142,16 @@ impl BetaDisk {
     /// M1 (opcode fetch) paging used by TR-DOS `USR 15616` (`0x3D00`).
     ///
     /// `page_in_lo` is the start of the page-in window through `0x3DFF`:
-    /// `0x3C00` for 48K Beta, `0x3D00` for Beta 128. Unpage only on fetches at
-    /// `PC >= 0x4000` so TR-DOS can read/write RAM without dropping the ROM.
-    /// No-op until a ROM is loaded so port-only tests can latch `paged` manually.
+    /// `0x3C00` for 48K Beta, `0x3D00` for Beta 128. The latch stays set across
+    /// RAM (`PC >= 0x4000`) execution so mixed ROM/RAM paths can resume in TR-DOS
+    /// below `0x4000` without re-entering through `3D00–3DFF`. Clear with
+    /// [`Self::page_trdos`] (`false`) when leaving DOS.
     pub fn notify_m1(&mut self, pc: u16, page_in_lo: u16) {
         if !self.rom_loaded {
             return;
         }
         if (page_in_lo..0x3e00).contains(&pc) {
             self.paged = true;
-        } else if pc >= 0x4000 {
-            self.paged = false;
         }
     }
 
@@ -869,6 +869,9 @@ mod tests {
         assert_eq!(beta.read_rom(0), Some(0x42));
         assert_eq!(beta.read_rom(0x3d00), Some(0xc3));
         beta.notify_m1(0x4000, 0x3c00);
+        assert!(beta.paged, "latch stays set across RAM execution");
+        assert_eq!(beta.read_rom(0), Some(0x42));
+        beta.page_trdos(false);
         assert!(!beta.paged);
         assert!(beta.read_rom(0).is_none());
     }
@@ -919,7 +922,8 @@ mod tests {
         beta.notify_m1(0x3d00, 0x3d00);
         assert!(beta.paged);
         beta.notify_m1(0x4000, 0x3d00);
-        assert!(!beta.paged);
+        assert!(beta.paged, "latch stays set across RAM on 128K");
+        beta.page_trdos(false);
         beta.notify_m1(0x3c00, 0x3c00);
         assert!(beta.paged, "48K window pages at 0x3C00");
     }
