@@ -3831,7 +3831,8 @@ mod tests {
         m.write_mem(0x5d0f, 0);
         // Seed `(PROG)` with ASCII `RUN` + CR + end marker so `3032h`/`30A9h` match the
         // RUN keyword (empty CR-only line returns immediately without loading `boot`).
-        let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        // Beta128/TR-DOS harness PROG lives at `5C4Fh` (see [`ensure_trdos_beta128_prog`]).
+        let prog = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
         for (i, &b) in b"RUN\r\x80".iter().enumerate() {
             m.write_mem(prog.wrapping_add(i as u16), b);
         }
@@ -3970,7 +3971,7 @@ mod tests {
         }
         m.write_mem(0x5cc2, 0xc9);
         m.write_mem(0x5d0f, 0);
-        let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        let prog = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
         for (i, &b) in b"RUN\r\x80".iter().enumerate() {
             m.write_mem(prog.wrapping_add(i as u16), b);
         }
