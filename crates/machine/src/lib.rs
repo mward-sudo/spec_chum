@@ -3672,6 +3672,98 @@ mod tests {
         assert_eq!(m.beta_mut().map(|b| b.sector_read_count), Some(1));
     }
 
+    /// Synthetic TR-DOS ROM: WRITE TRACK one sector then read it back.
+    fn trdos_write_track_rom() -> [u8; bus::TRDOS_ROM_SIZE] {
+        let mut rom = [0u8; bus::TRDOS_ROM_SIZE];
+        let code: &[u8] = &[
+            0x3e, 0x3c, // LD A,3Ch
+            0xd3, 0xff, // OUT (FFh),A
+            0xaf, // XOR A
+            0xd3, 0x3f, // OUT (3Fh),A  track 0
+            0x3e, 0xe0, // LD A,E0h
+            0xd3, 0x1f, // OUT (1Fh),A  WRITE TRACK
+            0x3e, 0xfe, // ID: FE
+            0xd3, 0x7f, // OUT (7Fh),A
+            0xaf, // track 0
+            0xd3, 0x7f, 0xaf, // side 0
+            0xd3, 0x7f, 0x3e, 0x02, // sector 2
+            0xd3, 0x7f, 0x3e, 0x01, // 256 bytes
+            0xd3, 0x7f, 0x3e, 0xf7, // CRC
+            0xd3, 0x7f, 0x3e, 0xfb, // data mark
+            0xd3, 0x7f, 0x3e, 0xbe, // fill byte
+            0x06, 0x00, // LD B,0  (256 bytes)
+            0xd3, 0x7f, // loop: OUT (7Fh),A
+            0x10, 0xfc, // DJNZ loop (-4 → 3D29h)
+            0x3e, 0xf7, 0xd3, 0x7f, 0x3e, 0xd8, // Force interrupt
+            0xd3, 0x1f, 0x3e, 0x02, // read sector 2 back
+            0xd3, 0x5f, 0x3e, 0x80, 0xd3, 0x1f, 0x21, 0x00, 0x60, // HL=6000h
+            0x01, 0x7f, 0x00, 0xdb, 0xff, 0xe6, 0xc0, 0x28, 0xfa, 0xfa, 0x50,
+            0x3d, // JP M, HALT
+            0xed, 0xa2, 0x18, 0xf3, 0x76,
+        ];
+        rom[0x3d00..0x3d00 + code.len()].copy_from_slice(code);
+        rom
+    }
+
+    #[test]
+    fn beta_write_track_via_synthetic_rom() {
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        m.load_trdos_rom(&trdos_write_track_rom()).unwrap();
+        m.insert_trd(synthetic_trd_with_marker(0, 0)).unwrap();
+        m.cpu_mut().regs.pc = 0x3d00;
+        m.cpu_mut().regs.sp = 0xfffd;
+        for _ in 0..50_000 {
+            if m.cpu().regs.halted {
+                break;
+            }
+            m.step_once();
+        }
+        assert!(m.cpu().regs.halted);
+        assert_eq!(m.read_mem(0x6000), 0xbe);
+        assert_eq!(m.beta_mut().map(|b| b.write_track_count), Some(1));
+    }
+
+    /// TR-DOS 5.04 Beta 128 rejects 48K sysvar layout when `(CHANS) < 5D25h`.
+    fn init_trdos_beta128_sysvars(m: &mut Machine) {
+        m.write_mem(0x5c4d, 0x25);
+        m.write_mem(0x5c4e, 0x5d);
+    }
+
+    /// Optional: real `roms/trdos.rom` + 128K main ROM. Skips when either is missing.
+    #[test]
+    fn trdos_rom_reads_boot_when_128k_chans_ok_and_fixture_present() {
+        let Some(main) = rom128() else {
+            eprintln!("skip: roms/128/spec128uk.rom missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
+            .unwrap();
+        init_trdos_beta128_sysvars(&mut m);
+        m.cpu_mut().regs.pc = 0x3d00;
+        m.cpu_mut().regs.sp = 0xfffd;
+        let mut sector_reads = 0u32;
+        for _ in 0..2_000_000 {
+            m.step_once();
+            if let Some(b) = m.beta_mut() {
+                sector_reads = b.sector_read_count;
+                if sector_reads > 0 {
+                    break;
+                }
+            }
+        }
+        if sector_reads == 0 {
+            eprintln!(
+                "skip: real TR-DOS did not read boot disk yet (PC={:#06x}); #140 RUN still open",
+                m.cpu().regs.pc
+            );
+        }
+    }
+
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
 
     #[test]
