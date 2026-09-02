@@ -3782,12 +3782,43 @@ mod tests {
         (pc < 0x4000).then_some(pc)
     }
 
+    /// Harness ROM patches for ROM-gated `RUN` → `boot` (#266 / #140).
+    ///
+    /// Prefer removing these as real FDC / RST `#20` / CAT semantics improve.
+    fn patch_trdos_run_harness_rom(m: &mut Machine) {
+        let Some(beta) = m.beta_mut() else {
+            return;
+        };
+        // `3D9Ah` VG93 wait `RST #20` → `1F54h` re-enters catalog seek and never
+        // unwinds with instant Type-I completion → `JR 3DA5h` over that helper.
+        beta.patch_rom(0x3d9d, &[0x18, 0x06, 0x00])
+            .expect("TR-DOS ROM loaded for RUN harness");
+        // Warm `02CBh` path `CALL 1D83h` runs CAT and blocks on a key (`161Dh`).
+        beta.patch_rom(0x02d4, &[0x00, 0x00, 0x00])
+            .expect("TR-DOS ROM loaded for RUN harness");
+        // `3DFFh` multi-ms busy-wait (motor spin); `RET` so Type-I finishes in budget.
+        beta.patch_rom(0x3dff, &[0xc9])
+            .expect("TR-DOS ROM loaded for RUN harness");
+        // `3D94h` `RST #20`/`0010h` → `JP 3D82h` recurses under a plain `5CC2h` stub.
+        beta.patch_rom(0x3d94, &[0xc9])
+            .expect("TR-DOS ROM loaded for RUN harness");
+        // `2135h` ends with `JP 1D90h` (CAT) and never returns to `02ECh` `CALL 3032h`.
+        beta.patch_rom(0x2155, &[0xc9])
+            .expect("TR-DOS ROM loaded for RUN harness");
+        // `213Eh` `CALL Z,211Eh` wipes `(PROG)` to bare CR when `(5D0F)=0`, so `3032h`
+        // matches no keyword and returns without loading `boot`. NOP that call; the
+        // harness seeds `RUN\\r` at `(PROG)` instead.
+        beta.patch_rom(0x213e, &[0x00, 0x00, 0x00])
+            .expect("TR-DOS ROM loaded for RUN harness");
+    }
+
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
     ///
     /// TR-DOS expects the Spectrum keyword token `0xF4` at `5CB6h` (`trdos.rom`
     /// `20F2h`: `LD A,(#5CB6); CP #F4`). After [`enter_trdos_command_mode`] seed
     /// workspace (`5CC2h` `RET` stub, `(ERR_SP)`, stacked `HL=5CC2h`) and enter via
-    /// `0239h` → `02E9h` `CALL 2135h` (same path as `3D35h` after a finished line).
+    /// `0239h` → `02E9h` `CALL 2135h` then `CALL 3032h` (same path as `3D35h` after a
+    /// finished line, with harness patches so `2135h` returns and `3032h` sees `RUN`).
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
@@ -3798,27 +3829,13 @@ mod tests {
         // `trdos.rom` `00FD`: `LD (5CC2),#C9`). USR 15616 entry may not run that init.
         m.write_mem(0x5cc2, 0xc9);
         m.write_mem(0x5d0f, 0);
-        // Harness (#266):
-        // - `3D9Ah` VG93 wait `RST #20` → `1F54h` re-enters catalog seek and never
-        //   unwinds with instant Type-I completion → `JR 3DA5h` over that helper.
-        // - Warm `02CBh` path `CALL 1D83h` runs CAT and blocks on a key (`161Dh`).
-        //   NOP that call so RUN proceeds to spin-up + `2135h`.
-        // - `3DFFh` is a multi-ms busy-wait used by motor spin; `RET` it for the
-        //   harness so Type-I / RUN can finish within the step budget.
-        // - `3D94h` is `RST #20` with parameter `0010h` → `JP 3D82h`, which re-enters
-        //   the same routine and recurses forever under a plain `5CC2h` `RET` stub.
-        //   Make it a no-op `RET` (the following `DJNZ`/`RET` is the intended epilogue
-        //   when B=0 after a real DOS init).
-        if let Some(beta) = m.beta_mut() {
-            beta.patch_rom(0x3d9d, &[0x18, 0x06, 0x00])
-                .expect("TR-DOS ROM loaded for RUN harness");
-            beta.patch_rom(0x02d4, &[0x00, 0x00, 0x00])
-                .expect("TR-DOS ROM loaded for RUN harness");
-            beta.patch_rom(0x3dff, &[0xc9])
-                .expect("TR-DOS ROM loaded for RUN harness");
-            beta.patch_rom(0x3d94, &[0xc9])
-                .expect("TR-DOS ROM loaded for RUN harness");
+        // Seed `(PROG)` with ASCII `RUN` + CR + end marker so `3032h`/`30A9h` match the
+        // RUN keyword (empty CR-only line returns immediately without loading `boot`).
+        let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        for (i, &b) in b"RUN\r\x80".iter().enumerate() {
+            m.write_mem(prog.wrapping_add(i as u16), b);
         }
+        patch_trdos_run_harness_rom(m);
         let sp = m.cpu().regs.sp;
         m.write_mem(0x5c3d, (sp & 0xff) as u8);
         m.write_mem(0x5c3e, (sp >> 8) as u8);
@@ -3953,12 +3970,11 @@ mod tests {
         }
         m.write_mem(0x5cc2, 0xc9);
         m.write_mem(0x5d0f, 0);
-        if let Some(beta) = m.beta_mut() {
-            let _ = beta.patch_rom(0x3d9d, &[0x18, 0x06, 0x00]);
-            let _ = beta.patch_rom(0x02d4, &[0x00, 0x00, 0x00]);
-            let _ = beta.patch_rom(0x3dff, &[0xc9]);
-            let _ = beta.patch_rom(0x3d94, &[0xc9]);
+        let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        for (i, &b) in b"RUN\r\x80".iter().enumerate() {
+            m.write_mem(prog.wrapping_add(i as u16), b);
         }
+        patch_trdos_run_harness_rom(&mut m);
         let sp = m.cpu().regs.sp;
         m.write_mem(0x5c3d, (sp & 0xff) as u8);
         m.write_mem(0x5c3e, (sp >> 8) as u8);
@@ -3973,9 +3989,13 @@ mod tests {
         let mut escaped = 0u32;
         let mut last_ring_len = 0usize;
         let mut saw_c0 = false;
-        for step in 0..200_000u32 {
+        let watch = [
+            0x02e9u16, 0x02ec, 0x2135, 0x2155, 0x3032, 0x1e40, 0x1e43, 0x1e62, 0x1e74, 0x1e83,
+            0x3e63, 0x3dc8, 0x3dfa, 0x1605, 0x1d90, 0x3f0e, 0x3f0a,
+        ];
+        for step in 0..400_000u32 {
             let pc = m.cpu().regs.pc;
-            if step % 20_000 == 0 {
+            if step % 50_000 == 0 {
                 eprintln!(
                     "tick step={step} PC={pc:#06x} 5CB6={:#04x} 5D16={:#04x}",
                     m.read_mem(0x5cb6),
@@ -3992,8 +4012,10 @@ mod tests {
                         b.system,
                         b.system & 3,
                     );
-                    if b.command_ring().last() == Some(&0xc0) {
-                        saw_c0 = true;
+                    if b.command_ring().last() == Some(&0xc0)
+                        || b.command_ring().last().is_some_and(|c| c & 0xe0 == 0x80)
+                    {
+                        saw_c0 |= b.command_ring().last() == Some(&0xc0);
                         hits = 0;
                     }
                     last_ring_len = len;
@@ -4005,12 +4027,15 @@ mod tests {
                 let sectors = m.beta_mut().map(|x| x.sector_read_count).unwrap_or(0);
                 let in_rom = pc < 0x4000;
                 let dos_stub = pc == 0x5cc2 || (0x5c00..0x5e00).contains(&pc);
-                let limit = if saw_c0 { 200 } else { 120 };
-                if in_rom && hits < limit {
+                let interesting = watch.contains(&pc);
+                let limit = if saw_c0 { 250 } else { 80 };
+                if interesting || (in_rom && hits < limit) {
                     eprintln!(
                         "step={step} PC={pc:#06x} B={breg:#04x} SP={sp:#06x} sectors={sectors}"
                     );
-                    hits += 1;
+                    if in_rom && !interesting {
+                        hits += 1;
+                    }
                 } else if !in_rom && !dos_stub {
                     eprintln!("escaped PC={pc:#06x} at step={step} SP={sp:#06x}");
                     escaped += 1;
@@ -4066,11 +4091,10 @@ mod tests {
             .map(|b| (b.sector_read_count, b.track, b.command_ring().to_vec()))
             .unwrap_or((0, 0, Vec::new()));
         if !ok {
-            // Still open (#266): after seek+read-address the load path escapes
-            // (PC≈0xC9xx / 0x2D91) before Type-II sector reads. Harness patches
-            // below are required for progress; remove as FDC/RST#20 improve.
+            // Still open (#266): RUN line reaches `3032h` and seek/`C0h`, but the
+            // load path hits `1E74h RET Z` with `B=0` (no Type-II sector reads).
             eprintln!(
-                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 load-after-read-address open"
+                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 B=0 before Type-II open"
             );
             return;
         }
