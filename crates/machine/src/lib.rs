@@ -3843,9 +3843,9 @@ mod tests {
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
     ///
     /// Warm entry `0239h`→`02E9h`→`3032h` reaches find-boot Type-II catalog reads.
-    /// Avoid relying on `19DDh`→`08D2h` (FF hole) for the post-match body load — the
-    /// harness patches `08D2h` to `JP 1E4Dh` (load matched file). Name block lives at
-    /// `5EE0h` so it does not overlap the `5D25h` sector buffer.
+    /// Post-match `19DDh`→`08D2h` is FF padding: harness FDC-loads `boot` into `(PROG)`,
+    /// unpages TR-DOS, and enters Spectrum `LINE-NEW` (`1B76h`) with sysvars/NEWPPC.
+    /// Name block lives at `5EE0h` so it does not overlap the `5D25h` sector buffer.
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
@@ -3952,15 +3952,22 @@ mod tests {
     }
 
     /// After find-boot matches `boot`, this TR-DOS image's `08D2h` epilogue is FF
-    /// padding. Load the file body through the real VG93 path into `(PROG)` and
-    /// enter the ROM BASIC-run entry at `012Ah`.
+    /// padding. Load the file body through the real VG93 path into `(PROG)`, wire
+    /// Spectrum sysvars / `NEWPPC`, unpage TR-DOS, page 48K BASIC ROM, and enter
+    /// `LINE-NEW` (`1B76h`).
+    ///
+    /// Why not TR-DOS `012Ah`:
+    /// - Beta keeps the TR-DOS latch across RAM, so stock `5CC2h`→`1B76h` would still
+    ///   fetch TR-DOS at `1B76h`.
+    /// - `012Ah` `CALL 1D97h` → RST `#20` into `0D6Bh` FF padding on this ROM image.
+    /// - 128/Pentagon ROM0 is the editor; `1B76h` LINE-NEW lives in ROM1 (`7FFDh` bit 4).
     fn trdos_fdc_load_boot_into_prog(m: &mut Machine) -> bool {
         let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
         let start_sec = m.read_mem(0x5d25 + 14);
         let start_trk = m.read_mem(0x5d25 + 15);
         let file_type = m.read_mem(0x5d25 + 8);
         let len = u16::from(m.read_mem(0x5d25 + 9)) | (u16::from(m.read_mem(0x5d25 + 10)) << 8);
-        if file_type != b'B' || start_trk == 0 {
+        if file_type != b'B' || start_trk == 0 || len == 0 || len > 256 {
             return false;
         }
         let mut buf = [0u8; 256];
@@ -3995,26 +4002,44 @@ mod tests {
                 *b = beta.in_port(0x007f).unwrap_or(0);
             }
         }
-        for (i, &b) in buf.iter().enumerate() {
+        // Program + empty VARS only (`len`); autostart `AAh` trailer stays out of E_LINE.
+        for (i, &b) in buf[..len as usize].iter().enumerate() {
             m.write_mem(prog.wrapping_add(i as u16), b);
         }
-        // Dirent length / vars offset — wire Spectrum sysvars so `012Ah` can RUN.
         let vars_off =
             u16::from(m.read_mem(0x5d25 + 11)) | (u16::from(m.read_mem(0x5d25 + 12)) << 8);
         let vars = prog.wrapping_add(vars_off);
         let e_line = vars.wrapping_add(1);
-        m.write_mem(0x5c4b, (vars & 0xff) as u8);
-        m.write_mem(0x5c4c, (vars >> 8) as u8);
-        m.write_mem(0x5c4f, (prog & 0xff) as u8);
-        m.write_mem(0x5c50, (prog >> 8) as u8);
-        m.write_mem(0x5c53, (e_line & 0xff) as u8);
-        m.write_mem(0x5c54, (e_line >> 8) as u8);
-        m.write_mem(0x5c59, (prog & 0xff) as u8);
-        m.write_mem(0x5c5a, (prog >> 8) as u8);
-        // File type / length for `1D56h` / `012Ah` BASIC run path.
-        m.write_mem(0x5ce5, b'B');
-        m.write_mem(0x5ce6, (len & 0xff) as u8);
-        m.write_mem(0x5ce7, (len >> 8) as u8);
+        let write_u16 = |m: &mut Machine, addr: u16, val: u16| {
+            m.write_mem(addr, (val & 0xff) as u8);
+            m.write_mem(addr.wrapping_add(1), (val >> 8) as u8);
+        };
+        // Standard Spectrum sysvars (TR-DOS harness aliases `5C4Fh`/`5C59h` differently).
+        // Harness parked channel info at `5C4Dh` and PROG at `5C4Fh` — restore CHANS.
+        let chans = u16::from(m.read_mem(0x5c4d)) | (u16::from(m.read_mem(0x5c4e)) << 8);
+        write_u16(m, 0x5c4b, vars); // VARS
+        write_u16(m, 0x5c4f, if chans >= 0x5b00 { chans } else { 0x5f00 }); // CHANS
+        write_u16(m, 0x5c53, prog); // PROG
+        write_u16(m, 0x5c59, e_line); // E_LINE
+        write_u16(m, 0x5c61, e_line); // WORKSP
+        write_u16(m, 0x5c63, e_line); // STKBOT
+        write_u16(m, 0x5c65, e_line); // STKEND
+                                      // Autostart LINE from TR-DOS trailer (`AAh`, line LE) or first program line.
+        let newppc = if buf.get(len as usize) == Some(&0xaa) {
+            u16::from(buf[len as usize + 1]) | (u16::from(buf[len as usize + 2]) << 8)
+        } else {
+            u16::from(buf[1]) | (u16::from(buf[0]) << 8)
+        };
+        write_u16(m, 0x5c42, newppc); // NEWPPC
+        m.write_mem(0x5c44, 0); // NSPPC = first statement
+                                // Leave DOS + select 48K BASIC ROM so `1B76h` is LINE-NEW.
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(false);
+        }
+        if let Machine::Spec128 { bus, .. } = m {
+            let page = bus.page | 0x10; // bit 4 → ROM1 (48K BASIC)
+            bus.out_7ffd(page);
+        }
         true
     }
 
@@ -4026,7 +4051,8 @@ mod tests {
         for _ in 0..max_steps {
             if !loaded && m.cpu().regs.pc == 0x08d2 && trdos_fdc_load_boot_into_prog(m) {
                 loaded = true;
-                m.cpu_mut().regs.pc = 0x012a;
+                // Spectrum LINE-NEW in ROM1 — not TR-DOS `012Ah` (see load helper docs).
+                m.cpu_mut().regs.pc = 0x1b76;
                 continue;
             }
             m.step_once();
@@ -4236,11 +4262,10 @@ mod tests {
             .map(|b| (b.sector_read_count, b.track, b.command_ring().to_vec()))
             .unwrap_or((0, 0, Vec::new()));
         if !ok {
-            // Still open (#266): catalog match + VG93 body read (track 1) work under
-            // harness; `08D2h` FF-hole is bridged via FDC load into `(PROG)`, but
-            // TR-DOS `012Ah` BASIC run does not yet poke `0x8000`.
+            // Still open (#266): body FDC + Spectrum LINE-NEW handoff attempted;
+            // hard `0x8000==0xA5` not reached yet.
             eprintln!(
-                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 body FDC ok, BASIC 012A marker open"
+                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 LINE-NEW handoff, marker open"
             );
             return;
         }
