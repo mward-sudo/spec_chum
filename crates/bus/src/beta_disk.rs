@@ -148,6 +148,23 @@ impl BetaDisk {
         Ok(())
     }
 
+    /// Overwrite bytes in the loaded TR-DOS ROM image (test / harness hooks).
+    pub fn patch_rom(&mut self, addr: u16, bytes: &[u8]) -> Result<(), String> {
+        let start = usize::from(addr);
+        let end = start.saturating_add(bytes.len());
+        if !self.rom_loaded {
+            return Err("TR-DOS ROM not loaded".into());
+        }
+        if end > TRDOS_ROM_SIZE {
+            return Err(format!(
+                "TR-DOS ROM patch {addr:#06x}+{} out of range",
+                bytes.len()
+            ));
+        }
+        self.rom[start..end].copy_from_slice(bytes);
+        Ok(())
+    }
+
     /// Recent VG93 command bytes for diagnostics (newest at `cmd_ring_len - 1`).
     #[must_use]
     pub fn command_ring(&self) -> &[u8] {
@@ -949,6 +966,24 @@ mod tests {
         beta.out_port(0x005f, 99);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x001f), Some(STAT_RNF));
+    }
+
+    #[test]
+    fn trdos_seek_compare_and_track0_pulse() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x00ff, 0x3c);
+        beta.out_port(0x007f, 1);
+        beta.out_port(0x001f, 0x19);
+        assert_eq!(
+            beta.in_port(0x00ff).unwrap() & 0x80,
+            0x80,
+            "INTRQ after seek"
+        );
+        assert_eq!(beta.in_port(0x003f), Some(1));
+        let st = beta.in_port(0x001f).unwrap();
+        assert_ne!(st & STAT_TRACK0, 0, "seek-complete pulse (3E30 AND #04)");
     }
 
     #[test]
