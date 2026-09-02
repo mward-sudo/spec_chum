@@ -3795,9 +3795,26 @@ mod tests {
         (pc < 0x4000).then_some(pc)
     }
 
+    /// `5CC2h` RST `#20` gate used by `2F72h`.
+    ///
+    /// Stock DOS init writes a lone `C9`. With that stub, `3D94h` `RST #20` / inline
+    /// `0010h` falls into `JP 3D82h` and recurses (`CALL 3D94h` again). Skip only the
+    /// `DE==0010h` service so `3D94h` can stay unpatched; other vectors (e.g. `1F54h`)
+    /// still run. Bytes live in the DOS printer-buffer hole at `5CC2h` (11 bytes).
+    fn install_trdos_rst20_5cc2_hook(m: &mut Machine) {
+        // POP HL / CP L,#10 / JR NZ,do / OR H / RET Z / PUSH HL / RET
+        const HOOK: [u8; 11] = [
+            0xe1, 0x7d, 0xfe, 0x10, 0x20, 0x03, 0x7c, 0xb7, 0xc8, 0xe5, 0xc9,
+        ];
+        for (i, &b) in HOOK.iter().enumerate() {
+            m.write_mem(0x5cc2 + i as u16, b);
+        }
+    }
+
     /// Harness ROM patches for ROM-gated `RUN` → `boot` (#266 / #140).
     ///
     /// Prefer removing these as real FDC / RST `#20` / CAT semantics improve.
+    /// `3D94h` is no longer RET-patched — see [`install_trdos_rst20_5cc2_hook`].
     fn patch_trdos_run_harness_rom(m: &mut Machine) {
         let Some(beta) = m.beta_mut() else {
             return;
@@ -3811,9 +3828,6 @@ mod tests {
             .expect("TR-DOS ROM loaded for RUN harness");
         // `3DFFh` multi-ms busy-wait (motor spin); `RET` so Type-I finishes in budget.
         beta.patch_rom(0x3dff, &[0xc9])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        // `3D94h` `RST #20`/`0010h` → `JP 3D82h` recurses under a plain `5CC2h` stub.
-        beta.patch_rom(0x3d94, &[0xc9])
             .expect("TR-DOS ROM loaded for RUN harness");
         // `2135h` ends with `JP 1D90h` (CAT) and never returns to `02ECh` `CALL 3032h`.
         beta.patch_rom(0x2155, &[0xc9])
@@ -3849,9 +3863,9 @@ mod tests {
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
-        // RST #20 epilogue (`2F72h`) returns through a `RET` stub at `5CC2h` (see
-        // `trdos.rom` `00FD`: `LD (5CC2),#C9`). USR 15616 entry may not run that init.
-        m.write_mem(0x5cc2, 0xc9);
+        // RST #20 epilogue (`2F72h`) enters `5CC2h` before the inline service address.
+        // Skip recursive `0010h`→`3D82h` so stock `3D94h` (`RST #20` / `0010h`) returns.
+        install_trdos_rst20_5cc2_hook(m);
         m.write_mem(0x5d0f, 0);
         // Find-boot sentinel for `1921h` `CALL Z,195Ch`.
         m.write_mem(0x5d10, 0xff);
@@ -4447,6 +4461,66 @@ mod tests {
                 b.sector_read_count,
             );
         }
+    }
+
+    /// ROM-gated: stock `3D94h` (`RST #20` / inline `0010h`) returns via the `5CC2h`
+    /// hook without RET-patching the ROM (#266).
+    #[test]
+    fn trdos_3d94_rst20_returns_without_rom_ret_patch_when_fixture_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        assert_eq!(
+            trdos.get(0x3d94).copied(),
+            Some(0xe7),
+            "fixture ROM must keep stock RST #20 at 3D94h"
+        );
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        install_trdos_rst20_5cc2_hook(&mut m);
+        assert!(
+            m.beta_mut().is_some_and(|b| b.paged),
+            "TR-DOS must be paged before 3D94h"
+        );
+        assert_eq!(
+            m.read_mem(0x3d94),
+            0xe7,
+            "paged fetch at 3D94h should be RST #20"
+        );
+        let at20 = m.read_mem(0x0020);
+        assert_eq!(
+            at20, 0xc3,
+            "paged fetch at 0020h should be TR-DOS JP 2F72h, got {at20:#04x}"
+        );
+        // RAM trampoline: `CALL 3D94h` / `HALT` — return addr sits below RST #20 traffic.
+        const STUB: u16 = 0x8000;
+        m.write_mem(STUB, 0xcd);
+        m.write_mem(STUB + 1, 0x94);
+        m.write_mem(STUB + 2, 0x3d);
+        m.write_mem(STUB + 3, 0x76); // HALT
+        m.cpu_mut().regs.sp = 0x6000;
+        m.cpu_mut().regs.pc = STUB;
+        let mut returned = false;
+        for _ in 0..50_000 {
+            m.step_once();
+            if m.cpu().regs.pc == STUB + 3 {
+                returned = true;
+                break;
+            }
+        }
+        let final_pc = m.cpu().regs.pc;
+        let final_paged = m.beta_mut().is_some_and(|b| b.paged);
+        assert!(
+            returned,
+            "3D94h RST #20 should return with 5CC2h hook (PC={final_pc:#06x}, paged={final_paged})"
+        );
     }
 
     /// ROM-gated: TR-DOS `RUN` (no filename) loads synthetic `boot` → `POKE 32768,165`.
