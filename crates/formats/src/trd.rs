@@ -256,6 +256,8 @@ impl TrdImage {
 }
 
 /// `10 POKE 32768,165` — same ZX float encoding as the +3DOS `DISK` fixture.
+/// LINE-NEW of this program needs FLAGS bit 7 set (running); otherwise DECIMAL
+/// inserts a second `0x0E` and Report-C's.
 fn trdos_basic_poke_marker() -> Vec<u8> {
     vec![
         0x00, 0x0A, 0x17, 0x00, 0xF4, b'3', b'2', b'7', b'6', b'8', 0x0E, 0x90, 0x00, 0x00, 0x00,
