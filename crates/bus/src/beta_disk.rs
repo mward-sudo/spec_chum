@@ -32,6 +32,7 @@ enum Xfer {
     Read,
     Write,
     ReadAddress,
+    ReadTrack,
     WriteTrack,
 }
 
@@ -73,6 +74,8 @@ pub struct BetaDisk {
     pub write_track_count: u32,
     /// Most recent command bytes (oldest → newest in `[..cmd_count.min(4)]` order is not kept; last four).
     pub recent_cmds: [u8; 4],
+    cmd_ring: [u8; 64],
+    cmd_ring_len: u8,
     wt_parse: WriteTrackParse,
     wt_pending_id: Option<(u8, u8, u8, u8)>,
     wt_sectors_done: u8,
@@ -110,6 +113,8 @@ impl BetaDisk {
             sector_read_count: 0,
             write_track_count: 0,
             recent_cmds: [0; 4],
+            cmd_ring: [0; 64],
+            cmd_ring_len: 0,
             wt_parse: WriteTrackParse::Hunt,
             wt_pending_id: None,
             wt_sectors_done: 0,
@@ -132,6 +137,13 @@ impl BetaDisk {
         self.rom.copy_from_slice(data);
         self.rom_loaded = true;
         Ok(())
+    }
+
+    /// Recent VG93 command bytes for diagnostics (newest at `cmd_ring_len - 1`).
+    #[must_use]
+    pub fn command_ring(&self) -> &[u8] {
+        let n = usize::from(self.cmd_ring_len.min(64));
+        &self.cmd_ring[..n]
     }
 
     /// Page / hide TR-DOS (enables Beta port decode when true).
@@ -179,10 +191,13 @@ impl BetaDisk {
             }
             0x3f => {
                 self.track = value;
+                // TR-DOS / Beta issue SEEK after OUT (#3Fh); latch target for Type I seek.
+                self.data_reg = value;
                 true
             }
             0x5f => {
                 self.sector = value;
+                self.data_reg = value;
                 true
             }
             0x7f => {
@@ -310,8 +325,23 @@ impl BetaDisk {
         self.cmd_count = self.cmd_count.saturating_add(1);
         self.recent_cmds.rotate_left(1);
         self.recent_cmds[3] = cmd;
+        let i = usize::from(self.cmd_ring_len.min(63));
+        self.cmd_ring[i] = cmd;
+        self.cmd_ring_len = self.cmd_ring_len.saturating_add(1);
 
+        // Type IV — Force Interrupt (`D0h`–`DFh`). `D8h` is overloaded: TR-DOS issues
+        // it as Read Address (`C0h|#18`) after seek; WRITE TRACK completion uses the
+        // same byte as Force Interrupt (see `write_track_formats_sector_with_data`).
         if cmd & 0xf0 == 0xd0 {
+            if cmd == 0xd8 && self.xfer != Xfer::WriteTrack {
+                if !self.disk_ready() {
+                    self.finish_not_ready();
+                    return;
+                }
+                self.type_i_status = false;
+                self.start_read_address();
+                return;
+            }
             let was_write_track = self.xfer == Xfer::WriteTrack;
             self.xfer = Xfer::Idle;
             self.buffer.clear();
@@ -335,49 +365,53 @@ impl BetaDisk {
             return;
         }
 
-        let nibble = cmd & 0xf0;
-        match nibble {
-            0x00 => {
-                self.track = 0;
-                self.step_in = false;
-                self.set_type_i_status();
+        // WD1793 / KR1818VG93 command classes (Fuse `wd_fdc_cr_write` layout).
+        if cmd & 0x80 == 0 {
+            match cmd & 0xf0 {
+                0x00 => {
+                    self.track = 0;
+                    self.step_in = false;
+                    self.set_type_i_status();
+                }
+                0x10 => {
+                    self.step_in = self.data_reg >= self.track;
+                    self.track = self.data_reg;
+                    self.set_type_i_status();
+                }
+                0x20 | 0x30 => self.do_step(cmd & 0x10 != 0),
+                0x40 | 0x50 => {
+                    self.step_in = true;
+                    self.do_step(cmd & 0x10 != 0);
+                }
+                0x60 | 0x70 => {
+                    self.step_in = false;
+                    self.do_step(cmd & 0x10 != 0);
+                }
+                _ => {
+                    self.status = 0;
+                    self.intrq = true;
+                }
             }
-            0x10 => {
-                self.step_in = self.data_reg >= self.track;
-                self.track = self.data_reg;
-                self.set_type_i_status();
-            }
-            0x20 | 0x30 => self.do_step(cmd & 0x10 != 0),
-            0x40 | 0x50 => {
-                self.step_in = true;
-                self.do_step(cmd & 0x10 != 0);
-            }
-            0x60 | 0x70 => {
-                self.step_in = false;
-                self.do_step(cmd & 0x10 != 0);
-            }
-            0x80 | 0x90 => {
-                self.multiple = cmd & 0x10 != 0;
-                self.type_i_status = false;
+        } else if cmd & 0x40 == 0 {
+            self.multiple = cmd & 0x10 != 0;
+            self.type_i_status = false;
+            if cmd & 0x20 != 0 {
+                self.start_write_sector();
+            } else {
                 self.start_read_sector();
             }
-            0xa0 | 0xb0 => {
-                self.multiple = cmd & 0x10 != 0;
-                self.type_i_status = false;
-                self.start_write_sector();
-            }
-            0xc0 => {
-                self.type_i_status = false;
+        } else if (cmd & 0x30) != 0x10 {
+            self.type_i_status = false;
+            if cmd & 0x20 == 0 {
                 self.start_read_address();
-            }
-            0xe0 | 0xf0 => {
-                self.type_i_status = false;
+            } else if cmd & 0x10 == 0 {
+                self.start_read_track();
+            } else {
                 self.start_write_track();
             }
-            _ => {
-                self.status = 0;
-                self.intrq = true;
-            }
+        } else {
+            self.status = 0;
+            self.intrq = true;
         }
     }
 
@@ -532,25 +566,58 @@ impl BetaDisk {
     }
 
     fn start_read_address(&mut self) {
-        let idx = self.sector_index();
-        if idx >= TRD_SECTORS_PER_TRACK {
-            self.finish_rnf();
-            return;
-        }
+        let track = self.track;
+        let side = self.side();
         let Some(img) = self.image.as_ref() else {
             self.finish_not_ready();
             return;
         };
-        if img
-            .read_sector_chs(self.track, self.side(), idx as u8)
-            .is_none()
-        {
+        // TR-DOS often leaves sector reg at 0 for address-scan; WD1793 still returns
+        // the next ID field on the track (first sector for our linear image model).
+        let sec_idx = if self.sector == 0 {
+            0usize
+        } else {
+            self.sector_index()
+        };
+        if sec_idx >= TRD_SECTORS_PER_TRACK {
             self.finish_rnf();
             return;
         }
-        self.buffer = vec![self.track, self.side(), self.sector.max(1), 0x01, 0, 0];
+        if img.read_sector_chs(track, side, sec_idx as u8).is_none() {
+            self.finish_rnf();
+            return;
+        }
+        let sector_id = sec_idx as u8 + 1;
+        self.buffer = vec![track, side, sector_id, 0x01, 0xf3, 0xfc];
         self.buffer_i = 0;
         self.xfer = Xfer::ReadAddress;
+        self.drq = true;
+        self.intrq = false;
+        self.status = STAT_DRQ;
+    }
+
+    /// Type III read track: synthesize address-mark ID fields for each sector on the track.
+    fn start_read_track(&mut self) {
+        let Some(img) = self.image.as_ref() else {
+            self.finish_not_ready();
+            return;
+        };
+        let track = self.track;
+        let side = self.side();
+        let mut buf = Vec::new();
+        for sec in 0..TRD_SECTORS_PER_TRACK as u8 {
+            if img.read_sector_chs(track, side, sec).is_some() {
+                let id = sec.saturating_add(1);
+                buf.extend_from_slice(&[track, side, id, 0x01, 0, 0]);
+            }
+        }
+        if buf.is_empty() {
+            self.finish_rnf();
+            return;
+        }
+        self.buffer = buf;
+        self.buffer_i = 0;
+        self.xfer = Xfer::ReadTrack;
         self.drq = true;
         self.intrq = false;
         self.status = STAT_DRQ;
@@ -650,7 +717,7 @@ impl BetaDisk {
     }
 
     pub fn read_data(&mut self) -> u8 {
-        if !matches!(self.xfer, Xfer::Read | Xfer::ReadAddress) {
+        if !matches!(self.xfer, Xfer::Read | Xfer::ReadAddress | Xfer::ReadTrack) {
             return self.data_reg;
         }
         if self.buffer_i >= self.buffer.len() {
@@ -822,6 +889,54 @@ mod tests {
     }
 
     #[test]
+    fn read_track_returns_address_ids() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0xaa, 0xbb));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x001f, 0xe9); // read track (E0h + TR-DOS modifiers)
+        assert_eq!(beta.in_port(0x007f), Some(0)); // C
+        assert_eq!(beta.in_port(0x007f), Some(0)); // H
+        assert_eq!(beta.in_port(0x007f), Some(1)); // R
+        assert_eq!(beta.in_port(0x007f), Some(1)); // N
+    }
+
+    #[test]
+    fn trdos_catalog_seek_read_boot_sector() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x00ff, 0x3c);
+        // Track 1 / sector 1 (boot body) — TR-DOS catalog then load path.
+        beta.out_port(0x003f, 1);
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x19);
+        assert_eq!(beta.in_port(0x00ff).unwrap() & 0x80, 0x80);
+        beta.out_port(0x001f, 0xc0);
+        assert_eq!(beta.in_port(0x007f), Some(1)); // C
+        assert_eq!(beta.in_port(0x007f), Some(0)); // H
+        assert_eq!(beta.in_port(0x007f), Some(1)); // R
+        beta.out_port(0x001f, 0x80);
+        assert_eq!(beta.in_port(0x007f), Some(0x00)); // boot BASIC
+        assert_eq!(beta.in_port(0x007f), Some(0x0a));
+        assert_eq!(beta.sector_read_count, 1);
+    }
+
+    #[test]
+    fn ss_disk_read_with_default_system_port() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x00ff, 0x3c);
+        assert_eq!(beta.side(), 0);
+        beta.out_port(0x003f, 1);
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x80);
+        assert!(beta.sector_read_count > 0);
+        assert_eq!(beta.in_port(0x007f), Some(0x00)); // boot BASIC line marker
+    }
+
+    #[test]
     fn read_address_returns_id_field() {
         let mut beta = BetaDisk::new();
         beta.insert(one_track_image(0, 0));
@@ -905,10 +1020,24 @@ mod tests {
         beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x001f), Some(STAT_RNF));
-        // Sector 1 still intact (sector 0 must not alias to it).
+        // Sector 0 must not alias to sector 1 for Type II read.
         beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x007f), Some(0));
+    }
+
+    #[test]
+    fn read_address_with_sector_zero_returns_first_id() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0xab, 0xcd));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x005f, 0);
+        beta.out_port(0x001f, 0xc0);
+        assert_eq!(beta.in_port(0x007f), Some(0));
+        assert_eq!(beta.in_port(0x007f), Some(0));
+        assert_eq!(beta.in_port(0x007f), Some(1));
+        assert_eq!(beta.in_port(0x007f), Some(1));
     }
 
     #[test]
@@ -989,7 +1118,7 @@ mod tests {
         beta.insert(one_track_image(0, 0));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x001f, 0xe0);
+        beta.out_port(0x001f, 0xf0);
         assert_eq!(beta.in_port(0x00ff), Some(0x40));
         feed_write_track_sector(&mut beta, 0, 2, 0xcd);
         beta.out_port(0x001f, 0xd8);
@@ -1006,7 +1135,7 @@ mod tests {
         beta.insert(one_track_image(0xaa, 0xbb));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x001f, 0xe0);
+        beta.out_port(0x001f, 0xf0);
         for sec in 1..=TRD_SECTORS_PER_TRACK as u8 {
             feed_write_track_sector(&mut beta, 0, sec, sec);
         }
@@ -1022,7 +1151,7 @@ mod tests {
     fn write_track_rnf_without_image() {
         let mut beta = BetaDisk::new();
         beta.page_trdos(true);
-        beta.out_port(0x001f, 0xe0);
+        beta.out_port(0x001f, 0xf0);
         assert_eq!(beta.status, STAT_NOT_READY);
     }
 }
