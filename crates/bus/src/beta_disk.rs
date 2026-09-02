@@ -730,10 +730,6 @@ impl BetaDisk {
             }
             _ => {
                 self.data_reg = value;
-                // TR-DOS loads the seek cylinder via `OUT #7F` before Type I SEEK.
-                if matches!(self.xfer, Xfer::Idle) && self.type_i_status {
-                    self.track = value;
-                }
             }
         }
     }
@@ -953,6 +949,21 @@ mod tests {
         beta.out_port(0x005f, 99);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x001f), Some(STAT_RNF));
+    }
+
+    #[test]
+    fn seek_compare_out7f_in3f_matches_after_seek() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x00ff, 0x3c);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x007f, 1);
+        assert_eq!(beta.track, 0, "OUT #7F must not move track register");
+        assert_eq!(beta.in_port(0x003f), Some(0));
+        beta.out_port(0x001f, 0x1b);
+        assert_eq!(beta.track, 1);
+        assert_eq!(beta.in_port(0x003f), Some(1));
     }
 
     #[test]
