@@ -4018,13 +4018,47 @@ mod tests {
         // Harness parked channel info at `5C4Dh` and PROG at `5C4Fh` — restore CHANS.
         let chans = u16::from(m.read_mem(0x5c4d)) | (u16::from(m.read_mem(0x5c4e)) << 8);
         write_u16(m, 0x5c4b, vars); // VARS
-        write_u16(m, 0x5c4f, if chans >= 0x5b00 { chans } else { 0x5f00 }); // CHANS
+                                    // Prefer a live channel block left by 128 BASIC entry. The TR-DOS harness
+                                    // parks a blank `5F00h` window and aliases CHANS at `5C4Dh` while overwriting
+                                    // standard `5C4Fh` with PROG — recover the post-menu pointer when present.
+        let standard_chans = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
+        let chans_ptr = if (0x5b00..0x5e00).contains(&standard_chans) {
+            standard_chans
+        } else if (0x5b00..0x5e00).contains(&chans) {
+            chans
+        } else {
+            // Minimal K/S/R/P channels (5 bytes each: OUT, IN, letter) as NEW installs.
+            const CHANS: u16 = 0x5f00;
+            let block: [u8; 21] = [
+                0xf4, 0x09, 0xa8, 0x10, b'K', // PRINT-OUT / KEY-INPUT
+                0xf4, 0x09, 0xc4, 0x15, b'S', // PRINT-OUT / KEY-INPUT
+                0x81, 0x0f, 0xc4, 0x15, b'R', // ADD-CHAR / KEY-INPUT
+                0xf4, 0x09, 0xc4, 0x15, b'P', // PRINT-OUT / KEY-INPUT
+                0x80, // end marker
+            ];
+            for (i, &b) in block.iter().enumerate() {
+                m.write_mem(CHANS.wrapping_add(i as u16), b);
+            }
+            CHANS
+        };
+        write_u16(m, 0x5c4f, chans_ptr); // CHANS
+        write_u16(m, 0x5c51, chans_ptr); // CURCHL → first channel
+                                         // Stream offsets from CHANS (NEW defaults).
+        for (i, off) in [0x0001u16, 0x0006, 0x000b, 0x0001, 0x0001, 0x0006, 0x0010]
+            .into_iter()
+            .enumerate()
+        {
+            write_u16(m, 0x5c10 + (i as u16) * 2, off);
+        }
         write_u16(m, 0x5c53, prog); // PROG
         write_u16(m, 0x5c59, e_line); // E_LINE
         write_u16(m, 0x5c61, e_line); // WORKSP
         write_u16(m, 0x5c63, e_line); // STKBOT
         write_u16(m, 0x5c65, e_line); // STKEND
-                                      // Autostart LINE from TR-DOS trailer (`AAh`, line LE) or first program line.
+                                      // Empty edit line terminator at E_LINE (required by many ROM walks).
+        m.write_mem(e_line, 0x0d);
+        m.write_mem(e_line.wrapping_add(1), 0x80);
+        // Autostart LINE from TR-DOS trailer (`AAh`, line LE) or first program line.
         let newppc = if buf.get(len as usize) == Some(&0xaa) {
             u16::from(buf[len as usize + 1]) | (u16::from(buf[len as usize + 2]) << 8)
         } else {
@@ -4039,6 +4073,10 @@ mod tests {
         if let Machine::Spec128 { bus, .. } = m {
             let page = bus.page | 0x10; // bit 4 → ROM1 (48K BASIC)
             bus.out_7ffd(page);
+            // Keep BANK_M (`5B5C`) in sync — 128 SWAP at `5B00h` XORs bit 4 from
+            // this shadow copy. Desync (e.g. `07` while port is `17`) makes ROM1
+            // `3B4Dh`→`0112h` run ROM1 message bytes instead of ROM0 Statement Return.
+            m.write_mem(0x5b5c, page);
         }
         true
     }
@@ -4084,6 +4122,178 @@ mod tests {
             manual_read_track1_sector1(&mut m),
             "FDC should read boot sector after TR-DOS entry (PC={:#06x}, at_prompt={at_prompt})",
             m.cpu().regs.pc
+        );
+    }
+
+    /// Debug: dump LINE-NEW handoff sysvars + PC trail until RST `#08` / marker.
+    #[test]
+    #[ignore]
+    fn debug_trdos_line_new_handoff() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            return;
+        };
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
+            .unwrap();
+        enter_128k_basic_from_menu(&mut m);
+        ensure_trdos_beta128_prog(&mut m);
+        assert!(enter_trdos_command_mode(&mut m));
+
+        // Drive RUN until the harness loads + jumps to LINE-NEW, then stop stepping
+        // the DOS path and inspect Spectrum BASIC state.
+        m.write_mem(0x5cb6, 0xf4);
+        m.write_mem(0x5cb7, 0x0d);
+        m.write_mem(0x5cc2, 0xc9);
+        m.write_mem(0x5d0f, 0);
+        m.write_mem(0x5d10, 0xff);
+        let prog0 = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        for (i, &b) in b"RUN\r\x80".iter().enumerate() {
+            m.write_mem(prog0.wrapping_add(i as u16), b);
+        }
+        m.write_mem(0x5cf6, 0xff);
+        m.write_mem(0x5cf9, 0xff);
+        m.write_mem(0x5cdb, 0x01);
+        m.write_mem(0x5cdc, 0x08);
+        m.write_mem(0x5cd9, 0x00);
+        m.write_mem(0x5cda, 0x00);
+        m.write_mem(0x5cf4, 0x00);
+        m.write_mem(0x5cf5, 0x00);
+        const NAME: u16 = 0x5ee0;
+        let dirent: [u8; 16] = [
+            b'b', b'o', b'o', b't', b' ', b' ', b' ', b' ', b'B', 28, 0, 27, 0, 1, 0, 1,
+        ];
+        for (i, &b) in dirent.iter().enumerate() {
+            m.write_mem(NAME + i as u16, b);
+        }
+        m.write_mem(0x5cd7, (NAME & 0xff) as u8);
+        m.write_mem(0x5cd8, (NAME >> 8) as u8);
+        patch_trdos_run_harness_rom(&mut m);
+        let sp = m.cpu().regs.sp;
+        m.write_mem(0x5c3d, (sp & 0xff) as u8);
+        m.write_mem(0x5c3e, (sp >> 8) as u8);
+        m.cpu_mut().regs.set_hl(0x5cc2);
+        m.cpu_mut().regs.set_de(0);
+        m.cpu_mut().regs.sp = sp.wrapping_sub(2);
+        m.write_mem(sp.wrapping_sub(2), 0xc2);
+        m.write_mem(sp.wrapping_sub(1), 0x5c);
+        m.write_mem(0x5d17, 0xaa);
+        m.cpu_mut().regs.pc = 0x0239;
+
+        let mut loaded = false;
+        for _ in 0..3_000_000u32 {
+            if !loaded && m.cpu().regs.pc == 0x08d2 && trdos_fdc_load_boot_into_prog(&mut m) {
+                loaded = true;
+                m.cpu_mut().regs.pc = 0x1b76;
+                break;
+            }
+            m.step_once();
+        }
+        assert!(loaded, "did not reach 08D2h FDC handoff");
+
+        let rd16 = |m: &Machine, a: u16| -> u16 {
+            u16::from(m.read_mem(a)) | (u16::from(m.read_mem(a.wrapping_add(1))) << 8)
+        };
+        let page = match &m {
+            Machine::Spec128 { bus, .. } => bus.page,
+            _ => 0,
+        };
+        let paged = m.beta_mut().is_some_and(|b| b.paged);
+        eprintln!(
+            "handoff PC={:#06x} SP={:#06x} IY={:#06x} page={page:#04x} trdos={paged}",
+            m.cpu().regs.pc,
+            m.cpu().regs.sp,
+            m.cpu().regs.iy()
+        );
+        let stub: Vec<u8> = (0..32).map(|i| m.read_mem(0x5b00 + i)).collect();
+        eprintln!("  5B00 stub={stub:02x?}");
+        eprintln!(
+            "  ERR_NR={:#04x} FLAGS={:#04x} FLAGS2={:#04x} ERR_SP={:#06x} RAMTOP={:#06x}",
+            m.read_mem(0x5c3a),
+            m.read_mem(0x5c3b),
+            m.read_mem(0x5c3c),
+            rd16(&m, 0x5c3d),
+            rd16(&m, 0x5cb2)
+        );
+        eprintln!(
+            "  NEWPPC={:#06x} NSPPC={:#04x} PPC={:#06x} SUBPPC={:#04x}",
+            rd16(&m, 0x5c42),
+            m.read_mem(0x5c44),
+            rd16(&m, 0x5c45),
+            m.read_mem(0x5c47)
+        );
+        eprintln!(
+            "  VARS={:#06x} CHANS={:#06x} PROG={:#06x} E_LINE={:#06x} WORKSP={:#06x} STKEND={:#06x}",
+            rd16(&m, 0x5c4b),
+            rd16(&m, 0x5c4f),
+            rd16(&m, 0x5c53),
+            rd16(&m, 0x5c59),
+            rd16(&m, 0x5c61),
+            rd16(&m, 0x5c65)
+        );
+        let strms: Vec<u16> = (0..7).map(|i| rd16(&m, 0x5c10 + i * 2)).collect();
+        eprintln!("  STRMS={strms:04x?}");
+        let prog = rd16(&m, 0x5c53);
+        let prog_bytes: Vec<u8> = (0..32).map(|i| m.read_mem(prog.wrapping_add(i))).collect();
+        eprintln!("  PROG bytes={prog_bytes:02x?}");
+        let chans = rd16(&m, 0x5c4f);
+        let chans_bytes: Vec<u8> = (0..21).map(|i| m.read_mem(chans.wrapping_add(i))).collect();
+        eprintln!("  CHANS bytes={chans_bytes:02x?}");
+
+        let mut last = 0xffffu16;
+        let mut trail: Vec<u16> = Vec::new();
+        for step in 0..50_000u32 {
+            let pc = m.cpu().regs.pc;
+            if pc != last {
+                trail.push(pc);
+                if trail.len() <= 40 || matches!(pc, 0x0008 | 0x3b4d | 0x0112 | 0x1b76 | 0x1b7d) {
+                    eprintln!(
+                        "step={step} PC={pc:#06x} A={:#04x} HL={:#06x} ERR_NR={:#04x} FLAGS={:#04x}",
+                        m.cpu().regs.a,
+                        m.cpu().regs.hl(),
+                        m.read_mem(0x5c3a),
+                        m.read_mem(0x5c3b)
+                    );
+                }
+                last = pc;
+            }
+            if pc == 0x0008 {
+                let sp = m.cpu().regs.sp;
+                let ret =
+                    u16::from(m.read_mem(sp)) | (u16::from(m.read_mem(sp.wrapping_add(1))) << 8);
+                let err_byte = m.read_mem(ret);
+                let ch_add = rd16(&m, 0x5c5d);
+                let prog_now = rd16(&m, 0x5c53);
+                let around: Vec<u8> = (0..32)
+                    .map(|i| m.read_mem(prog_now.wrapping_add(i)))
+                    .collect();
+                let ch_around: Vec<u8> = (0i16..8)
+                    .map(|i| m.read_mem(ch_add.wrapping_add((i - 2) as u16)))
+                    .collect();
+                eprintln!(
+                    "RST8 at step={step} err_byte={err_byte:#04x} CH_ADD={ch_add:#06x} STKEND={:#06x} PROG={prog_now:#06x}",
+                    rd16(&m, 0x5c65)
+                );
+                eprintln!("  PROG now={around:02x?}");
+                eprintln!("  near CH_ADD(-2..+5)={ch_around:02x?}");
+                eprintln!("  trail={:04x?}", &trail[trail.len().saturating_sub(24)..]);
+                break;
+            }
+            m.step_once();
+            if m.read_mem(0x8000) == 0xa5 {
+                eprintln!("MARKER at step={step}");
+                break;
+            }
+        }
+        eprintln!(
+            "final PC={:#06x} 8000={:#04x} ERR_NR={:#04x} page trail_len={} last={:04x?}",
+            m.cpu().regs.pc,
+            m.read_mem(0x8000),
+            m.read_mem(0x5c3a),
+            trail.len(),
+            &trail[trail.len().saturating_sub(20)..]
         );
     }
 
@@ -4262,10 +4472,10 @@ mod tests {
             .map(|b| (b.sector_read_count, b.track, b.command_ring().to_vec()))
             .unwrap_or((0, 0, Vec::new()));
         if !ok {
-            // Still open (#266): body FDC + Spectrum LINE-NEW handoff attempted;
-            // hard `0x8000==0xA5` not reached yet.
+            // Still open (#266): BANK_M sync lets ROM1 `3B4Dh` reach ROM0 Statement
+            // Return, but POKE still Report-C (re-embeds `0x0E` into the line).
             eprintln!(
-                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 LINE-NEW handoff, marker open"
+                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 BANK_M/LINE-NEW ok, POKE marker open"
             );
             return;
         }
