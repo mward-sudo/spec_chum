@@ -1273,7 +1273,7 @@ mod tests {
         beta.page_trdos(true);
 
         b.out_port(0x003f, 0);
-        b.out_port(0x005f, 1);
+        b.out_port(0x005f, 0);
         b.out_port(0x001f, 0x80); // read sector — MF clears NMI; Beta still gets command
         assert!(
             !b.multiface.as_ref().unwrap().nmi_pending,
@@ -1416,7 +1416,7 @@ mod tests {
         beta.insert(img);
         beta.page_trdos(true);
         b.out_port(0x003f, 0); // track
-        b.out_port(0x005f, 1); // sector 1 → index 0
+        b.out_port(0x005f, 0); // sector 0 (TR-DOS 0-based)
         b.out_port(0x001f, 0x80); // read sector
         assert_eq!(b.in_port(0x001f), 0x02); // DRQ
         assert_eq!(b.in_port(0x007f), 0x12);

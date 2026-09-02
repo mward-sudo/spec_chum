@@ -34,6 +34,7 @@ pub struct Inspect {
     pub tape: Option<TapeInspect>,
     pub ay_regs: Option<[u8; 16]>,
     pub ay_selected: Option<u8>,
+    pub beta: Option<BetaInspect>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,6 +56,45 @@ pub struct TapeInspect {
     pub speed: u32,
     pub block_index: u32,
     pub block_count: u32,
+}
+
+/// Beta Disk / VG93 FDC snapshot (TR-DOS / #140 diagnostics).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BetaInspect {
+    pub paged: bool,
+    pub track: u8,
+    pub sector: u8,
+    pub status: u8,
+    pub system: u8,
+    pub sector_read_count: u32,
+    pub cmd_count: u32,
+    pub recent_cmds: [u8; 4],
+    pub command_ring: Vec<u8>,
+}
+
+impl BetaInspect {
+    #[must_use]
+    pub fn from_disk(b: &bus::BetaDisk) -> Self {
+        Self {
+            paged: b.paged,
+            track: b.track,
+            sector: b.sector,
+            status: b.status,
+            system: b.system,
+            sector_read_count: b.sector_read_count,
+            cmd_count: b.cmd_count,
+            recent_cmds: b.recent_cmds,
+            command_ring: b.command_ring().to_vec(),
+        }
+    }
+}
+
+fn beta_inspect_from_48(bus: &bus::Bus48) -> Option<BetaInspect> {
+    bus.beta.as_ref().map(BetaInspect::from_disk)
+}
+
+fn beta_inspect_from_128(bus: &bus::Bus128) -> Option<BetaInspect> {
+    bus.beta.as_ref().map(BetaInspect::from_disk)
 }
 
 impl Machine {
@@ -122,6 +162,7 @@ impl Machine {
                     }),
                     ay_regs,
                     ay_selected,
+                    beta: beta_inspect_from_48(bus),
                 }
             }
             Self::Spec128 {
@@ -132,7 +173,7 @@ impl Machine {
             } => {
                 let frame_t = bus.frame_t;
                 Inspect {
-                    model: Model::Spectrum128,
+                    model: self.model(),
                     regs,
                     cpu_t,
                     frame_t,
@@ -168,6 +209,7 @@ impl Machine {
                     }),
                     ay_regs: Some(bus.ay.regs),
                     ay_selected: Some(bus.ay.selected),
+                    beta: beta_inspect_from_128(bus),
                 }
             }
             Self::SpecPlus3 {
@@ -218,6 +260,7 @@ impl Machine {
                     }),
                     ay_regs: Some(bus.ay.regs),
                     ay_selected: Some(bus.ay.selected),
+                    beta: None,
                 }
             }
         }
@@ -309,6 +352,24 @@ fn tape_json(t: &TapeInspect) -> String {
     )
 }
 
+fn beta_json(b: &BetaInspect) -> String {
+    let recent: Vec<String> = b.recent_cmds.iter().map(|v| format!("{v}")).collect();
+    let ring: Vec<String> = b.command_ring.iter().map(|v| format!("{v}")).collect();
+    format!(
+        "{{\"paged\":{},\"track\":{},\"sector\":{},\"status\":{},\"system\":{},\
+\"sector_read_count\":{},\"cmd_count\":{},\"recent_cmds\":[{}],\"command_ring\":[{}]}}",
+        u8::from(b.paged),
+        b.track,
+        b.sector,
+        b.status,
+        b.system,
+        b.sector_read_count,
+        b.cmd_count,
+        recent.join(","),
+        ring.join(","),
+    )
+}
+
 impl Inspect {
     /// Hand-rolled JSON (no serde).
     #[must_use]
@@ -334,6 +395,7 @@ impl Inspect {
                 list.join(",")
             )
         });
+        let beta = self.beta.as_ref().map_or("null".into(), beta_json);
         let fb = self.floating_bus.map_or("null".into(), |v| format!("{v}"));
         format!(
             "{{\
@@ -352,7 +414,7 @@ impl Inspect {
 \"ix\":{},\"iy\":{},\"af_\":{},\"bc_\":{},\"de_\":{},\"hl_\":{},\
 \"i\":{},\"r\":{},\"im\":{},\"memptr\":{},\"iff1\":{},\"iff2\":{},\"halted\":{},\
 \"page_7ffd\":{},\"page_1ffd\":{},\"rom\":{},\"ram_c000\":{},\"screen\":{},\
-\"tape\":{tape},\"ay\":{ay}\
+\"tape\":{tape},\"ay\":{ay},\"beta\":{beta}\
 }}",
             self.cpu_t,
             self.frame_t,
@@ -459,6 +521,20 @@ impl Display for Inspect {
                 t.block_count
             )?;
         }
+        if let Some(b) = &self.beta {
+            writeln!(
+                f,
+                "beta paged={} track={} sector={} status={:#04x} system={:#04x} sector_reads={} cmds={} recent={:02x?}",
+                u8::from(b.paged),
+                b.track,
+                b.sector,
+                b.status,
+                b.system,
+                b.sector_read_count,
+                b.cmd_count,
+                b.recent_cmds,
+            )?;
+        }
         Ok(())
     }
 }
@@ -482,5 +558,26 @@ mod tests {
         assert!(s.contains("\"block\":0"));
         assert!(s.contains("\"blocks\":2"));
         assert!(s.starts_with('{') && s.ends_with('}'));
+    }
+
+    #[test]
+    fn beta_json_includes_fdc_counters() {
+        let b = BetaInspect {
+            paged: true,
+            track: 1,
+            sector: 0,
+            status: 0x24,
+            system: 0x3c,
+            sector_read_count: 2,
+            cmd_count: 40,
+            recent_cmds: [0x19, 0x19, 0x80, 0x19],
+            command_ring: vec![0x19, 0x80],
+        };
+        let s = beta_json(&b);
+        assert!(s.contains("\"paged\":1"));
+        assert!(s.contains("\"sector_read_count\":2"));
+        assert!(s.contains("\"cmd_count\":40"));
+        assert!(s.contains("\"recent_cmds\":[25,25,128,25]"));
+        assert!(s.contains("\"command_ring\":[25,128]"));
     }
 }

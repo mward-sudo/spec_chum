@@ -15,7 +15,7 @@ mod joystick;
 mod rom;
 
 pub use debugger::{BreakReason, Debugger, Watch};
-pub use inspect::{Inspect, Paging, TapeInspect};
+pub use inspect::{BetaInspect, Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 pub use rom::{
     expected_main_rom_bytes, exrom_available, exrom_available_in, exrom_candidates,
@@ -3535,8 +3535,8 @@ mod tests {
             0x3e, 0x3c, // LD A,3Ch
             0xd3, 0xff, // OUT (FFh),A
             0xaf, // XOR A
-            0xd3, 0x3f, // OUT (3Fh),A
-            0x3e, 0x01, // LD A,1
+            0xd3, 0x3f, // OUT (3Fh),A  track 0
+            0x3e, 0x00, // LD A,0 — sector 0 (same size as old LD A,1 for jump targets)
             0xd3, 0x5f, // OUT (5Fh),A
             0x3e, 0x80, // LD A,80h
             0xd3, 0x1f, // OUT (1Fh),A
@@ -3561,7 +3561,7 @@ mod tests {
         m.insert_trd(synthetic_trd_with_marker(0x12, 0x34)).unwrap();
         m.cpu_mut().regs.pc = 0x3d00;
         m.cpu_mut().regs.sp = 0xfffd;
-        for _ in 0..4000 {
+        for _ in 0..100_000 {
             if m.cpu().regs.halted {
                 break;
             }
@@ -3631,8 +3631,8 @@ mod tests {
             0xd3, 0xff, // OUT (FFh),A
             0x3e, 0x01, // LD A,1
             0xd3, 0x3f, // OUT (3Fh),A  track 1
-            0x3e, 0x01, // LD A,1
-            0xd3, 0x5f, // OUT (5Fh),A  sector 1
+            0x3e, 0x00, // LD A,0
+            0xd3, 0x5f, // OUT (5Fh),A  sector 0
             0x3e, 0x80, // LD A,80h
             0xd3, 0x1f, // OUT (1Fh),A
             0x21, 0x00, 0x80, // LD HL,8000h
@@ -3695,7 +3695,7 @@ mod tests {
             0xd3, 0x7f, // loop: OUT (7Fh),A
             0x10, 0xfc, // DJNZ loop (-4 → 3D29h)
             0x3e, 0xf7, 0xd3, 0x7f, 0x3e, 0xd8, // Force interrupt
-            0xd3, 0x1f, 0x3e, 0x02, // read sector 2 back
+            0xd3, 0x1f, 0x3e, 0x01, // read sector index 1 (CHS ID 2)
             0xd3, 0x5f, 0x3e, 0x80, 0xd3, 0x1f, 0x21, 0x00, 0x60, // HL=6000h
             0x01, 0x7f, 0x00, 0xdb, 0xff, 0xe6, 0xc0, 0x28, 0xfa, 0xfa, 0x50,
             0x3d, // JP M, HALT
@@ -3787,11 +3787,32 @@ mod tests {
         m.hold_keys(&[], GAP);
     }
 
+    /// Wait until TR-DOS is at the command prompt (paged, low ROM PC, FDC idle).
+    fn wait_for_trdos_command_prompt(m: &mut Machine) {
+        let mut stable = 0u32;
+        for _ in 0..2_000_000 {
+            m.step_once();
+            let pc = m.cpu().regs.pc;
+            let Some(beta) = m.beta_mut() else {
+                stable = 0;
+                continue;
+            };
+            let idle = beta.status & 0x02 == 0;
+            let in_trdos = beta.paged && (0x3c00..0x3e00).contains(&pc);
+            if in_trdos && idle {
+                stable += 1;
+                if stable >= 50_000 {
+                    return;
+                }
+            } else {
+                stable = 0;
+            }
+        }
+    }
+
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`) via keyboard `RUN` + Enter.
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
-        for _ in 0..100 {
-            let _ = m.run_frame();
-        }
+        wait_for_trdos_command_prompt(m);
         type_trdos_run_command(m);
         wait_for_trdos_boot_marker(m, 2_000)
     }
@@ -3803,7 +3824,7 @@ mod tests {
         beta.page_trdos(true);
         beta.out_port(0x00ff, 0x3c);
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         if beta.sector_read_count == 0 {
             return false;
@@ -3915,6 +3936,7 @@ mod tests {
         enter_trdos_command_mode(&mut m);
         if !invoke_trdos_run_boot(&mut m) {
             let pc = m.cpu().regs.pc;
+            let inspect = m.inspect();
             let (sectors, cmd_total) = m
                 .beta_mut()
                 .map(|b| (b.sector_read_count, b.cmd_count))
@@ -3922,7 +3944,13 @@ mod tests {
             eprintln!(
                 "skip: TR-DOS RUN marker not set (PC={pc:#06x}, sector_reads={sectors}, cmd_total={cmd_total}); #140 RUN still open"
             );
+            if let Some(beta) = &inspect.beta {
+                eprintln!("  beta inspect: {beta:?}");
+            }
+            eprintln!("{}", m.disasm_window(pc, 8));
+            return;
         }
+        assert_eq!(m.read_mem(0x8000), 0xa5, "boot BASIC POKE 32768,165");
     }
 
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.

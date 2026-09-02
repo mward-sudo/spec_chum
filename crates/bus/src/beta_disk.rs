@@ -26,6 +26,12 @@ const STAT_NOT_READY: u8 = 0x80;
 /// Default system latch: drive 0, HLT, side 0, MFM (typical TR-DOS `OUT (#FF)`).
 const SYS_DEFAULT: u8 = 0x3c;
 
+fn trace_fdc(port: u16, write: bool, value: u8) {
+    if trace::enabled(trace::Category::DISK) {
+        trace::emit(trace::EventKind::DiskFdc { port, write, value });
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Xfer {
     Idle,
@@ -181,13 +187,14 @@ impl BetaDisk {
         if !self.paged {
             return false;
         }
-        match port & 0xff {
+        let handled = match port & 0xff {
             0x1f => {
                 if self.system & 0x04 == 0 {
-                    return true;
+                    true
+                } else {
+                    self.write_command(value);
+                    true
                 }
-                self.write_command(value);
-                true
             }
             0x3f => {
                 self.track = value;
@@ -197,7 +204,6 @@ impl BetaDisk {
             }
             0x5f => {
                 self.sector = value;
-                self.data_reg = value;
                 true
             }
             0x7f => {
@@ -213,7 +219,11 @@ impl BetaDisk {
                 true
             }
             _ => false,
+        };
+        if handled {
+            trace_fdc(port, true, value);
         }
+        handled
     }
 
     /// `IN` from Beta ports.
@@ -221,14 +231,14 @@ impl BetaDisk {
         if !self.paged {
             return None;
         }
-        match port & 0xff {
+        let value = match port & 0xff {
             0x1f => {
                 self.intrq = false;
-                Some(self.status)
+                self.status
             }
-            0x3f => Some(self.track),
-            0x5f => Some(self.sector),
-            0x7f => Some(self.read_data()),
+            0x3f => self.track,
+            0x5f => self.sector,
+            0x7f => self.read_data(),
             0xff => {
                 let mut v = 0u8;
                 if self.intrq {
@@ -237,10 +247,12 @@ impl BetaDisk {
                 if self.drq {
                     v |= 0x40;
                 }
-                Some(v)
+                v
             }
-            _ => None,
-        }
+            _ => return None,
+        };
+        trace_fdc(port, false, value);
+        Some(value)
     }
 
     fn reset_vg93(&mut self) {
@@ -281,14 +293,13 @@ impl BetaDisk {
         self.image.is_some() && self.drive() == 0
     }
 
-    /// 0-based index for the latched sector ID (`1..=16`). Returns
-    /// `TRD_SECTORS_PER_TRACK` for an invalid ID so callers report RNF.
+    /// TR-DOS / Beta sector register is 0-based (`0..=15`); values `>= 16` are RNF.
     fn sector_index(&self) -> usize {
-        if self.sector == 0 {
-            TRD_SECTORS_PER_TRACK
-        } else {
-            usize::from(self.sector - 1)
-        }
+        usize::from(self.sector)
+    }
+
+    fn sector_index_valid(&self) -> bool {
+        self.sector_index() < TRD_SECTORS_PER_TRACK
     }
 
     fn finish_not_ready(&mut self) {
@@ -374,8 +385,6 @@ impl BetaDisk {
                     self.set_type_i_status();
                 }
                 0x10 => {
-                    self.step_in = self.data_reg >= self.track;
-                    self.track = self.data_reg;
                     self.set_type_i_status();
                 }
                 0x20 | 0x30 => self.do_step(cmd & 0x10 != 0),
@@ -400,14 +409,16 @@ impl BetaDisk {
             } else {
                 self.start_read_sector();
             }
-        } else if (cmd & 0x30) != 0x10 {
+        } else if (cmd & 0xc0) == 0xc0 {
             self.type_i_status = false;
-            if cmd & 0x20 == 0 {
-                self.start_read_address();
-            } else if cmd & 0x10 == 0 {
-                self.start_read_track();
-            } else {
-                self.start_write_track();
+            match cmd & 0xf0 {
+                0xc0 => self.start_read_address(),
+                0xe0 => self.start_read_track(),
+                0xf0 => self.start_write_track(),
+                _ => {
+                    self.status = 0;
+                    self.intrq = true;
+                }
             }
         } else {
             self.status = 0;
@@ -574,11 +585,7 @@ impl BetaDisk {
         };
         // TR-DOS often leaves sector reg at 0 for address-scan; WD1793 still returns
         // the next ID field on the track (first sector for our linear image model).
-        let sec_idx = if self.sector == 0 {
-            0usize
-        } else {
-            self.sector_index()
-        };
+        let sec_idx = self.sector_index();
         if sec_idx >= TRD_SECTORS_PER_TRACK {
             self.finish_rnf();
             return;
@@ -629,6 +636,10 @@ impl BetaDisk {
             self.finish_not_ready();
             return false;
         };
+        if !self.sector_index_valid() {
+            self.finish_rnf();
+            return false;
+        }
         let sec_idx = self.sector_index();
         let Some(sec) = img.read_sector_chs(self.track, self.side(), sec_idx as u8) else {
             self.finish_rnf();
@@ -709,7 +720,7 @@ impl BetaDisk {
 
     fn advance_multi(&mut self) {
         let next = self.sector.saturating_add(1);
-        if usize::from(next) > TRD_SECTORS_PER_TRACK {
+        if usize::from(next) >= TRD_SECTORS_PER_TRACK {
             self.xfer = Xfer::Idle;
             return;
         }
@@ -771,7 +782,7 @@ mod tests {
         beta.insert(img);
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x001f), Some(0x02));
         assert_eq!(beta.in_port(0x007f), Some(0x12));
@@ -783,7 +794,7 @@ mod tests {
         let mut beta = BetaDisk::new();
         beta.insert(one_track_image(0, 0));
         beta.page_trdos(true);
-        beta.out_port(0x007f, 5);
+        beta.out_port(0x003f, 5);
         beta.out_port(0x001f, 0x18);
         assert_eq!(beta.track, 5);
         assert_eq!(beta.in_port(0x00ff).unwrap() & 0x80, 0x80);
@@ -814,7 +825,7 @@ mod tests {
         beta.insert(img);
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x00ff), Some(0x40));
         for _ in 0..TRD_SECTOR_SIZE {
@@ -829,7 +840,7 @@ mod tests {
         beta.insert(one_track_image(0, 0));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0xa0);
         assert_eq!(beta.in_port(0x00ff), Some(0x40));
         for i in 0..TRD_SECTOR_SIZE {
@@ -848,7 +859,7 @@ mod tests {
         beta.insert(one_track_image(0x11, 0x22));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x00ff), Some(0x40));
         beta.out_port(0x001f, 0xd0);
@@ -889,6 +900,38 @@ mod tests {
     }
 
     #[test]
+    fn seek_uses_track_register_not_sector_latch() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x005f, 0);
+        beta.out_port(0x001f, 0x19);
+        assert_eq!(beta.track, 0, "SEEK must not use sector number as cylinder");
+        beta.out_port(0x003f, 1);
+        beta.out_port(0x005f, 0);
+        beta.out_port(0x001f, 0x19);
+        assert_eq!(beta.track, 1);
+    }
+
+    #[test]
+    fn read_track_e9_modifier_is_read_not_write() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0xaa, 0xbb));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x001f, 0xe9);
+        assert_eq!(beta.in_port(0x007f), Some(0));
+        assert_eq!(beta.in_port(0x007f), Some(0));
+        assert_eq!(beta.in_port(0x007f), Some(1));
+        assert_eq!(beta.in_port(0x007f), Some(1));
+        while beta.in_port(0x00ff).unwrap() & 0x40 != 0 {
+            let _ = beta.in_port(0x007f);
+        }
+        assert_eq!(beta.in_port(0x00ff), Some(0x80), "read track must complete");
+    }
+
+    #[test]
     fn read_track_returns_address_ids() {
         let mut beta = BetaDisk::new();
         beta.insert(one_track_image(0xaa, 0xbb));
@@ -909,7 +952,7 @@ mod tests {
         beta.out_port(0x00ff, 0x3c);
         // Track 1 / sector 1 (boot body) — TR-DOS catalog then load path.
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x19);
         assert_eq!(beta.in_port(0x00ff).unwrap() & 0x80, 0x80);
         beta.out_port(0x001f, 0xc0);
@@ -930,7 +973,7 @@ mod tests {
         beta.out_port(0x00ff, 0x3c);
         assert_eq!(beta.side(), 0);
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert!(beta.sector_read_count > 0);
         assert_eq!(beta.in_port(0x007f), Some(0x00)); // boot BASIC line marker
@@ -942,7 +985,7 @@ mod tests {
         beta.insert(one_track_image(0, 0));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0xc0);
         assert_eq!(beta.in_port(0x007f), Some(0));
         assert_eq!(beta.in_port(0x007f), Some(0));
@@ -960,13 +1003,13 @@ mod tests {
         beta.insert(img);
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x90);
         assert_eq!(beta.in_port(0x007f), Some(0xa1));
         for _ in 1..TRD_SECTOR_SIZE {
             let _ = beta.in_port(0x007f);
         }
-        assert_eq!(beta.sector, 2);
+        assert_eq!(beta.sector, 1);
         assert_eq!(beta.in_port(0x007f), Some(0xa2));
     }
 
@@ -1012,18 +1055,17 @@ mod tests {
     }
 
     #[test]
-    fn sector_zero_is_record_not_found() {
+    fn sector_zero_reads_first_physical_sector() {
         let mut beta = BetaDisk::new();
-        beta.insert(one_track_image(0, 0));
+        beta.insert(one_track_image(0xab, 0xcd));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
         beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
-        assert_eq!(beta.in_port(0x001f), Some(STAT_RNF));
-        // Sector 0 must not alias to sector 1 for Type II read.
-        beta.out_port(0x005f, 1);
+        assert_eq!(beta.in_port(0x007f), Some(0xab));
+        beta.out_port(0x005f, 16);
         beta.out_port(0x001f, 0x80);
-        assert_eq!(beta.in_port(0x007f), Some(0));
+        assert_eq!(beta.in_port(0x001f), Some(STAT_RNF));
     }
 
     #[test]
@@ -1063,7 +1105,7 @@ mod tests {
         beta.insert(one_track_image(0xaa, 0xbb));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x00ff), Some(0x40), "DRQ during Type II");
         assert_eq!(beta.cmd_count, 1);
@@ -1089,7 +1131,7 @@ mod tests {
         beta.insert(TrdImage::synthetic_trdos_boot_basic());
         beta.page_trdos(true);
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 1);
+        beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x007f), Some(0x00));
         assert_eq!(beta.in_port(0x007f), Some(0x0a));
@@ -1153,5 +1195,39 @@ mod tests {
         beta.page_trdos(true);
         beta.out_port(0x001f, 0xf0);
         assert_eq!(beta.status, STAT_NOT_READY);
+    }
+
+    #[test]
+    fn beta_fdc_emits_disk_trace() {
+        trace::clear();
+        trace::enable(trace::Category::DISK);
+        let mut beta = BetaDisk::new();
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 5);
+        beta.in_port(0x003f);
+        trace::disable();
+        let events = trace::snapshot();
+        assert!(
+            events.iter().any(|e| matches!(
+                e.kind,
+                trace::EventKind::DiskFdc {
+                    port: 0x003f,
+                    write: true,
+                    value: 5
+                }
+            )),
+            "expected OUT track trace: {events:?}"
+        );
+        assert!(
+            events.iter().any(|e| matches!(
+                e.kind,
+                trace::EventKind::DiskFdc {
+                    port: 0x003f,
+                    write: false,
+                    value: 5
+                }
+            )),
+            "expected IN track trace: {events:?}"
+        );
     }
 }
