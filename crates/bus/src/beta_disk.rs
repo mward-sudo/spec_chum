@@ -16,6 +16,7 @@ use formats::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 /// TR-DOS / Beta 128 ROM size (16 KiB overlay at `0000–3FFF`).
 pub const TRDOS_ROM_SIZE: usize = 16384;
 
+// Fuse `wd_fdc.h`: BUSY=0, IDX/DRQ=1, TRACK0=2, RNF=4, HEAD/SPINUP=5, NOT_READY=7.
 const STAT_BUSY: u8 = 0x01;
 const STAT_DRQ: u8 = 0x02;
 const STAT_TRACK0: u8 = 0x04;
@@ -38,7 +39,6 @@ enum Xfer {
     Read,
     Write,
     ReadAddress,
-    ReadTrack,
     WriteTrack,
 }
 
@@ -86,6 +86,8 @@ pub struct BetaDisk {
     wt_pending_id: Option<(u8, u8, u8, u8)>,
     wt_sectors_done: u8,
     wt_fill: u8,
+    /// One status read after Type I completion exposes bit 0x04 (TR-DOS `3E30` `AND #04`).
+    seek_complete_pulse: bool,
 }
 
 impl Default for BetaDisk {
@@ -100,7 +102,7 @@ impl BetaDisk {
         Self {
             track: 0,
             sector: 1,
-            status: STAT_TRACK0,
+            status: STAT_TRACK0 | STAT_HEAD,
             system: SYS_DEFAULT,
             paged: false,
             data_reg: 0,
@@ -125,6 +127,7 @@ impl BetaDisk {
             wt_pending_id: None,
             wt_sectors_done: 0,
             wt_fill: 0xe5,
+            seek_complete_pulse: false,
         }
     }
 
@@ -212,6 +215,11 @@ impl BetaDisk {
             }
             0xff => {
                 // D2 low holds VG93 /RES (Beta 128; TR-DOS `XOR A; OUT (#FF),A`).
+                // SS images: TR-DOS may clear D2 when selecting "side 1" — keep /RES deasserted.
+                let mut value = value;
+                if self.image.as_ref().is_some_and(|img| img.sides <= 1) && value != 0 {
+                    value |= 0x04;
+                }
                 self.system = value;
                 if value & 0x04 == 0 {
                     self.reset_vg93();
@@ -234,7 +242,16 @@ impl BetaDisk {
         let value = match port & 0xff {
             0x1f => {
                 self.intrq = false;
-                self.status
+                // Fuse `wd_fdc_sr_read`: Type I status reads expose an index pulse on bit 1.
+                let mut s = self.status;
+                if self.seek_complete_pulse {
+                    s |= STAT_TRACK0;
+                    self.seek_complete_pulse = false;
+                }
+                if self.type_i_status && self.xfer == Xfer::Idle {
+                    s |= STAT_DRQ;
+                }
+                s
             }
             0x3f => self.track,
             0x5f => self.sector,
@@ -266,6 +283,7 @@ impl BetaDisk {
         self.wt_parse = WriteTrackParse::Hunt;
         self.wt_pending_id = None;
         self.wt_sectors_done = 0;
+        self.seek_complete_pulse = false;
         self.status = self.type_i_status_value();
     }
 
@@ -273,11 +291,13 @@ impl BetaDisk {
         let mut s = 0u8;
         if !self.disk_ready() {
             s |= STAT_NOT_READY;
+        } else {
+            s |= STAT_HEAD;
         }
         if self.track == 0 {
             s |= STAT_TRACK0;
         }
-        s | STAT_HEAD
+        s
     }
 
     fn drive(&self) -> u8 {
@@ -289,17 +309,36 @@ impl BetaDisk {
         u8::from(self.system & 0x10 == 0)
     }
 
+    /// Single-sided images ignore the side latch (TR-DOS may OUT `#60` on SS disks).
+    fn effective_side(&self) -> u8 {
+        if self.image.as_ref().is_some_and(|img| img.sides <= 1) {
+            0
+        } else {
+            self.side()
+        }
+    }
+
     fn disk_ready(&self) -> bool {
         self.image.is_some() && self.drive() == 0
     }
 
-    /// TR-DOS / Beta sector register is 0-based (`0..=15`); values `>= 16` are RNF.
+    /// WD1793 sector register is usually `1..=16`; TR-DOS also OUTs `0` for the first
+    /// physical sector (catalog start sector 0 → VG93 ID 1).
     fn sector_index(&self) -> usize {
-        usize::from(self.sector)
+        let id = self.sector.max(1);
+        if usize::from(id) > TRD_SECTORS_PER_TRACK {
+            TRD_SECTORS_PER_TRACK
+        } else {
+            usize::from(id - 1)
+        }
     }
 
-    fn sector_index_valid(&self) -> bool {
-        self.sector_index() < TRD_SECTORS_PER_TRACK
+    fn sector_index_for_read_address(&self) -> usize {
+        if self.sector == 0 {
+            0
+        } else {
+            self.sector_index()
+        }
     }
 
     fn finish_not_ready(&mut self) {
@@ -328,9 +367,16 @@ impl BetaDisk {
         self.drq = false;
         self.intrq = true;
         self.status = self.type_i_status_value();
+        // TR-DOS catalog seek (`trdos.rom` `3E30`: `IN A,(#1F); AND #04`) waits for bit
+        // 0x04 after SEEK even when the target cylinder is not 0. Fuse steady-state TRK0
+        // only reflects `track==0`; pulse seek-complete once on the next status read.
+        self.seek_complete_pulse = true;
     }
 
     fn write_command(&mut self, cmd: u8) {
+        // A new command supersedes any pending Type I completion pulse; otherwise a
+        // Type II status read would spuriously report bit 0x04.
+        self.seek_complete_pulse = false;
         self.intrq = false;
         self.drq = false;
         self.cmd_count = self.cmd_count.saturating_add(1);
@@ -385,6 +431,8 @@ impl BetaDisk {
                     self.set_type_i_status();
                 }
                 0x10 => {
+                    // Fuse `wd_fdc_type_i`: SEEK sets track from the data register.
+                    self.track = self.data_reg;
                     self.set_type_i_status();
                 }
                 0x20 | 0x30 => self.do_step(cmd & 0x10 != 0),
@@ -410,15 +458,20 @@ impl BetaDisk {
                 self.start_read_sector();
             }
         } else if (cmd & 0xc0) == 0xc0 {
+            // TR-DOS sets command bit 4 for side/MFM modifiers (`E9h` read track, `F9h` ≠ write).
             self.type_i_status = false;
-            match cmd & 0xf0 {
-                0xc0 => self.start_read_address(),
-                0xe0 => self.start_read_track(),
-                0xf0 => self.start_write_track(),
-                _ => {
-                    self.status = 0;
-                    self.intrq = true;
+            if (cmd & 0x30) != 0x10 {
+                if cmd & 0x20 == 0 {
+                    self.start_read_address();
+                } else if cmd == 0xf9 || cmd & 0x10 == 0 {
+                    // TR-DOS `F9h` is read-track with modifiers (not write-track).
+                    self.start_read_track();
+                } else {
+                    self.start_write_track();
                 }
+            } else {
+                self.status = 0;
+                self.intrq = true;
             }
         } else {
             self.status = 0;
@@ -562,7 +615,7 @@ impl BetaDisk {
             return;
         };
         if img
-            .read_sector_chs(self.track, self.side(), idx as u8)
+            .read_sector_chs(self.track, self.effective_side(), idx as u8)
             .is_none()
         {
             self.finish_rnf();
@@ -578,14 +631,14 @@ impl BetaDisk {
 
     fn start_read_address(&mut self) {
         let track = self.track;
-        let side = self.side();
+        let side = self.effective_side();
         let Some(img) = self.image.as_ref() else {
             self.finish_not_ready();
             return;
         };
         // TR-DOS often leaves sector reg at 0 for address-scan; WD1793 still returns
         // the next ID field on the track (first sector for our linear image model).
-        let sec_idx = self.sector_index();
+        let sec_idx = self.sector_index_for_read_address();
         if sec_idx >= TRD_SECTORS_PER_TRACK {
             self.finish_rnf();
             return;
@@ -603,31 +656,27 @@ impl BetaDisk {
         self.status = STAT_DRQ;
     }
 
-    /// Type III read track: synthesize address-mark ID fields for each sector on the track.
+    /// Type III read track: TR-DOS issues `E0h|seek` (`F9h` for seek `19h`) to verify the
+    /// index but never drains the DRQ byte stream (the ROM has no `IN` from `7Fh` on this
+    /// path). Instant completion matches index-to-index behaviour without rotation.
     fn start_read_track(&mut self) {
         let Some(img) = self.image.as_ref() else {
             self.finish_not_ready();
             return;
         };
         let track = self.track;
-        let side = self.side();
-        let mut buf = Vec::new();
-        for sec in 0..TRD_SECTORS_PER_TRACK as u8 {
-            if img.read_sector_chs(track, side, sec).is_some() {
-                let id = sec.saturating_add(1);
-                buf.extend_from_slice(&[track, side, id, 0x01, 0, 0]);
-            }
-        }
-        if buf.is_empty() {
+        let side = self.effective_side();
+        if img.read_sector_chs(track, side, 0).is_none() {
             self.finish_rnf();
             return;
         }
-        self.buffer = buf;
+        self.xfer = Xfer::Idle;
+        self.drq = false;
+        self.intrq = true;
+        self.type_i_status = true;
+        self.status = self.type_i_status_value();
+        self.buffer.clear();
         self.buffer_i = 0;
-        self.xfer = Xfer::ReadTrack;
-        self.drq = true;
-        self.intrq = false;
-        self.status = STAT_DRQ;
     }
 
     /// Latch track / sector then load sector into the data buffer.
@@ -636,12 +685,13 @@ impl BetaDisk {
             self.finish_not_ready();
             return false;
         };
-        if !self.sector_index_valid() {
+        if usize::from(self.sector.max(1)) > TRD_SECTORS_PER_TRACK {
             self.finish_rnf();
             return false;
         }
         let sec_idx = self.sector_index();
-        let Some(sec) = img.read_sector_chs(self.track, self.side(), sec_idx as u8) else {
+        let Some(sec) = img.read_sector_chs(self.track, self.effective_side(), sec_idx as u8)
+        else {
             self.finish_rnf();
             return false;
         };
@@ -680,6 +730,10 @@ impl BetaDisk {
             }
             _ => {
                 self.data_reg = value;
+                // TR-DOS loads the seek cylinder via `OUT #7F` before Type I SEEK.
+                if matches!(self.xfer, Xfer::Idle) && self.type_i_status {
+                    self.track = value;
+                }
             }
         }
     }
@@ -687,7 +741,7 @@ impl BetaDisk {
     fn commit_write_sector(&mut self) {
         let idx = self.sector_index();
         let track = self.track;
-        let side = self.side();
+        let side = self.effective_side();
         let mut data = [0u8; TRD_SECTOR_SIZE];
         let n = self.buffer.len().min(TRD_SECTOR_SIZE);
         data[..n].copy_from_slice(&self.buffer[..n]);
@@ -720,7 +774,7 @@ impl BetaDisk {
 
     fn advance_multi(&mut self) {
         let next = self.sector.saturating_add(1);
-        if usize::from(next) >= TRD_SECTORS_PER_TRACK {
+        if next == 0 || usize::from(next) > TRD_SECTORS_PER_TRACK {
             self.xfer = Xfer::Idle;
             return;
         }
@@ -728,7 +782,7 @@ impl BetaDisk {
     }
 
     pub fn read_data(&mut self) -> u8 {
-        if !matches!(self.xfer, Xfer::Read | Xfer::ReadAddress | Xfer::ReadTrack) {
+        if !matches!(self.xfer, Xfer::Read | Xfer::ReadAddress) {
             return self.data_reg;
         }
         if self.buffer_i >= self.buffer.len() {
@@ -782,7 +836,7 @@ mod tests {
         beta.insert(img);
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x001f), Some(0x02));
         assert_eq!(beta.in_port(0x007f), Some(0x12));
@@ -798,6 +852,8 @@ mod tests {
         beta.out_port(0x001f, 0x18);
         assert_eq!(beta.track, 5);
         assert_eq!(beta.in_port(0x00ff).unwrap() & 0x80, 0x80);
+        let st = beta.in_port(0x001f).unwrap();
+        assert_ne!(st & STAT_TRACK0, 0, "seek-complete pulse");
         let st = beta.in_port(0x001f).unwrap();
         assert_eq!(st & STAT_TRACK0, 0);
         assert_eq!(beta.in_port(0x00ff).unwrap() & 0x80, 0);
@@ -825,7 +881,7 @@ mod tests {
         beta.insert(img);
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x00ff), Some(0x40));
         for _ in 0..TRD_SECTOR_SIZE {
@@ -840,7 +896,7 @@ mod tests {
         beta.insert(one_track_image(0, 0));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0xa0);
         assert_eq!(beta.in_port(0x00ff), Some(0x40));
         for i in 0..TRD_SECTOR_SIZE {
@@ -859,7 +915,7 @@ mod tests {
         beta.insert(one_track_image(0x11, 0x22));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x00ff), Some(0x40));
         beta.out_port(0x001f, 0xd0);
@@ -909,7 +965,7 @@ mod tests {
         beta.out_port(0x001f, 0x19);
         assert_eq!(beta.track, 0, "SEEK must not use sector number as cylinder");
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x007f, 1);
         beta.out_port(0x001f, 0x19);
         assert_eq!(beta.track, 1);
     }
@@ -921,27 +977,35 @@ mod tests {
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
         beta.out_port(0x001f, 0xe9);
-        assert_eq!(beta.in_port(0x007f), Some(0));
-        assert_eq!(beta.in_port(0x007f), Some(0));
-        assert_eq!(beta.in_port(0x007f), Some(1));
-        assert_eq!(beta.in_port(0x007f), Some(1));
-        while beta.in_port(0x00ff).unwrap() & 0x40 != 0 {
-            let _ = beta.in_port(0x007f);
-        }
-        assert_eq!(beta.in_port(0x00ff), Some(0x80), "read track must complete");
+        assert_eq!(beta.in_port(0x00ff), Some(0x80), "read track completes");
+        assert_eq!(
+            beta.in_port(0x00ff).unwrap() & 0x40,
+            0,
+            "no DRQ during idle read track"
+        );
+        assert_ne!(
+            beta.in_port(0x001f).unwrap() & STAT_DRQ,
+            0,
+            "Fuse Type I index pulse on status read"
+        );
+        beta.out_port(0x001f, 0xf0);
+        assert_eq!(
+            beta.in_port(0x00ff),
+            Some(0x40),
+            "write track waits for data"
+        );
     }
 
     #[test]
-    fn read_track_returns_address_ids() {
+    fn read_track_completes_without_drq() {
         let mut beta = BetaDisk::new();
         beta.insert(one_track_image(0xaa, 0xbb));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x001f, 0xe9); // read track (E0h + TR-DOS modifiers)
-        assert_eq!(beta.in_port(0x007f), Some(0)); // C
-        assert_eq!(beta.in_port(0x007f), Some(0)); // H
-        assert_eq!(beta.in_port(0x007f), Some(1)); // R
-        assert_eq!(beta.in_port(0x007f), Some(1)); // N
+        beta.out_port(0x001f, 0xe9);
+        assert_eq!(beta.in_port(0x00ff), Some(0x80));
+        assert_eq!(beta.in_port(0x00ff).unwrap() & 0x40, 0);
+        assert_ne!(beta.in_port(0x001f).unwrap() & STAT_DRQ, 0);
     }
 
     #[test]
@@ -952,7 +1016,7 @@ mod tests {
         beta.out_port(0x00ff, 0x3c);
         // Track 1 / sector 1 (boot body) — TR-DOS catalog then load path.
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x19);
         assert_eq!(beta.in_port(0x00ff).unwrap() & 0x80, 0x80);
         beta.out_port(0x001f, 0xc0);
@@ -973,7 +1037,7 @@ mod tests {
         beta.out_port(0x00ff, 0x3c);
         assert_eq!(beta.side(), 0);
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         assert!(beta.sector_read_count > 0);
         assert_eq!(beta.in_port(0x007f), Some(0x00)); // boot BASIC line marker
@@ -1003,13 +1067,13 @@ mod tests {
         beta.insert(img);
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x90);
         assert_eq!(beta.in_port(0x007f), Some(0xa1));
         for _ in 1..TRD_SECTOR_SIZE {
             let _ = beta.in_port(0x007f);
         }
-        assert_eq!(beta.sector, 1);
+        assert_eq!(beta.sector, 2);
         assert_eq!(beta.in_port(0x007f), Some(0xa2));
     }
 
@@ -1063,9 +1127,9 @@ mod tests {
         beta.out_port(0x005f, 0);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x007f), Some(0xab));
-        beta.out_port(0x005f, 16);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
-        assert_eq!(beta.in_port(0x001f), Some(STAT_RNF));
+        assert_eq!(beta.in_port(0x007f), Some(0xab));
     }
 
     #[test]
@@ -1105,13 +1169,17 @@ mod tests {
         beta.insert(one_track_image(0xaa, 0xbb));
         beta.page_trdos(true);
         beta.out_port(0x003f, 0);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x00ff), Some(0x40), "DRQ during Type II");
         assert_eq!(beta.cmd_count, 1);
         beta.out_port(0x00ff, 0x00);
         assert_eq!(beta.in_port(0x00ff), Some(0x00), "reset clears DRQ/INTRQ");
-        assert_eq!(beta.in_port(0x001f).unwrap() & STAT_DRQ, 0);
+        assert_eq!(
+            beta.in_port(0x00ff).unwrap() & 0x40,
+            0,
+            "DRQ line clear after /RES"
+        );
         beta.out_port(0x001f, 0x80);
         assert_eq!(
             beta.in_port(0x00ff),
@@ -1131,7 +1199,7 @@ mod tests {
         beta.insert(TrdImage::synthetic_trdos_boot_basic());
         beta.page_trdos(true);
         beta.out_port(0x003f, 1);
-        beta.out_port(0x005f, 0);
+        beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
         assert_eq!(beta.in_port(0x007f), Some(0x00));
         assert_eq!(beta.in_port(0x007f), Some(0x0a));
@@ -1195,6 +1263,32 @@ mod tests {
         beta.page_trdos(true);
         beta.out_port(0x001f, 0xf0);
         assert_eq!(beta.status, STAT_NOT_READY);
+    }
+
+    #[test]
+    fn ss_disk_read_ignores_side_one_latch() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x00ff, 0x60);
+        assert_eq!(beta.side(), 1);
+        beta.out_port(0x003f, 1);
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x80);
+        assert!(beta.sector_read_count > 0);
+        assert_eq!(beta.in_port(0x007f), Some(0x00));
+    }
+
+    #[test]
+    fn trdos_read_track_f9_completes_on_status_poll_without_drain() {
+        let mut beta = BetaDisk::new();
+        beta.insert(TrdImage::synthetic_trdos_boot_basic());
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 1);
+        beta.out_port(0x001f, 0xf9);
+        assert_eq!(beta.in_port(0x00ff), Some(0x80));
+        assert_eq!(beta.in_port(0x001f).unwrap() & STAT_DRQ, STAT_DRQ);
+        assert_eq!(beta.sector_read_count, 0);
     }
 
     #[test]
