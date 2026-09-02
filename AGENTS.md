@@ -73,6 +73,19 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets --ex
 
 Do not run `cargo check -p living_room` (debug) unless you intentionally need Bevy debug symbols — prefer `--release` or `check_living_room.sh`. Set `SPEC_CHUM_CHECK_LIVING_ROOM=1` only when `./scripts/check.sh` should also run the living-room release gate.
 
+## graphify knowledge graph
+
+Checked-in outputs live under `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`, AST `cache/`). Cursor agents must query the graph before exploring — see `.cursor/rules/graphify.mdc`.
+
+| Task | Command |
+| --- | --- |
+| Query architecture | `graphify query "…"` / `graphify path A B` / `graphify explain concept` |
+| Refresh after **code** edits | `./scripts/graphify_update.sh` (AST-only, no API cost) |
+| Refresh after **doc** edits | `./scripts/graphify_update.sh --full` (LLM; needs API key) |
+| Auto-refresh on commit | `./scripts/graphify_install_hooks.sh` (once per clone) |
+
+Broad overview: `graphify-out/GRAPH_REPORT.md`. Wiki index (when present): `graphify-out/wiki/index.md`.
+
 ## Testing expectations
 
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
