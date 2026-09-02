@@ -35,6 +35,7 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 ## AI / agent-assisted work
 
 - Read `AGENTS.md` for crate boundaries and hard constraints.
+- **graphify:** after Rust changes run `./scripts/graphify_update.sh` and commit `graphify-out/` when the graph changes; optional `./scripts/graphify_install_hooks.sh` for post-commit refresh. See `AGENTS.md` → “graphify knowledge graph”.
 - Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync and `pr-review-merge.mdc` for bot review gates.
 - Before coding, agents should consult open issues, so implementations do not drift from tracked acceptance criteria.
 - Agents should be **clippy-first**: iterate with `./scripts/check_crates.sh`, then run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
