@@ -3759,18 +3759,31 @@ mod tests {
         let prog = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
         let chans = u16::from(m.read_mem(0x5c4d)) | (u16::from(m.read_mem(0x5c4e)) << 8);
         if chans == 0 {
-            const CHANS: u16 = 0x5d25;
+            // Keep CHANS clear of `5D25h` sector buffer and PROG at `5E00h`.
+            const CHANS: u16 = 0x5f00;
             m.write_mem(0x5c4d, (CHANS & 0xff) as u8);
             m.write_mem(0x5c4e, (CHANS >> 8) as u8);
         }
-        if prog < 0x5d25 {
-            const PROG: u16 = 0x5d30;
+        // Beta128 `3D21h` requires `(PROG) >= 5D25h`, but `5D25h` is also the TR-DOS
+        // 256-byte sector buffer (`1E4Bh` / `197Eh`). Park PROG above that window.
+        if prog < 0x5e00 {
+            const PROG: u16 = 0x5e00;
             m.write_mem(0x5c4f, (PROG & 0xff) as u8);
             m.write_mem(0x5c50, (PROG >> 8) as u8);
             m.write_mem(0x5c51, ((PROG + 1) & 0xff) as u8);
             m.write_mem(0x5c52, ((PROG + 1) >> 8) as u8);
             m.write_mem(PROG, 0x80);
         }
+        // TR-DOS command parse (`3032h` / `02FCh`) reads Spectrum `(PROG)` at `5C59h`,
+        // while Beta128 entry checks `5C4Fh`. Keep both pointers on the same line buffer.
+        let prog = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
+        m.write_mem(0x5c59, (prog & 0xff) as u8);
+        m.write_mem(0x5c5a, (prog >> 8) as u8);
+        // Find-boot (`195Ch`): `LD A,(5CF9); CP #FF; JP NZ,1E3Dh`. Non-`FF` skips the
+        // catalog scan and enters load with `B=0` → `1E74h RET Z` (no Type-II). Init
+        // copies `(5CF6)→(5CF9)`; `1812h` sets `#FF` on the named-RUN path we may miss.
+        m.write_mem(0x5cf6, 0xff);
+        m.write_mem(0x5cf9, 0xff);
         m.write_mem(0x5d17, 0xaa);
         m.write_mem(0x5d0f, 0x00);
         m.write_mem(0x5d16, 0x3c);
@@ -3810,6 +3823,18 @@ mod tests {
         // harness seeds `RUN\\r` at `(PROG)` instead.
         beta.patch_rom(0x213e, &[0x00, 0x00, 0x00])
             .expect("TR-DOS ROM loaded for RUN harness");
+        // Find-boot (`195Ch`) saves caller `DE`/`HL` as disk pos + filename. The `3032h`
+        // → `19DDh` path leaves `DE` as a PROG pointer (`5E00h` → track 94) and `HL` in
+        // the line buffer. Force catalog start CHS, 16-byte dirent compare, and `boot`
+        // name block matching the synthetic TRD.
+        // `1968h` `LD C,0` → `LD C,16` (one directory entry); `1972h` `LD DE,(5CD9)` →
+        // `LD DE,0`; `1989h` `LD HL,(5CD7)` → `LD HL,5D20h`.
+        beta.patch_rom(0x1968, &[0x0e, 0x10])
+            .expect("TR-DOS ROM loaded for RUN harness");
+        beta.patch_rom(0x1972, &[0x11, 0x00, 0x00, 0x00])
+            .expect("TR-DOS ROM loaded for RUN harness");
+        beta.patch_rom(0x1989, &[0x21, 0x20, 0x5d])
+            .expect("TR-DOS ROM loaded for RUN harness");
     }
 
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
@@ -3822,20 +3847,35 @@ mod tests {
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
-        for (i, &b) in b"boot    ".iter().enumerate() {
-            m.write_mem(0x5d20 + i as u16, b);
-        }
         // RST #20 epilogue (`2F72h`) returns through a `RET` stub at `5CC2h` (see
         // `trdos.rom` `00FD`: `LD (5CC2),#C9`). USR 15616 entry may not run that init.
         m.write_mem(0x5cc2, 0xc9);
         m.write_mem(0x5d0f, 0);
-        // Seed `(PROG)` with ASCII `RUN` + CR + end marker so `3032h`/`30A9h` match the
-        // RUN keyword (empty CR-only line returns immediately without loading `boot`).
-        // Beta128/TR-DOS harness PROG lives at `5C4Fh` (see [`ensure_trdos_beta128_prog`]).
-        let prog = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
+        // Seed Spectrum `(PROG)` at `5C59h` (not only Beta `5C4Fh`): `3032h` and `02FCh`
+        // both load HL from `5C59h`. ASCII `RUN` + CR + end marker so keyword match +
+        // token `F7h` dispatch reach `1D4Dh` RUN (empty CR-only line no-ops).
+        let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
         for (i, &b) in b"RUN\r\x80".iter().enumerate() {
             m.write_mem(prog.wrapping_add(i as u16), b);
         }
+        // Re-assert find-boot sentinel after `USR 15616` / warm path may have touched it.
+        m.write_mem(0x5cf6, 0xff);
+        m.write_mem(0x5cf9, 0xff);
+        // `19DDh` does `LD A,(5CDC); LD B,A` then `CALL 1921h` → `195Ch`. `B=0` →
+        // immediate `RET Z` (no catalog Type-II). `5CDC` is the high byte of the word at
+        // `5CDBh`; seed 8 directory sectors (TR-DOS track-0 catalog) and a non-zero low
+        // byte for the `194Fh OR A; RET Z` gate. Point `5CD7h` at the `boot` name block.
+        m.write_mem(0x5cdb, 0x01);
+        m.write_mem(0x5cdc, 0x08);
+        // Full 16-byte TR-DOS dirent for synthetic `boot` (see `TrdImage::synthetic_trdos_boot_basic`).
+        let dirent: [u8; 16] = [
+            b'b', b'o', b'o', b't', b' ', b' ', b' ', b' ', b'B', 28, 0, 27, 0, 1, 0, 1,
+        ];
+        for (i, &b) in dirent.iter().enumerate() {
+            m.write_mem(0x5d20 + i as u16, b);
+        }
+        m.write_mem(0x5cd7, 0x20);
+        m.write_mem(0x5cd8, 0x5d);
         patch_trdos_run_harness_rom(m);
         let sp = m.cpu().regs.sp;
         m.write_mem(0x5c3d, (sp & 0xff) as u8);
@@ -3966,15 +4006,24 @@ mod tests {
         // Same setup as invoke_trdos_run_boot without waiting.
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
-        for (i, &b) in b"boot    ".iter().enumerate() {
-            m.write_mem(0x5d20 + i as u16, b);
-        }
         m.write_mem(0x5cc2, 0xc9);
         m.write_mem(0x5d0f, 0);
-        let prog = u16::from(m.read_mem(0x5c4f)) | (u16::from(m.read_mem(0x5c50)) << 8);
+        let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
         for (i, &b) in b"RUN\r\x80".iter().enumerate() {
             m.write_mem(prog.wrapping_add(i as u16), b);
         }
+        m.write_mem(0x5cf6, 0xff);
+        m.write_mem(0x5cf9, 0xff);
+        m.write_mem(0x5cdb, 0x01);
+        m.write_mem(0x5cdc, 0x08);
+        let dirent: [u8; 16] = [
+            b'b', b'o', b'o', b't', b' ', b' ', b' ', b' ', b'B', 28, 0, 27, 0, 1, 0, 1,
+        ];
+        for (i, &b) in dirent.iter().enumerate() {
+            m.write_mem(0x5d20 + i as u16, b);
+        }
+        m.write_mem(0x5cd7, 0x20);
+        m.write_mem(0x5cd8, 0x5d);
         patch_trdos_run_harness_rom(&mut m);
         let sp = m.cpu().regs.sp;
         m.write_mem(0x5c3d, (sp & 0xff) as u8);
@@ -3991,8 +4040,9 @@ mod tests {
         let mut last_ring_len = 0usize;
         let mut saw_c0 = false;
         let watch = [
-            0x02e9u16, 0x02ec, 0x2135, 0x2155, 0x3032, 0x1e40, 0x1e43, 0x1e62, 0x1e74, 0x1e83,
-            0x3e63, 0x3dc8, 0x3dfa, 0x1605, 0x1d90, 0x3f0e, 0x3f0a,
+            0x02e9u16, 0x02ec, 0x2135, 0x2155, 0x3032, 0x030a, 0x031a, 0x1d4d, 0x1836, 0x187a,
+            0x18a1, 0x1921, 0x195c, 0x197e, 0x03fa, 0x1e3d, 0x1e40, 0x1e62, 0x1e74, 0x1e75, 0x1e83,
+            0x3e63, 0x3dc8, 0x3dfa, 0x3f0e, 0x3f25, 0x07d6, 0x0787,
         ];
         for step in 0..400_000u32 {
             let pc = m.cpu().regs.pc;
@@ -4034,6 +4084,17 @@ mod tests {
                     eprintln!(
                         "step={step} PC={pc:#06x} B={breg:#04x} SP={sp:#06x} sectors={sectors}"
                     );
+                    if matches!(pc, 0x1e3d | 0x1e40 | 0x1e62 | 0x1e74 | 0x195c | 0x1d4d) {
+                        let dir: Vec<u8> = (0..16).map(|i| m.read_mem(0x5d25 + i)).collect();
+                        eprintln!(
+                            "  A={:#04x} HL={:#06x} 5CF9={:#04x} 5C59→{:#06x} 5D25={:02x?}",
+                            m.cpu().regs.a,
+                            m.cpu().regs.hl(),
+                            m.read_mem(0x5cf9),
+                            u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8),
+                            dir
+                        );
+                    }
                     if in_rom && !interesting {
                         hits += 1;
                     }
@@ -4053,13 +4114,14 @@ mod tests {
             }
         }
         let pc = m.cpu().regs.pc;
+        let marker = m.read_mem(0x8000);
         if let Some(b) = m.beta_mut() {
             eprintln!(
-                "final PC={pc:#06x} ring={:02x?} track={} sys={:#04x} sectors={}",
+                "final PC={pc:#06x} ring={:02x?} track={} sys={:#04x} sectors={} mem8000={marker:#04x}",
                 b.command_ring(),
                 b.track,
                 b.system,
-                b.sector_read_count
+                b.sector_read_count,
             );
         }
     }
@@ -4092,10 +4154,11 @@ mod tests {
             .map(|b| (b.sector_read_count, b.track, b.command_ring().to_vec()))
             .unwrap_or((0, 0, Vec::new()));
         if !ok {
-            // Still open (#266): RUN line reaches `3032h` and seek/`C0h`, but the
-            // load path hits `1E74h RET Z` with `B=0` (no Type-II sector reads).
+            // Still open (#266): find-boot now issues Type-II catalog reads (`0x80`, track 0)
+            // with harness `5CF9`/`5CDC`/CHS seeds, but `0x8000==0xA5` is not reached yet
+            // (post-match path / BASIC run still open).
             eprintln!(
-                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 B=0 before Type-II open"
+                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}); #266 catalog Type-II reached, marker open"
             );
             return;
         }
