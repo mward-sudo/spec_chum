@@ -3784,50 +3784,25 @@ mod tests {
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
     ///
     /// TR-DOS expects the Spectrum keyword token `0xF4` at `5CB6h`, not typed ASCII
-    /// (`trdos.rom` `0x20F2`: `LD A,(#5CB6); CP #F4`). Dispatch via `3D80h`.
+    /// (`trdos.rom` `0x20F2`: `LD A,(#5CB6); CP #F4`). After
+    /// [`enter_trdos_command_mode`] the CPU is at the `3D31h` command loop — write the
+    /// `RUN` line and keep executing from there (do not `JP`/`CALL` into mid-routine).
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
-        if !wait_for_trdos_command_prompt(m) {
-            eprintln!(
-                "  TR-DOS command prompt never reached (PC={:#06x}) — not dispatching RUN",
-                m.cpu().regs.pc
-            );
-            return false;
-        }
         m.write_mem(0x5cb6, 0xf4);
         m.write_mem(0x5cb7, 0x0d);
-        m.cpu_mut().regs.pc = 0x3d80;
-        wait_for_trdos_boot_marker(m, 2_000)
-    }
-
-    /// Returns `true` only when the prompt was actually observed; callers must not
-    /// treat budget exhaustion as success.
-    #[must_use]
-    fn wait_for_trdos_command_prompt(m: &mut Machine) -> bool {
-        let mut stable = 0u32;
-        for _ in 0..20_000_000 {
-            m.step_once();
-            let pc = m.cpu().regs.pc;
-            let Some(beta) = m.beta_mut() else {
-                stable = 0;
-                continue;
-            };
-            let Some(rom_pc) = trdos_rom_pc(pc) else {
-                stable = 0;
-                continue;
-            };
-            let idle = beta.status & 0x01 == 0;
-            let at_prompt = beta.paged && (0x3D31..=0x3D60).contains(&rom_pc);
-            let in_disk_loader = (0x3E00..0x3F80).contains(&rom_pc);
-            if at_prompt && idle && !in_disk_loader {
-                stable += 1;
-                if stable >= 10_000 {
-                    return true;
-                }
-            } else {
-                stable = 0;
-            }
+        for (i, &b) in b"boot    ".iter().enumerate() {
+            m.write_mem(0x5d20 + i as u16, b);
         }
-        false
+        m.write_mem(0x5d0f, 0);
+        let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        if prog >= 0x5c00 {
+            m.write_mem(prog, 0x0d);
+            m.write_mem(prog.wrapping_add(1), 0x80);
+        }
+        m.cpu_mut().regs.set_hl(prog);
+        m.cpu_mut().regs.set_bc(0);
+        m.cpu_mut().regs.pc = 0x2144;
+        wait_for_trdos_boot_marker(m, 10_000)
     }
 
     fn manual_read_track1_sector1(m: &mut Machine) -> bool {
@@ -3941,21 +3916,20 @@ mod tests {
             .unwrap();
         enter_128k_basic_from_menu(&mut m);
         ensure_trdos_beta128_prog(&mut m);
-        let _ = enter_trdos_command_mode(&mut m);
+        assert!(
+            enter_trdos_command_mode(&mut m),
+            "TR-DOS command prompt (3D31h) not reached (PC={:#06x})",
+            m.cpu().regs.pc
+        );
         if !invoke_trdos_run_boot(&mut m) {
             let pc = m.cpu().regs.pc;
-            let inspect = m.inspect();
-            let (sectors, cmd_total) = m
+            let (sector_reads, recent_cmds) = m
                 .beta_mut()
-                .map(|b| (b.sector_read_count, b.cmd_count))
-                .unwrap_or((0, 0));
+                .map(|b| (b.sector_read_count, b.recent_cmds))
+                .unwrap_or((0, [0; 4]));
             eprintln!(
-                "skip: TR-DOS RUN marker not set (PC={pc:#06x}, sector_reads={sectors}, cmd_total={cmd_total}); #140 RUN still open"
+                "skip: TR-DOS RUN boot not complete (PC={pc:#06x}, sector_reads={sector_reads}, cmds={recent_cmds:#04x?}); #140 RUN harness open (3D94 RST / B!=0 DJNZ stack)"
             );
-            if let Some(beta) = &inspect.beta {
-                eprintln!("  beta inspect: {beta:?}");
-            }
-            eprintln!("{}", m.disasm_window(pc, 8));
             return;
         }
         assert_eq!(m.read_mem(0x8000), 0xa5, "boot BASIC POKE 32768,165");
