@@ -50,9 +50,11 @@ For **local / in-editor** review while iterating (staged, uncommitted, or branch
 
 This **complements** the GitHub PR workflow below. Ready PRs prefer `@coderabbitai full review` / `@coderabbitai review` on GitHub when quota allows, plus `./scripts/check_pr_reviews.sh` before merge. When GitHub is rate-limited/skipped, clean local CR + dispositioned threads satisfy the soft-pass path.
 
+**CLI / path scope:** [`.coderabbit.yaml`](.coderabbit.yaml) `reviews.path_filters` excludes `graphify-out/**` (checked-in knowledge graph — still committed; review-only skip). Local CLI also respects that YAML; to further scope a review away from graph artifacts, use `--dir` (e.g. `coderabbit review --agent --dir crates` or `--dir apps`). There is no separate exclude-path CLI flag.
+
 ## CodeRabbit — review when ready (usage)
 
-Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://docs.coderabbit.ai/configuration/auto-review), [review commands](https://docs.coderabbit.ai/reference/review-commands)). Automatic reviews are **off** so iteration pushes do not burn allowance. Workflow:
+Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://docs.coderabbit.ai/configuration/auto-review), [review commands](https://docs.coderabbit.ai/reference/review-commands)). Automatic reviews are **off** so iteration pushes do not burn allowance. `path_filters` skips lockfiles, `.cursor/plans/`, and `graphify-out/**`. Workflow:
 
 1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
 2. When merge-candidate: mark **Ready for review**, then request a first pass with `@coderabbitai full review` or label `coderabbit-review`.

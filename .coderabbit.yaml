@@ -26,10 +26,12 @@
 language: "en-US"
 
 reviews:
-  # Skip lockfile / plan noise (defaults already skip many binaries/media).
+  # Skip lockfile / plan / graphify noise (defaults already skip many binaries/media).
+  # graphify-out is intentionally committed; exclude from review only (not .gitignore).
   path_filters:
     - "!**/Cargo.lock"
     - "!**/.cursor/plans/**"
+    - "!**/graphify-out/**"
 
   auto_review:
     # No automatic review on open/push. Request explicitly when ready.
