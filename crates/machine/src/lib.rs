@@ -3811,34 +3811,14 @@ mod tests {
         }
     }
 
-    /// Harness ROM patches for ROM-gated `RUN` → `boot` (#266 / #140).
+    /// Harness entry for ROM-gated `RUN` → `boot` (#266 / #140).
     ///
-    /// Prefer removing these as real FDC / RST `#20` / CAT semantics improve.
-    /// `3D94h` is no longer RET-patched — see [`install_trdos_rst20_5cc2_hook`].
-    fn patch_trdos_run_harness_rom(m: &mut Machine) {
-        let Some(beta) = m.beta_mut() else {
-            return;
-        };
-        // `3D9Ah` VG93 wait `RST #20` → `1F54h` re-enters catalog seek and never
-        // unwinds with instant Type-I completion → `JR 3DA5h` over that helper.
-        beta.patch_rom(0x3d9d, &[0x18, 0x06, 0x00])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        // Warm `02CBh` path `CALL 1D83h` runs CAT and blocks on a key (`161Dh`).
-        beta.patch_rom(0x02d4, &[0x00, 0x00, 0x00])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        // `3DFFh` delay loop stays stock — see [`apply_trdos_run_native_abi`].
-        // `2135h` ends with `JP 1D90h` (CAT) and never returns to `02ECh` `CALL 3032h`.
-        beta.patch_rom(0x2155, &[0xc9])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        // `213Eh` `CALL Z,211Eh` wipes `(PROG)` to bare CR when `(5D0F)=0`, so `3032h`
-        // matches no keyword and returns without loading `boot`. NOP that call; the
-        // harness seeds `RUN\\r` at `(PROG)` instead.
-        beta.patch_rom(0x213e, &[0x00, 0x00, 0x00])
-            .expect("TR-DOS ROM loaded for RUN harness");
-        // Find-boot (`195Ch`/`1968h`/`1977h`/`1988h`/`199Ah`) stays stock — see
-        // [`apply_trdos_find_boot_native_abi`].
-        // `19DDh` → `08D2h` is FF padding; leave it and let the harness FDC-load the
-        // matched `boot` body when PC hits the hole (see `wait_for_trdos_boot_marker`).
+    /// CAT / VG93-wait / PROG-wipe sites stay **stock** — see
+    /// [`apply_trdos_run_native_abi`]. `3D94h` uses [`install_trdos_rst20_5cc2_hook`].
+    /// Remaining gap: `19DDh`→`08D2h` FF padding (FDC handoff in
+    /// [`wait_for_trdos_boot_marker`]).
+    fn patch_trdos_run_harness_rom(_m: &mut Machine) {
+        // No ROM writes — CAT/wait reductions live in `apply_trdos_run_native_abi`.
     }
 
     /// Stock find-boot ABI so catalog ROM stays unpatched (#140 / #266).
@@ -3865,14 +3845,42 @@ mod tests {
         }
     }
 
-    /// Register ABI so remaining RUN ROM can stay stock (#140 / #266).
+    /// Register / PC ABI so RUN harness ROM stays stock (#140 / #266).
+    ///
+    /// Replaces former ROM RET/NOP/JR patches at `3D9Dh` / `02D4h` / `213Eh` /
+    /// `2155h` plus the `3DFFh` A=1 delay seed.
     fn apply_trdos_run_native_abi(m: &mut Machine) {
         apply_trdos_find_boot_native_abi(m);
-        // Stock `3DFFh`: `LD C,#FF` / `DEC C` until Z / `DEC A` / JR NZ.
-        // Callers use `A=5` (`02C3h`) or `A=#FF` × `B=3` (`3EA4h` motor spin).
-        // `A=1` runs one inner 255-iter loop instead of a ROM RET patch.
-        if m.cpu().regs.pc == 0x3dff {
-            m.cpu_mut().regs.a = 1;
+        match m.cpu().regs.pc {
+            // Stock `3DFFh`: `LD C,#FF` / `DEC C` until Z / `DEC A` / JR NZ.
+            // Callers use `A=5` (`02C3h`) or `A=#FF` × `B=3` (`3EA4h` motor spin).
+            // `A=1` runs one inner 255-iter loop instead of a ROM RET patch.
+            0x3dff => {
+                m.cpu_mut().regs.a = 1;
+            }
+            // `3D9Ah` Type-I wait: stock `RST #20`→`1F54h` never unwinds with
+            // instant completion — skip to `3DA5h` `POP HL` (was `JR 3DA5h` patch).
+            0x3d9d => {
+                m.cpu_mut().regs.pc = 0x3da5;
+            }
+            // Warm `02CBh` `CALL 1D83h` CAT blocks on a key (`161Dh`) — skip the CALL.
+            0x02d4 => {
+                m.cpu_mut().regs.pc = 0x02d7;
+            }
+            // `213Eh` `CALL Z,211Eh` wipes `(PROG)` when Z (`5D0F=0`); keep seeded
+            // `RUN\\r` for `3032h` by skipping the call (was three NOPs).
+            0x213e => {
+                m.cpu_mut().regs.pc = 0x2141;
+            }
+            // `2155h` stock `JP 1D90h` (CAT) never returns to `02ECh` — RET to caller.
+            0x2155 => {
+                let sp = m.cpu().regs.sp;
+                let ret =
+                    u16::from(m.read_mem(sp)) | (u16::from(m.read_mem(sp.wrapping_add(1))) << 8);
+                m.cpu_mut().regs.sp = sp.wrapping_add(2);
+                m.cpu_mut().regs.pc = ret;
+            }
+            _ => {}
         }
     }
 
@@ -4632,6 +4640,60 @@ mod tests {
             m.read_mem(0x3dff),
             0x0e,
             "harness must not RET-patch 3DFFh delay"
+        );
+    }
+
+    /// ROM-gated: CAT / VG93-wait / PROG-wipe sites stay stock (PC/RET ABI).
+    #[test]
+    fn trdos_cat_wait_rom_unpatched_when_fixture_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        assert_eq!(
+            trdos.get(0x3d9d).copied(),
+            Some(0xe7),
+            "stock RST #20 at 3D9Dh"
+        );
+        assert_eq!(
+            trdos.get(0x02d4).copied(),
+            Some(0xcd),
+            "stock CALL at 02D4h"
+        );
+        assert_eq!(
+            trdos.get(0x213e).copied(),
+            Some(0xcc),
+            "stock CALL Z at 213Eh"
+        );
+        assert_eq!(trdos.get(0x2155).copied(), Some(0xc3), "stock JP at 2155h");
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        patch_trdos_run_harness_rom(&mut m);
+        assert_eq!(
+            m.read_mem(0x3d9d),
+            0xe7,
+            "harness must not JR-patch 3D9Dh wait"
+        );
+        assert_eq!(
+            m.read_mem(0x02d4),
+            0xcd,
+            "harness must not NOP 02D4h CAT CALL"
+        );
+        assert_eq!(
+            m.read_mem(0x213e),
+            0xcc,
+            "harness must not NOP 213Eh CALL Z"
+        );
+        assert_eq!(
+            m.read_mem(0x2155),
+            0xc3,
+            "harness must not RET-patch 2155h JP CAT"
         );
     }
 
