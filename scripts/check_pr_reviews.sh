@@ -12,14 +12,17 @@
 #   - Ready / non-draft: prefer CodeRabbit "Review completed" on HEAD, then
 #     check unresolved bot threads.
 #
-# Soft-pass (gate 1 only): green "Review rate limited" or "Review skipped" is
-# NOT treated as "Review completed". Gate 1 warns and continues so merge is not
-# hard-blocked on GitHub quota; agents MUST still run local CR (Cursor plugin /
-# `coderabbit review --agent`) and disposition findings. Gate 2 (unresolved
-# bot threads) still hard-fails. Optional: open a revisit issue when quota resets.
+# Soft-pass (gate 1 only): green "Review rate limited" (or similar quota
+# unavailability *after* a review was requested) is NOT treated as "Review
+# completed". Gate 1 warns and continues so merge is not hard-blocked on GitHub
+# quota; agents MUST still run local CR (Cursor plugin / `coderabbit review
+# --agent`) and disposition findings. Gate 2 (unresolved bot threads) still
+# hard-fails. Optional: open a revisit issue when quota resets.
 #
 # Hard-fail (gate 1): pending / missing / error / unexpected / non-completed
-# success that is not rate-limited or skipped.
+# success that is not rate-limited; also on-demand / label skips
+# ("Review skipped: excluded by label configuration", "Review skipped: on
+# demand", etc.) — those mean the review was never requested (same as missing).
 #
 # Usage:
 #   ./scripts/check_pr_reviews.sh [PR_NUMBER]
@@ -84,7 +87,9 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
   expect true success "Review completed" pass "completed"
   expect true success "Review rate limited" soft_pass "rate-limited success"
   expect true failure "Review rate limited" soft_pass "rate-limited failure"
-  expect true success "Review skipped: on demand" soft_pass "skipped"
+  expect true success "Review skipped: on demand" hold "on-demand skip"
+  expect true success "Review skipped: excluded by label configuration" hold "label-config skip"
+  expect true success "Review skipped: something else" hold "generic skip"
   expect true pending "Queued" hold "pending"
   expect false "" "" hold "missing"
   expect true error "boom" hold "error"
@@ -192,11 +197,11 @@ else
       apply_waiver_or_fail "$cr_hold_reason" \
         "Next steps:" \
         "  1. Hold the PR — do not merge while CodeRabbit is pending, in progress, missing, or errored." \
-        "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label); after fixes '@coderabbitai review'." \
+        "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label coderabbit-review); after fixes '@coderabbitai review'." \
         "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
-        "  4. If rate-limited/skipped, gate 1 soft-passes after this script update — still run local CR;" \
-        "     unresolved threads remain a hard fail. Optional revisit issue when quota resets." \
-        "  5. Re-run: ./scripts/check_pr_reviews.sh $PR" \
+        "  4. On-demand / label skips (\"excluded by label configuration\", \"on demand\") hard-fail — request a review; do not merge without one." \
+        "  5. If rate-limited after a request, gate 1 soft-passes — still run local CR; unresolved threads remain a hard fail. Optional revisit issue when quota resets." \
+        "  6. Re-run: ./scripts/check_pr_reviews.sh $PR" \
         "     (or re-run the \"Bot review threads\" GitHub Actions check)"
       ;;
     pass)
