@@ -3816,10 +3816,10 @@ mod tests {
     /// CAT / VG93-wait / PROG-wipe sites stay **stock** — see
     /// [`apply_trdos_run_native_abi`]. `3D94h` uses [`install_trdos_rst20_5cc2_hook`].
     /// Remaining gap: this 5.04 image has FF from `0800h`–`0E71h` (`08D2h` and
-    /// `0D6Bh`). Native `012Ah` re-enters catalog before LINE-NEW; handoff stays
-    /// the `19ECh` VG93+LINE-NEW stand-in in [`wait_for_trdos_boot_marker`].
+    /// `0D6Bh`). Native `012Ah` re-enters catalog before LINE-NEW; `19ECh`
+    /// VG93+LINE-NEW handoff lives in [`apply_trdos_run_native_abi`].
     fn patch_trdos_run_harness_rom(_m: &mut Machine) {
-        // No ROM writes — CAT/wait reductions live in `apply_trdos_run_native_abi`.
+        // No ROM writes — CAT/wait/`19ECh` reductions live in `apply_trdos_run_native_abi`.
     }
 
     /// Stock find-boot ABI so catalog ROM stays unpatched (#140 / #266).
@@ -3846,13 +3846,15 @@ mod tests {
         }
     }
 
-    /// Register / PC ABI so RUN harness ROM stays stock (#140 / #266).
+    /// Register / PC ABI so RUN harness ROM stays stock (#140).
     ///
     /// Replaces former ROM RET/NOP/JR patches at `3D9Dh` / `02D4h` / `213Eh` /
-    /// `2155h` plus the `3DFFh` A=1 delay seed.
+    /// `2155h` plus the `3DFFh` A=1 delay seed, and the post-match `19ECh`
+    /// VG93+LINE-NEW stand-in (this image’s `08D2h` is FF padding).
     fn apply_trdos_run_native_abi(m: &mut Machine) {
         apply_trdos_find_boot_native_abi(m);
-        match m.cpu().regs.pc {
+        let pc = m.cpu().regs.pc;
+        match pc {
             // Stock `3DFFh`: `LD C,#FF` / `DEC C` until Z / `DEC A` / JR NZ.
             // Callers use `A=5` (`02C3h`) or `A=#FF` × `B=3` (`3EA4h` motor spin).
             // `A=1` runs one inner 255-iter loop instead of a ROM RET patch.
@@ -3881,6 +3883,11 @@ mod tests {
                 m.cpu_mut().regs.sp = sp.wrapping_add(2);
                 m.cpu_mut().regs.pc = ret;
             }
+            // Stock `19ECh`: `RST #20` / `DW 08D2h`. Never enter this image’s
+            // `08D2h` FF hole — FDC-load `boot` and enter Spectrum `LINE-NEW`.
+            0x19ec if trdos_fdc_load_boot_into_prog(m) => {
+                m.cpu_mut().regs.pc = 0x1b76;
+            }
             _ => {}
         }
     }
@@ -3889,8 +3896,9 @@ mod tests {
     ///
     /// Warm entry `0239h`→`02E9h`→`3032h` reaches find-boot Type-II catalog reads.
     /// Post-match `19ECh` is stock `RST #20` / inline `08D2h`; this ROM's `08D2h` is
-    /// FF padding, so the harness FDC-loads `boot` at the **call site**, unpages
-    /// TR-DOS, and enters Spectrum `LINE-NEW` (`1B76h`) — never executes the hole.
+    /// FF padding, so [`apply_trdos_run_native_abi`] FDC-loads `boot` at the **call
+    /// site**, unpages TR-DOS, and enters Spectrum `LINE-NEW` (`1B76h`) — never
+    /// executes the hole.
     /// Name block lives at `5EE0h` so it does not overlap the `5D25h` sector buffer.
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
         m.write_mem(0x5cb6, 0xf4);
@@ -4136,22 +4144,12 @@ mod tests {
     }
 
     fn wait_for_trdos_boot_marker(m: &mut Machine, max_frames: u32) -> bool {
-        let mut loaded = false;
         let mut saw_08d2_ff_hole = false;
         // Prefer instruction steps so we cannot miss the one-instruction `19ECh`
-        // call-site window inside a full frame.
+        // call-site window inside a full frame (`apply_trdos_run_native_abi`).
         let max_steps = u64::from(max_frames).saturating_mul(70_000).min(3_000_000);
         for _ in 0..max_steps {
-            let pc = m.cpu().regs.pc;
-            // Stock `19ECh`: `RST #20` / `DW 08D2h`. Intercept at the call site —
-            // never enter this ROM image's `08D2h` FF padding.
-            if !loaded && pc == 0x19ec && trdos_fdc_load_boot_into_prog(m) {
-                loaded = true;
-                // Spectrum LINE-NEW in ROM1 — not TR-DOS `012Ah` (see load helper docs).
-                m.cpu_mut().regs.pc = 0x1b76;
-                continue;
-            }
-            if pc == 0x08d2 {
+            if m.cpu().regs.pc == 0x08d2 {
                 saw_08d2_ff_hole = true;
             }
             apply_trdos_run_native_abi(m);
@@ -4250,17 +4248,17 @@ mod tests {
 
         let mut loaded = false;
         for _ in 0..3_000_000u32 {
-            if !loaded && m.cpu().regs.pc == 0x19ec && trdos_fdc_load_boot_into_prog(&mut m) {
-                loaded = true;
-                m.cpu_mut().regs.pc = 0x1b76;
-                break;
-            }
             assert_ne!(
                 m.cpu().regs.pc,
                 0x08d2,
                 "debug path must not enter 08D2h FF padding"
             );
+            let at_19ec = m.cpu().regs.pc == 0x19ec;
             apply_trdos_run_native_abi(&mut m);
+            if at_19ec && m.cpu().regs.pc == 0x1b76 {
+                loaded = true;
+                break;
+            }
             m.step_once();
         }
         assert!(loaded, "did not reach 19ECh FDC handoff");
