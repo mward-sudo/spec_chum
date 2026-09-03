@@ -588,16 +588,16 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788478238.173698,
-    "seen": 1788478251.102817,
-    "ast_hash": "196181bc2b5ca2805c1f4422368670e3",
+    "mtime": 1788478936.9529293,
+    "seen": 1788478996.857131,
+    "ast_hash": "f4ac6193f016bdcaf6d71cb85bf81060",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
-    "mtime": 1788278603.279194,
-    "seen": 1788324807.415624,
-    "ast_hash": "e210f5d2cf541d3cfbeb4d74da59d859",
-    "semantic_hash": "e210f5d2cf541d3cfbeb4d74da59d859"
+    "mtime": 1788478945.5275292,
+    "seen": 1788478996.8571332,
+    "ast_hash": "e26e6946e22dbaa0e5a917ee824f99fd",
+    "semantic_hash": ""
   },
   "crates/machine/src/system_tests.rs": {
     "mtime": 1788278687.7865067,
@@ -930,9 +930,9 @@
     "semantic_hash": ""
   },
   "docs/ROMS.md": {
-    "mtime": 1788475500.5284843,
-    "seen": 1788477477.9709802,
-    "ast_hash": "d84496a14805c0371e5a523d188fef2e",
+    "mtime": 1788478916.6387355,
+    "seen": 1788478996.857965,
+    "ast_hash": "4f30a2e1340b8b68442683da4ab11235",
     "semantic_hash": ""
   },
   "docs/TIMEX.md": {
@@ -1014,9 +1014,9 @@
     "semantic_hash": ""
   },
   "tests/fixtures/trdos/README.md": {
-    "mtime": 1788478238.1828933,
-    "seen": 1788478251.103733,
-    "ast_hash": "97fec56457927084f7e5428d705f2e99",
+    "mtime": 1788478916.7037666,
+    "seen": 1788478996.858052,
+    "ast_hash": "7608cacab46a28b3eb0f689352e90cdb",
     "semantic_hash": ""
   },
   "scripts/graphify_install_hooks.sh": {

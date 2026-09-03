@@ -74,14 +74,37 @@ pub fn exrom_candidates(_model: Model) -> &'static [&'static str] {
     &["roms/timex/tc2068-1.rom"]
 }
 
-/// Relative TR-DOS ROM search paths (Pentagon only; first hit wins).
+/// Canonical install / picker path for user-provided TR-DOS (Pentagon).
+pub const TRDOS_ROM_INSTALL_PATH: &str = "roms/pentagon/trdos.rom";
+
+/// Relative TR-DOS ROM search paths (Pentagon / Beta attach).
+///
+/// Complete dumps (`*-5.04t` / `*-complete`) are listed first so native
+/// `08D2h` / `0D6Bh` file-load services win over the usual hole-filled 5.04
+/// image when both are present ([#140](https://github.com/mward-sudo/spec_chum/issues/140)).
 #[must_use]
 pub fn trdos_rom_candidates(_model: Model) -> &'static [&'static str] {
     &[
-        "roms/pentagon/trdos.rom",
+        "roms/pentagon/trdos-5.04t.rom",
+        "roms/pentagon/trdos-complete.rom",
+        "roms/trdos/trdos-5.04t.rom",
+        "roms/trdos/trdos-complete.rom",
+        TRDOS_ROM_INSTALL_PATH,
         "roms/trdos/trdos.rom",
         "roms/trdos.rom",
     ]
+}
+
+/// True when a 16 KiB TR-DOS image has non-FF code at the RUN file-load sites.
+///
+/// Many circulating **Ver 5.04** dumps leave `0800h`–`0E71h` as FF padding, so
+/// `08D2h` (post-match service from `19ECh`) and `0D6Bh` (via `1D97h` / `012Ah`)
+/// are not executable. A complete 5.03 / 5.04T image has real code there.
+#[must_use]
+pub fn trdos_rom_has_native_file_services(data: &[u8]) -> bool {
+    data.len() == TRDOS_ROM_SIZE
+        && data.get(0x08d2).is_some_and(|b| *b != 0xff)
+        && data.get(0x0d6b).is_some_and(|b| *b != 0xff)
 }
 
 /// Expected main-ROM byte length for `model`.
@@ -220,7 +243,7 @@ pub fn trdos_rom_available_in(model: Model, roots: &[PathBuf]) -> bool {
     if !requires_trdos_rom(model) {
         return true;
     }
-    resolve_first_in(roots, trdos_rom_candidates(model)).is_some()
+    resolve_trdos_rom_path_in(model, roots).is_some()
 }
 
 /// True when a Timex EX-ROM exists for models that require one.
@@ -260,6 +283,9 @@ pub fn resolve_rom_path_in(model: Model, roots: &[PathBuf]) -> Option<PathBuf> {
 }
 
 /// First resolved TR-DOS ROM path for clone models, if any.
+///
+/// Prefers a dump with native `08D2h`/`0D6Bh` services when several candidates
+/// exist under `roots` (complete name first, then any non-hole image).
 #[must_use]
 pub fn resolve_trdos_rom_path(model: Model) -> Option<PathBuf> {
     resolve_trdos_rom_path_in(model, &search_roots())
@@ -270,7 +296,37 @@ pub fn resolve_trdos_rom_path_in(model: Model, roots: &[PathBuf]) -> Option<Path
     if !requires_trdos_rom(model) {
         return None;
     }
-    resolve_first_in(roots, trdos_rom_candidates(model))
+    resolve_trdos_rom_preferring_file_services(roots, trdos_rom_candidates(model))
+}
+
+/// Scan `rel_paths` under `roots`; prefer images with native file-load services.
+#[must_use]
+pub fn resolve_trdos_rom_preferring_file_services(
+    roots: &[PathBuf],
+    rel_paths: &[&str],
+) -> Option<PathBuf> {
+    let mut fallback: Option<PathBuf> = None;
+    for root in roots {
+        for rel in rel_paths {
+            let path = root.join(rel);
+            if !path.is_file() {
+                continue;
+            }
+            let Ok(data) = fs::read(&path) else {
+                continue;
+            };
+            if data.len() != TRDOS_ROM_SIZE {
+                continue;
+            }
+            if trdos_rom_has_native_file_services(&data) {
+                return Some(path);
+            }
+            if fallback.is_none() {
+                fallback = Some(path);
+            }
+        }
+    }
+    fallback
 }
 
 /// Hint shown when a model is disabled in the picker.
@@ -341,7 +397,7 @@ pub fn rom_slot_descriptors(model: Model) -> Vec<RomSlotDescriptor> {
             kind: RomSlotKind::Trdos,
             id: "trdos",
             label: "TR-DOS ROM",
-            install_path: trdos_rom_candidates(model)[0],
+            install_path: TRDOS_ROM_INSTALL_PATH,
             search_paths: trdos_rom_candidates(model),
             expected_bytes: TRDOS_ROM_SIZE,
             user_provided: true,
@@ -376,7 +432,12 @@ pub fn rom_slot_state_with_override(
             resolved_path: Some(path.to_path_buf()),
         };
     }
-    if let Some(path) = resolve_first_in(roots, descriptor.search_paths) {
+    let path = if descriptor.kind == RomSlotKind::Trdos {
+        resolve_trdos_rom_preferring_file_services(roots, descriptor.search_paths)
+    } else {
+        resolve_first_in(roots, descriptor.search_paths)
+    };
+    if let Some(path) = path {
         let status = rom_path_status(&path, descriptor.expected_bytes);
         return RomSlotState {
             descriptor,
@@ -721,6 +782,45 @@ mod tests {
         assert_eq!(slots[0].id, "main");
         assert_eq!(slots[1].id, "trdos");
         assert_eq!(slots[1].expected_bytes, TRDOS_ROM_SIZE);
+        assert_eq!(slots[1].install_path, TRDOS_ROM_INSTALL_PATH);
+        assert!(slots[1]
+            .search_paths
+            .contains(&"roms/pentagon/trdos-5.04t.rom"));
+    }
+
+    #[test]
+    fn trdos_native_file_services_rejects_ff_hole() {
+        let mut hole = vec![0u8; TRDOS_ROM_SIZE];
+        hole[0x08d2] = 0xff;
+        hole[0x0d6b] = 0xff;
+        assert!(!trdos_rom_has_native_file_services(&hole));
+        hole[0x08d2] = 0xe7; // plausible RST #20
+        hole[0x0d6b] = 0xc9;
+        assert!(trdos_rom_has_native_file_services(&hole));
+        assert!(!trdos_rom_has_native_file_services(&[0u8; 8]));
+    }
+
+    #[test]
+    fn resolve_trdos_prefers_complete_over_hole() {
+        let dir = std::env::temp_dir().join(format!("spec_chum_trdos_pref_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let pent = dir.join("roms/pentagon");
+        fs::create_dir_all(&pent).expect("tmpdir");
+        let mut hole = vec![0u8; TRDOS_ROM_SIZE];
+        hole[0x08d2] = 0xff;
+        hole[0x0d6b] = 0xff;
+        fs::write(pent.join("trdos.rom"), &hole).expect("hole");
+        let mut complete = vec![0x00; TRDOS_ROM_SIZE];
+        complete[0x08d2] = 0xe7;
+        complete[0x0d6b] = 0xc9;
+        fs::write(pent.join("trdos-5.04t.rom"), &complete).expect("complete");
+        let got = resolve_trdos_rom_preferring_file_services(
+            std::slice::from_ref(&dir),
+            trdos_rom_candidates(Model::Pentagon128),
+        )
+        .expect("resolve");
+        assert_eq!(got, pent.join("trdos-5.04t.rom"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

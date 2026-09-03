@@ -25,11 +25,13 @@ pub use rom::{
     resolve_exrom_path, resolve_exrom_path_in, resolve_exrom_path_in_with_overrides,
     resolve_rom_path, resolve_rom_path_in, resolve_rom_path_in_with_overrides,
     resolve_trdos_rom_path, resolve_trdos_rom_path_in, resolve_trdos_rom_path_in_with_overrides,
-    rom_available, rom_available_in, rom_available_in_with_overrides, rom_candidates,
-    rom_path_status, rom_slot_descriptors, rom_slot_state, rom_slot_state_with_override,
-    rom_slot_states, rom_slot_states_with_overrides, search_roots, trdos_rom_available,
-    trdos_rom_available_in, unavailable_reason, writable_install_root, RomSlotDescriptor,
-    RomSlotKind, RomSlotState, RomSlotStatus, ALL_MODELS,
+    resolve_trdos_rom_preferring_file_services, rom_available, rom_available_in,
+    rom_available_in_with_overrides, rom_candidates, rom_path_status, rom_slot_descriptors,
+    rom_slot_state, rom_slot_state_with_override, rom_slot_states, rom_slot_states_with_overrides,
+    search_roots, trdos_rom_available, trdos_rom_available_in, trdos_rom_candidates,
+    trdos_rom_has_native_file_services, unavailable_reason, writable_install_root,
+    RomSlotDescriptor, RomSlotKind, RomSlotState, RomSlotStatus, ALL_MODELS,
+    TRDOS_ROM_INSTALL_PATH,
 };
 
 use std::cell::Cell;
@@ -3607,20 +3609,12 @@ mod tests {
 
     fn trdos_rom_bytes() -> Option<Vec<u8>> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        for rel in [
-            "roms/pentagon/trdos.rom",
-            "roms/trdos/trdos.rom",
-            "roms/trdos.rom",
-        ] {
-            let path = root.join(rel);
-            let Ok(data) = std::fs::read(&path) else {
-                continue;
-            };
-            if data.len() == bus::TRDOS_ROM_SIZE {
-                return Some(data);
-            }
-        }
-        None
+        let path = resolve_trdos_rom_preferring_file_services(
+            std::slice::from_ref(&root),
+            trdos_rom_candidates(Model::Pentagon128),
+        )?;
+        let data = std::fs::read(path).ok()?;
+        (data.len() == bus::TRDOS_ROM_SIZE).then_some(data)
     }
 
     /// Synthetic TR-DOS ROM: read track 1 sector 1 (BASIC `boot`) into `8000h`.
@@ -4741,11 +4735,14 @@ mod tests {
             Some(0x08),
             "stock inline service hi → 08D2h"
         );
-        assert_eq!(
-            trdos.get(0x08d2).copied(),
-            Some(0xff),
-            "this ROM image has FF padding at 08D2h"
-        );
+        let hole = !trdos_rom_has_native_file_services(&trdos);
+        if hole {
+            assert_eq!(
+                trdos.get(0x08d2).copied(),
+                Some(0xff),
+                "hole dump has FF padding at 08D2h"
+            );
+        }
         let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
         if let Some(beta) = m.beta_mut() {
             beta.page_trdos(true);
@@ -4761,10 +4758,69 @@ mod tests {
             [0xd2, 0x08],
             "harness must not retarget 19ECh service word"
         );
+        if hole {
+            assert_eq!(
+                m.read_mem(0x08d2),
+                0xff,
+                "harness must not write into 08D2h FF padding"
+            );
+        } else {
+            assert_ne!(
+                m.read_mem(0x08d2),
+                0xff,
+                "complete dump: harness must leave 08D2h service code intact"
+            );
+        }
+    }
+
+    /// ROM-gated: when a complete dump is present, gate native `08D2h`/`0D6Bh`.
+    ///
+    /// Soft-pass on the usual hole-filled 5.04 image (documents the blocker).
+    /// With `roms/pentagon/trdos-5.04t.rom` (or any non-FF services image), asserts
+    /// the native file-load sites are live — next slice can drop the `19ECh`
+    /// VG93+LINE-NEW stand-in without more FF intercepts.
+    #[test]
+    fn trdos_native_file_services_gate_when_fixture_present() {
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        if !trdos_rom_has_native_file_services(&trdos) {
+            assert_eq!(
+                trdos.get(0x08d2).copied(),
+                Some(0xff),
+                "hole dump: 08D2h stays FF"
+            );
+            assert_eq!(
+                trdos.get(0x0d6b).copied(),
+                Some(0xff),
+                "hole dump: 0D6Bh stays FF"
+            );
+            eprintln!(
+                "trdos native file-services gate: hole dump (0800h–0E71h FF) — \
+                 place a complete 5.03/5.04T image at roms/pentagon/trdos-5.04t.rom \
+                 to unlock native 08D2h/0D6Bh (Refs #140)"
+            );
+            return;
+        }
+        assert_ne!(
+            trdos.get(0x08d2).copied(),
+            Some(0xff),
+            "complete dump must have code at 08D2h"
+        );
+        assert_ne!(
+            trdos.get(0x0d6b).copied(),
+            Some(0xff),
+            "complete dump must have code at 0D6Bh"
+        );
         assert_eq!(
-            m.read_mem(0x08d2),
-            0xff,
-            "harness must not write into 08D2h FF padding"
+            [trdos.get(0x19ec), trdos.get(0x19ed), trdos.get(0x19ee)],
+            [Some(&0xe7), Some(&0xd2), Some(&0x08)],
+            "complete dump should keep stock 19ECh → 08D2h"
+        );
+        eprintln!(
+            "trdos native file-services gate: OPEN — complete ROM has 08D2h/0D6Bh \
+             (native RUN path eligible; Refs #140)"
         );
     }
 
@@ -4812,11 +4868,20 @@ mod tests {
             Some(0xc9),
             "stock RET after 1D97h service word"
         );
-        assert_eq!(
-            trdos.get(0x0d6b).copied(),
-            Some(0xff),
-            "this ROM image has FF padding at 0D6Bh (0800h–0E71h hole)"
-        );
+        let hole = !trdos_rom_has_native_file_services(&trdos);
+        if hole {
+            assert_eq!(
+                trdos.get(0x0d6b).copied(),
+                Some(0xff),
+                "hole dump has FF padding at 0D6Bh (0800h–0E71h)"
+            );
+        } else {
+            assert_ne!(
+                trdos.get(0x0d6b).copied(),
+                Some(0xff),
+                "complete dump has code at 0D6Bh"
+            );
+        }
         assert_eq!(
             trdos.get(0x16b0).copied(),
             Some(0x16),
@@ -4828,15 +4893,23 @@ mod tests {
         }
         patch_trdos_run_harness_rom(&mut m);
         assert_eq!(
-            [
-                m.read_mem(0x012a),
-                m.read_mem(0x012d),
-                m.read_mem(0x1d97),
-                m.read_mem(0x0d6b)
-            ],
-            [0xcd, 0xcd, 0xe7, 0xff],
-            "harness must not patch 012Ah / 1D97h / 0D6Bh"
+            [m.read_mem(0x012a), m.read_mem(0x012d), m.read_mem(0x1d97)],
+            [0xcd, 0xcd, 0xe7],
+            "harness must not patch 012Ah / 1D97h"
         );
+        if hole {
+            assert_eq!(
+                m.read_mem(0x0d6b),
+                0xff,
+                "harness must not write into 0D6Bh FF padding"
+            );
+        } else {
+            assert_ne!(
+                m.read_mem(0x0d6b),
+                0xff,
+                "complete dump: harness must leave 0D6Bh service code intact"
+            );
+        }
     }
 
     /// ROM-gated: TR-DOS `RUN` (no filename) loads synthetic `boot` → `POKE 32768,165`.
