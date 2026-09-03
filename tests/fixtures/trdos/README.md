@@ -39,8 +39,6 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 
 This tree’s usual `roms/pentagon/trdos.rom` identifies as **TR-DOS Ver 5.04** with FF padding `0800h`–`0E71h` (covers `08D2h` and `0D6Bh`). That is a ROM-image limitation, not an emulator skip of working service code.
 
-`RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
-
 | Fixture | Licence | Path | Marker |
 | --- | --- | --- | --- |
 | `synthetic_trdos_boot_basic` | in-repo | VG93/CPU read of BASIC `boot` | `POKE 32768,165` |
