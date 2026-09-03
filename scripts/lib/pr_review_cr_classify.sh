@@ -9,7 +9,8 @@
 # Outcomes:
 #   pass      — description is "Review completed" (case-insensitive) and state=success
 #   soft_pass — rate-limited / quota unavailable *after* a review was requested
-#               (NOT a completed review; local CR + gate 2 still apply)
+#               (NOT a completed review; local CR + gate 2 still apply). Soft-passes
+#               for both success and failure states — CR may report rate-limit either way.
 #   hold      — pending / missing / error / unexpected / non-completed success /
 #               on-demand or label skips (never requested — same as missing)
 classify_coderabbit_head_status() {
@@ -30,20 +31,22 @@ classify_coderabbit_head_status() {
     CR_CLASSIFY_REASON="CodeRabbit is still pending: ${desc:-pending}"
     return 0
   fi
-  # Soft-pass only for real quota unavailability after a request was made.
-  # Do NOT soft-pass on-demand / label configuration skips — those mean the
-  # review was never requested (same as missing). Lesson: PRs #278/#279.
-  if [[ "$desc_lc" == *rate*limit* || "$desc_lc" == *quota* || "$desc_lc" == *"too many request"* ]]; then
-    CR_CLASSIFY_OUTCOME="soft_pass"
-    CR_CLASSIFY_REASON="rate-limited"
-    return 0
-  fi
-  # On-demand / label skip: hard-fail (hold). Examples:
+  # On-demand / label skip: hard-fail (hold) BEFORE rate-limit soft-pass so a
+  # description that somehow mentions both cannot soft-pass. Examples:
   #   "Review skipped: excluded by label configuration"
   #   "Review skipped: on demand"
   #   "Review skipped: …"
+  # Lesson: PRs #278/#279 soft-passed these and merged without requesting CR.
   if [[ "$desc_lc" == *skip* || "$desc_lc" == *"excluded by label"* || "$desc_lc" == *"on demand"* ]]; then
     CR_CLASSIFY_REASON="CodeRabbit on-demand skip on HEAD (review never requested): ${desc:-no description}. Request '@coderabbitai full review' or label coderabbit-review."
+    return 0
+  fi
+  # Soft-pass only for real quota unavailability after a request was made.
+  # Intentionally soft-passes on failure as well as success — CodeRabbit has
+  # reported "Review rate limited" under both states.
+  if [[ "$desc_lc" == *rate*limit* || "$desc_lc" == *quota* || "$desc_lc" == *"too many request"* ]]; then
+    CR_CLASSIFY_OUTCOME="soft_pass"
+    CR_CLASSIFY_REASON="rate-limited"
     return 0
   fi
   if [[ "$state" == "failure" || "$state" == "error" ]]; then

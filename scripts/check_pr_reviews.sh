@@ -90,6 +90,7 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
   expect true success "Review skipped: on demand" hold "on-demand skip"
   expect true success "Review skipped: excluded by label configuration" hold "label-config skip"
   expect true success "Review skipped: something else" hold "generic skip"
+  expect true success "Review skipped: rate limited" hold "skip beats rate-limit"
   expect true pending "Queued" hold "pending"
   expect false "" "" hold "missing"
   expect true error "boom" hold "error"
