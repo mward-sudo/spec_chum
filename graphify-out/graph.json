@@ -9835,7 +9835,7 @@
       },
       "norm_label": "append_bot_thread_from_comments()",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L262"
+      "source_location": "L267"
     },
     {
       "id": "scripts_check_pr_reviews_apply_waiver_or_fail",
@@ -9850,7 +9850,7 @@
       },
       "norm_label": "apply_waiver_or_fail()",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L122"
+      "source_location": "L127"
     },
     {
       "id": "scripts_check_pr_reviews_expect",
@@ -9865,7 +9865,7 @@
       },
       "norm_label": "expect()",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L74"
+      "source_location": "L77"
     },
     {
       "id": "scripts_check_pr_reviews_sh__entry",
@@ -9910,7 +9910,7 @@
       },
       "norm_label": "classify_coderabbit_head_status()",
       "source_file": "scripts/lib/pr_review_cr_classify.sh",
-      "source_location": "L13"
+      "source_location": "L15"
     },
     {
       "id": "scripts_lib_pr_review_cr_classify_sh__entry",
@@ -9949,7 +9949,7 @@
       "node_kind": "heading",
       "norm_label": "not in git",
       "source_file": "tests/fixtures/trdos/README.md",
-      "source_location": "L51"
+      "source_location": "L49"
     },
     {
       "id": "tests_fixtures_trdos_readme_tr_dos_beta_disk_smokes",
@@ -94200,7 +94200,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L76",
+      "source_location": "L79",
       "weight": 1.0
     },
     {
@@ -94212,7 +94212,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L175",
+      "source_location": "L180",
       "weight": 1.0
     },
     {
@@ -94224,7 +94224,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L192",
+      "source_location": "L197",
       "weight": 1.0
     },
     {
@@ -94236,7 +94236,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L306",
+      "source_location": "L311",
       "weight": 1.0
     },
     {
@@ -94248,7 +94248,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L84",
+      "source_location": "L87",
       "weight": 1.0
     },
     {
@@ -157959,7 +157959,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "tests/fixtures/trdos/README.md",
-      "source_location": "L51",
+      "source_location": "L49",
       "weight": 1.0
     },
     {
@@ -158025,7 +158025,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L122",
+      "source_location": "L127",
       "weight": 1.0
     },
     {
@@ -158036,7 +158036,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L262",
+      "source_location": "L267",
       "weight": 1.0
     },
     {
@@ -158047,7 +158047,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L74",
+      "source_location": "L77",
       "weight": 1.0
     },
     {
@@ -158179,7 +158179,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "scripts/lib/pr_review_cr_classify.sh",
-      "source_location": "L13",
+      "source_location": "L15",
       "weight": 1.0
     },
     {
@@ -174779,7 +174779,7 @@
       "confidence_score": 0.55,
       "context": "import",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L37",
+      "source_location": "L40",
       "weight": 1.0
     },
     {
@@ -178907,5 +178907,5 @@
       "source_file": "docs/UI_ARCHITECTURE.md"
     }
   ],
-  "built_at_commit": "c1dd755f68a2944dca831965eff7a464496320f4"
+  "built_at_commit": "3b6d38ce3b9e4e6219a2a6c91f56ee78963bc652"
 }

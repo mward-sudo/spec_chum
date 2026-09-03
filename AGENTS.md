@@ -104,23 +104,23 @@ Before implementing: `gh issue list` / `gh issue view N` for related work. Prefe
 
 ### CodeRabbit — on-demand + merge gate
 
-For in-editor / local review before push, prefer the **CodeRabbit Cursor plugin** or `coderabbit review --agent` (`CONTRIBUTING.md` → “CodeRabbit — in-editor review”) — required habit before merge-candidate when CLI available. `.coderabbit.yaml` disables automatic reviews and excludes `graphify-out/**` from reviews (`path_filters`); local CLI may also use `--dir crates` / `--dir apps`. Iterate on **draft** PRs (GitHub CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label) **if not rate-limited** → disposition → `./scripts/check_pr_reviews.sh`. After fix commits: **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
+For in-editor / local review before push, prefer the **CodeRabbit Cursor plugin** or `coderabbit review --agent` (`CONTRIBUTING.md` → “CodeRabbit — in-editor review”) — required habit before merge-candidate when CLI available. `.coderabbit.yaml` disables automatic reviews and excludes `graphify-out/**` from reviews (`path_filters`); local CLI may also use `--dir crates` / `--dir apps`. Iterate on **draft** PRs (GitHub CR completeness not required). When merge-candidate: mark ready → **must** `@coderabbitai full review` (or label) **if not rate-limited** → disposition → `./scripts/check_pr_reviews.sh`. Undraft alone does not request a review. After fix commits: **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
 
 ### Before merge — CodeRabbit + bot review threads (hard gate)
 
 Any task to **finish, land, or merge a PR** must include this gate. A **ready** PR is **not merge-ready** while **either**:
 
-- CodeRabbit on HEAD is **pending / in progress / missing / failed** — hold for a completed GitHub review when possible; or
+- CodeRabbit on HEAD is **pending / in progress / missing / failed / on-demand skipped** (label-config or “on demand” — never requested) — hold and request `@coderabbitai full review` (or label); or
 - CodeRabbit (or similar bots) have unresolved **actionable** review threads,
 
-unless the user **explicitly** waives. **Rate-limited / skipped** (including green `Review rate limited`) is **not** “Review completed” and is **not** a hard merge hold: gate 1 soft-passes with a warning; agents must have run local CR and dispositioned threads; optional revisit issue (e.g. [#181](https://github.com/mward-sudo/spec_chum/issues/181)). **Drafts** may skip CR completeness in the script but still fail on unresolved bot threads; do not merge drafts.
+unless the user **explicitly** waives. **Rate-limited after a request** (including green `Review rate limited`) is **not** “Review completed” and is **not** a hard merge hold: gate 1 soft-passes with a warning; agents must have run local CR and dispositioned threads; optional revisit issue (e.g. [#181](https://github.com/mward-sudo/spec_chum/issues/181)). Soft-pass ≠ skip-without-request. **Drafts** may skip CR completeness in the script but still fail on unresolved bot threads; do not merge drafts.
 
-1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — ready PRs: hard-fail pending/missing/error; soft-pass rate-limited/skipped; hard-fail unresolved bot threads.
-2. If missing/pending: first pass → `@coderabbitai full review` (or label); after prior full review + fixes → `@coderabbitai review`. If rate-limited: do not burn quota; rely on local CR + soft-pass; optional revisit issue.
+1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — ready PRs: hard-fail pending/missing/error/on-demand-skip; soft-pass rate-limited; hard-fail unresolved bot threads.
+2. If missing/pending/on-demand-skip: first pass → `@coderabbitai full review` (or label); after prior full review + fixes → `@coderabbitai review`. If rate-limited after a request: do not burn quota; rely on local CR + soft-pass; optional revisit issue. If both local CLI and GitHub stay rate-limited for >10m with no completed review, ask the user before merging (may `--waive` with their approval).
 3. Disposition each finding (threads **and** actionable outside-diff / summary nits): fix, wontfix+resolve, or open a follow-up issue then resolve — never leave actionable comments hanging; re-run the script (and the **Bot review threads** CI check if red).
-4. Waiver only with user instruction: `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews` — document on the PR. (Rate-limit soft-pass does not require this waiver.)
+4. User-explicit waiver (`--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews`) remains the escape hatch for **any** gate hold (including unresolved bot threads) when the user asks — document on the PR. Rate-limit soft-pass does not require this waiver; on-demand skip does not soft-pass.
 
-CI: `.github/workflows/pr-bot-reviews.yml` (default `GITHUB_TOKEN`). Local/script remains mandatory for agents. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83)).
+CI: `.github/workflows/pr-bot-reviews.yml` (default `GITHUB_TOKEN`). Local/script remains mandatory for agents. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83); on-demand skip hole closed after [#278](https://github.com/mward-sudo/spec_chum/pull/278)/[#279](https://github.com/mward-sudo/spec_chum/pull/279)).
 
 Recently closed accuracy/feature issues: [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
 
