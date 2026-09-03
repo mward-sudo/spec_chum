@@ -25,3 +25,4 @@ After modifying **code** files, run `./scripts/graphify_update.sh` (or `graphify
 
 - **Doc / image changes:** run `./scripts/graphify_update.sh --full` (needs `GEMINI_API_KEY` or `GOOGLE_API_KEY`).
 - **Optional auto-refresh:** `./scripts/graphify_install_hooks.sh` installs a post-commit hook (per-clone; not in git).
+- **CodeRabbit:** `graphify-out/**` is excluded from reviews via `.coderabbit.yaml` `path_filters` (not `.gitignore`). Local CLI: same YAML, or `coderabbit review --agent --dir crates` / `--dir apps`.

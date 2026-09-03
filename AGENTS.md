@@ -75,7 +75,7 @@ Do not run `cargo check -p living_room` (debug) unless you intentionally need Be
 
 ## graphify knowledge graph
 
-Checked-in outputs live under `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`, AST `cache/`). Cursor agents must query the graph before exploring — see `.cursor/rules/graphify.mdc`.
+Checked-in outputs live under `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`, AST `cache/`). Cursor agents must query the graph before exploring — see `.cursor/rules/graphify.mdc`. CodeRabbit skips `graphify-out/**` via `.coderabbit.yaml` `path_filters` (review-only; keep the tree committed). Local CLI: rely on that YAML, or scope with `coderabbit review --agent --dir crates` / `--dir apps`.
 
 | Task | Command |
 | --- | --- |
@@ -104,7 +104,7 @@ Before implementing: `gh issue list` / `gh issue view N` for related work. Prefe
 
 ### CodeRabbit — on-demand + merge gate
 
-For in-editor / local review before push, prefer the **CodeRabbit Cursor plugin** or `coderabbit review --agent` (`CONTRIBUTING.md` → “CodeRabbit — in-editor review”) — required habit before merge-candidate when CLI available. `.coderabbit.yaml` disables automatic reviews. Iterate on **draft** PRs (GitHub CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label) **if not rate-limited** → disposition → `./scripts/check_pr_reviews.sh`. After fix commits: **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
+For in-editor / local review before push, prefer the **CodeRabbit Cursor plugin** or `coderabbit review --agent` (`CONTRIBUTING.md` → “CodeRabbit — in-editor review”) — required habit before merge-candidate when CLI available. `.coderabbit.yaml` disables automatic reviews and excludes `graphify-out/**` from reviews (`path_filters`); local CLI may also use `--dir crates` / `--dir apps`. Iterate on **draft** PRs (GitHub CR completeness not required). When merge-candidate: mark ready → `@coderabbitai full review` (or label) **if not rate-limited** → disposition → `./scripts/check_pr_reviews.sh`. After fix commits: **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
 
 ### Before merge — CodeRabbit + bot review threads (hard gate)
 
