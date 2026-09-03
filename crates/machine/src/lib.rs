@@ -3826,9 +3826,7 @@ mod tests {
         // Warm `02CBh` path `CALL 1D83h` runs CAT and blocks on a key (`161Dh`).
         beta.patch_rom(0x02d4, &[0x00, 0x00, 0x00])
             .expect("TR-DOS ROM loaded for RUN harness");
-        // `3DFFh` multi-ms busy-wait (motor spin); `RET` so Type-I finishes in budget.
-        beta.patch_rom(0x3dff, &[0xc9])
-            .expect("TR-DOS ROM loaded for RUN harness");
+        // `3DFFh` delay loop stays stock — see [`apply_trdos_run_native_abi`].
         // `2135h` ends with `JP 1D90h` (CAT) and never returns to `02ECh` `CALL 3032h`.
         beta.patch_rom(0x2155, &[0xc9])
             .expect("TR-DOS ROM loaded for RUN harness");
@@ -3864,6 +3862,17 @@ mod tests {
                 m.cpu_mut().regs.set_bc(0x0110); // B=1, C=16
             }
             _ => {}
+        }
+    }
+
+    /// Register ABI so remaining RUN ROM can stay stock (#140 / #266).
+    fn apply_trdos_run_native_abi(m: &mut Machine) {
+        apply_trdos_find_boot_native_abi(m);
+        // Stock `3DFFh`: `LD C,#FF` / `DEC C` until Z / `DEC A` / JR NZ.
+        // Callers use `A=5` (`02C3h`) or `A=#FF` × `B=3` (`3EA4h` motor spin).
+        // `A=1` runs one inner 255-iter loop instead of a ROM RET patch.
+        if m.cpu().regs.pc == 0x3dff {
+            m.cpu_mut().regs.a = 1;
         }
     }
 
@@ -4126,7 +4135,7 @@ mod tests {
                 m.cpu_mut().regs.pc = 0x1b76;
                 continue;
             }
-            apply_trdos_find_boot_native_abi(m);
+            apply_trdos_run_native_abi(m);
             m.step_once();
             if m.read_mem(0x8000) == 0xa5 {
                 return true;
@@ -4223,7 +4232,7 @@ mod tests {
                 m.cpu_mut().regs.pc = 0x1b76;
                 break;
             }
-            apply_trdos_find_boot_native_abi(&mut m);
+            apply_trdos_run_native_abi(&mut m);
             m.step_once();
         }
         assert!(loaded, "did not reach 08D2h FDC handoff");
@@ -4460,7 +4469,7 @@ mod tests {
                 }
                 last = pc;
             }
-            apply_trdos_find_boot_native_abi(&mut m);
+            apply_trdos_run_native_abi(&mut m);
             m.step_once();
             if m.read_mem(0x8000) == 0xa5 {
                 eprintln!("MARKER at step={step}");
@@ -4595,6 +4604,34 @@ mod tests {
             m.read_mem(0x199a),
             0x10,
             "harness must not RET-patch 199Ah DJNZ"
+        );
+    }
+
+    /// ROM-gated: `3DFFh` delay loop stays stock (A=1 ABI, not ROM RET).
+    #[test]
+    fn trdos_3dff_delay_rom_unpatched_when_fixture_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        assert_eq!(
+            trdos.get(0x3dff).copied(),
+            Some(0x0e),
+            "stock LD C,#FF at 3DFFh"
+        );
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        patch_trdos_run_harness_rom(&mut m);
+        assert_eq!(
+            m.read_mem(0x3dff),
+            0x0e,
+            "harness must not RET-patch 3DFFh delay"
         );
     }
 

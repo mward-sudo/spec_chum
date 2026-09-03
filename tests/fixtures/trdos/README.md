@@ -29,7 +29,8 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 | `trdos_rom_reads_boot_when_128k_chans_ok_and_fixture_present` | After DOS entry, VG93 can still read track 1 / sector 1 (`boot` body) |
 | `trdos_3d94_rst20_returns_without_rom_ret_patch_when_fixture_present` | Stock `3D94h` `RST #20` / `0010h` returns via RAM `5CC2h` hook (no ROM RET patch) |
 | `trdos_find_boot_rom_unpatched_when_fixture_present` | Find-boot `1968h`/`1977h`/`1988h`/`199Ah` stay stock; catalog ABI is seeded at `195Ch`/`196Ah` |
-| `trdos_rom_run_boot_basic_when_fixture_present` | Catalog match + VG93 body load; harness unpages TR-DOS, selects ROM1, syncs `BANK_M`, restores CHANS/STRMS, sets FLAGS bit 7 (running) so DECIMAL does not re-embed `0x0E`, enters `LINE-NEW`. Asserts `0x8000==0xA5` when `trdos.rom` is present. `3D94h` and find-boot ROM stay unpatched; CAT/wait ROM patches + `08D2h` handoff remain |
+| `trdos_3dff_delay_rom_unpatched_when_fixture_present` | Motor/seek delay `3DFFh` stays stock `LD C,#FF`; harness seeds `A=1` instead of a ROM RET |
+| `trdos_rom_run_boot_basic_when_fixture_present` | Catalog match + VG93 body load; harness unpages TR-DOS, selects ROM1, syncs `BANK_M`, restores CHANS/STRMS, sets FLAGS bit 7 (running) so DECIMAL does not re-embed `0x0E`, enters `LINE-NEW`. Asserts `0x8000==0xA5` when `trdos.rom` is present. `3D94h`, find-boot, and `3DFFh` ROM stay unpatched; remaining CAT/wait patches + `08D2h` handoff remain |
 
 `RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
 
