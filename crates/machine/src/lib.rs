@@ -3815,9 +3815,9 @@ mod tests {
     ///
     /// CAT / VG93-wait / PROG-wipe sites stay **stock** — see
     /// [`apply_trdos_run_native_abi`]. `3D94h` uses [`install_trdos_rst20_5cc2_hook`].
-    /// Remaining gap: stock `19ECh` `RST #20` / `08D2h` service body is FF on this
-    /// ROM image — handoff is at the call site in [`wait_for_trdos_boot_marker`],
-    /// not inside the padding.
+    /// Remaining gap: this 5.04 image has FF from `0800h`–`0E71h` (`08D2h` and
+    /// `0D6Bh`). Native `012Ah` re-enters catalog before LINE-NEW; handoff stays
+    /// the `19ECh` VG93+LINE-NEW stand-in in [`wait_for_trdos_boot_marker`].
     fn patch_trdos_run_harness_rom(_m: &mut Machine) {
         // No ROM writes — CAT/wait reductions live in `apply_trdos_run_native_abi`.
     }
@@ -4003,8 +4003,10 @@ mod tests {
     /// VG93 path into `(PROG)`, wire Spectrum sysvars / `NEWPPC` / FLAGS bit 7
     /// (running), unpage TR-DOS, page 48K BASIC ROM, and enter `LINE-NEW` (`1B76h`).
     ///
-    /// Why not TR-DOS `012Ah` / native `08D2h` service:
-    /// - This image has no code at `08D2h` (or at `0D6Bh` used by `012Ah`→`1D97h`).
+    /// Why not TR-DOS `012Ah` / native `08D2h` service (this image):
+    /// - FF padding `0800h`–`0E71h` covers `08D2h` and `0D6Bh` (`012Ah` `CALL 1D97h`).
+    /// - Entering `012Ah` from `19ECh` re-enters catalog (`30B2h`) / Type-I wait
+    ///   (`3D9Ch`) before LINE-NEW; `RST #20`/`16B0h` is mid-`CALL 166Fh`.
     /// - Beta keeps the TR-DOS latch across RAM, so stock `5CC2h`→`1B76h` would still
     ///   fetch TR-DOS at `1B76h`.
     /// - 128/Pentagon ROM0 is the editor; `1B76h` LINE-NEW lives in ROM1 (`7FFDh` bit 4).
@@ -4765,6 +4767,77 @@ mod tests {
             m.read_mem(0x08d2),
             0xff,
             "harness must not write into 08D2h FF padding"
+        );
+    }
+
+    /// ROM-gated: native `012Ah` / `1D97h` stay stock; `0D6Bh` hole is not patched.
+    #[test]
+    fn trdos_012a_0d6b_service_rom_unpatched_when_fixture_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        assert_eq!(
+            trdos.get(0x012a).copied(),
+            Some(0xcd),
+            "stock CALL at 012Ah"
+        );
+        assert_eq!(
+            [trdos.get(0x012b).copied(), trdos.get(0x012c).copied()],
+            [Some(0xe5), Some(0x20)],
+            "stock CALL 20E5h at 012Ah"
+        );
+        assert_eq!(
+            [
+                trdos.get(0x012d).copied(),
+                trdos.get(0x012e).copied(),
+                trdos.get(0x012f).copied()
+            ],
+            [Some(0xcd), Some(0x97), Some(0x1d)],
+            "stock CALL 1D97h after 20E5h"
+        );
+        assert_eq!(
+            [
+                trdos.get(0x1d97).copied(),
+                trdos.get(0x1d98).copied(),
+                trdos.get(0x1d99).copied()
+            ],
+            [Some(0xe7), Some(0x6b), Some(0x0d)],
+            "stock RST #20 / 0D6Bh at 1D97h"
+        );
+        assert_eq!(
+            trdos.get(0x1d9a).copied(),
+            Some(0xc9),
+            "stock RET after 1D97h service word"
+        );
+        assert_eq!(
+            trdos.get(0x0d6b).copied(),
+            Some(0xff),
+            "this ROM image has FF padding at 0D6Bh (0800h–0E71h hole)"
+        );
+        assert_eq!(
+            trdos.get(0x16b0).copied(),
+            Some(0x16),
+            "16B0h is the high byte of CALL 166Fh, not a RST #20 body"
+        );
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        patch_trdos_run_harness_rom(&mut m);
+        assert_eq!(
+            [
+                m.read_mem(0x012a),
+                m.read_mem(0x012d),
+                m.read_mem(0x1d97),
+                m.read_mem(0x0d6b)
+            ],
+            [0xcd, 0xcd, 0xe7, 0xff],
+            "harness must not patch 012Ah / 1D97h / 0D6Bh"
         );
     }
 

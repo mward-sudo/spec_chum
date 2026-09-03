@@ -32,9 +32,12 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 | `trdos_3dff_delay_rom_unpatched_when_fixture_present` | Motor/seek delay `3DFFh` stays stock `LD C,#FF`; harness seeds `A=1` instead of a ROM RET |
 | `trdos_cat_wait_rom_unpatched_when_fixture_present` | CAT/wait sites `3D9Dh`/`02D4h`/`213Eh`/`2155h` stay stock; harness skips via PC/RET ABI |
 | `trdos_19ec_08d2_callsite_rom_unpatched_when_fixture_present` | Post-match `19ECh` stays stock `RST #20`/`08D2h`; `08D2h` FF padding is not written |
-| `trdos_rom_run_boot_basic_when_fixture_present` | Catalog match + VG93 body load at **`19ECh` call site** (never enters `08D2h` FF); harness unpages TR-DOS, selects ROM1, syncs `BANK_M`, restores CHANS/STRMS, sets FLAGS bit 7 (running), enters `LINE-NEW`. Asserts `0x8000==0xA5` when `trdos.rom` is present. Remaining debt: implement a real `08D2h`/`012Ah` service path instead of call-site FDC+LINE-NEW |
+| `trdos_012a_0d6b_service_rom_unpatched_when_fixture_present` | Native `012Ah`/`1D97h` stay stock; `0D6Bh` is FF (`0800h`–`0E71h` hole); `16B0h` is mid-`CALL 166Fh`, not a service |
+| `trdos_rom_run_boot_basic_when_fixture_present` | Catalog match + VG93 body load at **`19ECh`** (never enters `08D2h`/`0D6Bh` FF). Harness unpages TR-DOS, selects ROM1, restores CHANS/STRMS, FLAGS bit 7, enters `LINE-NEW`. Asserts `0x8000==0xA5`. **This 5.04 image cannot run native `012Ah`:** the load services are in a 1.6 KiB FF hole, and `012Ah` from `19ECh` re-enters catalog (`30B2h`) before LINE-NEW. Remaining harness is that stand-in, plus Beta latch / ROM1 at `1B76h` |
 
 `RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
+
+This tree’s usual `roms/pentagon/trdos.rom` identifies as **TR-DOS Ver 5.04** with FF padding `0800h`–`0E71h` (covers `08D2h` and `0D6Bh`). That is a ROM-image limitation, not an emulator skip of working service code.
 
 | Fixture | Licence | Path | Marker |
 | --- | --- | --- | --- |
