@@ -3815,8 +3815,9 @@ mod tests {
     ///
     /// CAT / VG93-wait / PROG-wipe sites stay **stock** — see
     /// [`apply_trdos_run_native_abi`]. `3D94h` uses [`install_trdos_rst20_5cc2_hook`].
-    /// Remaining gap: `19DDh`→`08D2h` FF padding (FDC handoff in
-    /// [`wait_for_trdos_boot_marker`]).
+    /// Remaining gap: stock `19ECh` `RST #20` / `08D2h` service body is FF on this
+    /// ROM image — handoff is at the call site in [`wait_for_trdos_boot_marker`],
+    /// not inside the padding.
     fn patch_trdos_run_harness_rom(_m: &mut Machine) {
         // No ROM writes — CAT/wait reductions live in `apply_trdos_run_native_abi`.
     }
@@ -3887,8 +3888,9 @@ mod tests {
     /// Invoke TR-DOS `RUN` with no filename (loads `boot`).
     ///
     /// Warm entry `0239h`→`02E9h`→`3032h` reaches find-boot Type-II catalog reads.
-    /// Post-match `19DDh`→`08D2h` is FF padding: harness FDC-loads `boot` into `(PROG)`,
-    /// unpages TR-DOS, and enters Spectrum `LINE-NEW` (`1B76h`) with sysvars/NEWPPC.
+    /// Post-match `19ECh` is stock `RST #20` / inline `08D2h`; this ROM's `08D2h` is
+    /// FF padding, so the harness FDC-loads `boot` at the **call site**, unpages
+    /// TR-DOS, and enters Spectrum `LINE-NEW` (`1B76h`) — never executes the hole.
     /// Name block lives at `5EE0h` so it does not overlap the `5D25h` sector buffer.
     fn invoke_trdos_run_boot(m: &mut Machine) -> bool {
         m.write_mem(0x5cb6, 0xf4);
@@ -3996,15 +3998,15 @@ mod tests {
         at_prompt
     }
 
-    /// After find-boot matches `boot`, this TR-DOS image's `08D2h` epilogue is FF
-    /// padding. Load the file body through the real VG93 path into `(PROG)`, wire
-    /// Spectrum sysvars / `NEWPPC` / FLAGS bit 7 (running), unpage TR-DOS, page
-    /// 48K BASIC ROM, and enter `LINE-NEW` (`1B76h`).
+    /// After find-boot matches `boot`, stock `19ECh` would `RST #20` into `08D2h`,
+    /// which is FF padding on this ROM image. Load the file body through the real
+    /// VG93 path into `(PROG)`, wire Spectrum sysvars / `NEWPPC` / FLAGS bit 7
+    /// (running), unpage TR-DOS, page 48K BASIC ROM, and enter `LINE-NEW` (`1B76h`).
     ///
-    /// Why not TR-DOS `012Ah`:
+    /// Why not TR-DOS `012Ah` / native `08D2h` service:
+    /// - This image has no code at `08D2h` (or at `0D6Bh` used by `012Ah`→`1D97h`).
     /// - Beta keeps the TR-DOS latch across RAM, so stock `5CC2h`→`1B76h` would still
     ///   fetch TR-DOS at `1B76h`.
-    /// - `012Ah` `CALL 1D97h` → RST `#20` into `0D6Bh` FF padding on this ROM image.
     /// - 128/Pentagon ROM0 is the editor; `1B76h` LINE-NEW lives in ROM1 (`7FFDh` bit 4).
     fn trdos_fdc_load_boot_into_prog(m: &mut Machine) -> bool {
         let prog = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
@@ -4133,19 +4135,30 @@ mod tests {
 
     fn wait_for_trdos_boot_marker(m: &mut Machine, max_frames: u32) -> bool {
         let mut loaded = false;
-        // Prefer instruction steps so we cannot miss the one-instruction `08D2h`
-        // FF-hole window inside a full frame.
+        let mut saw_08d2_ff_hole = false;
+        // Prefer instruction steps so we cannot miss the one-instruction `19ECh`
+        // call-site window inside a full frame.
         let max_steps = u64::from(max_frames).saturating_mul(70_000).min(3_000_000);
         for _ in 0..max_steps {
-            if !loaded && m.cpu().regs.pc == 0x08d2 && trdos_fdc_load_boot_into_prog(m) {
+            let pc = m.cpu().regs.pc;
+            // Stock `19ECh`: `RST #20` / `DW 08D2h`. Intercept at the call site —
+            // never enter this ROM image's `08D2h` FF padding.
+            if !loaded && pc == 0x19ec && trdos_fdc_load_boot_into_prog(m) {
                 loaded = true;
                 // Spectrum LINE-NEW in ROM1 — not TR-DOS `012Ah` (see load helper docs).
                 m.cpu_mut().regs.pc = 0x1b76;
                 continue;
             }
+            if pc == 0x08d2 {
+                saw_08d2_ff_hole = true;
+            }
             apply_trdos_run_native_abi(m);
             m.step_once();
             if m.read_mem(0x8000) == 0xa5 {
+                assert!(
+                    !saw_08d2_ff_hole,
+                    "RUN boot must not execute 08D2h FF padding (handoff at 19ECh)"
+                );
                 return true;
             }
         }
@@ -4235,15 +4248,20 @@ mod tests {
 
         let mut loaded = false;
         for _ in 0..3_000_000u32 {
-            if !loaded && m.cpu().regs.pc == 0x08d2 && trdos_fdc_load_boot_into_prog(&mut m) {
+            if !loaded && m.cpu().regs.pc == 0x19ec && trdos_fdc_load_boot_into_prog(&mut m) {
                 loaded = true;
                 m.cpu_mut().regs.pc = 0x1b76;
                 break;
             }
+            assert_ne!(
+                m.cpu().regs.pc,
+                0x08d2,
+                "debug path must not enter 08D2h FF padding"
+            );
             apply_trdos_run_native_abi(&mut m);
             m.step_once();
         }
-        assert!(loaded, "did not reach 08D2h FDC handoff");
+        assert!(loaded, "did not reach 19ECh FDC handoff");
 
         let rd16 = |m: &Machine, a: u16| -> u16 {
             u16::from(m.read_mem(a)) | (u16::from(m.read_mem(a.wrapping_add(1))) << 8)
@@ -4694,6 +4712,59 @@ mod tests {
             m.read_mem(0x2155),
             0xc3,
             "harness must not RET-patch 2155h JP CAT"
+        );
+    }
+
+    /// ROM-gated: `19ECh` stays stock `RST #20`/`08D2h`; padding is never patched.
+    #[test]
+    fn trdos_19ec_08d2_callsite_rom_unpatched_when_fixture_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes() else {
+            eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
+            return;
+        };
+        assert_eq!(
+            trdos.get(0x19ec).copied(),
+            Some(0xe7),
+            "stock RST #20 at 19ECh"
+        );
+        assert_eq!(
+            trdos.get(0x19ed).copied(),
+            Some(0xd2),
+            "stock inline service lo at 19EDh"
+        );
+        assert_eq!(
+            trdos.get(0x19ee).copied(),
+            Some(0x08),
+            "stock inline service hi → 08D2h"
+        );
+        assert_eq!(
+            trdos.get(0x08d2).copied(),
+            Some(0xff),
+            "this ROM image has FF padding at 08D2h"
+        );
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        patch_trdos_run_harness_rom(&mut m);
+        assert_eq!(
+            m.read_mem(0x19ec),
+            0xe7,
+            "harness must not patch 19ECh RST #20"
+        );
+        assert_eq!(
+            [m.read_mem(0x19ed), m.read_mem(0x19ee)],
+            [0xd2, 0x08],
+            "harness must not retarget 19ECh service word"
+        );
+        assert_eq!(
+            m.read_mem(0x08d2),
+            0xff,
+            "harness must not write into 08D2h FF padding"
         );
     }
 

@@ -31,7 +31,8 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 | `trdos_find_boot_rom_unpatched_when_fixture_present` | Find-boot `1968h`/`1977h`/`1988h`/`199Ah` stay stock; catalog ABI is seeded at `195Ch`/`196Ah` |
 | `trdos_3dff_delay_rom_unpatched_when_fixture_present` | Motor/seek delay `3DFFh` stays stock `LD C,#FF`; harness seeds `A=1` instead of a ROM RET |
 | `trdos_cat_wait_rom_unpatched_when_fixture_present` | CAT/wait sites `3D9Dh`/`02D4h`/`213Eh`/`2155h` stay stock; harness skips via PC/RET ABI |
-| `trdos_rom_run_boot_basic_when_fixture_present` | Catalog match + VG93 body load; harness unpages TR-DOS, selects ROM1, syncs `BANK_M`, restores CHANS/STRMS, sets FLAGS bit 7 (running) so DECIMAL does not re-embed `0x0E`, enters `LINE-NEW`. Asserts `0x8000==0xA5` when `trdos.rom` is present. RUN harness ROM writes are gone; `08D2h` FF-padding FDC handoff remains |
+| `trdos_19ec_08d2_callsite_rom_unpatched_when_fixture_present` | Post-match `19ECh` stays stock `RST #20`/`08D2h`; `08D2h` FF padding is not written |
+| `trdos_rom_run_boot_basic_when_fixture_present` | Catalog match + VG93 body load at **`19ECh` call site** (never enters `08D2h` FF); harness unpages TR-DOS, selects ROM1, syncs `BANK_M`, restores CHANS/STRMS, sets FLAGS bit 7 (running), enters `LINE-NEW`. Asserts `0x8000==0xA5` when `trdos.rom` is present. Remaining debt: implement a real `08D2h`/`012Ah` service path instead of call-site FDC+LINE-NEW |
 
 `RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
 
