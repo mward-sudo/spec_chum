@@ -31,6 +31,12 @@ struct Cli {
     tzx: Option<PathBuf>,
     #[arg(long)]
     snapshot: Option<PathBuf>,
+    /// Insert a `.trd` (attaches Beta / TR-DOS if needed). 48K/128K/Pentagon.
+    #[arg(long)]
+    trd: Option<PathBuf>,
+    /// Load a 16 KiB TR-DOS ROM (attaches Beta on 48K/128K).
+    #[arg(long)]
+    trdos_rom: Option<PathBuf>,
     /// Comma-separated trace categories (tape,cpu,bus,ula,machine,ay,disk,mem,all)
     #[arg(long)]
     trace: Option<String>,
@@ -144,6 +150,12 @@ fn load_host_session(cli: &Cli) -> Result<HostSession> {
     if let Some(path) = &cli.snapshot {
         session.load_snapshot(path).map_err(host_err)?;
     }
+    if let Some(path) = &cli.trdos_rom {
+        session.load_trdos_rom(path).map_err(host_err)?;
+    }
+    if let Some(path) = &cli.trd {
+        session.load_trd(path).map_err(host_err)?;
+    }
     if let Some(path) = &cli.tap {
         session.open_tape(path).map_err(host_err)?;
         session.play_tape().map_err(host_err)?;
@@ -184,6 +196,12 @@ fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {
     }
     if let Some(path) = &cli.snapshot {
         client.load_snapshot(&path.display().to_string())?;
+    }
+    if let Some(path) = &cli.trdos_rom {
+        client.load_trdos_rom(&path.display().to_string())?;
+    }
+    if let Some(path) = &cli.trd {
+        client.load_trd(&path.display().to_string())?;
     }
     if cli.ear_load || cli.speed != 1 {
         client.tape_load_options(cli.ear_load, cli.speed)?;
@@ -492,8 +510,9 @@ fn main() -> Result<()> {
 mod tests {
     use super::parse_u16;
     use clap::Parser;
+    use std::path::PathBuf;
 
-    use super::Cli;
+    use super::{load_host_session, Cli};
 
     #[test]
     fn serve_without_subcommand() {
@@ -501,6 +520,69 @@ mod tests {
             Cli::try_parse_from(["spec-chum-debug", "--serve", "--model", "48k"]).expect("parse");
         assert!(cli.serve);
         assert!(cli.cmd.is_none());
+    }
+
+    #[test]
+    fn parse_trd_and_trdos_rom_flags() {
+        let cli = Cli::try_parse_from([
+            "spec-chum-debug",
+            "--model",
+            "pentagon128",
+            "--trd",
+            "/tmp/boot.trd",
+            "--trdos-rom",
+            "/tmp/trdos.rom",
+            "dump-state",
+        ])
+        .expect("parse");
+        assert_eq!(cli.model, "pentagon128");
+        assert_eq!(cli.trd, Some(PathBuf::from("/tmp/boot.trd")));
+        assert_eq!(cli.trdos_rom, Some(PathBuf::from("/tmp/trdos.rom")));
+    }
+
+    #[test]
+    fn load_host_session_trd_attaches_beta() {
+        let rom = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/spec48.rom");
+        if !rom.is_file() {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        }
+
+        let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
+        raw[0xe3] = 0; // unknown type → parser infers geometry from length
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "spec_chum_debug_cli_trd_{}_{}",
+            std::process::id(),
+            nanos
+        ));
+        std::fs::create_dir_all(&dir).expect("unique temp dir");
+        struct RmTree(PathBuf);
+        impl Drop for RmTree {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = RmTree(dir.clone());
+        let trd_path = dir.join("one_track.trd");
+        std::fs::write(&trd_path, &raw).expect("write trd");
+
+        let cli = Cli::try_parse_from([
+            "spec-chum-debug",
+            "--model",
+            "48k",
+            "--rom",
+            rom.to_str().expect("utf8 rom path"),
+            "--trd",
+            trd_path.to_str().expect("utf8 trd path"),
+            "dump-state",
+        ])
+        .expect("parse");
+        let session = load_host_session(&cli).expect("load session with --trd");
+        assert!(session.has_beta(), "Beta should attach when --trd is set");
     }
 
     #[test]

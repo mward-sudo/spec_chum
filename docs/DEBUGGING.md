@@ -68,12 +68,17 @@ C ABI (`host_api`):
 Agent / script entry. Crate `debug_cli`, binary `spec-chum-debug`.
 
 Each invocation is a **new process** (fresh machine and empty trace ring).
-Put `--trace`, `--snapshot`, `--tap`, and the subcommand on the **same** command.
+Put `--trace`, `--snapshot`, `--tap`, `--trd` / `--trdos-rom`, and the subcommand on the **same** command.
 
 ```bash
 # Inspect after N frames (run already prints Inspect)
 cargo run -p debug_cli -- --model 48k run --frames 1
 cargo run -p debug_cli -- --model 48k --json dump-state
+
+# Beta + TRD one-shot (48K/128K/Pentagon; attaches Beta automatically)
+cargo run -p debug_cli -- --model pentagon128 --trd path/to/disk.trd dump-state
+# Optional TR-DOS ROM override (also attaches Beta on 48K/128K)
+cargo run -p debug_cli -- --model 128k --trdos-rom roms/trdos.rom --trd path/to/disk.trd dump-state
 
 # Run until PC (hex), mem write watch, PC break over frames
 cargo run -p debug_cli -- until-pc 056C --max 10000000
@@ -109,7 +114,9 @@ cargo run -p debug_cli -- --trace tape,cpu --json dump-trace
 
 `--trace` takes the same category list as `SPEC_CHUM_TRACE`. `--json` prints
 `Inspect::to_json()` or `trace::dump_json()`. `--snapshot` loads SNA/Z80;
-`--rom` / `--model 128k|plus2a|plus3` select machine.
+`--rom` / `--model 128k|plus2a|plus3|pentagon128` select machine.
+`--trd` inserts a TR-DOS disk (Beta attach); `--trdos-rom` loads a 16 KiB
+TR-DOS ROM ([#262](https://github.com/mward-sudo/spec_chum/issues/262)).
 
 `Debugger` on `Machine`: `paused`, PC breaks, mem/port watches,
 `run_until_break`. Continue from a PC hit uses `continue_from_pc` so the
