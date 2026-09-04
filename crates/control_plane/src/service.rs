@@ -787,6 +787,19 @@ impl ControlPlane {
         })
     }
 
+    /// Patch PC / SP / AF (`POST /v1/regs`, #261).
+    pub fn patch_regs(
+        &self,
+        patch: spec_chum_host::RegsPatch,
+    ) -> ApiResult<spec_chum_host::HostRegs> {
+        if patch.is_empty() {
+            return Err(ApiError::BadRequest(
+                "regs patch requires at least one of pc, sp, af".into(),
+            ));
+        }
+        self.with_session_mut(|s| Ok(s.patch_regs(patch)?))
+    }
+
     pub fn disasm(&self, addr: Option<u16>, count: usize) -> ApiResult<String> {
         self.with_session_ref(|s| Ok(s.disasm(addr, count)?))
     }

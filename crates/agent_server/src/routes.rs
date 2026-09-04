@@ -53,6 +53,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/run-until", post(run_until))
         .route("/v1/peek", get(peek))
         .route("/v1/poke", post(poke))
+        .route("/v1/regs", post(patch_regs))
         .route("/v1/disasm", get(disasm))
         .route("/v1/rom", post(load_rom))
         .route("/v1/snapshot", post(load_snapshot))
@@ -719,6 +720,37 @@ async fn poke(
         Err(e) => return api_error(&state.plane, e),
     };
     auth_empty(&state, &headers, || state.plane.poke(addr, body.value))
+}
+
+#[derive(Debug, Deserialize)]
+struct RegsBody {
+    #[serde(default)]
+    pc: Option<String>,
+    #[serde(default)]
+    sp: Option<String>,
+    #[serde(default)]
+    af: Option<String>,
+}
+
+async fn patch_regs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<RegsBody>,
+) -> Response {
+    let pc = match body.pc.as_deref().map(parse_addr).transpose() {
+        Ok(v) => v,
+        Err(e) => return api_error(&state.plane, e),
+    };
+    let sp = match body.sp.as_deref().map(parse_addr).transpose() {
+        Ok(v) => v,
+        Err(e) => return api_error(&state.plane, e),
+    };
+    let af = match body.af.as_deref().map(parse_addr).transpose() {
+        Ok(v) => v,
+        Err(e) => return api_error(&state.plane, e),
+    };
+    let patch = spec_chum_host::RegsPatch { pc, sp, af };
+    auth_json(&state, &headers, || state.plane.patch_regs(patch))
 }
 
 #[derive(Debug, Deserialize)]

@@ -72,7 +72,10 @@ export SPEC_CHUM_AGENT=1
 export SPEC_CHUM_AGENT_INSECURE=1   # or SPEC_CHUM_AGENT_TOKEN=…
 cargo run -p app --release
 # curl inspect PC matches the running GUI machine
-curl -sS http://127.0.0.1:17384/v1/inspect | jq '.regs.pc'
+curl -sS http://127.0.0.1:17384/v1/inspect | jq '.pc'
+# jump to TR-DOS entry without typing USR 15616 (#261)
+curl -sS -X POST http://127.0.0.1:17384/v1/regs \
+  -H 'Content-Type: application/json' -d '{"pc":"0x3D00"}' | jq .
 ```
 
 Standalone server (no GUI) remains:

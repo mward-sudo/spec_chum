@@ -132,15 +132,15 @@
     "semantic_hash": "10bab6f6581240038ba9f49ae3b016b3"
   },
   "crates/agent_server/src/routes.rs": {
-    "mtime": 1788281318.1415684,
-    "seen": 1788324807.415584,
-    "ast_hash": "c062807cf3f8dcac152db9d739e5bc8b",
+    "mtime": 1788488117.3134472,
+    "seen": 1788488214.8962612,
+    "ast_hash": "c39c11f1b8689b9259dabc62d801a30c",
     "semantic_hash": ""
   },
   "crates/agent_server/tests/http_smoke.rs": {
-    "mtime": 1788281342.9066184,
-    "seen": 1788324807.415585,
-    "ast_hash": "a956735244d183950743945f5ddc2b69",
+    "mtime": 1788488147.0932987,
+    "seen": 1788488214.896262,
+    "ast_hash": "6b460f01c122c363992d88d018e84f48",
     "semantic_hash": ""
   },
   "crates/app/Cargo.toml": {
@@ -276,9 +276,9 @@
     "semantic_hash": ""
   },
   "crates/control_plane/src/service.rs": {
-    "mtime": 1788281314.9117882,
-    "seen": 1788324807.4155982,
-    "ast_hash": "662d09b1e48074e0ebbd49b062d4aa59",
+    "mtime": 1788488172.3738341,
+    "seen": 1788488214.8967092,
+    "ast_hash": "02af5f659219e114e494161fd0423739",
     "semantic_hash": ""
   },
   "crates/debug_cli/Cargo.toml": {
@@ -378,10 +378,10 @@
     "semantic_hash": "f5ed9c779a9eba267dbb994151a12053"
   },
   "crates/host_api/src/lib.rs": {
-    "mtime": 1788278603.2743924,
-    "seen": 1788324807.415606,
-    "ast_hash": "313ba3a429637476aa565ee31119cc0f",
-    "semantic_hash": "313ba3a429637476aa565ee31119cc0f"
+    "mtime": 1788488079.3266425,
+    "seen": 1788488214.8969831,
+    "ast_hash": "77d54009c1f2c53d62037c5c8b1cace5",
+    "semantic_hash": ""
   },
   "crates/host_api/src/machine_config.rs": {
     "mtime": 1788281827.7508178,
@@ -402,9 +402,9 @@
     "semantic_hash": "e5748dbe3494059e6c95ca7378fa48bf"
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1788281338.289301,
-    "seen": 1788324807.415607,
-    "ast_hash": "113ca57010e9ee0fb38a5ba3e49ba63e",
+    "mtime": 1788488117.639931,
+    "seen": 1788488214.897032,
+    "ast_hash": "20cc73808986b2b27e021dab5883c58e",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -852,9 +852,9 @@
     "semantic_hash": ""
   },
   ".cursor/skills/spec-chum-debugging/SKILL.md": {
-    "mtime": 1788278687.779217,
-    "seen": 1788324807.415647,
-    "ast_hash": "3c788452b5ef943c410ebfdea7c1bba4",
+    "mtime": 1788488169.0131102,
+    "seen": 1788488214.898207,
+    "ast_hash": "65b20a7a7ec1c07e3f38fba64f3b7eee",
     "semantic_hash": ""
   },
   ".github/workflows/ci.yml": {
@@ -894,9 +894,9 @@
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
-    "mtime": 1788281410.4124575,
-    "seen": 1788324807.4156501,
-    "ast_hash": "fd0177bd29b2eb5fcd29107efea96fc5",
+    "mtime": 1788488167.3725665,
+    "seen": 1788488214.898289,
+    "ast_hash": "5c79808f66fc5dd524e7891d0f3cf807",
     "semantic_hash": ""
   },
   "docs/DEBUGGING.md": {
