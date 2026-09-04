@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use crate::FormatError;
+use crate::error::FormatError;
 
 #[derive(Clone, Debug)]
 pub struct DskImage {

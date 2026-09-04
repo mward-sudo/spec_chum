@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use crate::FormatError;
+use crate::error::FormatError;
 
 /// One frame of recorded input (IORQ port reads / keyboard matrix bytes).
 #[derive(Clone, Debug, Default)]
