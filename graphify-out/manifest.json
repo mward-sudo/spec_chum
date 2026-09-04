@@ -12,8 +12,8 @@
     "semantic_hash": "5495e97105ccab99680f7cd181f856cc"
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1788282943.6468365,
-    "seen": 1788324807.415573,
+    "mtime": 1788495806.070133,
+    "seen": 1788495830.5907478,
     "ast_hash": "32c17529ba4b2bc4bddb5b7efa8b5b07",
     "semantic_hash": ""
   },
@@ -42,9 +42,9 @@
     "semantic_hash": "7f5409df2ce54f1fd9131a68f63f57fd"
   },
   "apps/macos/Sources/SpecChumMac/HostBridge.swift": {
-    "mtime": 1788281529.8944092,
-    "seen": 1788324807.4155772,
-    "ast_hash": "4af7fb6597390d1ccd69d4ce91aeb2ab",
+    "mtime": 1788495805.643054,
+    "seen": 1788495830.590849,
+    "ast_hash": "c3bf2be197499bf37f1aa3a0ed12e009",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/KempstonMouseTracking.swift": {
@@ -1083,6 +1083,42 @@
     "mtime": 1788495257.9670491,
     "seen": 1788495329.241602,
     "ast_hash": "3e72d7c903e9c5fe3c572bc4a0c2672f",
+    "semantic_hash": ""
+  },
+  "apps/macos/Sources/SpecChumMac/HostBridge+Config.swift": {
+    "mtime": 1788495725.2439604,
+    "seen": 1788495830.5908449,
+    "ast_hash": "2efc0e852fb86e9abbc4f8a4cf8bf446",
+    "semantic_hash": ""
+  },
+  "apps/macos/Sources/SpecChumMac/HostBridge+Debug.swift": {
+    "mtime": 1788495674.722108,
+    "seen": 1788495830.5908449,
+    "ast_hash": "8519602a0abff9677d8a1f8060b98a59",
+    "semantic_hash": ""
+  },
+  "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift": {
+    "mtime": 1788495725.2443614,
+    "seen": 1788495830.590846,
+    "ast_hash": "f563bd6e4eceb26992818e8818e34318",
+    "semantic_hash": ""
+  },
+  "apps/macos/Sources/SpecChumMac/HostBridge+LivingRoom.swift": {
+    "mtime": 1788495674.7212348,
+    "seen": 1788495830.590846,
+    "ast_hash": "38abfdc1e221c023209fdc60d3085081",
+    "semantic_hash": ""
+  },
+  "apps/macos/Sources/SpecChumMac/HostBridge+Media.swift": {
+    "mtime": 1788495725.2436411,
+    "seen": 1788495830.590847,
+    "ast_hash": "4cc602294d32fa6f65d0909d8d1ee983",
+    "semantic_hash": ""
+  },
+  "apps/macos/Sources/SpecChumMac/HostBridge+Tape.swift": {
+    "mtime": 1788495725.2445662,
+    "seen": 1788495830.590848,
+    "ast_hash": "5f40086f3bfb4c5893593bf90ca0c88f",
     "semantic_hash": ""
   }
 }
