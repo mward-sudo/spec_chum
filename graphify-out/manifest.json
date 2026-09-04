@@ -294,9 +294,9 @@
     "semantic_hash": ""
   },
   "crates/debug_cli/src/main.rs": {
-    "mtime": 1788489166.08523,
-    "seen": 1788489180.2261062,
-    "ast_hash": "16434a8b7b83cd505f9aab310a758ec9",
+    "mtime": 1788489812.7062283,
+    "seen": 1788490723.5006678,
+    "ast_hash": "057fff08cd4e867a218c13790cbe91aa",
     "semantic_hash": ""
   },
   "crates/formats/Cargo.toml": {
@@ -318,10 +318,10 @@
     "semantic_hash": "47e0be892eb8aff2b51354297cdf6890"
   },
   "crates/formats/src/fdc.rs": {
-    "mtime": 1788278603.2728891,
-    "seen": 1788324807.415601,
-    "ast_hash": "0040d7698d310f2cea4e750f192f2627",
-    "semantic_hash": "0040d7698d310f2cea4e750f192f2627"
+    "mtime": 1788490704.5029433,
+    "seen": 1788490723.5007129,
+    "ast_hash": "64d0ca92742ac1164602d23681219292",
+    "semantic_hash": ""
   },
   "crates/formats/src/lib.rs": {
     "mtime": 1788279239.97595,
@@ -888,9 +888,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1788281413.9750664,
-    "seen": 1788324807.4156501,
-    "ast_hash": "b0d6a9be8363e78c353b3ebbc5f7f654",
+    "mtime": 1788490716.4681668,
+    "seen": 1788490723.502073,
+    "ast_hash": "0115d1ffd7b95dea602b8a848aa77704",
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
@@ -954,10 +954,10 @@
     "semantic_hash": "aafdd1d77e5c84e537ba783de0856fe9"
   },
   "tests/fixtures/plus3/README.md": {
-    "mtime": 1788278603.2887537,
-    "seen": 1788324807.415654,
-    "ast_hash": "110bff37aa67a705d10b174d0154a43c",
-    "semantic_hash": "110bff37aa67a705d10b174d0154a43c"
+    "mtime": 1788490716.9827917,
+    "seen": 1788490723.502207,
+    "ast_hash": "e044de81d7f28f75514e90d81d1fa8fb",
+    "semantic_hash": ""
   },
   "tests/fixtures/system/README.md": {
     "mtime": 1788278687.7881963,

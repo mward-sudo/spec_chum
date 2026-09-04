@@ -33,3 +33,11 @@ outside CI. Public-domain +3 images may be added later via a fetch script
 Not covered. A CP/M Plus boot disk needs a copyrighted or separately licensed
 system image; note only. `DOS_BOOT` with checksum 3 is the hook those disks
 use — the titled bootstrap smoke exercises that entry without shipping CP/M.
+
+## Unsupported µPD765 commands
+
+SCAN EQUAL (`0x11`), SCAN LOW OR EQUAL (`0x19`), SCAN HIGH OR EQUAL (`0x1d`),
+and READ TRACK (`0x02`) — including MT/SK variants — return invalid-command
+`ST0=0x80` immediately (see `Plus3Fdc` module docs / unit tests). No +3DOS or
+Loader path issues them; FORMAT TRACK is implemented. Copy-protected /
+non-standard DSK geometry is not modelled.
