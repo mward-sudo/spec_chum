@@ -288,16 +288,16 @@
     "semantic_hash": "0b196a4c1a2fa2aa147a57456238c3b8"
   },
   "crates/debug_cli/src/agent_client.rs": {
-    "mtime": 1788278603.2723582,
-    "seen": 1788324807.415599,
-    "ast_hash": "4ebe9b2050d12d33c9446e568b45601f",
-    "semantic_hash": "4ebe9b2050d12d33c9446e568b45601f"
+    "mtime": 1788489070.6269734,
+    "seen": 1788489180.226105,
+    "ast_hash": "7f52dcde02a10df629b9e3aa8fd1e134",
+    "semantic_hash": ""
   },
   "crates/debug_cli/src/main.rs": {
-    "mtime": 1788278603.2724435,
-    "seen": 1788324807.4156,
-    "ast_hash": "c368f2e9122f748b224e7c6e4c6481bb",
-    "semantic_hash": "c368f2e9122f748b224e7c6e4c6481bb"
+    "mtime": 1788489166.08523,
+    "seen": 1788489180.2261062,
+    "ast_hash": "16434a8b7b83cd505f9aab310a758ec9",
+    "semantic_hash": ""
   },
   "crates/formats/Cargo.toml": {
     "mtime": 1788278603.2726195,
@@ -852,9 +852,9 @@
     "semantic_hash": ""
   },
   ".cursor/skills/spec-chum-debugging/SKILL.md": {
-    "mtime": 1788488169.0131102,
-    "seen": 1788488214.898207,
-    "ast_hash": "65b20a7a7ec1c07e3f38fba64f3b7eee",
+    "mtime": 1788489147.049574,
+    "seen": 1788489180.227504,
+    "ast_hash": "f727087ca1861ff3d3a0a74601388a4e",
     "semantic_hash": ""
   },
   ".github/workflows/ci.yml": {
@@ -894,16 +894,16 @@
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
-    "mtime": 1788488167.3725665,
-    "seen": 1788488214.898289,
-    "ast_hash": "5c79808f66fc5dd524e7891d0f3cf807",
+    "mtime": 1788489167.0454128,
+    "seen": 1788489180.227586,
+    "ast_hash": "8bb540f504c74bff05fe654c9a7c720c",
     "semantic_hash": ""
   },
   "docs/DEBUGGING.md": {
-    "mtime": 1788278603.2820203,
-    "seen": 1788324807.4156501,
-    "ast_hash": "95fce6f1f6938dfa97d433cf902b1157",
-    "semantic_hash": "95fce6f1f6938dfa97d433cf902b1157"
+    "mtime": 1788489146.0085008,
+    "seen": 1788489180.227586,
+    "ast_hash": "e0a819af9104226c3787b30330bbe00e",
+    "semantic_hash": ""
   },
   "docs/LIVING_ROOM.md": {
     "mtime": 1788278603.282301,

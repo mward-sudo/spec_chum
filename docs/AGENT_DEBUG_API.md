@@ -349,7 +349,9 @@ Hosts:
 - **Standalone:** `cargo run -p agent_server -- --model 48k` (`spec-chum-agent` binary).
 - **Embedded CLI:** `spec-chum-debug --serve --model 48k` (same HTTP surface).
 - **HTTP client (Phase B):** `SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384 spec-chum-debug …`
-  or `--agent-url …` on supported subcommands.
+  or `--agent-url …` on supported subcommands. One-shot media flags include
+  `--tap`/`--tzx`, `--snapshot`, and `--trd` / `--trdos-rom` ([#262](https://github.com/mward-sudo/spec_chum/issues/262))
+  (maps to `POST /v1/trd` and `POST /v1/hardware/trdos/rom`).
 - **Embedded GUI (Phase B):** egui Debug and optional `SPEC_CHUM_AGENT=1` HTTP share
   one `Arc<ControlPlane>` / `HostSession` (same live PC). Requires
   `SPEC_CHUM_AGENT_TOKEN` or `SPEC_CHUM_AGENT_INSECURE=1`. SpecChumMac: same via

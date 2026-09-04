@@ -27,7 +27,7 @@ Project debugger workflow for agents. Full detail: [`docs/DEBUGGING.md`](../../.
 
 Each **local** `spec-chum-debug` invocation (no `SPEC_CHUM_AGENT_URL`) is a **new
 process** (fresh machine + empty trace ring). Put `--trace`, `--tap`/`--tzx`,
-`--snapshot`, and the subcommand on the **same** command. When
+`--snapshot`, `--trd` / `--trdos-rom`, and the subcommand on the **same** command. When
 `SPEC_CHUM_AGENT_URL` / `--agent-url` is set, the **HTTP server** owns the
 persistent machine and trace ring — resets use `POST /v1/reset` (or restart the
 server), not a new CLI process.
@@ -94,12 +94,13 @@ SpecChumMac in-process embed stays deferred (cycle-safe constraint).
 export SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384
 spec-chum-debug --model 48k run --frames 1
 spec-chum-debug --tap tests/fixtures/tape/attr_mark.tap type-load --code
+spec-chum-debug --model pentagon128 --trd path/to/disk.trd dump-state
 ```
 
 Remote mode supports: `run`, `dump-state`, `dump-trace`, `peek`, `disasm`, `type-load`,
-`until-pc`, `break-pc`, `watch-write` (mem or `--port`). Requires a running agent (`spec-chum-agent`,
-`spec-chum-debug --serve`, or egui with `SPEC_CHUM_AGENT=1`). `--rom` / `--snapshot`
-remain local-only (no HTTP upload yet — #210).
+`until-pc`, `break-pc`, `watch-write` (mem or `--port`), plus `--rom` / `--snapshot` /
+`--trd` / `--trdos-rom` via agent path posts. Requires a running agent (`spec-chum-agent`,
+`spec-chum-debug --serve`, or egui with `SPEC_CHUM_AGENT=1`).
 
 ### Framebuffer export (not window capture)
 
