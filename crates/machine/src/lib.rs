@@ -3948,6 +3948,23 @@ mod tests {
                 m.cpu_mut().regs.sp = sp.wrapping_add(2);
                 m.cpu_mut().regs.pc = ret;
             }
+            // 5.04T: `1FEBh` ends `JP 0897h` instead of hole `OUT (#FF),A / RET`.
+            // `CALL 1FEBh` from `3E63h` must return so catalog `1E3Dh` can finish.
+            0x1ff3
+                if m.read_mem(0x1ff3) == 0xc3
+                    && m.read_mem(0x1ff4) == 0x97
+                    && m.read_mem(0x1ff5) == 0x08 =>
+            {
+                let sys = m.cpu().regs.a;
+                if let Some(beta) = m.beta_mut() {
+                    let _ = beta.out_port(0x00ff, sys);
+                }
+                let sp = m.cpu().regs.sp;
+                let ret =
+                    u16::from(m.read_mem(sp)) | (u16::from(m.read_mem(sp.wrapping_add(1))) << 8);
+                m.cpu_mut().regs.sp = sp.wrapping_add(2);
+                m.cpu_mut().regs.pc = ret;
+            }
             // Stock `19ECh`: `RST #20` / `DW 08D2h`. On hole dumps, never enter
             // `08D2h` FF padding — FDC-load `boot` and enter Spectrum `LINE-NEW`.
             // Complete dumps (non-FF at `08D2h`) run the native service.
@@ -5070,14 +5087,15 @@ mod tests {
         assert_ne!(m.read_mem(0x08d2), 0xff);
     }
 
-    /// Full native `08D2h` RUN→boot — still open on 5.04T warm entry (find misses).
+    /// Full native `08D2h` RUN→boot — still open on 5.04T find-boot catalog fill.
     ///
-    /// With Alone Coder `TRD_5043` / `trdos-5.04t.rom`, `USR→3D31h` and warm `0239h`
-    /// diverge from hole 5.04 (`CALL 3AE6h`, different `02E9h`). Find-boot reaches
-    /// `195Ch` but falls through to `1E3Dh` (miss) before `19ECh`. Keep ignored until
-    /// that match path is green; gate + `19ECh` non-intercept tests cover the ROM side.
+    /// Alone Coder / VfNG `trdos-5.04t.rom` uses VG93 ports `#08/#28/#48/#68` (mapped)
+    /// and replaces hole `1FEBh` `OUT (#FF);RET` with `JP 0897h` (ABI RET at `1FF3h`).
+    /// Find-boot still enters `CALL 1E3Dh` but the `3E63h` catalog-fill loop does not
+    /// return to `1981h` for the dirent compare / `19ECh` before timeout. Keep ignored
+    /// until that match path is green.
     #[test]
-    #[ignore = "5.04T warm find-boot still misses (1E3Dh) before native 19ECh/08D2h; Refs #140"]
+    #[ignore = "5.04T find-boot CALL 1E3Dh catalog fill does not return to 1981h; Refs #140"]
     fn trdos_rom_run_boot_native_08d2_when_complete_present() {
         let Some(main) = rom_pentagon().or_else(rom128) else {
             return;
