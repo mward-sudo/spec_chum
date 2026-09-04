@@ -3619,23 +3619,40 @@ mod tests {
 
     /// Hole-filled 5.04 (or any dump) for the harnessed `19ECh` stand-in path.
     /// Prefers `roms/pentagon/trdos.rom` so a complete `trdos-5.04t.rom` does not
-    /// change the established RUN→boot fixture behaviour.
+    /// change the established RUN→boot fixture behaviour. Never returns a dump
+    /// with native `08D2h`/`0D6Bh` services (those belong on the complete path).
     fn trdos_rom_bytes_harness() -> Option<Vec<u8>> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let hole_paths = [
+        let preferred = [
             "roms/pentagon/trdos.rom",
             "roms/trdos/trdos.rom",
             "roms/trdos.rom",
         ];
-        for rel in hole_paths {
+        let mut fallback: Option<Vec<u8>> = None;
+        for rel in preferred
+            .iter()
+            .copied()
+            .chain(trdos_rom_candidates(Model::Pentagon128).iter().copied())
+        {
             let p = root.join(rel);
-            if let Ok(data) = std::fs::read(&p) {
-                if data.len() == bus::TRDOS_ROM_SIZE {
-                    return Some(data);
-                }
+            let Ok(data) = std::fs::read(&p) else {
+                continue;
+            };
+            if data.len() != bus::TRDOS_ROM_SIZE {
+                continue;
+            }
+            if trdos_rom_has_native_file_services(&data) {
+                continue;
+            }
+            // Prefer explicit hole-dump paths when present.
+            if preferred.contains(&rel) {
+                return Some(data);
+            }
+            if fallback.is_none() {
+                fallback = Some(data);
             }
         }
-        trdos_rom_bytes()
+        fallback
     }
 
     /// Complete dump only (`08D2h`/`0D6Bh` live), if present.
