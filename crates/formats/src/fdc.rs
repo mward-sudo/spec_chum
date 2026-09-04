@@ -5,10 +5,14 @@
 //!
 //! Supported commands: SPECIFY, SENSE DRIVE STATUS, SENSE INTERRUPT STATUS,
 //! RECALIBRATE, SEEK, READ ID, READ DATA / READ DELETED DATA, WRITE DATA /
-//! WRITE DELETED DATA, FORMAT TRACK. Unknown opcodes return ST0=`0x80`.
+//! WRITE DELETED DATA, FORMAT TRACK. Unknown opcodes return ST0=`0x80`
+//! (invalid-command interrupt code) as a single-byte result phase.
 //!
-//! **Unsupported:** SCAN EQUAL/LOW/HIGH, READ TRACK. Copy-protected
-//! or non-standard DSK geometry is not modelled.
+//! **Unsupported (intentionally invalid):** SCAN EQUAL (`0x11`), SCAN LOW OR
+//! EQUAL (`0x19`), SCAN HIGH OR EQUAL (`0x1d`), READ TRACK (`0x02`) — including
+//! MT/SK opcode variants. No known +3DOS / Loader path needs SCAN; CP/M disk
+//! tools that issue SCAN still get `ST0=0x80`. Copy-protected or non-standard
+//! DSK geometry is not modelled.
 
 use crate::dsk::DskImage;
 
@@ -911,6 +915,28 @@ mod tests {
         let res = drain_result(&mut fdc);
         assert_eq!(res, vec![ST0_IC_INVALID]);
         assert_eq!(fdc.main_status(), MSR_RQM);
+    }
+
+    /// SCAN* / READ TRACK stay unsupported: first command byte → ST0=`0x80`.
+    #[test]
+    fn unsupported_scan_and_read_track_opcodes_are_invalid() {
+        // Base opcodes and MT (`0x40`) / SK (`0x20`) variants (masked to low 5 bits).
+        const OPS: &[u8] = &[
+            0x11, 0x31, 0x51, 0x71, // SCAN EQUAL
+            0x19, 0x39, 0x59, 0x79, // SCAN LOW OR EQUAL
+            0x1d, 0x3d, 0x5d, 0x7d, // SCAN HIGH OR EQUAL
+            0x02, 0x22, 0x42, 0x62, // READ TRACK
+        ];
+        for &op in OPS {
+            let mut fdc = loaded(DskImage::synthetic_one_sector());
+            fdc.write_command_byte(op);
+            let res = drain_result(&mut fdc);
+            assert_eq!(res, vec![ST0_IC_INVALID], "op={op:#04x}");
+            assert_eq!(fdc.main_status(), MSR_RQM, "op={op:#04x} idle after result");
+            assert_eq!(fdc.format_count, 0);
+            assert_eq!(fdc.read_count, 0);
+            assert_eq!(fdc.write_count, 0);
+        }
     }
 
     #[test]
