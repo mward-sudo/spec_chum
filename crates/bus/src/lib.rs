@@ -1287,7 +1287,7 @@ mod tests {
         b.kempston.fire = true;
         assert_eq!(
             b.in_port(0x001f),
-            0x02,
+            0x03,
             "IN 1Fh returns Beta status, not Kempston"
         );
         assert!(
@@ -1418,7 +1418,7 @@ mod tests {
         b.out_port(0x003f, 0); // track
         b.out_port(0x005f, 1); // sector 1 (WD1793 first sector)
         b.out_port(0x001f, 0x80); // read sector
-        assert_eq!(b.in_port(0x001f), 0x02); // DRQ
+        assert_eq!(b.in_port(0x001f), 0x03); // BUSY|DRQ
         assert_eq!(b.in_port(0x007f), 0x12);
         assert_eq!(b.in_port(0x007f), 0x34);
     }

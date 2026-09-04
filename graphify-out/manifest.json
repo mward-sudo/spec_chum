@@ -192,9 +192,9 @@
     "semantic_hash": "e29d8571c1317d36f1a000fb26624962"
   },
   "crates/bus/src/beta_disk.rs": {
-    "mtime": 1788483570.6059465,
-    "seen": 1788483583.169875,
-    "ast_hash": "81c8f8135d0295cd6a33164c54bc2cfa",
+    "mtime": 1788486130.2824974,
+    "seen": 1788486236.825504,
+    "ast_hash": "ca87ffa9d262f51a386b14331a6f2880",
     "semantic_hash": ""
   },
   "crates/bus/src/divmmc.rs": {
@@ -222,9 +222,9 @@
     "semantic_hash": "bcecf352bc883e60b41a725cb598f184"
   },
   "crates/bus/src/lib.rs": {
-    "mtime": 1788321406.4903128,
-    "seen": 1788324807.415592,
-    "ast_hash": "d06c2842c08b0f7c6411e9506d823c79",
+    "mtime": 1788484536.630011,
+    "seen": 1788484942.08766,
+    "ast_hash": "46113fe8189d1a1cac872f8930caebf2",
     "semantic_hash": ""
   },
   "crates/bus/src/multiface.rs": {
@@ -588,15 +588,15 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788483223.083805,
-    "seen": 1788483287.8986812,
-    "ast_hash": "da449ca1ef4cceec98899274dc236d0c",
+    "mtime": 1788485409.0707994,
+    "seen": 1788485569.2822258,
+    "ast_hash": "9b387c5992b91a3da9d53d3c95ce8803",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
-    "mtime": 1788478945.5275292,
-    "seen": 1788478996.8571332,
-    "ast_hash": "e26e6946e22dbaa0e5a917ee824f99fd",
+    "mtime": 1788485420.4181914,
+    "seen": 1788485569.282229,
+    "ast_hash": "0e3fd5c4dd8d81a82f36a3839d42875d",
     "semantic_hash": ""
   },
   "crates/machine/src/system_tests.rs": {
@@ -1014,9 +1014,9 @@
     "semantic_hash": ""
   },
   "tests/fixtures/trdos/README.md": {
-    "mtime": 1788483224.9140432,
-    "seen": 1788483287.899738,
-    "ast_hash": "9f381a2d1785c7d73b07f0d444b20356",
+    "mtime": 1788486092.6524382,
+    "seen": 1788486236.82749,
+    "ast_hash": "eb65e8ef8d15963cf09a5192541ac983",
     "semantic_hash": ""
   },
   "scripts/graphify_install_hooks.sh": {

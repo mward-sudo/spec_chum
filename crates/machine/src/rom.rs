@@ -95,16 +95,37 @@ pub fn trdos_rom_candidates(_model: Model) -> &'static [&'static str] {
     ]
 }
 
-/// True when a 16 KiB TR-DOS image has non-FF code at the RUN file-load sites.
+/// True when `08D2h` is Alone Coder / VfNG **5.04T** VG93 port-remap stub
+/// (`LD A,#2C; JP 0897h`), not a classic TR-DOS file-load service.
+#[must_use]
+pub fn trdos_rom_08d2_is_vg93_port_stub(data: &[u8]) -> bool {
+    data.get(0x08d2..0x08d7) == Some(&[0x3e, 0x2c, 0xc3, 0x97, 0x08][..])
+}
+
+/// True when a 16 KiB TR-DOS image has real code in the usual 5.04 hole region.
 ///
-/// Many circulating **Ver 5.04** dumps leave `0800h`–`0E71h` as FF padding, so
-/// `08D2h` (post-match service from `19ECh`) and `0D6Bh` (via `1D97h` / `012Ah`)
-/// are not executable. A complete 5.03 / 5.04T image has real code there.
+/// Alone Coder **5.04T** fills `0800h`+ with VG93 helpers (including a port stub at
+/// `08D2h`); classic file-load at `08D2h` is still absent — see
+/// [`trdos_rom_has_native_file_services`].
+///
+/// Rejects FF padding **and** blank (all-zero) images — probes must be non-zero
+/// program bytes, not an empty buffer of the right length.
+#[must_use]
+pub fn trdos_rom_fills_0800_hole(data: &[u8]) -> bool {
+    data.len() == TRDOS_ROM_SIZE
+        && data.get(0x08d2).is_some_and(|b| !matches!(*b, 0x00 | 0xff))
+        && data.get(0x0d6b).is_some_and(|b| !matches!(*b, 0x00 | 0xff))
+}
+
+/// True when a 16 KiB TR-DOS image has a classic RUN file-load service at `08D2h`.
+///
+/// Many circulating **Ver 5.04** dumps leave `0800h`–`0E71h` as FF padding.
+/// Alone Coder / VfNG **5.04T** fills that hole with VG93 port remapping (`0897h`
+/// trampoline; `08D2h` is `LD A,#2C; JP 0897h`) — not the stock file loader — so
+/// post-match `19ECh` still needs the FDC/`LINE-NEW` stand-in for `boot`.
 #[must_use]
 pub fn trdos_rom_has_native_file_services(data: &[u8]) -> bool {
-    data.len() == TRDOS_ROM_SIZE
-        && data.get(0x08d2).is_some_and(|b| *b != 0xff)
-        && data.get(0x0d6b).is_some_and(|b| *b != 0xff)
+    trdos_rom_fills_0800_hole(data) && !trdos_rom_08d2_is_vg93_port_stub(data)
 }
 
 /// Expected main-ROM byte length for `model`.
@@ -284,8 +305,8 @@ pub fn resolve_rom_path_in(model: Model, roots: &[PathBuf]) -> Option<PathBuf> {
 
 /// First resolved TR-DOS ROM path for clone models, if any.
 ///
-/// Prefers a dump with native `08D2h`/`0D6Bh` services when several candidates
-/// exist under `roots` (complete name first, then any non-hole image).
+/// Prefers a dump that fills the usual 5.04 `0800h` hole when several candidates
+/// exist under `roots` (complete / 5.04T name first, then any non-hole image).
 #[must_use]
 pub fn resolve_trdos_rom_path(model: Model) -> Option<PathBuf> {
     resolve_trdos_rom_path_in(model, &search_roots())
@@ -299,7 +320,7 @@ pub fn resolve_trdos_rom_path_in(model: Model, roots: &[PathBuf]) -> Option<Path
     resolve_trdos_rom_preferring_file_services(roots, trdos_rom_candidates(model))
 }
 
-/// Scan `rel_paths` under `roots`; prefer images with native file-load services.
+/// Scan `rel_paths` under `roots`; prefer images that fill the `0800h` hole.
 #[must_use]
 pub fn resolve_trdos_rom_preferring_file_services(
     roots: &[PathBuf],
@@ -318,7 +339,8 @@ pub fn resolve_trdos_rom_preferring_file_services(
             if data.len() != TRDOS_ROM_SIZE {
                 continue;
             }
-            if trdos_rom_has_native_file_services(&data) {
+            // Prefer filled-hole dumps (5.04T / true 5.03) over FF-padded 5.04.
+            if trdos_rom_fills_0800_hole(&data) {
                 return Some(path);
             }
             if fallback.is_none() {
@@ -790,13 +812,26 @@ mod tests {
 
     #[test]
     fn trdos_native_file_services_rejects_ff_hole() {
+        let blank = vec![0u8; TRDOS_ROM_SIZE];
+        assert!(
+            !trdos_rom_fills_0800_hole(&blank),
+            "all-zero 16KiB must not count as a filled hole"
+        );
+        assert!(!trdos_rom_has_native_file_services(&blank));
         let mut hole = vec![0u8; TRDOS_ROM_SIZE];
         hole[0x08d2] = 0xff;
         hole[0x0d6b] = 0xff;
         assert!(!trdos_rom_has_native_file_services(&hole));
+        assert!(!trdos_rom_fills_0800_hole(&hole));
         hole[0x08d2] = 0xe7; // plausible RST #20
         hole[0x0d6b] = 0xc9;
+        assert!(trdos_rom_fills_0800_hole(&hole));
         assert!(trdos_rom_has_native_file_services(&hole));
+        // Alone Coder 5.04T: VG93 port stub at 08D2h is not a file-load service.
+        hole[0x08d2..0x08d7].copy_from_slice(&[0x3e, 0x2c, 0xc3, 0x97, 0x08]);
+        assert!(trdos_rom_08d2_is_vg93_port_stub(&hole));
+        assert!(trdos_rom_fills_0800_hole(&hole));
+        assert!(!trdos_rom_has_native_file_services(&hole));
         assert!(!trdos_rom_has_native_file_services(&[0u8; 8]));
     }
 
