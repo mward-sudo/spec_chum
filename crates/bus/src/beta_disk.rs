@@ -208,17 +208,22 @@ impl BetaDisk {
     }
 
     /// Map classic Beta / 5.04T low-byte ports onto the five VG93 registers.
+    ///
+    /// `for_write`: when true, include 5.04T write-only aliases `#2A` (track) and
+    /// `#6A` (data). Reads use only the bidirectional ports.
     #[inline]
-    fn map_vg93_port(port: u16) -> Option<u8> {
+    fn map_vg93_port(port: u16, for_write: bool) -> Option<u8> {
         Some(match port & 0xff {
             // cmd/status
             0x1f | 0x08 => 0x1f,
-            // track (5.04T also OUTs track on `#2A`)
-            0x3f | 0x28 | 0x2a => 0x3f,
+            // track (`#2A` is write-only on 5.04T)
+            0x3f | 0x28 => 0x3f,
+            0x2a if for_write => 0x3f,
             // sector
             0x5f | 0x48 => 0x5f,
-            // data (5.04T also uses `#6A`)
-            0x7f | 0x68 | 0x6a => 0x7f,
+            // data (`#6A` is write-only on 5.04T)
+            0x7f | 0x68 => 0x7f,
+            0x6a if for_write => 0x7f,
             // system (classic `#FF` only; 5.04T polls `#08` status instead)
             0xff => 0xff,
             _ => return None,
@@ -230,7 +235,7 @@ impl BetaDisk {
         if !self.paged {
             return false;
         }
-        let Some(reg) = Self::map_vg93_port(port) else {
+        let Some(reg) = Self::map_vg93_port(port, true) else {
             return false;
         };
         let handled = match reg {
@@ -282,7 +287,7 @@ impl BetaDisk {
         if !self.paged {
             return None;
         }
-        let reg = Self::map_vg93_port(port)?;
+        let reg = Self::map_vg93_port(port, false)?;
         let value = match reg {
             0x1f => {
                 self.intrq = false;
@@ -898,6 +903,20 @@ mod tests {
         assert_eq!(beta.in_port(0x0068), Some(0x78));
         assert_eq!(beta.track, 0);
         assert_eq!(beta.sector, 1);
+    }
+
+    #[test]
+    fn port_protocol_504t_write_only_aliases() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0, 0));
+        beta.page_trdos(true);
+        assert!(beta.out_port(0x002a, 7)); // write-only track alias
+        assert_eq!(beta.track, 7);
+        assert_eq!(beta.in_port(0x0028), Some(7));
+        assert_eq!(beta.in_port(0x002a), None, "#2A is write-only");
+        assert!(beta.out_port(0x006a, 0xab)); // write-only data alias
+        assert_eq!(beta.data_reg, 0xab);
+        assert_eq!(beta.in_port(0x006a), None, "#6A is write-only");
     }
 
     #[test]

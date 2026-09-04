@@ -192,9 +192,9 @@
     "semantic_hash": "e29d8571c1317d36f1a000fb26624962"
   },
   "crates/bus/src/beta_disk.rs": {
-    "mtime": 1788483232.4987228,
-    "seen": 1788483287.897546,
-    "ast_hash": "53d0e2f7e06ec77806dbef307d357f40",
+    "mtime": 1788483570.6059465,
+    "seen": 1788483583.169875,
+    "ast_hash": "81c8f8135d0295cd6a33164c54bc2cfa",
     "semantic_hash": ""
   },
   "crates/bus/src/divmmc.rs": {
