@@ -1,11 +1,15 @@
 //! Beta Disk Interface / TR-DOS: VG93 (KR1818VG93 / WD1793-class) FDC.
 //!
-//! Ports (low byte, when TR-DOS is paged): `0x1F` cmd/status, `0x3F` track,
-//! `0x5F` sector, `0x7F` data, `0xFF` system.
+//! Ports (low byte, when TR-DOS is paged):
+//! - Classic Beta 128: `0x1F` cmd/status, `0x3F` track, `0x5F` sector, `0x7F`
+//!   data, `0xFF` system.
+//! - Alone Coder / VfNG **5.04T** (complete ROM): `0x08` cmd/status, `0x28`
+//!   track, `0x48` sector, `0x68` data (plus write aliases `0x2A` track,
+//!   `0x6A` data). Same VG93 registers; different address decode.
 //!
 //! System port `0xFF` (Fuse / Beta 128): write selects drive (`D0–D1`), VG93
 //! `/RES` (`D2` low = reset), HLT (`D3`), side (`D4` set = side 0), MFM (`D5`).
-//! Read: `D7` = INTRQ, `D6` = DRQ.
+//! Read: `D7` = INTRQ, `D6` = DRQ. 5.04T mostly polls status on `0x08` instead.
 //!
 //! Opcode-fetch (M1) paging: ROM in at `0x3C00–0x3DFF` (48K) or `0x3D00–0x3DFF`
 //! (128K). The latch stays set across RAM execution until [`BetaDisk::page_trdos`]
@@ -55,7 +59,8 @@ pub struct BetaDisk {
     pub sector: u8,
     pub status: u8,
     pub system: u8,
-    /// When true, TR-DOS is paged and Beta claims ports `1Fh`/`3Fh`/`5Fh`/`7Fh`/`FFh`.
+    /// When true, TR-DOS is paged and Beta claims VG93 ports (classic
+    /// `1Fh`/`3Fh`/`5Fh`/`7Fh`/`FFh`, plus 5.04T aliases `08h`/`28h`/`48h`/`68h`).
     pub paged: bool,
     /// Data register (seek target; first ID byte; Type II scratch).
     pub data_reg: u8,
@@ -202,12 +207,33 @@ impl BetaDisk {
         Some(self.rom[addr as usize])
     }
 
+    /// Map classic Beta / 5.04T low-byte ports onto the five VG93 registers.
+    #[inline]
+    fn map_vg93_port(port: u16) -> Option<u8> {
+        Some(match port & 0xff {
+            // cmd/status
+            0x1f | 0x08 => 0x1f,
+            // track (5.04T also OUTs track on `#2A`)
+            0x3f | 0x28 | 0x2a => 0x3f,
+            // sector
+            0x5f | 0x48 => 0x5f,
+            // data (5.04T also uses `#6A`)
+            0x7f | 0x68 | 0x6a => 0x7f,
+            // system (classic `#FF` only; 5.04T polls `#08` status instead)
+            0xff => 0xff,
+            _ => return None,
+        })
+    }
+
     /// `OUT` to Beta ports. Returns true if handled.
     pub fn out_port(&mut self, port: u16, value: u8) -> bool {
         if !self.paged {
             return false;
         }
-        let handled = match port & 0xff {
+        let Some(reg) = Self::map_vg93_port(port) else {
+            return false;
+        };
+        let handled = match reg {
             0x1f => {
                 if self.system & 0x04 == 0 {
                     true
@@ -256,7 +282,8 @@ impl BetaDisk {
         if !self.paged {
             return None;
         }
-        let value = match port & 0xff {
+        let reg = Self::map_vg93_port(port)?;
+        let value = match reg {
             0x1f => {
                 self.intrq = false;
                 // Fuse `wd_fdc_sr_read`: Type I status reads expose an index pulse on bit 1.
@@ -854,6 +881,23 @@ mod tests {
         assert_eq!(beta.in_port(0x001f), Some(0x02));
         assert_eq!(beta.in_port(0x007f), Some(0x12));
         assert_eq!(beta.in_port(0x007f), Some(0x34));
+    }
+
+    /// Alone Coder / VfNG 5.04T uses `#08/#28/#48/#68` instead of `#1F/#3F/#5F/#7F`.
+    #[test]
+    fn port_protocol_504t_aliases_read_sector() {
+        let img = one_track_image(0x56, 0x78);
+        let mut beta = BetaDisk::new();
+        beta.insert(img);
+        beta.page_trdos(true);
+        beta.out_port(0x0028, 0); // track
+        beta.out_port(0x0048, 1); // sector
+        beta.out_port(0x0008, 0x80); // read sector
+        assert_eq!(beta.in_port(0x0008), Some(0x02));
+        assert_eq!(beta.in_port(0x0068), Some(0x56));
+        assert_eq!(beta.in_port(0x0068), Some(0x78));
+        assert_eq!(beta.track, 0);
+        assert_eq!(beta.sector, 1);
     }
 
     #[test]
