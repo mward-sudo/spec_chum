@@ -4,6 +4,7 @@
 
 mod dck;
 mod dsk;
+mod error;
 mod fdc;
 mod mdr;
 mod rzx;
@@ -11,29 +12,13 @@ mod trd;
 
 pub use dck::{DckBank, DckBankId, DckChunkAccess, DckImage, DCK_CHUNK_SIZE, DCK_HEADER_SIZE};
 pub use dsk::{DskImage, Sector};
+pub use error::FormatError;
 pub use fdc::Plus3Fdc;
 pub use mdr::{MdrImage, MDR_DATA_LEN, MDR_HEAD_LEN, MDR_IMAGE_SIZE, MDR_SECTORS, MDR_SECTOR_SIZE};
 pub use rzx::{apply_input_byte, RzxFrame, RzxRecording};
 pub use trd::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 
 use std::path::Path;
-
-#[derive(Debug)]
-pub enum FormatError {
-    Io(std::io::Error),
-    Format(String),
-}
-
-impl std::fmt::Display for FormatError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Io(e) => write!(f, "{e}"),
-            Self::Format(s) => write!(f, "{s}"),
-        }
-    }
-}
-
-impl std::error::Error for FormatError {}
 
 /// Loaded 48K machine state from a snapshot.
 #[derive(Clone, Debug)]

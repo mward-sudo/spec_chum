@@ -3,7 +3,7 @@
 //! Standard layout: 254 sectors × 543 bytes (+ optional trailing write-protect byte).
 //! Sector R/W is opaque 543-byte blocks — enough for IF1 smoke tests without ROM.
 
-use crate::FormatError;
+use crate::error::FormatError;
 
 /// Sectors on a full Microdrive cartridge image.
 pub const MDR_SECTORS: usize = 254;

@@ -3,7 +3,7 @@
 //! Layout: one or more 9-byte bank headers followed by 8 KiB pages for each
 //! chunk whose access byte is ROM (`2`) or RAM-with-image (`3`).
 
-use crate::FormatError;
+use crate::error::FormatError;
 
 /// Bytes per Timex horizontal-MMU chunk.
 pub const DCK_CHUNK_SIZE: usize = 0x2000;

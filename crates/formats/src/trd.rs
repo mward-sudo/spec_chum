@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use crate::FormatError;
+use crate::error::FormatError;
 
 /// Bytes per TR-DOS sector.
 pub const TRD_SECTOR_SIZE: usize = 256;
