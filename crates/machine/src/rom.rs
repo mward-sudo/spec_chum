@@ -102,16 +102,19 @@ pub fn trdos_rom_08d2_is_vg93_port_stub(data: &[u8]) -> bool {
     data.get(0x08d2..0x08d7) == Some(&[0x3e, 0x2c, 0xc3, 0x97, 0x08][..])
 }
 
-/// True when a 16 KiB TR-DOS image has non-FF code in the usual 5.04 hole region.
+/// True when a 16 KiB TR-DOS image has real code in the usual 5.04 hole region.
 ///
 /// Alone Coder **5.04T** fills `0800h`+ with VG93 helpers (including a port stub at
 /// `08D2h`); classic file-load at `08D2h` is still absent — see
 /// [`trdos_rom_has_native_file_services`].
+///
+/// Rejects FF padding **and** blank (all-zero) images — probes must be non-zero
+/// program bytes, not an empty buffer of the right length.
 #[must_use]
 pub fn trdos_rom_fills_0800_hole(data: &[u8]) -> bool {
     data.len() == TRDOS_ROM_SIZE
-        && data.get(0x08d2).is_some_and(|b| *b != 0xff)
-        && data.get(0x0d6b).is_some_and(|b| *b != 0xff)
+        && data.get(0x08d2).is_some_and(|b| !matches!(*b, 0x00 | 0xff))
+        && data.get(0x0d6b).is_some_and(|b| !matches!(*b, 0x00 | 0xff))
 }
 
 /// True when a 16 KiB TR-DOS image has a classic RUN file-load service at `08D2h`.
@@ -809,6 +812,12 @@ mod tests {
 
     #[test]
     fn trdos_native_file_services_rejects_ff_hole() {
+        let blank = vec![0u8; TRDOS_ROM_SIZE];
+        assert!(
+            !trdos_rom_fills_0800_hole(&blank),
+            "all-zero 16KiB must not count as a filled hole"
+        );
+        assert!(!trdos_rom_has_native_file_services(&blank));
         let mut hole = vec![0u8; TRDOS_ROM_SIZE];
         hole[0x08d2] = 0xff;
         hole[0x0d6b] = 0xff;

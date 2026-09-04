@@ -588,15 +588,15 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788484877.1130428,
-    "seen": 1788484942.088675,
-    "ast_hash": "48714177953dc4812c0b862ff5e94f4d",
+    "mtime": 1788485409.0707994,
+    "seen": 1788485569.2822258,
+    "ast_hash": "9b387c5992b91a3da9d53d3c95ce8803",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
-    "mtime": 1788484651.2565105,
-    "seen": 1788484942.0886762,
-    "ast_hash": "48f39e268eb1ebc896f829cdd5bad80b",
+    "mtime": 1788485420.4181914,
+    "seen": 1788485569.282229,
+    "ast_hash": "0e3fd5c4dd8d81a82f36a3839d42875d",
     "semantic_hash": ""
   },
   "crates/machine/src/system_tests.rs": {

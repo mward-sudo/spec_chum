@@ -5099,12 +5099,16 @@ mod tests {
             return;
         };
         let Some(trdos) = trdos_rom_bytes_complete() else {
+            eprintln!(
+                "skip: complete TR-DOS dump missing — place trdos-5.04t.rom / \
+                 trdos-complete.rom under roms/pentagon/ (Refs #140)"
+            );
             return;
         };
-        assert!(
-            trdos_rom_08d2_is_vg93_port_stub(&trdos),
-            "expected Alone Coder 5.04T VG93 stub at 08D2h"
-        );
+        if !trdos_rom_08d2_is_vg93_port_stub(&trdos) {
+            eprintln!("skip: complete dump has classic 08D2h file-load (not 5.04T stub)");
+            return;
+        }
         let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
         m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
             .unwrap();
