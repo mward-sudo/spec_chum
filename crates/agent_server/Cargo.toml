@@ -28,6 +28,7 @@ clap = { workspace = true }
 anyhow = { workspace = true }
 
 [dev-dependencies]
+formats = { workspace = true }
 tape = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

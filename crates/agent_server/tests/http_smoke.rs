@@ -493,16 +493,7 @@ async fn agent_api_dsk_rejects_non_plus3() {
         insecure: true,
     });
 
-    // Minimal parseable MV-CPC DSK (one empty track header).
-    let mut dsk = vec![0u8; 0x100];
-    dsk[0..8].copy_from_slice(b"MV - CPC");
-    dsk[0x30] = 1;
-    dsk[0x31] = 1;
-    let track_size: u16 = 0x100;
-    dsk[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-    let mut track = vec![0u8; track_size as usize];
-    track[0..12].copy_from_slice(b"Track-Info\r\n");
-    dsk.extend_from_slice(&track);
+    let dsk = formats::DskImage::synthetic_empty_track_bytes();
 
     let dir = std::env::temp_dir().join("spec_chum_agent_api_dsk_reject");
     let _ = std::fs::create_dir_all(&dir);

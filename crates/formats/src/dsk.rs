@@ -179,6 +179,29 @@ impl DskImage {
         true
     }
 
+    /// Raw CPC DSK bytes: one track with an empty Track-Info header (no sectors).
+    ///
+    /// Shared test fixture for “parseable but empty” disks (insert / model-reject paths).
+    #[must_use]
+    pub fn synthetic_empty_track_bytes() -> Vec<u8> {
+        let mut data = vec![0u8; 0x100];
+        data[0..8].copy_from_slice(b"MV - CPC");
+        data[0x30] = 1;
+        data[0x31] = 1;
+        let track_size: u16 = 0x100;
+        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
+        let mut track = vec![0u8; track_size as usize];
+        track[0..12].copy_from_slice(b"Track-Info\r\n");
+        data.extend_from_slice(&track);
+        data
+    }
+
+    /// Parsed [`Self::synthetic_empty_track_bytes`].
+    #[must_use]
+    pub fn synthetic_empty_track() -> Self {
+        Self::parse(&Self::synthetic_empty_track_bytes()).expect("synthetic_empty_track fixture")
+    }
+
     /// Raw CPC DSK bytes: one track, one 256-byte sector (id `0xC1`, payload `0x42 0x43`).
     ///
     /// Shared test fixture — see [`Self::synthetic_one_sector`].
@@ -447,6 +470,16 @@ fn parse_track(data: &[u8]) -> Result<TrackData, FormatError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn synthetic_empty_track_parses_with_no_sectors() {
+        let img = DskImage::synthetic_empty_track();
+        assert_eq!(img.tracks, 1);
+        assert_eq!(img.sides, 1);
+        assert_eq!(img.tracks_data.len(), 1);
+        assert!(img.tracks_data[0].sectors.is_empty());
+        assert!(img.find_sector(0, 0, 0xc1).is_none());
+    }
 
     #[test]
     fn parse_and_read_sector() {

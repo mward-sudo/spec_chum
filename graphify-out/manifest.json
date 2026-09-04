@@ -108,10 +108,10 @@
     "semantic_hash": ""
   },
   "crates/agent_server/Cargo.toml": {
-    "mtime": 1788278603.2678218,
-    "seen": 1788324807.415582,
-    "ast_hash": "55f14ccf00b9aaf27bc2978979a6da7f",
-    "semantic_hash": "55f14ccf00b9aaf27bc2978979a6da7f"
+    "mtime": 1788491220.9994628,
+    "seen": 1788491228.6832151,
+    "ast_hash": "951ba52b9ad4b542ea5daf550322f08b",
+    "semantic_hash": ""
   },
   "crates/agent_server/src/embedded.rs": {
     "mtime": 1788278603.2679288,
@@ -138,9 +138,9 @@
     "semantic_hash": ""
   },
   "crates/agent_server/tests/http_smoke.rs": {
-    "mtime": 1788488147.0932987,
-    "seen": 1788488214.896262,
-    "ast_hash": "6b460f01c122c363992d88d018e84f48",
+    "mtime": 1788491220.9995823,
+    "seen": 1788491228.683282,
+    "ast_hash": "5f5be5b141cbb85f9e47b62a879abd42",
     "semantic_hash": ""
   },
   "crates/app/Cargo.toml": {
@@ -312,10 +312,10 @@
     "semantic_hash": "50e74a18f3444e6a94db3e0fb7655e06"
   },
   "crates/formats/src/dsk.rs": {
-    "mtime": 1788278603.272797,
-    "seen": 1788324807.415601,
-    "ast_hash": "47e0be892eb8aff2b51354297cdf6890",
-    "semantic_hash": "47e0be892eb8aff2b51354297cdf6890"
+    "mtime": 1788491207.3280175,
+    "seen": 1788491228.683795,
+    "ast_hash": "e1bdfe81b6ae83e439ab32f1756afce2",
+    "semantic_hash": ""
   },
   "crates/formats/src/fdc.rs": {
     "mtime": 1788490704.5029433,
@@ -402,9 +402,9 @@
     "semantic_hash": "e5748dbe3494059e6c95ca7378fa48bf"
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1788488117.639931,
-    "seen": 1788488214.897032,
-    "ast_hash": "20cc73808986b2b27e021dab5883c58e",
+    "mtime": 1788491219.4124599,
+    "seen": 1788491228.684036,
+    "ast_hash": "75a198887ab38e17ae8770ba0e8db89b",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -588,9 +588,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788485409.0707994,
-    "seen": 1788485569.2822258,
-    "ast_hash": "9b387c5992b91a3da9d53d3c95ce8803",
+    "mtime": 1788491214.97877,
+    "seen": 1788491228.6845288,
+    "ast_hash": "9dd2bfb3402bfabe103dba57a563cbb0",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
