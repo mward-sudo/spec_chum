@@ -13,14 +13,16 @@ Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unres
 2. **GitHub `@coderabbitai` (preferred when quota allows):** still request when merge-candidate if not rate-limited — first pass `@coderabbitai full review` (or label `coderabbit-review`); after fix commits `@coderabbitai review` (incremental).
 3. **Hard merge gate:** `./scripts/check_pr_reviews.sh` + **Bot review threads** CI — see below.
 
-## Either-side CodeRabbit (gate 1)
+## Prefer both; either-side is enough (gate 1)
 
-For merge, **only one** of these must succeed:
+**Preferred:** when both are available, agents should **run local CR** (Cursor plugin / `coderabbit review --agent`) **and** **request GitHub** `@coderabbitai` (full, then incremental after fixes) so both complete cleanly.
 
-- **Local** clean CodeRabbit (Cursor plugin / `coderabbit review --agent`), **or**
+**Enough to merge (fallback):** if only one side can complete, **either** is sufficient:
+
+- **Local** clean CodeRabbit, **or**
 - **GitHub** `Review completed` on HEAD.
 
-Soft-pass on one side (rate-limited) is fine when the other completed cleanly. Scripts already soft-pass GitHub rate-limit; docs carry the either-side rule (no script timer required).
+Soft-pass on one side (rate-limited) is fine when the other completed cleanly — that is the fallback, not the preferred path. Scripts already soft-pass GitHub rate-limit; docs carry the either-side rule (no script timer required).
 
 **Still HOLD:** on-demand / label skip without requesting GitHub CR (`Review skipped: …`, missing / never requested) — must `@coderabbitai full review` (or label) first. Soft-pass ≠ skip-without-request (lesson [#281](https://github.com/mward-sudo/spec_chum/pull/281) / [#278](https://github.com/mward-sudo/spec_chum/pull/278) / [#279](https://github.com/mward-sudo/spec_chum/pull/279)).
 
@@ -32,7 +34,7 @@ CodeRabbit is available via the **Cursor plugin** for local / in-editor change r
 
 ## On-demand + hold-until-clean (unified)
 
-CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Prefer a completed GitHub CR on HEAD when quota allows; local clean alone is also enough once GitHub was requested (or rate-limited after a request):
+CodeRabbit is **on-demand** (`.coderabbit.yaml`; `CONTRIBUTING.md` → “CodeRabbit — review when ready”). Prefer **both** local clean CR and GitHub `Review completed` when available; either-side alone is the fallback once GitHub was requested (or rate-limited after a request):
 
 1. Iterate on a **draft** PR (no GitHub CR required yet).
 2. When merge-candidate: mark ready → comment `@coderabbitai full review` (or label `coderabbit-review`) **if not rate-limited**. Undraft alone does **not** request a review — agents must comment or label.
@@ -56,15 +58,16 @@ Ignoring unresolved bot threads is a process failure. Do not burn GitHub CodeRab
 
 ## User shorthand (agents)
 
-- **`rm` / `rmc`:** merge when ready — **no** extra waiver for normal either-side soft-pass (GitHub rate-limited + local clean, or GitHub `Review completed`).
+- **`rm` / `rmc`:** merge when ready — **no** extra waiver for normal either-side soft-pass (GitHub rate-limited + local clean, or GitHub `Review completed`). Prefer both sides first when available.
 - **`rmw` / `rmcw`:** explicit one-shot waiver for other holds (e.g. unresolved threads, exceptional cases) — document on the PR.
+- **`all rmc`:** rmc every open draft PR in a loop (continue until none remain from that pass); no waiver unless `w` / `rmw` / `rmcw`.
 - Dual >10m rate-limit merge is **standing user policy** (revisit issue + PR note) — not a blanket waiver for skip-without-request.
 
 ## Before merge / when asked to finish or merge a PR
 
-1. Confirm the PR is **ready** (not draft). Ensure **either** local CR clean **or** GitHub `Review completed` on HEAD. Still **request** GitHub `@coderabbitai full review` (or label) when merge-candidate if not rate-limited — soft-pass does not cover never-requested reviews.
+1. Confirm the PR is **ready** (not draft). **Prefer both:** run local CR **and** request GitHub `@coderabbitai full review` (or label) when merge-candidate if not rate-limited. **Fallback:** either local clean **or** GitHub `Review completed` is enough to merge. Soft-pass does not cover never-requested reviews.
 2. Run `./scripts/check_pr_reviews.sh` (or pass the PR number). CI also runs this as **Bot review threads**. Ready PRs: gate 1 hard-fails pending/missing/error/on-demand-skip; soft-passes rate-limited with stderr warning; gate 2 hard-fails on unresolved bot threads.
-3. If CodeRabbit is pending, missing, or on-demand-skipped on HEAD: **hold** — first pass `@coderabbitai full review` (or label); after fixes `@coderabbitai review`. Wait for **Review completed**, then re-run — **or** rely on clean local CR when GitHub soft-passes rate-limited. If **both** local and GitHub stay rate-limited for >10m: merge under standing dual-rate-limit policy (revisit issue + document on PR) — do not wait forever.
+3. If CodeRabbit is pending, missing, or on-demand-skipped on HEAD: **hold** — first pass `@coderabbitai full review` (or label); after fixes `@coderabbitai review`. Prefer waiting for **Review completed** (with local also clean when available); fallback to clean local CR when GitHub soft-passes rate-limited. If **both** local and GitHub stay rate-limited for >10m: merge under standing dual-rate-limit policy (revisit issue + document on PR) — do not wait forever.
 4. Treat bot comments as blocking when **actionable** (bugs, wrong behavior, clear maintainability fixes).
 5. Disposition each finding (including actionable outside-diff / summary nits): **fix** in code, **wontfix** with a short reason then **resolve**, or **defer** via a follow-up GitHub issue (link from the PR reply) then resolve. Prefer a follow-up issue over silently ignoring deferred nits — see `coderabbit-lessons.mdc`.
 6. Re-run the script (and re-run the CI check if it failed) after addressing feedback.
