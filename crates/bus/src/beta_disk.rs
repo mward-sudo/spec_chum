@@ -550,7 +550,7 @@ impl BetaDisk {
         self.xfer = Xfer::WriteTrack;
         self.drq = true;
         self.intrq = false;
-        self.status = STAT_DRQ;
+        self.status = STAT_BUSY | STAT_DRQ;
     }
 
     fn finish_write_track(&mut self) {
@@ -650,7 +650,8 @@ impl BetaDisk {
         self.xfer = Xfer::Read;
         self.drq = true;
         self.intrq = false;
-        self.status = STAT_DRQ;
+        // BUSY+DRQ: Alone Coder 5.04T `0975h` waits for status bit 0 then drains on DRQ.
+        self.status = STAT_BUSY | STAT_DRQ;
     }
 
     fn start_write_sector(&mut self) {
@@ -675,7 +676,7 @@ impl BetaDisk {
         self.xfer = Xfer::Write;
         self.drq = true;
         self.intrq = false;
-        self.status = STAT_DRQ;
+        self.status = STAT_BUSY | STAT_DRQ;
     }
 
     fn start_read_address(&mut self) {
@@ -702,7 +703,7 @@ impl BetaDisk {
         self.xfer = Xfer::ReadAddress;
         self.drq = true;
         self.intrq = false;
-        self.status = STAT_DRQ;
+        self.status = STAT_BUSY | STAT_DRQ;
     }
 
     /// Type III read track: TR-DOS issues `E0h|seek` (`F9h` for seek `19h`) to verify the
@@ -748,7 +749,7 @@ impl BetaDisk {
         self.buffer_i = 0;
         self.drq = true;
         self.intrq = false;
-        self.status = STAT_DRQ;
+        self.status = STAT_BUSY | STAT_DRQ;
         self.sector_read_count = self.sector_read_count.saturating_add(1);
         debug_assert_eq!(self.buffer.len(), TRD_SECTOR_SIZE);
         true
@@ -761,7 +762,7 @@ impl BetaDisk {
                 self.data_reg = value;
                 if self.xfer == Xfer::WriteTrack {
                     self.drq = true;
-                    self.status = STAT_DRQ;
+                    self.status = STAT_BUSY | STAT_DRQ;
                 }
             }
             Xfer::Write => {
@@ -774,7 +775,7 @@ impl BetaDisk {
                     self.commit_write_sector();
                 } else {
                     self.drq = true;
-                    self.status = STAT_DRQ;
+                    self.status = STAT_BUSY | STAT_DRQ;
                 }
             }
             _ => {
@@ -805,7 +806,7 @@ impl BetaDisk {
                 self.buffer_i = 0;
                 self.drq = true;
                 self.intrq = false;
-                self.status = STAT_DRQ;
+                self.status = STAT_BUSY | STAT_DRQ;
                 return;
             }
         }
@@ -841,7 +842,7 @@ impl BetaDisk {
             self.complete_read_byte_stream();
         } else {
             self.drq = true;
-            self.status = STAT_DRQ;
+            self.status = STAT_BUSY | STAT_DRQ;
         }
         v
     }
@@ -851,13 +852,15 @@ impl BetaDisk {
             self.advance_multi();
             if self.xfer == Xfer::Read && self.load_sector_to_buffer() {
                 self.xfer = Xfer::Read;
+                self.drq = true;
+                self.status = STAT_BUSY | STAT_DRQ;
                 return;
             }
         }
         self.xfer = Xfer::Idle;
         self.drq = false;
         self.intrq = true;
-        self.status &= !STAT_DRQ;
+        self.status = 0;
         self.buffer_i = self.buffer.len();
     }
 }
@@ -883,7 +886,7 @@ mod tests {
         beta.out_port(0x003f, 0);
         beta.out_port(0x005f, 1);
         beta.out_port(0x001f, 0x80);
-        assert_eq!(beta.in_port(0x001f), Some(0x02));
+        assert_eq!(beta.in_port(0x001f), Some(STAT_BUSY | STAT_DRQ));
         assert_eq!(beta.in_port(0x007f), Some(0x12));
         assert_eq!(beta.in_port(0x007f), Some(0x34));
     }
@@ -898,7 +901,7 @@ mod tests {
         beta.out_port(0x0028, 0); // track
         beta.out_port(0x0048, 1); // sector
         beta.out_port(0x0008, 0x80); // read sector
-        assert_eq!(beta.in_port(0x0008), Some(0x02));
+        assert_eq!(beta.in_port(0x0008), Some(STAT_BUSY | STAT_DRQ));
         assert_eq!(beta.in_port(0x0068), Some(0x56));
         assert_eq!(beta.in_port(0x0068), Some(0x78));
         assert_eq!(beta.track, 0);

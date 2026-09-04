@@ -34,8 +34,8 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 | `trdos_19ec_08d2_callsite_rom_unpatched_when_fixture_present` | Post-match `19ECh` stays stock `RST #20`/`08D2h`; `08D2h` FF padding is not written; handoff is PC ABI in `apply_trdos_run_native_abi` |
 | `trdos_012a_0d6b_service_rom_unpatched_when_fixture_present` | Native `012Ah`/`1D97h` stay stock; `0D6Bh` is FF (`0800h`–`0E71h` hole); `16B0h` is mid-`CALL 166Fh`, not a service |
 | `trdos_native_file_services_gate_when_fixture_present` | Soft: hole dump → document FF at `08D2h`/`0D6Bh`; complete dump (`trdos-5.04t.rom` / `trdos-complete.rom`) → assert those sites are live (native RUN eligible) |
-| `trdos_19ec_skips_fdc_standin_when_complete_rom_present` | Complete dump: `19ECh` ABI must **not** jump to `1B76h` FDC stand-in |
-| `trdos_rom_run_boot_native_08d2_when_complete_present` | `#[ignore]` until 5.04T find-boot `CALL 1E3Dh` returns to `1981h` (ports `#08/#28/#48/#68` + `1FEBh` ABI landed; catalog-fill loop still open) |
+| `trdos_19ec_takes_fdc_standin_when_504t_port_stub_present` | 5.04T: `08D2h` is VG93 port stub → `19ECh` still takes FDC/`LINE-NEW` stand-in |
+| `trdos_rom_run_boot_504t_catalog_match_when_complete_present` | 5.04T: Type-II BUSY so `1E3Dh` returns to `1981h`; catalog match + `19ECh` stand-in → `0x8000==0xA5` |
 | `trdos_rom_run_boot_basic_when_fixture_present` | Catalog match + VG93 body load at **`19ECh`** via native ABI (never enters `08D2h`/`0D6Bh` FF). Unpages TR-DOS, selects ROM1, restores CHANS/STRMS, FLAGS bit 7, enters `LINE-NEW`. Asserts `0x8000==0xA5`. **This 5.04 image cannot run native `012Ah`:** the load services are in a 1.6 KiB FF hole, and `012Ah` from `19ECh` re-enters catalog (`30B2h`) before LINE-NEW |
 
 `RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).

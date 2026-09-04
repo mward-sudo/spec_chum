@@ -28,10 +28,10 @@ pub use rom::{
     resolve_trdos_rom_preferring_file_services, rom_available, rom_available_in,
     rom_available_in_with_overrides, rom_candidates, rom_path_status, rom_slot_descriptors,
     rom_slot_state, rom_slot_state_with_override, rom_slot_states, rom_slot_states_with_overrides,
-    search_roots, trdos_rom_available, trdos_rom_available_in, trdos_rom_candidates,
-    trdos_rom_has_native_file_services, unavailable_reason, writable_install_root,
-    RomSlotDescriptor, RomSlotKind, RomSlotState, RomSlotStatus, ALL_MODELS,
-    TRDOS_ROM_INSTALL_PATH,
+    search_roots, trdos_rom_08d2_is_vg93_port_stub, trdos_rom_available, trdos_rom_available_in,
+    trdos_rom_candidates, trdos_rom_fills_0800_hole, trdos_rom_has_native_file_services,
+    unavailable_reason, writable_install_root, RomSlotDescriptor, RomSlotKind, RomSlotState,
+    RomSlotStatus, ALL_MODELS, TRDOS_ROM_INSTALL_PATH,
 };
 
 use std::cell::Cell;
@@ -3641,7 +3641,7 @@ mod tests {
             if data.len() != bus::TRDOS_ROM_SIZE {
                 continue;
             }
-            if trdos_rom_has_native_file_services(&data) {
+            if trdos_rom_fills_0800_hole(&data) {
                 continue;
             }
             // Prefer explicit hole-dump paths when present.
@@ -3655,10 +3655,10 @@ mod tests {
         fallback
     }
 
-    /// Complete dump only (`08D2h`/`0D6Bh` live), if present.
+    /// Complete dump only (fills the usual 5.04 `0800h` hole), if present.
     fn trdos_rom_bytes_complete() -> Option<Vec<u8>> {
         let data = trdos_rom_bytes()?;
-        trdos_rom_has_native_file_services(&data).then_some(data)
+        trdos_rom_fills_0800_hole(&data).then_some(data)
     }
 
     /// Synthetic TR-DOS ROM: read track 1 sector 1 (BASIC `boot`) into `8000h`.
@@ -3884,16 +3884,21 @@ mod tests {
         }
     }
 
-    /// True when the *currently loaded* TR-DOS image has live file-load services.
+    /// True when the *currently loaded* TR-DOS image has a classic file-load at `08D2h`.
     ///
     /// Must not consult the preferred-on-disk resolver: harness tests load the hole
-    /// dump even when `trdos-5.04t.rom` exists beside it.
+    /// dump even when `trdos-5.04t.rom` exists beside it. Alone Coder 5.04T fills
+    /// `08D2h` with a VG93 port stub — that is **not** a file service.
     fn trdos_rom_has_native_file_services_paged(m: &mut Machine) -> bool {
         let was = m.beta_mut().map(|b| b.paged).unwrap_or(false);
         if let Some(beta) = m.beta_mut() {
             beta.page_trdos(true);
         }
-        let ok = m.read_mem(0x08d2) != 0xff && m.read_mem(0x0d6b) != 0xff;
+        let mut img = [0u8; bus::TRDOS_ROM_SIZE];
+        for (i, b) in img.iter_mut().enumerate() {
+            *b = m.read_mem(i as u16);
+        }
+        let ok = trdos_rom_has_native_file_services(&img);
         if let Some(beta) = m.beta_mut() {
             beta.page_trdos(was);
         }
@@ -4816,7 +4821,7 @@ mod tests {
             eprintln!("skip: pentagon/128 main ROM missing");
             return;
         };
-        let Some(trdos) = trdos_rom_bytes() else {
+        let Some(trdos) = trdos_rom_bytes_harness() else {
             eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
             return;
         };
@@ -4835,7 +4840,7 @@ mod tests {
             Some(0x08),
             "stock inline service hi → 08D2h"
         );
-        let hole = !trdos_rom_has_native_file_services(&trdos);
+        let hole = !trdos_rom_fills_0800_hole(&trdos);
         if hole {
             assert_eq!(
                 trdos.get(0x08d2).copied(),
@@ -4873,19 +4878,18 @@ mod tests {
         }
     }
 
-    /// ROM-gated: when a complete dump is present, gate native `08D2h`/`0D6Bh`.
+    /// ROM-gated: when a filled-hole dump is present, classify `08D2h`.
     ///
     /// Soft-pass on the usual hole-filled 5.04 image (documents the blocker).
-    /// With `roms/pentagon/trdos-5.04t.rom` (or any non-FF services image), asserts
-    /// the native file-load sites are live — next slice can drop the `19ECh`
-    /// VG93+LINE-NEW stand-in without more FF intercepts.
+    /// Alone Coder **5.04T** fills `0800h`+ with VG93 helpers — `08D2h` is a port
+    /// stub, not classic file-load — so `19ECh` still uses the FDC stand-in.
     #[test]
     fn trdos_native_file_services_gate_when_fixture_present() {
         let Some(trdos) = trdos_rom_bytes() else {
             eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
             return;
         };
-        if !trdos_rom_has_native_file_services(&trdos) {
+        if !trdos_rom_fills_0800_hole(&trdos) {
             assert_eq!(
                 trdos.get(0x08d2).copied(),
                 Some(0xff),
@@ -4898,28 +4902,26 @@ mod tests {
             );
             eprintln!(
                 "trdos native file-services gate: hole dump (0800h–0E71h FF) — \
-                 place a complete 5.03/5.04T image at roms/pentagon/trdos-5.04t.rom \
-                 to unlock native 08D2h/0D6Bh (Refs #140)"
+                 place trdos-5.04t.rom under roms/pentagon/ (Refs #140)"
             );
             return;
         }
-        assert_ne!(
-            trdos.get(0x08d2).copied(),
-            Some(0xff),
-            "complete dump must have code at 08D2h"
-        );
-        assert_ne!(
-            trdos.get(0x0d6b).copied(),
-            Some(0xff),
-            "complete dump must have code at 0D6Bh"
-        );
+        if trdos_rom_08d2_is_vg93_port_stub(&trdos) {
+            assert!(!trdos_rom_has_native_file_services(&trdos));
+            eprintln!(
+                "trdos native file-services gate: 5.04T VG93 port stub at 08D2h — \
+                 RUN boot uses 19ECh FDC stand-in after catalog match (Refs #140)"
+            );
+            return;
+        }
+        assert!(trdos_rom_has_native_file_services(&trdos));
         assert_eq!(
             [trdos.get(0x19ec), trdos.get(0x19ed), trdos.get(0x19ee)],
             [Some(&0xe7), Some(&0xd2), Some(&0x08)],
-            "complete dump should keep stock 19ECh → 08D2h"
+            "classic complete dump should keep stock 19ECh → 08D2h"
         );
         eprintln!(
-            "trdos native file-services gate: OPEN — complete ROM has 08D2h/0D6Bh \
+            "trdos native file-services gate: OPEN — classic file-load at 08D2h \
              (native RUN path eligible; Refs #140)"
         );
     }
@@ -4931,7 +4933,7 @@ mod tests {
             eprintln!("skip: pentagon/128 main ROM missing");
             return;
         };
-        let Some(trdos) = trdos_rom_bytes() else {
+        let Some(trdos) = trdos_rom_bytes_harness() else {
             eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
             return;
         };
@@ -4968,7 +4970,7 @@ mod tests {
             Some(0xc9),
             "stock RET after 1D97h service word"
         );
-        let hole = !trdos_rom_has_native_file_services(&trdos);
+        let hole = !trdos_rom_fills_0800_hole(&trdos);
         if hole {
             assert_eq!(
                 trdos.get(0x0d6b).copied(),
@@ -5047,28 +5049,32 @@ mod tests {
         assert_eq!(m.read_mem(0x8000), 0xa5, "boot BASIC POKE 32768,165");
     }
 
-    /// Complete ROM: `19ECh` must not take the hole-dump FDC/`LINE-NEW` stand-in.
+    /// 5.04T: `08D2h` is a VG93 port stub, so `19ECh` must still take the FDC stand-in.
     #[test]
-    fn trdos_19ec_skips_fdc_standin_when_complete_rom_present() {
+    fn trdos_19ec_takes_fdc_standin_when_504t_port_stub_present() {
         let Some(main) = rom_pentagon().or_else(rom128) else {
             eprintln!("skip: pentagon/128 main ROM missing");
             return;
         };
         let Some(trdos) = trdos_rom_bytes_complete() else {
             eprintln!(
-                "skip: complete TR-DOS dump missing — place trdos-5.04t.rom /                  trdos-complete.rom under roms/pentagon/ (Refs #140)"
+                "skip: complete TR-DOS dump missing — place trdos-5.04t.rom / \
+                 trdos-complete.rom under roms/pentagon/ (Refs #140)"
             );
             return;
         };
-        assert!(trdos_rom_has_native_file_services(&trdos));
+        assert!(trdos_rom_fills_0800_hole(&trdos));
+        if !trdos_rom_08d2_is_vg93_port_stub(&trdos) {
+            eprintln!("skip: complete dump has classic 08D2h file-load (not 5.04T stub)");
+            return;
+        }
+        assert!(!trdos_rom_has_native_file_services(&trdos));
         let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
         m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
             .unwrap();
         if let Some(beta) = m.beta_mut() {
             beta.page_trdos(true);
         }
-        // Seed a plausible BASIC dirent in the sector buffer so the stand-in
-        // *would* succeed if it still ran — proving we skipped it for real.
         m.write_mem(0x5d25 + 8, b'B');
         m.write_mem(0x5d25 + 9, 28);
         m.write_mem(0x5d25 + 10, 0);
@@ -5077,32 +5083,28 @@ mod tests {
         m.write_mem(0x5c59, 0x00);
         m.write_mem(0x5c5a, 0x5e);
         m.cpu_mut().regs.pc = 0x19ec;
-        assert!(trdos_rom_has_native_file_services_paged(&mut m));
         apply_trdos_run_native_abi(&mut m);
         assert_eq!(
             m.cpu().regs.pc,
-            0x19ec,
-            "complete ROM must leave stock 19ECh (RST #20→08D2h); FDC stand-in would jump to 1B76h"
+            0x1b76,
+            "5.04T port-stub 08D2h: 19ECh must FDC-load and enter LINE-NEW"
         );
-        assert_ne!(m.read_mem(0x08d2), 0xff);
     }
 
-    /// Full native `08D2h` RUN→boot — still open on 5.04T find-boot catalog fill.
-    ///
-    /// Alone Coder / VfNG `trdos-5.04t.rom` uses VG93 ports `#08/#28/#48/#68` (mapped)
-    /// and replaces hole `1FEBh` `OUT (#FF);RET` with `JP 0897h` (ABI RET at `1FF3h`).
-    /// Find-boot still enters `CALL 1E3Dh` but the `3E63h` catalog-fill loop does not
-    /// return to `1981h` for the dirent compare / `19ECh` before timeout. Keep ignored
-    /// until that match path is green.
+    /// 5.04T RUN→boot: Type-II BUSY so catalog `1E3Dh` returns to `1981h`; `08D2h` is a
+    /// VG93 port stub so `19ECh` uses the FDC/`LINE-NEW` stand-in (hard `0x8000==0xA5`).
     #[test]
-    #[ignore = "5.04T find-boot CALL 1E3Dh catalog fill does not return to 1981h; Refs #140"]
-    fn trdos_rom_run_boot_native_08d2_when_complete_present() {
+    fn trdos_rom_run_boot_504t_catalog_match_when_complete_present() {
         let Some(main) = rom_pentagon().or_else(rom128) else {
             return;
         };
         let Some(trdos) = trdos_rom_bytes_complete() else {
             return;
         };
+        assert!(
+            trdos_rom_08d2_is_vg93_port_stub(&trdos),
+            "expected Alone Coder 5.04T VG93 stub at 08D2h"
+        );
         let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
         m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
             .unwrap();
@@ -5114,7 +5116,7 @@ mod tests {
         init_trdos_usr_call_frame(&mut m);
         assert!(
             invoke_trdos_run_boot(&mut m),
-            "complete ROM native RUN boot should POKE 32768,165 via 08D2h"
+            "5.04T RUN boot should POKE 32768,165 after catalog match + 19ECh stand-in"
         );
         assert_eq!(m.read_mem(0x8000), 0xa5);
     }
