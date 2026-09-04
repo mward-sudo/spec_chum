@@ -550,8 +550,23 @@ mod tests {
 
         let mut raw = vec![0u8; formats::TRD_SECTOR_SIZE * formats::TRD_SECTORS_PER_TRACK];
         raw[0xe3] = 0; // unknown type → parser infers geometry from length
-        let dir = std::env::temp_dir().join("spec_chum_debug_cli_trd");
-        let _ = std::fs::create_dir_all(&dir);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "spec_chum_debug_cli_trd_{}_{}",
+            std::process::id(),
+            nanos
+        ));
+        std::fs::create_dir_all(&dir).expect("unique temp dir");
+        struct RmTree(PathBuf);
+        impl Drop for RmTree {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = RmTree(dir.clone());
         let trd_path = dir.join("one_track.trd");
         std::fs::write(&trd_path, &raw).expect("write trd");
 
