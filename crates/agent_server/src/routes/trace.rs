@@ -45,6 +45,9 @@ pub(crate) async fn trace_dump(
     headers: HeaderMap,
     Query(q): Query<TraceQuery>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let format = match q
         .format
         .as_deref()
@@ -62,17 +65,14 @@ pub(crate) async fn trace_dump(
             )
         }
     };
-    match check_auth(&state, &headers) {
-        Ok(()) => match state.plane.trace_dump(format, q.last) {
-            Ok(text) => {
-                let ctype = match format {
-                    TraceFormat::Json | TraceFormat::Ndjson => "application/json",
-                    TraceFormat::Text => "text/plain; charset=utf-8",
-                };
-                ([(header::CONTENT_TYPE, ctype)], text).into_response()
-            }
-            Err(e) => api_error(&state.plane, e),
-        },
+    match state.plane.trace_dump(format, q.last) {
+        Ok(text) => {
+            let ctype = match format {
+                TraceFormat::Json | TraceFormat::Ndjson => "application/json",
+                TraceFormat::Text => "text/plain; charset=utf-8",
+            };
+            ([(header::CONTENT_TYPE, ctype)], text).into_response()
+        }
         Err(e) => api_error(&state.plane, e),
     }
 }

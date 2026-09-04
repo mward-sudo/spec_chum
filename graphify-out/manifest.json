@@ -1032,15 +1032,15 @@
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/debug.rs": {
-    "mtime": 1788494052.1497352,
-    "seen": 1788494072.631176,
-    "ast_hash": "9727dafae7ad5899e082e83ac994b1d3",
+    "mtime": 1788495312.1892867,
+    "seen": 1788495329.2415218,
+    "ast_hash": "b076b37cf16db5e142de5ccc3686fa05",
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/hardware.rs": {
-    "mtime": 1788494052.150255,
-    "seen": 1788494072.631177,
-    "ast_hash": "506eb1a364f76d3e2984947dbb403f68",
+    "mtime": 1788495264.08437,
+    "seen": 1788495329.241524,
+    "ast_hash": "6be3446cbc2adcb032adcdf238473f15",
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/health.rs": {
@@ -1056,9 +1056,9 @@
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/media.rs": {
-    "mtime": 1788494052.1512005,
-    "seen": 1788494072.631178,
-    "ast_hash": "ca157ade4204fff0b76c20f6425d01a5",
+    "mtime": 1788495260.078054,
+    "seen": 1788495329.2415638,
+    "ast_hash": "155476cbfa5169461355e0a98ca11669",
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/mod.rs": {
@@ -1074,15 +1074,15 @@
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/trace.rs": {
-    "mtime": 1788494052.1534412,
-    "seen": 1788494072.63118,
-    "ast_hash": "82f7438a3e4881e0175ff1e77a32e18e",
+    "mtime": 1788495303.5292296,
+    "seen": 1788495329.241601,
+    "ast_hash": "74e0d2317f661e0b70cdb8edf6ce17c8",
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/video.rs": {
-    "mtime": 1788494049.2710683,
-    "seen": 1788494072.63118,
-    "ast_hash": "13ed174fdadaf449e21811a5e9aa44f4",
+    "mtime": 1788495257.9670491,
+    "seen": 1788495329.241602,
+    "ast_hash": "3e72d7c903e9c5fe3c572bc4a0c2672f",
     "semantic_hash": ""
   }
 }

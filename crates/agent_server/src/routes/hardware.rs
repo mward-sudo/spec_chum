@@ -26,9 +26,9 @@ pub(crate) async fn insert_dck(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.insert_dck(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.insert_dck(path.as_ref())).await
 }
 
 pub(crate) async fn eject_dck(State(state): State<AppState>, headers: HeaderMap) -> Response {

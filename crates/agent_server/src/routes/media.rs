@@ -4,7 +4,7 @@ use axum::{extract::State, http::HeaderMap, response::Response, Json};
 use machine::TapeLoadOptions;
 use serde::Deserialize;
 
-use super::{auth_empty, auth_json_blocking, AppState, PathBody};
+use super::{auth_empty, auth_empty_blocking, auth_json_blocking, AppState, PathBody};
 
 fn default_one() -> u32 {
     super::default_one()
@@ -15,9 +15,9 @@ pub(crate) async fn load_rom(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_rom_path(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.load_rom_path(path.as_ref())).await
 }
 
 pub(crate) async fn load_snapshot(
@@ -25,9 +25,9 @@ pub(crate) async fn load_snapshot(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_snapshot(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.load_snapshot(path.as_ref())).await
 }
 
 pub(crate) async fn load_rzx(
@@ -35,9 +35,9 @@ pub(crate) async fn load_rzx(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_rzx(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.load_rzx(path.as_ref())).await
 }
 
 pub(crate) async fn load_dsk(
@@ -45,9 +45,9 @@ pub(crate) async fn load_dsk(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_dsk(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.load_dsk(path.as_ref())).await
 }
 
 pub(crate) async fn load_trd(
@@ -55,9 +55,9 @@ pub(crate) async fn load_trd(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.load_trd(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.load_trd(path.as_ref())).await
 }
 
 pub(crate) async fn tape_open(
@@ -65,9 +65,9 @@ pub(crate) async fn tape_open(
     headers: HeaderMap,
     Json(body): Json<PathBody>,
 ) -> Response {
-    auth_empty(&state, &headers, || {
-        state.plane.tape_open(body.path.as_ref())
-    })
+    let plane = state.plane.clone();
+    let path = body.path;
+    auth_empty_blocking(&state, &headers, move || plane.tape_open(path.as_ref())).await
 }
 
 pub(crate) async fn tape_play(State(state): State<AppState>, headers: HeaderMap) -> Response {

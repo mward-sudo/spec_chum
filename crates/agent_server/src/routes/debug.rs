@@ -31,17 +31,15 @@ pub(crate) async fn peek(
     headers: HeaderMap,
     Query(q): Query<PeekQuery>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let addr = match parse_addr(&q.addr) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
     };
-    match check_auth(&state, &headers) {
-        Ok(()) => match state.plane.peek(addr, q.len) {
-            Ok(text) => {
-                ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response()
-            }
-            Err(e) => api_error(&state.plane, e),
-        },
+    match state.plane.peek(addr, q.len) {
+        Ok(text) => ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response(),
         Err(e) => api_error(&state.plane, e),
     }
 }
@@ -57,6 +55,9 @@ pub(crate) async fn poke(
     headers: HeaderMap,
     Json(body): Json<PokeBody>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let addr = match parse_addr(&body.addr) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
@@ -79,6 +80,9 @@ pub(crate) async fn patch_regs(
     headers: HeaderMap,
     Json(body): Json<RegsBody>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let pc = match body.pc.as_deref().map(parse_addr).transpose() {
         Ok(v) => v,
         Err(e) => return api_error(&state.plane, e),
@@ -111,17 +115,15 @@ pub(crate) async fn disasm(
     headers: HeaderMap,
     Query(q): Query<DisasmQuery>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let addr = match q.addr.as_deref().map(parse_addr).transpose() {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
     };
-    match check_auth(&state, &headers) {
-        Ok(()) => match state.plane.disasm(addr, q.count) {
-            Ok(text) => {
-                ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response()
-            }
-            Err(e) => api_error(&state.plane, e),
-        },
+    match state.plane.disasm(addr, q.count) {
+        Ok(text) => ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response(),
         Err(e) => api_error(&state.plane, e),
     }
 }
@@ -142,6 +144,9 @@ pub(crate) async fn add_breakpoint(
     headers: HeaderMap,
     Json(body): Json<BreakpointBody>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let pc = match parse_addr(&body.pc) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
@@ -154,6 +159,9 @@ pub(crate) async fn remove_breakpoint(
     headers: HeaderMap,
     axum::extract::Path(pc): axum::extract::Path<String>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let pc = match parse_addr(&pc) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
@@ -179,6 +187,9 @@ pub(crate) async fn add_watch(
     headers: HeaderMap,
     Json(body): Json<WatchBody>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let addr = match parse_addr(&body.addr) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
@@ -202,6 +213,9 @@ pub(crate) async fn remove_mem_watch(
     headers: HeaderMap,
     axum::extract::Path(addr): axum::extract::Path<String>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let addr = match parse_addr(&addr) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
@@ -221,6 +235,9 @@ pub(crate) async fn add_port_watch(
     headers: HeaderMap,
     Json(body): Json<WatchBody>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let addr = match parse_addr(&body.addr) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),
@@ -244,6 +261,9 @@ pub(crate) async fn remove_port_watch(
     headers: HeaderMap,
     axum::extract::Path(addr): axum::extract::Path<String>,
 ) -> Response {
+    if let Err(e) = check_auth(&state, &headers) {
+        return api_error(&state.plane, e);
+    }
     let addr = match parse_addr(&addr) {
         Ok(a) => a,
         Err(e) => return api_error(&state.plane, e),

@@ -48,6 +48,20 @@ pub(crate) async fn framebuffer(
     if let Err(e) = check_auth(&state, &headers) {
         return api_error(&state.plane, e);
     }
+    enum Format {
+        Rgba,
+        Png,
+    }
+    let format = match q.format.to_ascii_lowercase().as_str() {
+        "rgba" => Format::Rgba,
+        "png" | "" => Format::Png,
+        other => {
+            return api_error(
+                &state.plane,
+                ApiError::BadRequest(format!("unknown framebuffer format: {other}")),
+            )
+        }
+    };
     let restore_border = if let Some(border) = q.border {
         let prev = state.plane.framebuffer_meta().ok().map(|m| m.border);
         if let Err(e) = state.plane.set_border(border) {
@@ -64,16 +78,15 @@ pub(crate) async fn framebuffer(
         Ok(m) => m,
         Err(e) => return api_error(&state.plane, e),
     };
-    let response = match q.format.to_ascii_lowercase().as_str() {
-        "rgba" => rgba_response(&state, meta),
-        "png" | "" => png_response(&state, meta),
-        other => api_error(
-            &state.plane,
-            ApiError::BadRequest(format!("unknown framebuffer format: {other}")),
-        ),
+    let response = match format {
+        Format::Rgba => rgba_response(&state, meta),
+        Format::Png => png_response(&state, meta),
     };
     if let Some(prev) = restore_border {
-        let _ = state.plane.set_border(prev);
+        if let Err(e) = state.plane.set_border(prev) {
+            // Best-effort restore; keep the capture response.
+            state.plane.record_error(&e);
+        }
     }
     response
 }
