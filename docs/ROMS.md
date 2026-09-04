@@ -115,8 +115,11 @@ Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
 | --- | --- | --- |
 | `roms/pentagon/pentagon.rom` | 32 KiB | Main Pentagon firmware (also accepts `128p.rom`) |
 | `roms/pentagon/trdos.rom` | 16 KiB | TR-DOS for Beta Disk — both files required before the model enables |
+| `roms/pentagon/trdos-5.04t.rom` (or `trdos-complete.rom`) | 16 KiB | **Preferred when present:** complete 5.03 / 5.04T dump with real `08D2h` / `0D6Bh` file-load services ([#140](https://github.com/mward-sudo/spec_chum/issues/140)). Same search under `roms/trdos/` |
 
-Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. A synthetic TR-DOS `boot` BASIC disk is the always-on fixture in [#140](https://github.com/mward-sudo/spec_chum/issues/140) (`tests/fixtures/trdos/README.md`). Real `trdos.rom` `RUN` reaches catalog match; file-load/`012Ah` on the usual 5.04 dump is blocked by an `0800h`–`0E71h` FF hole. Pentagon auto-boot depth can follow once that path is green.
+Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. A synthetic TR-DOS `boot` BASIC disk is the always-on fixture in [#140](https://github.com/mward-sudo/spec_chum/issues/140) (`tests/fixtures/trdos/README.md`).
+
+**Usual vs complete TR-DOS dumps:** many circulating **Ver 5.04** images (including a common `roms/pentagon/trdos.rom`) leave `0800h`–`0E71h` as FF padding, so `08D2h` and `0D6Bh` are not executable (post-match `19ECh` targets `08D2h`; `012Ah`→`1D97h` targets `0D6Bh`). Spec Chum’s harnessed `RUN`→`boot` path still asserts `0x8000==0xA5` on that dump. Place a complete image at `trdos-5.04t.rom` / `trdos-complete.rom` (preferred over the hole dump) to unlock the native-services gate test; do not commit ROM bytes. Pentagon auto-boot depth can follow once native `RUN` is green on a complete image.
 
 ### Timex TC2048 / TS2068 — fetched paths (#192)
 
