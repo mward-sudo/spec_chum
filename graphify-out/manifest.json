@@ -12,8 +12,8 @@
     "semantic_hash": "5495e97105ccab99680f7cd181f856cc"
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1788495806.070133,
-    "seen": 1788495830.5907478,
+    "mtime": 1788496825.556351,
+    "seen": 1788496839.390332,
     "ast_hash": "32c17529ba4b2bc4bddb5b7efa8b5b07",
     "semantic_hash": ""
   },
@@ -42,9 +42,9 @@
     "semantic_hash": "7f5409df2ce54f1fd9131a68f63f57fd"
   },
   "apps/macos/Sources/SpecChumMac/HostBridge.swift": {
-    "mtime": 1788495805.643054,
-    "seen": 1788495830.590849,
-    "ast_hash": "c3bf2be197499bf37f1aa3a0ed12e009",
+    "mtime": 1788496800.1145513,
+    "seen": 1788496839.3909812,
+    "ast_hash": "0cca27ae446c3736b8e1e84ff939b05b",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/KempstonMouseTracking.swift": {
@@ -1104,9 +1104,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+LivingRoom.swift": {
-    "mtime": 1788495674.7212348,
-    "seen": 1788495830.590846,
-    "ast_hash": "38abfdc1e221c023209fdc60d3085081",
+    "mtime": 1788496816.8513596,
+    "seen": 1788496839.390835,
+    "ast_hash": "ce6f6a4103fe072289a121d63e6f535b",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Media.swift": {

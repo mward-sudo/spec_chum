@@ -220,9 +220,12 @@ final class HostBridge: ObservableObject {
     var scrollZoomAccum: CGFloat = 0
     /// Trackpad pixels per preset step (matches standalone Bevy `SCROLL_PIXELS_PER_STEP`).
     static let scrollZoomStepPx: CGFloat = 64
-    /// Active present size (stepped); updated on resize.
+    /// Authoritative present size (stepped) — main thread only (#300).
     var roomPresentWidth: UInt32 = 1920
     var roomPresentHeight: UInt32 = 1080
+    /// Last size applied on `livingRoomQueue` (resize decisions); queue only.
+    var roomQueuePresentWidth: UInt32 = 1920
+    var roomQueuePresentHeight: UInt32 = 1080
     /// 50 Hz host clock (owns Spectrum pacing; SwiftUI only presents).
     var frameTimer: DispatchSourceTimer?
     @Published var debugPc: UInt16 = 0

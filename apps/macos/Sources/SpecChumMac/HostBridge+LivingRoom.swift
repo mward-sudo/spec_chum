@@ -87,18 +87,20 @@ extension HostBridge {
     }
 
     /// Must run on `livingRoomQueue` only via `enqueueLivingRoomPresentBind`.
-    func performLivingRoomPresentBind(surface: IOSurface, width: UInt32, height: UInt32) {
-        guard let room = livingRoomHandle else { return }
+    /// Returns whether the bind applied; main updates `roomPresentWidth`/`Height` on success.
+    @discardableResult
+    func performLivingRoomPresentBind(surface: IOSurface, width: UInt32, height: UInt32) -> Bool {
+        guard let room = livingRoomHandle else { return false }
         livingRoomBoundSurface = surface
         let ptr = Unmanaged.passUnretained(surface).toOpaque()
         var bindError: String?
-        if width != roomPresentWidth || height != roomPresentHeight {
+        if width != roomQueuePresentWidth || height != roomQueuePresentHeight {
             if sc_room_resize(room, width, height) != 0 {
                 bindError = HostBridge.takeRoomLastError() ?? "Living room resize failed"
             } else {
                 _ = sc_room_skip_intro(room)
-                roomPresentWidth = width
-                roomPresentHeight = height
+                roomQueuePresentWidth = width
+                roomQueuePresentHeight = height
             }
         }
         if bindError == nil, sc_room_set_present_iosurface(room, ptr, width, height) != 0 {
@@ -110,7 +112,9 @@ extension HostBridge {
             DispatchQueue.main.async { [weak self] in
                 self?.status = bindError
             }
+            return false
         }
+        return true
     }
 
     func enqueueLivingRoomPresentBind(
@@ -122,10 +126,14 @@ extension HostBridge {
         let retained = surface
         livingRoomQueue.async { [weak self] in
             guard let self else { return }
-            self.performLivingRoomPresentBind(surface: retained, width: width, height: height)
+            let ok = self.performLivingRoomPresentBind(surface: retained, width: width, height: height)
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 guard generation == self.roomPresentBindGeneration else { return }
+                if ok {
+                    self.roomPresentWidth = width
+                    self.roomPresentHeight = height
+                }
                 self.roomPresentBindInFlight = false
                 self.roomPresentBindStartedUptime = 0
                 guard let pending = self.roomPresentBindPending else { return }
@@ -157,9 +165,15 @@ extension HostBridge {
     func ensureLivingRoom() {
         if livingRoomReady || livingRoomCreateInFlight { return }
         livingRoomCreateInFlight = true
+        let createW = roomPresentWidth
+        let createH = roomPresentHeight
         livingRoomQueue.async { [weak self] in
             guard let self else { return }
-            let createError = self.createLivingRoomOnQueue(warmupTicks: 0)
+            let createError = self.createLivingRoomOnQueue(
+                warmupTicks: 0,
+                width: createW,
+                height: createH
+            )
             let ok = self.livingRoomHandle != nil
             DispatchQueue.main.async {
                 self.livingRoomCreateInFlight = false
@@ -194,9 +208,15 @@ extension HostBridge {
     func scheduleLivingRoomPreload() {
         if livingRoomReady || livingRoomCreateInFlight { return }
         livingRoomCreateInFlight = true
+        let createW = roomPresentWidth
+        let createH = roomPresentHeight
         livingRoomQueue.async { [weak self] in
             guard let self else { return }
-            let createError = self.createLivingRoomOnQueue(warmupTicks: 4)
+            let createError = self.createLivingRoomOnQueue(
+                warmupTicks: 4,
+                width: createW,
+                height: createH
+            )
             let ok = self.livingRoomHandle != nil
             DispatchQueue.main.async {
                 self.livingRoomCreateInFlight = false
@@ -218,13 +238,15 @@ extension HostBridge {
     }
 
     /// Must run on `livingRoomQueue`. Creates handle, skips intro, optional warmup ticks.
-    func createLivingRoomOnQueue(warmupTicks: Int) -> String? {
+    func createLivingRoomOnQueue(warmupTicks: Int, width: UInt32, height: UInt32) -> String? {
         guard livingRoomHandle == nil else { return nil }
-        livingRoomHandle = sc_room_create(roomPresentWidth, roomPresentHeight)
+        livingRoomHandle = sc_room_create(width, height)
         guard livingRoomHandle != nil else {
             return HostBridge.takeRoomLastError()
                 ?? "Living room renderer failed — run cargo build -p living_room --release --no-default-features"
         }
+        roomQueuePresentWidth = width
+        roomQueuePresentHeight = height
         if sc_room_skip_intro(livingRoomHandle) != 0 {
             return HostBridge.takeRoomLastError() ?? "Living room skip intro failed"
         }
@@ -260,6 +282,8 @@ extension HostBridge {
             guard let self else { return }
             self.roomFbLastUploadedGen = 0
             self.livingRoomBoundSurface = nil
+            self.roomQueuePresentWidth = 1920
+            self.roomQueuePresentHeight = 1080
             if let livingRoomHandle = self.livingRoomHandle {
                 _ = sc_room_set_present_iosurface(livingRoomHandle, nil, 0, 0)
                 sc_room_destroy(livingRoomHandle)
