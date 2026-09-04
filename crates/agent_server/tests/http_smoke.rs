@@ -101,6 +101,74 @@ async fn agent_api_run_inspect_and_framebuffer_png() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn agent_api_patch_regs_sets_pc() {
+    let Some(rom) = rom48() else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
+    };
+    let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
+    plane.load_rom_bytes(&rom).expect("rom");
+    let app = router(AppState {
+        plane: plane.clone(),
+        token: None,
+        insecure: true,
+    });
+
+    let empty = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/regs")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .expect("empty regs");
+    assert_eq!(empty.status(), StatusCode::BAD_REQUEST);
+
+    let set = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/regs")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"pc":"0x3D00","sp":"0xFF4A","af":"0xFFFF"}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("set regs");
+    assert_eq!(set.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(set.into_body(), usize::MAX)
+        .await
+        .expect("regs body");
+    let regs: serde_json::Value = serde_json::from_slice(&body).expect("regs json");
+    assert_eq!(regs["pc"], 0x3d00);
+    assert_eq!(regs["sp"], 0xff4a);
+    assert_eq!(regs["af"], 0xffff);
+
+    let inspect = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/inspect")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("inspect");
+    assert_eq!(inspect.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(inspect.into_body(), usize::MAX)
+        .await
+        .expect("inspect body");
+    let inspect: serde_json::Value = serde_json::from_slice(&body).expect("inspect json");
+    assert_eq!(inspect["pc"], 0x3d00);
+    assert_eq!(inspect["sp"], 0xff4a);
+    assert_eq!(inspect["af"], 0xffff);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn agent_api_video_metadata_and_last_error() {
     let Some(rom) = rom48() else {
         eprintln!("skip: Spectrum 48 ROM missing");

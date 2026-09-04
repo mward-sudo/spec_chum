@@ -220,7 +220,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Area | Operations |
 | --- | --- |
 | Machine | `POST /v1/model` — select built-in model; `POST /v1/config` — apply `#187` custom profile JSON; `POST /v1/reset`; `POST /v1/running` pause/run; `POST /v1/run` — advance within a **finite budget** (see below) |
-| Execution | `POST /v1/step` — one `step_once`; `POST /v1/step` body `{ "count": N }`; `POST /v1/continue` — resume after debugger stop (`continue_from_pc`); `POST /v1/run-until` — PC / budget (maps `Debugger::run_until`) |
+| Execution | `POST /v1/step` — one `step_once`; `POST /v1/step` body `{ "count": N }`; `POST /v1/continue` — resume after debugger stop (`continue_from_pc`); `POST /v1/run-until` — PC / budget (maps `Debugger::run_until`); `POST /v1/regs` — patch `pc` / `sp` / `af` (hex strings; #261 TR-DOS entry) |
 | Tape | `POST /v1/tape/open`, `/play`, `/pause`, `/rewind`, `/eject`; load options flash vs EAR vs experience + speed |
 | Type-load | `POST /v1/type-load` — scripted LOAD "" [CODE] (today's `type-load` subcommand) |
 | ROM | `POST /v1/rom` — load ROM image from host filesystem path |
@@ -275,6 +275,7 @@ Remaining control/inspect/debug rows land in later phases on [#210](https://gith
 | `POST /v1/mouse` | Requires `kempston_mouse: true` in prefs. Body `{ "dx", "dy", "left", "right", "middle" }` and/or `{ "clear": true }` (full axis+button reset) — Kempston mouse via `HostSession` ([#136](https://github.com/mward-sudo/spec_chum/issues/136)) |
 | `POST /v1/tape/eject` | Clears the inserted TAP/TZX deck |
 | `POST /v1/continue` | `continue_from_pc` after a debugger stop; JSON `{ "reason", "paused" }` |
+| `POST /v1/regs` | Patch `pc` / `sp` / `af` (optional hex strings, at least one required); JSON `HostRegs` (#261) |
 
 ### Port watches
 
@@ -364,7 +365,9 @@ AGENT=http://127.0.0.1:17384
 
 curl -sS "$AGENT/v1/health" | jq .
 curl -sS -X POST "$AGENT/v1/run" -H 'Content-Type: application/json' -d '{"frames":1}'
-curl -sS "$AGENT/v1/inspect" | jq '.regs.pc'
+curl -sS "$AGENT/v1/inspect" | jq '.pc'
+curl -sS -X POST "$AGENT/v1/regs" -H 'Content-Type: application/json' \
+  -d '{"pc":"0x3D00"}' | jq .
 curl -sS "$AGENT/v1/framebuffer?border=false&format=png" -o /tmp/spec_paper.png
 file /tmp/spec_paper.png   # PNG image data, 256 x 192
 ```

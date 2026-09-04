@@ -110,7 +110,7 @@ pub enum HostError {
 }
 
 /// Core registers exposed through `sc_regs`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct HostRegs {
     pub pc: u16,
     pub sp: u16,
@@ -120,6 +120,21 @@ pub struct HostRegs {
     pub hl: u16,
     pub ix: u16,
     pub iy: u16,
+}
+
+/// Optional register poke for agent TR-DOS / debug entry (`POST /v1/regs`, #261).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RegsPatch {
+    pub pc: Option<u16>,
+    pub sp: Option<u16>,
+    pub af: Option<u16>,
+}
+
+impl RegsPatch {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.pc.is_none() && self.sp.is_none() && self.af.is_none()
+    }
 }
 
 /// Host-owned emulator session: machine + RGBA framebuffer + status.
@@ -959,6 +974,39 @@ impl HostSession {
             ix: r.ix(),
             iy: r.iy(),
         })
+    }
+
+    /// Patch PC / SP / AF for headless entry (e.g. TR-DOS `USR 15616` → `PC=0x3D00`).
+    pub fn patch_regs(&mut self, patch: RegsPatch) -> Result<HostRegs, HostError> {
+        if patch.is_empty() {
+            return Err(HostError::Message(
+                "regs patch requires at least one of pc, sp, af".into(),
+            ));
+        }
+        let Some(m) = self.machine.as_mut() else {
+            return Err(HostError::NoMachine);
+        };
+        let r = &mut m.cpu_mut().regs;
+        if let Some(pc) = patch.pc {
+            r.pc = pc;
+        }
+        if let Some(sp) = patch.sp {
+            r.sp = sp;
+        }
+        if let Some(af) = patch.af {
+            r.set_af(af);
+        }
+        let out = HostRegs {
+            pc: r.pc,
+            sp: r.sp,
+            af: r.af(),
+            bc: r.bc(),
+            de: r.de(),
+            hl: r.hl(),
+            ix: r.ix(),
+            iy: r.iy(),
+        };
+        Ok(out)
     }
 
     /// One CPU/machine instruction (`step_once`).
@@ -1802,6 +1850,32 @@ mod tests {
         assert!(matches!(s.peek(0), Err(HostError::NoMachine)));
         assert!(matches!(s.inspect_json(), Err(HostError::NoMachine)));
         assert!(matches!(s.regs(), Err(HostError::NoMachine)));
+    }
+
+    #[test]
+    fn patch_regs_sets_pc_sp_af() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        let empty = s.patch_regs(RegsPatch::default());
+        assert!(matches!(empty, Err(HostError::Message(_))));
+        let out = s
+            .patch_regs(RegsPatch {
+                pc: Some(0x3d00),
+                sp: Some(0xff4a),
+                af: Some(0xffff),
+            })
+            .expect("patch");
+        assert_eq!(out.pc, 0x3d00);
+        assert_eq!(out.sp, 0xff4a);
+        assert_eq!(out.af, 0xffff);
+        let regs = s.regs().expect("regs");
+        assert_eq!(regs.pc, 0x3d00);
+        assert_eq!(regs.sp, 0xff4a);
+        assert_eq!(regs.af, 0xffff);
     }
 
     #[test]
