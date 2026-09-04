@@ -131,12 +131,6 @@
     "ast_hash": "10bab6f6581240038ba9f49ae3b016b3",
     "semantic_hash": "10bab6f6581240038ba9f49ae3b016b3"
   },
-  "crates/agent_server/src/routes.rs": {
-    "mtime": 1788488117.3134472,
-    "seen": 1788488214.8962612,
-    "ast_hash": "c39c11f1b8689b9259dabc62d801a30c",
-    "semantic_hash": ""
-  },
   "crates/agent_server/tests/http_smoke.rs": {
     "mtime": 1788491941.7891037,
     "seen": 1788493267.545631,
@@ -1035,6 +1029,60 @@
     "mtime": 1788493252.0726938,
     "seen": 1788493267.5460649,
     "ast_hash": "13cdb2c39a88c712ea31ccea87dff3eb",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/debug.rs": {
+    "mtime": 1788495312.1892867,
+    "seen": 1788495329.2415218,
+    "ast_hash": "b076b37cf16db5e142de5ccc3686fa05",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/hardware.rs": {
+    "mtime": 1788495264.08437,
+    "seen": 1788495329.241524,
+    "ast_hash": "6be3446cbc2adcb032adcdf238473f15",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/health.rs": {
+    "mtime": 1788494048.7364416,
+    "seen": 1788494072.631177,
+    "ast_hash": "d0e7a123d82f9a2b9146138fd41670a4",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/input.rs": {
+    "mtime": 1788493997.1333861,
+    "seen": 1788494072.631178,
+    "ast_hash": "c66acd751a260898fc603f291ed76c62",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/media.rs": {
+    "mtime": 1788495260.078054,
+    "seen": 1788495329.2415638,
+    "ast_hash": "155476cbfa5169461355e0a98ca11669",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/mod.rs": {
+    "mtime": 1788494052.1528313,
+    "seen": 1788494072.631179,
+    "ast_hash": "eee3be4de24147ca5671c7a8a6d25eef",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/session.rs": {
+    "mtime": 1788494052.1531487,
+    "seen": 1788494072.631179,
+    "ast_hash": "3fab2dfed07e8b420005e9f9e37086ef",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/trace.rs": {
+    "mtime": 1788495303.5292296,
+    "seen": 1788495329.241601,
+    "ast_hash": "74e0d2317f661e0b70cdb8edf6ce17c8",
+    "semantic_hash": ""
+  },
+  "crates/agent_server/src/routes/video.rs": {
+    "mtime": 1788495257.9670491,
+    "seen": 1788495329.241602,
+    "ast_hash": "3e72d7c903e9c5fe3c572bc4a0c2672f",
     "semantic_hash": ""
   }
 }
