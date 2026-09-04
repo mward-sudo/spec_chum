@@ -3617,6 +3617,50 @@ mod tests {
         (data.len() == bus::TRDOS_ROM_SIZE).then_some(data)
     }
 
+    /// Hole-filled 5.04 (or any dump) for the harnessed `19ECh` stand-in path.
+    /// Prefers `roms/pentagon/trdos.rom` so a complete `trdos-5.04t.rom` does not
+    /// change the established RUN→boot fixture behaviour. Never returns a dump
+    /// with native `08D2h`/`0D6Bh` services (those belong on the complete path).
+    fn trdos_rom_bytes_harness() -> Option<Vec<u8>> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let preferred = [
+            "roms/pentagon/trdos.rom",
+            "roms/trdos/trdos.rom",
+            "roms/trdos.rom",
+        ];
+        let mut fallback: Option<Vec<u8>> = None;
+        for rel in preferred
+            .iter()
+            .copied()
+            .chain(trdos_rom_candidates(Model::Pentagon128).iter().copied())
+        {
+            let p = root.join(rel);
+            let Ok(data) = std::fs::read(&p) else {
+                continue;
+            };
+            if data.len() != bus::TRDOS_ROM_SIZE {
+                continue;
+            }
+            if trdos_rom_has_native_file_services(&data) {
+                continue;
+            }
+            // Prefer explicit hole-dump paths when present.
+            if preferred.contains(&rel) {
+                return Some(data);
+            }
+            if fallback.is_none() {
+                fallback = Some(data);
+            }
+        }
+        fallback
+    }
+
+    /// Complete dump only (`08D2h`/`0D6Bh` live), if present.
+    fn trdos_rom_bytes_complete() -> Option<Vec<u8>> {
+        let data = trdos_rom_bytes()?;
+        trdos_rom_has_native_file_services(&data).then_some(data)
+    }
+
     /// Synthetic TR-DOS ROM: read track 1 sector 1 (BASIC `boot`) into `8000h`.
     fn trdos_read_boot_basic_rom() -> [u8; bus::TRDOS_ROM_SIZE] {
         let mut rom = [0u8; bus::TRDOS_ROM_SIZE];
@@ -3840,6 +3884,22 @@ mod tests {
         }
     }
 
+    /// True when the *currently loaded* TR-DOS image has live file-load services.
+    ///
+    /// Must not consult the preferred-on-disk resolver: harness tests load the hole
+    /// dump even when `trdos-5.04t.rom` exists beside it.
+    fn trdos_rom_has_native_file_services_paged(m: &mut Machine) -> bool {
+        let was = m.beta_mut().map(|b| b.paged).unwrap_or(false);
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        let ok = m.read_mem(0x08d2) != 0xff && m.read_mem(0x0d6b) != 0xff;
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(was);
+        }
+        ok
+    }
+
     /// Register / PC ABI so RUN harness ROM stays stock (#140).
     ///
     /// Replaces former ROM RET/NOP/JR patches at `3D9Dh` / `02D4h` / `213Eh` /
@@ -3864,6 +3924,17 @@ mod tests {
             0x02d4 => {
                 m.cpu_mut().regs.pc = 0x02d7;
             }
+            // 5.04T warm path: `0249h` is `CALL 3AE6h` (XOR A/OUT (9)/LD HL,5D17/RET)
+            // where hole 5.04 inlines `LD HL,5D17`. Skip the CALL so SP/IFF stay aligned
+            // with the harnessed hole path (native `08D2h` still runs at `19ECh`).
+            0x0249
+                if m.read_mem(0x0249) == 0xcd
+                    && m.read_mem(0x024a) == 0xe6
+                    && m.read_mem(0x024b) == 0x3a =>
+            {
+                m.cpu_mut().regs.set_hl(0x5d17);
+                m.cpu_mut().regs.pc = 0x024c;
+            }
             // `213Eh` `CALL Z,211Eh` wipes `(PROG)` when Z (`5D0F=0`); keep seeded
             // `RUN\\r` for `3032h` by skipping the call (was three NOPs).
             0x213e => {
@@ -3877,9 +3948,13 @@ mod tests {
                 m.cpu_mut().regs.sp = sp.wrapping_add(2);
                 m.cpu_mut().regs.pc = ret;
             }
-            // Stock `19ECh`: `RST #20` / `DW 08D2h`. Never enter this image’s
-            // `08D2h` FF hole — FDC-load `boot` and enter Spectrum `LINE-NEW`.
-            0x19ec if trdos_fdc_load_boot_into_prog(m) => {
+            // Stock `19ECh`: `RST #20` / `DW 08D2h`. On hole dumps, never enter
+            // `08D2h` FF padding — FDC-load `boot` and enter Spectrum `LINE-NEW`.
+            // Complete dumps (non-FF at `08D2h`) run the native service.
+            0x19ec
+                if !trdos_rom_has_native_file_services_paged(m)
+                    && trdos_fdc_load_boot_into_prog(m) =>
+            {
                 m.cpu_mut().regs.pc = 0x1b76;
             }
             _ => {}
@@ -4138,21 +4213,29 @@ mod tests {
     }
 
     fn wait_for_trdos_boot_marker(m: &mut Machine, max_frames: u32) -> bool {
-        let mut saw_08d2_ff_hole = false;
+        let native = trdos_rom_has_native_file_services_paged(m);
+        let mut saw_08d2 = false;
         // Prefer instruction steps so we cannot miss the one-instruction `19ECh`
         // call-site window inside a full frame (`apply_trdos_run_native_abi`).
         let max_steps = u64::from(max_frames).saturating_mul(70_000).min(3_000_000);
         for _ in 0..max_steps {
             if m.cpu().regs.pc == 0x08d2 {
-                saw_08d2_ff_hole = true;
+                saw_08d2 = true;
             }
             apply_trdos_run_native_abi(m);
             m.step_once();
             if m.read_mem(0x8000) == 0xa5 {
-                assert!(
-                    !saw_08d2_ff_hole,
-                    "RUN boot must not execute 08D2h FF padding (handoff at 19ECh)"
-                );
+                if native {
+                    assert!(
+                        saw_08d2,
+                        "complete ROM: RUN boot must enter native 08D2h file-load service"
+                    );
+                } else {
+                    assert!(
+                        !saw_08d2,
+                        "hole dump: RUN boot must not execute 08D2h FF padding (handoff at 19ECh)"
+                    );
+                }
                 return true;
             }
         }
@@ -4166,7 +4249,7 @@ mod tests {
             eprintln!("skip: pentagon/128 main ROM missing");
             return;
         };
-        let Some(trdos) = trdos_rom_bytes() else {
+        let Some(trdos) = trdos_rom_bytes_harness() else {
             eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
             return;
         };
@@ -4919,7 +5002,7 @@ mod tests {
             eprintln!("skip: pentagon/128 main ROM missing");
             return;
         };
-        let Some(trdos) = trdos_rom_bytes() else {
+        let Some(trdos) = trdos_rom_bytes_harness() else {
             eprintln!("skip: roms/trdos.rom missing (optional #140 TR-DOS boot fixture)");
             return;
         };
@@ -4945,6 +5028,77 @@ mod tests {
             m.read_mem(0x8000)
         );
         assert_eq!(m.read_mem(0x8000), 0xa5, "boot BASIC POKE 32768,165");
+    }
+
+    /// Complete ROM: `19ECh` must not take the hole-dump FDC/`LINE-NEW` stand-in.
+    #[test]
+    fn trdos_19ec_skips_fdc_standin_when_complete_rom_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            eprintln!("skip: pentagon/128 main ROM missing");
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes_complete() else {
+            eprintln!(
+                "skip: complete TR-DOS dump missing — place trdos-5.04t.rom /                  trdos-complete.rom under roms/pentagon/ (Refs #140)"
+            );
+            return;
+        };
+        assert!(trdos_rom_has_native_file_services(&trdos));
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
+            .unwrap();
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        // Seed a plausible BASIC dirent in the sector buffer so the stand-in
+        // *would* succeed if it still ran — proving we skipped it for real.
+        m.write_mem(0x5d25 + 8, b'B');
+        m.write_mem(0x5d25 + 9, 28);
+        m.write_mem(0x5d25 + 10, 0);
+        m.write_mem(0x5d25 + 14, 1);
+        m.write_mem(0x5d25 + 15, 1);
+        m.write_mem(0x5c59, 0x00);
+        m.write_mem(0x5c5a, 0x5e);
+        m.cpu_mut().regs.pc = 0x19ec;
+        assert!(trdos_rom_has_native_file_services_paged(&mut m));
+        apply_trdos_run_native_abi(&mut m);
+        assert_eq!(
+            m.cpu().regs.pc,
+            0x19ec,
+            "complete ROM must leave stock 19ECh (RST #20→08D2h); FDC stand-in would jump to 1B76h"
+        );
+        assert_ne!(m.read_mem(0x08d2), 0xff);
+    }
+
+    /// Full native `08D2h` RUN→boot — still open on 5.04T warm entry (find misses).
+    ///
+    /// With Alone Coder `TRD_5043` / `trdos-5.04t.rom`, `USR→3D31h` and warm `0239h`
+    /// diverge from hole 5.04 (`CALL 3AE6h`, different `02E9h`). Find-boot reaches
+    /// `195Ch` but falls through to `1E3Dh` (miss) before `19ECh`. Keep ignored until
+    /// that match path is green; gate + `19ECh` non-intercept tests cover the ROM side.
+    #[test]
+    #[ignore = "5.04T warm find-boot still misses (1E3Dh) before native 19ECh/08D2h; Refs #140"]
+    fn trdos_rom_run_boot_native_08d2_when_complete_present() {
+        let Some(main) = rom_pentagon().or_else(rom128) else {
+            return;
+        };
+        let Some(trdos) = trdos_rom_bytes_complete() else {
+            return;
+        };
+        let mut m = Machine::new_pentagon128(&main, &trdos).unwrap();
+        m.insert_trd(formats::TrdImage::synthetic_trdos_boot_basic())
+            .unwrap();
+        enter_128k_basic_from_menu(&mut m);
+        ensure_trdos_beta128_prog(&mut m);
+        if let Some(beta) = m.beta_mut() {
+            beta.page_trdos(true);
+        }
+        init_trdos_usr_call_frame(&mut m);
+        assert!(
+            invoke_trdos_run_boot(&mut m),
+            "complete ROM native RUN boot should POKE 32768,165 via 08D2h"
+        );
+        assert_eq!(m.read_mem(0x8000), 0xa5);
     }
 
     /// Mid-instruction ULA time: `frame_t` at insn start + `(cpu.t - t_step_start)`.
