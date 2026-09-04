@@ -40,7 +40,7 @@ ROM/RAM warm-boot paths can resume below `4000h` without re-entering through
 
 `RUN` with no filename loads the BASIC program named `boot` (Beta 128 manual).
 
-This tree’s usual `roms/pentagon/trdos.rom` identifies as **TR-DOS Ver 5.04** with FF padding `0800h`–`0E71h` (covers `08D2h` and `0D6Bh`). That is a ROM-image limitation, not an emulator skip of working service code. Resolver prefers `roms/pentagon/trdos-5.04t.rom` / `trdos-complete.rom` (and the same names under `roms/trdos/`) when those files exist and have non-FF services — see [ROMS.md](../../../docs/ROMS.md).
+This tree’s usual `roms/pentagon/trdos.rom` identifies as **TR-DOS Ver 5.04** with FF padding `0800h`–`0E71h` (covers `08D2h` and `0D6Bh`). That is a ROM-image limitation, not an emulator skip of working service code. Resolver prefers `roms/pentagon/trdos-5.04t.rom` / `trdos-complete.rom` (and the same names under `roms/trdos/`) when those files exist and fill the hole — see [ROMS.md](../../../docs/ROMS.md). Alone Coder **5.04T** is a filled-hole dump whose `08D2h` is a VG93 port stub (not classic file-load); classic complete dumps with live `08D2h` remain optional for the native soft-gate.
 
 | Fixture | Licence | Path | Marker |
 | --- | --- | --- | --- |
