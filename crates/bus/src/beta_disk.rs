@@ -850,7 +850,11 @@ impl BetaDisk {
     fn complete_read_byte_stream(&mut self) {
         if self.xfer == Xfer::Read && self.multiple {
             self.advance_multi();
-            if self.xfer == Xfer::Read && self.load_sector_to_buffer() {
+            if self.xfer == Xfer::Read {
+                // Preserve STAT_NOT_READY / STAT_RNF from a failed continuation load.
+                if !self.load_sector_to_buffer() {
+                    return;
+                }
                 self.xfer = Xfer::Read;
                 self.drq = true;
                 self.status = STAT_BUSY | STAT_DRQ;
@@ -889,6 +893,28 @@ mod tests {
         assert_eq!(beta.in_port(0x001f), Some(STAT_BUSY | STAT_DRQ));
         assert_eq!(beta.in_port(0x007f), Some(0x12));
         assert_eq!(beta.in_port(0x007f), Some(0x34));
+    }
+
+    /// Multi-sector Type-II: a failed continuation load must keep STAT_NOT_READY.
+    #[test]
+    fn multi_sector_read_preserves_not_ready_on_continuation() {
+        let mut beta = BetaDisk::new();
+        beta.insert(one_track_image(0xaa, 0xbb));
+        beta.page_trdos(true);
+        beta.out_port(0x003f, 0);
+        beta.out_port(0x005f, 1);
+        beta.out_port(0x001f, 0x90); // Read Sector, multiple
+        assert_eq!(beta.in_port(0x001f), Some(STAT_BUSY | STAT_DRQ));
+        for _ in 0..(TRD_SECTOR_SIZE - 1) {
+            let _ = beta.in_port(0x007f);
+        }
+        beta.image = None;
+        let _ = beta.in_port(0x007f); // last byte → advance + failed load
+        assert_eq!(
+            beta.status, STAT_NOT_READY,
+            "continuation failure must not be wiped to success status 0"
+        );
+        assert_eq!(beta.in_port(0x001f), Some(STAT_NOT_READY));
     }
 
     /// Alone Coder / VfNG 5.04T uses `#08/#28/#48/#68` instead of `#1F/#3F/#5F/#7F`.
