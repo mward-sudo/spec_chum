@@ -6095,19 +6095,7 @@ mod tests {
             return;
         };
         let mut m = Machine::new_plus3(&rom).unwrap();
-        let data = {
-            let mut data = vec![0u8; 0x100];
-            data[0..8].copy_from_slice(b"MV - CPC");
-            data[0x30] = 1;
-            data[0x31] = 1;
-            let track_size: u16 = 0x100;
-            data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-            let mut track = vec![0u8; track_size as usize];
-            track[0..12].copy_from_slice(b"Track-Info\r\n");
-            data.extend_from_slice(&track);
-            data
-        };
-        let img = formats::DskImage::parse(&data).expect("minimal dsk");
+        let img = formats::DskImage::synthetic_empty_track();
         m.insert_disk(img).expect("insert");
         {
             let Machine::SpecPlus3 { bus, .. } = &m else {
@@ -6578,19 +6566,7 @@ mod tests {
             assert!(!bus.disk_interface);
             assert_eq!(bus.in_port(0x2ffd), 0xff);
         }
-        let data = {
-            let mut data = vec![0u8; 0x100];
-            data[0..8].copy_from_slice(b"MV - CPC");
-            data[0x30] = 1;
-            data[0x31] = 1;
-            let track_size: u16 = 0x100;
-            data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-            let mut track = vec![0u8; track_size as usize];
-            track[0..12].copy_from_slice(b"Track-Info\r\n");
-            data.extend_from_slice(&track);
-            data
-        };
-        let img = formats::DskImage::parse(&data).expect("minimal dsk");
+        let img = formats::DskImage::synthetic_empty_track();
         let err = m.insert_disk(img).unwrap_err();
         assert!(
             err.contains("+2A") || err.contains("disk"),
