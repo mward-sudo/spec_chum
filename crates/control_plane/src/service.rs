@@ -629,33 +629,37 @@ impl ControlPlane {
     ///
     /// When `border_override` is `Some`, temporarily sets that border preference,
     /// advances one frame, captures, then restores the previous preference — so
-    /// concurrent [`Self::set_border`] cannot interleave mid-capture.
+    /// concurrent [`Self::set_border`] cannot interleave mid-capture. Restoration
+    /// runs even if the frame advance or encode fails.
     pub fn capture_framebuffer(
         &self,
         border_override: Option<bool>,
         as_png: bool,
     ) -> ApiResult<(FramebufferMeta, Vec<u8>)> {
         self.with_session_mut(|s| {
-            let restore = if let Some(want) = border_override {
+            let restore = border_override.and_then(|want| {
                 let prev = s.with_border();
                 s.set_border(want);
-                s.run_frames(1)?;
                 (prev != want).then_some(prev)
-            } else {
-                None
-            };
+            });
 
-            let meta = FramebufferMeta::from_session(s);
-            let bytes = if as_png {
-                encode_framebuffer_png(s)?
-            } else {
-                s.framebuffer().to_vec()
-            };
+            let result = (|| {
+                if border_override.is_some() {
+                    s.run_frames(1)?;
+                }
+                let meta = FramebufferMeta::from_session(s);
+                let bytes = if as_png {
+                    encode_framebuffer_png(s)?
+                } else {
+                    s.framebuffer().to_vec()
+                };
+                Ok((meta, bytes))
+            })();
 
             if let Some(prev) = restore {
                 s.set_border(prev);
             }
-            Ok((meta, bytes))
+            result
         })
     }
 
@@ -1390,6 +1394,18 @@ mod tests {
         assert!(
             !plane.framebuffer_meta().expect("after").border,
             "border preference must be restored after override capture"
+        );
+    }
+
+    #[test]
+    fn capture_framebuffer_restores_border_when_run_fails() {
+        // No machine → run_frames fails after the temporary border flip.
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        assert!(!plane.framebuffer_meta().expect("meta").border);
+        assert!(plane.capture_framebuffer(Some(true), true).is_err());
+        assert!(
+            !plane.framebuffer_meta().expect("after").border,
+            "border preference must restore even when override capture fails"
         );
     }
 

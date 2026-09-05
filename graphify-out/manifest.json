@@ -270,9 +270,9 @@
     "semantic_hash": ""
   },
   "crates/control_plane/src/service.rs": {
-    "mtime": 1788652336.2202168,
-    "seen": 1788652375.370545,
-    "ast_hash": "e42b2679bfb5fd364a259f3e40cd5aa7",
+    "mtime": 1788652469.738404,
+    "seen": 1788652509.334184,
+    "ast_hash": "223624e329205ad63a0d0611dd02076a",
     "semantic_hash": ""
   },
   "crates/debug_cli/Cargo.toml": {
