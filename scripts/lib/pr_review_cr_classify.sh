@@ -8,9 +8,12 @@
 #
 # Outcomes:
 #   pass      — description is "Review completed" (case-insensitive) and state=success
-#   soft_pass — rate-limited / quota unavailable *after* a review was requested
-#               (NOT a completed review; local CR + gate 2 still apply). Soft-passes
-#               for both success and failure states — CR may report rate-limit either way.
+#   soft_pass — GitHub rate-limited / quota unavailable *after* a review was requested
+#               (NOT a completed review). CI cannot see local CR; agents MUST still
+#               confirm either (a) the other side completed cleanly, or (b) BOTH local
+#               and GitHub are rate-limited with reported resets >10m (or long/unknown
+#               on both) before merge. Soft-passes for success and failure states —
+#               CR may report rate-limit either way. Soft-pass ≠ on-demand skip.
 #   hold      — pending / missing / error / unexpected / non-completed success /
 #               on-demand or label skips (never requested — same as missing)
 classify_coderabbit_head_status() {

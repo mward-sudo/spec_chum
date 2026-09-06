@@ -1,7 +1,8 @@
 # PR status check: for ready PRs, fail when CodeRabbit has not completed a
 # review on HEAD (pending / in progress / missing / error / on-demand or label
-# skip without a request). Rate-limited *after* a review was requested
-# soft-passes gate 1 with a warning (local CR + threads still apply).
+# skip without a request). GitHub rate-limited *after* a request soft-passes
+# gate 1 in CI only (loud warning) — CI cannot see local CR; agents must still
+# confirm either-completed OR dual rate-limit (both sides >10m) before merge.
 # Soft-pass ≠ on-demand/label skip. Drafts skip CR completeness. Always fail
 # when unresolved CodeRabbit/bot review threads remain.
 # Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
@@ -181,4 +182,4 @@ jobs:
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=Ready PRs: hard-fails when CodeRabbit is pending/missing/error/on-demand-skip on HEAD or unresolved bot threads remain. Rate-limited soft-passes gate 1 (local CR required; soft-pass ≠ on-demand skip). Drafts skip CR completeness but still fail on unresolved threads. See the workflow run for details.'
+            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip or unresolved bot threads. GitHub rate-limited soft-passes CI only (not Review completed); agents must confirm either-completed OR dual rate-limit both sides >10m (wait if either ≤10m). Soft-pass ≠ on-demand skip. Drafts skip CR completeness. See workflow run.'
