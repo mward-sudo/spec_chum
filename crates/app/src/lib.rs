@@ -278,12 +278,14 @@ impl EmulatorSession {
             Model::SpectrumPlus3 => Machine::new_plus3(data),
             Model::Spectrum128 => Machine::new_128k(data),
             Model::Pentagon128 => {
-                let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
+                let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
+                    .map_err(|e| e.to_string())?;
                 Machine::new_pentagon128(data, &trdos)
             }
             Model::TimexTC2048 => Machine::new_timex_tc2048(data),
             Model::TimexTS2068 => {
-                let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)?;
+                let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)
+                    .map_err(|e| e.to_string())?;
                 Machine::new_timex_ts2068(data, &exrom)
             }
         }
@@ -1563,7 +1565,7 @@ impl SpecChumApp {
                                         ));
                                         self.refresh_rom_setup();
                                     }
-                                    Err(e) => self.rom_setup_error = Some(e),
+                                    Err(e) => self.rom_setup_error = Some(e.to_string()),
                                 }
                             }
                         }

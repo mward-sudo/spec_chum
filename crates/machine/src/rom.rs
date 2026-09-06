@@ -11,8 +11,40 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bus::{TIMEX_EXROM_SIZE, TRDOS_ROM_SIZE};
+use thiserror::Error;
 
 use crate::Model;
+
+/// Filesystem ROM resolve / read / install failures (`#171` Pillar B).
+#[derive(Debug, Error)]
+pub enum RomReadError {
+    #[error("ROM for {model} not found; {hint}")]
+    NotFound { model: String, hint: String },
+    #[error("TR-DOS ROM for {model} not found; {hint}")]
+    TrdosNotFound { model: String, hint: String },
+    #[error("EX-ROM for {model} not found; {hint}")]
+    ExromNotFound { model: String, hint: String },
+    #[error("{model} does not use a TR-DOS ROM")]
+    TrdosNotApplicable { model: String },
+    #[error("{model} does not use an EX-ROM")]
+    ExromNotApplicable { model: String },
+    #[error("unknown ROM slot “{0}”")]
+    UnknownSlot(String),
+    #[error("{kind} must be {expected} bytes, got {got} ({path})")]
+    WrongSize {
+        kind: &'static str,
+        expected: usize,
+        got: usize,
+        path: String,
+    },
+    #[error("{op} {path}: {source}")]
+    Io {
+        op: &'static str,
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+}
 
 /// Which ROM image a setup slot refers to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -384,20 +416,23 @@ pub fn unavailable_reason(model: Model) -> &'static str {
 pub fn read_rom_with_overrides(
     model: Model,
     overrides: &BTreeMap<String, PathBuf>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, RomReadError> {
     let roots = search_roots();
     let path = resolve_rom_path_in_with_overrides(model, &roots, overrides).ok_or_else(|| {
-        format!(
-            "ROM for {} not found; {}",
-            model_title(model),
-            unavailable_reason(model)
-        )
+        RomReadError::NotFound {
+            model: model_title(model).to_string(),
+            hint: unavailable_reason(model).to_string(),
+        }
     })?;
-    std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))
+    std::fs::read(&path).map_err(|source| RomReadError::Io {
+        op: "read",
+        path: path.display().to_string(),
+        source,
+    })
 }
 
 /// Load main ROM bytes for `model` when available.
-pub fn read_rom(model: Model) -> Result<Vec<u8>, String> {
+pub fn read_rom(model: Model) -> Result<Vec<u8>, RomReadError> {
     read_rom_with_overrides(model, &BTreeMap::new())
 }
 
@@ -613,20 +648,23 @@ pub fn install_rom_slot(
     slot_id: &str,
     source: &Path,
     roots: &[PathBuf],
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, RomReadError> {
     let descriptor = rom_slot_descriptors(model)
         .into_iter()
         .find(|d| d.id == slot_id)
-        .ok_or_else(|| format!("unknown ROM slot “{slot_id}”"))?;
-    let data = fs::read(source).map_err(|e| format!("read {}: {e}", source.display()))?;
+        .ok_or_else(|| RomReadError::UnknownSlot(slot_id.to_string()))?;
+    let data = fs::read(source).map_err(|source_err| RomReadError::Io {
+        op: "read",
+        path: source.display().to_string(),
+        source: source_err,
+    })?;
     if data.len() != descriptor.expected_bytes {
-        return Err(format!(
-            "{} must be {} bytes, got {} ({})",
-            descriptor.label,
-            descriptor.expected_bytes,
-            data.len(),
-            source.display()
-        ));
+        return Err(RomReadError::WrongSize {
+            kind: descriptor.label,
+            expected: descriptor.expected_bytes,
+            got: data.len(),
+            path: source.display().to_string(),
+        });
     }
     let root = roots
         .iter()
@@ -640,12 +678,24 @@ pub fn install_rom_slot(
         .unwrap_or_else(writable_install_root);
     let dest = root.join(descriptor.install_path);
     if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent).map_err(|source| RomReadError::Io {
+            op: "mkdir",
+            path: parent.display().to_string(),
+            source,
+        })?;
     }
     let tmp = dest.with_extension("part");
-    fs::write(&tmp, &data).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    fs::write(&tmp, &data).map_err(|source| RomReadError::Io {
+        op: "write",
+        path: tmp.display().to_string(),
+        source,
+    })?;
     if fs::rename(&tmp, &dest).is_err() {
-        fs::copy(&tmp, &dest).map_err(|e| format!("copy {}: {e}", dest.display()))?;
+        fs::copy(&tmp, &dest).map_err(|source| RomReadError::Io {
+            op: "copy",
+            path: dest.display().to_string(),
+            source,
+        })?;
         let _ = fs::remove_file(&tmp);
     }
     Ok(dest)
@@ -655,32 +705,38 @@ pub fn install_rom_slot(
 pub fn read_trdos_rom_with_overrides(
     model: Model,
     overrides: &BTreeMap<String, PathBuf>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, RomReadError> {
     if !requires_trdos_rom(model) {
-        return Err(format!("{} does not use a TR-DOS ROM", model_title(model)));
+        return Err(RomReadError::TrdosNotApplicable {
+            model: model_title(model).to_string(),
+        });
     }
     let roots = search_roots();
     let path =
         resolve_trdos_rom_path_in_with_overrides(model, &roots, overrides).ok_or_else(|| {
-            format!(
-                "TR-DOS ROM for {} not found; {}",
-                model_title(model),
-                unavailable_reason(model)
-            )
+            RomReadError::TrdosNotFound {
+                model: model_title(model).to_string(),
+                hint: unavailable_reason(model).to_string(),
+            }
         })?;
-    let data = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let data = std::fs::read(&path).map_err(|source| RomReadError::Io {
+        op: "read",
+        path: path.display().to_string(),
+        source,
+    })?;
     if data.len() != TRDOS_ROM_SIZE {
-        return Err(format!(
-            "TR-DOS ROM must be {TRDOS_ROM_SIZE} bytes, got {} ({})",
-            data.len(),
-            path.display()
-        ));
+        return Err(RomReadError::WrongSize {
+            kind: "TR-DOS ROM",
+            expected: TRDOS_ROM_SIZE,
+            got: data.len(),
+            path: path.display().to_string(),
+        });
     }
     Ok(data)
 }
 
 /// Load TR-DOS ROM bytes when required and available.
-pub fn read_trdos_rom(model: Model) -> Result<Vec<u8>, String> {
+pub fn read_trdos_rom(model: Model) -> Result<Vec<u8>, RomReadError> {
     read_trdos_rom_with_overrides(model, &BTreeMap::new())
 }
 
@@ -688,31 +744,37 @@ pub fn read_trdos_rom(model: Model) -> Result<Vec<u8>, String> {
 pub fn read_exrom_with_overrides(
     model: Model,
     overrides: &BTreeMap<String, PathBuf>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, RomReadError> {
     if !requires_exrom(model) {
-        return Err(format!("{} does not use an EX-ROM", model_title(model)));
+        return Err(RomReadError::ExromNotApplicable {
+            model: model_title(model).to_string(),
+        });
     }
     let roots = search_roots();
     let path = resolve_exrom_path_in_with_overrides(model, &roots, overrides).ok_or_else(|| {
-        format!(
-            "EX-ROM for {} not found; {}",
-            model_title(model),
-            unavailable_reason(model)
-        )
+        RomReadError::ExromNotFound {
+            model: model_title(model).to_string(),
+            hint: unavailable_reason(model).to_string(),
+        }
     })?;
-    let data = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let data = std::fs::read(&path).map_err(|source| RomReadError::Io {
+        op: "read",
+        path: path.display().to_string(),
+        source,
+    })?;
     if data.len() != TIMEX_EXROM_SIZE {
-        return Err(format!(
-            "EX-ROM must be {TIMEX_EXROM_SIZE} bytes, got {} ({})",
-            data.len(),
-            path.display()
-        ));
+        return Err(RomReadError::WrongSize {
+            kind: "EX-ROM",
+            expected: TIMEX_EXROM_SIZE,
+            got: data.len(),
+            path: path.display().to_string(),
+        });
     }
     Ok(data)
 }
 
 /// Load Timex EX-ROM bytes when required and available.
-pub fn read_exrom(model: Model) -> Result<Vec<u8>, String> {
+pub fn read_exrom(model: Model) -> Result<Vec<u8>, RomReadError> {
     read_exrom_with_overrides(model, &BTreeMap::new())
 }
 
@@ -867,8 +929,24 @@ mod tests {
         fs::write(&bad, [0u8; 8]).expect("write");
         let err = install_rom_slot(Model::Spectrum48, "main", &bad, std::slice::from_ref(&dir))
             .expect_err("size");
-        assert!(err.contains("16384"), "{err}");
+        let msg = err.to_string();
+        assert!(msg.contains("16384"), "{msg}");
+        assert!(matches!(
+            err,
+            RomReadError::WrongSize {
+                expected: 16384,
+                got: 8,
+                ..
+            }
+        ));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_trdos_not_applicable_is_typed() {
+        let err = read_trdos_rom(Model::Spectrum48).expect_err("48K has no TR-DOS");
+        assert!(matches!(err, RomReadError::TrdosNotApplicable { .. }));
+        assert!(err.to_string().contains("does not use a TR-DOS ROM"));
     }
 
     #[test]

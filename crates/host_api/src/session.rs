@@ -562,13 +562,13 @@ impl HostSession {
             ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
             ModelId::Pentagon128 => {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
-                    .map_err(HostError::Message)?;
+                    .map_err(|e| HostError::Message(e.to_string()))?;
                 Machine::new_pentagon128(rom, &trdos)
             }
             ModelId::TimexTC2048 => Machine::new_timex_tc2048(rom),
             ModelId::TimexTS2068 => {
                 let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)
-                    .map_err(HostError::Message)?;
+                    .map_err(|e| HostError::Message(e.to_string()))?;
                 Machine::new_timex_ts2068(rom, &exrom)
             }
         }
