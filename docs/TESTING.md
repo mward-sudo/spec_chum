@@ -60,7 +60,7 @@ Flash-load, turbo tape, and similar UI helpers may diverge from real EAR timing 
 
 Documented exceptions (do not treat as green-gate failures unless they regress):
 
-- Occasional Actions runner / composite-wrapper log notices (default CI Actions are SHA-pinned Node 24; see #171 CI hygiene).
+- Occasional Actions runner / composite-wrapper log notices (default CI Actions SHA-pinned: `actions/checkout@v6` / `actions/cache@v6`; see #171 CI hygiene).
 - Historical (resolved / no longer seen on recent `macos-latest` CI): living-room `__eh_frame section too large` linker notes on `room_probe` / `room_perf`; if they return they are Apple ld notes and do not fail `-Dwarnings`.
 - SpecChumMac builds set `MACOSX_DEPLOYMENT_TARGET=14.0` (+ matching `CFLAGS`/`CXXFLAGS`) in `./scripts/build_macos_app.sh` so clang deps (e.g. blake3 NEON) match Swift `.macOS(.v14)` — avoids `ld: built for newer macOS than being linked (14.0)`. If a stale archive still warns locally: `cargo clean -p blake3` then rebuild.
 - **`cargo deny check` advisories (non-blocking CI):** transitive RustSec hits via egui/bevy (e.g. `quick-xml` / `ttf-parser` / `paste`) — licenses/bans/sources are configured to pass; clear or ignore-with-reason under #171 before making the workflow blocking.
