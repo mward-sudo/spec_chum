@@ -16,11 +16,21 @@
 //! clears it.
 
 use formats::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
+use thiserror::Error;
 
 use crate::RomLoadError;
 
 /// TR-DOS / Beta 128 ROM size (16 KiB overlay at `0000–3FFF`).
 pub const TRDOS_ROM_SIZE: usize = 16384;
+
+/// Errors from [`BetaDisk::patch_rom`] (test / harness ROM overlays).
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum BetaDiskPatchError {
+    #[error("TR-DOS ROM not loaded")]
+    RomNotLoaded,
+    #[error("TR-DOS ROM patch {addr:#06x}+{len} out of range")]
+    OutOfRange { addr: u16, len: usize },
+}
 
 // Fuse `wd_fdc.h`: BUSY=0, IDX/DRQ=1, TRACK0=2, RNF=4, HEAD/SPINUP=5, NOT_READY=7.
 const STAT_BUSY: u8 = 0x01;
@@ -157,17 +167,17 @@ impl BetaDisk {
     }
 
     /// Overwrite bytes in the loaded TR-DOS ROM image (test / harness hooks).
-    pub fn patch_rom(&mut self, addr: u16, bytes: &[u8]) -> Result<(), String> {
+    pub fn patch_rom(&mut self, addr: u16, bytes: &[u8]) -> Result<(), BetaDiskPatchError> {
         let start = usize::from(addr);
         let end = start.saturating_add(bytes.len());
         if !self.rom_loaded {
-            return Err("TR-DOS ROM not loaded".into());
+            return Err(BetaDiskPatchError::RomNotLoaded);
         }
         if end > TRDOS_ROM_SIZE {
-            return Err(format!(
-                "TR-DOS ROM patch {addr:#06x}+{} out of range",
-                bytes.len()
-            ));
+            return Err(BetaDiskPatchError::OutOfRange {
+                addr,
+                len: bytes.len(),
+            });
         }
         self.rom[start..end].copy_from_slice(bytes);
         Ok(())
@@ -880,6 +890,35 @@ mod tests {
         raw[0] = marker0;
         raw[1] = marker1;
         TrdImage::parse(&raw).unwrap()
+    }
+
+    #[test]
+    fn patch_rom_requires_loaded_rom_and_in_range() {
+        let mut beta = BetaDisk::new();
+        assert_eq!(
+            beta.patch_rom(0, &[0x00]).unwrap_err(),
+            BetaDiskPatchError::RomNotLoaded
+        );
+        beta.load_rom(&[0u8; TRDOS_ROM_SIZE]).unwrap();
+        assert_eq!(
+            beta.patch_rom(0x3fff, &[0xaa, 0xbb]).unwrap_err(),
+            BetaDiskPatchError::OutOfRange {
+                addr: 0x3fff,
+                len: 2
+            }
+        );
+        assert_eq!(
+            BetaDiskPatchError::OutOfRange {
+                addr: 0x3fff,
+                len: 2
+            }
+            .to_string(),
+            "TR-DOS ROM patch 0x3fff+2 out of range"
+        );
+        beta.patch_rom(0x0100, &[0xcd, 0xef]).unwrap();
+        beta.page_trdos(true);
+        assert_eq!(beta.read_rom(0x0100), Some(0xcd));
+        assert_eq!(beta.read_rom(0x0101), Some(0xef));
     }
 
     #[test]
