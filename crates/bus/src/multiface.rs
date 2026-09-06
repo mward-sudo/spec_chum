@@ -12,6 +12,8 @@
 
 use std::path::Path;
 
+use crate::RomLoadError;
+
 /// Multiface One memory size (ROM and RAM each).
 pub const MULTIFACE1_SIZE: usize = 8192;
 
@@ -54,12 +56,13 @@ impl Multiface1 {
     }
 
     /// Load an 8 KiB Multiface ROM image from memory.
-    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
         if data.len() != MULTIFACE1_SIZE {
-            return Err(format!(
-                "Multiface 1 ROM must be {MULTIFACE1_SIZE} bytes, got {}",
-                data.len()
-            ));
+            return Err(RomLoadError::WrongSize {
+                kind: "Multiface 1 ROM",
+                expected: MULTIFACE1_SIZE,
+                got: data.len(),
+            });
         }
         self.rom.copy_from_slice(data);
         self.rom_loaded = true;
@@ -67,8 +70,8 @@ impl Multiface1 {
     }
 
     /// Load Multiface ROM from a filesystem path.
-    pub fn load_rom_path(&mut self, path: &Path) -> Result<(), String> {
-        let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    pub fn load_rom_path(&mut self, path: &Path) -> Result<(), RomLoadError> {
+        let data = std::fs::read(path)?;
         self.load_rom(&data)
     }
 

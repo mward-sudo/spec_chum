@@ -12,6 +12,8 @@
 //! flat sector image so loaders can smoke-test sector read/write. Full ESXDOS
 //! boot still needs a real EEPROM binary (see `roms/` / docs).
 
+use crate::RomLoadError;
+
 /// `DivMMC` control / paging register.
 pub const PORT_CONTROL: u16 = 0x00e3;
 /// SPI chip-select (active low bit0).
@@ -317,12 +319,13 @@ impl DivMmc {
 
     /// Attach ESXDOS / `DivMMC` EEPROM. Accepts exactly 8 KiB, or a larger image
     /// (first 8 KiB used). Smaller images are rejected.
-    pub fn attach_eeprom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn attach_eeprom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
         if data.len() < PAGE_SIZE {
-            return Err(format!(
-                "DivMMC EEPROM must be at least {PAGE_SIZE} bytes, got {}",
-                data.len()
-            ));
+            return Err(RomLoadError::TooSmall {
+                kind: "DivMMC EEPROM",
+                min: PAGE_SIZE,
+                got: data.len(),
+            });
         }
         self.eeprom.copy_from_slice(&data[..PAGE_SIZE]);
         self.eeprom_loaded = true;

@@ -281,12 +281,13 @@ impl EmulatorSession {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
                 Machine::new_pentagon128(data, &trdos)
             }
-            Model::TimexTC2048 => Machine::new_timex_tc2048(data).map_err(|e| e.to_string()),
+            Model::TimexTC2048 => Machine::new_timex_tc2048(data),
             Model::TimexTS2068 => {
                 let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)?;
-                Machine::new_timex_ts2068(data, &exrom).map_err(|e| e.to_string())
+                Machine::new_timex_ts2068(data, &exrom)
             }
         }
+        .map_err(|e| e.to_string())
     }
 
     /// Boot from a saved user profile (#187).
