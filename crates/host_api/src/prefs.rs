@@ -1,6 +1,6 @@
 //! Host-local UI / session preferences (issue #186).
 //!
-//! Shared JSON schema for egui / living_room. macOS SwiftUI mirrors the same
+//! Shared JSON schema for egui / `living_room`. macOS `SwiftUI` mirrors the same
 //! fields in `UserDefaults` (`specChum.*` keys). Instant / flash-load is never
 //! persisted as a sticky Play default.
 
@@ -23,7 +23,7 @@ pub const PREFS_VERSION: u32 = 2;
 /// Cap for the recent-files list.
 pub const MAX_RECENT_FILES: usize = 12;
 
-/// Minimum egui / native window size (matches `ViewportBuilder` / SwiftUI mins).
+/// Minimum egui / native window size (matches `ViewportBuilder` / `SwiftUI` mins).
 pub const MIN_WINDOW_WIDTH: f32 = 480.0;
 pub const MIN_WINDOW_HEIGHT: f32 = 400.0;
 
@@ -163,7 +163,7 @@ impl UiPreferences {
         self.custom_configs = self
             .custom_configs
             .drain(..)
-            .map(|c| c.sanitized())
+            .map(super::machine_config::UserMachineConfig::sanitized)
             .filter(|c| seen.insert(c.id.clone()))
             .take(MAX_CUSTOM_CONFIGS)
             .collect();
@@ -308,8 +308,7 @@ impl UiPreferences {
     #[must_use]
     pub fn effective_ay_stereo(&self) -> AyStereoMode {
         self.active_custom_config()
-            .map(|c| c.ay_stereo.to_mode())
-            .unwrap_or_else(|| self.ay_stereo.to_mode())
+            .map_or_else(|| self.ay_stereo.to_mode(), |c| c.ay_stereo.to_mode())
     }
 
     pub fn set_tape_from_options(&mut self, opts: TapeLoadOptions) {
@@ -486,9 +485,10 @@ pub fn default_prefs_path() -> PathBuf {
             return PathBuf::from(p);
         }
     }
-    directories::ProjectDirs::from("dev", "SpecChum", "spec-chum")
-        .map(|d| d.config_dir().join("ui-prefs.json"))
-        .unwrap_or_else(|| PathBuf::from("ui-prefs.json"))
+    directories::ProjectDirs::from("dev", "SpecChum", "spec-chum").map_or_else(
+        || PathBuf::from("ui-prefs.json"),
+        |d| d.config_dir().join("ui-prefs.json"),
+    )
 }
 
 /// Load preferences; missing or corrupt files yield [`UiPreferences::default`].
@@ -595,8 +595,7 @@ mod tests {
     fn temp_prefs_path(label: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         std::env::temp_dir().join(format!("spec-chum-prefs-{label}-{nanos}.json"))
     }
 

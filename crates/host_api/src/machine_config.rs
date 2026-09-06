@@ -1,7 +1,7 @@
 //! User-defined machine configurations (#187).
 //!
 //! Serializable profiles: base model + optional hardware + ROM override.
-//! Apply logic is shared by egui and SpecChumMac (`sc_apply_user_config_json`).
+//! Apply logic is shared by egui and `SpecChumMac` (`sc_apply_user_config_json`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -345,8 +345,7 @@ pub fn new_config_id() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos());
     format!("cfg-{nanos}")
 }
 

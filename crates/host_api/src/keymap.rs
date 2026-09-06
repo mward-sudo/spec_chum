@@ -1,6 +1,6 @@
 //! Host → ZX Spectrum keyboard matrix mapping (ANSI key codes).
 //!
-//! Canonical table for the macOS SwiftUI shell (`SpectrumKeymap.swift`). The egui
+//! Canonical table for the macOS `SwiftUI` shell (`SpectrumKeymap.swift`). The egui
 //! app uses the same chords via `app::keymap` (logical `egui::Key` ids). Matrix
 //! rows are active-low bits 0–4, matching `bus::Keyboard`.
 
@@ -38,7 +38,7 @@ impl Chord {
     }
 }
 
-/// ANSI US Mac key codes (Carbon / HIToolbox) — keep in sync with `SpectrumKeymap.swift`.
+/// ANSI US Mac key codes (Carbon / `HIToolbox`) — keep in sync with `SpectrumKeymap.swift`.
 pub mod ansi {
     pub const LEFT: u16 = 123;
     pub const DOWN: u16 = 125;

@@ -139,7 +139,7 @@ impl RegsPatch {
 
 /// Host-owned emulator session: machine + RGBA framebuffer + status.
 ///
-/// Fields are private; in-process hosts (egui / living_room) use accessors
+/// Fields are private; in-process hosts (egui / `living_room`) use accessors
 /// (`machine` / `machine_mut`, `framebuffer`, `set_status`, `set_border`, …).
 #[derive(Debug)]
 pub struct HostSession {
@@ -296,7 +296,7 @@ impl HostSession {
     pub fn set_model(&mut self, model: ModelId) {
         self.model = model;
         self.machine = None;
-        self.status = format!("Model set to {:?}; load a ROM", model);
+        self.status = format!("Model set to {model:?}; load a ROM");
     }
 
     /// Switch the selected model and autoload its ROM from `roms/`.
@@ -882,7 +882,7 @@ impl HostSession {
         self.machine.as_ref().is_some_and(Machine::has_interface1)
     }
 
-    /// Attach DivMMC on 48K/128K (no media).
+    /// Attach `DivMMC` on 48K/128K (no media).
     pub fn attach_divmmc(&mut self) -> Result<(), HostError> {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
@@ -892,7 +892,7 @@ impl HostSession {
         Ok(())
     }
 
-    /// Attach DivMMC and load a flat SD/MMC image.
+    /// Attach `DivMMC` and load a flat SD/MMC image.
     pub fn load_divmmc_sd(&mut self, path: &Path) -> Result<(), HostError> {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
@@ -904,7 +904,7 @@ impl HostSession {
         Ok(())
     }
 
-    /// Attach DivMMC and load an ESXDOS EEPROM (8 KiB or larger prefix).
+    /// Attach `DivMMC` and load an ESXDOS EEPROM (8 KiB or larger prefix).
     pub fn load_divmmc_eeprom(&mut self, path: &Path) -> Result<(), HostError> {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
