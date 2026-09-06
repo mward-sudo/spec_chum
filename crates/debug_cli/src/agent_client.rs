@@ -17,20 +17,20 @@ pub struct AgentClient {
 }
 
 impl AgentClient {
-    pub fn from_env() -> Result<Self> {
+    pub fn from_env() -> Self {
         let base = std::env::var("SPEC_CHUM_AGENT_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:17384".into());
         let token = std::env::var("SPEC_CHUM_AGENT_TOKEN").ok();
         Self::new(&base, token)
     }
 
-    pub fn new(base: &str, token: Option<String>) -> Result<Self> {
+    pub fn new(base: &str, token: Option<String>) -> Self {
         let base = base.trim_end_matches('/').to_string();
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(30)))
             .build()
             .new_agent();
-        Ok(Self { base, token, agent })
+        Self { base, token, agent }
     }
 
     pub fn health(&self) -> Result<Value> {

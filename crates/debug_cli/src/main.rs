@@ -45,7 +45,7 @@ struct Cli {
     /// Use EAR bitstream loading instead of instant flash-load at LD-BYTES.
     #[arg(long)]
     ear_load: bool,
-    /// EAR speed: N Spectrum frames per run_frame while playing (ignored when flash-load/Instant).
+    /// EAR speed: N Spectrum frames per `run_frame` while playing (ignored when flash-load/Instant).
     #[arg(long, default_value_t = 1)]
     speed: u32,
     /// Run the loopback agent HTTP server instead of a one-shot command.
@@ -235,20 +235,16 @@ fn run_remote(cli: &Cli, client: &AgentClient, cmd: &Cmd) -> Result<()> {
                 bail!("type-load requires --tap or --tzx");
             }
             let body = client.type_load(*code, *warmup, max.unwrap_or(0))?;
+            let load_ok = body
+                .get("load_ok")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
             if cli.json {
                 println!("{body}");
             } else {
-                let load_ok = body
-                    .get("load_ok")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
                 println!("load_ok={load_ok}");
             }
-            if !body
-                .get("load_ok")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
+            if !load_ok {
                 exit_cli(2);
             }
         }
@@ -489,13 +485,13 @@ fn main() -> Result<()> {
         .context("subcommand required (or pass --serve to run the HTTP server)")?;
     if let Some(url) = &cli.agent_url {
         let token = std::env::var("SPEC_CHUM_AGENT_TOKEN").ok();
-        let client = AgentClient::new(url, token)?;
+        let client = AgentClient::new(url, token);
         run_remote(&cli, &client, cmd)?;
         trace::flush_append().context("flush SPEC_CHUM_TRACE_APPEND")?;
         return Ok(());
     }
     if std::env::var("SPEC_CHUM_AGENT_URL").is_ok() {
-        let client = AgentClient::from_env()?;
+        let client = AgentClient::from_env();
         run_remote(&cli, &client, cmd)?;
         trace::flush_append().context("flush SPEC_CHUM_TRACE_APPEND")?;
         return Ok(());
@@ -540,6 +536,13 @@ mod tests {
         assert_eq!(cli.trdos_rom, Some(PathBuf::from("/tmp/trdos.rom")));
     }
 
+    struct RmTree(PathBuf);
+    impl Drop for RmTree {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn load_host_session_trd_attaches_beta() {
         let rom = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/spec48.rom");
@@ -552,20 +555,13 @@ mod tests {
         raw[0xe3] = 0; // unknown type → parser infers geometry from length
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         let dir = std::env::temp_dir().join(format!(
             "spec_chum_debug_cli_trd_{}_{}",
             std::process::id(),
             nanos
         ));
         std::fs::create_dir_all(&dir).expect("unique temp dir");
-        struct RmTree(PathBuf);
-        impl Drop for RmTree {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.0);
-            }
-        }
         let _cleanup = RmTree(dir.clone());
         let trd_path = dir.join("one_track.trd");
         std::fs::write(&trd_path, &raw).expect("write trd");
