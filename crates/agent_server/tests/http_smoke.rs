@@ -418,12 +418,9 @@ async fn agent_api_port_watch_crud() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_api_load_rom_by_path() {
-    let rom_path = match machine::resolve_rom_path(Model::Spectrum48) {
-        Some(p) => p,
-        None => {
-            eprintln!("skip: Spectrum 48 ROM missing");
-            return;
-        }
+    let Some(rom_path) = machine::resolve_rom_path(Model::Spectrum48) else {
+        eprintln!("skip: Spectrum 48 ROM missing");
+        return;
     };
     let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
     let app = router(AppState {

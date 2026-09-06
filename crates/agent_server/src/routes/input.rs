@@ -123,7 +123,22 @@ pub(crate) async fn set_keys(
     if body.clear {
         return auth_empty(&state, &headers, || state.plane.clear_keys());
     }
-    if !body.keys.is_empty() {
+    if body.keys.is_empty() {
+        let (Some(row), Some(bit)) = (body.row, body.bit) else {
+            return api_error(
+                &state.plane,
+                ApiError::BadRequest("keys body requires clear, keys[], or row+bit".into()),
+            );
+        };
+        if row > 7 || bit > 4 {
+            return api_error(
+                &state.plane,
+                ApiError::BadRequest("key row/bit out of range".into()),
+            );
+        }
+        let pressed = body.pressed.unwrap_or(true);
+        auth_empty(&state, &headers, || state.plane.set_key(row, bit, pressed))
+    } else {
         for key in &body.keys {
             if key.row > 7 || key.bit > 4 {
                 return api_error(
@@ -143,20 +158,5 @@ pub(crate) async fn set_keys(
             }
             Err(e) => api_error(&state.plane, e),
         }
-    } else {
-        let (Some(row), Some(bit)) = (body.row, body.bit) else {
-            return api_error(
-                &state.plane,
-                ApiError::BadRequest("keys body requires clear, keys[], or row+bit".into()),
-            );
-        };
-        if row > 7 || bit > 4 {
-            return api_error(
-                &state.plane,
-                ApiError::BadRequest("key row/bit out of range".into()),
-            );
-        }
-        let pressed = body.pressed.unwrap_or(true);
-        auth_empty(&state, &headers, || state.plane.set_key(row, bit, pressed))
     }
 }
