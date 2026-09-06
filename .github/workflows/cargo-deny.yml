@@ -1,0 +1,28 @@
+# Opt-in cargo-deny (licenses / advisories / bans / sources). Refs #171.
+# Non-blocking: continue-on-error until advisory/license findings are cleared.
+name: cargo-deny
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-deny:
+    name: cargo-deny (non-blocking)
+    runs-on: ubuntu-latest
+    # Soft-fail while #171 disposes transitive advisories (egui/bevy graph).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: cargo-deny
+        # EmbarkStudios/cargo-deny-action@v2.1.1 (cargo-deny 0.20.2)
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
+        with:
+          command: check
