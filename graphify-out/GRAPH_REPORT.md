@@ -1,7 +1,7 @@
-# Graph Report - 171-pedantic-trace  (2026-09-06)
+# Graph Report - 171-pedantic-control-plane  (2026-09-06)
 
 ## Corpus Check
-- 184 files · ~223,261 words
+- 184 files · ~223,384 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `26947e69`
+- Built from commit: `76a57355`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

@@ -112,7 +112,7 @@ pub(crate) async fn patch_prefs(
     headers: HeaderMap,
     Json(body): Json<PrefsPatch>,
 ) -> Response {
-    auth_json(&state, &headers, || state.plane.patch_prefs(body))
+    auth_json(&state, &headers, || state.plane.patch_prefs(&body))
 }
 
 pub(crate) async fn set_keys(

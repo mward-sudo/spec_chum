@@ -408,7 +408,7 @@ impl ControlPlane {
             };
             let inspect = m.inspect();
             let paging = &inspect.paging;
-            let model = model_slug(s.model()).to_string();
+            let model = model_slug(s.model());
             let paged = paging.page_7ffd.is_some() || paging.page_1ffd.is_some();
 
             let regions = if paged {
@@ -561,7 +561,7 @@ impl ControlPlane {
         Ok(guard.clone())
     }
 
-    pub fn patch_prefs(&self, patch: PrefsPatch) -> ApiResult<SessionPrefs> {
+    pub fn patch_prefs(&self, patch: &PrefsPatch) -> ApiResult<SessionPrefs> {
         // Lock order: session → prefs (must match [`Self::with_machine_load`]).
         self.with_session_mut(|s| {
             let mut guard = self
@@ -1438,7 +1438,7 @@ mod tests {
         assert!(prefs.throttle);
         assert!(!prefs.muted);
         let updated = plane
-            .patch_prefs(PrefsPatch {
+            .patch_prefs(&PrefsPatch {
                 muted: Some(true),
                 volume: Some(0.5),
                 throttle: Some(false),
@@ -1470,7 +1470,7 @@ mod tests {
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         plane
-            .patch_prefs(PrefsPatch {
+            .patch_prefs(&PrefsPatch {
                 joystick_mode: Some(PrefJoystick::Cursor),
                 tape_experience: Some(true),
                 ..PrefsPatch::default()
@@ -1506,7 +1506,7 @@ mod tests {
             Err(ApiError::BadRequest(_))
         ));
         plane
-            .patch_prefs(PrefsPatch {
+            .patch_prefs(&PrefsPatch {
                 kempston_mouse: Some(true),
                 ..PrefsPatch::default()
             })

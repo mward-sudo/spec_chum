@@ -13,7 +13,7 @@ pub trait HostWindowCapture: Send + Sync {
     fn capture_window_png(&self) -> ApiResult<Vec<u8>>;
 }
 
-/// Live panel size + optional window capturer registered by egui / SpecChumMac.
+/// Live panel size + optional window capturer registered by egui / `SpecChumMac`.
 #[derive(Default)]
 pub struct HostViewState {
     /// Last egui central-panel size in points (integer).
