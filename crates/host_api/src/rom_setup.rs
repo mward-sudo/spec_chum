@@ -33,7 +33,7 @@ pub struct RomSetupJson {
 
 static MODEL_ROM_PATHS: Mutex<BTreeMap<String, String>> = Mutex::new(BTreeMap::new());
 
-/// Replace the process-global ROM path map (macOS UserDefaults mirror for FFI).
+/// Replace the process-global ROM path map (macOS `UserDefaults` mirror for FFI).
 pub fn sync_model_rom_paths(paths: BTreeMap<String, String>) {
     if let Ok(mut guard) = MODEL_ROM_PATHS.lock() {
         *guard = paths
@@ -220,8 +220,7 @@ mod tests {
             "spec_chum_rom_persist_{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
+                .map_or(0, |d| d.as_nanos())
         ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("tmpdir");

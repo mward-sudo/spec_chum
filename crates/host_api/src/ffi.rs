@@ -148,7 +148,7 @@ pub extern "C" fn sc_model_rom_setup_json(model: c_uint) -> *mut c_char {
     };
     let paths = crate::rom_setup::model_rom_paths_snapshot();
     match serde_json::to_string(&crate::rom_setup::rom_setup_json(model, &paths)) {
-        Ok(json) => heap_cstring(json),
+        Ok(json) => heap_cstring(&json),
         Err(e) => {
             set_last_error(format!("rom setup json: {e}"));
             ptr::null_mut()
@@ -156,7 +156,7 @@ pub extern "C" fn sc_model_rom_setup_json(model: c_uint) -> *mut c_char {
     }
 }
 
-/// Replace the process-global persisted ROM path map (macOS UserDefaults mirror).
+/// Replace the process-global persisted ROM path map (macOS `UserDefaults` mirror).
 #[no_mangle]
 pub extern "C" fn sc_sync_model_rom_paths_json(json: *const c_char) -> c_int {
     clear_last_error();
@@ -187,7 +187,7 @@ pub extern "C" fn sc_sync_model_rom_paths_json(json: *const c_char) -> c_int {
 pub extern "C" fn sc_model_rom_paths_json() -> *mut c_char {
     clear_last_error();
     match serde_json::to_string(&crate::rom_setup::model_rom_paths_snapshot()) {
-        Ok(json) => heap_cstring(json),
+        Ok(json) => heap_cstring(&json),
         Err(e) => {
             set_last_error(format!("model rom paths json: {e}"));
             ptr::null_mut()
@@ -723,9 +723,7 @@ pub extern "C" fn sc_tape_set_load_options(
     let experience_load = if flash {
         false
     } else {
-        s.tape_load_options()
-            .map(|o| o.experience_load)
-            .unwrap_or(false)
+        s.tape_load_options().is_some_and(|o| o.experience_load)
     };
     match s.set_tape_load_options(machine::TapeLoadOptions {
         flash_load: flash,
@@ -784,9 +782,7 @@ pub extern "C" fn sc_audio_ptr(handle: *mut c_void) -> *const f32 {
 /// Number of mono samples in [`sc_audio_ptr`].
 #[no_mangle]
 pub extern "C" fn sc_audio_frames(handle: *mut c_void) -> c_uint {
-    session_mut(handle)
-        .map(|s| s.audio_pcm().len() as c_uint)
-        .unwrap_or(0)
+    session_mut(handle).map_or(0, |s| s.audio_pcm().len() as c_uint)
 }
 
 /// Host audio sample rate (Hz).
@@ -1183,9 +1179,7 @@ pub extern "C" fn sc_status(handle: *mut c_void) -> *mut c_char {
     let Some(mut s) = session_mut(handle) else {
         return ptr::null_mut();
     };
-    CString::new(s.status().replace('\0', ""))
-        .map(CString::into_raw)
-        .unwrap_or(ptr::null_mut())
+    CString::new(s.status().replace('\0', "")).map_or(ptr::null_mut(), CString::into_raw)
 }
 
 /// Heap-allocated last error; free with [`sc_string_free`]. May be null.
@@ -1237,9 +1231,7 @@ pub extern "C" fn sc_debug_clear() {
 #[no_mangle]
 pub extern "C" fn sc_debug_dump() -> *mut c_char {
     let s = trace::dump_string().replace('\0', "");
-    CString::new(s)
-        .map(CString::into_raw)
-        .unwrap_or(ptr::null_mut())
+    CString::new(s).map_or(ptr::null_mut(), CString::into_raw)
 }
 
 /// Write the ring dump to `path`. Returns 0 on success.
@@ -1270,10 +1262,8 @@ pub extern "C" fn sc_debug_event_count() -> c_uint {
     trace::len() as c_uint
 }
 
-fn heap_cstring(s: String) -> *mut c_char {
-    CString::new(s.replace('\0', ""))
-        .map(CString::into_raw)
-        .unwrap_or(ptr::null_mut())
+fn heap_cstring(s: &str) -> *mut c_char {
+    CString::new(s.replace('\0', "")).map_or(ptr::null_mut(), CString::into_raw)
 }
 
 fn break_reason_code(reason: machine::BreakReason) -> c_int {
@@ -1355,7 +1345,7 @@ pub extern "C" fn sc_inspect_json(handle: *mut c_void) -> *mut c_char {
         return ptr::null_mut();
     };
     match s.inspect_json() {
-        Ok(json) => heap_cstring(json),
+        Ok(json) => heap_cstring(&json),
         Err(e) => {
             set_last_error(e.to_string());
             ptr::null_mut()
@@ -1484,7 +1474,7 @@ pub extern "C" fn sc_run_until_break(handle: *mut c_void, max_insns: c_uint) -> 
 /// Heap-allocated UTF-8 JSON dump of the trace ring; free with [`sc_string_free`].
 #[no_mangle]
 pub extern "C" fn sc_debug_dump_json() -> *mut c_char {
-    heap_cstring(trace::dump_json())
+    heap_cstring(&trace::dump_json())
 }
 
 /// Apply a [`crate::machine_config::UserMachineConfig`] from JSON (#187).
@@ -1590,13 +1580,13 @@ mod tests {
         sc_string_free(dump);
 
         let mut out: u8 = 0x5A;
-        assert_eq!(sc_peek(ptr::null_mut(), 0, &mut out), -1);
+        assert_eq!(sc_peek(ptr::null_mut(), 0, &raw mut out), -1);
         assert_eq!(out, 0x5A);
 
         let h = sc_create(0, 1);
         assert!(!h.is_null());
-        assert_eq!(sc_peek(h, 0, &mut out), -1);
-        assert_eq!(sc_peek(h, 0x1_0000, &mut out), -1);
+        assert_eq!(sc_peek(h, 0, &raw mut out), -1);
+        assert_eq!(sc_peek(h, 0x1_0000, &raw mut out), -1);
         assert_eq!(sc_step(h), -1);
         assert_eq!(sc_run_until_break(h, 1), -1);
         sc_destroy(h);
