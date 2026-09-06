@@ -45,7 +45,7 @@ struct Cli {
     /// Use EAR bitstream loading instead of instant flash-load at LD-BYTES.
     #[arg(long)]
     ear_load: bool,
-    /// EAR speed: N Spectrum frames per `run_frame` while playing (ignored when flash-load/Instant).
+    /// EAR speed: N Spectrum frames per `run_frames` while playing (ignored when flash-load/Instant).
     #[arg(long, default_value_t = 1)]
     speed: u32,
     /// Run the loopback agent HTTP server instead of a one-shot command.
