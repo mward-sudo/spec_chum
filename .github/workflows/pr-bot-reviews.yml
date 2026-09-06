@@ -122,8 +122,9 @@ jobs:
           fi
           if [[ -z "${n:-}" && "${EVENT_NAME}" == "status" && -n "${STATUS_SHA:-}" ]]; then
             # Map commit → open PR whose *head* is this SHA (not merely containing it).
+            # gh api --jq takes one expression; pass --arg to standalone jq (#331).
             n="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${STATUS_SHA}/pulls" \
-              --jq --arg sha "$STATUS_SHA" \
+              | jq -r --arg sha "$STATUS_SHA" \
               '[.[] | select(.state == "open" and .head.sha == $sha)] | sort_by(.updated_at) | reverse | .[0].number // empty')"
             if [[ -z "${n:-}" ]]; then
               echo "No open PR head matching CodeRabbit status on ${STATUS_SHA:0:12}; nothing to check."

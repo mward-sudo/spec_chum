@@ -160,6 +160,25 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
     else
       echo "ok: job name bot-review-gate"
     fi
+    # Status→PR: gh api --jq accepts one expression only — do not pass --arg (#331).
+    resolve_step="$(awk '
+      $0 ~ /^[[:space:]]*name: bot-review-gate[[:space:]]*$/ { in_job=1 }
+      in_job && $0 ~ /^[[:space:]]*- name: Resolve PR number[[:space:]]*$/ { in_res=1 }
+      in_res { print }
+      in_res && $0 ~ /^[[:space:]]*- name: Resolve PR head SHA[[:space:]]*$/ { exit }
+    ' "$wf")"
+    if [[ -z "$resolve_step" ]]; then
+      echo "FAIL: $wf missing bot-review-gate Resolve PR number step" >&2
+      fail=1
+    elif printf '%s\n' "$resolve_step" | grep -qE -- '--jq[[:space:]]+--arg'; then
+      echo "FAIL: Resolve PR number must not pass --arg through gh api --jq (#331)" >&2
+      fail=1
+    elif ! printf '%s\n' "$resolve_step" | grep -qE -- '\|[[:space:]]*jq[[:space:]].*--arg[[:space:]]+sha'; then
+      echo "FAIL: Resolve PR number must pipe gh api JSON to jq --arg sha (#331)" >&2
+      fail=1
+    else
+      echo "ok: status→PR uses jq --arg, not gh api --jq --arg"
+    fi
     # Extract Publish status step body from the gate job only.
     publish_step="$(awk '
       $0 ~ /^[[:space:]]*name: bot-review-gate[[:space:]]*$/ { in_job=1 }
