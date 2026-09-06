@@ -86,6 +86,15 @@ pub enum BetaDiskError {
     Rom(#[from] bus::RomLoadError),
 }
 
+/// Errors inserting a +3 DSK image.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum InsertDiskError {
+    #[error("+2A has no disk interface — use Spectrum +3 for DSK")]
+    Plus2ANoDiskInterface,
+    #[error("+3 disk requires SpectrumPlus3 model")]
+    RequiresPlus3,
+}
+
 /// Errors constructing a [`Machine`] (ROM size / content).
 #[derive(Debug, Error)]
 pub enum MachineBuildError {
@@ -1223,16 +1232,14 @@ impl Machine {
         }
     }
 
-    pub fn insert_disk(&mut self, image: DskImage) -> Result<(), String> {
+    pub fn insert_disk(&mut self, image: DskImage) -> Result<(), InsertDiskError> {
         match self {
             Self::SpecPlus3 { bus, .. } if bus.disk_interface => {
                 bus.fdc.insert(image);
                 Ok(())
             }
-            Self::SpecPlus3 { .. } => {
-                Err("+2A has no disk interface — use Spectrum +3 for DSK".into())
-            }
-            _ => Err("+3 disk requires SpectrumPlus3 model".into()),
+            Self::SpecPlus3 { .. } => Err(InsertDiskError::Plus2ANoDiskInterface),
+            _ => Err(InsertDiskError::RequiresPlus3),
         }
     }
 
@@ -6617,10 +6624,9 @@ mod tests {
             assert_eq!(bus.in_port(0x2ffd), 0xff);
         }
         let img = formats::DskImage::synthetic_empty_track();
-        let err = m.insert_disk(img).unwrap_err();
-        assert!(
-            err.contains("+2A") || err.contains("disk"),
-            "unexpected: {err}"
+        assert_eq!(
+            m.insert_disk(img).unwrap_err(),
+            InsertDiskError::Plus2ANoDiskInterface
         );
     }
 

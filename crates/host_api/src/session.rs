@@ -487,7 +487,8 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         let img = formats::DskImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
-        m.insert_disk(img).map_err(HostError::Message)?;
+        m.insert_disk(img)
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = format!("Inserted DSK {}", path.display());
         Ok(())
     }

@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/lib.rs": {
-    "mtime": 1788732480.7900283,
-    "seen": 1788732894.160897,
-    "ast_hash": "54ed1ca4421c273851aa58b53554bf96",
+    "mtime": 1788733972.3630977,
+    "seen": 1788734035.89418,
+    "ast_hash": "3c8f60aadf5718c55fb4dcefe9ac40f1",
     "semantic_hash": ""
   },
   "crates/app/src/main.rs": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1788732559.900575,
-    "seen": 1788732894.166878,
-    "ast_hash": "d986288634259607ee7311beeffa92a2",
+    "mtime": 1788733972.2833376,
+    "seen": 1788734035.895731,
+    "ast_hash": "3d11f3b44282efa5f621266bfaae0a5b",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -582,9 +582,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788732587.6839604,
-    "seen": 1788732894.17615,
-    "ast_hash": "61385db5fc1b9cafa55e14b96d46df17",
+    "mtime": 1788733971.3885381,
+    "seen": 1788734035.896889,
+    "ast_hash": "d5612db2b5b3f63afdd65741f03a0b44",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
