@@ -3,7 +3,7 @@
 //! Phase A models use the UK primary paths under `roms/` (see `rom_candidates`).
 //! Phase B (Pentagon 128) requires user-provided main + TR-DOS ROMs — never fetched.
 //! Additional distributable images fetched by `./scripts/fetch_roms.sh` — Timex,
-//! OpenSE, +3e, Datel, SpeccyBoot, regional alternates — are documented in
+//! `OpenSE`, +3e, Datel, `SpeccyBoot`, regional alternates — are documented in
 //! `docs/ROMS.md` (#190); wire `rom_candidates` when those models ship.
 
 use std::collections::BTreeMap;
@@ -95,7 +95,7 @@ pub fn trdos_rom_candidates(_model: Model) -> &'static [&'static str] {
     ]
 }
 
-/// True when `08D2h` is Alone Coder / VfNG **5.04T** VG93 port-remap stub
+/// True when `08D2h` is Alone Coder / `VfNG` **5.04T** VG93 port-remap stub
 /// (`LD A,#2C; JP 0897h`), not a classic TR-DOS file-load service.
 #[must_use]
 pub fn trdos_rom_08d2_is_vg93_port_stub(data: &[u8]) -> bool {
@@ -120,7 +120,7 @@ pub fn trdos_rom_fills_0800_hole(data: &[u8]) -> bool {
 /// True when a 16 KiB TR-DOS image has a classic RUN file-load service at `08D2h`.
 ///
 /// Many circulating **Ver 5.04** dumps leave `0800h`–`0E71h` as FF padding.
-/// Alone Coder / VfNG **5.04T** fills that hole with VG93 port remapping (`0897h`
+/// Alone Coder / `VfNG` **5.04T** fills that hole with VG93 port remapping (`0897h`
 /// trampoline; `08D2h` is `LD A,#2C; JP 0897h`) — not the stock file loader — so
 /// post-match `19ECh` still needs the FDC/`LINE-NEW` stand-in for `boot`.
 #[must_use]

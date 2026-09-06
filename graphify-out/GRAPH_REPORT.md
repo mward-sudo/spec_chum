@@ -1,7 +1,7 @@
-# Graph Report - 171-pedantic-bus  (2026-09-06)
+# Graph Report - 171-pedantic-machine  (2026-09-06)
 
 ## Corpus Check
-- 184 files · ~222,607 words
+- 184 files · ~222,772 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `dde90638`
+- Built from commit: `49bdbaf3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
