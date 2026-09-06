@@ -27,6 +27,10 @@ Local quality gate (same as CI intent):
 
 Living room / SpecChumMac Bevy gate uses **release** by default (`./scripts/check_living_room.sh`; set `SPEC_CHUM_ROOM_DEBUG=1` only if you need debug Bevy symbols).
 
+Full **test tier matrix** (fast / living-room / slow / opt-in), lint inventory, and
+provable-correctness rules: [docs/TESTING.md](docs/TESTING.md)
+([#171](https://github.com/mward-sudo/spec_chum/issues/171)).
+
 Optional native macOS SwiftUI shell compile ([#68](https://github.com/mward-sudo/spec_chum/issues/68)): CI job **`macos-shell`** on `macos-latest` runs `./scripts/build_macos_app.sh`. It is a separate job from Linux **`check`** (does not block Rust fmt/clippy/test). See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
@@ -95,6 +99,8 @@ Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignor
 The script (1) on ready PRs checks CodeRabbit on HEAD — hard-fails pending/missing/error/on-demand-skip; **soft-passes** rate-limited with stderr warning (drafts skip this step); then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
 
 ## TDD
+
+See [docs/TESTING.md](docs/TESTING.md) for the full tier matrix and gate inventory.
 
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests required.
