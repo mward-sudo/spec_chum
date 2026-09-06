@@ -172,6 +172,7 @@ pub struct Interface1 {
     /// Previous COMMS CLK level (bit1 of control OUT).
     comms_clk: bool,
     /// COMMS DATA (bit0) — also selects RS232 vs net on real hardware.
+    /// Latched for upcoming IF1 deepen / inspect (#139); not read by the stub path yet (#171).
     #[allow(dead_code)]
     comms_data: bool,
     /// Latched control bits (erase / r/w / cts / wait) for inspect/tests.

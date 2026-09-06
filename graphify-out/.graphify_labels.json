@@ -178,19 +178,12 @@
   "176": "OwnWindowCapturer",
   "177": ".body",
   "178": "is_screen_tri",
-  "179": ".write",
   "180": "crt_phosphor_local",
-  "181": "handle.rs",
   "182": "MachineConfigEditorView",
   "183": "NSEvent",
-  "184": ".run_frame",
   "185": "input.rs",
-  "186": ".with_machine_load",
   "187": ".installTrackingArea",
   "188": "parse_model",
   "189": "Keyboard",
-  "190": "display.rs",
-  "191": ".inspect",
-  "192": ".open_tape",
-  "193": ".fmt"
+  "192": ".open_tape"
 }

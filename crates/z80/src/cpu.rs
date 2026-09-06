@@ -22,8 +22,9 @@ pub(crate) enum FuseEventKind {
 }
 
 impl FuseEventKind {
+    /// Fuse `tests.expected` event labels — only needed by the `fuse` test harness.
+    #[cfg(test)]
     #[must_use]
-    #[allow(dead_code)] // used by `fuse` test harness formatters
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Mc => "MC",

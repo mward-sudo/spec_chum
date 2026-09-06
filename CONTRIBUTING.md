@@ -14,6 +14,7 @@
 - **Edition**: 2021 (workspace). Toolchain: stable with `rustfmt` + `clippy` (`rust-toolchain.toml`).
 - **Lints**: shared via `[workspace.lints]` in the root `Cargo.toml`; every crate sets `lints.workspace = true`.
 - **`unsafe`**: denied workspace-wide. Only allow with a narrow `#[allow(unsafe_code)]` and a `SAFETY` comment.
+- **`#[allow]`**: every new allow needs a one-line rationale (prefer refactor); link an issue when temporary. See [docs/TESTING.md](docs/TESTING.md) and [#171](https://github.com/mward-sudo/spec_chum/issues/171).
 - **Errors**: `thiserror` in library crates; `anyhow` is fine in `app`.
 - **Formatting / Clippy**: `rustfmt.toml` and `clippy.toml` at the repo root. CI runs `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings`.
 - **API design**: prefer the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) for public surfaces.

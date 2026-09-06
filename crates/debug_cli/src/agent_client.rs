@@ -1,4 +1,8 @@
 //! Thin HTTP client for the Spec Chum agent debug API (#210 Phase B).
+//!
+//! Extra helpers beyond current CLI flags are intentional for agent scripts;
+//! keep one module allow rather than per-method noise (#171).
+#![allow(dead_code)]
 
 use std::time::Duration;
 
@@ -29,7 +33,6 @@ impl AgentClient {
         Ok(Self { base, token, agent })
     }
 
-    #[allow(dead_code)]
     pub fn health(&self) -> Result<Value> {
         self.get_json("/v1/health")
     }
@@ -102,12 +105,10 @@ impl AgentClient {
         )
     }
 
-    #[allow(dead_code)]
     pub fn remove_mem_watch(&self, addr: &str) -> Result<()> {
         self.delete_empty(&format!("/v1/debug/watches/{addr}"))
     }
 
-    #[allow(dead_code)]
     pub fn remove_port_watch(&self, addr: &str) -> Result<()> {
         self.delete_empty(&format!("/v1/debug/port-watches/{addr}"))
     }
@@ -196,17 +197,14 @@ impl AgentClient {
         }
     }
 
-    #[allow(dead_code)]
     pub fn video_meta(&self) -> Result<Value> {
         self.get_json("/v1/video")
     }
 
-    #[allow(dead_code)]
     pub fn last_error(&self) -> Result<Value> {
         self.get_json("/v1/errors/last")
     }
 
-    #[allow(dead_code)]
     pub fn set_key(&self, row: usize, bit: u8, pressed: bool) -> Result<()> {
         self.post_empty(
             "/v1/keys",
@@ -214,17 +212,14 @@ impl AgentClient {
         )
     }
 
-    #[allow(dead_code)]
     pub fn clear_keys(&self) -> Result<()> {
         self.post_empty("/v1/keys", serde_json::json!({ "clear": true }))
     }
 
-    #[allow(dead_code)]
     pub fn last_break(&self) -> Result<Value> {
         self.get_json("/v1/debug/last-break")
     }
 
-    #[allow(dead_code)]
     pub fn apply_config(&self, config: &Value) -> Result<()> {
         self.post_empty("/v1/config", config.clone())
     }
@@ -233,7 +228,6 @@ impl AgentClient {
         format!("{}{path}", self.base)
     }
 
-    #[allow(dead_code)]
     fn get_json(&self, path: &str) -> Result<Value> {
         let resp = self
             .agent

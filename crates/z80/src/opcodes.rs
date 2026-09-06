@@ -132,6 +132,7 @@ fn exec_indexed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, idx: Idx, prev_q: u8
     }
 }
 
+// Single match over the main opcode map — splitting would obscure decode adjacency (#171).
 #[allow(clippy::too_many_lines)]
 fn exec_main<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, op: u8, idx: Idx, prev_q: u8) {
     match op {
@@ -785,6 +786,7 @@ fn rot_shift(y: u8, v: u8, c_in: bool) -> (u8, u8) {
     (r, f)
 }
 
+// ED-prefix opcode map kept as one match for decode clarity (#171).
 #[allow(clippy::too_many_lines)]
 fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
     let op = cpu.fetch_opcode(bus);

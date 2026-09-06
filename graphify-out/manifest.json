@@ -198,10 +198,10 @@
     "semantic_hash": "f28c5ddf55e6c73b9a376213b3a72e53"
   },
   "crates/bus/src/interface1.rs": {
-    "mtime": 1788278603.2711318,
-    "seen": 1788324807.4155898,
-    "ast_hash": "560511e43255d5d5a958754f110e8fe3",
-    "semantic_hash": "560511e43255d5d5a958754f110e8fe3"
+    "mtime": 1788654425.3875723,
+    "seen": 1788654546.304876,
+    "ast_hash": "e647bb14a9ff7532c8ffde0a26b77865",
+    "semantic_hash": ""
   },
   "crates/bus/src/kempston.rs": {
     "mtime": 1788278603.2711856,
@@ -282,9 +282,9 @@
     "semantic_hash": "0b196a4c1a2fa2aa147a57456238c3b8"
   },
   "crates/debug_cli/src/agent_client.rs": {
-    "mtime": 1788489070.6269734,
-    "seen": 1788489180.226105,
-    "ast_hash": "7f52dcde02a10df629b9e3aa8fd1e134",
+    "mtime": 1788654432.0273576,
+    "seen": 1788654546.3057,
+    "ast_hash": "fb87254ebf8901c0c4dfbbf0ca610a20",
     "semantic_hash": ""
   },
   "crates/debug_cli/src/main.rs": {
@@ -672,9 +672,9 @@
     "semantic_hash": ""
   },
   "crates/z80/src/cpu.rs": {
-    "mtime": 1788278687.7870483,
-    "seen": 1788324807.415631,
-    "ast_hash": "260d1045a60d52cb80436c5b161f6f6e",
+    "mtime": 1788654422.1759663,
+    "seen": 1788654546.311927,
+    "ast_hash": "6a861a28ecad08e39e7ce3a5f824be66",
     "semantic_hash": ""
   },
   "crates/z80/src/disasm.rs": {
@@ -702,10 +702,10 @@
     "semantic_hash": "4a1f13ead77271bd464ae1674c4a6e26"
   },
   "crates/z80/src/opcodes.rs": {
-    "mtime": 1788278603.2814007,
-    "seen": 1788324807.415633,
-    "ast_hash": "99cee754f82f60b795916d2fa12613b9",
-    "semantic_hash": "99cee754f82f60b795916d2fa12613b9"
+    "mtime": 1788654426.048749,
+    "seen": 1788654546.312141,
+    "ast_hash": "e4acb7b10a79c0f462cf5a5a1e7e3542",
+    "semantic_hash": ""
   },
   "crates/z80/src/registers.rs": {
     "mtime": 1788278603.2815135,
@@ -852,33 +852,33 @@
     "semantic_hash": ""
   },
   ".github/workflows/ci.yml": {
-    "mtime": 1788278603.2624352,
-    "seen": 1788324807.415647,
-    "ast_hash": "3af0c92d9d6259e77d93b5eeec541ecc",
-    "semantic_hash": "3af0c92d9d6259e77d93b5eeec541ecc"
+    "mtime": 1788653833.4568086,
+    "seen": 1788654546.313499,
+    "ast_hash": "fc7a9e8c76d9fae4e6617cdbf3528208",
+    "semantic_hash": ""
   },
   ".github/workflows/pr-bot-reviews.yml": {
-    "mtime": 1788278603.2626894,
-    "seen": 1788324807.415648,
-    "ast_hash": "78d4accde1955fef38de4ec3e2c7f698",
-    "semantic_hash": "78d4accde1955fef38de4ec3e2c7f698"
+    "mtime": 1788653833.457067,
+    "seen": 1788654546.3135018,
+    "ast_hash": "807d2ced447c3fa57349e2e62dfc9839",
+    "semantic_hash": ""
   },
   ".github/workflows/release.yml": {
-    "mtime": 1788278603.2629757,
-    "seen": 1788324807.415648,
-    "ast_hash": "7b9f99252bbe6f877b2f8d5d78534394",
-    "semantic_hash": "7b9f99252bbe6f877b2f8d5d78534394"
+    "mtime": 1788653833.4573445,
+    "seen": 1788654546.313505,
+    "ast_hash": "d3c3781774cc8bdd1d3125b624a48214",
+    "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1788491941.7316992,
-    "seen": 1788493267.547315,
-    "ast_hash": "83d5427824f63d4808ffa6cfaeaf5cde",
+    "mtime": 1788653833.4995835,
+    "seen": 1788654546.313507,
+    "ast_hash": "5930b8d60af2caa44ec666a0080cfc5b",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
-    "mtime": 1788491941.7320943,
-    "seen": 1788493267.547315,
-    "ast_hash": "5d4f014be021055f763d9034c0fb3201",
+    "mtime": 1788654446.870338,
+    "seen": 1788654546.3135092,
+    "ast_hash": "6150f05824625f64d10a68776b7c811a",
     "semantic_hash": ""
   },
   "README.md": {
@@ -918,9 +918,9 @@
     "semantic_hash": "13e52d5e893eb3b2545929a0b1eba479"
   },
   "docs/RELEASE.md": {
-    "mtime": 1788278687.7875774,
-    "seen": 1788324807.415652,
-    "ast_hash": "586c95681d6e9a1c964bd794d61fe567",
+    "mtime": 1788652921.1593244,
+    "seen": 1788654546.313809,
+    "ast_hash": "6a36bbd6fa009992029c8d7bbba1950d",
     "semantic_hash": ""
   },
   "docs/ROMS.md": {
@@ -1119,6 +1119,12 @@
     "mtime": 1788495725.2445662,
     "seen": 1788495830.590848,
     "ast_hash": "5f40086f3bfb4c5893593bf90ca0c88f",
+    "semantic_hash": ""
+  },
+  "docs/TESTING.md": {
+    "mtime": 1788654440.5797668,
+    "seen": 1788654546.313858,
+    "ast_hash": "2bb9e782a34937ae64e26ba728e9cfce",
     "semantic_hash": ""
   }
 }
