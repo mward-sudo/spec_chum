@@ -88,6 +88,8 @@ Broad overview: `graphify-out/GRAPH_REPORT.md`. Wiki index (when present): `grap
 
 ## Testing expectations
 
+Tier matrix and gate inventory: [docs/TESTING.md](docs/TESTING.md) ([#171](https://github.com/mward-sudo/spec_chum/issues/171)).
+
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.

@@ -1,0 +1,70 @@
+# Testing and quality gates
+
+Provable-correctness tiers and where each check runs. Tracked under
+[#171](https://github.com/mward-sudo/spec_chum/issues/171). Release tagging
+requirements remain in [RELEASE.md](RELEASE.md).
+
+## Test tier matrix
+
+| Tier | When | Commands / CI | What it proves |
+| --- | --- | --- | --- |
+| **Fast (PR / agent default)** | Every PR; before claiming done | `./scripts/check_crates.sh` while iterating; `./scripts/check.sh` before merge. CI: **`fmt + clippy + test`** (+ **`z80doc`** by name) | Workspace builds with `-D warnings` (excl. `living_room`); Fuse / unit / table tests; ROM-dependent tests skip cleanly when `roms/` is missing; GUI smoke without xvfb |
+| **Living room / SpecChumMac** | When touching Bevy host, `host_api` FFI used by macOS, or living-room display | `./scripts/check_living_room.sh` (**release** by default). CI: **`living_room`**, **`macos-shell`** | Bevy room + staticlib / Swift shell compile; set `SPEC_CHUM_CHECK_LIVING_ROOM=1` to fold living-room into `./scripts/check.sh` |
+| **Slow (pre-release)** | Before tagging `vX.Y.Z` | `./scripts/run_slow_tests.sh` | z80doc + z80ccf + z80memptr + system-tests + **z80full** — real CPU/ULA accuracy; no stubs ([#17](https://github.com/mward-sudo/spec_chum/issues/17), [#122](https://github.com/mward-sudo/spec_chum/issues/122)) |
+| **Opt-in day-to-day** | Accuracy investigations | `./scripts/run_system_tests.sh`; individual `cargo test -p machine --features slow-tests --release …` | Third-party ULA/ROM TAPs ([#108](https://github.com/mward-sudo/spec_chum/issues/108)); full CPU suites outside release |
+
+Default PR CI is **not** enough for a release. See [RELEASE.md](RELEASE.md).
+
+### What “provable” means
+
+- **Unit / Fuse:** opcode and contention tables match reference vectors before merging related groups.
+- **z80doc / z80full / z80ccf / z80memptr:** Patrik Rak suites under `--features slow-tests --release` (fixtures in `tests/fixtures/z80test/`).
+- **system-tests:** third-party ULA/ROM TAPs in `.rom-cache/system-tests/` (not git); failures are accuracy bugs — do not stub or weaken.
+- **Integration / peripheral smokes:** assert observable hardware behaviour (FDC, paging, loader reachability), ROM/fixture-gated; never `assert!(… \|\| true)` placeholders.
+
+### Hardware-faithful vs convenience
+
+Flash-load, turbo tape, and similar UI helpers may diverge from real EAR timing but must still **load correctly**. Do not weaken hardware-path assertions to accommodate them; keep convenience-path tests clearly labelled ([AGENTS.md](../AGENTS.md)).
+
+### ROM and fixture skip policy
+
+- System ROMs: `roms/` via `./scripts/fetch_roms.sh` (not committed).
+- ROM-dependent tests must **skip cleanly** when ROMs are missing (no hard fail in default CI).
+- System-test TAPs: `.rom-cache/system-tests/` (fetched by `./scripts/run_system_tests.sh`).
+- z80test fixtures: `tests/fixtures/z80test/` (`z80doc.tap` / `z80full.tap` in git; optional `./scripts/fetch_z80test.sh`).
+
+## Lint and check inventory
+
+| Check | Where it runs | Notes |
+| --- | --- | --- |
+| `cargo fmt --all -- --check` | `./scripts/check.sh`, CI `fmt + clippy + test` | `rustfmt.toml` |
+| `cargo clippy --workspace --all-targets --exclude living_room -- -D warnings` | `./scripts/check.sh`, CI | Workspace lints in root `Cargo.toml`; `clippy.toml` |
+| `cargo test --workspace --exclude living_room` | `./scripts/check.sh`, CI | Debug by default in the script |
+| `./scripts/check_crates.sh` | Local / agents only | Debug clippy+test for crates touched vs `origin/main` |
+| `./scripts/check_living_room.sh` | Opt-in / when living-room touched; CI `living_room` | **Release** Bevy by default |
+| `./scripts/build_macos_app.sh` | CI `macos-shell` | SpecChumMac + living_room staticlib |
+| z80doc (named filter) | CI slow-tests job | Bounded; full `z80full` is release-only |
+| `./scripts/run_system_tests.sh` | Opt-in; inside `run_slow_tests.sh` | Needs network once for TAP cache |
+| `./scripts/run_slow_tests.sh` | **Required before `vX.Y.Z`** | See [RELEASE.md](RELEASE.md) |
+| `./scripts/check_pr_reviews.sh` | Local agents; CI **Bot review threads** | CodeRabbit HEAD + unresolved bot threads |
+
+### Workspace lint posture
+
+- `unsafe_code = deny` workspace-wide; narrow `#[allow(unsafe_code)]` only with a `SAFETY` rationale.
+- `unwrap_used = warn`; library crates use `thiserror` (no bare unwrap on non-test hot paths).
+- Clippy `pedantic` is allowed at workspace level with noisy lints explicitly allowed in `Cargo.toml` / `clippy.toml` — prefer refactors over new `#[allow]` (see [#171](https://github.com/mward-sudo/spec_chum/issues/171) Pillar B).
+
+### Known non-blocking noise
+
+Documented exceptions (do not treat as green-gate failures unless they regress):
+
+- Living-room linker `__eh_frame section too large` notes on some examples.
+- macOS shell `ld` deployment-target mismatch vs newer SDK builds.
+- GitHub Actions Node deprecation notices on pinned Actions (CI hygiene follow-up in #171).
+
+## Related docs
+
+- [AGENTS.md](../AGENTS.md) — crate map, clippy-first workflow, accuracy vs convenience.
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — PR / CodeRabbit / TDD expectations.
+- [RELEASE.md](RELEASE.md) — tag checklist and slow suite.
+- `tests/fixtures/z80test/README.md`, `tests/fixtures/system/README.md` — fixture details.

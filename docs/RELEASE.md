@@ -14,7 +14,8 @@ and notarisation remain separate ([#68](https://github.com/mward-sudo/spec_chum/
 
 Do **not** push a `vX.Y.Z` tag (and do not treat merge-then-tag as done) until
 the **full slow test suite** passes on the commit you intend to release.
-Default PR CI and `./scripts/check.sh` are not enough.
+Default PR CI and `./scripts/check.sh` are not enough. Tier overview:
+[TESTING.md](TESTING.md).
 
 ### Full slow test suite
 
