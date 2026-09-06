@@ -14,9 +14,12 @@
 #
 # Soft-pass (gate 1 only, CI / GitHub status): "Review rate limited" (or similar
 # quota unavailability *after* a review was requested) is NOT "Review completed".
-# CI cannot observe local CodeRabbit; it soft-passes GitHub rate-limit with a loud
-# warning so the check is not stuck red while agents finish process. Merge is only
-# OK when agents confirm ONE of:
+# CI parses reset minutes from the status description when reliable
+# ("Next included review available in N minutes", etc.):
+#   - parsed N ≤ 10  → HOLD (fail) so humans/agents wait/retry
+#   - parsed N > 10  → soft-pass CI (loud warning)
+#   - unparsable     → soft-pass CI (loud warning; do not invent brittle false reds)
+# CI cannot observe local CodeRabbit. Merge is only OK when agents confirm ONE of:
 #   (a) Prefer-both / either-completed: local CR completed cleanly (or GitHub
 #       "Review completed" — this path is not a rate-limit soft-pass), OR
 #   (b) Dual rate-limit: BOTH local CLI and GitHub are rate-limited AND reported
@@ -26,9 +29,10 @@
 # Gate 2 (unresolved bot threads) still hard-fails.
 #
 # Hard-fail (gate 1): pending / missing / error / unexpected / non-completed
-# success that is not rate-limited; also on-demand / label skips
-# ("Review skipped: excluded by label configuration", "Review skipped: on
-# demand", etc.) — those mean the review was never requested (same as missing).
+# success that is not rate-limited; rate-limited with parsed reset ≤10m; also
+# on-demand / label skips ("Review skipped: excluded by label configuration",
+# "Review skipped: on demand", etc.) — those mean the review was never requested
+# (same as missing).
 #
 # Usage:
 #   ./scripts/check_pr_reviews.sh [PR_NUMBER]
@@ -92,10 +96,15 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
   }
   expect true success "Review completed" pass "completed"
   expect true success "REVIEW COMPLETED" pass "completed case-insensitive"
-  expect true success "Review rate limited" soft_pass "rate-limited success"
-  expect true failure "Review rate limited" soft_pass "rate-limited failure"
+  expect true success "Review rate limited" soft_pass "rate-limited unparsable success"
+  expect true failure "Review rate limited" soft_pass "rate-limited unparsable failure"
   expect true success "Rate limit: too many requests" soft_pass "too-many-requests"
   expect true failure "quota exceeded" soft_pass "quota failure"
+  expect true success "Review rate limited. Next included review available in 45 minutes" soft_pass "rate-limited >10m"
+  expect true failure "Review rate limited. Next included review available in 11 minutes" soft_pass "rate-limited 11m"
+  expect true success "Review rate limited. Next included review available in 10 minutes" hold "rate-limited =10m hold"
+  expect true success "Review rate limited. Next included review available in 5 minutes" hold "rate-limited <10m hold"
+  expect true failure "quota exceeded; available in 1 hour" soft_pass "rate-limited 1h"
   expect true success "Review skipped: on demand" hold "on-demand skip"
   expect true success "Review skipped: excluded by label configuration" hold "label-config skip"
   expect true success "Review skipped: something else" hold "generic skip"
@@ -200,6 +209,7 @@ else
       echo "==> PR #$PR: WARNING: CodeRabbit on HEAD ${HEAD_SHA:0:12} is ${CR_CLASSIFY_REASON}" >&2
       echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}" >&2
       echo "    GitHub CodeRabbit rate-limited — gate 1 soft-passes CI only (NOT Review completed)." >&2
+      echo "    Soft-pass when reset is >10m (parsed) or unparsable; HOLD when parsed ≤10m." >&2
       echo "    CI cannot verify local CodeRabbit. Before merge, agents MUST confirm ONE of:" >&2
       echo "      (a) Either-completed: local CR finished cleanly (Cursor plugin / coderabbit" >&2
       echo "          review --agent), OR GitHub later reaches Review completed; OR" >&2
@@ -219,7 +229,7 @@ else
         "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label coderabbit-review); after fixes '@coderabbitai review'." \
         "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
         "  4. On-demand / label skips (\"excluded by label configuration\", \"on demand\") hard-fail — request a review; do not merge without one." \
-        "  5. If GitHub is rate-limited after a request, gate 1 soft-passes CI only — merge needs either-completed (local clean or Review completed) OR dual rate-limit (both sides >10m / long-unknown) + revisit issue; if either side ≤10m, wait/retry. Unresolved threads remain a hard fail." \
+        "  5. If GitHub is rate-limited after a request: CI soft-passes when reset is >10m or unparsable; HOLD when parsed reset ≤10m. Merge needs either-completed (local clean or Review completed) OR dual rate-limit (both sides >10m / long-unknown) + revisit issue; if either side ≤10m, wait/retry. Unresolved threads remain a hard fail." \
         "  6. Re-run: ./scripts/check_pr_reviews.sh $PR" \
         "     (or re-run the \"Bot review threads\" GitHub Actions check)"
       ;;

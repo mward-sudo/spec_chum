@@ -1,10 +1,11 @@
 # PR status check: for ready PRs, fail when CodeRabbit has not completed a
 # review on HEAD (pending / in progress / missing / error / on-demand or label
-# skip without a request). GitHub rate-limited *after* a request soft-passes
-# gate 1 in CI only (loud warning) — CI cannot see local CR; agents must still
-# confirm either-completed OR dual rate-limit (both sides >10m) before merge.
-# Soft-pass ≠ on-demand/label skip. Drafts skip CR completeness. Always fail
-# when unresolved CodeRabbit/bot review threads remain.
+# skip without a request). GitHub rate-limited *after* a request: soft-passes
+# gate 1 when reset is >10m (parsed from status description) or unparsable
+# (loud warning); HOLDs when parsed reset ≤10m. CI cannot see local CR; agents
+# must still confirm either-completed OR dual rate-limit (both sides >10m)
+# before merge. Soft-pass ≠ on-demand/label skip. Drafts skip CR completeness.
+# Always fail when unresolved CodeRabbit/bot review threads remain.
 # Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
 #
 # Checkout uses the PR base (or default branch) so the checker script comes from a
@@ -182,4 +183,4 @@ jobs:
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip or unresolved bot threads. GitHub rate-limited soft-passes CI only (not Review completed); agents must confirm either-completed OR dual rate-limit both sides >10m (wait if either ≤10m). Soft-pass ≠ on-demand skip. Drafts skip CR completeness. See workflow run.'
+            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip, rate-limit with parsed reset ≤10m, or unresolved bot threads. GitHub rate-limited soft-passes CI when reset >10m or unparsable (not Review completed); agents must confirm either-completed OR dual rate-limit both sides >10m. Soft-pass ≠ on-demand skip. Drafts skip CR completeness. See workflow run.'
