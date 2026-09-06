@@ -157,20 +157,23 @@ pub fn install_model_rom(
     slot_id: &str,
     source: &Path,
     rom_paths: &mut BTreeMap<String, String>,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, machine::RomReadError> {
     let descriptor = machine::rom_slot_descriptors(model.to_model())
         .into_iter()
         .find(|d| d.id == slot_id)
-        .ok_or_else(|| format!("unknown ROM slot “{slot_id}”"))?;
-    let data = std::fs::read(source).map_err(|e| format!("read {}: {e}", source.display()))?;
+        .ok_or_else(|| machine::RomReadError::UnknownSlot(slot_id.to_string()))?;
+    let data = std::fs::read(source).map_err(|source_err| machine::RomReadError::Io {
+        op: "read",
+        path: source.display().to_string(),
+        source: source_err,
+    })?;
     if data.len() != descriptor.expected_bytes {
-        return Err(format!(
-            "{} must be {} bytes, got {} ({})",
-            descriptor.label,
-            descriptor.expected_bytes,
-            data.len(),
-            source.display()
-        ));
+        return Err(machine::RomReadError::WrongSize {
+            kind: descriptor.label,
+            expected: descriptor.expected_bytes,
+            got: data.len(),
+            path: source.display().to_string(),
+        });
     }
     let persisted = canonical_persist_path(source);
     let key = model_rom_path_key(PrefModel::from_model(model.to_model()), slot_id);

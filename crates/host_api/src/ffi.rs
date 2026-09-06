@@ -226,7 +226,7 @@ pub extern "C" fn sc_install_model_rom(
     match crate::rom_setup::install_model_rom(model, slot_id, Path::new(source_path), &mut paths) {
         Ok(_) => 0,
         Err(e) => {
-            set_last_error(e);
+            set_last_error(e.to_string());
             -1
         }
     }

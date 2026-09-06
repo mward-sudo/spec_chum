@@ -29,8 +29,8 @@ pub use rom::{
     rom_slot_state, rom_slot_state_with_override, rom_slot_states, rom_slot_states_with_overrides,
     search_roots, trdos_rom_08d2_is_vg93_port_stub, trdos_rom_available, trdos_rom_available_in,
     trdos_rom_candidates, trdos_rom_fills_0800_hole, trdos_rom_has_native_file_services,
-    unavailable_reason, writable_install_root, RomSlotDescriptor, RomSlotKind, RomSlotState,
-    RomSlotStatus, ALL_MODELS, TRDOS_ROM_INSTALL_PATH,
+    unavailable_reason, writable_install_root, RomReadError, RomSlotDescriptor, RomSlotKind,
+    RomSlotState, RomSlotStatus, ALL_MODELS, TRDOS_ROM_INSTALL_PATH,
 };
 
 use std::cell::Cell;
