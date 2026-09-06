@@ -30,10 +30,30 @@ pub use timex::{
 };
 pub use timex_dock::{TimexDock, TimexDockChunk, TimexDockError};
 
+use thiserror::Error;
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
     FRAME_TSTATES_48,
 };
+
+/// Errors loading a fixed-size (or minimum-size) ROM / EEPROM image into the bus.
+#[derive(Debug, Error)]
+pub enum RomLoadError {
+    #[error("{kind} must be {expected} bytes, got {got}")]
+    WrongSize {
+        kind: &'static str,
+        expected: usize,
+        got: usize,
+    },
+    #[error("{kind} must be at least {min} bytes, got {got}")]
+    TooSmall {
+        kind: &'static str,
+        min: usize,
+        got: usize,
+    },
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
 
 fn emit_floating_sampled(port: u16, frame_t: u32, value: u8) {
     static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -173,21 +193,26 @@ impl Bus48 {
         }
     }
 
-    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
         if data.len() != 16384 {
-            return Err(format!("48K ROM must be 16384 bytes, got {}", data.len()));
+            return Err(RomLoadError::WrongSize {
+                kind: "48K ROM",
+                expected: 16384,
+                got: data.len(),
+            });
         }
         self.rom.copy_from_slice(data);
         Ok(())
     }
 
     /// Load the 8 KiB Timex EX-ROM (TS2068 / TC2068).
-    pub fn load_timex_exrom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_timex_exrom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
         if data.len() != TIMEX_EXROM_SIZE {
-            return Err(format!(
-                "Timex EX-ROM must be {TIMEX_EXROM_SIZE} bytes, got {}",
-                data.len()
-            ));
+            return Err(RomLoadError::WrongSize {
+                kind: "Timex EX-ROM",
+                expected: TIMEX_EXROM_SIZE,
+                got: data.len(),
+            });
         }
         self.timex_exrom.copy_from_slice(data);
         Ok(())
@@ -276,7 +301,7 @@ impl Bus48 {
     }
 
     /// Attach Multiface 1 with an 8 KiB ROM image (creates the peripheral if absent).
-    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), String> {
+    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), RomLoadError> {
         let mut mf = Multiface1::new();
         mf.load_rom(rom)?;
         self.multiface = Some(mf);
@@ -699,9 +724,13 @@ impl Bus128 {
         &self.ay.regs
     }
 
-    pub fn load_rom128(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_rom128(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
         if data.len() != 32768 {
-            return Err(format!("128 ROM must be 32768 bytes, got {}", data.len()));
+            return Err(RomLoadError::WrongSize {
+                kind: "128 ROM",
+                expected: 32768,
+                got: data.len(),
+            });
         }
         self.rom[0].copy_from_slice(&data[0..16384]);
         self.rom[1].copy_from_slice(&data[16384..32768]);
@@ -966,6 +995,21 @@ mod tests {
         assert_eq!(b.read(0x4000), 0x55);
         b.write(0x0000, 0x11);
         assert_eq!(b.read(0), 0xAA, "ROM not writable");
+    }
+
+    #[test]
+    fn rom_load_wrong_size_is_typed() {
+        let mut b = Bus48::new();
+        let err = b.load_rom(&[0u8; 8]).expect_err("short ROM");
+        assert!(matches!(
+            err,
+            RomLoadError::WrongSize {
+                kind: "48K ROM",
+                expected: 16384,
+                got: 8
+            }
+        ));
+        assert_eq!(err.to_string(), "48K ROM must be 16384 bytes, got 8");
     }
 
     #[test]

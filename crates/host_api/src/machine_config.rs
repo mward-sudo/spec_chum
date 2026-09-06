@@ -418,14 +418,14 @@ fn build_machine(
                 .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
             Machine::new_pentagon128(rom, &trdos)
         }
-        Model::TimexTC2048 => Machine::new_timex_tc2048(rom).map_err(|e| e.to_string()),
+        Model::TimexTC2048 => Machine::new_timex_tc2048(rom),
         Model::TimexTS2068 => {
             let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)
                 .map_err(|e| MachineConfigError::Machine(format!("EX-ROM: {e}")))?;
-            Machine::new_timex_ts2068(rom, &exrom).map_err(|e| e.to_string())
+            Machine::new_timex_ts2068(rom, &exrom)
         }
     }
-    .map_err(MachineConfigError::Machine)
+    .map_err(|e| MachineConfigError::Machine(e.to_string()))
 }
 
 /// Build a [`Machine`] from a user config and attach enabled peripherals.

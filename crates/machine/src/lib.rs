@@ -62,8 +62,10 @@ pub enum Interface1Error {
 /// Errors constructing a [`Machine`] (ROM size / content).
 #[derive(Debug, Error)]
 pub enum MachineBuildError {
-    #[error("invalid ROM: {0}")]
-    InvalidRom(String),
+    #[error(transparent)]
+    Rom(#[from] bus::RomLoadError),
+    #[error("{0}")]
+    Message(String),
 }
 
 /// Advance `frame_t` by `dt` and report whether a display frame boundary was crossed.
@@ -782,7 +784,7 @@ fn push_ay_frame_sample(
 }
 
 impl Machine {
-    pub fn new_48k(rom: &[u8]) -> Result<Self, String> {
+    pub fn new_48k(rom: &[u8]) -> Result<Self, MachineBuildError> {
         let mut bus = Bus48::new();
         bus.load_rom(rom)?;
         trace::emit(trace::EventKind::MachineModel { model: 0 });
@@ -798,7 +800,7 @@ impl Machine {
     }
 
     /// Spectrum 16K: 48K ULA / bus timing, 16 KiB RAM only (#188).
-    pub fn new_16k(rom: &[u8]) -> Result<Self, String> {
+    pub fn new_16k(rom: &[u8]) -> Result<Self, MachineBuildError> {
         let mut bus = Bus48::new();
         bus.ram16k = true;
         bus.load_rom(rom)?;
@@ -818,7 +820,7 @@ impl Machine {
     pub fn new_timex_tc2048(rom: &[u8]) -> Result<Self, MachineBuildError> {
         let mut bus = Bus48::new();
         bus.timex = true;
-        bus.load_rom(rom).map_err(MachineBuildError::InvalidRom)?;
+        bus.load_rom(rom)?;
         trace::emit(trace::EventKind::MachineModel { model: 7 });
         Ok(Self::Spec48 {
             cpu: Cpu::new(),
@@ -836,10 +838,8 @@ impl Machine {
         let mut bus = Bus48::new();
         bus.timex = true;
         bus.timex_2068 = true;
-        bus.load_rom(home_rom)
-            .map_err(MachineBuildError::InvalidRom)?;
-        bus.load_timex_exrom(exrom)
-            .map_err(MachineBuildError::InvalidRom)?;
+        bus.load_rom(home_rom)?;
+        bus.load_timex_exrom(exrom)?;
         trace::emit(trace::EventKind::MachineModel { model: 8 });
         Ok(Self::Spec48 {
             cpu: Cpu::new(),
@@ -852,7 +852,7 @@ impl Machine {
         })
     }
 
-    pub fn new_128k(rom: &[u8]) -> Result<Self, String> {
+    pub fn new_128k(rom: &[u8]) -> Result<Self, MachineBuildError> {
         let mut bus = Bus128::new();
         bus.load_rom128(rom)?;
         trace::emit(trace::EventKind::MachineModel { model: 1 });
@@ -870,7 +870,7 @@ impl Machine {
     }
 
     /// Amstrad grey +2: 128K hardware with `roms/plus2/` ROM (#188).
-    pub fn new_plus2(rom: &[u8]) -> Result<Self, String> {
+    pub fn new_plus2(rom: &[u8]) -> Result<Self, MachineBuildError> {
         let mut bus = Bus128::new();
         bus.load_rom128(rom)?;
         trace::emit(trace::EventKind::MachineModel { model: 4 });
@@ -888,7 +888,7 @@ impl Machine {
     }
 
     /// Pentagon 128: 128K banking, user main ROM + TR-DOS (#188 Phase B / #193).
-    pub fn new_pentagon128(main_rom: &[u8], trdos_rom: &[u8]) -> Result<Self, String> {
+    pub fn new_pentagon128(main_rom: &[u8], trdos_rom: &[u8]) -> Result<Self, MachineBuildError> {
         let mut bus = Bus128::new();
         bus.frame_tstates = FRAME_TSTATES_PENTAGON;
         bus.load_rom128(main_rom)?;
@@ -904,20 +904,22 @@ impl Machine {
             plus2_rom: false,
             pentagon: true,
         };
-        m.attach_beta()?.load_rom(trdos_rom)?;
+        m.attach_beta()
+            .map_err(MachineBuildError::Message)?
+            .load_rom(trdos_rom)?;
         Ok(m)
     }
 
-    pub fn new_plus3(rom: &[u8]) -> Result<Self, String> {
+    pub fn new_plus3(rom: &[u8]) -> Result<Self, MachineBuildError> {
         Self::new_amstrad_plus(rom, true)
     }
 
     /// Spectrum +2A: same gate array as +3 but FDC ports float (`disk_interface = false`).
-    pub fn new_plus2a(rom: &[u8]) -> Result<Self, String> {
+    pub fn new_plus2a(rom: &[u8]) -> Result<Self, MachineBuildError> {
         Self::new_amstrad_plus(rom, false)
     }
 
-    fn new_amstrad_plus(rom: &[u8], disk_interface: bool) -> Result<Self, String> {
+    fn new_amstrad_plus(rom: &[u8], disk_interface: bool) -> Result<Self, MachineBuildError> {
         let mut bus = BusPlus3::new_with_disk(disk_interface);
         bus.load_rom64(rom)?;
         let model_id = if disk_interface { 2 } else { 3 };
@@ -1412,7 +1414,7 @@ impl Machine {
     /// Attach Multiface 1 with an 8 KiB ROM image (48K only).
     pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), String> {
         match self {
-            Self::Spec48 { bus, .. } => bus.attach_multiface(rom),
+            Self::Spec48 { bus, .. } => bus.attach_multiface(rom).map_err(|e| e.to_string()),
             _ => Err("Multiface 1 is only supported on Spectrum 48K".into()),
         }
     }
@@ -1462,7 +1464,7 @@ impl Machine {
     /// Attach `DivMMC` and load an ESXDOS EEPROM image (8 KiB, or larger prefix).
     pub fn attach_divmmc_eeprom(&mut self, data: &[u8]) -> Result<(), String> {
         let div = self.attach_divmmc()?;
-        div.attach_eeprom(data)
+        div.attach_eeprom(data).map_err(|e| e.to_string())
     }
 
     pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
@@ -1586,7 +1588,9 @@ impl Machine {
 
     /// Load a 16 KiB TR-DOS ROM onto Beta (attaches the interface if needed).
     pub fn load_trdos_rom(&mut self, data: &[u8]) -> Result<(), String> {
-        self.attach_beta()?.load_rom(data)
+        self.attach_beta()?
+            .load_rom(data)
+            .map_err(|e| e.to_string())
     }
 
     pub fn beta_mut(&mut self) -> Option<&mut bus::BetaDisk> {

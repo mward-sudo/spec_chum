@@ -13,7 +13,7 @@
 
 use ula::{contention_delay_128, Ula48, FRAME_TSTATES_128};
 
-use crate::{Ay8912, Keyboard};
+use crate::{Ay8912, Keyboard, RomLoadError};
 
 /// Contended RAM banks on +2A/+3 (unlike 128K’s 1/3/5/7).
 #[inline]
@@ -93,12 +93,13 @@ impl BusPlus3 {
     }
 
     /// Load 64 KiB ROM image (4 × 16K: ROM0..ROM3).
-    pub fn load_rom64(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_rom64(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
         if data.len() != 65536 {
-            return Err(format!(
-                "+2A/+3 ROM must be 65536 bytes, got {}",
-                data.len()
-            ));
+            return Err(RomLoadError::WrongSize {
+                kind: "+2A/+3 ROM",
+                expected: 65536,
+                got: data.len(),
+            });
         }
         for i in 0..4 {
             self.rom[i].copy_from_slice(&data[i * 16384..(i + 1) * 16384]);

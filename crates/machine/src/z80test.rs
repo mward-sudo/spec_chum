@@ -84,7 +84,7 @@ pub fn run_z80test_tap(tap_path: &Path, max_instructions: u64) -> Result<Z80test
         ));
     }
 
-    let mut machine = Machine::new_48k(&rom)?;
+    let mut machine = Machine::new_48k(&rom).map_err(|e| e.to_string())?;
     flash_load_block(&mut |addr, v| machine.write_mem(addr, v), block, load_addr);
 
     // Simulate `RANDOMIZE USR 32768`: CALL into the test, RET lands on USR_RETURN.

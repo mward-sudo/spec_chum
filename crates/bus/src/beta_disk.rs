@@ -17,6 +17,8 @@
 
 use formats::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 
+use crate::RomLoadError;
+
 /// TR-DOS / Beta 128 ROM size (16 KiB overlay at `0000–3FFF`).
 pub const TRDOS_ROM_SIZE: usize = 16384;
 
@@ -141,12 +143,13 @@ impl BetaDisk {
     }
 
     /// Load a 16 KiB TR-DOS ROM (paged over `0000–3FFF` on M1 into `3C00–3DFF`).
-    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn load_rom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
         if data.len() != TRDOS_ROM_SIZE {
-            return Err(format!(
-                "TR-DOS ROM must be {TRDOS_ROM_SIZE} bytes, got {}",
-                data.len()
-            ));
+            return Err(RomLoadError::WrongSize {
+                kind: "TR-DOS ROM",
+                expected: TRDOS_ROM_SIZE,
+                got: data.len(),
+            });
         }
         self.rom.copy_from_slice(data);
         self.rom_loaded = true;
