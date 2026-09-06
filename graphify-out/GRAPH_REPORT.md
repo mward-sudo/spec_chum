@@ -1,16 +1,16 @@
-# Graph Report - 171-pedantic-debug-cli  (2026-09-06)
+# Graph Report - 171-pedantic-app  (2026-09-06)
 
 ## Corpus Check
-- 184 files · ~223,735 words
+- 184 files · ~223,909 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4245 nodes · 11504 edges · 187 communities (156 shown, 25 thin omitted)
+- 4245 nodes · 11504 edges · 188 communities (157 shown, 25 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 443 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ac9f761c`
+- Built from commit: `5ce9f50e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -156,6 +156,7 @@
 - CrtPlugin
 - HybridPlugin
 - Test tier matrix
+- .share_host
 - UiOverlayPlugin
 - check_crates.sh
 - sign-macos.sh
@@ -224,7 +225,7 @@
 ## Import Cycles
 - 2-file cycle: `crates/z80/src/cpu.rs -> crates/z80/src/opcodes.rs -> crates/z80/src/cpu.rs`
 
-## Communities (187 total, 25 thin omitted)
+## Communities (188 total, 25 thin omitted)
 
 ### Community 0 - "ApiError"
 Cohesion: 0.36
@@ -351,8 +352,8 @@ Cohesion: 0.12
 Nodes (37): AppliedConfig, apply_builtin_rom_when_no_override(), apply_diagrom_succeeds_on_128k_class_models(), apply_diagrom_succeeds_on_16k_class_models(), apply_diagrom_succeeds_on_plus3_with_16k_rom(), apply_rejects_bad_custom_rom_size(), apply_user_config(), build_machine() (+29 more)
 
 ### Community 31 - ".new"
-Cohesion: 0.13
-Nodes (26): arrow_left_maps_joystick_kempston_and_cursor_mode(), debug_window_smoke_headless(), egui_menu_smoke_without_window(), emulator_session_uses_host_session(), gui_and_control_plane_share_live_session(), HostSlot, load_snapshot48_switches_from_128k(), load_snapshot48_switches_from_plus3() (+18 more)
+Cohesion: 0.17
+Nodes (20): arrow_left_maps_joystick_kempston_and_cursor_mode(), debug_window_smoke_headless(), egui_menu_smoke_without_window(), emulator_session_uses_host_session(), gui_and_control_plane_share_live_session(), load_snapshot48_switches_from_128k(), load_snapshot48_switches_from_plus3(), physical_num1_survives_sinclair_left_joystick_clear() (+12 more)
 
 ### Community 32 - "Model"
 Cohesion: 0.07
@@ -387,8 +388,8 @@ Cohesion: 0.06
 Nodes (43): CodingKeys, attachBeta, attachDivmmc, attachInterface1, attachMultiface, ayStereo, base, customRomPath (+35 more)
 
 ### Community 40 - "SpecChumApp"
-Cohesion: 0.08
-Nodes (19): App, BTreeMap, Context, Debug, Formatter, Frame, Instant, Machine (+11 more)
+Cohesion: 0.09
+Nodes (18): App, BTreeMap, Context, Debug, Formatter, Frame, Instant, Machine (+10 more)
 
 ### Community 41 - ".patch_prefs"
 Cohesion: 0.14
@@ -579,7 +580,7 @@ Cohesion: 0.13
 Nodes (13): ExternalFramebuffer, ExternalFramebufferPlugin, App, Assets, Default, Image, Option, Plugin (+5 more)
 
 ### Community 88 - ".host_mut"
-Cohesion: 0.19
+Cohesion: 0.20
 Nodes (3): EmulatorSession, Path, tzx_standard_inserts_as_paused_tap()
 
 ### Community 89 - "TimexDock"
@@ -786,6 +787,10 @@ Nodes (3): HybridPlugin, App, Plugin
 Cohesion: 0.22
 Nodes (9): Hardware-faithful vs convenience, Known non-blocking noise, Lint and check inventory, Related docs, ROM and fixture skip policy, Test tier matrix, Testing and quality gates, What “provable” means (+1 more)
 
+### Community 141 - ".share_host"
+Cohesion: 0.29
+Nodes (7): HostSlot, Arc, Box, Mutex, ParkingMutex, Stream, start_beeper()
+
 ### Community 142 - "UiOverlayPlugin"
 Cohesion: 0.50
 Nodes (3): App, Plugin, UiOverlayPlugin
@@ -858,7 +863,7 @@ Nodes (3): Keyboard, Default, Self
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `HostSession` connect `HostSession` to `.open_tape`, `FramebufferMeta`, `host_api/src/ffi.rs`, `.load_rom_bytes_with_overrides`, `agent_embed.rs`, `AgentClient`, `HostError`, `.patch_prefs`, `.with_session_ref`, `joystick.rs`, `ControlPlane`, `service.rs`, `.recompose_input`, `.with_machine_load`, `src/session.rs`, `ModelId`, `EmulatorHost`, `.new`?**
+- **Why does `HostSession` connect `HostSession` to `.open_tape`, `FramebufferMeta`, `host_api/src/ffi.rs`, `.load_rom_bytes_with_overrides`, `agent_embed.rs`, `AgentClient`, `HostError`, `.patch_prefs`, `.with_session_ref`, `joystick.rs`, `ControlPlane`, `.share_host`, `service.rs`, `.with_machine_load`, `.recompose_input`, `src/session.rs`, `ModelId`, `EmulatorHost`?**
   _High betweenness centrality (0.261) - this node is a cross-community bridge._
 - **Why does `Machine` connect `Machine` to `Cpu`, `Bus128`, `.step_once`, `Ula48`, `Bus48`, `machine/src/lib.rs`, `.new_48k`, `joystick.rs`, `Kempston`, `custom_loader_matrix_models_instant_and_ear`, `interface1_opcode_fetch_pages_shadow_rom`, `Debugger`, `.cpu`, `BusPlus3`, `Ay8912`, `KempstonMouse`?**
   _High betweenness centrality (0.223) - this node is a cross-community bridge._

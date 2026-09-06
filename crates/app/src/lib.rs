@@ -698,7 +698,7 @@ impl EmulatorSession {
                 if let Some(m) = host.machine_mut() {
                     match m.attach_multiface(&data) {
                         Ok(()) => {
-                            host.set_status(format!("Attached Multiface 1 {}", path.display()))
+                            host.set_status(format!("Attached Multiface 1 {}", path.display()));
                         }
                         Err(e) => host.set_status(e),
                     }
@@ -940,7 +940,7 @@ impl EmulatorSession {
 
     /// Rebuild the Spectrum matrix from currently held egui keys (macOS-friendly).
     ///
-    /// `pad` is ORed with arrow/Tab keyboard stick. Joystick modes that touch the
+    /// `pad` is combined with arrow/`Tab` keyboard stick. Joystick modes that touch the
     /// matrix run first; physical key chords are restored afterward so held digits
     /// (e.g. Num1–Num5 in Sinclair-left) are not cleared by joystick routing.
     pub fn sync_keyboard(
@@ -1064,12 +1064,11 @@ pub struct SpecChumApp {
 
 impl std::fmt::Debug for SpecChumApp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Keep drop-order holders (_agent/_stream) out of Debug; prefs/UI fields omitted.
         f.debug_struct("SpecChumApp")
             .field("session", &self.session)
-            .field("agent", &self._agent.as_ref().map(|s| s.addr.as_str()))
             .field("has_texture", &self.texture.is_some())
-            .field("has_audio", &self._stream.is_some())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -1402,14 +1401,12 @@ impl SpecChumApp {
         }
     }
 
-    fn open_recent_path(&mut self, path: PathBuf) {
+    fn open_recent_path(&mut self, path: &Path) {
         if !path.is_file() {
             self.session
                 .host_mut()
                 .set_status(format!("Recent file missing: {}", path.display()));
-            self.prefs
-                .recent_files
-                .retain(|p| Path::new(p) != path.as_path());
+            self.prefs.recent_files.retain(|p| Path::new(p) != path);
             self.mark_prefs_dirty();
             return;
         }
@@ -1419,11 +1416,11 @@ impl SpecChumApp {
             .unwrap_or("")
             .to_ascii_lowercase();
         match ext.as_str() {
-            "sna" | "z80" => self.session.load_snapshot(&path),
-            "tap" => self.session.load_tap(&path),
-            "tzx" => self.session.load_tzx(&path),
-            "rzx" => self.session.load_rzx(&path),
-            "dsk" => self.session.load_dsk(&path),
+            "sna" | "z80" => self.session.load_snapshot(path),
+            "tap" => self.session.load_tap(path),
+            "tzx" => self.session.load_tzx(path),
+            "rzx" => self.session.load_rzx(path),
+            "dsk" => self.session.load_dsk(path),
             _ => {
                 self.session
                     .host_mut()
@@ -1440,7 +1437,7 @@ impl SpecChumApp {
             && !self.session.host_mut().status().contains("before")
             && !self.session.host_mut().status().contains("Missing")
         {
-            self.note_recent_if_ok(&path);
+            self.note_recent_if_ok(path);
         }
         // Snapshot may have switched model — keep prefs in sync.
         self.prefs.set_model_from_machine(self.session.model());
@@ -1865,7 +1862,7 @@ impl SpecChumApp {
                                         .and_then(|n| n.to_str())
                                         .unwrap_or(path_str.as_str());
                                     if ui.button(label).clicked() {
-                                        self.open_recent_path(PathBuf::from(path_str));
+                                        self.open_recent_path(Path::new(&path_str));
                                         ui.close_menu();
                                     }
                                 }
@@ -2667,8 +2664,7 @@ of their copyrighted material but retain that copyright.",
                     .session
                     .host_mut()
                     .regs()
-                    .map(|r| (r.pc, r.sp, r.hl))
-                    .unwrap_or((0, 0, 0));
+                    .map_or((0, 0, 0), |r| (r.pc, r.sp, r.hl));
                 ui.separator();
                 ui.monospace(inspect);
                 ui.separator();
@@ -3058,7 +3054,7 @@ mod tests {
         assert!(session.key_script.is_none(), "CODE script should finish");
     }
 
-    /// +3 Type LOAD must queue keys (not a disk-Loader hint) and flash-load attr_mark (#144).
+    /// +3 Type LOAD must queue keys (not a disk-Loader hint) and flash-load `attr_mark` (#144).
     #[test]
     fn plus3_type_load_code_flash_loads_attr_mark() {
         let mut session = EmulatorSession::new(Model::SpectrumPlus3, true);
@@ -3255,8 +3251,7 @@ mod tests {
 
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         let path = std::env::temp_dir().join(format!("spec-chum-app-prefs-{nanos}.json"));
         let prefs = UiPreferences {
             model: PrefModel::Spectrum128,

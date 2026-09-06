@@ -33,7 +33,7 @@ let v = x.unwrap();
 - Prefer `&T` / iterators over needless clones; avoid `clone()` in T-state hot loops (Z80/ULA).
 - Derive `Debug` on public types; keep APIs small (`pub(crate)` by default).
 - Use `?` for propagation; no empty `catch` / discarded `Result`s.
-- Clippy **`pedantic`**: workspace-allow; crate-local warn on `z80` / `ula` / `bus` / `tape` / `formats` / `machine` / `trace` / `control_plane` / `host_api` / `agent_server` / `debug_cli` with endemic cast/name allows (#171). Do not flip workspace pedantic to warn without a dedicated cleanup PR.
+- Clippy **`pedantic`**: workspace-allow; crate-local warn on `z80` / `ula` / `bus` / `tape` / `formats` / `machine` / `trace` / `control_plane` / `host_api` / `agent_server` / `debug_cli` / `app` with endemic cast/name allows (#171). Do not flip workspace pedantic to warn without a dedicated cleanup PR.
 - **No new `#[allow(…)]` without a one-line rationale** (prefer a refactor). Link an issue when the allow is temporary (e.g. `#171`, peripheral deepen). Prefer one module-level allow over many per-item copies when the reason is shared.
 
 ## Verification

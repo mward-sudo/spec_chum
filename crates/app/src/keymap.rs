@@ -1,7 +1,7 @@
 //! Host (macOS/egui) → ZX Spectrum keyboard matrix mapping.
 //!
 //! Shared matrix constants and Symbol-layer tables live in [`spec_chum_host::keymap`]
-//! (ANSI codes for the SwiftUI shell). This module maps [`egui::Key`] + modifiers.
+//! (ANSI codes for the `SwiftUI` shell). This module maps [`egui::Key`] + modifiers for the egui host.
 
 use eframe::egui::{Key, Modifiers};
 
