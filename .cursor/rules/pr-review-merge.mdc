@@ -6,6 +6,7 @@ alwaysApply: true
 # PR review / merge gate
 
 Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unresolved CodeRabbit threads. **Do not repeat that.**
+Follow-up [#318](https://github.com/mward-sudo/spec_chum/issues/318): CI job name is `bot-review-gate`; ruleset required context remains published `unresolved bot threads` so cancelled same-name Actions checks cannot keep merge BLOCKED after a rate-limit soft-pass.
 
 ## Review layers
 
