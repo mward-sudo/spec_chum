@@ -1,5 +1,5 @@
 # cargo-deny configuration — Refs #171 (engineering quality, Pillar B).
-# Local: `./scripts/check_deny.sh`. CI: non-blocking `cargo-deny` workflow.
+# Local: `./scripts/check_deny.sh`. CI: blocking `cargo-deny` workflow.
 
 [graph]
 all-features = false
@@ -9,10 +9,22 @@ no-default-features = false
 feature-depth = 1
 
 [advisories]
-# Keep advisories as errors so CI surfaces them; the workflow is continue-on-error
-# until we dispose each finding (upgrade, ignore-with-reason, or follow-up issue).
+# Advisories are errors. Transitive egui 0.31 / accesskit graph hits below are
+# ignored-with-reason until an egui (or accesskit) upgrade removes the crates.
+# Revisit when bumping `eframe` / `egui` (see #171 Pillar B).
 version = 2
-ignore = []
+ignore = [
+    # Proc-macro only via accesskit_windows ← accesskit_winit ← egui-winit 0.31.
+    # No safe upgrade; not in Spec Chum source. Drop when egui pulls a paste-free accesskit.
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; transitive via egui-winit 0.31 accesskit_windows only" },
+    # Font parser via ab_glyph ← epaint/egui 0.31 (+ winit sctk path). No safe upgrade upstream.
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; transitive via egui/ab_glyph 0.31; awaits egui font stack move" },
+    # quick-xml 0.30 via zbus_xml ← zbus-lockstep ← atspi ← accesskit_unix ← egui-winit.
+    # Spec Chum does not parse untrusted XML; AT-SPI introspection only. Fixed in >=0.41 but
+    # that version is not reachable without newer atspi/zbus_xml than egui 0.31 pins.
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.30 quadratic attrs; transitive AT-SPI only via egui 0.31; no untrusted XML parse" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.30 NsReader DoS; transitive AT-SPI only via egui 0.31; no untrusted XML parse" },
+]
 
 [licenses]
 version = 2

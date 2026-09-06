@@ -47,7 +47,7 @@ Flash-load, turbo tape, and similar UI helpers may diverge from real EAR timing 
 | `./scripts/run_system_tests.sh` | Opt-in; inside `run_slow_tests.sh` | Needs network once for TAP cache |
 | `./scripts/run_slow_tests.sh` | **Required before `vX.Y.Z`** | See [RELEASE.md](RELEASE.md) |
 | `./scripts/check_pr_reviews.sh` | Local agents; CI **Bot review threads** | CodeRabbit HEAD + unresolved bot threads |
-| `./scripts/check_deny.sh` / `cargo deny check` | Opt-in local; CI **cargo-deny (non-blocking)** | `deny.toml` — licenses / advisories / bans / sources. Workflow uses `continue-on-error` until #171 clears transitive advisories (egui/bevy). Not part of `./scripts/check.sh` |
+| `./scripts/check_deny.sh` / `cargo deny check` | Opt-in local; CI **cargo-deny** | `deny.toml` — licenses / advisories / bans / sources. Egui 0.31 transitive RustSec IDs ignored-with-reason (#171); revisit on `eframe`/`egui` bump. Not part of `./scripts/check.sh` |
 
 ### Workspace lint posture
 
@@ -63,7 +63,7 @@ Documented exceptions (do not treat as green-gate failures unless they regress):
 - Occasional Actions runner / composite-wrapper log notices (default CI Actions SHA-pinned: `actions/checkout@v6` / `actions/cache@v6`; see #171 CI hygiene).
 - Historical (resolved / no longer seen on recent `macos-latest` CI): living-room `__eh_frame section too large` linker notes on `room_probe` / `room_perf`; if they return they are Apple ld notes and do not fail `-Dwarnings`.
 - SpecChumMac builds set `MACOSX_DEPLOYMENT_TARGET=14.0` (+ matching `CFLAGS`/`CXXFLAGS`) in `./scripts/build_macos_app.sh` so clang deps (e.g. blake3 NEON) match Swift `.macOS(.v14)` — avoids `ld: built for newer macOS than being linked (14.0)`. If a stale archive still warns locally: `cargo clean -p blake3` then rebuild.
-- **`cargo deny check` advisories (non-blocking CI):** transitive RustSec hits via egui/bevy (e.g. `quick-xml` / `ttf-parser` / `paste`) — licenses/bans/sources are configured to pass; clear or ignore-with-reason under #171 before making the workflow blocking.
+- **`cargo deny check` advisories:** licenses/bans/sources pass; remaining RustSec IDs (`paste`, `ttf-parser`, `quick-xml` 0.30) are ignored-with-reason in `deny.toml` as egui 0.31 / accesskit transitive deps (no untrusted XML parse in Spec Chum). Remove ignores when upgrading `eframe`/`egui` clears the crates (#171).
 
 ## Related docs
 
