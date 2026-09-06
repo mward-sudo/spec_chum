@@ -6,7 +6,7 @@
 //! +2A and +3 share this gate array. The ROM detects a disk interface by probing
 //! FDC ports (`2FFD`/`3FFD`); when [`BusPlus3::disk_interface`] is false those
 //! ports read as `0xFF` so menu **Loader** uses tape (real +2A). When true, the
-//! µPD765 path is present and **Loader** is +3DOS disk (real +3).
+//! `µPD765` path is present and **Loader** is +3DOS disk (real +3).
 //!
 //! Port `1FFD` bit 3 is the floppy motor; [`formats::Plus3Fdc::set_motor`] is
 //! updated on every `1FFD` write. FDC I/O is not Sinclair ULA-contended.
@@ -65,7 +65,7 @@ impl BusPlus3 {
         Self::new_with_disk(true)
     }
 
-    /// +3-class bus; `disk_interface` enables µPD765 ports (`true` = +3, `false` = +2A).
+    /// +3-class bus; `disk_interface` enables `µPD765` ports (`true` = +3, `false` = +2A).
     #[must_use]
     pub fn new_with_disk(disk_interface: bool) -> Self {
         Self {

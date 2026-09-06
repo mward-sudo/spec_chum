@@ -162,7 +162,7 @@ impl TrdImage {
     /// Replace sectors on a physical track (VG93 WRITE TRACK / TR-DOS `NEW`).
     ///
     /// `entries` are `(C, H, R, N)` ID fields from the format stream; `R` is the
-    /// WD179x sector number (`1..=16`). Clears the whole track to `fill` first.
+    /// `WD179x` sector number (`1..=16`). Clears the whole track to `fill` first.
     #[must_use]
     pub fn format_track(
         &mut self,

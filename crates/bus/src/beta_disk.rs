@@ -3,7 +3,7 @@
 //! Ports (low byte, when TR-DOS is paged):
 //! - Classic Beta 128: `0x1F` cmd/status, `0x3F` track, `0x5F` sector, `0x7F`
 //!   data, `0xFF` system.
-//! - Alone Coder / VfNG **5.04T** (complete ROM): `0x08` cmd/status, `0x28`
+//! - Alone Coder / `VfNG` **5.04T** (complete ROM): `0x08` cmd/status, `0x28`
 //!   track, `0x48` sector, `0x68` data (plus write aliases `0x2A` track,
 //!   `0x6A` data). Same VG93 registers; different address decode.
 //!
@@ -338,10 +338,10 @@ impl BetaDisk {
 
     fn type_i_status_value(&self) -> u8 {
         let mut s = 0u8;
-        if !self.disk_ready() {
-            s |= STAT_NOT_READY;
-        } else {
+        if self.disk_ready() {
             s |= STAT_HEAD;
+        } else {
+            s |= STAT_NOT_READY;
         }
         if self.track == 0 {
             s |= STAT_TRACK0;
@@ -509,18 +509,16 @@ impl BetaDisk {
         } else if (cmd & 0xc0) == 0xc0 {
             // TR-DOS sets command bit 4 for side/MFM modifiers (`E9h` read track, `F9h` ≠ write).
             self.type_i_status = false;
-            if (cmd & 0x30) != 0x10 {
-                if cmd & 0x20 == 0 {
-                    self.start_read_address();
-                } else if cmd == 0xf9 || cmd & 0x10 == 0 {
-                    // TR-DOS `F9h` is read-track with modifiers (not write-track).
-                    self.start_read_track();
-                } else {
-                    self.start_write_track();
-                }
-            } else {
+            if (cmd & 0x30) == 0x10 {
                 self.status = 0;
                 self.intrq = true;
+            } else if cmd & 0x20 == 0 {
+                self.start_read_address();
+            } else if cmd == 0xf9 || cmd & 0x10 == 0 {
+                // TR-DOS `F9h` is read-track with modifiers (not write-track).
+                self.start_read_track();
+            } else {
+                self.start_write_track();
             }
         } else {
             self.status = 0;
@@ -895,7 +893,7 @@ mod tests {
         assert_eq!(beta.in_port(0x007f), Some(0x34));
     }
 
-    /// Multi-sector Type-II: a failed continuation load must keep STAT_NOT_READY.
+    /// Multi-sector Type-II: a failed continuation load must keep `STAT_NOT_READY`.
     #[test]
     fn multi_sector_read_preserves_not_ready_on_continuation() {
         let mut beta = BetaDisk::new();
@@ -917,7 +915,7 @@ mod tests {
         assert_eq!(beta.in_port(0x001f), Some(STAT_NOT_READY));
     }
 
-    /// Alone Coder / VfNG 5.04T uses `#08/#28/#48/#68` instead of `#1F/#3F/#5F/#7F`.
+    /// Alone Coder / `VfNG` 5.04T uses `#08/#28/#48/#68` instead of `#1F/#3F/#5F/#7F`.
     #[test]
     fn port_protocol_504t_aliases_read_sector() {
         let img = one_track_image(0x56, 0x78);

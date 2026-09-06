@@ -111,11 +111,7 @@ impl Drive {
     }
 
     fn increment_head(&mut self) {
-        let len = self
-            .cart
-            .as_ref()
-            .map(Self::cartridge_len_bytes)
-            .unwrap_or(0);
+        let len = self.cart.as_ref().map_or(0, Self::cartridge_len_bytes);
         if len == 0 {
             self.head_pos = 0;
             return;
@@ -132,7 +128,7 @@ impl Drive {
         };
         let sec = self.head_pos / MDR_SECTOR_SIZE;
         let off = self.head_pos % MDR_SECTOR_SIZE;
-        cart.sectors.get(sec).map(|s| s[off]).unwrap_or(0xff)
+        cart.sectors.get(sec).map_or(0xff, |s| s[off])
     }
 
     fn write_byte_at_head(&mut self, val: u8) -> bool {

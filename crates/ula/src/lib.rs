@@ -1,7 +1,5 @@
 //! Spec Chum ULA — frame timing, contention, floating bus, video render.
 
-#![allow(clippy::pedantic)]
-
 mod snow;
 
 pub use snow::{

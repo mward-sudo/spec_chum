@@ -1,7 +1,5 @@
 //! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK, TRD, Timex DCK.
 
-#![allow(clippy::pedantic)]
-
 mod dck;
 mod dsk;
 mod error;
@@ -102,7 +100,7 @@ impl Snapshot48 {
         let src = &data[hdr.header_len..];
         if hdr.header_len == 30 {
             if compressed {
-                decode_z80_v1(src, &mut ram)?;
+                decode_z80_v1(src, &mut ram);
             } else {
                 if src.len() < 49152 {
                     return Err(FormatError::Format("Z80 v1 RAM short".into()));
@@ -175,10 +173,10 @@ fn parse_z80_header(data: &[u8]) -> Result<Z80HeaderInfo, FormatError> {
     let hw = data[34];
     let misc = if header_len > 37 { data[37] } else { 0 };
     let class = z80_machine_class(extra, hw, misc);
-    let page_7ffd = if class != Z80MachineClass::Spectrum48 {
-        data[35]
-    } else {
+    let page_7ffd = if class == Z80MachineClass::Spectrum48 {
         0
+    } else {
+        data[35]
     };
     // 1FFD for +2A/+3 (xzx hw 7/8). Ignore trailing byte on plain 128K
     // snapshots that happen to use a 55-byte extended header.
@@ -405,7 +403,7 @@ impl Snapshot128 {
     }
 }
 
-fn decode_z80_v1(src: &[u8], ram: &mut [u8; 49152]) -> Result<(), FormatError> {
+fn decode_z80_v1(src: &[u8], ram: &mut [u8; 49152]) {
     let mut i = 0usize;
     let mut o = 0usize;
     while i < src.len() && o < 49152 {
@@ -434,7 +432,6 @@ fn decode_z80_v1(src: &[u8], ram: &mut [u8; 49152]) -> Result<(), FormatError> {
             i += 1;
         }
     }
-    Ok(())
 }
 
 fn take_z80_page_block(src: &mut &[u8]) -> Result<(u8, Vec<u8>), FormatError> {
@@ -456,7 +453,7 @@ fn take_z80_page_block(src: &mut &[u8]) -> Result<(u8, Vec<u8>), FormatError> {
             return Err(FormatError::Format("compressed page short".into()));
         }
         let mut page_ram = vec![0u8; 16384];
-        decode_z80_page(&src[..block_len], &mut page_ram)?;
+        decode_z80_page(&src[..block_len], &mut page_ram);
         *src = &src[block_len..];
         page_ram
     };
@@ -492,7 +489,7 @@ fn load_z80_v2_pages_128(mut src: &[u8], banks: &mut [[u8; 16384]; 8]) -> Result
     Ok(())
 }
 
-fn decode_z80_page(src: &[u8], dest: &mut [u8]) -> Result<(), FormatError> {
+fn decode_z80_page(src: &[u8], dest: &mut [u8]) {
     let mut i = 0;
     let mut o = 0;
     while i < src.len() && o < dest.len() {
@@ -513,7 +510,6 @@ fn decode_z80_page(src: &[u8], dest: &mut [u8]) -> Result<(), FormatError> {
             i += 1;
         }
     }
-    Ok(())
 }
 
 #[cfg(test)]

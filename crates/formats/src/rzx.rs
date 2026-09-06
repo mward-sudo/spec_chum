@@ -48,48 +48,40 @@ impl RzxRecording {
                 )));
             }
             let body = &data[i + 5..i + block_len];
-            match block_id {
-                0x80 => {
-                    // Input recording block
-                    if body.len() < 5 {
-                        return Err(FormatError::Format("short input block".into()));
-                    }
-                    let flags = body[4];
-                    if flags & 0x02 != 0 {
-                        return Err(FormatError::Format(
-                            "compressed RZX input not supported".into(),
-                        ));
-                    }
-                    let mut p = 5usize;
-                    while p + 4 <= body.len() {
-                        let fetch = u16::from_le_bytes([body[p], body[p + 1]]);
-                        let in_count = u16::from_le_bytes([body[p + 2], body[p + 3]]) as usize;
-                        p += 4;
-                        if in_count == 0xffff {
-                            // Repeated frame — copy previous inputs
-                            let prev: RzxFrame = frames.last().cloned().unwrap_or_default();
-                            frames.push(RzxFrame {
-                                fetch_count: fetch,
-                                inputs: prev.inputs,
-                            });
-                            continue;
-                        }
-                        if p + in_count > body.len() {
-                            return Err(FormatError::Format("RZX frame inputs truncated".into()));
-                        }
-                        let inputs = body[p..p + in_count].to_vec();
-                        p += in_count;
+            // 0x80 = input recording; other blocks (snapshot/creator/security/unknown) skip by length.
+            if block_id == 0x80 {
+                if body.len() < 5 {
+                    return Err(FormatError::Format("short input block".into()));
+                }
+                let flags = body[4];
+                if flags & 0x02 != 0 {
+                    return Err(FormatError::Format(
+                        "compressed RZX input not supported".into(),
+                    ));
+                }
+                let mut p = 5usize;
+                while p + 4 <= body.len() {
+                    let fetch = u16::from_le_bytes([body[p], body[p + 1]]);
+                    let in_count = u16::from_le_bytes([body[p + 2], body[p + 3]]) as usize;
+                    p += 4;
+                    if in_count == 0xffff {
+                        // Repeated frame — copy previous inputs
+                        let prev: RzxFrame = frames.last().cloned().unwrap_or_default();
                         frames.push(RzxFrame {
                             fetch_count: fetch,
-                            inputs,
+                            inputs: prev.inputs,
                         });
+                        continue;
                     }
-                }
-                0x30 | 0x01 | 0x02 | 0x0A | 0x0B => {
-                    // snapshot / creator / security — skip
-                }
-                _ => {
-                    // Unknown — skip by length
+                    if p + in_count > body.len() {
+                        return Err(FormatError::Format("RZX frame inputs truncated".into()));
+                    }
+                    let inputs = body[p..p + in_count].to_vec();
+                    p += in_count;
+                    frames.push(RzxFrame {
+                        fetch_count: fetch,
+                        inputs,
+                    });
                 }
             }
             i += block_len;
