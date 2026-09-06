@@ -65,7 +65,7 @@ rust_2018_idioms = { level = "warn", priority = -1 }
 [workspace.lints.clippy]
 # Default `all` stays on; pedantic stays allow workspace-wide (#171 evaluation):
 # cast_*/many_single_char_names/too_many_lines are endemic in emulator cores.
-# Core crates (`z80`/`ula`/`bus`/`tape`/`formats`/`machine`/`trace`/`control_plane`/`host_api`) enable pedantic crate-locally with endemic allows.
+# Core crates (`z80`/`ula`/`bus`/`tape`/`formats`/`machine`/`trace`/`control_plane`/`host_api`/`agent_server`) enable pedantic crate-locally with endemic allows.
 # Nursery stays off (missing_const_for_fn noise). See docs/TESTING.md.
 pedantic = { level = "allow", priority = -1 }
 module_name_repetitions = "allow"

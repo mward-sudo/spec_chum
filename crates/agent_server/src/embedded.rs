@@ -82,8 +82,7 @@ pub fn spawn_from_env() -> Result<Option<EmbeddedServer>> {
     }
     let model_slug = std::env::var("SPEC_CHUM_AGENT_MODEL").unwrap_or_else(|_| "48k".into());
     let with_border = std::env::var("SPEC_CHUM_AGENT_BORDER")
-        .ok()
-        .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+        .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     let model = parse_model_slug(&model_slug).map_err(|e| anyhow::anyhow!("{e}"))?;
     let config = ServerConfig::from_env();
     let plane = Arc::new(ControlPlane::new(model, with_border));
