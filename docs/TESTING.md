@@ -53,7 +53,7 @@ Flash-load, turbo tape, and similar UI helpers may diverge from real EAR timing 
 
 - `unsafe_code = deny` workspace-wide; narrow `#[allow(unsafe_code)]` only with a `SAFETY` rationale.
 - `unwrap_used = warn`; library crates use `thiserror` (no bare unwrap on non-test hot paths).
-- Clippy `pedantic` is allowed at workspace level with noisy lints explicitly allowed in `Cargo.toml` / `clippy.toml` — prefer refactors over new `#[allow]` (see [#171](https://github.com/mward-sudo/spec_chum/issues/171) Pillar B).
+- Clippy `pedantic` stays **allow** workspace-wide ([#171](https://github.com/mward-sudo/spec_chum/issues/171) Pillar B evaluation): full-group warn is dominated by `cast_*` / `many_single_char_names` in cores (~160 hits in `z80` alone). **`z80` and `ula` enable `pedantic` crate-locally** with those endemic lints allowed; `match_same_arms` allowed in `z80` so opcode maps keep explicit empty NOP/unused arms. Nursery stays off (`missing_const_for_fn` noise). Prefer refactors over new `#[allow]`.
 - **`#[allow]` policy:** every new allow needs a one-line rationale (and an issue link when temporary). Prefer module-level shared reasons over duplicated per-item noise. Inventory snapshot (2026-09-06): ~25 sites after slice 3 — mostly Bevy `too_many_arguments` / `type_complexity`, Z80 opcode maps, host FFI, and intentional IF1 latch.
 
 ### Known non-blocking noise

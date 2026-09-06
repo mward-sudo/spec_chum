@@ -520,13 +520,12 @@ fn fuse_all_vectors() {
             }
         }
     }
-    if failed > 0 {
-        panic!(
-            "{failed}/{} Fuse tests failed. First errors:\n{}",
-            tests.len(),
-            first_errs.join("\n")
-        );
-    }
+    assert!(
+        failed == 0,
+        "{failed}/{} Fuse tests failed. First errors:\n{}",
+        tests.len(),
+        first_errs.join("\n")
+    );
 }
 
 #[test]

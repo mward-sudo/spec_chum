@@ -506,7 +506,7 @@ mod tests {
         assert_eq!(ret, 0x8000);
     }
 
-    /// Skipped displacement probe must call Memory::read (for wait) but emit only MC.
+    /// Skipped displacement probe must call [`Memory::read`] (for wait) but emit only `MC`.
     #[test]
     fn contend_read_timing_adds_wait_without_mr() {
         struct WaitMem {
