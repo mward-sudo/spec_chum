@@ -1,6 +1,6 @@
 //! Own-window OS capture for agent `GET /v1/host/window` (#239).
 //!
-//! Shared by egui (`app`) and SpecChumMac (`living_room` agent embed).
+//! Shared by egui (`app`) and `SpecChumMac` (`living_room` agent embed).
 //!
 //! Safety rules:
 //! - Capture only by a registered window id owned by this process.
@@ -61,7 +61,7 @@ fn capture_own_window_png(_window_id: u32) -> ApiResult<Vec<u8>> {
     ))
 }
 
-/// Read `CGWindowID` / `windowNumber` from an AppKit `NSView*` (no focus change).
+/// Read `CGWindowID` / `windowNumber` from an `AppKit` `NSView*` (no focus change).
 #[cfg(target_os = "macos")]
 #[must_use]
 pub fn cg_window_id_from_ns_view(ns_view: *mut std::ffi::c_void) -> Option<u32> {
@@ -166,7 +166,7 @@ mod macos {
         }
         // SAFETY: kCGWindowOwnerPID is a permanent CoreGraphics string constant.
         let pid_val = unsafe {
-            core_foundation::dictionary::CFDictionaryGetValue(dict, kCGWindowOwnerPID as *const _)
+            core_foundation::dictionary::CFDictionaryGetValue(dict, kCGWindowOwnerPID.cast())
         };
         if pid_val.is_null() {
             return Err(ApiError::Unavailable(
@@ -174,7 +174,7 @@ mod macos {
             ));
         }
         let pid_num: CFNumber =
-            unsafe { TCFType::wrap_under_get_rule(pid_val as CFNumberRef as _) };
+            unsafe { TCFType::wrap_under_get_rule((pid_val as CFNumberRef).cast()) };
         let Some(pid) = pid_num.to_i64() else {
             return Err(ApiError::Unavailable("owner PID not numeric".into()));
         };

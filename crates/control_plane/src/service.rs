@@ -39,8 +39,7 @@ impl ServerConfig {
             .ok()
             .filter(|s| !s.is_empty());
         let insecure = std::env::var("SPEC_CHUM_AGENT_INSECURE")
-            .ok()
-            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+            .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
         Self {
             host: "127.0.0.1".into(),
             port,
@@ -408,7 +407,7 @@ impl ControlPlane {
             };
             let inspect = m.inspect();
             let paging = &inspect.paging;
-            let model = model_slug(s.model()).to_string();
+            let model = model_slug(s.model());
             let paged = paging.page_7ffd.is_some() || paging.page_1ffd.is_some();
 
             let regions = if paged {
@@ -561,7 +560,7 @@ impl ControlPlane {
         Ok(guard.clone())
     }
 
-    pub fn patch_prefs(&self, patch: PrefsPatch) -> ApiResult<SessionPrefs> {
+    pub fn patch_prefs(&self, patch: &PrefsPatch) -> ApiResult<SessionPrefs> {
         // Lock order: session → prefs (must match [`Self::with_machine_load`]).
         self.with_session_mut(|s| {
             let mut guard = self
@@ -1438,7 +1437,7 @@ mod tests {
         assert!(prefs.throttle);
         assert!(!prefs.muted);
         let updated = plane
-            .patch_prefs(PrefsPatch {
+            .patch_prefs(&PrefsPatch {
                 muted: Some(true),
                 volume: Some(0.5),
                 throttle: Some(false),
@@ -1470,7 +1469,7 @@ mod tests {
         };
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         plane
-            .patch_prefs(PrefsPatch {
+            .patch_prefs(&PrefsPatch {
                 joystick_mode: Some(PrefJoystick::Cursor),
                 tape_experience: Some(true),
                 ..PrefsPatch::default()
@@ -1506,7 +1505,7 @@ mod tests {
             Err(ApiError::BadRequest(_))
         ));
         plane
-            .patch_prefs(PrefsPatch {
+            .patch_prefs(&PrefsPatch {
                 kempston_mouse: Some(true),
                 ..PrefsPatch::default()
             })

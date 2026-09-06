@@ -3,8 +3,6 @@
 //! Wraps [`spec_chum_host::HostSession`] as the single source of truth for debugger
 //! operations. HTTP (`agent_server`) and CLI clients call into this crate.
 
-#![allow(clippy::pedantic)]
-
 mod error;
 mod framebuffer;
 mod host_view;

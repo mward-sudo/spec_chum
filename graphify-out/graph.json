@@ -23305,7 +23305,7 @@
       "file_type": "code",
       "norm_label": "append_flushes_events_to_trace_file()",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1034"
+      "source_location": "L1035"
     },
     {
       "id": "crates_trace_src_lib_appendsink",
@@ -23470,7 +23470,7 @@
       "file_type": "code",
       "norm_label": "disabled_emit_is_noop()",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L967"
+      "source_location": "L968"
     },
     {
       "id": "crates_trace_src_lib_dump_contains_flash_skip",
@@ -23481,7 +23481,7 @@
       "file_type": "code",
       "norm_label": "dump_contains_flash_skip()",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1013"
+      "source_location": "L1014"
     },
     {
       "id": "crates_trace_src_lib_dump_filtered",
@@ -23778,7 +23778,7 @@
       "file_type": "code",
       "norm_label": "parse_categories()",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1001"
+      "source_location": "L1002"
     },
     {
       "id": "crates_trace_src_lib_regsnap",
@@ -23844,7 +23844,7 @@
       "file_type": "code",
       "norm_label": "ring_keeps_last_n()",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L976"
+      "source_location": "L977"
     },
     {
       "id": "crates_trace_src_lib_ring_new",
@@ -24119,7 +24119,7 @@
       "file_type": "code",
       "norm_label": "with_trace()",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L949"
+      "source_location": "L950"
     },
     {
       "id": "file",
@@ -90362,7 +90362,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1035",
+      "source_location": "L1036",
       "weight": 1.0
     },
     {
@@ -90374,7 +90374,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1044",
+      "source_location": "L1045",
       "weight": 1.0
     },
     {
@@ -90386,7 +90386,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1045",
+      "source_location": "L1046",
       "weight": 1.0
     },
     {
@@ -90398,7 +90398,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1046",
+      "source_location": "L1047",
       "weight": 1.0
     },
     {
@@ -90410,7 +90410,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1047",
+      "source_location": "L1048",
       "weight": 1.0
     },
     {
@@ -90422,7 +90422,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1048",
+      "source_location": "L1049",
       "weight": 1.0
     },
     {
@@ -90434,7 +90434,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1049",
+      "source_location": "L1050",
       "weight": 1.0
     },
     {
@@ -90446,7 +90446,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1051",
+      "source_location": "L1052",
       "weight": 1.0
     },
     {
@@ -90590,24 +90590,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L968",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_trace_src_lib_disabled_emit_is_noop",
-      "target": "crates_trace_src_lib_disable",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/trace/src/lib.rs",
       "source_location": "L969",
       "weight": 1.0
     },
     {
       "source": "crates_trace_src_lib_disabled_emit_is_noop",
-      "target": "crates_trace_src_lib_clear",
+      "target": "crates_trace_src_lib_disable",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -90619,7 +90607,7 @@
     },
     {
       "source": "crates_trace_src_lib_disabled_emit_is_noop",
-      "target": "crates_trace_src_lib_emit",
+      "target": "crates_trace_src_lib_clear",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -90627,6 +90615,18 @@
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
       "source_location": "L971",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_trace_src_lib_disabled_emit_is_noop",
+      "target": "crates_trace_src_lib_emit",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/trace/src/lib.rs",
+      "source_location": "L972",
       "weight": 1.0
     },
     {
@@ -90638,7 +90638,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1014",
+      "source_location": "L1015",
       "weight": 1.0
     },
     {
@@ -90650,7 +90650,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1015",
+      "source_location": "L1016",
       "weight": 1.0
     },
     {
@@ -90662,7 +90662,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1016",
+      "source_location": "L1017",
       "weight": 1.0
     },
     {
@@ -90674,7 +90674,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1017",
+      "source_location": "L1018",
       "weight": 1.0
     },
     {
@@ -90686,7 +90686,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1018",
+      "source_location": "L1019",
       "weight": 1.0
     },
     {
@@ -90698,7 +90698,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1026",
+      "source_location": "L1027",
       "weight": 1.0
     },
     {
@@ -91178,7 +91178,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L977",
+      "source_location": "L978",
       "weight": 1.0
     },
     {
@@ -91190,7 +91190,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L978",
+      "source_location": "L979",
       "weight": 1.0
     },
     {
@@ -91202,7 +91202,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L979",
+      "source_location": "L980",
       "weight": 1.0
     },
     {
@@ -91214,7 +91214,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L980",
+      "source_location": "L981",
       "weight": 1.0
     },
     {
@@ -91226,7 +91226,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L983",
+      "source_location": "L984",
       "weight": 1.0
     },
     {
@@ -91238,7 +91238,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L986",
+      "source_location": "L987",
       "weight": 1.0
     },
     {
@@ -91250,7 +91250,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L988",
+      "source_location": "L989",
       "weight": 1.0
     },
     {
@@ -91274,7 +91274,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L956",
+      "source_location": "L957",
       "weight": 1.0
     },
     {
@@ -91286,7 +91286,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L957",
+      "source_location": "L958",
       "weight": 1.0
     },
     {
@@ -91298,7 +91298,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L958",
+      "source_location": "L959",
       "weight": 1.0
     },
     {
@@ -111710,7 +111710,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/control_plane/src/lib.rs",
-      "source_location": "L16",
+      "source_location": "L14",
       "weight": 1.0
     },
     {
@@ -111722,7 +111722,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/control_plane/src/lib.rs",
-      "source_location": "L17",
+      "source_location": "L15",
       "weight": 1.0
     },
     {
@@ -111734,7 +111734,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/control_plane/src/lib.rs",
-      "source_location": "L21",
+      "source_location": "L19",
       "weight": 1.0
     },
     {
@@ -127298,7 +127298,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L949",
+      "source_location": "L950",
       "weight": 1.0
     },
     {
@@ -127310,7 +127310,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L949",
+      "source_location": "L950",
       "weight": 1.0
     },
     {
@@ -139448,7 +139448,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L949",
+      "source_location": "L950",
       "weight": 1.0
     },
     {
@@ -156486,7 +156486,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1001",
+      "source_location": "L1002",
       "weight": 1.0
     },
     {
@@ -156497,7 +156497,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1013",
+      "source_location": "L1014",
       "weight": 1.0
     },
     {
@@ -156508,7 +156508,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L1034",
+      "source_location": "L1035",
       "weight": 1.0
     },
     {
@@ -156937,7 +156937,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L949",
+      "source_location": "L950",
       "weight": 1.0
     },
     {
@@ -156948,7 +156948,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L967",
+      "source_location": "L968",
       "weight": 1.0
     },
     {
@@ -156959,7 +156959,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/trace/src/lib.rs",
-      "source_location": "L976",
+      "source_location": "L977",
       "weight": 1.0
     },
     {
@@ -182530,5 +182530,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "26947e694fe2d6b1c0ca2deb46f88769c99bbb26"
+  "built_at_commit": "76a5735588d71f872df206a7fe75994af84847ed"
 }
