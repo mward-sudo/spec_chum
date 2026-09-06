@@ -39,8 +39,7 @@ impl ServerConfig {
             .ok()
             .filter(|s| !s.is_empty());
         let insecure = std::env::var("SPEC_CHUM_AGENT_INSECURE")
-            .ok()
-            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+            .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
         Self {
             host: "127.0.0.1".into(),
             port,
