@@ -8,5 +8,28 @@ publish = false
 
 [dependencies]
 
-[lints]
-workspace = true
+# Crate-local lints (#171): pedantic warn with endemic cast/name allows.
+# Cannot mix `workspace = true` with overrides — keep in sync with root Cargo.toml.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unwrap_used = "warn"
+expect_used = "allow"
+# Endemic bitflags / capacity math — do not enable workspace-wide.
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_lossless = "allow"
+cast_sign_loss = "allow"
+many_single_char_names = "allow"
+too_many_lines = "allow"
+verbose_bit_mask = "allow"
+large_stack_arrays = "allow"
+format_push_string = "allow"

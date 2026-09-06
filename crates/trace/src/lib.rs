@@ -3,8 +3,6 @@
 //! Hot path: when no categories are enabled, [`emit`] / [`enabled`] are a single
 //! `AtomicU64` load (`Relaxed`) and return — no allocation and no lock.
 
-#![allow(clippy::pedantic)]
-
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::fs::File;
@@ -662,7 +660,7 @@ pub fn snapshot() -> Vec<TraceEvent> {
 /// How many events are currently buffered.
 #[must_use]
 pub fn len() -> usize {
-    ring().lock().map(|g| g.events.len()).unwrap_or(0)
+    ring().lock().map_or(0, |g| g.events.len())
 }
 
 fn describe_categories(c: Category) -> String {
@@ -840,12 +838,10 @@ fn maybe_append(ev: &TraceEvent) {
     };
     if !sink.decided {
         sink.decided = true;
-        let flag = std::env::var("SPEC_CHUM_TRACE_APPEND")
-            .map(|v| {
-                let t = v.trim();
-                t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
-            })
-            .unwrap_or(false);
+        let flag = std::env::var("SPEC_CHUM_TRACE_APPEND").is_ok_and(|v| {
+            let t = v.trim();
+            t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
+        });
         if flag {
             match std::env::var("SPEC_CHUM_TRACE_FILE") {
                 Ok(path) if !path.is_empty() => {
@@ -946,7 +942,8 @@ pub fn dump_to_env_file() -> io::Result<Option<std::path::PathBuf>> {
 /// Exclusive lock for tests that mutate the global ring (avoids cross-test races).
 pub fn test_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
-    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    LOCK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Test helper: enable categories, clear ring, run `f`, restore previous enable mask.
@@ -1042,8 +1039,7 @@ mod tests {
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
+                .map_or(0, |d| d.as_nanos())
         ));
         let _ = std::fs::remove_file(&path);
         configure_append_file_for_tests(&path);
