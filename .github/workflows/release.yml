@@ -98,7 +98,7 @@ jobs:
             target: x86_64-apple-darwin
             archive: zip
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ needs.resolve.outputs.ref }}
           persist-credentials: false
@@ -107,7 +107,7 @@ jobs:
       # branch, never from a tag-controlled tree (CWE-829).
       - name: Fetch trusted signing scripts
         if: runner.os == 'macOS' || runner.os == 'Windows'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: |
