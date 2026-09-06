@@ -1,4 +1,4 @@
-//! +3 µPD765 (NEC 765A) floppy controller — command / execution / result.
+//! +3 `µPD765` (`NEC 765A`) floppy controller — command / execution / result.
 //!
 //! Port `2FFD` is the main status register (MSR); `3FFD` is the data register.
 //! Non-DMA programmed I/O only (the +3 has no Terminal Count pulse).
@@ -73,7 +73,7 @@ enum Phase {
     Result,
 }
 
-/// +3 µPD765 controller with in-memory DSK backing.
+/// +3 `µPD765` controller with in-memory `DSK` backing.
 #[derive(Clone, Debug)]
 pub struct Plus3Fdc {
     pub image: Option<DskImage>,
@@ -483,38 +483,35 @@ impl Plus3Fdc {
                     .or_else(|| img.find_id(phys, p.h, p.r))
             })
             .map(|sec| sec.data.clone());
-        match found {
-            Some(data) => {
-                let mut buf = vec![0u8; len];
-                let copy = len.min(data.len());
-                buf[..copy].copy_from_slice(&data[..copy]);
-                self.data_buf = buf;
-                self.data_index = 0;
-                let mut st0 = p.us | (p.head << 2);
-                let mut st1 = 0;
-                if p.r == p.eot {
-                    st0 |= ST0_IC_ABNORMAL;
-                    st1 |= ST1_EN;
-                }
-                let st2 = if p.c != phys { ST2_WC } else { 0 };
-                self.set_result_7(st0, st1, st2, p.c, p.h, p.r, p.n);
-                self.status = 0;
-                self.phase = Phase::ExecRead;
+        if let Some(data) = found {
+            let mut buf = vec![0u8; len];
+            let copy = len.min(data.len());
+            buf[..copy].copy_from_slice(&data[..copy]);
+            self.data_buf = buf;
+            self.data_index = 0;
+            let mut st0 = p.us | (p.head << 2);
+            let mut st1 = 0;
+            if p.r == p.eot {
+                st0 |= ST0_IC_ABNORMAL;
+                st1 |= ST1_EN;
             }
-            None => {
-                self.status = 0x10;
-                self.data_buf.clear();
-                self.set_result_7(
-                    ST0_IC_ABNORMAL | p.us | (p.head << 2),
-                    ST1_ND,
-                    0,
-                    p.c,
-                    p.h,
-                    p.r,
-                    p.n,
-                );
-                self.phase = Phase::Result;
-            }
+            let st2 = if p.c == phys { 0 } else { ST2_WC };
+            self.set_result_7(st0, st1, st2, p.c, p.h, p.r, p.n);
+            self.status = 0;
+            self.phase = Phase::ExecRead;
+        } else {
+            self.status = 0x10;
+            self.data_buf.clear();
+            self.set_result_7(
+                ST0_IC_ABNORMAL | p.us | (p.head << 2),
+                ST1_ND,
+                0,
+                p.c,
+                p.h,
+                p.r,
+                p.n,
+            );
+            self.phase = Phase::Result;
         }
     }
 
@@ -575,7 +572,7 @@ impl Plus3Fdc {
             st0 |= ST0_IC_ABNORMAL;
             st1 |= ST1_EN;
         }
-        let st2 = if p.c != phys { ST2_WC } else { 0 };
+        let st2 = if p.c == phys { 0 } else { ST2_WC };
         self.set_result_7(st0, st1, st2, p.c, p.h, p.r, p.n);
         self.status = 0;
         self.phase = Phase::ExecWrite;
@@ -686,8 +683,7 @@ fn command_len(opcode: u8) -> Option<usize> {
     match opcode & 0x1f {
         0x03 => Some(3),
         0x04 => Some(2),
-        0x05 | 0x09 => Some(9),
-        0x06 | 0x0c => Some(9),
+        0x05 | 0x06 | 0x09 | 0x0c => Some(9),
         0x07 => Some(2),
         0x08 => Some(1),
         0x0a => Some(2),

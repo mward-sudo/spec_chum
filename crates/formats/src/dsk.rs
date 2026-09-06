@@ -1,6 +1,6 @@
 //! Amstrad/Spectrum +3 `.DSK` / Extended DSK image reader.
 //!
-//! Sector lookup is by physical track (file order) plus CHRN. The µPD765
+//! Sector lookup is by physical track (file order) plus `CHRN`. The `µPD765`
 //! state machine lives in [`crate::Plus3Fdc`].
 
 use std::path::Path;
@@ -149,7 +149,7 @@ impl DskImage {
         self.tracks_data[idx].sectors.first()
     }
 
-    /// Replace sectors on a physical track (µPD765 FORMAT TRACK).
+    /// Replace sectors on a physical track (`µPD765` FORMAT TRACK).
     ///
     /// Returns `false` when `physical_track` / `head` are out of range.
     #[must_use]
@@ -341,7 +341,7 @@ impl DskImage {
         let mut img = Self::synthetic_plus3_data();
         let program = plus3_basic_poke_marker();
         let file = plus3dos_basic_file(&program, 10);
-        let entry = cpm_dir_entry(b"DISK    ", b"   ", 2, file.len());
+        let entry = cpm_dir_entry(*b"DISK    ", *b"   ", 2, file.len());
         img.write_data_sector(0, &entry);
         img.write_data_sector(4, &file);
         img
@@ -420,11 +420,11 @@ fn plus3dos_basic_file(program: &[u8], autostart_line: u16) -> Vec<u8> {
     file
 }
 
-fn cpm_dir_entry(name8: &[u8; 8], ext3: &[u8; 3], block: u8, file_len: usize) -> [u8; 32] {
+fn cpm_dir_entry(name8: [u8; 8], ext3: [u8; 3], block: u8, file_len: usize) -> [u8; 32] {
     let mut e = [0u8; 32];
     e[0] = 0;
-    e[1..9].copy_from_slice(name8);
-    e[9..12].copy_from_slice(ext3);
+    e[1..9].copy_from_slice(&name8);
+    e[9..12].copy_from_slice(&ext3);
     let records = file_len.div_ceil(128).min(128) as u8;
     e[15] = records;
     e[16] = block;
@@ -450,12 +450,12 @@ fn parse_track(data: &[u8]) -> Result<TrackData, FormatError> {
         let side = data[info_off + 1];
         let sector_id = data[info_off + 2];
         let size_code = data[info_off + 3];
-        let size = 128usize << size_code.min(6);
-        if data_off + size > data.len() {
+        let sector_len = 128usize << size_code.min(6);
+        if data_off + sector_len > data.len() {
             return Err(FormatError::Format("sector data truncated".into()));
         }
-        let sector_data = data[data_off..data_off + size].to_vec();
-        data_off += size;
+        let sector_data = data[data_off..data_off + sector_len].to_vec();
+        data_off += sector_len;
         sectors.push(Sector {
             track,
             side,

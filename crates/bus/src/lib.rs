@@ -1,7 +1,5 @@
 //! Spec Chum bus — 48K/128K/+2A/+3 memory maps and port decode.
 
-#![allow(clippy::pedantic)]
-
 mod ay;
 mod beta_disk;
 mod divmmc;
@@ -38,10 +36,10 @@ use ula::{
 };
 
 fn emit_floating_sampled(port: u16, frame_t: u32, value: u8) {
+    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     if !trace::enabled(trace::Category::BUS) {
         return;
     }
-    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if n.is_multiple_of(256) {
         trace::emit(trace::EventKind::BusFloating {
@@ -125,13 +123,13 @@ pub struct Bus48 {
     /// Frame-relative T-state (0..69888).
     pub frame_t: u32,
     pub ula: Ula48,
-    /// Timestamped beeper edges: (frame_t, level).
+    /// Timestamped beeper edges: (`frame_t`, level).
     pub beeper_edges: Vec<(u32, bool)>,
     pub kempston: Kempston,
     pub mouse: KempstonMouse,
     /// Optional Multiface 1 (ROM attached separately).
     pub multiface: Option<Multiface1>,
-    /// Optional DivMMC (control port `0xE3`).
+    /// Optional `DivMMC` (control port `0xE3`).
     pub divmmc: Option<DivMmc>,
     /// Optional Interface 1 + Microdrive.
     pub interface1: Option<Interface1>,
@@ -285,12 +283,12 @@ impl Bus48 {
         Ok(())
     }
 
-    /// Attach a DivMMC (creates default peripheral if absent).
+    /// Attach a `DivMMC` (creates default peripheral if absent).
     pub fn attach_divmmc(&mut self) -> &mut DivMmc {
         self.divmmc.get_or_insert_with(DivMmc::new)
     }
 
-    /// M1 opcode-fetch hook for DivMMC automap.
+    /// M1 opcode-fetch hook for `DivMMC` automap.
     pub fn notify_divmmc_m1(&mut self, pc: u16) {
         if let Some(d) = self.divmmc.as_mut() {
             d.notify_m1(pc);
@@ -616,7 +614,7 @@ pub struct Bus128 {
     pub beeper_edges: Vec<(u32, bool)>,
     pub ula: Ula48,
     /// T-states after `OUT #7FFD` before the ULA display bank updates (Sinclair
-    /// 128 / grey +2: 3; Amstrad models use BusPlus3 with 2).
+    /// 128 / grey +2: 3; Amstrad models use `BusPlus3` with 2).
     pub screen_switch_delay: u32,
     /// Frame length used when a delayed screen switch spills into the next frame.
     pub frame_tstates: u32,
@@ -662,12 +660,12 @@ impl Bus128 {
         }
     }
 
-    /// Attach a DivMMC (creates default peripheral if absent).
+    /// Attach a `DivMMC` (creates default peripheral if absent).
     pub fn attach_divmmc(&mut self) -> &mut DivMmc {
         self.divmmc.get_or_insert_with(DivMmc::new)
     }
 
-    /// M1 opcode-fetch hook for DivMMC automap.
+    /// M1 opcode-fetch hook for `DivMMC` automap.
     pub fn notify_divmmc_m1(&mut self, pc: u16) {
         if let Some(d) = self.divmmc.as_mut() {
             d.notify_m1(pc);

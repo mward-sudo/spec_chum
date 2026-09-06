@@ -12,7 +12,7 @@
 //! flat sector image so loaders can smoke-test sector read/write. Full ESXDOS
 //! boot still needs a real EEPROM binary (see `roms/` / docs).
 
-/// DivMMC control / paging register.
+/// `DivMMC` control / paging register.
 pub const PORT_CONTROL: u16 = 0x00e3;
 /// SPI chip-select (active low bit0).
 pub const PORT_SPI_CS: u16 = 0x00e7;
@@ -182,16 +182,15 @@ impl SdSpi {
                     0x05
                 }
             }
-            SpiPhase::WriteResp { idx } => match idx {
-                0 => {
+            SpiPhase::WriteResp { idx } => {
+                if idx == 0 {
                     self.phase = SpiPhase::WriteResp { idx: 1 };
                     0x00 // busy
-                }
-                _ => {
+                } else {
                     self.phase = SpiPhase::Idle;
                     0xff
                 }
-            },
+            }
         }
     }
 
@@ -316,7 +315,7 @@ impl DivMmc {
         self.spi.soft_reset_card();
     }
 
-    /// Attach ESXDOS / DivMMC EEPROM. Accepts exactly 8 KiB, or a larger image
+    /// Attach ESXDOS / `DivMMC` EEPROM. Accepts exactly 8 KiB, or a larger image
     /// (first 8 KiB used). Smaller images are rejected.
     pub fn attach_eeprom(&mut self, data: &[u8]) -> Result<(), String> {
         if data.len() < PAGE_SIZE {
@@ -359,7 +358,7 @@ impl DivMmc {
         self.conmem() || self.automap
     }
 
-    /// M1 (opcode fetch) automap — DivIDE entry / exit points.
+    /// M1 (opcode fetch) automap — `DivIDE` entry / exit points.
     ///
     /// No-op until EEPROM is attached or MAPRAM is set (hardware needs a ROM
     /// image or MAPRAM before automatic paging engages).

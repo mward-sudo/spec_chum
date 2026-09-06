@@ -1,6 +1,5 @@
 //! Spec Chum Z80 CPU — from-scratch cycle-aware implementation.
 
-#![allow(clippy::pedantic)]
 #![allow(clippy::duplicated_attributes)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]

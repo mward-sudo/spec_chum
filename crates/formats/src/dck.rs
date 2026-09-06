@@ -232,7 +232,7 @@ mod tests {
         let empty_ram = [0u8, 1, 1, 1, 1, 1, 1, 1, 1];
         let img = DckImage::parse(&empty_ram).unwrap();
         assert_eq!(img.banks[0].bank, DckBankId::Dock);
-        assert!(img.banks[0].pages.iter().all(|p| p.is_none()));
+        assert!(img.banks[0].pages.iter().all(std::option::Option::is_none));
         assert!(img.banks[0]
             .access
             .iter()
