@@ -684,7 +684,7 @@ impl EmulatorSession {
                                 path.display()
                             ));
                         }
-                        Err(e) => host.set_status(e),
+                        Err(e) => host.set_status(e.to_string()),
                     }
                 } else {
                     host.set_status("Load +3 ROM before inserting disk");
