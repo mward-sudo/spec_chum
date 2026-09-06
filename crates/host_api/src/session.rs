@@ -498,7 +498,8 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         let img = formats::TrdImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
-        m.insert_trd(img).map_err(HostError::Message)?;
+        m.insert_trd(img)
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = format!("Inserted TRD {}", path.display());
         Ok(())
     }
@@ -509,7 +510,8 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         let data = std::fs::read(path)?;
-        m.load_trdos_rom(&data).map_err(HostError::Message)?;
+        m.load_trdos_rom(&data)
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = format!("Loaded TR-DOS ROM {}", path.display());
         Ok(())
     }
@@ -519,7 +521,8 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
-        m.attach_beta().map_err(HostError::Message)?;
+        m.attach_beta()
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = "Beta Disk attached".into();
         Ok(())
     }
@@ -761,7 +764,8 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         let data = std::fs::read(path)?;
-        m.attach_multiface(&data).map_err(HostError::Message)?;
+        m.attach_multiface(&data)
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = format!("Attached Multiface 1 from {}", path.display());
         Ok(())
     }
@@ -887,7 +891,8 @@ impl HostSession {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
-        m.attach_divmmc().map_err(HostError::Message)?;
+        m.attach_divmmc()
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = "DivMMC attached".into();
         Ok(())
     }
@@ -898,7 +903,9 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         let data = std::fs::read(path)?;
-        let div = m.attach_divmmc().map_err(HostError::Message)?;
+        let div = m
+            .attach_divmmc()
+            .map_err(|e| HostError::Message(e.to_string()))?;
         div.attach_sd(data);
         self.status = format!("DivMMC SD {}", path.display());
         Ok(())
@@ -910,7 +917,8 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         let data = std::fs::read(path)?;
-        m.attach_divmmc_eeprom(&data).map_err(HostError::Message)?;
+        m.attach_divmmc_eeprom(&data)
+            .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = format!("DivMMC EEPROM {}", path.display());
         Ok(())
     }
