@@ -1,7 +1,6 @@
 //! Spec Chum machine — Spectrum models and frame runner.
 
-#![allow(clippy::pedantic)]
-#![allow(clippy::large_enum_variant)]
+#![allow(clippy::large_enum_variant)] // SpectrumModel enum variants differ widely in size by design.
 
 #[cfg(all(test, feature = "slow-tests"))]
 mod z80test;
@@ -314,7 +313,7 @@ pub enum Model {
     SpectrumPlus2,
     /// Amstrad +2A (gate array `1FFD`, no disk interface — menu Loader is tape).
     SpectrumPlus2A,
-    /// Amstrad +3 (same gate array with µPD765 — menu Loader is +3DOS disk).
+    /// Amstrad +3 (same gate array with `µPD765` — menu Loader is +3DOS disk).
     SpectrumPlus3,
     /// Pentagon 128 clone (#188 Phase B / #193): user ROM + TR-DOS, distinct timing.
     Pentagon128,
@@ -760,7 +759,7 @@ pub enum Machine {
 
 #[derive(Clone, Debug, Default)]
 pub struct FrameAudio {
-    /// Beeper edges: (frame_t, level).
+    /// Beeper edges: (`frame_t`, level).
     pub beeper_edges: Vec<(u32, bool)>,
     /// Mono AY samples for this frame (empty on 48K). Amplitude roughly 0..1.
     pub ay_samples: Vec<f32>,
@@ -1190,7 +1189,7 @@ impl Machine {
                 *rzx = Some(RzxPlayer {
                     recording,
                     frame: 0,
-                })
+                });
             }
         }
     }
@@ -1451,7 +1450,7 @@ impl Machine {
         }
     }
 
-    /// Attach DivMMC on 48K/128K (creates the peripheral if absent).
+    /// Attach `DivMMC` on 48K/128K (creates the peripheral if absent).
     pub fn attach_divmmc(&mut self) -> Result<&mut bus::DivMmc, String> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_divmmc()),
@@ -1460,7 +1459,7 @@ impl Machine {
         }
     }
 
-    /// Attach DivMMC and load an ESXDOS EEPROM image (8 KiB, or larger prefix).
+    /// Attach `DivMMC` and load an ESXDOS EEPROM image (8 KiB, or larger prefix).
     pub fn attach_divmmc_eeprom(&mut self, data: &[u8]) -> Result<(), String> {
         let div = self.attach_divmmc()?;
         div.attach_eeprom(data)
@@ -1774,7 +1773,7 @@ impl Machine {
                         break;
                     }
                     Self::timex_redirect_spectrum_ld_bytes(cpu, bus);
-                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
+                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
@@ -1955,7 +1954,7 @@ impl Machine {
                     if debugger.check_pc(cpu.regs.pc) {
                         break;
                     }
-                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
+                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
@@ -2111,7 +2110,7 @@ impl Machine {
                     if debugger.check_pc(cpu.regs.pc) {
                         break;
                     }
-                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
+                    if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                         const HOLD_T: u32 = 4;
                         cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                         last_t = cpu.t;
@@ -2293,10 +2292,10 @@ impl Machine {
     #[must_use]
     fn hold_ld_bytes_until_play(
         pc: u16,
-        tape: &Option<TapeDeck>,
+        tape: Option<&TapeDeck>,
         read: impl Fn(u16) -> u8,
     ) -> bool {
-        let holding = tape.as_ref().is_some_and(|t| !t.playing()) && is_ld_bytes_trap_pc(pc, read);
+        let holding = tape.is_some_and(|t| !t.playing()) && is_ld_bytes_trap_pc(pc, read);
         if holding && trace::enabled(trace::Category::MACHINE) {
             // Sampled: one event per hold check would flood; emit sparsely via counter.
             static HOLD_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -2641,7 +2640,7 @@ impl Machine {
                     return;
                 }
                 Self::timex_redirect_spectrum_ld_bytes(cpu, bus);
-                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
+                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
                         tape,
@@ -2770,7 +2769,7 @@ impl Machine {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
-                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
+                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
                         tape,
@@ -2898,7 +2897,7 @@ impl Machine {
                         Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
                     }
                 }
-                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape, |a| bus.read(a)) {
+                if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
                         tape,
@@ -3381,7 +3380,7 @@ impl Machine {
     pub fn type_load_quotes(&mut self, with_code: bool) {
         match self.model() {
             Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068 => {
-                self.type_load_quotes_48k(with_code)
+                self.type_load_quotes_48k(with_code);
             }
             Model::Spectrum128 => self.type_load_quotes_128k(with_code),
             Model::SpectrumPlus2 => self.type_load_quotes_plus2(with_code),
@@ -3890,7 +3889,7 @@ mod tests {
     /// dump even when `trdos-5.04t.rom` exists beside it. Alone Coder 5.04T fills
     /// `08D2h` with a VG93 port stub — that is **not** a file service.
     fn trdos_rom_has_native_file_services_paged(m: &mut Machine) -> bool {
-        let was = m.beta_mut().map(|b| b.paged).unwrap_or(false);
+        let was = m.beta_mut().is_some_and(|b| b.paged);
         if let Some(beta) = m.beta_mut() {
             beta.page_trdos(true);
         }
@@ -4562,7 +4561,7 @@ mod tests {
             if pc != last {
                 let breg = m.cpu().regs.b;
                 let sp = m.cpu().regs.sp;
-                let sectors = m.beta_mut().map(|x| x.sector_read_count).unwrap_or(0);
+                let sectors = m.beta_mut().map_or(0, |x| x.sector_read_count);
                 let in_rom = pc < 0x4000;
                 let dos_stub = pc == 0x5cc2 || (0x5c00..0x5e00).contains(&pc);
                 let interesting = watch.contains(&pc);
@@ -5037,10 +5036,9 @@ mod tests {
         );
         let ok = invoke_trdos_run_boot(&mut m);
         let pc = m.cpu().regs.pc;
-        let (sectors, track, ring) = m
-            .beta_mut()
-            .map(|b| (b.sector_read_count, b.track, b.command_ring().to_vec()))
-            .unwrap_or((0, 0, Vec::new()));
+        let (sectors, track, ring) = m.beta_mut().map_or((0, 0, Vec::new()), |b| {
+            (b.sector_read_count, b.track, b.command_ring().to_vec())
+        });
         assert!(
             ok,
             "TR-DOS RUN boot should POKE 32768,165 (PC={pc:#06x}, sectors={sectors}, track={track}, ring={ring:02x?}, 8000={:#04x})",
@@ -5353,7 +5351,7 @@ mod tests {
         );
     }
 
-    /// Each M1 refresh uses contention from that fetch, not a stale opcode_pc marker.
+    /// Each M1 refresh uses contention from that fetch, not a stale `opcode_pc` marker.
     #[test]
     fn m1_refresh_per_fetch_contention_not_stale() {
         use z80::Memory;
@@ -6622,7 +6620,7 @@ mod tests {
         }
     }
 
-    /// ROM-gated: Loader (menu Enter) must talk to the µPD765 on a synthetic
+    /// ROM-gated: Loader (menu Enter) must talk to the `µPD765` on a synthetic
     /// +3DOS DATA disk. Skips if `roms/plus3/plus3.rom` is missing — do not
     /// fall back to +2A ROM.
     #[test]
@@ -7025,7 +7023,7 @@ mod tests {
         eprintln!("attr_mark LOAD \"\" CODE succeeded (CODE at 0x8000)");
     }
 
-    /// Hard success gate for attr_mark `LOAD "" CODE`.
+    /// Hard success gate for `attr_mark` `LOAD "" CODE`.
     #[test]
     fn attr_mark_load_path_must_succeed() {
         let Some(rom) = rom48() else {
@@ -7217,7 +7215,7 @@ mod tests {
         );
     }
 
-    /// Minimal uncompressed Z80 v1 for apply_snapshot48 golden.
+    /// Minimal uncompressed Z80 v1 for `apply_snapshot48` golden.
     fn synthetic_z80_v1_for_machine() -> Vec<u8> {
         let mut data = vec![0u8; 30 + 49152];
         data[0] = 0x11; // A
@@ -7350,7 +7348,7 @@ mod tests {
         }
     }
 
-    /// Uncompressed RZX input block (same layout as formats::rzx tests).
+    /// Uncompressed RZX input block (same layout as `formats::rzx` tests).
     fn minimal_rzx(frames: &[(u16, &[u8])]) -> Vec<u8> {
         let mut v = Vec::new();
         v.extend_from_slice(b"RZX!");
@@ -7466,7 +7464,7 @@ mod tests {
         assert!(saw_high, "turbo pilot must drive EAR high");
         assert!(saw_progress, "pulse index must advance under EAR path");
         assert!(
-            m.tape_progress().map(|p| p.pulse_count).unwrap_or(0) > 0,
+            m.tape_progress().map_or(0, |p| p.pulse_count) > 0,
             "turbo deck reports scheduled pulses"
         );
     }

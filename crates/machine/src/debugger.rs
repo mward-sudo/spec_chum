@@ -151,7 +151,7 @@ impl Debugger {
     }
 }
 
-/// Shared with MemIo adapters for the duration of one CPU step.
+/// Shared with `MemIo` adapters for the duration of one CPU step.
 #[derive(Debug)]
 pub(crate) struct WatchHook<'a> {
     pub mem: &'a [Watch],

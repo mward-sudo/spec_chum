@@ -178,12 +178,11 @@ mod tests {
 
     fn assert_z80test_passed(name: &str, tap_name: &str) {
         let tap = fixture_dir().join(tap_name);
-        if !tap.exists() {
-            panic!(
-                "missing {} — copy from z80test v1.2a or run ./scripts/fetch_z80test.sh",
-                tap.display()
-            );
-        }
+        assert!(
+            tap.exists(),
+            "missing {} — copy from z80test v1.2a or run ./scripts/fetch_z80test.sh",
+            tap.display()
+        );
         if !rom48_path().exists() {
             eprintln!("skip: roms/spec48.rom missing");
             return;
