@@ -6,7 +6,10 @@
 # CI runs the same gate as a PR check (see .github/workflows/pr-bot-reviews.yml).
 # Ruleset context is the API-published check "unresolved bot threads"; the
 # Actions job is named bot-review-gate so cancelled runs cannot block merge
-# after a newer soft-pass (#318).
+# after a newer soft-pass (#318). CI re-invokes this script on CodeRabbit
+# *commit status* changes (`on: status` in pr-bot-reviews.yml) so pending →
+# completed/rate-limited clears the published required check without a manual
+# re-run (#312 lacked that trigger until #314; #318 keeps publish authoritative).
 # Lesson: https://github.com/mward-sudo/spec_chum/pull/83
 #
 # Draft vs ready (aligns with on-demand CodeRabbit usage):
