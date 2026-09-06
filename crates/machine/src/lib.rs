@@ -62,7 +62,7 @@ pub enum Interface1Error {
 /// Errors attaching Multiface 1 or loading its ROM.
 #[derive(Debug, Error)]
 pub enum MultifaceError {
-    #[error("Multiface 1 is only supported on Spectrum 48K")]
+    #[error("Multiface 1 is only supported on 48K-class models (16K/48K/Timex)")]
     UnsupportedModel,
     #[error(transparent)]
     Rom(#[from] bus::RomLoadError),
