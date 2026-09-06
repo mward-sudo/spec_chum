@@ -12,7 +12,7 @@ mod timex;
 mod timex_dock;
 
 pub use ay::{Ay8912, StereoMode};
-pub use beta_disk::{BetaDisk, TRDOS_ROM_SIZE};
+pub use beta_disk::{BetaDisk, BetaDiskPatchError, TRDOS_ROM_SIZE};
 pub use divmmc::{
     DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
     PORT_SPI_DATA as DIVMMC_PORT_SPI_DATA,
