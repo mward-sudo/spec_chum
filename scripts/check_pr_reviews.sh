@@ -85,16 +85,23 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
     fi
   }
   expect true success "Review completed" pass "completed"
+  expect true success "REVIEW COMPLETED" pass "completed case-insensitive"
   expect true success "Review rate limited" soft_pass "rate-limited success"
   expect true failure "Review rate limited" soft_pass "rate-limited failure"
+  expect true success "Rate limit: too many requests" soft_pass "too-many-requests"
+  expect true failure "quota exceeded" soft_pass "quota failure"
   expect true success "Review skipped: on demand" hold "on-demand skip"
   expect true success "Review skipped: excluded by label configuration" hold "label-config skip"
   expect true success "Review skipped: something else" hold "generic skip"
   expect true success "Review skipped: rate limited" hold "skip beats rate-limit"
+  expect true pending "Review queued" hold "queued pending"
+  expect true pending "Review in progress" hold "in-progress pending"
   expect true pending "Queued" hold "pending"
   expect false "" "" hold "missing"
   expect true error "boom" hold "error"
+  expect true failure "Review failed" hold "failure non-rate-limit"
   expect true success "In progress" hold "non-completed success"
+  expect true success "" hold "empty success description"
   if [[ "$fail" -ne 0 ]]; then
     echo "self-test failed" >&2
     exit 1

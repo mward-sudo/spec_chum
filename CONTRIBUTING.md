@@ -85,7 +85,7 @@ Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignor
 
 **Drafts:** `./scripts/check_pr_reviews.sh` skips CodeRabbit HEAD completeness but still fails on unresolved bot threads. Do not merge drafts.
 
-**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs (and when reviews/comments arrive) using the default `GITHUB_TOKEN` (`pull-requests: read`). Treat a failing check as blocking for merge. After resolving threads or when CodeRabbit finishes, re-run that job if GitHub did not re-trigger it.
+**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs, when reviews/comments arrive, and when CodeRabbit updates its **commit status** (so a prior pending/in-progress red check clears on `Review completed` / `Review rate limited` without a manual re-run). Uses the default `GITHUB_TOKEN`. Treat a failing check as blocking for merge. After resolving threads, re-run that job if GitHub did not re-trigger it. On-demand/label skips hard-fail; rate-limited soft-passes (soft-pass ≠ skip).
 
 **Agents / local (mandatory before merge):**
 

@@ -11,7 +11,7 @@ Lesson: [#83](https://github.com/mward-sudo/spec_chum/pull/83) merged with unres
 
 1. **Local (primary while iterating):** Cursor CodeRabbit plugin and/or `coderabbit review --agent` before treating a branch as merge-candidate when the CLI is available. `graphify-out/**` is excluded via `.coderabbit.yaml` `path_filters`; optionally scope further with `--dir crates` / `--dir apps`.
 2. **GitHub `@coderabbitai` (preferred when quota allows):** still request when merge-candidate if not rate-limited — first pass `@coderabbitai full review` (or label `coderabbit-review`); after fix commits `@coderabbitai review` (incremental).
-3. **Hard merge gate:** `./scripts/check_pr_reviews.sh` + **Bot review threads** CI — see below.
+3. **Hard merge gate:** `./scripts/check_pr_reviews.sh` + **Bot review threads** CI — see below. CI listens for CodeRabbit commit-status updates (not only review comments) so terminal rate-limited/completed clears a prior pending hold; on-demand/label skips still hard-fail (soft-pass ≠ skip).
 
 ## Prefer both; either-side is enough (gate 1)
 
