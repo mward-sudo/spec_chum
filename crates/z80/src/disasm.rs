@@ -77,7 +77,7 @@ pub fn disasm_one(bytes: &[u8]) -> Disasm {
         0x3d => one("DEC A"),
         0x3e => ld8(bytes, "A"),
         0x3f => one("CCF"),
-        op @ 0x40..=0x75 | op @ 0x77..=0x7f => one(&format!("LD {},{}", r8(op >> 3), r8(op))),
+        op @ (0x40..=0x75 | 0x77..=0x7f) => one(&format!("LD {},{}", r8(op >> 3), r8(op))),
         0x76 => one("HALT"),
         op @ 0x80..=0xbf => {
             let alu = [
@@ -375,6 +375,7 @@ fn disasm_ed(bytes: &[u8]) -> Disasm {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum EdAbs {
     MemBc,
     BcMem,

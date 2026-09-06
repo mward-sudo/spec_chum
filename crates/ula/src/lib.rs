@@ -267,13 +267,13 @@ pub fn palette_rgb(color: u8, bright: bool) -> [u8; 3] {
 
 #[derive(Clone, Debug)]
 pub struct Ula48 {
-    /// Border changes: (frame_t, color 0–7)
+    /// Border changes: (`frame_t`, color `0`–`7`)
     pub border_events: Vec<(u32, u8)>,
     pub border: u8,
-    /// Display screen-bank changes: (frame_t, bank 5 or 7). Used for mid-frame
-    /// `OUT #7FFD` shadow-screen switches (ptime / demos).
+    /// Display screen-bank changes: (`frame_t`, bank `5` or `7`). Used for mid-frame
+    /// `OUT (#7FFD)` shadow-screen switches (ptime / demos).
     pub screen_events: Vec<(u32, u8)>,
-    /// Latched display screen bank (5 or 7) after the latest switch.
+    /// Latched display screen bank (`5` or `7`) after the latest switch.
     pub display_screen_bank: u8,
     pub flash_phase: bool,
     pub frame: u64,
@@ -791,10 +791,10 @@ mod tests {
 
     #[test]
     fn contention_table() {
-        assert_eq!(contention_delay(0), 0);
-        let t = PAPER_START_48;
         // Full early-timing 8-cycle window (FAQ / Sinclair wiki).
         const DELAYS: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
+        assert_eq!(contention_delay(0), 0);
+        let t = PAPER_START_48;
         for (i, &d) in DELAYS.iter().enumerate() {
             assert_eq!(contention_delay(t + i as u32), d, "48K delay at PAPER+{i}");
         }
