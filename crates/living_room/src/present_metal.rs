@@ -11,8 +11,20 @@ use objc2_metal::{
     MTLDevice, MTLPixelFormat, MTLTextureDescriptor, MTLTextureType, MTLTextureUsage,
 };
 use std::os::raw::c_void;
+use thiserror::Error;
 use wgpu::hal::api::Metal;
 use wgpu::hal::CopyExtent;
+
+/// Errors from [`import_iosurface_texture`].
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum PresentIosurfaceError {
+    #[error("null IOSurface")]
+    NullSurface,
+    #[error("wgpu device is not Metal")]
+    NotMetal,
+    #[error("MTLDevice newTextureWithDescriptor:iosurface:plane: failed")]
+    TextureCreateFailed,
+}
 
 /// Import `iosurface` (IOSurfaceRef) into a wgpu texture on Bevy's MTLDevice.
 ///
@@ -25,9 +37,9 @@ pub fn import_iosurface_texture(
     iosurface: *mut c_void,
     width: u32,
     height: u32,
-) -> Result<wgpu::Texture, String> {
+) -> Result<wgpu::Texture, PresentIosurfaceError> {
     if iosurface.is_null() {
-        return Err("null IOSurface".into());
+        return Err(PresentIosurfaceError::NullSurface);
     }
     let width = width.max(1);
     let height = height.max(1);
@@ -35,7 +47,7 @@ pub fn import_iosurface_texture(
     let wgpu_dev = render_device.wgpu_device();
     // SAFETY: Bevy's device is Metal on macOS; HAL borrow is for this call only.
     let Some(hal_dev) = (unsafe { wgpu_dev.as_hal::<Metal>() }) else {
-        return Err("wgpu device is not Metal".into());
+        return Err(PresentIosurfaceError::NotMetal);
     };
     let mtl_device = hal_dev.raw_device().clone();
 
@@ -57,7 +69,7 @@ pub fn import_iosurface_texture(
 
     let Some(mtl_tex) = mtl_device.newTextureWithDescriptor_iosurface_plane(&desc, surface, 0)
     else {
-        return Err("MTLDevice newTextureWithDescriptor:iosurface:plane: failed".into());
+        return Err(PresentIosurfaceError::TextureCreateFailed);
     };
 
     let copy_size = CopyExtent {
@@ -96,4 +108,25 @@ pub fn import_iosurface_texture(
 
     // SAFETY: hal texture matches descriptor; ownership moves into wgpu.
     Ok(unsafe { wgpu_dev.create_texture_from_hal::<Metal>(hal_tex, &desc) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PresentIosurfaceError;
+
+    #[test]
+    fn present_iosurface_error_display_matches_legacy_strings() {
+        assert_eq!(
+            PresentIosurfaceError::NullSurface.to_string(),
+            "null IOSurface"
+        );
+        assert_eq!(
+            PresentIosurfaceError::NotMetal.to_string(),
+            "wgpu device is not Metal"
+        );
+        assert_eq!(
+            PresentIosurfaceError::TextureCreateFailed.to_string(),
+            "MTLDevice newTextureWithDescriptor:iosurface:plane: failed"
+        );
+    }
 }

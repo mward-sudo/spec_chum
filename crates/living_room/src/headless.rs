@@ -17,6 +17,8 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 use std::time::Duration;
 
+use thiserror::Error;
+
 use crate::asset_plugin;
 
 use crate::camera::{
@@ -35,6 +37,16 @@ use crate::room::RoomPlugin;
 /// 1920 long-edge: 60 Hz budget on the real present path; the CRT undersamples below this.
 pub const DEFAULT_ROOM_W: u32 = 1920;
 pub const DEFAULT_ROOM_H: u32 = 1080;
+
+/// Errors from [`HeadlessRoom`] create / resize / IOSurface present bind.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum HeadlessRoomError {
+    #[cfg(target_os = "macos")]
+    #[error(transparent)]
+    Present(#[from] crate::present_metal::PresentIosurfaceError),
+    #[error("IOSurface present is only supported on macOS")]
+    UnsupportedPlatform,
+}
 
 /// Handle to the offscreen Image used as the camera render target (present blit src).
 #[derive(Resource, Clone, Debug)]
@@ -59,7 +71,7 @@ impl std::fmt::Debug for HeadlessRoom {
 
 impl HeadlessRoom {
     /// Build plugins, finish, take [`SubApps`]. Does not call `App::run()`.
-    pub fn try_new(width: u32, height: u32) -> Result<Self, String> {
+    pub fn try_new(width: u32, height: u32) -> Result<Self, HeadlessRoomError> {
         let width = width.max(64);
         let height = height.max(64);
 
@@ -287,7 +299,7 @@ impl HeadlessRoom {
     ///
     /// Avoids a full `HeadlessRoom::try_new` / GPU pipeline recompile on stepped window resizes
     /// (was freezing SpecChumMac for seconds when the living-room queue blocked).
-    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), String> {
+    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), HeadlessRoomError> {
         let width = width.max(64);
         let height = height.max(64);
         if width == self.width && height == self.height {
@@ -316,7 +328,7 @@ impl HeadlessRoom {
         iosurface: *mut c_void,
         width: u32,
         height: u32,
-    ) -> Result<(), String> {
+    ) -> Result<(), HeadlessRoomError> {
         if iosurface.is_null() {
             if let Some(mut present) = self
                 .apps
@@ -348,7 +360,7 @@ impl HeadlessRoom {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = (width, height);
-            Err("IOSurface present is only supported on macOS".into())
+            Err(HeadlessRoomError::UnsupportedPlatform)
         }
     }
 }
@@ -400,7 +412,7 @@ fn rebuild_headless_render_target(
     apps: &mut SubApps,
     width: u32,
     height: u32,
-) -> Result<(), String> {
+) -> Result<(), HeadlessRoomError> {
     let world = apps.main.world_mut();
     *world.resource_mut::<HeadlessSize>() = HeadlessSize { width, height };
 
@@ -464,4 +476,17 @@ fn bind_hybrid_headless_targets(
     mut plates: ResMut<crate::hybrid::HybridPlates>,
 ) {
     crate::hybrid::bind_present_target(size.width, size.height, Some(&mut plates));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HeadlessRoomError;
+
+    #[test]
+    fn unsupported_platform_display_matches_legacy_string() {
+        assert_eq!(
+            HeadlessRoomError::UnsupportedPlatform.to_string(),
+            "IOSurface present is only supported on macOS"
+        );
+    }
 }

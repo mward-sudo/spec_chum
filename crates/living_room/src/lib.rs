@@ -31,7 +31,9 @@ pub mod room;
 pub mod ui_overlay;
 
 pub use external_fb::ExternalFramebuffer;
-pub use headless::{HeadlessRoom, DEFAULT_ROOM_H, DEFAULT_ROOM_W};
+pub use headless::{HeadlessRoom, HeadlessRoomError, DEFAULT_ROOM_H, DEFAULT_ROOM_W};
+#[cfg(target_os = "macos")]
+pub use present_metal::PresentIosurfaceError;
 
 /// Keep `host_api` linked into the embed staticlib so SpecChumMac resolves `sc_*`
 /// even when the `standalone` feature (and `host` module) is off.
