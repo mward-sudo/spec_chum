@@ -20,11 +20,7 @@ mod tests {
         let avail = egui::vec2(800.0, 400.0);
         let fitted = fit_size(src, avail);
         let eps = 0.01;
-        assert!(
-            (fitted.y - 400.0).abs() < eps,
-            "height-limited {:?}",
-            fitted
-        );
+        assert!((fitted.y - 400.0).abs() < eps, "height-limited {fitted:?}");
         assert!(fitted.x < avail.x);
         assert!((fitted.x / fitted.y - src.x / src.y).abs() < 0.001);
     }
