@@ -485,6 +485,9 @@ impl ControlPlane {
     }
 
     pub fn set_key(&self, row: usize, bit: u8, pressed: bool) -> ApiResult<()> {
+        if row > 7 || bit > 4 {
+            return Err(ApiError::BadRequest("key row/bit out of range".into()));
+        }
         self.with_session_mut(|s| {
             s.set_key(row, bit, pressed)?;
             Ok(())
@@ -620,6 +623,44 @@ impl ControlPlane {
 
     pub fn framebuffer_png(&self) -> ApiResult<Vec<u8>> {
         self.with_session_ref(encode_framebuffer_png)
+    }
+
+    /// Capture framebuffer bytes under one host lock.
+    ///
+    /// When `border_override` is `Some`, temporarily sets that border preference,
+    /// advances one frame, captures, then restores the previous preference — so
+    /// concurrent [`Self::set_border`] cannot interleave mid-capture. Restoration
+    /// runs even if the frame advance or encode fails.
+    pub fn capture_framebuffer(
+        &self,
+        border_override: Option<bool>,
+        as_png: bool,
+    ) -> ApiResult<(FramebufferMeta, Vec<u8>)> {
+        self.with_session_mut(|s| {
+            let restore = border_override.and_then(|want| {
+                let prev = s.with_border();
+                s.set_border(want);
+                (prev != want).then_some(prev)
+            });
+
+            let result = (|| {
+                if border_override.is_some() {
+                    s.run_frames(1)?;
+                }
+                let meta = FramebufferMeta::from_session(s);
+                let bytes = if as_png {
+                    encode_framebuffer_png(s)?
+                } else {
+                    s.framebuffer().to_vec()
+                };
+                Ok((meta, bytes))
+            })();
+
+            if let Some(prev) = restore {
+                s.set_border(prev);
+            }
+            result
+        })
     }
 
     pub fn set_model(&self, model: &str) -> ApiResult<()> {
@@ -1321,6 +1362,51 @@ mod tests {
     fn set_key_requires_machine() {
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
         assert!(plane.set_key(0, 0, true).is_err());
+    }
+
+    #[test]
+    fn set_key_rejects_out_of_range_as_bad_request() {
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        let err = plane.set_key(8, 0, true).expect_err("row");
+        assert_eq!(err.status_code(), 400);
+        let err = plane.set_key(0, 5, true).expect_err("bit");
+        assert_eq!(err.status_code(), 400);
+    }
+
+    #[test]
+    fn capture_framebuffer_border_override_restores() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: Spectrum 48 ROM missing");
+            return;
+        };
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        {
+            let mut s = plane.lock_host();
+            s.load_rom_bytes(&rom).expect("rom");
+        }
+        assert!(!plane.framebuffer_meta().expect("meta").border);
+        let (meta, png) = plane
+            .capture_framebuffer(Some(true), true)
+            .expect("capture");
+        assert!(meta.border);
+        assert!(meta.width > 256);
+        assert!(png.starts_with(&[0x89, b'P', b'N', b'G']));
+        assert!(
+            !plane.framebuffer_meta().expect("after").border,
+            "border preference must be restored after override capture"
+        );
+    }
+
+    #[test]
+    fn capture_framebuffer_restores_border_when_run_fails() {
+        // No machine → run_frames fails after the temporary border flip.
+        let plane = ControlPlane::new(ModelId::Spectrum48, false);
+        assert!(!plane.framebuffer_meta().expect("meta").border);
+        assert!(plane.capture_framebuffer(Some(true), true).is_err());
+        assert!(
+            !plane.framebuffer_meta().expect("after").border,
+            "border preference must restore even when override capture fails"
+        );
     }
 
     #[test]

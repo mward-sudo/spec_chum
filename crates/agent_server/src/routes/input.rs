@@ -150,6 +150,12 @@ pub(crate) async fn set_keys(
                 ApiError::BadRequest("keys body requires clear, keys[], or row+bit".into()),
             );
         };
+        if row > 7 || bit > 4 {
+            return api_error(
+                &state.plane,
+                ApiError::BadRequest("key row/bit out of range".into()),
+            );
+        }
         let pressed = body.pressed.unwrap_or(true);
         auth_empty(&state, &headers, || state.plane.set_key(row, bit, pressed))
     }

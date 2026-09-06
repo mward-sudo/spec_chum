@@ -48,13 +48,9 @@ pub(crate) async fn framebuffer(
     if let Err(e) = check_auth(&state, &headers) {
         return api_error(&state.plane, e);
     }
-    enum Format {
-        Rgba,
-        Png,
-    }
-    let format = match q.format.to_ascii_lowercase().as_str() {
-        "rgba" => Format::Rgba,
-        "png" | "" => Format::Png,
+    let as_png = match q.format.to_ascii_lowercase().as_str() {
+        "rgba" => false,
+        "png" | "" => true,
         other => {
             return api_error(
                 &state.plane,
@@ -62,61 +58,25 @@ pub(crate) async fn framebuffer(
             )
         }
     };
-    let restore_border = if let Some(border) = q.border {
-        let prev = state.plane.framebuffer_meta().ok().map(|m| m.border);
-        if let Err(e) = state.plane.set_border(border) {
-            return api_error(&state.plane, e);
-        }
-        if let Err(e) = state.plane.run_frames(1) {
-            return api_error(&state.plane, e);
-        }
-        prev.filter(|p| *p != border)
-    } else {
-        None
-    };
-    let meta = match state.plane.framebuffer_meta() {
-        Ok(m) => m,
-        Err(e) => return api_error(&state.plane, e),
-    };
-    let response = match format {
-        Format::Rgba => rgba_response(&state, meta),
-        Format::Png => png_response(&state, meta),
-    };
-    if let Some(prev) = restore_border {
-        if let Err(e) = state.plane.set_border(prev) {
-            // Best-effort restore; keep the capture response.
-            state.plane.record_error(&e);
-        }
-    }
-    response
-}
-
-pub(crate) fn rgba_response(state: &AppState, meta: FramebufferMeta) -> Response {
-    match state.plane.framebuffer_rgba() {
-        Ok(bytes) => {
+    let plane = state.plane.clone();
+    let border = q.border;
+    match tokio::task::spawn_blocking(move || plane.capture_framebuffer(border, as_png)).await {
+        Ok(Ok((meta, bytes))) => {
             let mut resp = Response::new(Body::from(bytes));
             let h = resp.headers_mut();
-            h.insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static("application/octet-stream"),
-            );
+            if as_png {
+                h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+            } else {
+                h.insert(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/octet-stream"),
+                );
+            }
             insert_meta_headers(h, &meta);
             resp
         }
-        Err(e) => api_error(&state.plane, e),
-    }
-}
-
-pub(crate) fn png_response(state: &AppState, meta: FramebufferMeta) -> Response {
-    match state.plane.framebuffer_png() {
-        Ok(bytes) => {
-            let mut resp = Response::new(Body::from(bytes));
-            let h = resp.headers_mut();
-            h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
-            insert_meta_headers(h, &meta);
-            resp
-        }
-        Err(e) => api_error(&state.plane, e),
+        Ok(Err(e)) => api_error(&state.plane, e),
+        Err(e) => api_error(&state.plane, ApiError::Message(format!("task join: {e}"))),
     }
 }
 

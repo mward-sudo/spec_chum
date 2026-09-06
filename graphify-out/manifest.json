@@ -12,8 +12,8 @@
     "semantic_hash": "5495e97105ccab99680f7cd181f856cc"
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1788496825.556351,
-    "seen": 1788496839.390332,
+    "mtime": 1788497514.9281912,
+    "seen": 1788652375.369482,
     "ast_hash": "32c17529ba4b2bc4bddb5b7efa8b5b07",
     "semantic_hash": ""
   },
@@ -270,9 +270,9 @@
     "semantic_hash": ""
   },
   "crates/control_plane/src/service.rs": {
-    "mtime": 1788488172.3738341,
-    "seen": 1788488214.8967092,
-    "ast_hash": "02af5f659219e114e494161fd0423739",
+    "mtime": 1788652469.738404,
+    "seen": 1788652509.334184,
+    "ast_hash": "223624e329205ad63a0d0611dd02076a",
     "semantic_hash": ""
   },
   "crates/debug_cli/Cargo.toml": {
@@ -1050,9 +1050,9 @@
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/input.rs": {
-    "mtime": 1788493997.1333861,
-    "seen": 1788494072.631178,
-    "ast_hash": "c66acd751a260898fc603f291ed76c62",
+    "mtime": 1788652348.4649074,
+    "seen": 1788652375.370079,
+    "ast_hash": "deaa9eb3c702e4320356f1c6c9f0b1bb",
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/media.rs": {
@@ -1080,9 +1080,9 @@
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/video.rs": {
-    "mtime": 1788495257.9670491,
-    "seen": 1788495329.241602,
-    "ast_hash": "3e72d7c903e9c5fe3c572bc4a0c2672f",
+    "mtime": 1788652356.1249104,
+    "seen": 1788652375.370146,
+    "ast_hash": "b2cdd20403df6724b2bf1066fa774221",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Config.swift": {
