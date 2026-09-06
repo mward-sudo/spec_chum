@@ -4,6 +4,12 @@
 #
 # Agents MUST run this before merging (and again after addressing feedback).
 # CI runs the same gate as a PR check (see .github/workflows/pr-bot-reviews.yml).
+# Ruleset context is the API-published check "unresolved bot threads"; the
+# Actions job is named bot-review-gate so cancelled runs cannot block merge
+# after a newer soft-pass (#318). CI re-invokes this script on CodeRabbit
+# *commit status* changes (`on: status` in pr-bot-reviews.yml) so pending →
+# completed/rate-limited clears the published required check without a manual
+# re-run (#312 lacked that trigger until #314; #318 keeps publish authoritative).
 # Lesson: https://github.com/mward-sudo/spec_chum/pull/83
 #
 # Draft vs ready (aligns with on-demand CodeRabbit usage):
@@ -117,6 +123,23 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
   expect true failure "Review failed" hold "failure non-rate-limit"
   expect true success "In progress" hold "non-completed success"
   expect true success "" hold "empty success description"
+  # Status→PR mapping: only open PRs whose head SHA matches (workflow uses this).
+  map_n="$(printf '%s' '[{"state":"open","head":{"sha":"aaa"},"number":1,"updated_at":"2020-01-01"},{"state":"open","head":{"sha":"bbb"},"number":2,"updated_at":"2021-01-01"},{"state":"closed","head":{"sha":"bbb"},"number":3,"updated_at":"2022-01-01"}]' \
+    | jq -r --arg sha bbb '[.[] | select(.state == "open" and .head.sha == $sha)] | sort_by(.updated_at) | reverse | .[0].number // empty')"
+  if [[ "$map_n" != "2" ]]; then
+    echo "FAIL: status→PR head map — got ${map_n:-empty} want 2" >&2
+    fail=1
+  else
+    echo "ok: status→PR head SHA map → $map_n"
+  fi
+  map_empty="$(printf '%s' '[{"state":"open","head":{"sha":"aaa"},"number":1,"updated_at":"2020-01-01"}]' \
+    | jq -r --arg sha zzz '[.[] | select(.state == "open" and .head.sha == $sha)] | sort_by(.updated_at) | reverse | .[0].number // empty')"
+  if [[ -n "$map_empty" ]]; then
+    echo "FAIL: status→PR head map should be empty for non-head — got $map_empty" >&2
+    fail=1
+  else
+    echo "ok: status→PR head SHA map empty for non-matching"
+  fi
   if [[ "$fail" -ne 0 ]]; then
     echo "self-test failed" >&2
     exit 1

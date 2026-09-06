@@ -20,6 +20,21 @@
 # status (so terminal "Review completed" / "Review rate limited" clears a prior
 # pending/in-progress failure without a manual re-run). Resolving a thread does
 # not always emit an event — re-run this job after fixing if needed.
+#
+# Required ruleset context is ONLY the API-published check-run named
+# "unresolved bot threads". The Actions job uses a different name so
+# cancel-in-progress cancelled job checks cannot keep main merge BLOCKED after
+# a newer soft-pass publish (lesson: #312 / #318 after #314).
+#
+# Recheck path (user-visible stale-fail fix):
+#   CodeRabbit updates commit status (pending → completed / rate-limited)
+#   → `on: status` (default-branch workflow) with context CodeRabbit
+#   → map STATUS_SHA → open PR head → ./scripts/check_pr_reviews.sh
+#   → Publish/update required check-run "unresolved bot threads" on that head.
+# Without `status` (pre-#314) the gate never re-read CR and stayed red until a
+# new PR/review event or manual workflow_dispatch (#312). With `status` but the
+# job sharing the required name, cancelled/failed Actions checks still looked
+# like a stale bot-gate fail (#317).
 name: Bot review threads
 
 on:
@@ -45,24 +60,38 @@ permissions:
   checks: write
   statuses: read
 
-# One in-flight gate per PR (or commit SHA for status events) so a cancelled/
-# superseded run cannot publish a stale success after a newer failure for the
-# same head SHA.
+# One in-flight gate per head SHA (PR head for pull_request*; status SHA when
+# CodeRabbit posts on that head). Shared key so status soft-pass cancels an
+# in-flight pull_request pending/queued hold for the same commit.
 concurrency:
-  group: bot-review-threads-${{ github.event.pull_request.number || inputs.pr_number || github.event.sha || github.run_id }}
+  group: bot-review-threads-${{ github.event.pull_request.head.sha || github.event.sha || inputs.pr_number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   check-bot-threads:
-    name: unresolved bot threads
+    # NOT the ruleset context — see Publish step (name: unresolved bot threads).
+    name: bot-review-gate
     # status events fire for every commit status; only act on CodeRabbit.
-    if: ${{ github.event_name != 'status' || github.event.context == 'CodeRabbit' }}
+    if: ${{ github.event_name != 'status' || github.event.context == 'CodeRabbit' || github.event.context == 'coderabbit' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
           persist-credentials: false
+
+      - name: Log CodeRabbit status trigger
+        if: ${{ github.event_name == 'status' }}
+        env:
+          STATUS_SHA: ${{ github.event.sha }}
+          STATUS_STATE: ${{ github.event.state }}
+          STATUS_DESC: ${{ github.event.description }}
+          STATUS_CTX: ${{ github.event.context }}
+        run: |
+          set -euo pipefail
+          echo "Recheck trigger: CodeRabbit commit status changed"
+          echo "  sha=${STATUS_SHA:0:12} context=$STATUS_CTX state=$STATUS_STATE"
+          echo "  description=${STATUS_DESC:-}"
 
       - name: Classify self-test
         run: |
@@ -88,11 +117,12 @@ jobs:
             n="${PR_FROM_INPUT:-}"
           fi
           if [[ -z "${n:-}" && "${EVENT_NAME}" == "status" && -n "${STATUS_SHA:-}" ]]; then
-            # Map commit → open PR(s). Prefer the newest open PR for this SHA.
+            # Map commit → open PR whose *head* is this SHA (not merely containing it).
             n="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${STATUS_SHA}/pulls" \
-              --jq '[.[] | select(.state == "open")] | sort_by(.updated_at) | reverse | .[0].number // empty')"
+              --jq --arg sha "$STATUS_SHA" \
+              '[.[] | select(.state == "open" and .head.sha == $sha)] | sort_by(.updated_at) | reverse | .[0].number // empty')"
             if [[ -z "${n:-}" ]]; then
-              echo "No open PR for CodeRabbit status on ${STATUS_SHA:0:12}; nothing to check."
+              echo "No open PR head matching CodeRabbit status on ${STATUS_SHA:0:12}; nothing to check."
               echo "number=" >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -141,6 +171,9 @@ jobs:
       - name: Check CodeRabbit HEAD status + unresolved bot threads
         id: gate
         if: ${{ steps.pr.outputs.number != '' && steps.head.outputs.sha != '' }}
+        # Publish must run even when the script fails — required check is the
+        # API-published run, not this job. Fail the job only after Publish.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -156,10 +189,10 @@ jobs:
           fi
           ./scripts/check_pr_reviews.sh "$PR_NUMBER"
 
-      # Required checks key off the PR head; review_comment runs may otherwise
-      # attach only to a merge-ref GITHUB_SHA and leave a stale head check green.
-      # !cancelled(): do not publish after concurrency cancel-in-progress.
-      # Runs on gate failure too so head gets an explicit failure check-run.
+      # Ruleset required context is this published check-run only (not the job
+      # name). !cancelled(): do not publish after concurrency cancel-in-progress
+      # so a superseded run cannot overwrite a newer conclusion. Runs on gate
+      # failure too (`!cancelled()` opts out of skip-after-failure).
       - name: Publish check on PR head
         if: ${{ !cancelled() && steps.pr.outputs.number != '' && steps.head.outputs.sha != '' }}
         env:
@@ -177,10 +210,23 @@ jobs:
             conclusion=neutral
             title='Bot review gate skipped'
           fi
+          # external_id stable per head so re-publishes update the same logical
+          # check in UIs that key on it; name stays the ruleset context.
           gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name='unresolved bot threads' \
             -f head_sha="$HEAD_SHA" \
+            -f external_id="bot-review-threads-${HEAD_SHA}" \
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip, rate-limit with parsed reset ≤10m, or unresolved bot threads. GitHub rate-limited soft-passes CI when reset >10m or unparsable (not Review completed); agents must confirm either-completed OR dual rate-limit both sides >10m. Soft-pass ≠ on-demand skip. Drafts skip CR completeness. See workflow run.'
+            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip, rate-limit with parsed reset ≤10m, or unresolved bot threads. GitHub rate-limited soft-passes CI when reset >10m or unparsable (not Review completed); agents must confirm either-completed OR dual rate-limit both sides >10m. Soft-pass ≠ on-demand skip. Drafts skip CR completeness. Job name is bot-review-gate (not required); this published check is the ruleset context. See workflow run.'
+
+      # Job name is bot-review-gate (not ruleset-required). Still fail the job
+      # for Actions UI after the required check has been published/updated.
+      - name: Fail job when gate failed
+        if: ${{ !cancelled() && steps.gate.outcome == 'failure' }}
+        run: |
+          set -euo pipefail
+          echo "bot-review-gate failed after publishing required check 'unresolved bot threads'." >&2
+          echo "On CodeRabbit status changes the workflow re-runs (on: status) and re-publishes." >&2
+          exit 1
