@@ -9213,7 +9213,7 @@
       },
       "norm_label": "append_bot_thread_from_comments()",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L361"
+      "source_location": "L380"
     },
     {
       "id": "scripts_check_pr_reviews_apply_waiver_or_fail",
@@ -9228,7 +9228,7 @@
       },
       "norm_label": "apply_waiver_or_fail()",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L215"
+      "source_location": "L234"
     },
     {
       "id": "scripts_check_pr_reviews_expect",
@@ -94523,7 +94523,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L268",
+      "source_location": "L287",
       "weight": 1.0
     },
     {
@@ -94535,7 +94535,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L291",
+      "source_location": "L310",
       "weight": 1.0
     },
     {
@@ -94547,7 +94547,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L405",
+      "source_location": "L424",
       "weight": 1.0
     },
     {
@@ -159312,7 +159312,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L215",
+      "source_location": "L234",
       "weight": 1.0
     },
     {
@@ -159323,7 +159323,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "scripts/check_pr_reviews.sh",
-      "source_location": "L361",
+      "source_location": "L380",
       "weight": 1.0
     },
     {
@@ -182500,5 +182500,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "5ce9f50e734319b6e13dd0a82237469924de2ab4"
+  "built_at_commit": "6e0da5650624635b36977917659ac92c66b9afd9"
 }
