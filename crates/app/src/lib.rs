@@ -703,7 +703,7 @@ impl EmulatorSession {
                         Ok(()) => {
                             host.set_status(format!("Attached Multiface 1 {}", path.display()));
                         }
-                        Err(e) => host.set_status(e),
+                        Err(e) => host.set_status(e.to_string()),
                     }
                 } else {
                     host.set_status("Load a 48K ROM before Multiface");
@@ -734,7 +734,7 @@ impl EmulatorSession {
             if let Some(m) = host.machine_mut() {
                 match m.attach_divmmc() {
                     Ok(_) => host.set_status("DivMMC attached"),
-                    Err(e) => host.set_status(e),
+                    Err(e) => host.set_status(e.to_string()),
                 }
             } else {
                 host.set_status("Load a machine ROM first");
@@ -752,7 +752,7 @@ impl EmulatorSession {
                             div.attach_sd(data);
                             host.set_status(format!("DivMMC SD {}", path.display()));
                         }
-                        Err(e) => host.set_status(e),
+                        Err(e) => host.set_status(e.to_string()),
                     }
                 } else {
                     host.set_status("Load a machine ROM first");
@@ -771,7 +771,7 @@ impl EmulatorSession {
                         Ok(()) => {
                             host.set_status(format!("DivMMC EEPROM {}", path.display()));
                         }
-                        Err(e) => host.set_status(e),
+                        Err(e) => host.set_status(e.to_string()),
                     }
                 } else {
                     host.set_status("Load a machine ROM first");
@@ -894,7 +894,7 @@ impl EmulatorSession {
             if let Some(m) = host.machine_mut() {
                 match m.attach_beta() {
                     Ok(_) => host.set_status("Beta Disk attached"),
-                    Err(e) => host.set_status(e),
+                    Err(e) => host.set_status(e.to_string()),
                 }
             } else {
                 host.set_status("Load a machine ROM first");
@@ -911,7 +911,7 @@ impl EmulatorSession {
                         Ok(()) => {
                             host.set_status(format!("Loaded TR-DOS ROM {}", path.display()));
                         }
-                        Err(e) => host.set_status(e),
+                        Err(e) => host.set_status(e.to_string()),
                     }
                 } else {
                     host.set_status("Load a machine ROM first");
@@ -931,7 +931,7 @@ impl EmulatorSession {
                             beta.insert(img);
                             host.set_status(format!("Inserted TRD {}", path.display()));
                         }
-                        Err(e) => host.set_status(e),
+                        Err(e) => host.set_status(e.to_string()),
                     }
                 } else {
                     host.set_status("Load a machine ROM first");

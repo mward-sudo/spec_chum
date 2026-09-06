@@ -59,6 +59,33 @@ pub enum Interface1Error {
     Rom(#[from] bus::Interface1RomError),
 }
 
+/// Errors attaching Multiface 1 or loading its ROM.
+#[derive(Debug, Error)]
+pub enum MultifaceError {
+    #[error("Multiface 1 is only supported on Spectrum 48K")]
+    UnsupportedModel,
+    #[error(transparent)]
+    Rom(#[from] bus::RomLoadError),
+}
+
+/// Errors attaching `DivMMC` or loading its EEPROM.
+#[derive(Debug, Error)]
+pub enum DivMmcError {
+    #[error("DivMMC is not supported on Spectrum +2A/+3")]
+    UnsupportedModel,
+    #[error(transparent)]
+    Rom(#[from] bus::RomLoadError),
+}
+
+/// Errors attaching Beta Disk / TR-DOS or loading its ROM.
+#[derive(Debug, Error)]
+pub enum BetaDiskError {
+    #[error("Beta Disk is not supported on Spectrum +2A/+3")]
+    UnsupportedModel,
+    #[error(transparent)]
+    Rom(#[from] bus::RomLoadError),
+}
+
 /// Errors constructing a [`Machine`] (ROM size / content).
 #[derive(Debug, Error)]
 pub enum MachineBuildError {
@@ -905,7 +932,7 @@ impl Machine {
             pentagon: true,
         };
         m.attach_beta()
-            .map_err(MachineBuildError::Message)?
+            .map_err(|e| MachineBuildError::Message(e.to_string()))?
             .load_rom(trdos_rom)?;
         Ok(m)
     }
@@ -1412,10 +1439,10 @@ impl Machine {
     }
 
     /// Attach Multiface 1 with an 8 KiB ROM image (48K only).
-    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), String> {
+    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), MultifaceError> {
         match self {
-            Self::Spec48 { bus, .. } => bus.attach_multiface(rom).map_err(|e| e.to_string()),
-            _ => Err("Multiface 1 is only supported on Spectrum 48K".into()),
+            Self::Spec48 { bus, .. } => Ok(bus.attach_multiface(rom)?),
+            _ => Err(MultifaceError::UnsupportedModel),
         }
     }
 
@@ -1453,18 +1480,18 @@ impl Machine {
     }
 
     /// Attach `DivMMC` on 48K/128K (creates the peripheral if absent).
-    pub fn attach_divmmc(&mut self) -> Result<&mut bus::DivMmc, String> {
+    pub fn attach_divmmc(&mut self) -> Result<&mut bus::DivMmc, DivMmcError> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_divmmc()),
             Self::Spec128 { bus, .. } => Ok(bus.attach_divmmc()),
-            Self::SpecPlus3 { .. } => Err("DivMMC is not supported on Spectrum +2A/+3".into()),
+            Self::SpecPlus3 { .. } => Err(DivMmcError::UnsupportedModel),
         }
     }
 
     /// Attach `DivMMC` and load an ESXDOS EEPROM image (8 KiB, or larger prefix).
-    pub fn attach_divmmc_eeprom(&mut self, data: &[u8]) -> Result<(), String> {
+    pub fn attach_divmmc_eeprom(&mut self, data: &[u8]) -> Result<(), DivMmcError> {
         let div = self.attach_divmmc()?;
-        div.attach_eeprom(data).map_err(|e| e.to_string())
+        Ok(div.attach_eeprom(data)?)
     }
 
     pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
@@ -1572,25 +1599,23 @@ impl Machine {
     }
 
     /// Attach Beta Disk / TR-DOS on 48K/128K.
-    pub fn attach_beta(&mut self) -> Result<&mut bus::BetaDisk, String> {
+    pub fn attach_beta(&mut self) -> Result<&mut bus::BetaDisk, BetaDiskError> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_beta()),
             Self::Spec128 { bus, .. } => Ok(bus.attach_beta()),
-            Self::SpecPlus3 { .. } => Err("Beta Disk is not supported on Spectrum +2A/+3".into()),
+            Self::SpecPlus3 { .. } => Err(BetaDiskError::UnsupportedModel),
         }
     }
 
     /// Insert a `.trd` image (attaches Beta if needed). 48K/128K only.
-    pub fn insert_trd(&mut self, image: formats::TrdImage) -> Result<(), String> {
+    pub fn insert_trd(&mut self, image: formats::TrdImage) -> Result<(), BetaDiskError> {
         self.attach_beta()?.insert(image);
         Ok(())
     }
 
     /// Load a 16 KiB TR-DOS ROM onto Beta (attaches the interface if needed).
-    pub fn load_trdos_rom(&mut self, data: &[u8]) -> Result<(), String> {
-        self.attach_beta()?
-            .load_rom(data)
-            .map_err(|e| e.to_string())
+    pub fn load_trdos_rom(&mut self, data: &[u8]) -> Result<(), BetaDiskError> {
+        Ok(self.attach_beta()?.load_rom(data)?)
     }
 
     pub fn beta_mut(&mut self) -> Option<&mut bus::BetaDisk> {
@@ -3524,6 +3549,29 @@ mod tests {
             0x42,
             "NMI handler should have written flag to MF RAM"
         );
+    }
+
+    #[test]
+    fn peripheral_attach_rejects_unsupported_models_with_typed_errors() {
+        let mut plus3 = Machine::new_plus3(&[0u8; 65536]).unwrap();
+        assert!(matches!(
+            plus3.attach_divmmc(),
+            Err(DivMmcError::UnsupportedModel)
+        ));
+        assert!(matches!(
+            plus3.attach_beta(),
+            Err(BetaDiskError::UnsupportedModel)
+        ));
+        assert!(matches!(
+            plus3.attach_interface1(),
+            Err(Interface1Error::UnsupportedModel)
+        ));
+
+        let mut m128 = Machine::new_128k(&[0u8; 32768]).unwrap();
+        assert!(matches!(
+            m128.attach_multiface(&[0u8; bus::MULTIFACE1_SIZE]),
+            Err(MultifaceError::UnsupportedModel)
+        ));
     }
 
     fn synthetic_trd_with_marker(b0: u8, b1: u8) -> formats::TrdImage {

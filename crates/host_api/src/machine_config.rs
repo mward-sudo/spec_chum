@@ -454,7 +454,7 @@ pub fn apply_user_config(
                     .attach_multiface(&data)
                     .map_err(|e| MachineConfigError::Peripheral {
                         peripheral: "Multiface",
-                        message: e,
+                        message: e.to_string(),
                     })?;
             }
             _ => notes.push("Multiface enabled but no ROM — not attached"),
@@ -466,7 +466,7 @@ pub fn apply_user_config(
             .attach_divmmc()
             .map_err(|e| MachineConfigError::Peripheral {
                 peripheral: "DivMMC",
-                message: e,
+                message: e.to_string(),
             })?;
         if let Some(path) = &config.divmmc_eeprom_path {
             if Path::new(path).is_file() {
@@ -477,7 +477,7 @@ pub fn apply_user_config(
                 machine.attach_divmmc_eeprom(&data).map_err(|e| {
                     MachineConfigError::Peripheral {
                         peripheral: "DivMMC EEPROM",
-                        message: e,
+                        message: e.to_string(),
                     }
                 })?;
             } else {
@@ -536,7 +536,7 @@ pub fn apply_user_config(
             .attach_beta()
             .map_err(|e| MachineConfigError::Peripheral {
                 peripheral: "Beta",
-                message: e,
+                message: e.to_string(),
             })?;
         if let Some(path) = &config.trdos_rom_path {
             if Path::new(path).is_file() {
@@ -548,7 +548,7 @@ pub fn apply_user_config(
                     .load_trdos_rom(&data)
                     .map_err(|e| MachineConfigError::Peripheral {
                         peripheral: "TR-DOS",
-                        message: e,
+                        message: e.to_string(),
                     })?;
             } else {
                 notes.push("Beta attached but TR-DOS ROM missing");
