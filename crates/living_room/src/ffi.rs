@@ -108,7 +108,7 @@ pub extern "C" fn sc_room_create(width: c_uint, height: c_uint) -> *mut c_void {
                 Box::into_raw(Box::new(RoomHandle { room, frame })).cast()
             }
             Err(e) => {
-                set_last_error(e);
+                set_last_error(e.to_string());
                 ptr::null_mut()
             }
         }
@@ -239,7 +239,7 @@ pub extern "C" fn sc_room_resize(handle: *mut c_void, width: c_uint, height: c_u
                 0
             }
             Err(e) => {
-                set_last_error(e);
+                set_last_error(e.to_string());
                 -1
             }
         }
@@ -262,7 +262,7 @@ pub extern "C" fn sc_room_set_present_iosurface(
         match h.room.set_present_iosurface(iosurface, width, height) {
             Ok(()) => 0,
             Err(e) => {
-                set_last_error(e);
+                set_last_error(e.to_string());
                 -1
             }
         }

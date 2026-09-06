@@ -402,10 +402,10 @@
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
-    "mtime": 1788729094.4443483,
-    "seen": 1788730076.229373,
-    "ast_hash": "6e0bc22032ac4ef0bcf1ba2c80b0d198",
-    "semantic_hash": "6e0bc22032ac4ef0bcf1ba2c80b0d198"
+    "mtime": 1788736330.4968512,
+    "seen": 1788738295.541093,
+    "ast_hash": "6f422e700a8d28f1144ece5d6c4f02ab",
+    "semantic_hash": ""
   },
   "crates/living_room/examples/room_perf.rs": {
     "mtime": 1788729094.4447198,
@@ -462,10 +462,10 @@
     "semantic_hash": "107ee060eec734f85482b70c2e057285"
   },
   "crates/living_room/src/ffi.rs": {
-    "mtime": 1788729094.4455106,
-    "seen": 1788730076.229377,
-    "ast_hash": "dbb84bb8c6b5cb865eed3201852ad646",
-    "semantic_hash": "dbb84bb8c6b5cb865eed3201852ad646"
+    "mtime": 1788736345.1704264,
+    "seen": 1788738295.541236,
+    "ast_hash": "637e82e1933b1fa9ccd8c28206d35079",
+    "semantic_hash": ""
   },
   "crates/living_room/src/file_dialog.rs": {
     "mtime": 1788729094.4455662,
@@ -480,10 +480,10 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/headless.rs": {
-    "mtime": 1788729094.4457092,
-    "seen": 1788730076.229378,
-    "ast_hash": "4e9e0d01e27a49b21c7aba3f9c314a02",
-    "semantic_hash": "4e9e0d01e27a49b21c7aba3f9c314a02"
+    "mtime": 1788736351.429355,
+    "seen": 1788738295.5412679,
+    "ast_hash": "64cca6e689f682fdf400dec8c3796ee9",
+    "semantic_hash": ""
   },
   "crates/living_room/src/host.rs": {
     "mtime": 1788729094.4457757,
@@ -510,10 +510,10 @@
     "semantic_hash": "434813be0c20f6f1f3e89354b4ed0c26"
   },
   "crates/living_room/src/lib.rs": {
-    "mtime": 1788729094.4460497,
-    "seen": 1788730076.2293801,
-    "ast_hash": "c583d549f08d9198c19ad7ca6390517d",
-    "semantic_hash": "c583d549f08d9198c19ad7ca6390517d"
+    "mtime": 1788736341.8334458,
+    "seen": 1788738295.541329,
+    "ast_hash": "0a20cad0a2da7d80b8db78e63132053f",
+    "semantic_hash": ""
   },
   "crates/living_room/src/main.rs": {
     "mtime": 1788729094.4461002,
@@ -534,10 +534,10 @@
     "semantic_hash": "c360dbde98d23f0c1f6e67e24e013659"
   },
   "crates/living_room/src/present_metal.rs": {
-    "mtime": 1788729094.4462726,
-    "seen": 1788730076.2293818,
-    "ast_hash": "b8ea9d12bd9c7c2749fe7ab157cae667",
-    "semantic_hash": "b8ea9d12bd9c7c2749fe7ab157cae667"
+    "mtime": 1788736353.892748,
+    "seen": 1788738295.541376,
+    "ast_hash": "7fe60ef9d3fffefc9021491f8eb4f239",
+    "semantic_hash": ""
   },
   "crates/living_room/src/quality.rs": {
     "mtime": 1788729094.4463315,

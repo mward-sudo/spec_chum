@@ -42,6 +42,7 @@ bevy = { workspace = true, features = ["jpeg"] }
 cpal = { workspace = true, optional = true }
 rfd = { workspace = true, optional = true }
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 crossbeam-channel = "0.5"
 # Unconditional: `present.rs` uses `wgpu::Texture` on all targets.
 # Must track Bevy 0.19's wgpu (Metal HAL import in present_metal.rs).
