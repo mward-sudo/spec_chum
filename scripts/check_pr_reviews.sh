@@ -142,6 +142,7 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
     echo "ok: status→PR head SHA map empty for non-matching"
   fi
   # Workflow must publish a classic commit status (ruleset) with statuses: write (#323).
+  # Scope greps to permissions + bot-review-gate publish step (avoid comment/doc matches).
   wf=".github/workflows/pr-bot-reviews.yml"
   if [[ ! -f "$wf" ]]; then
     echo "FAIL: missing $wf for publish-path self-test" >&2
@@ -153,23 +154,32 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
     else
       echo "ok: workflow statuses: write"
     fi
-    if ! grep -Fq 'repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}' "$wf"; then
-      echo "FAIL: $wf must POST statuses/\${HEAD_SHA} for context unresolved bot threads" >&2
-      fail=1
-    else
-      echo "ok: workflow publishes commit status on HEAD_SHA"
-    fi
-    if ! grep -Fq "context='unresolved bot threads'" "$wf"; then
-      echo "FAIL: $wf must set status context exactly unresolved bot threads" >&2
-      fail=1
-    else
-      echo "ok: workflow status context unresolved bot threads"
-    fi
     if ! grep -Fq 'name: bot-review-gate' "$wf"; then
       echo "FAIL: $wf job name must remain bot-review-gate (≠ ruleset context)" >&2
       fail=1
     else
       echo "ok: job name bot-review-gate"
+    fi
+    # Extract Publish status step body from the gate job only.
+    publish_step="$(awk '
+      $0 ~ /^[[:space:]]*name: bot-review-gate[[:space:]]*$/ { in_job=1 }
+      in_job && $0 ~ /^[[:space:]]*- name: Publish status on PR head[[:space:]]*$/ { in_pub=1 }
+      in_pub { print }
+      in_pub && $0 ~ /^[[:space:]]*- name: Fail job when gate failed[[:space:]]*$/ { exit }
+    ' "$wf")"
+    if [[ -z "$publish_step" ]]; then
+      echo "FAIL: $wf missing bot-review-gate Publish status on PR head step" >&2
+      fail=1
+    else
+      if ! printf '%s\n' "$publish_step" | grep -Fq 'repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}'; then
+        echo "FAIL: publish step must POST statuses/\${HEAD_SHA}" >&2
+        fail=1
+      elif ! printf '%s\n' "$publish_step" | grep -Fq "context='unresolved bot threads'"; then
+        echo "FAIL: publish step must set status context exactly unresolved bot threads" >&2
+        fail=1
+      else
+        echo "ok: publish step POSTs statuses/HEAD_SHA with context unresolved bot threads"
+      fi
     fi
   fi
   if [[ "$fail" -ne 0 ]]; then
