@@ -60,7 +60,7 @@ Documented exceptions (do not treat as green-gate failures unless they regress):
 
 - Living-room linker `__eh_frame section too large` notes on some examples.
 - macOS shell `ld` deployment-target mismatch vs newer SDK builds.
-- GitHub Actions Node deprecation notices on pinned Actions (CI hygiene follow-up in #171).
+- Occasional Actions runner / composite-wrapper log notices (default CI Actions are SHA-pinned Node 24; see #171 CI hygiene).
 
 ## Related docs
 
