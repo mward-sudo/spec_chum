@@ -22,6 +22,15 @@ if [[ -z "${DEVELOPER_DIR:-}" ]]; then
 fi
 echo "==> Using DEVELOPER_DIR=$DEVELOPER_DIR"
 
+# Match Package.swift `.macOS(.v14)` / Info.plist LSMinimumSystemVersion.
+# Without this, clang-built deps (notably blake3 NEON asm) stamp the host SDK
+# (e.g. 26.x/27.x) and Swift link emits "built for newer macOS than being linked (14.0)".
+# Refs #171.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+export CFLAGS="${CFLAGS:--mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}}"
+export CXXFLAGS="${CXXFLAGS:--mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}}"
+echo "==> MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET (Rust + C deps)"
+
 echo "==> cargo build -p living_room --release --no-default-features (embed staticlib + host_api)"
 # strip=none is set in workspace profile for living_room (macOS 27 LINKEDIT).
 # --no-default-features omits standalone Bevy chrome / cpal / rfd (Swift owns those).

@@ -458,6 +458,10 @@ with **release** clippy/test. Opt in locally:
 # SPEC_CHUM_ROOM_DEBUG=1 ./scripts/check_living_room.sh   # disk-heavy Bevy debug
 ```
 
+Historical note ([#171](https://github.com/mward-sudo/spec_chum/issues/171)): Apple ld
+`__eh_frame section too large` notes on large Bevy examples were previously seen in CI;
+they have not appeared on recent `macos-latest` runs and do not fail `-Dwarnings` if they return.
+
 `SPEC_CHUM_LIVING_ROOM=1` is **app boot** (start SpecChumMac in living-room display mode) —
 not the check.sh include-crate gate.
 

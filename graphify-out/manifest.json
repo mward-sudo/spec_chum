@@ -714,10 +714,10 @@
     "semantic_hash": "631934039235910023c60c5c3aabc295"
   },
   "scripts/build_macos_app.sh": {
-    "mtime": 1788278603.2830756,
-    "seen": 1788324807.415634,
-    "ast_hash": "a130d9ef29304b4dbe28d20139130275",
-    "semantic_hash": "a130d9ef29304b4dbe28d20139130275"
+    "mtime": 1788655948.937741,
+    "seen": 1788655977.736214,
+    "ast_hash": "a20fb725a019d3700f03f142168b8182",
+    "semantic_hash": ""
   },
   "scripts/build_tape_fixtures.py": {
     "mtime": 1788278603.2833972,
@@ -900,15 +900,15 @@
     "semantic_hash": ""
   },
   "docs/LIVING_ROOM.md": {
-    "mtime": 1788278603.282301,
-    "seen": 1788324807.415651,
-    "ast_hash": "1ea121b08ff5a780ff926ca004b4c2d3",
-    "semantic_hash": "1ea121b08ff5a780ff926ca004b4c2d3"
+    "mtime": 1788655970.488854,
+    "seen": 1788655977.736672,
+    "ast_hash": "86915124bac978900b52261601aaa2c5",
+    "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
-    "mtime": 1788281529.2770386,
-    "seen": 1788324807.415651,
-    "ast_hash": "3e89e8dfb99d525623690ef2640d2fdb",
+    "mtime": 1788655958.1216376,
+    "seen": 1788655977.736672,
+    "ast_hash": "f4a2db66844096fd912efa77555f0fbb",
     "semantic_hash": ""
   },
   "docs/MULTIFACE.md": {
@@ -1122,9 +1122,9 @@
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
-    "mtime": 1788654440.5797668,
-    "seen": 1788654546.313858,
-    "ast_hash": "2bb9e782a34937ae64e26ba728e9cfce",
+    "mtime": 1788655954.1934707,
+    "seen": 1788655977.736715,
+    "ast_hash": "195a6b1a4b2f70e75ee4250c3197edde",
     "semantic_hash": ""
   }
 }

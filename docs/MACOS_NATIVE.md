@@ -284,6 +284,14 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   staticlib + SwiftPM). Independent of Linux `check`.
 - **`living-room`** on `macos-latest`: `./scripts/check_living_room.sh` (fmt/clippy/test/perf).
 
+### Deployment target ([#171](https://github.com/mward-sudo/spec_chum/issues/171))
+
+`Package.swift` and the staged `Info.plist` target **macOS 14**. The build script
+exports `MACOSX_DEPLOYMENT_TARGET=14.0` and matching `CFLAGS`/`CXXFLAGS` before
+`cargo build -p living_room` so C/asm objects inside `libspec_chum_room.a`
+(especially blake3 NEON) are not stamped with the host SDK (26.x/27.x), which
+otherwise produces Swift-link `ld` warnings.
+
 GitHub Releases currently ship an **egui**-wrapped `Spec Chum.app` (see
 [RELEASE.md](RELEASE.md)). This SwiftUI shell is not yet a release artifact;
 DMG/notarisation remain follow-ups under [#68](https://github.com/mward-sudo/spec_chum/issues/68).
