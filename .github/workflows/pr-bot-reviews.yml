@@ -6,7 +6,8 @@
 # must still confirm either-completed OR dual rate-limit (both sides >10m)
 # before merge. Soft-pass ≠ on-demand/label skip. Drafts skip CR completeness.
 # Always fail when unresolved CodeRabbit/bot review threads remain.
-# Uses default GITHUB_TOKEN (pull-requests: read, checks: write) — no extra secrets.
+# Uses default GITHUB_TOKEN (pull-requests: read, checks: write, statuses: write)
+# — no extra secrets.
 #
 # Checkout uses the PR base (or default branch) so the checker script comes from a
 # trusted ref before GH_TOKEN is exposed — not the untrusted merge/head ref.
@@ -21,16 +22,19 @@
 # pending/in-progress failure without a manual re-run). Resolving a thread does
 # not always emit an event — re-run this job after fixing if needed.
 #
-# Required ruleset context is ONLY the API-published check-run named
-# "unresolved bot threads". The Actions job uses a different name so
-# cancel-in-progress cancelled job checks cannot keep main merge BLOCKED after
-# a newer soft-pass publish (lesson: #312 / #318 after #314).
+# Required ruleset context is the commit status named "unresolved bot threads"
+# (classic statuses API). We also publish a check-run with the same name for
+# Checks UI. The Actions job uses a different name so cancel-in-progress
+# cancelled job checks cannot keep main merge BLOCKED after a newer soft-pass
+# publish (lesson: #312 / #318 after #314). Check-run alone is not enough when
+# the ruleset expects a status context (#321 merge / #323).
 #
 # Recheck path (user-visible stale-fail fix):
 #   CodeRabbit updates commit status (pending → completed / rate-limited)
 #   → `on: status` (default-branch workflow) with context CodeRabbit
 #   → map STATUS_SHA → open PR head → ./scripts/check_pr_reviews.sh
-#   → Publish/update required check-run "unresolved bot threads" on that head.
+#   → Publish/update required status (+ check-run) "unresolved bot threads"
+#     on that head.
 # Without `status` (pre-#314) the gate never re-read CR and stayed red until a
 # new PR/review event or manual workflow_dispatch (#312). With `status` but the
 # job sharing the required name, cancelled/failed Actions checks still looked
@@ -58,7 +62,7 @@ permissions:
   contents: read
   pull-requests: read
   checks: write
-  statuses: read
+  statuses: write
 
 # One in-flight gate per head SHA (PR head for pull_request*; status SHA when
 # CodeRabbit posts on that head). Shared key so status soft-pass cancels an
@@ -189,29 +193,46 @@ jobs:
           fi
           ./scripts/check_pr_reviews.sh "$PR_NUMBER"
 
-      # Ruleset required context is this published check-run only (not the job
-      # name). !cancelled(): do not publish after concurrency cancel-in-progress
-      # so a superseded run cannot overwrite a newer conclusion. Runs on gate
+      # Ruleset required context is the commit status "unresolved bot threads"
+      # (not the job name). Also publish a same-named check-run for Checks UI.
+      # !cancelled(): do not publish after concurrency cancel-in-progress so a
+      # superseded run cannot overwrite a newer conclusion. Runs on gate
       # failure too (`!cancelled()` opts out of skip-after-failure).
-      - name: Publish check on PR head
+      - name: Publish status on PR head
         if: ${{ !cancelled() && steps.pr.outputs.number != '' && steps.head.outputs.sha != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ steps.head.outputs.sha }}
           GATE_OUTCOME: ${{ steps.gate.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           conclusion=failure
+          state=failure
           title='CodeRabbit / bot review gate failed'
           if [[ "${GATE_OUTCOME:-failure}" == "success" ]]; then
             conclusion=success
+            state=success
             title='CodeRabbit clean + no unresolved bot threads'
           elif [[ "${GATE_OUTCOME:-}" == "skipped" ]]; then
             conclusion=neutral
+            # statuses API has no neutral; treat skip as success so ruleset is not held.
+            state=success
             title='Bot review gate skipped'
           fi
+          # Classic commit status — this is what the branch ruleset requires (#323).
+          # Truncate description to GitHub's 140-char statuses limit.
+          desc="$title"
+          if ((${#desc} > 140)); then
+            desc="${desc:0:137}..."
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state="$state" \
+            -f context='unresolved bot threads' \
+            -f description="$desc" \
+            -f target_url="$RUN_URL"
           # external_id stable per head so re-publishes update the same logical
-          # check in UIs that key on it; name stays the ruleset context.
+          # check in UIs that key on it; name matches the ruleset context.
           gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name='unresolved bot threads' \
             -f head_sha="$HEAD_SHA" \
@@ -219,14 +240,14 @@ jobs:
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip, rate-limit with parsed reset ≤10m, or unresolved bot threads. GitHub rate-limited soft-passes CI when reset >10m or unparsable (not Review completed); agents must confirm either-completed OR dual rate-limit both sides >10m. Soft-pass ≠ on-demand skip. Drafts skip CR completeness. Job name is bot-review-gate (not required); this published check is the ruleset context. See workflow run.'
+            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip, rate-limit with parsed reset ≤10m, or unresolved bot threads. GitHub rate-limited soft-passes CI when reset >10m or unparsable (not Review completed); agents must confirm either-completed OR dual rate-limit both sides >10m. Soft-pass ≠ on-demand skip. Drafts skip CR completeness. Job name is bot-review-gate (not required); ruleset context is the published commit status (check-run is supplemental). See workflow run.'
 
       # Job name is bot-review-gate (not ruleset-required). Still fail the job
-      # for Actions UI after the required check has been published/updated.
+      # for Actions UI after the required status has been published/updated.
       - name: Fail job when gate failed
         if: ${{ !cancelled() && steps.gate.outcome == 'failure' }}
         run: |
           set -euo pipefail
-          echo "bot-review-gate failed after publishing required check 'unresolved bot threads'." >&2
+          echo "bot-review-gate failed after publishing required status 'unresolved bot threads'." >&2
           echo "On CodeRabbit status changes the workflow re-runs (on: status) and re-publishes." >&2
           exit 1
