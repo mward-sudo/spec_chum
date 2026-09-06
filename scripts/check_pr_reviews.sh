@@ -4,11 +4,12 @@
 #
 # Agents MUST run this before merging (and again after addressing feedback).
 # CI runs the same gate as a PR check (see .github/workflows/pr-bot-reviews.yml).
-# Ruleset context is the API-published check "unresolved bot threads"; the
+# Ruleset context is the API-published *commit status* "unresolved bot threads"
+# (check-run with the same name is supplemental for Checks UI; #323). The
 # Actions job is named bot-review-gate so cancelled runs cannot block merge
 # after a newer soft-pass (#318). CI re-invokes this script on CodeRabbit
 # *commit status* changes (`on: status` in pr-bot-reviews.yml) so pending →
-# completed/rate-limited clears the published required check without a manual
+# completed/rate-limited clears the published required status without a manual
 # re-run (#312 lacked that trigger until #314; #318 keeps publish authoritative).
 # Lesson: https://github.com/mward-sudo/spec_chum/pull/83
 #
@@ -139,6 +140,37 @@ if [[ "$SELF_TEST" -eq 1 ]]; then
     fail=1
   else
     echo "ok: status→PR head SHA map empty for non-matching"
+  fi
+  # Workflow must publish a classic commit status (ruleset) with statuses: write (#323).
+  wf=".github/workflows/pr-bot-reviews.yml"
+  if [[ ! -f "$wf" ]]; then
+    echo "FAIL: missing $wf for publish-path self-test" >&2
+    fail=1
+  else
+    if ! grep -qE '^[[:space:]]*statuses:[[:space:]]*write[[:space:]]*$' "$wf"; then
+      echo "FAIL: $wf must grant statuses: write for commit-status publish" >&2
+      fail=1
+    else
+      echo "ok: workflow statuses: write"
+    fi
+    if ! grep -Fq 'repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}' "$wf"; then
+      echo "FAIL: $wf must POST statuses/\${HEAD_SHA} for context unresolved bot threads" >&2
+      fail=1
+    else
+      echo "ok: workflow publishes commit status on HEAD_SHA"
+    fi
+    if ! grep -Fq "context='unresolved bot threads'" "$wf"; then
+      echo "FAIL: $wf must set status context exactly unresolved bot threads" >&2
+      fail=1
+    else
+      echo "ok: workflow status context unresolved bot threads"
+    fi
+    if ! grep -Fq 'name: bot-review-gate' "$wf"; then
+      echo "FAIL: $wf job name must remain bot-review-gate (≠ ruleset context)" >&2
+      fail=1
+    else
+      echo "ok: job name bot-review-gate"
+    fi
   fi
   if [[ "$fail" -ne 0 ]]; then
     echo "self-test failed" >&2
