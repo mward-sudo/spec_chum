@@ -1,5 +1,5 @@
-# Opt-in cargo-deny (licenses / advisories / bans / sources). Refs #171.
-# Non-blocking: continue-on-error until advisory/license findings are cleared.
+# cargo-deny (licenses / advisories / bans / sources). Refs #171.
+# Blocking after advisory disposition in deny.toml (egui-transitive ignores).
 name: cargo-deny
 
 on:
@@ -12,10 +12,8 @@ permissions:
 
 jobs:
   cargo-deny:
-    name: cargo-deny (non-blocking)
+    name: cargo-deny
     runs-on: ubuntu-latest
-    # Soft-fail while #171 disposes transitive advisories (egui/bevy graph).
-    continue-on-error: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:

@@ -83,6 +83,7 @@ Checked-in outputs live under `graphify-out/` (`graph.json`, `graph.html`, `GRAP
 | Refresh after **code** edits | `./scripts/graphify_update.sh` (AST-only, no API cost) |
 | Refresh after **doc** edits | `./scripts/graphify_update.sh --full` (LLM; needs API key) |
 | Auto-refresh on commit | `./scripts/graphify_install_hooks.sh` (once per clone) |
+| After task done | Skim `GRAPH_REPORT.md` Suggested Questions → ignore / defer / do now (see `.cursor/rules/graphify.mdc`) |
 
 Broad overview: `graphify-out/GRAPH_REPORT.md`. Wiki index (when present): `graphify-out/wiki/index.md`.
 
