@@ -49,6 +49,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=spec-chum.ico
 DisableProgramGroupPage=yes
 ; Single primary binary; no ROMs in the installer (same as the portable zip).
 CloseApplications=yes

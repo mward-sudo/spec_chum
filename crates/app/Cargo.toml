@@ -32,6 +32,10 @@ rfd = "0.15"
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 raw-window-handle = "0.6"
+png = { workspace = true }
+
+[build-dependencies]
+winres = "0.1"
 
 # Crate-local lints (#171): pedantic warn with endemic cast/name allows.
 # Cannot mix `workspace = true` with overrides — keep in sync with root Cargo.toml.
