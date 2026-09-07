@@ -6,10 +6,11 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use tape::{flash_load_block, TapImage};
+use tape::{flash_load_block, TapImage, TapeError};
+use thiserror::Error;
 use z80::Registers;
 
-use crate::Machine;
+use crate::{Machine, MachineBuildError};
 
 /// Spectrum ROM `RST 10` entry (character in A).
 const RST10: u16 = 0x0010;
@@ -19,6 +20,31 @@ const CHAN_OPEN: u16 = 0x1601;
 const USR_RETURN: u16 = 0x0000;
 /// z80test load / entry address.
 const CODE_ENTRY: u16 = 0x8000;
+
+/// Errors from the z80test TAP harness (`run_z80test_tap`).
+#[derive(Debug, Error)]
+pub enum Z80testError {
+    #[error("missing 48K ROM ({}): run ./scripts/fetch_roms.sh ({source})", path.display())]
+    MissingRom {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("TAP {}: {source}", path.display())]
+    TapLoad {
+        path: PathBuf,
+        #[source]
+        source: TapeError,
+    },
+    #[error("CODE data length mismatch: header {header_len}, block {block_len}")]
+    CodeLengthMismatch { header_len: usize, block_len: usize },
+    #[error("no CODE block found in TAP")]
+    NoCodeBlock,
+    #[error("expected CODE at {expected:#x}, got {got:#x}")]
+    WrongCodeAddress { expected: u16, got: u16 },
+    #[error(transparent)]
+    Machine(#[from] MachineBuildError),
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Z80testOutcome {
@@ -47,7 +73,7 @@ fn rom48_path() -> PathBuf {
 }
 
 /// Locate the CODE block (type 3) in a z80test TAP: returns (load address, block bytes).
-fn code_block(image: &TapImage) -> Result<(u16, &[u8]), String> {
+fn code_block(image: &TapImage) -> Result<(u16, &[u8]), Z80testError> {
     let mut i = 0;
     while i + 1 < image.blocks.len() {
         let header = &image.blocks[i];
@@ -56,35 +82,41 @@ fn code_block(image: &TapImage) -> Result<(u16, &[u8]), String> {
             let addr = u16::from_le_bytes([header[14], header[15]]);
             let len = u16::from_le_bytes([header[12], header[13]]) as usize;
             if data.len() != len + 2 {
-                return Err(format!(
-                    "CODE data length mismatch: header {len}, block {}",
-                    data.len()
-                ));
+                return Err(Z80testError::CodeLengthMismatch {
+                    header_len: len,
+                    block_len: data.len(),
+                });
             }
             return Ok((addr, data));
         }
         i += 1;
     }
-    Err("no CODE block found in TAP".into())
+    Err(Z80testError::NoCodeBlock)
 }
 
 /// Run a z80test TAP under the 48K machine with RST10 print capture.
-pub fn run_z80test_tap(tap_path: &Path, max_instructions: u64) -> Result<Z80testOutcome, String> {
-    let rom = std::fs::read(rom48_path()).map_err(|e| {
-        format!(
-            "missing 48K ROM ({}): run ./scripts/fetch_roms.sh ({e})",
-            rom48_path().display()
-        )
+pub fn run_z80test_tap(
+    tap_path: &Path,
+    max_instructions: u64,
+) -> Result<Z80testOutcome, Z80testError> {
+    let rom_path = rom48_path();
+    let rom = std::fs::read(&rom_path).map_err(|source| Z80testError::MissingRom {
+        path: rom_path,
+        source,
     })?;
-    let image = TapImage::load(tap_path).map_err(|e| format!("TAP {}: {e}", tap_path.display()))?;
+    let image = TapImage::load(tap_path).map_err(|source| Z80testError::TapLoad {
+        path: tap_path.to_path_buf(),
+        source,
+    })?;
     let (load_addr, block) = code_block(&image)?;
     if load_addr != CODE_ENTRY {
-        return Err(format!(
-            "expected CODE at {CODE_ENTRY:#x}, got {load_addr:#x}"
-        ));
+        return Err(Z80testError::WrongCodeAddress {
+            expected: CODE_ENTRY,
+            got: load_addr,
+        });
     }
 
-    let mut machine = Machine::new_48k(&rom).map_err(|e| e.to_string())?;
+    let mut machine = Machine::new_48k(&rom)?;
     flash_load_block(&mut |addr, v| machine.write_mem(addr, v), block, load_addr);
 
     // Simulate `RANDOMIZE USR 32768`: CALL into the test, RET lands on USR_RETURN.
@@ -247,5 +279,38 @@ mod tests {
     #[test]
     fn z80memptr_all_tests_passed() {
         assert_z80test_passed("z80memptr", "z80memptr.tap");
+    }
+
+    #[test]
+    fn z80test_error_display_preserves_harness_strings() {
+        assert_eq!(
+            Z80testError::NoCodeBlock.to_string(),
+            "no CODE block found in TAP"
+        );
+        assert_eq!(
+            Z80testError::WrongCodeAddress {
+                expected: CODE_ENTRY,
+                got: 0x9000,
+            }
+            .to_string(),
+            "expected CODE at 0x8000, got 0x9000"
+        );
+        assert_eq!(
+            Z80testError::CodeLengthMismatch {
+                header_len: 10,
+                block_len: 5,
+            }
+            .to_string(),
+            "CODE data length mismatch: header 10, block 5"
+        );
+    }
+
+    #[test]
+    fn code_block_rejects_empty_tap() {
+        let image = TapImage {
+            blocks: Vec::new(),
+            pause_t: Vec::new(),
+        };
+        assert!(matches!(code_block(&image), Err(Z80testError::NoCodeBlock)));
     }
 }

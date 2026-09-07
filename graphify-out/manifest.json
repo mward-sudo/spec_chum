@@ -600,9 +600,9 @@
     "semantic_hash": ""
   },
   "crates/machine/src/z80test.rs": {
-    "mtime": 1788731434.8570209,
-    "seen": 1788731536.508744,
-    "ast_hash": "29f014bb93bb0aa0a379ee52b076f1a3",
+    "mtime": 1788738864.5427046,
+    "seen": 1788738885.0306098,
+    "ast_hash": "72b52f64c92ca73bec6e68e66cea8b30",
     "semantic_hash": ""
   },
   "crates/machine/tests/deathchase_probe.rs": {
