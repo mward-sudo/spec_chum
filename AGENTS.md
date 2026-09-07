@@ -41,8 +41,8 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 GitHub Release archives (single primary `spec_chum` / `Spec Chum.app` per platform) are built by
 `.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
 Do not attach ROMs. macOS ships an egui-wrapped `Spec Chum.app` in a **`.dmg`**
-(Applications shortcut; secondary `.zip` kept; notarisation + staple when Apple
-notary secrets are set — [#354](https://github.com/mward-sudo/spec_chum/issues/354));
+(Applications shortcut only — no secondary `.zip`; [#361](https://github.com/mward-sudo/spec_chum/issues/361);
+notarisation + staple when Apple notary secrets are set — [#354](https://github.com/mward-sudo/spec_chum/issues/354));
 Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
 **AppImage**, and **`.deb`**. Shared Spectrum app icon (macOS `.icns` / Windows `.ico` /
 Linux PNG / egui window) lives under `packaging/` — regenerate with

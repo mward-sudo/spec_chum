@@ -8,9 +8,9 @@
 # Usage:
 #   notarize-macos.sh <signed.dmg> [Spec-Chum.app...]
 #
-# Submit the outer .dmg (Gatekeeper-facing primary). After Accepted, staple the
-# DMG and any optional .app paths (so the secondary release .zip stays offline-
-# friendly). Requires prior Developer ID codesign (#354; umbrella #231).
+# Submit the outer .dmg (Gatekeeper-facing release artifact). After Accepted,
+# staple the DMG and any optional .app paths. Requires prior Developer ID
+# codesign (#354; umbrella #231). Release CI passes the DMG only (#361).
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
@@ -88,7 +88,7 @@ xcrun stapler validate "$DMG"
 for path in "$@"; do
   echo "stapler staple $path"
   # Ticket was published for the nested Mach-O when the DMG was accepted;
-  # stapling the staged .app keeps the secondary .zip Gatekeeper-friendly offline.
+  # optional .app staple is for local/dev unpack paths, not a release zip.
   xcrun stapler staple "$path"
   xcrun stapler validate "$path"
 done
