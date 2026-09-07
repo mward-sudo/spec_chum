@@ -197,7 +197,7 @@ fn receive_image_from_buffer(
     let Some(sender) = sender else {
         return;
     };
-    for image_copier in image_copiers.0.iter() {
+    for image_copier in &image_copiers.0 {
         // Finish a previously timed-out map before starting a new one.
         let pending = image_copier
             .pending_map

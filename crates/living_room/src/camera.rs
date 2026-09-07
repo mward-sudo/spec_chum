@@ -399,8 +399,7 @@ fn update_intro_camera(
     let look_at = phosphor
         .iter()
         .next()
-        .map(|g| g.translation())
-        .unwrap_or_else(screen_look_at);
+        .map_or_else(screen_look_at, GlobalTransform::translation);
 
     if let Ok(mut tf) = cams.single_mut() {
         let pos = lerp_eye_pullback_rise(intro.start.translation, intro.end.translation, t);
@@ -474,8 +473,7 @@ pub(crate) fn apply_zoom_camera(
     let look = phosphor
         .iter()
         .next()
-        .map(|g| g.translation())
-        .unwrap_or_else(screen_look_at);
+        .map_or_else(screen_look_at, GlobalTransform::translation);
     let max_i = f32::from(ZOOM_PRESET_COUNT.saturating_sub(1)).max(1.0);
     let t = (zoom.display / max_i).clamp(0.0, 1.0);
     look_blend.0 = t;
@@ -592,7 +590,8 @@ mod tests {
         assert!(z.anim_start.is_some());
         assert!((z.anim_to - 1.0).abs() < f32::EPSILON);
         // Simulate near end of anim by rewriting start into the past.
-        z.anim_start = Some(Instant::now() - std::time::Duration::from_secs_f32(ZOOM_ANIM_SECS));
+        z.anim_start =
+            Instant::now().checked_sub(std::time::Duration::from_secs_f32(ZOOM_ANIM_SECS));
         z.tick_animation();
         assert!((z.display - 1.0).abs() < 0.01);
         assert!(z.anim_start.is_none());

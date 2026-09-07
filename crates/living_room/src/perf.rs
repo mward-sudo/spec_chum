@@ -12,9 +12,7 @@ static PERF_LOG_INIT: AtomicBool = AtomicBool::new(false);
 
 fn perf_log_enabled() -> bool {
     if !PERF_LOG_INIT.swap(true, Ordering::Relaxed) {
-        let on = env::var_os("SPEC_CHUM_ROOM_PERF")
-            .map(|v| !v.is_empty() && v != "0")
-            .unwrap_or(false);
+        let on = env::var_os("SPEC_CHUM_ROOM_PERF").is_some_and(|v| !v.is_empty() && v != "0");
         PERF_LOG.store(on, Ordering::Relaxed);
     }
     PERF_LOG.load(Ordering::Relaxed)
@@ -56,8 +54,7 @@ impl RoomPerf {
         let should_log = self.ticks == 1
             || self
                 .last_log
-                .map(|t| t.elapsed().as_secs_f32() >= 1.0)
-                .unwrap_or(true);
+                .is_none_or(|t| t.elapsed().as_secs_f32() >= 1.0);
         if !should_log {
             return;
         }

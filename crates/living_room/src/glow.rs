@@ -174,8 +174,9 @@ fn sync_fill_origin(
     let origin = phosphor
         .iter()
         .next()
-        .map(|g| g.translation() + Vec3::new(0.0, 0.0, 0.12))
-        .unwrap_or(Vec3::new(0.0, 1.17, -1.15));
+        .map_or(Vec3::new(0.0, 1.17, -1.15), |g| {
+            g.translation() + Vec3::new(0.0, 0.0, 0.12)
+        });
 
     for mut tf in &mut fill {
         tf.translation = origin;

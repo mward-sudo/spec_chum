@@ -148,7 +148,7 @@ pub fn hide_crt_enabled() -> bool {
 fn env_flag(name: &str) -> bool {
     matches!(
         std::env::var(name).as_deref(),
-        Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
+        Ok("1" | "true" | "TRUE" | "yes" | "YES")
     )
 }
 
@@ -292,7 +292,9 @@ fn attach_crt_to_television(
         );
     }
 
-    if !hide_crt {
+    if hide_crt {
+        bevy::log::info!("SPEC_CHUM_ROOM_HIDE_CRT: phosphor/glass not spawned");
+    } else {
         commands.entity(tv_entity).with_children(|parent| {
             parent.spawn((
                 Mesh3d(kit.phosphor_mesh.clone()),
@@ -309,8 +311,6 @@ fn attach_crt_to_television(
                 Name::new("crt_glass"),
             ));
         });
-    } else {
-        bevy::log::info!("SPEC_CHUM_ROOM_HIDE_CRT: phosphor/glass not spawned");
     }
 
     commands.entity(tv_entity).insert(CrtAttachedToTv);
@@ -322,7 +322,7 @@ fn animate_crt_params(
     mut materials: ResMut<Assets<CrtPhosphorMaterial>>,
     query: Query<&MeshMaterial3d<CrtPhosphorMaterial>, With<CrtPhosphor>>,
 ) {
-    let t = look.map(|l| l.0.clamp(0.0, 1.0)).unwrap_or(0.0);
+    let t = look.map_or(0.0, |l| l.0.clamp(0.0, 1.0));
     // Close: keep glyphs readable. Far: sofa-distance Trinitron (scan/grille/soft).
     let near = (1.0 - t).powf(1.5);
     let scan = 0.06 * near + t * 0.48;
@@ -368,9 +368,10 @@ pub fn bulging_screen_mesh(width: f32, height: f32, bulge: f32, seg_x: u32, seg_
             positions.push([nx * width * 0.5, -ny * height * 0.5, z]);
             let hx = 1.0 - H_CURVE * nx * nx;
             let vy = 1.0 - V_CURVE * ny * ny;
-            let dz_dnx = bulge * (-2.0 * H_CURVE * nx) * vy;
-            let dz_dny = bulge * hx * (-2.0 * V_CURVE * ny);
-            let n = Vec3::new(-dz_dnx / (width * 0.5), dz_dny / (height * 0.5), 1.0).normalize();
+            let z_grad_x = bulge * (-2.0 * H_CURVE * nx) * vy;
+            let z_grad_y = bulge * hx * (-2.0 * V_CURVE * ny);
+            let n =
+                Vec3::new(-z_grad_x / (width * 0.5), z_grad_y / (height * 0.5), 1.0).normalize();
             normals.push(n.to_array());
             uvs.push([u, v]);
         }
@@ -437,13 +438,13 @@ mod tests {
 
     #[test]
     fn bottom_adjust_keeps_top_edge() {
-        let top_sym = APERTURE_CENTER_LOCAL.y + PHOSPHOR_H * 0.5;
-        let top_asym = crt_phosphor_local().y + PHOSPHOR_MESH_H * 0.5;
-        assert!((top_sym - top_asym).abs() < 1e-5);
-        let bot_sym = APERTURE_CENTER_LOCAL.y - PHOSPHOR_H * 0.5;
-        let bot_asym = crt_phosphor_local().y - PHOSPHOR_MESH_H * 0.5;
-        // Negative adjust → bottom moves up (bot_asym > bot_sym).
-        assert!((bot_asym - bot_sym - (-BOTTOM_Y_ADJUST)).abs() < 1e-5);
+        let top_nominal = APERTURE_CENTER_LOCAL.y + PHOSPHOR_H * 0.5;
+        let top_mesh = crt_phosphor_local().y + PHOSPHOR_MESH_H * 0.5;
+        assert!((top_nominal - top_mesh).abs() < 1e-5);
+        let bot_nominal = APERTURE_CENTER_LOCAL.y - PHOSPHOR_H * 0.5;
+        let bot_mesh = crt_phosphor_local().y - PHOSPHOR_MESH_H * 0.5;
+        // Negative adjust → bottom moves up (bot_mesh > bot_nominal).
+        assert!((bot_mesh - bot_nominal - (-BOTTOM_Y_ADJUST)).abs() < 1e-5);
     }
 
     #[test]

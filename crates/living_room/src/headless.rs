@@ -305,7 +305,7 @@ impl HeadlessRoom {
         if width == self.width && height == self.height {
             return Ok(());
         }
-        rebuild_headless_render_target(&mut self.apps, width, height)?;
+        rebuild_headless_render_target(&mut self.apps, width, height);
         self.width = width;
         self.height = height;
         self.apps.update();
@@ -408,11 +408,7 @@ fn create_headless_render_image(images: &mut Assets<Image>, w: u32, h: u32) -> H
 }
 
 /// Rebuild the offscreen camera target without tearing down Bevy / recompiling pipelines.
-fn rebuild_headless_render_target(
-    apps: &mut SubApps,
-    width: u32,
-    height: u32,
-) -> Result<(), HeadlessRoomError> {
+fn rebuild_headless_render_target(apps: &mut SubApps, width: u32, height: u32) {
     let world = apps.main.world_mut();
     *world.resource_mut::<HeadlessSize>() = HeadlessSize { width, height };
 
@@ -466,8 +462,6 @@ fn rebuild_headless_render_target(
     for entity in cam_entities {
         world.entity_mut(entity).insert(target.clone());
     }
-
-    Ok(())
 }
 
 /// Keep hybrid bake plate resolution aligned with the headless present size.

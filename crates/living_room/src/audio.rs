@@ -27,9 +27,7 @@ const RECORD_SECS: usize = 10;
 const RECORD_SAMPLES: usize = AUDIO_SAMPLE_RATE as usize * RECORD_SECS;
 
 fn audio_capture_enabled() -> bool {
-    std::env::var("SPEC_CHUM_ROOM_AUDIO_CAPTURE")
-        .map(|v| v != "0" && !v.is_empty())
-        .unwrap_or(false)
+    std::env::var("SPEC_CHUM_ROOM_AUDIO_CAPTURE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
 /// Shared PCM queue; the cpal stream is held as a non-send resource (not Sync).
