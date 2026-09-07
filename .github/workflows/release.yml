@@ -91,13 +91,13 @@ jobs:
             target: x86_64-pc-windows-msvc
             archive: zip
           # Windows also builds Inno Setup *-setup.exe (see Build Windows installer).
-          # macOS: primary .dmg (app + Applications shortcut) + secondary .zip.
+          # macOS: .dmg only (app + Applications shortcut).
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive: zip
+            archive: dmg
           - os: macos-latest
             target: x86_64-apple-darwin
-            archive: zip
+            archive: dmg
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -193,15 +193,14 @@ jobs:
               echo "  Spec Chum.app/   — egui host"
               echo "  Applications/   — shortcut (DMG only; drag Spec Chum.app here)"
               echo ""
-              echo "Prefer the .dmg release asset: open it and drag Spec Chum.app to"
-              echo "Applications. The .zip is a secondary unpack-anywhere layout."
+              echo "Open the .dmg release asset and drag Spec Chum.app to Applications."
               echo ""
               echo "Headless debugger / agent HTTP: run the binary inside the .app with"
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum --serve …"
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum debug …"
               echo ""
-              echo "When Apple notary secrets are configured, the .dmg (and the"
-              echo ".app inside the secondary .zip) are notarised and stapled."
+              echo "When Apple notary secrets are configured, the .dmg is notarised"
+              echo "and stapled."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
               echo "Contents: spec_chum.exe (portable zip) or Start Menu install via *-setup.exe"
@@ -277,12 +276,9 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           DMG_ASSET: ${{ steps.dmg.outputs.asset }}
-          STAGE_DIR: ${{ steps.stage.outputs.dir }}
         run: |
           chmod +x .trusted-ci/scripts/ci/notarize-macos.sh
-          .trusted-ci/scripts/ci/notarize-macos.sh \
-            "$DMG_ASSET" \
-            "${STAGE_DIR}/Spec Chum.app"
+          .trusted-ci/scripts/ci/notarize-macos.sh "$DMG_ASSET"
 
       - name: Authenticode-sign Windows
         if: runner.os == 'Windows'
@@ -405,7 +401,11 @@ jobs:
             test -f "${DEB_ASSET}"
           fi
           mkdir -p packed
-          if [[ "$ARCHIVE" == zip ]]; then
+          if [[ "$ARCHIVE" == dmg ]]; then
+            # DMG already written under packed/ by Build macOS DMG; no .zip.
+            test -f "${DMG_ASSET}"
+            echo "asset=${DMG_ASSET}" >> "$GITHUB_OUTPUT"
+          elif [[ "$ARCHIVE" == zip ]]; then
             (cd dist && python -c "import shutil; shutil.make_archive('../packed/${OUT}', 'zip', '.', '${OUT}')")
             echo "asset=packed/${OUT}.zip" >> "$GITHUB_OUTPUT"
           else
@@ -478,7 +478,7 @@ jobs:
 
             | Platform | Archive contents |
             | --- | --- |
-            | **macOS** | **`.dmg`** (primary): `Spec Chum.app` + Applications shortcut; secondary `.zip` of the same tree |
+            | **macOS** | **`.dmg`**: `Spec Chum.app` + Applications shortcut |
             | **Windows** | Portable `.zip` (`spec_chum.exe`) **and** Inno Setup `*-setup.exe` (Start Menu + uninstall) |
             | **Linux** | `.tar.gz` **and** AppImage **and** `.deb` (same `spec_chum` binary) |
 

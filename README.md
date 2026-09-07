@@ -39,10 +39,10 @@ See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 ## Releases
 
-Push a `vX.Y.Z` tag to build release archives: macOS `.dmg` (primary; `Spec Chum.app`
-+ Applications shortcut) and secondary `.zip`, Windows portable `.zip` and Inno
-`*-setup.exe`, Linux `.tar.gz` + AppImage + `.deb` with the primary binary
-(optional Apple/Windows/GPG signing). See [docs/RELEASE.md](docs/RELEASE.md).
+Push a `vX.Y.Z` tag to build release archives: macOS `.dmg` (`Spec Chum.app`
++ Applications shortcut), Windows portable `.zip` and Inno `*-setup.exe`,
+Linux `.tar.gz` + AppImage + `.deb` with the primary binary (optional
+Apple/Windows/GPG signing). See [docs/RELEASE.md](docs/RELEASE.md).
 
 ## ROMs
 
