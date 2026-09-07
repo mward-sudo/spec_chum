@@ -7,6 +7,9 @@ description = "Spec Chum z80 crate"
 
 [dependencies]
 
+[dev-dependencies]
+thiserror = { workspace = true }
+
 # Crate-local lints (#171): pedantic warn with endemic cast/name allows.
 # Cannot mix `workspace = true` with overrides — keep in sync with root Cargo.toml.
 [lints.rust]
