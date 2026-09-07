@@ -105,7 +105,11 @@ fi
 
 echo "==> swift build (SpecChumMac, force_load libspec_chum_room.a from $SPEC_CHUM_HOST_LIB_DIR)"
 export SPEC_CHUM_ROOT="$ROOT"
-xcrun swift build -c release --package-path apps/macos "${SWIFT_ARCH_ARGS[@]}"
+if ((${#SWIFT_ARCH_ARGS[@]})); then
+  xcrun swift build -c release --package-path apps/macos "${SWIFT_ARCH_ARGS[@]}"
+else
+  xcrun swift build -c release --package-path apps/macos
+fi
 
 BIN="$ROOT/apps/macos/.build/release/SpecChumMac"
 # Cross-arch SwiftPM may place the product under .build/<arch>-apple-macosx/release/.
