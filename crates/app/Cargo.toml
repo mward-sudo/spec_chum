@@ -29,6 +29,7 @@ cpal = { workspace = true }
 gilrs = { workspace = true }
 rfd = "0.15"
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 raw-window-handle = "0.6"
 
 # Crate-local lints (#171): pedantic warn with endemic cast/name allows.

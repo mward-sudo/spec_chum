@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use control_plane::{ControlPlane, ServerConfig};
 
-use crate::routes::serve;
+use crate::routes::{serve, ReadyError};
 
 /// Keeps the embedded HTTP server thread alive for the host process lifetime.
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub fn spawn(config: ServerConfig, plane: Arc<ControlPlane>) -> Result<EmbeddedS
             let rt = match tokio::runtime::Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
-                    let _ = ready_tx.send(Err(format!("tokio runtime failed: {e}")));
+                    let _ = ready_tx.send(Err(ReadyError::Runtime(e)));
                     return;
                 }
             };
@@ -47,7 +47,7 @@ pub fn spawn(config: ServerConfig, plane: Arc<ControlPlane>) -> Result<EmbeddedS
                 addr,
             })
         }
-        Ok(Err(msg)) => Err(anyhow::anyhow!(msg)),
+        Ok(Err(err)) => Err(err.into()),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(anyhow::anyhow!(
             "embedded agent server did not become ready in time"
         )),

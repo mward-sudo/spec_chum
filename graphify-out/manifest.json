@@ -108,22 +108,22 @@
     "semantic_hash": ""
   },
   "crates/agent_server/Cargo.toml": {
-    "mtime": 1788729196.4242961,
-    "seen": 1788730076.229346,
-    "ast_hash": "14710de74ed9710155e9bfb051e7ce47",
+    "mtime": 1788740469.3052902,
+    "seen": 1788740562.980062,
+    "ast_hash": "51c4a944b6949b6a0761459ef058e205",
     "semantic_hash": ""
   },
   "crates/agent_server/src/embedded.rs": {
-    "mtime": 1788729196.4245746,
-    "seen": 1788730076.229346,
-    "ast_hash": "581556a5123b2a99b40efac8dca81866",
+    "mtime": 1788740505.437362,
+    "seen": 1788740562.980063,
+    "ast_hash": "c51152e38e4a4e6cd14d660dd406464d",
     "semantic_hash": ""
   },
   "crates/agent_server/src/lib.rs": {
-    "mtime": 1788729094.437465,
-    "seen": 1788730076.229347,
-    "ast_hash": "4b9b26ab691bfe9286df7366dc0db162",
-    "semantic_hash": "4b9b26ab691bfe9286df7366dc0db162"
+    "mtime": 1788740536.630195,
+    "seen": 1788740562.980064,
+    "ast_hash": "1ee6a66e1153288ce64dce14cdd85188",
+    "semantic_hash": ""
   },
   "crates/agent_server/src/main.rs": {
     "mtime": 1788729094.4376113,
@@ -138,9 +138,9 @@
     "semantic_hash": ""
   },
   "crates/app/Cargo.toml": {
-    "mtime": 1788729196.4296772,
-    "seen": 1788730076.229353,
-    "ast_hash": "fdd2d49cb69a4fa3493fd2fa000a83da",
+    "mtime": 1788740470.4105191,
+    "seen": 1788740562.980242,
+    "ast_hash": "368ad2ff6f609500d21ad38c9632da9f",
     "semantic_hash": ""
   },
   "crates/app/src/display.rs": {
@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/lib.rs": {
-    "mtime": 1788733972.3630977,
-    "seen": 1788734035.89418,
-    "ast_hash": "3c8f60aadf5718c55fb4dcefe9ac40f1",
+    "mtime": 1788740536.1683614,
+    "seen": 1788740562.9802759,
+    "ast_hash": "ee26fd0c44a4798b57545e7ab637abe9",
     "semantic_hash": ""
   },
   "crates/app/src/main.rs": {
@@ -870,9 +870,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1788730799.9247105,
-    "seen": 1788731536.50937,
-    "ast_hash": "ffb95a5db0daeeb7f0c1bcf6a7c4cc2c",
+    "mtime": 1788740406.1968153,
+    "seen": 1788740562.982296,
+    "ast_hash": "b2ad7e845d01420a02c53de2f9715909",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -1062,9 +1062,9 @@
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/mod.rs": {
-    "mtime": 1788729196.4279494,
-    "seen": 1788730076.2293499,
-    "ast_hash": "eee3be4de24147ca5671c7a8a6d25eef",
+    "mtime": 1788740544.9506059,
+    "seen": 1788740562.980172,
+    "ast_hash": "245954d000a6226f87bbd76ae46deadb",
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/session.rs": {

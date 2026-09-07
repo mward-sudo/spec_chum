@@ -24,6 +24,16 @@ use spec_chum_host::{
     PrefJoystick, PrefModel, RomSetupJson, UiPreferences, UserMachineConfig, MIN_WINDOW_HEIGHT,
     MIN_WINDOW_WIDTH,
 };
+use thiserror::Error;
+
+/// Errors building a [`Machine`] from a main ROM (and optional TR-DOS / EX-ROM).
+#[derive(Debug, Error)]
+enum BuildMachineError {
+    #[error(transparent)]
+    Machine(#[from] machine::MachineBuildError),
+    #[error(transparent)]
+    Rom(#[from] machine::RomReadError),
+}
 
 /// Live machine storage: direct for GUI-only, shared `Arc` when agent HTTP is on (#221).
 #[derive(Debug)]
@@ -253,7 +263,7 @@ impl EmulatorSession {
                         self.host_mut()
                             .set_status(format!("Loaded {}", path.display()));
                     }
-                    Err(e) => self.host_mut().set_status(e),
+                    Err(e) => self.host_mut().set_status(e.to_string()),
                 }
                 return;
             }
@@ -269,27 +279,24 @@ impl EmulatorSession {
         model: Model,
         data: &[u8],
         overrides: &std::collections::BTreeMap<String, std::path::PathBuf>,
-    ) -> Result<Machine, String> {
+    ) -> Result<Machine, BuildMachineError> {
         match model {
-            Model::Spectrum16K => Machine::new_16k(data),
-            Model::Spectrum48 => Machine::new_48k(data),
-            Model::SpectrumPlus2 => Machine::new_plus2(data),
-            Model::SpectrumPlus2A => Machine::new_plus2a(data),
-            Model::SpectrumPlus3 => Machine::new_plus3(data),
-            Model::Spectrum128 => Machine::new_128k(data),
+            Model::Spectrum16K => Ok(Machine::new_16k(data)?),
+            Model::Spectrum48 => Ok(Machine::new_48k(data)?),
+            Model::SpectrumPlus2 => Ok(Machine::new_plus2(data)?),
+            Model::SpectrumPlus2A => Ok(Machine::new_plus2a(data)?),
+            Model::SpectrumPlus3 => Ok(Machine::new_plus3(data)?),
+            Model::Spectrum128 => Ok(Machine::new_128k(data)?),
             Model::Pentagon128 => {
-                let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
-                    .map_err(|e| e.to_string())?;
-                Machine::new_pentagon128(data, &trdos)
+                let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
+                Ok(Machine::new_pentagon128(data, &trdos)?)
             }
-            Model::TimexTC2048 => Machine::new_timex_tc2048(data),
+            Model::TimexTC2048 => Ok(Machine::new_timex_tc2048(data)?),
             Model::TimexTS2068 => {
-                let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)
-                    .map_err(|e| e.to_string())?;
-                Machine::new_timex_ts2068(data, &exrom)
+                let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)?;
+                Ok(Machine::new_timex_ts2068(data, &exrom)?)
             }
         }
-        .map_err(|e| e.to_string())
     }
 
     /// Boot from a saved user profile (#187).
@@ -2852,6 +2859,17 @@ fn start_beeper(state: Arc<std::sync::Mutex<BeeperState>>) -> Option<cpal::Strea
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_machine_error_from_rom_read_displays() {
+        let err = BuildMachineError::from(machine::RomReadError::TrdosNotApplicable {
+            model: "48K".into(),
+        });
+        assert!(
+            err.to_string().contains("does not use a TR-DOS ROM"),
+            "got {err}"
+        );
+    }
 
     #[test]
     fn quote_maps_to_symbol_p_on_session() {
