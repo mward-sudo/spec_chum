@@ -43,6 +43,14 @@ if [[ ! -f "$DMG" ]]; then
   exit 1
 fi
 
+# Validate optional staple targets before spending a notary submission.
+for path in "$@"; do
+  if [[ ! -d "$path" || "$path" != *.app ]]; then
+    echo "error: optional staple target must be a .app bundle: $path" >&2
+    exit 1
+  fi
+done
+
 TMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/spec-chum-notary-$$"
 mkdir -p "$TMP"
 cleanup() {
@@ -65,7 +73,8 @@ else
     --password "$APPLE_APP_SPECIFIC_PASSWORD"
     --team-id "$APPLE_TEAM_ID"
   )
-  echo "notary auth: Apple ID ($APPLE_ID, team=$APPLE_TEAM_ID)"
+  # Do not log APPLE_ID (PII); team ID is enough for CI diagnostics.
+  echo "notary auth: Apple ID mode (team=$APPLE_TEAM_ID)"
 fi
 
 echo "notarytool submit $DMG --wait"
@@ -77,10 +86,6 @@ xcrun stapler staple "$DMG"
 xcrun stapler validate "$DMG"
 
 for path in "$@"; do
-  if [[ ! -d "$path" || "$path" != *.app ]]; then
-    echo "error: optional staple target must be a .app bundle: $path" >&2
-    exit 1
-  fi
   echo "stapler staple $path"
   # Ticket was published for the nested Mach-O when the DMG was accepted;
   # stapling the staged .app keeps the secondary .zip Gatekeeper-friendly offline.
