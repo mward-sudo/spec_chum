@@ -44,8 +44,10 @@ Do not attach ROMs. macOS ships an egui-wrapped `Spec Chum.app` in a **`.dmg`**
 (Applications shortcut; secondary `.zip` kept; notarisation + staple when Apple
 notary secrets are set — [#354](https://github.com/mward-sudo/spec_chum/issues/354));
 Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
-**AppImage**, and **`.deb`**. Shared app icon polish:
-[#231](https://github.com/mward-sudo/spec_chum/issues/231).
+**AppImage**, and **`.deb`**. Shared Spectrum app icon (macOS `.icns` / Windows `.ico` /
+Linux PNG / egui window) lives under `packaging/` — regenerate with
+`python3 scripts/generate_app_icons.py`
+([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
 Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 **Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
 (z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.

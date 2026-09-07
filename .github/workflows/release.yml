@@ -116,6 +116,8 @@ jobs:
             scripts/ci
             packaging/windows
             packaging/linux
+            packaging/macos
+            packaging/icon
           sparse-checkout-cone-mode: true
           path: .trusted-ci
           persist-credentials: false
@@ -388,6 +390,7 @@ jobs:
           if [[ "$TARGET" == *apple-darwin* ]]; then
             test -d "${STAGE_DIR}/Spec Chum.app/Contents/MacOS"
             test -x "${STAGE_DIR}/Spec Chum.app/Contents/MacOS/spec_chum"
+            test -f "${STAGE_DIR}/Spec Chum.app/Contents/Resources/AppIcon.icns"
             test ! -e "${STAGE_DIR}/spec-chum-debug"
             test -f "${DMG_ASSET}"
           elif [[ "$TARGET" == *windows* ]]; then
@@ -484,4 +487,4 @@ jobs:
             GitHub Artifact Attestations are attached to this workflow run.
 
             Linux runtime: GTK 3, ALSA, and udev (`libgtk-3-0`, `libasound2`/`libasound2t64`, `libudev1`).
-            Shared app icon polish: issue #231. Notarisation secrets: issue #354.
+            Shared Spectrum app icon on all packaged hosts. Notarisation secrets: issue #354.
