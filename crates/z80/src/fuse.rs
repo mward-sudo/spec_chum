@@ -11,8 +11,19 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use thiserror::Error;
+
 use crate::bus::FlatMem;
 use crate::cpu::{Cpu, FuseEvent, FuseEventKind};
+
+/// Mismatch report from a single Fuse `tests.in` / `tests.expected` case.
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("{name}: {details}\n{disasm}")]
+struct FuseCaseError {
+    name: String,
+    details: String,
+    disasm: String,
+}
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/fuse")
@@ -316,7 +327,7 @@ impl crate::bus::Io for FuseBus {
     }
 }
 
-fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
+fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), FuseCaseError> {
     let mut cpu = tin.cpu.clone();
     cpu.fuse_log = Some(Vec::new());
     let mut bus = FuseBus {
@@ -438,7 +449,11 @@ fn run_case(tin: &TestIn, exp: &Expected) -> Result<(), String> {
         Ok(())
     } else {
         let dump = fuse_disasm_window(&tin.mem, tin.cpu.regs.pc, 8);
-        Err(format!("{}: {}\n{dump}", tin.name, errs.join("; ")))
+        Err(FuseCaseError {
+            name: tin.name.clone(),
+            details: errs.join("; "),
+            disasm: dump,
+        })
     }
 }
 
@@ -481,11 +496,26 @@ fn fuse_mismatch_includes_disasm_at_start_pc() {
         .expect("NOP test");
     let mut exp = exp.clone();
     exp.pc = exp.pc.wrapping_add(1);
-    let err = run_case(tin, &exp).expect_err("forced PC mismatch");
+    let err = run_case(tin, &exp)
+        .expect_err("forced PC mismatch")
+        .to_string();
     let start = tin.cpu.regs.pc;
     assert!(err.contains("PC:"), "{err}");
     assert!(err.contains(&format!("disasm @{start:04X}:")), "{err}");
     assert!(err.contains("NOP"), "{err}");
+}
+
+#[test]
+fn fuse_case_error_display_preserves_harness_string() {
+    let err = FuseCaseError {
+        name: "00".into(),
+        details: "PC: got 0001 want 0000".into(),
+        disasm: "disasm @0000:\n0000  00           NOP\n".into(),
+    };
+    assert_eq!(
+        err.to_string(),
+        "00: PC: got 0001 want 0000\ndisasm @0000:\n0000  00           NOP\n"
+    );
 }
 
 #[test]
@@ -516,7 +546,7 @@ fn fuse_all_vectors() {
         if let Err(e) = run_case(tin, exp) {
             failed += 1;
             if first_errs.len() < 40 {
-                first_errs.push(e);
+                first_errs.push(e.to_string());
             }
         }
     }

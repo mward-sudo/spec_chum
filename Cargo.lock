@@ -8462,6 +8462,9 @@ dependencies = [
 [[package]]
 name = "z80"
 version = "0.5.0"
+dependencies = [
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "zbus"
