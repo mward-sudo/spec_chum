@@ -71,11 +71,11 @@ Deepen PRs must add or extend ROM/fixture-gated smokes (never weaken hardware pa
 
 | Area | Issue | Fixtures / notes |
 | --- | --- | --- |
-| +3 FDC / DSK | [#141](https://github.com/mward-sudo/spec_chum/issues/141), [#164](https://github.com/mward-sudo/spec_chum/issues/164) | `tests/fixtures/plus3/`; machine `insert_disk` typed rejects |
-| TR-DOS / Beta Disk | [#166](https://github.com/mward-sudo/spec_chum/issues/166) | `tests/fixtures/trdos/` |
+| +3 FDC / DSK | [#141](https://github.com/mward-sudo/spec_chum/issues/141), [#166](https://github.com/mward-sudo/spec_chum/issues/166), [#164](https://github.com/mward-sudo/spec_chum/issues/164) | `tests/fixtures/plus3/`; machine `insert_disk` typed rejects |
+| TR-DOS / Beta Disk | [#140](https://github.com/mward-sudo/spec_chum/issues/140) | `tests/fixtures/trdos/` |
 | Interface 1 / Microdrive | [#139](https://github.com/mward-sudo/spec_chum/issues/139) | Attach typed; deepen smokes land with feature work |
-| Multiface / DivMMC | [#138](https://github.com/mward-sudo/spec_chum/issues/138)–[#140](https://github.com/mward-sudo/spec_chum/issues/140) | Attach typed; ROM-gated behaviour with deepen PRs |
-| Timex TC2048 / TS2068 | model smokes in `machine` | Boot smokes; further accuracy tracked on Timex issues |
+| Multiface / DivMMC | [#138](https://github.com/mward-sudo/spec_chum/issues/138), [#168](https://github.com/mward-sudo/spec_chum/issues/168) | Attach typed; ROM-gated behaviour with deepen PRs |
+| Timex TC2048 / TS2068 | [#192](https://github.com/mward-sudo/spec_chum/issues/192) | Boot smokes in `machine`; further accuracy on Timex issues |
 
 ## Opt-in tooling (evaluated under #171)
 
