@@ -40,9 +40,11 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 
 GitHub Release archives (single primary `spec_chum` / `Spec Chum.app` per platform) are built by
 `.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
-Do not attach ROMs. macOS ships an egui-wrapped `Spec Chum.app` in a `.zip`;
-Windows a `.zip` of the primary `.exe`; Linux a `.tar.gz`. Installer formats
-(DMG / Inno / AppImage / `.deb`) and app icon: [#231](https://github.com/mward-sudo/spec_chum/issues/231).
+Do not attach ROMs. macOS ships an egui-wrapped `Spec Chum.app` in a **`.dmg`**
+(Applications shortcut; secondary `.zip` kept); Windows a `.zip` of the primary
+`.exe`; Linux a `.tar.gz`. Remaining installer formats (Inno / AppImage / `.deb`)
+and app icon: [#231](https://github.com/mward-sudo/spec_chum/issues/231).
+Notarisation: [#354](https://github.com/mward-sudo/spec_chum/issues/354).
 Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 **Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
 (z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
