@@ -6,6 +6,10 @@ license.workspace = true
 description = "Headless Spec Chum debugger CLI for agents"
 publish = false
 
+[lib]
+name = "debug_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "spec-chum-debug"
 path = "src/main.rs"

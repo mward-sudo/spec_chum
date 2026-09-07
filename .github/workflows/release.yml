@@ -90,7 +90,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
-          # macOS: .zip of Spec Chum.app (+ debugger CLI); see docs/RELEASE.md.
+          # macOS: .zip of Spec Chum.app (single primary binary); see docs/RELEASE.md.
           - os: macos-latest
             target: aarch64-apple-darwin
             archive: zip
@@ -146,7 +146,9 @@ jobs:
 
       - name: Build binaries
         shell: bash
-        run: cargo build --release -p app -p debug_cli --target ${{ matrix.target }}
+        # Primary release deliverable is `spec_chum` only (#231). Headless
+        # debug/agent lives on the same binary (`--serve` / `debug …`).
+        run: cargo build --release -p app --target ${{ matrix.target }}
 
       - name: Stage release tree
         id: stage
@@ -161,19 +163,15 @@ jobs:
           BIN_DIR="target/${TARGET}/release"
           if [[ "$TARGET" == *windows* ]]; then
             cp "$BIN_DIR/spec_chum.exe" "dist/$OUT/"
-            cp "$BIN_DIR/spec-chum-debug.exe" "dist/$OUT/"
           elif [[ "$TARGET" == *apple-darwin* ]]; then
             chmod +x scripts/ci/stage-macos-egui-app.sh
             scripts/ci/stage-macos-egui-app.sh \
               "$VERSION" \
               "$BIN_DIR/spec_chum" \
               "dist/$OUT/Spec Chum.app"
-            cp "$BIN_DIR/spec-chum-debug" "dist/$OUT/"
-            strip "dist/$OUT/spec-chum-debug" || true
           else
             cp "$BIN_DIR/spec_chum" "dist/$OUT/"
-            cp "$BIN_DIR/spec-chum-debug" "dist/$OUT/"
-            strip "dist/$OUT/spec_chum" "dist/$OUT/spec-chum-debug" || true
+            strip "dist/$OUT/spec_chum" || true
           fi
           cp LICENSE "dist/$OUT/"
           if find "dist/$OUT" -iname '*.rom' | grep -q .; then
@@ -186,16 +184,21 @@ jobs:
             if [[ "$TARGET" == *apple-darwin* ]]; then
               echo "Contents:"
               echo "  Spec Chum.app/   — egui host (open the .app, or drag to Applications)"
-              echo "  spec-chum-debug  — headless debugger CLI"
               echo ""
-              echo "This is the egui app wrapped as a macOS bundle. The native SwiftUI"
-              echo "shell / DMG / notarisation are tracked separately (GitHub issue #68)."
+              echo "Headless debugger / agent HTTP: run the binary inside the .app with"
+              echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum --serve …"
+              echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum debug …"
+              echo ""
+              echo "This is the egui app wrapped as a macOS bundle. DMG + notarisation"
+              echo "and further install UX are tracked in GitHub issue #231."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
-              echo "Contents: spec_chum.exe, spec-chum-debug.exe"
+              echo "Contents: spec_chum.exe"
+              echo "Headless: spec_chum.exe --serve …   or   spec_chum.exe debug …"
               echo ""
             else
-              echo "Contents: spec_chum, spec-chum-debug"
+              echo "Contents: spec_chum"
+              echo "Headless: ./spec_chum --serve …   or   ./spec_chum debug …"
               echo "Runtime: GTK 3 + ALSA (e.g. libgtk-3-0, libasound2 on Debian/Ubuntu)."
               echo ""
             fi
@@ -215,8 +218,7 @@ jobs:
         run: |
           chmod +x .trusted-ci/scripts/ci/sign-macos.sh
           .trusted-ci/scripts/ci/sign-macos.sh \
-            "${STAGE_DIR}/Spec Chum.app" \
-            "${STAGE_DIR}/spec-chum-debug"
+            "${STAGE_DIR}/Spec Chum.app"
 
       - name: Authenticode-sign Windows
         if: runner.os == 'Windows'
@@ -227,8 +229,7 @@ jobs:
           STAGE_DIR: ${{ steps.stage.outputs.dir }}
         run: |
           & ".trusted-ci/scripts/ci/sign-windows.ps1" `
-            "$env:STAGE_DIR/spec_chum.exe" `
-            "$env:STAGE_DIR/spec-chum-debug.exe"
+            "$env:STAGE_DIR/spec_chum.exe"
 
       - name: Pack archive
         id: pack
@@ -241,17 +242,17 @@ jobs:
         run: |
           set -euo pipefail
           OUT="spec-chum-${VERSION}-${TARGET}"
-          # Sanity: macOS must ship a .app; Windows must ship .exe files.
+          # Sanity: one primary application per platform (#231).
           if [[ "$TARGET" == *apple-darwin* ]]; then
             test -d "${STAGE_DIR}/Spec Chum.app/Contents/MacOS"
             test -x "${STAGE_DIR}/Spec Chum.app/Contents/MacOS/spec_chum"
-            test -x "${STAGE_DIR}/spec-chum-debug"
+            test ! -e "${STAGE_DIR}/spec-chum-debug"
           elif [[ "$TARGET" == *windows* ]]; then
             test -f "${STAGE_DIR}/spec_chum.exe"
-            test -f "${STAGE_DIR}/spec-chum-debug.exe"
+            test ! -e "${STAGE_DIR}/spec-chum-debug.exe"
           else
             test -x "${STAGE_DIR}/spec_chum"
-            test -x "${STAGE_DIR}/spec-chum-debug"
+            test ! -e "${STAGE_DIR}/spec-chum-debug"
           fi
           mkdir -p packed
           if [[ "$ARCHIVE" == zip ]]; then
@@ -321,13 +322,14 @@ jobs:
           overwrite_files: true
           files: dist/*
           body: |
-            Cross-platform **egui** host and headless debugger (`spec-chum-debug`).
+            Cross-platform **egui** host (`spec_chum`) with headless debugger / agent HTTP
+            on the **same** binary (`spec_chum --serve` / `spec_chum debug …`).
 
             | Platform | Archive contents |
             | --- | --- |
-            | **macOS** | `Spec Chum.app` (egui) + `spec-chum-debug` in a `.zip` |
-            | **Windows** | `spec_chum.exe` + `spec-chum-debug.exe` in a `.zip` |
-            | **Linux** | `spec_chum` + `spec-chum-debug` in a `.tar.gz` |
+            | **macOS** | `Spec Chum.app` (egui) in a `.zip` |
+            | **Windows** | `spec_chum.exe` in a `.zip` |
+            | **Linux** | `spec_chum` in a `.tar.gz` |
 
             System ROMs are **not** included — fetch with `./scripts/fetch_roms.sh`.
 
@@ -335,4 +337,4 @@ jobs:
             GitHub Artifact Attestations are attached to this workflow run.
 
             Linux runtime: GTK 3 and ALSA (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).
-            Native SwiftUI `.app` / DMG / notarisation: tracked in issue #68.
+            Installer packaging (DMG / Inno / AppImage / `.deb`) and app icon: issue #231.

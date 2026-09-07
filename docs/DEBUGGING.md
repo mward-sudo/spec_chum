@@ -63,9 +63,23 @@ C ABI (`host_api`):
 - `sc_debug_dump_to_file(path)`
 - `sc_debug_event_count()` / `sc_debug_clear()`
 
-## Headless CLI (`spec-chum-debug`)
+## Headless CLI (`spec_chum debug` / `--serve`)
 
-Agent / script entry. Crate `debug_cli`, binary `spec-chum-debug`.
+Agent / script entry. Implementation lives in crate `debug_cli`, exposed on the
+primary `spec_chum` binary ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
+`cargo run -p debug_cli` still builds the `spec-chum-debug` alias for source
+checkouts; release archives do **not** ship a second binary.
+
+```bash
+# Preferred (same binary as the GUI):
+cargo run -p app -- --serve --model 48k
+cargo run -p app -- debug --model 48k run --frames 1
+cargo run -p app -- debug --model 48k --json dump-state
+
+# Alias (source builds only):
+cargo run -p debug_cli -- --model 48k run --frames 1
+cargo run -p debug_cli -- --model 48k --json dump-state
+```
 
 Each invocation is a **new process** (fresh machine and empty trace ring).
 Put `--trace`, `--snapshot`, `--tap`, `--trd` / `--trdos-rom`, and the subcommand on the **same** command.

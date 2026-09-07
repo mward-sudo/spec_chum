@@ -21,6 +21,7 @@ tape = { workspace = true }
 trace = { workspace = true }
 control_plane = { workspace = true }
 agent_server = { workspace = true }
+debug_cli = { workspace = true }
 parking_lot = { workspace = true }
 host_api = { workspace = true }
 eframe = { workspace = true }

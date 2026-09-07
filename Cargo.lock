@@ -373,6 +373,7 @@ dependencies = [
  "anyhow",
  "control_plane",
  "cpal 0.15.3",
+ "debug_cli",
  "eframe",
  "egui",
  "formats",
