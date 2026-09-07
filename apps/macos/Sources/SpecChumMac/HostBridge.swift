@@ -107,9 +107,8 @@ final class HostBridge: ObservableObject {
         /// Timex dock `.dck` cartridges (TS2068 / TC2068 horizontal MMU).
         var supportsTimexDock: Bool { self == .timexTS2068 }
 
-        /// Toolbar machine picker: fit the longest `title` ("Spectrum 128K") plus chevron.
-        static let toolbarPickerMinWidth: CGFloat = 148
-        static let toolbarPickerMaxWidth: CGFloat = 196
+        /// Soft cap for toolbar machine label glyphs (custom profile names); avoid layout frames.
+        static let toolbarPickerMaxLabelChars: Int = 18
     }
 
     @Published var status: String = "Starting…"
@@ -327,6 +326,14 @@ final class HostBridge: ObservableObject {
             return cfg.name
         }
         return model.shortTitle
+    }
+
+    /// Closed toolbar Menu label: truncates long custom names without a greedy `maxWidth` frame (#184).
+    var machineToolbarLabel: String {
+        let title = machineDisplayTitle
+        let maxChars = Model.toolbarPickerMaxLabelChars
+        guard title.count > maxChars else { return title }
+        return String(title.prefix(maxChars - 1)) + "…"
     }
 
     /// Recent media paths (most recent first); reopen from File menu — not auto-inserted on launch.

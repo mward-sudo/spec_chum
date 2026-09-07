@@ -131,6 +131,23 @@ if [[ -z "${BIN:-}" || ! -x "$BIN" ]]; then
   exit 1
 fi
 
+# force_load of libspec_chum_room.a makes ld stamp LC_BUILD_VERSION sdk from the
+# Rust/C objects (14.0 via MACOSX_DEPLOYMENT_TARGET above). macOS then withholds
+# Liquid Glass toolbar shared-background pills. Re-stamp minos=deployment,
+# sdk=active Xcode SDK so SpecChumMac matches release chrome (minos 14 / sdk 26+).
+if ! SDK_VERSION="$(xcrun --show-sdk-version 2>/dev/null)"; then
+  echo "error: cannot determine the active macOS SDK version" >&2
+  exit 1
+fi
+SDK_VERSION="${SDK_VERSION%%_*}" # drop rare suffixes
+if [[ -z "$SDK_VERSION" ]]; then
+  echo "error: active macOS SDK version is empty" >&2
+  exit 1
+fi
+echo "==> vtool LC_BUILD_VERSION macos ${MACOSX_DEPLOYMENT_TARGET} / sdk ${SDK_VERSION}"
+xcrun vtool -set-build-version macos "$MACOSX_DEPLOYMENT_TARGET" "$SDK_VERSION" \
+  -replace -output "$BIN" "$BIN"
+
 APP_STAGE="$ROOT/apps/macos/.build/SpecChumMac.app"
 RESOURCES="$APP_STAGE/Contents/Resources"
 mkdir -p "$RESOURCES"
