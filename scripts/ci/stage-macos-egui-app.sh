@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Stage the egui `spec_chum` binary into a production macOS .app bundle.
 #
-# SwiftUI SpecChumMac.app / DMG / notarisation remain [#68]; release CI ships this
-# egui-wrapped bundle until that path is ready.
+# Release CI wraps this bundle in a .dmg (Applications shortcut) via
+# create-macos-dmg.sh. Notarisation and SpecChumMac native UI remain on
+# [#231](https://github.com/mward-sudo/spec_chum/issues/231) /
+# [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 #
 # Usage:
 #   stage-macos-egui-app.sh <version> <spec_chum-binary> <dest-app-path>

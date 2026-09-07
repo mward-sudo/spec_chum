@@ -8,10 +8,11 @@ live on the **same** binary (`spec_chum --serve`, `spec_chum debug …`). System
 are never packaged.
 
 On macOS, release CI wraps the egui binary in a production **`Spec Chum.app`**
-bundle (double-clickable via Launch Services). DMG (with Applications shortcut),
-notarisation, Windows installer, Linux AppImage/`.deb`, and a shared app icon are
-tracked in [#231](https://github.com/mward-sudo/spec_chum/issues/231). Native UI
-shells are separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
+bundle and ships a **`.dmg`** (primary) with an **Applications** folder shortcut
+plus a secondary `.zip` of the same tree. Notarisation / Gatekeeper staple,
+Windows installer, Linux AppImage/`.deb`, and a shared app icon remain on
+[#231](https://github.com/mward-sudo/spec_chum/issues/231). Native UI shells are
+separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
 
 ## Before tagging (required)
 
@@ -135,10 +136,12 @@ git push origin v0.2.0
 | --- | --- | --- |
 | Linux | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `LICENSE`, `README.txt` |
 | Windows | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `LICENSE`, `README.txt` |
-| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` | `Spec Chum.app/`, `LICENSE`, `README.txt` |
-| macOS (Intel) | `spec-chum-<ver>-x86_64-apple-darwin.zip` | same as Apple silicon |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` (**primary**) | `Spec Chum.app/`, `Applications` → `/Applications`, `LICENSE`, `README.txt` |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` (secondary) | `Spec Chum.app/`, `LICENSE`, `README.txt` |
+| macOS (Intel) | same pair with `x86_64-apple-darwin` | same layout |
 
 One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
+Prefer the macOS **`.dmg`**: open it and drag **Spec Chum.app** onto **Applications**.
 Headless use:
 
 ```bash
@@ -150,8 +153,8 @@ spec_chum debug --tap path/to/game.tap type-load --code
 (`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is
 **not** attached to GitHub Release archives.)
 
-Linux uses `.tar.gz` (common on Unix); Windows and macOS use `.zip`. No `roms/`
-are included.
+Linux uses `.tar.gz` (common on Unix); Windows uses `.zip`; macOS ships a
+primary `.dmg` and a secondary `.zip`. No `roms/` are included.
 
 Checksums and optional signatures:
 
@@ -176,7 +179,7 @@ is absent so a first release does not require certificates.
 | --- | --- | --- |
 | All | SHA-256 checksums | none |
 | All | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (Sigstore) | none (OIDC) |
-| macOS | Developer ID `codesign` on `Spec Chum.app` (hardened runtime + timestamp) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
+| macOS | Developer ID `codesign` on `Spec Chum.app` and the release `.dmg` (hardened runtime + timestamp on Mach-O / `.app`; DMG signed when the same secrets are set) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
 | Windows | Authenticode (`signtool`, SHA-256, DigiCert timestamp) | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` |
 | Checksums | Detached ASCII-armored GPG signature `SHA256SUMS.asc` | `GPG_PRIVATE_KEY`, optional `GPG_PASSPHRASE` |
 
@@ -185,9 +188,11 @@ is absent so a first release does not require certificates.
 Developer ID Application certificate, for example
 `Developer ID Application: Example Ltd (TEAMID)`.
 
-**Notarisation** of the `.app` / a DMG is not part of this workflow yet (tracked
-in [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Gatekeeper may
-still warn on first launch for unsigned or un-notarised builds.
+**Notarisation** (`notarytool` submit + `stapler staple` of the `.dmg` / `.app`)
+is **not** part of this workflow yet. Codesigned-but-unnotarised builds may still
+prompt under Gatekeeper. Follow-up:
+[#354](https://github.com/mward-sudo/spec_chum/issues/354) (needs Apple notary
+API credentials beyond the existing Developer ID `.p12`; still Refs #231).
 
 Default PR CI (`.github/workflows/ci.yml`) is unchanged and does not use these
 secrets. A `workflow_dispatch` without a tag still builds archives as
@@ -204,6 +209,9 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 Attestations from the release workflow run:
 
 ```bash
+gh attestation verify spec-chum-0.2.0-aarch64-apple-darwin.dmg \
+  --owner mward-sudo --repo spec_chum
+# secondary zip still attested when published:
 gh attestation verify spec-chum-0.2.0-aarch64-apple-darwin.zip \
   --owner mward-sudo --repo spec_chum
 ```

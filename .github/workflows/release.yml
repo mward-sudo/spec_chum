@@ -90,7 +90,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
-          # macOS: .zip of Spec Chum.app (single primary binary); see docs/RELEASE.md.
+          # macOS: primary .dmg (app + Applications shortcut) + secondary .zip.
           - os: macos-latest
             target: aarch64-apple-darwin
             archive: zip
@@ -183,14 +183,17 @@ jobs:
             echo ""
             if [[ "$TARGET" == *apple-darwin* ]]; then
               echo "Contents:"
-              echo "  Spec Chum.app/   — egui host (open the .app, or drag to Applications)"
+              echo "  Spec Chum.app/   — egui host"
+              echo "  Applications/   — shortcut (DMG only; drag Spec Chum.app here)"
+              echo ""
+              echo "Prefer the .dmg release asset: open it and drag Spec Chum.app to"
+              echo "Applications. The .zip is a secondary unpack-anywhere layout."
               echo ""
               echo "Headless debugger / agent HTTP: run the binary inside the .app with"
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum --serve …"
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum debug …"
               echo ""
-              echo "This is the egui app wrapped as a macOS bundle. DMG + notarisation"
-              echo "and further install UX are tracked in GitHub issue #231."
+              echo "Notarisation / Gatekeeper staple is a follow-up on issue #231."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
               echo "Contents: spec_chum.exe"
@@ -207,7 +210,7 @@ jobs:
           } > "dist/$OUT/README.txt"
           echo "dir=dist/$OUT" >> "$GITHUB_OUTPUT"
 
-      - name: Codesign macOS
+      - name: Codesign macOS app
         if: runner.os == 'macOS'
         shell: bash
         env:
@@ -219,6 +222,39 @@ jobs:
           chmod +x .trusted-ci/scripts/ci/sign-macos.sh
           .trusted-ci/scripts/ci/sign-macos.sh \
             "${STAGE_DIR}/Spec Chum.app"
+
+      - name: Build macOS DMG
+        id: dmg
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ steps.version.outputs.version }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          set -euo pipefail
+          OUT="spec-chum-${VERSION}-${TARGET}"
+          mkdir -p packed
+          chmod +x scripts/ci/create-macos-dmg.sh
+          scripts/ci/create-macos-dmg.sh \
+            "$VERSION" \
+            "${STAGE_DIR}/Spec Chum.app" \
+            "packed/${OUT}.dmg" \
+            "${STAGE_DIR}/LICENSE" \
+            "${STAGE_DIR}/README.txt"
+          echo "asset=packed/${OUT}.dmg" >> "$GITHUB_OUTPUT"
+
+      - name: Codesign macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          DMG_ASSET: ${{ steps.dmg.outputs.asset }}
+        run: |
+          chmod +x .trusted-ci/scripts/ci/sign-macos.sh
+          .trusted-ci/scripts/ci/sign-macos.sh "$DMG_ASSET"
 
       - name: Authenticode-sign Windows
         if: runner.os == 'Windows'
@@ -239,6 +275,7 @@ jobs:
           ARCHIVE: ${{ matrix.archive }}
           VERSION: ${{ steps.version.outputs.version }}
           STAGE_DIR: ${{ steps.stage.outputs.dir }}
+          DMG_ASSET: ${{ steps.dmg.outputs.asset }}
         run: |
           set -euo pipefail
           OUT="spec-chum-${VERSION}-${TARGET}"
@@ -247,6 +284,7 @@ jobs:
             test -d "${STAGE_DIR}/Spec Chum.app/Contents/MacOS"
             test -x "${STAGE_DIR}/Spec Chum.app/Contents/MacOS/spec_chum"
             test ! -e "${STAGE_DIR}/spec-chum-debug"
+            test -f "${DMG_ASSET}"
           elif [[ "$TARGET" == *windows* ]]; then
             test -f "${STAGE_DIR}/spec_chum.exe"
             test ! -e "${STAGE_DIR}/spec-chum-debug.exe"
@@ -266,7 +304,8 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: spec-chum-${{ steps.version.outputs.version }}-${{ matrix.target }}
-          path: ${{ steps.pack.outputs.asset }}
+          # Flatten packed/* so download-artifact + checksums see bare filenames.
+          path: packed/*
           if-no-files-found: error
   publish:
     name: checksums, attest, GitHub Release
@@ -290,7 +329,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} dist/ \;
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.dmg' \) -exec cp {} dist/ \;
           cd dist
           sha256sum spec-chum-* > SHA256SUMS
           if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
@@ -327,7 +366,7 @@ jobs:
 
             | Platform | Archive contents |
             | --- | --- |
-            | **macOS** | `Spec Chum.app` (egui) in a `.zip` |
+            | **macOS** | **`.dmg`** (primary): `Spec Chum.app` + Applications shortcut; secondary `.zip` of the same tree |
             | **Windows** | `spec_chum.exe` in a `.zip` |
             | **Linux** | `spec_chum` in a `.tar.gz` |
 
@@ -337,4 +376,5 @@ jobs:
             GitHub Artifact Attestations are attached to this workflow run.
 
             Linux runtime: GTK 3 and ALSA (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).
-            Installer packaging (DMG / Inno / AppImage / `.deb`) and app icon: issue #231.
+            Remaining installer packaging (Inno / AppImage / `.deb`), app icon, and
+            notarisation: issue #231.
