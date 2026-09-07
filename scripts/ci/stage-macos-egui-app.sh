@@ -33,13 +33,22 @@ fi
 # Replace any previous staging of this path.
 rm -rf "$APP_DST"
 MACOS_DIR="$APP_DST/Contents/MacOS"
-mkdir -p "$MACOS_DIR"
+RESOURCES_DIR="$APP_DST/Contents/Resources"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 # Keep the executable name space-free; display name comes from Info.plist.
 cp "$BIN_SRC" "$MACOS_DIR/spec_chum"
 chmod +x "$MACOS_DIR/spec_chum"
 # Strip when possible (no-op on already-stripped or non-Mach-O in local dry runs).
 strip "$MACOS_DIR/spec_chum" 2>/dev/null || true
+
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ICNS="$REPO_ROOT/packaging/macos/AppIcon.icns"
+if [[ ! -f "$ICNS" ]]; then
+  echo "error: shared app icon missing: $ICNS (run scripts/generate_app_icons.py)" >&2
+  exit 1
+fi
+cp "$ICNS" "$RESOURCES_DIR/AppIcon.icns"
 
 # Escape XML special chars in version for plist text nodes.
 plist_escape() {
@@ -64,6 +73,8 @@ cat > "$APP_DST/Contents/Info.plist" <<PLIST
 	<string>Spec Chum</string>
 	<key>CFBundleExecutable</key>
 	<string>spec_chum</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.specchum.spec-chum</string>
 	<key>CFBundleInfoDictionaryVersion</key>

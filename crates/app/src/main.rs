@@ -63,7 +63,8 @@ fn run_gui() -> eframe::Result {
     let viewport = egui::ViewportBuilder::default()
         .with_inner_size([width, height])
         .with_min_inner_size([MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT])
-        .with_title("Spec Chum");
+        .with_title("Spec Chum")
+        .with_icon(app_icon());
 
     let options = eframe::NativeOptions {
         viewport,
@@ -74,6 +75,26 @@ fn run_gui() -> eframe::Result {
         options,
         Box::new(|_cc| Ok(Box::new(SpecChumApp::new()))),
     )
+}
+
+/// Shared Spec Chum mark (`crates/app/assets/icon.png`; Refs #231).
+fn app_icon() -> egui::IconData {
+    let bytes = include_bytes!("../assets/icon.png");
+    let decoder = png::Decoder::new(std::io::Cursor::new(bytes.as_slice()));
+    let mut reader = decoder.read_info().expect("app icon PNG header");
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).expect("app icon PNG frame");
+    assert_eq!(
+        info.color_type,
+        png::ColorType::Rgba,
+        "app icon must be RGBA PNG (regenerate via scripts/generate_app_icons.py)"
+    );
+    buf.truncate(info.buffer_size());
+    egui::IconData {
+        rgba: buf,
+        width: info.width,
+        height: info.height,
+    }
 }
 
 #[cfg(test)]
@@ -112,5 +133,19 @@ mod tests {
     fn bare_gui_launch_stays_gui() {
         assert!(rewrite_headless_args(os(&["spec_chum"])).is_none());
         assert!(rewrite_headless_args(os(&["spec_chum", "--something-gui-only"])).is_none());
+    }
+
+    #[test]
+    fn app_icon_decodes_rgba() {
+        let icon = super::app_icon();
+        assert_eq!(icon.width, 256);
+        assert_eq!(icon.height, 256);
+        assert_eq!(icon.rgba.len(), 256 * 256 * 4);
+        // Green BASIC cursor near center should be non-black.
+        let mid = ((128 * 256) + 128) * 4;
+        assert!(
+            icon.rgba[mid] > 0 || icon.rgba[mid + 1] > 0 || icon.rgba[mid + 2] > 0,
+            "expected non-black pixel near icon center"
+        );
     }
 }

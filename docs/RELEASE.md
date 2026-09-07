@@ -15,7 +15,9 @@ secondary zip) — see signing table below ([#354](https://github.com/mward-sudo
 Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows ships a
 **portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall).
 Linux ships **`.tar.gz`**, **AppImage**, and **`.deb`** of the same primary binary.
-A shared app icon across all packaged hosts remains on #231. Native UI shells are
+A shared Spectrum rainbow app icon is wired into macOS `.icns`, Windows `.ico` /
+PE resources, Linux desktop PNG, and the egui window
+([#231](https://github.com/mward-sudo/spec_chum/issues/231)). Native UI shells are
 separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
 
 ## Before tagging (required)
@@ -140,11 +142,11 @@ git push origin v0.2.0
 | --- | --- | --- |
 | Linux (tarball) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `LICENSE`, `README.txt` |
 | Linux (AppImage) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.AppImage` | Double-clickable wrapper around the same `spec_chum` |
-| Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `dpkg` install: `/usr/bin/spec_chum` + `.desktop` + icon |
-| Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `LICENSE`, `README.txt` |
-| Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs `spec_chum.exe` + LICENSE/README |
-| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` (**primary**) | `Spec Chum.app/`, `Applications` → `/Applications`, `LICENSE`, `README.txt` |
-| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` (secondary) | `Spec Chum.app/`, `LICENSE`, `README.txt` |
+| Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `dpkg` install: `/usr/bin/spec_chum` + `.desktop` + shared icon |
+| Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe` (embedded `.ico`) + `LICENSE`/`README.txt` |
+| Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; wizard uses shared `.ico` |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` (**primary**) | `Spec Chum.app/` (with `AppIcon.icns`), `Applications` → `/Applications`, `LICENSE`, `README.txt` |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` (secondary) | `Spec Chum.app/` (with `AppIcon.icns`), `LICENSE`, `README.txt` |
 | macOS (Intel) | same pair with `x86_64-apple-darwin` | same layout |
 
 One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
@@ -165,7 +167,8 @@ spec_chum debug --tap path/to/game.tap type-load --code
 
 Linux ships `.tar.gz` + AppImage + `.deb`; Windows ships a portable `.zip` and an
 Inno Setup `*-setup.exe`; macOS ships a primary `.dmg` and a secondary `.zip`.
-No `roms/` are included.
+No `roms/` are included. Shared app icon assets live under `packaging/` (see
+`packaging/icon/README.md`); regenerate with `python3 scripts/generate_app_icons.py`.
 
 Checksums and optional signatures:
 
