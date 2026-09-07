@@ -9,10 +9,11 @@ are never packaged.
 
 On macOS, release CI wraps the egui binary in a production **`Spec Chum.app`**
 bundle and ships a **`.dmg`** (primary) with an **Applications** folder shortcut
-plus a secondary `.zip` of the same tree. Notarisation / Gatekeeper staple,
-Windows installer, Linux AppImage/`.deb`, and a shared app icon remain on
-[#231](https://github.com/mward-sudo/spec_chum/issues/231). Native UI shells are
-separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
+plus a secondary `.zip` of the same tree. Notarisation / Gatekeeper staple:
+[#354](https://github.com/mward-sudo/spec_chum/issues/354) (Refs
+[#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows installer,
+Linux AppImage/`.deb`, and a shared app icon remain on #231. Native UI shells
+are separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
 
 ## Before tagging (required)
 
