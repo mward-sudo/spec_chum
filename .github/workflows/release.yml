@@ -193,8 +193,8 @@ jobs:
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum --serve …"
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum debug …"
               echo ""
-              echo "Notarisation / Gatekeeper staple is tracked in issue #354"
-              echo "(umbrella packaging: #231)."
+              echo "When Apple notary secrets are configured, the .dmg (and the"
+              echo ".app inside the secondary .zip) are notarised and stapled."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
               echo "Contents: spec_chum.exe"
@@ -256,6 +256,26 @@ jobs:
         run: |
           chmod +x .trusted-ci/scripts/ci/sign-macos.sh
           .trusted-ci/scripts/ci/sign-macos.sh "$DMG_ASSET"
+
+      # Notary credentials from the default-branch trusted tree (same CWE-829
+      # pattern as codesign). Soft-skips when secrets are absent.
+      - name: Notarise and staple macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DMG_ASSET: ${{ steps.dmg.outputs.asset }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          chmod +x .trusted-ci/scripts/ci/notarize-macos.sh
+          .trusted-ci/scripts/ci/notarize-macos.sh \
+            "$DMG_ASSET" \
+            "${STAGE_DIR}/Spec Chum.app"
 
       - name: Authenticode-sign Windows
         if: runner.os == 'Windows'
