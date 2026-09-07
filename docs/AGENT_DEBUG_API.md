@@ -347,7 +347,8 @@ breakpoint debugging, and framebuffer grab **after** N frames without respawn.
 Hosts:
 
 - **Standalone:** `cargo run -p agent_server -- --model 48k` (`spec-chum-agent` binary).
-- **Embedded CLI:** `spec-chum-debug --serve --model 48k` (same HTTP surface).
+- Embedded CLI: `spec_chum --serve --model 48k` (preferred; same HTTP surface).
+  Source-build aliases: `spec-chum-debug --serve` / `spec-chum-agent`.
 - **HTTP client (Phase B):** `SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384 spec-chum-debug …`
   or `--agent-url …` on supported subcommands. One-shot media flags include
   `--tap`/`--tzx`, `--snapshot`, and `--trd` / `--trdos-rom` ([#262](https://github.com/mward-sudo/spec_chum/issues/262))
@@ -381,7 +382,7 @@ Optional bearer token: set `SPEC_CHUM_AGENT_TOKEN` on server and pass
 
 ```text
 1. ./scripts/fetch_roms.sh
-2. Start agent server (`spec-chum-agent` / `spec-chum-debug --serve`)
+2. Start agent server (`spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`)
 3. POST /v1/model { "model": "timex_ts2068" }
 4. POST /v1/tape/open + /type-load OR POST /v1/run { "frames": 100 }
 5. GET /v1/inspect — assert PC, tape, SCLD fields

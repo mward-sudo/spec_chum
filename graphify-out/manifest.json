@@ -138,9 +138,9 @@
     "semantic_hash": ""
   },
   "crates/app/Cargo.toml": {
-    "mtime": 1788740470.4105191,
-    "seen": 1788740562.980242,
-    "ast_hash": "368ad2ff6f609500d21ad38c9632da9f",
+    "mtime": 1788743909.4378452,
+    "seen": 1788744476.691294,
+    "ast_hash": "d51c3f8fc23c12ddd32079362e66d6dd",
     "semantic_hash": ""
   },
   "crates/app/src/display.rs": {
@@ -162,10 +162,10 @@
     "semantic_hash": ""
   },
   "crates/app/src/main.rs": {
-    "mtime": 1788729094.4386644,
-    "seen": 1788730076.229354,
-    "ast_hash": "0274997672972f6f83c60a016b49c339",
-    "semantic_hash": "0274997672972f6f83c60a016b49c339"
+    "mtime": 1788744027.090552,
+    "seen": 1788744476.691343,
+    "ast_hash": "6bce4b31d99b03756f19bb931ad3ee3c",
+    "semantic_hash": ""
   },
   "crates/app/src/theme.rs": {
     "mtime": 1788729094.4387546,
@@ -276,9 +276,9 @@
     "semantic_hash": ""
   },
   "crates/debug_cli/Cargo.toml": {
-    "mtime": 1788729196.4366043,
-    "seen": 1788730076.229364,
-    "ast_hash": "dfe6097fa953447b753a55aff0c3fb3a",
+    "mtime": 1788743907.1047027,
+    "seen": 1788744476.6916869,
+    "ast_hash": "19641eed93fa143ae91063bc44248aee",
     "semantic_hash": ""
   },
   "crates/debug_cli/src/agent_client.rs": {
@@ -288,9 +288,9 @@
     "semantic_hash": ""
   },
   "crates/debug_cli/src/main.rs": {
-    "mtime": 1788729196.43711,
-    "seen": 1788730076.229365,
-    "ast_hash": "46baf05d2efddd36a0ac271dbd3de06e",
+    "mtime": 1788743894.2534828,
+    "seen": 1788744476.691704,
+    "ast_hash": "9f574c151fe7b654c05ea7aa434c6c1d",
     "semantic_hash": ""
   },
   "crates/formats/Cargo.toml": {
@@ -864,15 +864,15 @@
     "semantic_hash": ""
   },
   ".github/workflows/release.yml": {
-    "mtime": 1788729196.4189572,
-    "seen": 1788730076.229408,
-    "ast_hash": "12d7235062d6715b2f4fd3e70588ad76",
+    "mtime": 1788743962.7755637,
+    "seen": 1788744476.6931899,
+    "ast_hash": "d121d64ca73e8731cc35004532fe4674",
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1788740406.1968153,
-    "seen": 1788740562.982296,
-    "ast_hash": "b2ad7e845d01420a02c53de2f9715909",
+    "mtime": 1788744020.660877,
+    "seen": 1788744476.6931899,
+    "ast_hash": "4e85a16a61cfb65b4af3f6df2910f0a0",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -888,15 +888,15 @@
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
-    "mtime": 1788729196.4498966,
-    "seen": 1788730076.229409,
-    "ast_hash": "8bb540f504c74bff05fe654c9a7c720c",
+    "mtime": 1788744026.6089947,
+    "seen": 1788744476.693215,
+    "ast_hash": "0fb7ad0bbb266741875d032f98ca3a85",
     "semantic_hash": ""
   },
   "docs/DEBUGGING.md": {
-    "mtime": 1788729196.4502645,
-    "seen": 1788730076.22941,
-    "ast_hash": "e0a819af9104226c3787b30330bbe00e",
+    "mtime": 1788743997.7934978,
+    "seen": 1788744476.693215,
+    "ast_hash": "ff88e5413ec478a366ce2d5d06af5912",
     "semantic_hash": ""
   },
   "docs/LIVING_ROOM.md": {
@@ -918,9 +918,9 @@
     "semantic_hash": "13e52d5e893eb3b2545929a0b1eba479"
   },
   "docs/RELEASE.md": {
-    "mtime": 1788729196.4513621,
-    "seen": 1788730076.229412,
-    "ast_hash": "6a36bbd6fa009992029c8d7bbba1950d",
+    "mtime": 1788743988.4927619,
+    "seen": 1788744476.693255,
+    "ast_hash": "f62ae952413becb97a5c6135dec73fab",
     "semantic_hash": ""
   },
   "docs/ROMS.md": {
@@ -1122,9 +1122,9 @@
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
-    "mtime": 1788742330.4140832,
-    "seen": 1788742405.536,
-    "ast_hash": "1c0ecbb253ea8830f161f5c3ce054451",
+    "mtime": 1788742771.6575925,
+    "seen": 1788744476.693268,
+    "ast_hash": "a720dcf55a4745deea44551702ae86b3",
     "semantic_hash": ""
   },
   "scripts/check_deny.sh": {
@@ -1137,6 +1137,12 @@
     "mtime": 1788730642.0926075,
     "seen": 1788731536.5093288,
     "ast_hash": "7659a2f1359c2b512b8d2d289b65a09b",
+    "semantic_hash": ""
+  },
+  "crates/debug_cli/src/lib.rs": {
+    "mtime": 1788743892.703794,
+    "seen": 1788744476.691704,
+    "ast_hash": "5ecd20be189ac4ade2e86bf134501c9f",
     "semantic_hash": ""
   }
 }

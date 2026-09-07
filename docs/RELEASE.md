@@ -3,12 +3,15 @@
 GitHub Actions builds **macOS**, **Linux**, and **Windows** archives and attaches
 them to a GitHub Release when a version tag is pushed.
 
-The product binary is the egui host `spec_chum` (plus `spec-chum-debug`).
-System ROMs are never packaged.
+The product binary is the egui host `spec_chum`. Headless debugger and agent HTTP
+live on the **same** binary (`spec_chum --serve`, `spec_chum debug …`). System ROMs
+are never packaged.
 
 On macOS, release CI wraps the egui binary in a production **`Spec Chum.app`**
-bundle (double-clickable via Launch Services). The native SwiftUI shell, DMG,
-and notarisation remain separate ([#68](https://github.com/mward-sudo/spec_chum/issues/68)).
+bundle (double-clickable via Launch Services). DMG (with Applications shortcut),
+notarisation, Windows installer, Linux AppImage/`.deb`, and a shared app icon are
+tracked in [#231](https://github.com/mward-sudo/spec_chum/issues/231). Native UI
+shells are separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
 
 ## Before tagging (required)
 
@@ -130,10 +133,22 @@ git push origin v0.2.0
 
 | Platform | Archive | Contents |
 | --- | --- | --- |
-| Linux | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `spec-chum-debug`, `LICENSE`, `README.txt` |
-| Windows | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `spec-chum-debug.exe`, `LICENSE`, `README.txt` |
-| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` | `Spec Chum.app/`, `spec-chum-debug`, `LICENSE`, `README.txt` |
+| Linux | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `LICENSE`, `README.txt` |
+| Windows | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `LICENSE`, `README.txt` |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` | `Spec Chum.app/`, `LICENSE`, `README.txt` |
 | macOS (Intel) | `spec-chum-<ver>-x86_64-apple-darwin.zip` | same as Apple silicon |
+
+One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
+Headless use:
+
+```bash
+spec_chum --serve --model 48k
+spec_chum debug dump-state
+spec_chum debug --tap path/to/game.tap type-load --code
+```
+
+(`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is
+**not** attached to GitHub Release archives.)
 
 Linux uses `.tar.gz` (common on Unix); Windows and macOS use `.zip`. No `roms/`
 are included.
@@ -161,7 +176,7 @@ is absent so a first release does not require certificates.
 | --- | --- | --- |
 | All | SHA-256 checksums | none |
 | All | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (Sigstore) | none (OIDC) |
-| macOS | Developer ID `codesign` on `Spec Chum.app` + `spec-chum-debug` (hardened runtime + timestamp) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
+| macOS | Developer ID `codesign` on `Spec Chum.app` (hardened runtime + timestamp) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
 | Windows | Authenticode (`signtool`, SHA-256, DigiCert timestamp) | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` |
 | Checksums | Detached ASCII-armored GPG signature `SHA256SUMS.asc` | `GPG_PRIVATE_KEY`, optional `GPG_PASSPHRASE` |
 
@@ -170,9 +185,9 @@ is absent so a first release does not require certificates.
 Developer ID Application certificate, for example
 `Developer ID Application: Example Ltd (TEAMID)`.
 
-**Notarisation** of the `.app` / a DMG is not part of this workflow. Gatekeeper
-may still warn on first launch for unsigned or un-notarised builds. SwiftUI
-`.app`, DMG, and notarisation CI are tracked in [#68](https://github.com/mward-sudo/spec_chum/issues/68).
+**Notarisation** of the `.app` / a DMG is not part of this workflow yet (tracked
+in [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Gatekeeper may
+still warn on first launch for unsigned or un-notarised builds.
 
 Default PR CI (`.github/workflows/ci.yml`) is unchanged and does not use these
 secrets. A `workflow_dispatch` without a tag still builds archives as

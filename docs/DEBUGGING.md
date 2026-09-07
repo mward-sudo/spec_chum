@@ -3,10 +3,11 @@
 Structured emulator tracing lives in the `trace` crate: a category-gated ring
 buffer with dump APIs for tests, the egui app, and the native macOS shell.
 
-**Planned:** a localhost [Agent Debug HTTP API](AGENT_DEBUG_API.md) ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) will unify
-control, inspect, and debug for agents (including **1:1 framebuffer PNG export**
-— guest pixels only, not OS window capture). Until it ships, use `spec-chum-debug`
-below.
+The localhost [Agent Debug HTTP API](AGENT_DEBUG_API.md) ([#210](https://github.com/mward-sudo/spec_chum/issues/210))
+unifies control, inspect, and debug for agents (including **1:1 framebuffer PNG
+export** — guest pixels only, not OS window capture). Prefer `spec_chum --serve`
+or an embedded GUI host with `SPEC_CHUM_AGENT=1`; one-shot headless commands use
+`spec_chum debug …` (see below).
 
 When tracing is **off**, each emit site is a single `AtomicU64` load (`Relaxed`)
 and an early return — no allocation and no lock on the hot path.
@@ -28,10 +29,11 @@ The `z80` crate does **not** emit traces. CPU events (`CpuStep` / `CpuIrq` /
 | `SPEC_CHUM_TRACE_APPEND=1` | With `SPEC_CHUM_TRACE_FILE`, append each event as it is emitted (writer is flushed so short CLI runs are not empty) |
 
 Hosts call `trace::init_from_env()` (egui `main`, `HostSession::new`,
-`sc_debug_init_from_env`) so env vars apply once at startup. `spec-chum-debug`
-also applies `--trace` **before** tape insert / `type-load` so those events are
-recorded. `SPEC_CHUM_TRACE_APPEND=1` writes each event (and flushes) to
-`SPEC_CHUM_TRACE_FILE`; do not rely on `dump-trace` in a second process.
+`sc_debug_init_from_env`) so env vars apply once at startup. Headless
+`spec_chum debug` / `spec-chum-debug` also apply `--trace` **before** tape insert
+/ `type-load` so those events are recorded. `SPEC_CHUM_TRACE_APPEND=1` writes each
+event (and flushes) to `SPEC_CHUM_TRACE_FILE`; do not rely on `dump-trace` in a
+second process.
 
 ### Categories (bitmask)
 
@@ -63,9 +65,23 @@ C ABI (`host_api`):
 - `sc_debug_dump_to_file(path)`
 - `sc_debug_event_count()` / `sc_debug_clear()`
 
-## Headless CLI (`spec-chum-debug`)
+## Headless CLI (`spec_chum debug` / `--serve`)
 
-Agent / script entry. Crate `debug_cli`, binary `spec-chum-debug`.
+Agent / script entry. Implementation lives in crate `debug_cli`, exposed on the
+primary `spec_chum` binary ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
+`cargo run -p debug_cli` still builds the `spec-chum-debug` alias for source
+checkouts; release archives do **not** ship a second binary.
+
+```bash
+# Preferred (same binary as the GUI):
+cargo run -p app -- --serve --model 48k
+cargo run -p app -- debug --model 48k run --frames 1
+cargo run -p app -- debug --model 48k --json dump-state
+
+# Alias (source builds only):
+cargo run -p debug_cli -- --model 48k run --frames 1
+cargo run -p debug_cli -- --model 48k --json dump-state
+```
 
 Each invocation is a **new process** (fresh machine and empty trace ring).
 Put `--trace`, `--snapshot`, `--tap`, `--trd` / `--trdos-rom`, and the subcommand on the **same** command.
@@ -136,11 +152,11 @@ breakpoint is not re-taken immediately.
 
 - Same env vars (export before launching the wrapper).
 - Menu **Debug**: Enable default trace, dump to file / Desktop, clear ring.
-- No full Pause/Step inspector yet — use `spec-chum-debug` or the egui window.
+- No full Pause/Step inspector yet — use `spec_chum debug` or the egui window.
 - C hooks: `sc_debug_*` in `spec_chum_host.h` — **FFI-only** for the native shell
   (not the agent primary API). Prefer
-  [`docs/AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) HTTP / `spec-chum-agent` /
-  `spec-chum-debug --serve` for scripted control and 1:1 framebuffers.
+  [`docs/AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) HTTP / `spec_chum --serve` /
+  `SPEC_CHUM_AGENT=1` embed for scripted control and 1:1 framebuffers.
 
 ## Recipes
 
