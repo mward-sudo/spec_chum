@@ -83,7 +83,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux: .tar.gz is the usual Unix distribution form.
+          # Linux: .tar.gz + AppImage + .deb (see Build Linux packages).
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
@@ -104,17 +104,18 @@ jobs:
           ref: ${{ needs.resolve.outputs.ref }}
           persist-credentials: false
 
-      # Signing / installer-build scripts run with credentials or produce
-      # Authenticode-signed artifacts — always take them from the default
-      # branch, never from a tag-controlled tree (CWE-829).
-      - name: Fetch trusted signing scripts
-        if: runner.os == 'macOS' || runner.os == 'Windows'
+      # Signing / installer / Linux packaging scripts run with credentials or
+      # produce release artifacts — always take them from the default branch,
+      # never from a tag-controlled tree (CWE-829).
+      - name: Fetch trusted packaging scripts
+        if: runner.os == 'macOS' || runner.os == 'Windows' || runner.os == 'Linux'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: |
             scripts/ci
             packaging/windows
+            packaging/linux
           sparse-checkout-cone-mode: true
           path: .trusted-ci
           persist-credentials: false
@@ -204,9 +205,9 @@ jobs:
               echo "Headless: spec_chum.exe --serve …   or   spec_chum.exe debug …"
               echo ""
             else
-              echo "Contents: spec_chum"
+              echo "Contents: spec_chum (also shipped as AppImage and .deb)"
               echo "Headless: ./spec_chum --serve …   or   ./spec_chum debug …"
-              echo "Runtime: GTK 3 + ALSA (e.g. libgtk-3-0, libasound2 on Debian/Ubuntu)."
+              echo "Runtime: GTK 3 + ALSA + udev (e.g. libgtk-3-0, libasound2, libudev1)."
               echo ""
             fi
             echo "System ROMs are not included. Fetch them with ./scripts/fetch_roms.sh"
@@ -327,6 +328,47 @@ jobs:
           & ".trusted-ci/scripts/ci/sign-windows.ps1" `
             $env:SETUP_ASSET
 
+      # AppImage + .deb wrap the staged Linux binary (tarball remains).
+      # Packaging scripts + desktop/icon assets from the trusted default-branch
+      # tree (same CWE-829 pattern as the Windows installer).
+      - name: Build Linux AppImage
+        id: appimage
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ steps.version.outputs.version }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          set -euo pipefail
+          OUT="spec-chum-${VERSION}-${TARGET}.AppImage"
+          mkdir -p packed
+          chmod +x .trusted-ci/scripts/ci/build-linux-appimage.sh
+          .trusted-ci/scripts/ci/build-linux-appimage.sh \
+            "$VERSION" \
+            "$STAGE_DIR" \
+            "packed/${OUT}"
+          echo "asset=packed/${OUT}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Linux .deb
+        id: deb
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ steps.version.outputs.version }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          set -euo pipefail
+          OUT="spec-chum-${VERSION}-${TARGET}.deb"
+          mkdir -p packed
+          chmod +x .trusted-ci/scripts/ci/build-linux-deb.sh
+          .trusted-ci/scripts/ci/build-linux-deb.sh \
+            "$VERSION" \
+            "$STAGE_DIR" \
+            "packed/${OUT}"
+          echo "asset=packed/${OUT}" >> "$GITHUB_OUTPUT"
+
       - name: Pack archive
         id: pack
         shell: bash
@@ -337,6 +379,8 @@ jobs:
           STAGE_DIR: ${{ steps.stage.outputs.dir }}
           DMG_ASSET: ${{ steps.dmg.outputs.asset }}
           SETUP_ASSET: ${{ steps.win_setup.outputs.asset }}
+          APPIMAGE_ASSET: ${{ steps.appimage.outputs.asset }}
+          DEB_ASSET: ${{ steps.deb.outputs.asset }}
         run: |
           set -euo pipefail
           OUT="spec-chum-${VERSION}-${TARGET}"
@@ -353,6 +397,8 @@ jobs:
           else
             test -x "${STAGE_DIR}/spec_chum"
             test ! -e "${STAGE_DIR}/spec-chum-debug"
+            test -f "${APPIMAGE_ASSET}"
+            test -f "${DEB_ASSET}"
           fi
           mkdir -p packed
           if [[ "$ARCHIVE" == zip ]]; then
@@ -391,7 +437,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.dmg' -o -name '*-setup.exe' \) -exec cp {} dist/ \;
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.dmg' -o -name '*-setup.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} dist/ \;
           cd dist
           sha256sum spec-chum-* > SHA256SUMS
           if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
@@ -430,13 +476,12 @@ jobs:
             | --- | --- |
             | **macOS** | **`.dmg`** (primary): `Spec Chum.app` + Applications shortcut; secondary `.zip` of the same tree |
             | **Windows** | Portable `.zip` (`spec_chum.exe`) **and** Inno Setup `*-setup.exe` (Start Menu + uninstall) |
-            | **Linux** | `spec_chum` in a `.tar.gz` |
+            | **Linux** | `.tar.gz` **and** AppImage **and** `.deb` (same `spec_chum` binary) |
 
             System ROMs are **not** included — fetch with `./scripts/fetch_roms.sh`.
 
             Verify downloads with `SHA256SUMS` (and `SHA256SUMS.asc` when GPG signing is configured).
             GitHub Artifact Attestations are attached to this workflow run.
 
-            Linux runtime: GTK 3 and ALSA (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).
-            Remaining packaging (AppImage / `.deb`) and shared app icon: issue #231.
-            Notarisation secrets: issue #354.
+            Linux runtime: GTK 3, ALSA, and udev (`libgtk-3-0`, `libasound2`/`libasound2t64`, `libudev1`).
+            Shared app icon polish: issue #231. Notarisation secrets: issue #354.

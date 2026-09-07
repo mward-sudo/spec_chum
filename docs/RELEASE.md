@@ -14,7 +14,8 @@ CI notarises and staples the `.dmg` (and staples the staged `.app` for the
 secondary zip) — see signing table below ([#354](https://github.com/mward-sudo/spec_chum/issues/354),
 Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows ships a
 **portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall).
-Linux AppImage/`.deb` and a shared app icon remain on #231. Native UI shells are
+Linux ships **`.tar.gz`**, **AppImage**, and **`.deb`** of the same primary binary.
+A shared app icon across all packaged hosts remains on #231. Native UI shells are
 separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
 
 ## Before tagging (required)
@@ -137,7 +138,9 @@ git push origin v0.2.0
 
 | Platform | Archive | Contents |
 | --- | --- | --- |
-| Linux | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `LICENSE`, `README.txt` |
+| Linux (tarball) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `LICENSE`, `README.txt` |
+| Linux (AppImage) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.AppImage` | Double-clickable wrapper around the same `spec_chum` |
+| Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `dpkg` install: `/usr/bin/spec_chum` + `.desktop` + icon |
 | Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `LICENSE`, `README.txt` |
 | Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs `spec_chum.exe` + LICENSE/README |
 | macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` (**primary**) | `Spec Chum.app/`, `Applications` → `/Applications`, `LICENSE`, `README.txt` |
@@ -147,7 +150,9 @@ git push origin v0.2.0
 One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
 Prefer the macOS **`.dmg`**: open it and drag **Spec Chum.app** onto **Applications**.
 On Windows, prefer the **`*-setup.exe`** for Start Menu / uninstall, or the portable
-`.zip` for unzip-and-run. Headless use:
+`.zip` for unzip-and-run. On Linux, prefer the **`.deb`** on Debian/Ubuntu, the
+**AppImage** for distro-agnostic double-click, or the **`.tar.gz`** for unpack-and-run.
+Headless use:
 
 ```bash
 spec_chum --serve --model 48k
@@ -158,7 +163,7 @@ spec_chum debug --tap path/to/game.tap type-load --code
 (`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is
 **not** attached to GitHub Release archives.)
 
-Linux uses `.tar.gz` (common on Unix); Windows ships a portable `.zip` and an
+Linux ships `.tar.gz` + AppImage + `.deb`; Windows ships a portable `.zip` and an
 Inno Setup `*-setup.exe`; macOS ships a primary `.dmg` and a secondary `.zip`.
 No `roms/` are included.
 
