@@ -50,6 +50,15 @@ for extra in "$@"; do
     echo "error: extra file not found: $extra" >&2
     exit 1
   fi
+  # Reject basenames that would write through the Applications symlink or
+  # collide with the staged .app (release CI only passes LICENSE/README.txt).
+  extra_base="$(basename "$extra")"
+  case "$extra_base" in
+    Applications|Spec\ Chum.app)
+      echo "error: extra file basename collides with DMG layout: $extra" >&2
+      exit 1
+      ;;
+  esac
   cp "$extra" "$STAGE/"
 done
 
