@@ -501,8 +501,7 @@ fn sync_bake_camera_pose(
     let look = phosphor
         .iter()
         .next()
-        .map(|g| g.translation())
-        .unwrap_or_else(crate::camera::screen_look_at);
+        .map_or_else(crate::camera::screen_look_at, GlobalTransform::translation);
     let preset = match *phase {
         HybridPhase::Baking { preset, .. } => preset,
         _ => zoom.target,

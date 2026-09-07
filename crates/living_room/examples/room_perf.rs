@@ -148,9 +148,7 @@ fn main() {
     const P95_BUDGET_MS: f64 = 16.0;
     const AVG_BUDGET_MS: f64 = 12.0;
     const MIN_PLAUSIBLE_MS: f64 = 0.5;
-    let soft = std::env::var("SPEC_CHUM_ROOM_PERF_SOFT")
-        .map(|v| v != "0" && !v.is_empty())
-        .unwrap_or(false);
+    let soft = std::env::var("SPEC_CHUM_ROOM_PERF_SOFT").is_ok_and(|v| v != "0" && !v.is_empty());
     let mut over_budget = false;
     if tick_p95 > P95_BUDGET_MS {
         eprintln!("FAIL: tick-only p95 {tick_p95:.2} ms exceeds {P95_BUDGET_MS} ms (60 Hz floor)");

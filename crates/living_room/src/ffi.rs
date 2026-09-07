@@ -55,42 +55,38 @@ fn room_mut<'a>(handle: *mut c_void) -> Option<&'a mut RoomHandle> {
 }
 
 fn catch_ptr(f: impl FnOnce() -> *mut c_void) -> *mut c_void {
-    match catch_unwind(AssertUnwindSafe(f)) {
-        Ok(p) => p,
-        Err(_) => {
-            set_last_error("living_room panic in FFI");
-            ptr::null_mut()
-        }
+    if let Ok(p) = catch_unwind(AssertUnwindSafe(f)) {
+        p
+    } else {
+        set_last_error("living_room panic in FFI");
+        ptr::null_mut()
     }
 }
 
 fn catch_int(f: impl FnOnce() -> c_int) -> c_int {
-    match catch_unwind(AssertUnwindSafe(f)) {
-        Ok(c) => c,
-        Err(_) => {
-            set_last_error("living_room panic in FFI");
-            -1
-        }
+    if let Ok(c) = catch_unwind(AssertUnwindSafe(f)) {
+        c
+    } else {
+        set_last_error("living_room panic in FFI");
+        -1
     }
 }
 
 fn catch_uint(f: impl FnOnce() -> c_uint) -> c_uint {
-    match catch_unwind(AssertUnwindSafe(f)) {
-        Ok(c) => c,
-        Err(_) => {
-            set_last_error("living_room panic in FFI");
-            0
-        }
+    if let Ok(c) = catch_unwind(AssertUnwindSafe(f)) {
+        c
+    } else {
+        set_last_error("living_room panic in FFI");
+        0
     }
 }
 
 fn catch_const_u8(f: impl FnOnce() -> *const u8) -> *const u8 {
-    match catch_unwind(AssertUnwindSafe(f)) {
-        Ok(p) => p,
-        Err(_) => {
-            set_last_error("living_room panic in FFI");
-            ptr::null()
-        }
+    if let Ok(p) = catch_unwind(AssertUnwindSafe(f)) {
+        p
+    } else {
+        set_last_error("living_room panic in FFI");
+        ptr::null()
     }
 }
 
@@ -187,11 +183,7 @@ pub extern "C" fn sc_room_nudge_zoom(handle: *mut c_void, steps: c_int) -> c_int
 /// Current zoom preset index (0 = CRT fill).
 #[no_mangle]
 pub extern "C" fn sc_room_zoom_preset(handle: *mut c_void) -> c_uint {
-    catch_uint(|| {
-        room_mut(handle)
-            .map(|h| u32::from(h.room.zoom_preset()))
-            .unwrap_or(0)
-    })
+    catch_uint(|| room_mut(handle).map_or(0, |h| u32::from(h.room.zoom_preset())))
 }
 
 /// Set Bevy frame delta before [`sc_room_tick`] (display-link paced embed).
@@ -271,12 +263,12 @@ pub extern "C" fn sc_room_set_present_iosurface(
 
 #[no_mangle]
 pub extern "C" fn sc_room_width(handle: *mut c_void) -> c_uint {
-    catch_uint(|| room_mut(handle).map(|h| h.room.width()).unwrap_or(0))
+    catch_uint(|| room_mut(handle).map_or(0, |h| h.room.width()))
 }
 
 #[no_mangle]
 pub extern "C" fn sc_room_height(handle: *mut c_void) -> c_uint {
-    catch_uint(|| room_mut(handle).map(|h| h.room.height()).unwrap_or(0))
+    catch_uint(|| room_mut(handle).map_or(0, |h| h.room.height()))
 }
 
 /// Pointer to last room RGBA8 frame (valid until next mutating call).
@@ -290,11 +282,7 @@ pub extern "C" fn sc_room_frame_ptr(handle: *mut c_void) -> *const u8 {
 
 #[no_mangle]
 pub extern "C" fn sc_room_frame_byte_len(handle: *mut c_void) -> c_uint {
-    catch_uint(|| {
-        room_mut(handle)
-            .map(|h| h.frame.len() as c_uint)
-            .unwrap_or(0)
-    })
+    catch_uint(|| room_mut(handle).map_or(0, |h| h.frame.len() as c_uint))
 }
 
 /// C layout must match `ScRoomPerfSnapshot` in `spec_chum_room.h`.
@@ -311,6 +299,8 @@ pub struct ScRoomPerfSnapshot {
     pub zoom_preset: u32,
     pub has_present: u8,
     pub thread_hint: u8,
+    /// C ABI padding; keep for `repr(C)` layout match with `spec_chum_room.h`.
+    #[allow(clippy::pub_underscore_fields)] // intentional unused padding field
     pub _pad: [u8; 2],
 }
 
