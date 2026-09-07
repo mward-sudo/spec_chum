@@ -56,7 +56,8 @@ if [[ -x "$REPO_ROOT/scripts/stage_living_room_assets.sh" ]]; then
     "$REPO_ROOT" "$RESOURCES_DIR/living_room_assets"
 fi
 
-# Redistributable ROMs into Contents/Resources/roms (#363 addendum).
+# Redistributable ROMs into Contents/Resources/roms (managed fetch set; docs/ROMS.md).
+# Packaged with the SpecChumMac DMG work in #363 (user addendum for v0.6.1).
 BUNDLE_ROMS="$SCRIPT_ROOT/scripts/ci/bundle-release-roms.sh"
 if [[ ! -x "$BUNDLE_ROMS" ]]; then
   chmod +x "$BUNDLE_ROMS" 2>/dev/null || true

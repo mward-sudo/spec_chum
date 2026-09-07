@@ -106,6 +106,16 @@ xcrun swift build -c release --package-path apps/macos "${SWIFT_ARCH_ARGS[@]}"
 BIN="$ROOT/apps/macos/.build/release/SpecChumMac"
 # Cross-arch SwiftPM may place the product under .build/<arch>-apple-macosx/release/.
 if [[ ! -x "$BIN" ]]; then
+  case "${TARGET_TRIPLE:-}" in
+    aarch64-apple-darwin) build_arch="arm64" ;;
+    x86_64-apple-darwin) build_arch="x86_64" ;;
+    *) build_arch="$HOST_ARCH" ;;
+  esac
+  BIN="$(find "$ROOT/apps/macos/.build" -type f \
+    -path "*/${build_arch}-apple-macosx/release/SpecChumMac" -print -quit || true)"
+fi
+if [[ -z "${BIN:-}" || ! -x "$BIN" ]]; then
+  # Last resort: unique release product (native single-arch builds).
   BIN="$(find "$ROOT/apps/macos/.build" -type f -name SpecChumMac -path '*/release/SpecChumMac' | head -n 1 || true)"
 fi
 if [[ -z "${BIN:-}" || ! -x "$BIN" ]]; then

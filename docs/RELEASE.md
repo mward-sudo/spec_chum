@@ -172,10 +172,13 @@ spec_chum debug dump-state
 spec_chum debug --tap path/to/game.tap type-load --code
 ```
 
-macOS agent HTTP (SpecChumMac embed):
+macOS agent HTTP (SpecChumMac embed; loopback only):
 
 ```bash
-SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 open -a "Spec Chum"
+# Preferred: token auth
+SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" open -a "Spec Chum"
+# Dev-only on a trusted machine (disables bearer auth — any local process can call the agent):
+# SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 open -a "Spec Chum"
 ```
 
 (`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is
