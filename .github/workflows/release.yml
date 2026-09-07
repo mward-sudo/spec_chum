@@ -193,7 +193,8 @@ jobs:
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum --serve …"
               echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum debug …"
               echo ""
-              echo "Notarisation / Gatekeeper staple is a follow-up on issue #231."
+              echo "Notarisation / Gatekeeper staple is tracked in issue #354"
+              echo "(umbrella packaging: #231)."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
               echo "Contents: spec_chum.exe"
@@ -376,5 +377,5 @@ jobs:
             GitHub Artifact Attestations are attached to this workflow run.
 
             Linux runtime: GTK 3 and ALSA (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).
-            Remaining installer packaging (Inno / AppImage / `.deb`), app icon, and
-            notarisation: issue #231.
+            Remaining installer packaging (Inno / AppImage / `.deb`) and app icon:
+            issue #231. Notarisation: issue #354.
