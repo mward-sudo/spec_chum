@@ -8,7 +8,7 @@
 #   create-macos-dmg.sh 0.2.0 "dist/out/Spec Chum.app" packed/out.dmg \
 #     dist/out/LICENSE dist/out/README.txt
 #
-# Notarisation / stapling is intentionally out of scope here (see #354; umbrella #231).
+# Notarisation / stapling lives in notarize-macos.sh (see #354; umbrella #231).
 set -euo pipefail
 
 if [[ $# -lt 3 ]]; then
