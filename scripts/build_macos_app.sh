@@ -76,7 +76,11 @@ export SPEC_CHUM_HOST_LIB_DIR="${SPEC_CHUM_HOST_LIB_DIR:-$LIB_DIR}"
 echo "==> cargo build -p living_room --release --no-default-features ${CARGO_TARGET_ARGS[*]:-}"
 # strip=none is set in workspace profile for living_room (macOS 27 LINKEDIT).
 # --no-default-features omits standalone Bevy chrome / cpal / rfd (Swift owns those).
-cargo build -p living_room --release --no-default-features "${CARGO_TARGET_ARGS[@]}"
+if ((${#CARGO_TARGET_ARGS[@]})); then
+  cargo build -p living_room --release --no-default-features "${CARGO_TARGET_ARGS[@]}"
+else
+  cargo build -p living_room --release --no-default-features
+fi
 
 ROOM_A="$SPEC_CHUM_HOST_LIB_DIR/libspec_chum_room.a"
 if [[ ! -f "$ROOM_A" ]]; then
