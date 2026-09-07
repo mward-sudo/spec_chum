@@ -104,9 +104,9 @@ jobs:
           ref: ${{ needs.resolve.outputs.ref }}
           persist-credentials: false
 
-      # Signing / installer / Linux packaging scripts run with credentials or
-      # produce release artifacts — always take them from the default branch,
-      # never from a tag-controlled tree (CWE-829).
+      # Signing / installer / Linux + macOS packaging scripts run with
+      # credentials or produce release artifacts — always take them from the
+      # default branch, never from a tag-controlled tree (CWE-829).
       - name: Fetch trusted packaging scripts
         if: runner.os == 'macOS' || runner.os == 'Windows' || runner.os == 'Linux'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -170,8 +170,9 @@ jobs:
           if [[ "$TARGET" == *windows* ]]; then
             cp "$BIN_DIR/spec_chum.exe" "dist/$OUT/"
           elif [[ "$TARGET" == *apple-darwin* ]]; then
-            chmod +x scripts/ci/stage-macos-egui-app.sh
-            scripts/ci/stage-macos-egui-app.sh \
+            # Bundle layout + AppIcon.icns from trusted default-branch tree (CWE-829).
+            chmod +x .trusted-ci/scripts/ci/stage-macos-egui-app.sh
+            .trusted-ci/scripts/ci/stage-macos-egui-app.sh \
               "$VERSION" \
               "$BIN_DIR/spec_chum" \
               "dist/$OUT/Spec Chum.app"
@@ -242,8 +243,8 @@ jobs:
           set -euo pipefail
           OUT="spec-chum-${VERSION}-${TARGET}"
           mkdir -p packed
-          chmod +x scripts/ci/create-macos-dmg.sh
-          scripts/ci/create-macos-dmg.sh \
+          chmod +x .trusted-ci/scripts/ci/create-macos-dmg.sh
+          .trusted-ci/scripts/ci/create-macos-dmg.sh \
             "$VERSION" \
             "${STAGE_DIR}/Spec Chum.app" \
             "packed/${OUT}.dmg" \
