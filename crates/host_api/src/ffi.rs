@@ -1355,6 +1355,7 @@ pub extern "C" fn sc_inspect_json(handle: *mut c_void) -> *mut c_char {
 
 /// Fill `pc,sp,af,bc,de,hl,ix,iy`. Null out-params are skipped. Returns 0 on success.
 #[no_mangle]
+// Flat out-params match the C header; packing would break ABI (#171).
 #[allow(clippy::too_many_arguments)]
 pub extern "C" fn sc_regs(
     handle: *mut c_void,

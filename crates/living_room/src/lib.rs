@@ -38,6 +38,7 @@ pub use present_metal::PresentIosurfaceError;
 /// Keep `host_api` linked into the embed staticlib so SpecChumMac resolves `sc_*`
 /// even when the `standalone` feature (and `host` module) is off.
 #[doc(hidden)]
+// Force-link host_api + agent FFI into the embed staticlib (#171).
 #[allow(dead_code, unused_imports)]
 mod ensure_host_api_linked {
     use spec_chum_host::{HostSession, ModelId};

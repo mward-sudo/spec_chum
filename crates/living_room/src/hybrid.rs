@@ -268,6 +268,7 @@ fn show_plate(
     let _ = commands;
 }
 
+// Bevy hybrid phase machine: many Queries + resources by design (#171).
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn hybrid_state_machine(
     locked: Option<Res<CameraLocked>>,
@@ -420,6 +421,7 @@ fn hybrid_state_machine(
     }
 }
 
+// Bake kickoff shares plate/camera entity sets with the hybrid machine (#171).
 #[allow(clippy::too_many_arguments)]
 fn start_bake(
     phase: &mut HybridPhase,
@@ -458,6 +460,7 @@ fn start_bake(
     };
 }
 
+// Visibility/layer updates across room + plate entity sets (#171).
 #[allow(clippy::too_many_arguments)]
 fn apply_hybrid_display(
     commands: &mut Commands,

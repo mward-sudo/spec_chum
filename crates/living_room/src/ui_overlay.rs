@@ -200,6 +200,7 @@ fn chrome_button(parent: &mut ChildSpawnerCommands, label: &str, action: ChromeA
         });
 }
 
+// Bevy Changed<Interaction> filter pack for chrome buttons (#171).
 #[allow(clippy::type_complexity)]
 fn chrome_buttons(
     mut interaction: Query<
@@ -321,6 +322,7 @@ fn host_cmd_shortcuts(
     }
 }
 
+// Bevy multi-label Query filters for status chrome (#171).
 #[allow(clippy::type_complexity)]
 fn update_labels(
     host: Res<EmulatorHost>,

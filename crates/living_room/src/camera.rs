@@ -347,6 +347,7 @@ pub(crate) fn setup_camera(mut commands: Commands) {
     }
 }
 
+// Bevy system: intro skip needs input + camera + zoom resources together (#171).
 #[allow(clippy::too_many_arguments)]
 fn skip_intro(
     keys: Res<ButtonInput<KeyCode>>,
@@ -446,6 +447,7 @@ fn zoom_from_scroll(
 }
 
 /// Apply current zoom pose (also callable from headless FFI after snap).
+// Bevy Queries + zoom resources; splitting obscures the pose update (#171).
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(crate) fn apply_zoom_camera(
     locked: Option<Res<CameraLocked>>,
