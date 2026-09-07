@@ -90,6 +90,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
+          # Windows also builds Inno Setup *-setup.exe (see Build Windows installer).
           # macOS: primary .dmg (app + Applications shortcut) + secondary .zip.
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -103,7 +104,8 @@ jobs:
           ref: ${{ needs.resolve.outputs.ref }}
           persist-credentials: false
 
-      # Signing scripts run with credentials — always take them from the default
+      # Signing / installer-build scripts run with credentials or produce
+      # Authenticode-signed artifacts — always take them from the default
       # branch, never from a tag-controlled tree (CWE-829).
       - name: Fetch trusted signing scripts
         if: runner.os == 'macOS' || runner.os == 'Windows'
@@ -112,6 +114,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: |
             scripts/ci
+            packaging/windows
           sparse-checkout-cone-mode: true
           path: .trusted-ci
           persist-credentials: false
@@ -197,7 +200,7 @@ jobs:
               echo ".app inside the secondary .zip) are notarised and stapled."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
-              echo "Contents: spec_chum.exe"
+              echo "Contents: spec_chum.exe (portable zip) or Start Menu install via *-setup.exe"
               echo "Headless: spec_chum.exe --serve …   or   spec_chum.exe debug …"
               echo ""
             else
@@ -288,6 +291,42 @@ jobs:
           & ".trusted-ci/scripts/ci/sign-windows.ps1" `
             "$env:STAGE_DIR/spec_chum.exe"
 
+      # Inno Setup installer wraps the (optionally signed) staged exe.
+      # Install tool from Chocolatey; compile script + .iss from the trusted
+      # default-branch tree (same CWE-829 pattern as codesign / notary).
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install innosetup --version=6.7.1 --no-progress -y
+
+      - name: Build Windows installer
+        id: win_setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ steps.version.outputs.version }}
+          STAGE_DIR: ${{ steps.stage.outputs.dir }}
+        run: |
+          $Out = "spec-chum-$env:VERSION-$env:TARGET-setup.exe"
+          New-Item -ItemType Directory -Force -Path packed | Out-Null
+          & ".trusted-ci/scripts/ci/build-windows-installer.ps1" `
+            $env:VERSION `
+            $env:STAGE_DIR `
+            "packed/$Out"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "asset=packed/$Out"
+
+      - name: Authenticode-sign Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+          SETUP_ASSET: ${{ steps.win_setup.outputs.asset }}
+        run: |
+          & ".trusted-ci/scripts/ci/sign-windows.ps1" `
+            $env:SETUP_ASSET
+
       - name: Pack archive
         id: pack
         shell: bash
@@ -297,6 +336,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           STAGE_DIR: ${{ steps.stage.outputs.dir }}
           DMG_ASSET: ${{ steps.dmg.outputs.asset }}
+          SETUP_ASSET: ${{ steps.win_setup.outputs.asset }}
         run: |
           set -euo pipefail
           OUT="spec-chum-${VERSION}-${TARGET}"
@@ -309,6 +349,7 @@ jobs:
           elif [[ "$TARGET" == *windows* ]]; then
             test -f "${STAGE_DIR}/spec_chum.exe"
             test ! -e "${STAGE_DIR}/spec-chum-debug.exe"
+            test -f "${SETUP_ASSET}"
           else
             test -x "${STAGE_DIR}/spec_chum"
             test ! -e "${STAGE_DIR}/spec-chum-debug"
@@ -350,7 +391,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.dmg' \) -exec cp {} dist/ \;
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.dmg' -o -name '*-setup.exe' \) -exec cp {} dist/ \;
           cd dist
           sha256sum spec-chum-* > SHA256SUMS
           if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
@@ -388,7 +429,7 @@ jobs:
             | Platform | Archive contents |
             | --- | --- |
             | **macOS** | **`.dmg`** (primary): `Spec Chum.app` + Applications shortcut; secondary `.zip` of the same tree |
-            | **Windows** | `spec_chum.exe` in a `.zip` |
+            | **Windows** | Portable `.zip` (`spec_chum.exe`) **and** Inno Setup `*-setup.exe` (Start Menu + uninstall) |
             | **Linux** | `spec_chum` in a `.tar.gz` |
 
             System ROMs are **not** included — fetch with `./scripts/fetch_roms.sh`.
@@ -397,5 +438,5 @@ jobs:
             GitHub Artifact Attestations are attached to this workflow run.
 
             Linux runtime: GTK 3 and ALSA (`libgtk-3-0`, `libasound2` on Debian/Ubuntu).
-            Remaining installer packaging (Inno / AppImage / `.deb`) and app icon:
-            issue #231. Notarisation: issue #354.
+            Remaining packaging (AppImage / `.deb`) and shared app icon: issue #231.
+            Notarisation secrets: issue #354.

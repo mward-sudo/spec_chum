@@ -12,9 +12,10 @@ bundle and ships a **`.dmg`** (primary) with an **Applications** folder shortcut
 plus a secondary `.zip` of the same tree. When Apple notary secrets are set,
 CI notarises and staples the `.dmg` (and staples the staged `.app` for the
 secondary zip) — see signing table below ([#354](https://github.com/mward-sudo/spec_chum/issues/354),
-Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows
-installer, Linux AppImage/`.deb`, and a shared app icon remain on #231. Native
-UI shells are separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
+Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows ships a
+**portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall).
+Linux AppImage/`.deb` and a shared app icon remain on #231. Native UI shells are
+separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
 
 ## Before tagging (required)
 
@@ -137,14 +138,16 @@ git push origin v0.2.0
 | Platform | Archive | Contents |
 | --- | --- | --- |
 | Linux | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `LICENSE`, `README.txt` |
-| Windows | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `LICENSE`, `README.txt` |
+| Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe`, `LICENSE`, `README.txt` |
+| Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs `spec_chum.exe` + LICENSE/README |
 | macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` (**primary**) | `Spec Chum.app/`, `Applications` → `/Applications`, `LICENSE`, `README.txt` |
 | macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.zip` (secondary) | `Spec Chum.app/`, `LICENSE`, `README.txt` |
 | macOS (Intel) | same pair with `x86_64-apple-darwin` | same layout |
 
 One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
 Prefer the macOS **`.dmg`**: open it and drag **Spec Chum.app** onto **Applications**.
-Headless use:
+On Windows, prefer the **`*-setup.exe`** for Start Menu / uninstall, or the portable
+`.zip` for unzip-and-run. Headless use:
 
 ```bash
 spec_chum --serve --model 48k
@@ -155,8 +158,9 @@ spec_chum debug --tap path/to/game.tap type-load --code
 (`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is
 **not** attached to GitHub Release archives.)
 
-Linux uses `.tar.gz` (common on Unix); Windows uses `.zip`; macOS ships a
-primary `.dmg` and a secondary `.zip`. No `roms/` are included.
+Linux uses `.tar.gz` (common on Unix); Windows ships a portable `.zip` and an
+Inno Setup `*-setup.exe`; macOS ships a primary `.dmg` and a secondary `.zip`.
+No `roms/` are included.
 
 Checksums and optional signatures:
 
@@ -183,7 +187,7 @@ is absent so a first release does not require certificates.
 | All | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (Sigstore) | none (OIDC) |
 | macOS | Developer ID `codesign` on `Spec Chum.app` and the release `.dmg` (hardened runtime + timestamp on Mach-O / `.app`; DMG signed when the same secrets are set) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
 | macOS | Notarisation + staple (`notarytool submit --wait`, then `stapler staple` on the `.dmg` and staged `.app`) | **Preferred:** `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`. **Fallback:** `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` |
-| Windows | Authenticode (`signtool`, SHA-256, DigiCert timestamp) | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` |
+| Windows | Authenticode (`signtool`, SHA-256, DigiCert timestamp) on `spec_chum.exe` and the Inno `*-setup.exe` | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` |
 | Checksums | Detached ASCII-armored GPG signature `SHA256SUMS.asc` | `GPG_PRIVATE_KEY`, optional `GPG_PASSPHRASE` |
 
 `APPLE_CERTIFICATE_P12_BASE64` / `WINDOWS_PFX_BASE64` are base64 of the `.p12` /
