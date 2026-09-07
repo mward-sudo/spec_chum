@@ -9,6 +9,7 @@ let repoRoot = "../.."
 // still live in this archive for SpecChumMac.
 // Release CI may set SPEC_CHUM_HOST_LIB_DIR to target/<triple>/release.
 let hostLibDir = Context.environment["SPEC_CHUM_HOST_LIB_DIR"]
+    .flatMap { $0.isEmpty ? nil : $0 }
     ?? "\(repoRoot)/target/release"
 let roomStatic = "\(hostLibDir)/libspec_chum_room.a"
 
