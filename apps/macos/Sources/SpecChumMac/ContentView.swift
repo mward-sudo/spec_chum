@@ -388,7 +388,7 @@ struct ContentView: View {
         .frame(height: 20)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Tape progress")
-        .accessibilityValue(label)
+        .accessibilityValue("\(label), \(Int((frac * 100).rounded()))%")
     }
 
     private var statusFooterDeckControls: some View {
