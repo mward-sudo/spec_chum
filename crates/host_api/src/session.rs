@@ -1430,16 +1430,7 @@ fn render_frame_pcm(
 }
 
 fn rom_search_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
-    if let Ok(cwd) = std::env::current_dir() {
-        roots.push(cwd);
-    }
-    if let Ok(env) = std::env::var("SPEC_CHUM_ROOT") {
-        roots.push(std::path::PathBuf::from(env));
-    }
-    // Dev / `cargo test`: crates/host_api → workspace root.
-    roots.push(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
-    roots
+    machine::search_roots()
 }
 
 fn dims(with_border: bool) -> (usize, usize) {

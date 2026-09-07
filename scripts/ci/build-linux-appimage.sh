@@ -4,12 +4,13 @@
 # Usage:
 #   build-linux-appimage.sh <version> <stage-dir> <output.AppImage>
 #
-# Expects stage-dir to contain: spec_chum, LICENSE, README.txt.
+# Expects stage-dir to contain: spec_chum, LICENSE, README.txt, roms/
+# (redistributable managed set from bundle-release-roms.sh).
 # Desktop entry + icon come from packaging/linux/ beside this scripts/ci tree
 # (release CI invokes this from the trusted default-branch checkout — CWE-829).
 #
 # Runtime still needs GTK 3 + ALSA + udev on the host (same as the .tar.gz);
-# this wraps the single primary binary for double-click / PATH-free use.
+# this wraps the primary binary + bundled roms/ for double-click / PATH-free use.
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
@@ -29,12 +30,17 @@ fi
 BIN="$STAGE_DIR/spec_chum"
 LICENSE="$STAGE_DIR/LICENSE"
 README="$STAGE_DIR/README.txt"
+ROMS="$STAGE_DIR/roms"
 for required in "$BIN" "$LICENSE" "$README"; do
   if [[ ! -f "$required" ]]; then
     echo "error: staged release tree missing required file: $required" >&2
     exit 1
   fi
 done
+if [[ ! -d "$ROMS" || ! -f "$ROMS/spec48.rom" ]]; then
+  echo "error: staged release tree missing bundled roms/ (spec48.rom)" >&2
+  exit 1
+fi
 if [[ ! -x "$BIN" ]]; then
   echo "error: staged binary is not executable: $BIN" >&2
   exit 1
@@ -62,7 +68,7 @@ APPDIR="$TMP/SpecChum.AppDir"
 TOOL_DIR="$TMP/tools"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" \
   "$APPDIR/usr/share/icons/hicolor/256x256/apps" \
-  "$APPDIR/usr/share/doc/spec-chum" "$TOOL_DIR"
+  "$APPDIR/usr/share/doc/spec-chum" "$APPDIR/usr/share/spec-chum" "$TOOL_DIR"
 cleanup() {
   rm -rf "$TMP"
 }
@@ -71,6 +77,11 @@ trap cleanup EXIT
 cp "$BIN" "$APPDIR/usr/bin/spec_chum"
 chmod 755 "$APPDIR/usr/bin/spec_chum"
 cp "$LICENSE" "$README" "$APPDIR/usr/share/doc/spec-chum/"
+if [[ -f "$STAGE_DIR/ROMS-NOTICE.txt" ]]; then
+  cp "$STAGE_DIR/ROMS-NOTICE.txt" "$APPDIR/usr/share/doc/spec-chum/"
+fi
+# Bundled redistributable ROMs — AppRun sets SPEC_CHUM_ROOT to this prefix.
+cp -a "$ROMS" "$APPDIR/usr/share/spec-chum/roms"
 cp "$DESKTOP" "$APPDIR/usr/share/applications/spec-chum.desktop"
 cp "$DESKTOP" "$APPDIR/spec-chum.desktop"
 cp "$ICON" "$APPDIR/usr/share/icons/hicolor/256x256/apps/spec-chum.png"
@@ -80,6 +91,7 @@ cat > "$APPDIR/AppRun" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 HERE="$(dirname "$(readlink -f "$0")")"
+export SPEC_CHUM_ROOT="${SPEC_CHUM_ROOT:-$HERE/usr/share/spec-chum}"
 exec "$HERE/usr/bin/spec_chum" "$@"
 EOF
 chmod 755 "$APPDIR/AppRun"

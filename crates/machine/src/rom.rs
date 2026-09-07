@@ -235,17 +235,45 @@ pub const ALL_MODELS: [Model; 9] = [
     Model::TimexTS2068,
 ];
 
-/// Workspace / env / cwd roots tried when autoloading ROMs.
+/// Workspace / env / cwd / packaged-app roots tried when autoloading ROMs.
+///
+/// Packaged builds embed redistributable images under `roms/` next to the
+/// executable, in a macOS `.app` `Contents/Resources`, or under
+/// `share/spec-chum` for Linux FHS / `AppImage` layouts (see `docs/ROMS.md`).
 #[must_use]
 pub fn search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
+    let mut push_unique = |path: PathBuf| {
+        if !roots.iter().any(|existing| existing == &path) {
+            roots.push(path);
+        }
+    };
     if let Ok(cwd) = std::env::current_dir() {
-        roots.push(cwd);
+        push_unique(cwd);
     }
     if let Ok(env) = std::env::var("SPEC_CHUM_ROOT") {
-        roots.push(PathBuf::from(env));
+        push_unique(PathBuf::from(env));
     }
-    roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    if let Ok(env) = std::env::var("SPEC_CHUM_ROM_ROOT") {
+        push_unique(PathBuf::from(env));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            push_unique(exe_dir.to_path_buf());
+            // Spec Chum.app/Contents/MacOS → Contents/Resources (bundled roms/).
+            if exe_dir.file_name().is_some_and(|name| name == "MacOS") {
+                if let Some(contents) = exe_dir.parent() {
+                    push_unique(contents.join("Resources"));
+                }
+            }
+            // /usr/bin/spec_chum → /usr/share/spec-chum (deb / AppImage FHS).
+            if let Some(prefix) = exe_dir.parent() {
+                push_unique(prefix.join("share/spec-chum"));
+            }
+        }
+    }
+    // Dev / `cargo test`: crates/machine → workspace root.
+    push_unique(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
     roots
 }
 
@@ -833,6 +861,22 @@ mod tests {
             plus2.is_some(),
             rom_available_in(Model::SpectrumPlus2, &roots)
         );
+    }
+
+    #[test]
+    fn search_roots_find_bundled_resources_layout() {
+        let tmp = std::env::temp_dir().join(format!("spec-chum-rom-roots-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        let resources = tmp.join("Contents/Resources");
+        let roms = resources.join("roms");
+        fs::create_dir_all(&roms).expect("mkdir");
+        fs::write(roms.join("spec48.rom"), vec![0u8; 16 * 1024]).expect("rom");
+        assert!(resolve_rom_path_in(Model::Spectrum48, std::slice::from_ref(&resources)).is_some());
+        let share = tmp.join("share/spec-chum");
+        fs::create_dir_all(share.join("roms")).expect("share");
+        fs::write(share.join("roms/spec48.rom"), vec![0u8; 16 * 1024]).expect("rom");
+        assert!(resolve_rom_path_in(Model::Spectrum48, std::slice::from_ref(&share)).is_some());
+        let _ = fs::remove_dir_all(&tmp);
     }
 
     #[test]

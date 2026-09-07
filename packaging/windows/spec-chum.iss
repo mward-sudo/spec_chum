@@ -51,7 +51,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=spec-chum.ico
 DisableProgramGroupPage=yes
-; Single primary binary; no ROMs in the installer (same as the portable zip).
+; Single primary binary; redistributable ROMs under {app}\roms (docs/ROMS.md).
 CloseApplications=yes
 
 [Languages]
@@ -64,6 +64,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#StageDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\ROMS-NOTICE.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#StageDir}\roms\*"; DestDir: "{app}\roms"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

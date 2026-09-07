@@ -3,22 +3,32 @@
 GitHub Actions builds **macOS**, **Linux**, and **Windows** archives and attaches
 them to a GitHub Release when a version tag is pushed.
 
-The product binary is the egui host `spec_chum`. Headless debugger and agent HTTP
-live on the **same** binary (`spec_chum --serve`, `spec_chum debug …`). System ROMs
-are never packaged.
+**macOS** ships the native **SpecChumMac** SwiftUI app (`apps/macos`) in a
+**`.dmg`**. **Windows / Linux** ship the cross-platform **egui** host
+`spec_chum`. Headless debugger and agent HTTP live on the egui binary
+(`spec_chum --serve`, `spec_chum debug …`); on macOS, agents use the embedded
+loopback server (`SPEC_CHUM_AGENT=1` on SpecChumMac — see
+[MACOS_NATIVE.md](MACOS_NATIVE.md) / [AGENT_DEBUG_API.md](AGENT_DEBUG_API.md)).
 
-On macOS, release CI wraps the egui binary in a production **`Spec Chum.app`**
-bundle and ships a **`.dmg`** with an **Applications** folder shortcut (no
-secondary `.zip` — [#361](https://github.com/mward-sudo/spec_chum/issues/361)).
+Redistributable Spectrum ROMs (Amstrad Lawson 1999 grant and other grants in
+[ROMS.md](ROMS.md)) are **fetched at packaging time** and **bundled inside** each
+app package. ROM bytes are still **not** committed to git. User-provided-only
+firmware (IF1, Multiface, TR-DOS, …) is never bundled.
+
+On macOS, release CI builds SpecChumMac via `./scripts/build_macos_app.sh`,
+stages `Spec Chum.app` with `scripts/ci/stage-macos-specchummac-app.sh`, and
+ships a **`.dmg`** with an **Applications** folder shortcut (no secondary
+`.zip` — [#361](https://github.com/mward-sudo/spec_chum/issues/361)). This is
+the release-artifact switch from egui-on-macOS ([#363](https://github.com/mward-sudo/spec_chum/issues/363));
+cross-platform native shells remain [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 When Apple notary secrets are set, CI notarises and staples the `.dmg` — see
 signing table below ([#354](https://github.com/mward-sudo/spec_chum/issues/354),
 Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows ships a
 **portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall).
-Linux ships **`.tar.gz`**, **AppImage**, and **`.deb`** of the same primary binary.
-A shared Spectrum rainbow app icon is wired into macOS `.icns`, Windows `.ico` /
-PE resources, Linux desktop PNG, and the egui window
-([#231](https://github.com/mward-sudo/spec_chum/issues/231)). Native UI shells are
-separate ([#351](https://github.com/mward-sudo/spec_chum/issues/351)).
+Linux ships **`.tar.gz`**, **AppImage**, and **`.deb`** of the egui binary plus
+bundled `roms/`. A shared Spectrum rainbow app icon is wired into macOS `.icns`,
+Windows `.ico` / PE resources, Linux desktop PNG, and the egui window
+([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
 
 ## Before tagging (required)
 
@@ -106,8 +116,8 @@ Workspace crates and GitHub Release tags ship together as `vX.Y.Z` (root
 
 Before tagging, compare against the previous **published** release (not an
 intermediate mistaken tag). Keep workspace crate versions, macOS bundle numeric
-version (derived from the tag in `stage-macos-egui-app.sh`), and archive names
-aligned.
+version (derived from the tag in `stage-macos-specchummac-app.sh`), and archive
+names aligned.
 
 If a tag shipped at the wrong semver level: delete the GitHub Release and remote
 tag (`gh release delete vX.Y.Z --yes`; `git push origin :refs/tags/vX.Y.Z`),
@@ -140,12 +150,12 @@ git push origin v0.2.0
 
 | Platform | Archive | Contents |
 | --- | --- | --- |
-| Linux (tarball) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `LICENSE`, `README.txt` |
-| Linux (AppImage) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.AppImage` | Double-clickable wrapper around the same `spec_chum` |
-| Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `dpkg` install: `/usr/bin/spec_chum` + `.desktop` + shared icon |
-| Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe` (embedded `.ico`) + `LICENSE`/`README.txt` |
-| Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; wizard uses shared `.ico` |
-| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` | `Spec Chum.app/` (with `AppIcon.icns`), `Applications` → `/Applications`, `LICENSE`, `README.txt` |
+| Linux (tarball) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `roms/`, `LICENSE`, `README.txt`, `ROMS-NOTICE.txt` |
+| Linux (AppImage) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.AppImage` | Same binary + bundled roms under `usr/share/spec-chum` |
+| Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `/usr/bin/spec_chum` + `/usr/share/spec-chum/roms` + `.desktop` + icon |
+| Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe` + `roms/` + `LICENSE`/`README.txt`/`ROMS-NOTICE.txt` |
+| Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs exe + `roms/` |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` | SpecChumMac `Spec Chum.app/` (AppIcon + `Contents/Resources/roms`), Applications shortcut |
 | macOS (Intel) | same `.dmg` with `x86_64-apple-darwin` | same layout |
 
 One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
@@ -153,7 +163,8 @@ On macOS, open the **`.dmg`** and drag **Spec Chum.app** onto **Applications**.
 On Windows, prefer the **`*-setup.exe`** for Start Menu / uninstall, or the portable
 `.zip` for unzip-and-run. On Linux, prefer the **`.deb`** on Debian/Ubuntu, the
 **AppImage** for distro-agnostic double-click, or the **`.tar.gz`** for unpack-and-run.
-Headless use:
+
+Headless (egui / Windows / Linux):
 
 ```bash
 spec_chum --serve --model 48k
@@ -161,13 +172,24 @@ spec_chum debug dump-state
 spec_chum debug --tap path/to/game.tap type-load --code
 ```
 
+macOS agent HTTP (SpecChumMac embed; loopback only):
+
+```bash
+# Preferred: token auth
+SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" open -a "Spec Chum"
+# Dev-only on a trusted machine (disables bearer auth — any local process can call the agent):
+# SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 open -a "Spec Chum"
+```
+
 (`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is
 **not** attached to GitHub Release archives.)
 
 Linux ships `.tar.gz` + AppImage + `.deb`; Windows ships a portable `.zip` and an
 Inno Setup `*-setup.exe`; macOS ships a `.dmg` only.
-No `roms/` are included. Shared app icon assets live under `packaging/` (see
-`packaging/icon/README.md`); regenerate with `python3 scripts/generate_app_icons.py`.
+ROM **bytes are not in git**; release CI runs `./scripts/fetch_roms.sh` and embeds
+the managed redistributable set (see [ROMS.md](ROMS.md)). Shared app icon assets
+live under `packaging/` (see `packaging/icon/README.md`); regenerate with
+`python3 scripts/generate_app_icons.py`.
 
 Checksums and optional signatures:
 

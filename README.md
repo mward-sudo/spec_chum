@@ -39,23 +39,27 @@ See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 ## Releases
 
-Push a `vX.Y.Z` tag to build release archives: macOS `.dmg` (`Spec Chum.app`
-+ Applications shortcut), Windows portable `.zip` and Inno `*-setup.exe`,
-Linux `.tar.gz` + AppImage + `.deb` with the primary binary (optional
-Apple/Windows/GPG signing). See [docs/RELEASE.md](docs/RELEASE.md).
+Push a `vX.Y.Z` tag to build release archives: macOS `.dmg` (SpecChumMac
+`Spec Chum.app` + Applications shortcut), Windows portable `.zip` and Inno
+`*-setup.exe`, Linux `.tar.gz` + AppImage + `.deb`. Redistributable Spectrum
+ROMs are bundled inside each package (not committed to git). See
+[docs/RELEASE.md](docs/RELEASE.md) and [docs/ROMS.md](docs/ROMS.md).
 
 ## ROMs
 
-System ROMs are **not** included in this repository and are **not** attached to
-GitHub Releases. Fetch official Spectrum images with:
+System ROM **bytes are not** in this repository. Dev checkouts fetch official
+Spectrum images with:
 
 ```bash
 ./scripts/fetch_roms.sh
 ```
 
-Source: [spectrumforeveryone/zx-roms](https://github.com/spectrumforeveryone/zx-roms) and
-[Fuse `roms/`](https://github.com/fuse-emulator/fuse/tree/master/roms) for distributable
-non-Amstrad sets (Timex, OpenSE, +3e, Datel, SpeccyBoot) — pinned commits in the script.
+Release builds run the same fetch and embed the managed redistributable set
+inside app packages. Source:
+[spectrumforeveryone/zx-roms](https://github.com/spectrumforeveryone/zx-roms) and
+[Fuse `roms/`](https://github.com/fuse-emulator/fuse/tree/master/roms) for
+non-Amstrad sets (Timex, OpenSE, +3e, Datel, SpeccyBoot) — pinned commits in the
+script. Grants and the user-provided-only list: [docs/ROMS.md](docs/ROMS.md).
 
 **Amstrad / Sinclair:** Amstrad have kindly given their permission for the
 redistribution of their copyrighted material but retain that copyright. Do not

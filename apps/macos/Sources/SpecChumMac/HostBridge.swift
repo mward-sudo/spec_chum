@@ -748,16 +748,31 @@ final class HostBridge: ObservableObject {
 
     static func defaultRomRoots() -> [URL] {
         var roots: [URL] = []
-        roots.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        var seen = Set<String>()
+        func appendRoot(_ url: URL) {
+            let path = url.standardizedFileURL.path
+            guard !seen.contains(path) else { return }
+            seen.insert(path)
+            roots.append(url)
+        }
+        appendRoot(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         if let env = ProcessInfo.processInfo.environment["SPEC_CHUM_ROOT"] {
-            roots.append(URL(fileURLWithPath: env))
+            appendRoot(URL(fileURLWithPath: env))
+        }
+        if let env = ProcessInfo.processInfo.environment["SPEC_CHUM_ROM_ROOT"] {
+            appendRoot(URL(fileURLWithPath: env))
+        }
+        // Release DMG: Contents/Resources/roms (Closes #363 packaging).
+        if let resources = Bundle.main.resourceURL {
+            appendRoot(resources)
         }
         if let exe = Bundle.main.executableURL?.deletingLastPathComponent() {
+            appendRoot(exe)
             var dir = exe
             for _ in 0 ..< 8 {
                 let probe = dir.appendingPathComponent("roms/spec48.rom")
                 if FileManager.default.isReadableFile(atPath: probe.path) {
-                    roots.append(dir)
+                    appendRoot(dir)
                     break
                 }
                 dir = dir.deletingLastPathComponent()
