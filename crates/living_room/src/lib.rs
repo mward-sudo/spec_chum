@@ -58,7 +58,7 @@ mod ensure_host_api_linked {
     static FORCE_LINK: fn() = touch;
 }
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 
@@ -79,6 +79,9 @@ mod standalone_app {
 
     /// Standalone winit living-room app (Bevy chrome / cpal / HostSession).
     pub fn living_room_app() -> App {
+        if let Err(msg) = crate::verify_polyhaven_assets(&crate::resolve_asset_root()) {
+            panic!("{msg}");
+        }
         let mut app = App::new();
         app.add_plugins(
             DefaultPlugins
@@ -149,5 +152,78 @@ pub fn asset_plugin() -> AssetPlugin {
     AssetPlugin {
         file_path: resolve_asset_root().to_string_lossy().into_owned(),
         ..default()
+    }
+}
+
+/// Verify `asset_root` contains every path listed in `polyhaven.manifest` (#368).
+///
+/// The manifest lives next to the `polyhaven/` directory and is staged into the
+/// SpecChumMac `.app` Resources tree. Incomplete trees look like a lighting bug
+/// (CRT in a black void); fail closed before Bevy starts.
+pub fn verify_polyhaven_assets(asset_root: &Path) -> Result<(), String> {
+    let manifest = asset_root.join("polyhaven.manifest");
+    let text = std::fs::read_to_string(&manifest).map_err(|_| {
+        format!(
+            "Living room assets missing — no polyhaven.manifest under {} (run ./scripts/fetch_living_room_assets.sh)",
+            asset_root.display()
+        )
+    })?;
+
+    let mut missing: Vec<&str> = Vec::new();
+    for raw in text.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let path = asset_root.join("polyhaven").join(line);
+        if !path.is_file() {
+            missing.push(line);
+        }
+    }
+
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    let sample: Vec<&str> = missing.iter().copied().take(5).collect();
+    Err(format!(
+        "Living room assets incomplete ({} missing under {}/polyhaven) — run ./scripts/fetch_living_room_assets.sh (e.g. {})",
+        missing.len(),
+        asset_root.display(),
+        sample.join(", ")
+    ))
+}
+
+#[cfg(test)]
+mod asset_verify_tests {
+    use super::verify_polyhaven_assets;
+    use std::path::PathBuf;
+
+    #[test]
+    fn manifest_in_crate_assets_is_complete_or_skipped() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+        let poly = root.join("polyhaven");
+        // CI / Linux hosts often skip the large Poly Haven download; only assert
+        // when the tree is present (macOS SpecChumMac / release packaging).
+        if !poly.is_dir() {
+            return;
+        }
+        verify_polyhaven_assets(&root).expect("fetched polyhaven matches checked-in manifest");
+    }
+
+    #[test]
+    fn empty_temp_root_reports_actionable_error() {
+        let dir = std::env::temp_dir().join(format!(
+            "spec_chum_polyhaven_verify_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let err = verify_polyhaven_assets(&dir).expect_err("empty root");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            err.contains("fetch_living_room_assets") || err.contains("polyhaven.manifest"),
+            "unexpected: {err}"
+        );
     }
 }

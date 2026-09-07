@@ -80,6 +80,8 @@ EOF
 chmod +x "$MACOS_DIR/SpecChumMac"
 
 # Ensure assets are present in the staged app (shared with build_macos_app.sh).
+# Incomplete Poly Haven trees auto-fetch by default (#368).
+"$ROOT/scripts/ensure_living_room_assets.sh" "$ROOT"
 "$ROOT/scripts/stage_living_room_assets.sh" "$ROOT" "$CONTENTS/Resources/living_room_assets"
 
 cat > "$CONTENTS/Info.plist" <<'PLIST'
