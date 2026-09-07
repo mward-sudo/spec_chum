@@ -132,155 +132,11 @@ struct ContentView: View {
             .accessibilityLabel("Instant load")
         }
 
-        // Tape deck chrome — only when a tape is inserted (Open / Instant always available).
-        if host.hasTape || host.tapePlaying {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    chromeAction {
-                        if host.tapePlaying {
-                            host.pauseTape()
-                        } else {
-                            host.playTape()
-                        }
-                    }
-                } label: {
-                    Label(
-                        host.tapePlaying ? "Pause" : "Play",
-                        systemImage: host.tapePlaying ? "pause.fill" : "play.fill"
-                    )
-                }
-                .help(host.tapePlaying ? "Pause tape" : "Play tape (EAR path; Instant is flash-load)")
-                .accessibilityLabel(host.tapePlaying ? "Pause tape" : "Play tape")
-
-                Button {
-                    chromeAction { host.rewindTape() }
-                } label: {
-                    Label("Rewind", systemImage: "backward.end.fill")
-                }
-                .help("Rewind tape")
-                .accessibilityLabel("Rewind tape")
-
-                Picker("Load", selection: Binding(
-                    get: { host.experienceLoad ? 0 : host.tapeSpeed },
-                    set: { val in
-                        if val == 0 {
-                            // tapeSpeed.didSet clears experienceLoad — set speed first.
-                            host.tapeSpeed = 16
-                            host.experienceLoad = true
-                        } else {
-                            host.experienceLoad = false
-                            host.tapeSpeed = val
-                        }
-                        FocusSpectrumView.post()
-                    }
-                )) {
-                    Text("Experience").tag(UInt32(0))
-                    Text("1x").tag(UInt32(1))
-                    Text("2x").tag(UInt32(2))
-                    Text("5x").tag(UInt32(5))
-                    Text("10x").tag(UInt32(10))
-                    Text("20x").tag(UInt32(20))
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: 96)
-                .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick")
-                .accessibilityLabel("Tape load mode")
-            }
-
-            ToolbarItem(placement: .principal) {
-                if let frac = host.tapeFraction {
-                    VStack(alignment: .leading, spacing: 1) {
-                        ProgressView(value: frac)
-                            .controlSize(.small)
-                            .frame(minWidth: 100, maxWidth: 160)
-                        Text(host.tapeBlockLabel)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Tape progress")
-                    .accessibilityValue(host.tapeBlockLabel)
-                }
-            }
-        }
+        // Tape Play / Rewind / progress / load-mode live in the status footer (not toolbar).
 
         // Trailing cluster — separate placements so `.unified` does not cram/wrap one group.
         ToolbarItem(placement: .status) {
-            Menu {
-                Section("Built-in models") {
-                    Text("Select only — default ROMs. Session hardware via Hardware menu.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    ForEach(HostBridge.Model.pickerOrder) { pick in
-                        Button {
-                            chromeAction { host.selectBuiltinModel(pick) }
-                        } label: {
-                            HStack {
-                                Text(pick.title)
-                                if !pick.romAvailable {
-                                    Image(systemName: "exclamationmark.circle")
-                                        .foregroundStyle(.secondary)
-                                }
-                                if host.activeConfigId == nil && host.model == pick {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                }
-                Section("My configurations") {
-                    Button("+ New configuration…") {
-                        chromeAction { host.beginNewConfiguration() }
-                    }
-                    if host.customConfigs.isEmpty {
-                        Text("(none saved yet)")
-                    }
-                    ForEach(host.customConfigs) { cfg in
-                        Button {
-                            chromeAction { host.selectCustomConfiguration(id: cfg.id) }
-                        } label: {
-                            HStack {
-                                Text(cfg.name)
-                                if host.activeConfigId == cfg.id {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                    if !host.customConfigs.isEmpty {
-                        Menu("Manage configuration…") {
-                            ForEach(host.customConfigs) { cfg in
-                                Button("Edit “\(cfg.name)”…") {
-                                    chromeAction { host.beginEditConfiguration(id: cfg.id) }
-                                }
-                                Button("Delete “\(cfg.name)”", role: .destructive) {
-                                    chromeAction { host.deleteConfiguration(id: cfg.id) }
-                                }
-                            }
-                        }
-                    }
-                    if host.isCustomConfigActive {
-                        Divider()
-                        Button("Edit configuration…") {
-                            chromeAction { host.beginEditActiveConfiguration() }
-                        }
-                        Button("Delete configuration", role: .destructive) {
-                            chromeAction { host.deleteActiveConfiguration() }
-                        }
-                    }
-                }
-            } label: {
-                Text(host.machineDisplayTitle)
-            }
-            .frame(
-                minWidth: HostBridge.Model.toolbarPickerMinWidth,
-                maxWidth: HostBridge.Model.toolbarPickerMaxWidth,
-                alignment: .leading
-            )
-            .help("Built-ins: select only. Custom profiles: edit hardware & ROM.")
-            .accessibilityLabel("Machine")
-            .accessibilityValue(host.machineDisplayTitle)
+            machineModelMenu
         }
 
         // Separate ToolbarItem — conditional children inside ToolbarItemGroup often fail to
@@ -346,13 +202,105 @@ struct ContentView: View {
         }
     }
 
-    /// Secondary status — caption style so it does not compete with the display / CRT.
+    /// Machine model Menu — hug content; padded label for readable inset inside glass.
+    private var machineModelMenu: some View {
+        Menu {
+            Section("Built-in models") {
+                Text("Select only — default ROMs. Session hardware via Hardware menu.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                ForEach(HostBridge.Model.pickerOrder) { pick in
+                    Button {
+                        chromeAction { host.selectBuiltinModel(pick) }
+                    } label: {
+                        HStack {
+                            Text(pick.title)
+                            if !pick.romAvailable {
+                                Image(systemName: "exclamationmark.circle")
+                                    .foregroundStyle(.secondary)
+                            }
+                            if host.activeConfigId == nil && host.model == pick {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+            Section("My configurations") {
+                Button("+ New configuration…") {
+                    chromeAction { host.beginNewConfiguration() }
+                }
+                if host.customConfigs.isEmpty {
+                    Text("(none saved yet)")
+                }
+                ForEach(host.customConfigs) { cfg in
+                    Button {
+                        chromeAction { host.selectCustomConfiguration(id: cfg.id) }
+                    } label: {
+                        HStack {
+                            Text(cfg.name)
+                            if host.activeConfigId == cfg.id {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+                if !host.customConfigs.isEmpty {
+                    Menu("Manage configuration…") {
+                        ForEach(host.customConfigs) { cfg in
+                            Button("Edit “\(cfg.name)”…") {
+                                chromeAction { host.beginEditConfiguration(id: cfg.id) }
+                            }
+                            Button("Delete “\(cfg.name)”", role: .destructive) {
+                                chromeAction { host.deleteConfiguration(id: cfg.id) }
+                            }
+                        }
+                    }
+                }
+                if host.isCustomConfigActive {
+                    Divider()
+                    Button("Edit configuration…") {
+                        chromeAction { host.beginEditActiveConfiguration() }
+                    }
+                    Button("Delete configuration", role: .destructive) {
+                        chromeAction { host.deleteActiveConfiguration() }
+                    }
+                }
+            }
+        } label: {
+            // No greedy min/maxWidth on the Menu — it expands into the proposal and the
+            // Liquid Glass pill grows empty (flush-left short titles). Hug content instead;
+            // truncate long custom names in `machineToolbarLabel` (#184 readable).
+            // Em-space is part of the measured title (SwiftUI `.padding` is not wrapped by glass).
+            HStack(spacing: 0) {
+                Text(verbatim: "\u{2003}")
+                    .accessibilityHidden(true)
+                Text(host.machineToolbarLabel)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .help("Built-ins: select only. Custom profiles: edit hardware & ROM.")
+        .accessibilityLabel("Machine")
+        .accessibilityValue(host.machineDisplayTitle)
+    }
+
+    /// Tape deck + identity in the footer chrome (replaces the old EAR status caption).
+    /// Left: load affordance or truncated tape name. Centre/right: progress + deck controls when inserted.
     private var statusFooter: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(host.status)
-                .font(.caption)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                statusFooterLeading
+                    .layoutPriority(1)
+                if host.hasTape || host.tapePlaying {
+                    statusFooterProgress
+                        .frame(maxWidth: .infinity)
+                        .layoutPriority(0)
+                    statusFooterDeckControls
+                        .layoutPriority(1)
+                } else {
+                    Spacer(minLength: 0)
+                }
+            }
             if !host.roomPerfLine.isEmpty {
                 Text(host.roomPerfLine)
                     .font(.system(.caption2, design: .monospaced))
@@ -362,11 +310,157 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .glassBarBackground()
-        .accessibilityLabel("Status")
-        .accessibilityValue(host.status)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Tape status")
+    }
+
+    @ViewBuilder
+    private var statusFooterLeading: some View {
+        if host.hasTape || host.tapePlaying {
+            Text(statusFooterTapeName)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 180, alignment: .leading)
+                .help(statusFooterTapeName)
+                .accessibilityLabel("Tape")
+                .accessibilityValue(statusFooterTapeName)
+        } else {
+            HStack(spacing: 8) {
+                Text("No tape present")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Button {
+                    chromeAction { host.presentOpenMediaPanel() }
+                } label: {
+                    Label(host.openMediaTitle, systemImage: "opticaldiscdrive")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help(host.openMediaMenuTitle)
+                .accessibilityLabel(host.openMediaTitle)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
+    private var statusFooterTapeName: String {
+        if let media = host.mediaTitle, !media.isEmpty {
+            return media
+        }
+        return "Tape"
+    }
+
+    private var statusFooterProgress: some View {
+        let frac = min(max(host.tapeFraction ?? 0, 0), 1)
+        let label = host.tapeBlockLabel.isEmpty ? "…" : host.tapeBlockLabel
+        return ZStack {
+            // Track must stay visible on glass chrome (low-contrast Capsule washes out).
+            Capsule()
+                .fill(Color(nsColor: .tertiaryLabelColor).opacity(0.35))
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5)
+                )
+            GeometryReader { geo in
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(width: max(frac > 0.001 ? 8 : 0, geo.size.width * frac))
+            }
+            .clipShape(Capsule())
+            .padding(1)
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 8)
+                .allowsHitTesting(false)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 20)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tape progress")
+        .accessibilityValue(label)
+    }
+
+    private var statusFooterDeckControls: some View {
+        HStack(spacing: 2) {
+            Button {
+                chromeAction { host.rewindTape() }
+            } label: {
+                Image(systemName: "backward.end.fill")
+                    .imageScale(.small)
+                    .frame(width: 22, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help("Rewind tape")
+            .accessibilityLabel("Rewind tape")
+
+            Button {
+                chromeAction {
+                    if host.tapePlaying {
+                        host.pauseTape()
+                    } else {
+                        host.playTape()
+                    }
+                }
+            } label: {
+                Image(systemName: host.tapePlaying ? "pause.fill" : "play.fill")
+                    .imageScale(.small)
+                    .frame(width: 22, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help(host.tapePlaying ? "Pause tape" : "Play tape (EAR path; Instant is flash-load)")
+            .accessibilityLabel(host.tapePlaying ? "Pause tape" : "Play tape")
+
+            Picker("Load", selection: tapeLoadModeBinding) {
+                Text("Experience").tag(UInt32(0))
+                Text("1x").tag(UInt32(1))
+                Text("2x").tag(UInt32(2))
+                Text("5x").tag(UInt32(5))
+                Text("10x").tag(UInt32(10))
+                Text("20x").tag(UInt32(20))
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .fixedSize()
+            .controlSize(.mini)
+            .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick")
+            .accessibilityLabel("Tape load mode")
+            .accessibilityValue(tapeLoadModeAccessibilityValue)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var tapeLoadModeBinding: Binding<UInt32> {
+        Binding(
+            get: { host.experienceLoad ? 0 : host.tapeSpeed },
+            set: { val in
+                if val == 0 {
+                    // tapeSpeed.didSet clears experienceLoad — set speed first.
+                    host.tapeSpeed = 16
+                    host.experienceLoad = true
+                } else {
+                    host.experienceLoad = false
+                    host.tapeSpeed = val
+                }
+                FocusSpectrumView.post()
+            }
+        )
+    }
+
+    private var tapeLoadModeAccessibilityValue: String {
+        host.experienceLoad ? "Experience" : "\(host.tapeSpeed)x"
     }
 
     /// After chrome clicks, return key focus to the Spectrum / room view.

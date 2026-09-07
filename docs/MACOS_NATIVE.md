@@ -290,7 +290,10 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 exports `MACOSX_DEPLOYMENT_TARGET=14.0` and matching `CFLAGS`/`CXXFLAGS` before
 `cargo build -p living_room` so C/asm objects inside `libspec_chum_room.a`
 (especially blake3 NEON) are not stamped with the host SDK (26.x/27.x), which
-otherwise produces Swift-link `ld` warnings.
+otherwise produces Swift-link `ld` warnings. After `swift build`, the script
+re-stamps SpecChumMac’s `LC_BUILD_VERSION` with `vtool` (`minos` 14.0, `sdk` =
+active Xcode SDK) so macOS still applies Liquid Glass toolbar shared-background
+pills — linking the staticlib alone leaves `sdk 14.0` and the chrome goes flat.
 
 GitHub Releases ship **SpecChumMac** as the macOS `.dmg` app
 ([#363](https://github.com/mward-sudo/spec_chum/issues/363)), with redistributable
