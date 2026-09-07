@@ -150,11 +150,35 @@ jobs:
         with:
           key: release-${{ matrix.target }}
 
-      - name: Build binaries
+      - name: Fetch redistributable ROMs
         shell: bash
-        # Primary release deliverable is `spec_chum` only (#231). Headless
+        # Managed fetch set only (docs/ROMS.md / Lawson 1999 + Fuse grants).
+        # Never commit ROM bytes; embed into packages at release time (#363).
+        run: ./scripts/fetch_roms.sh
+
+      - name: Fetch living-room assets
+        if: runner.os == 'macOS'
+        shell: bash
+        run: ./scripts/fetch_living_room_assets.sh
+
+      - name: Build egui host (Windows / Linux)
+        if: runner.os != 'macOS'
+        shell: bash
+        # Primary non-macOS deliverable is egui `spec_chum` (#231). Headless
         # debug/agent lives on the same binary (`--serve` / `debug …`).
         run: cargo build --release -p app --target ${{ matrix.target }}
+
+      - name: Build SpecChumMac (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        # Native SwiftUI shell for the DMG (#363); living_room staticlib + SwiftPM.
+        run: |
+          set -euo pipefail
+          export SPEC_CHUM_MAC_TARGET="$TARGET"
+          chmod +x scripts/build_macos_app.sh
+          ./scripts/build_macos_app.sh
 
       - name: Stage release tree
         id: stage
@@ -167,22 +191,37 @@ jobs:
           OUT="spec-chum-${VERSION}-${TARGET}"
           mkdir -p "dist/$OUT"
           BIN_DIR="target/${TARGET}/release"
+          chmod +x .trusted-ci/scripts/ci/bundle-release-roms.sh
           if [[ "$TARGET" == *windows* ]]; then
             cp "$BIN_DIR/spec_chum.exe" "dist/$OUT/"
+            .trusted-ci/scripts/ci/bundle-release-roms.sh "$PWD" "dist/$OUT"
           elif [[ "$TARGET" == *apple-darwin* ]]; then
-            # Bundle layout + AppIcon.icns from trusted default-branch tree (CWE-829).
-            chmod +x .trusted-ci/scripts/ci/stage-macos-egui-app.sh
-            .trusted-ci/scripts/ci/stage-macos-egui-app.sh \
+            # SpecChumMac .app from trusted packaging scripts (CWE-829).
+            BIN="$(cat apps/macos/.build/specchummac-binary-path.txt)"
+            chmod +x .trusted-ci/scripts/ci/stage-macos-specchummac-app.sh
+            .trusted-ci/scripts/ci/stage-macos-specchummac-app.sh \
               "$VERSION" \
-              "$BIN_DIR/spec_chum" \
-              "dist/$OUT/Spec Chum.app"
+              "$BIN" \
+              "dist/$OUT/Spec Chum.app" \
+              "$PWD"
+            # Surface Lawson notice next to LICENSE on the DMG volume.
+            if [[ -f "dist/$OUT/Spec Chum.app/Contents/Resources/ROMS-NOTICE.txt" ]]; then
+              cp "dist/$OUT/Spec Chum.app/Contents/Resources/ROMS-NOTICE.txt" "dist/$OUT/"
+            fi
           else
             cp "$BIN_DIR/spec_chum" "dist/$OUT/"
             strip "dist/$OUT/spec_chum" || true
+            .trusted-ci/scripts/ci/bundle-release-roms.sh "$PWD" "dist/$OUT"
           fi
           cp LICENSE "dist/$OUT/"
-          if find "dist/$OUT" -iname '*.rom' | grep -q .; then
-            echo "error: ROM files must not be packaged" >&2
+          # Require managed ROMs inside the package; reject empty / missing tree.
+          if [[ "$TARGET" == *apple-darwin* ]]; then
+            ROM_PROBE="dist/$OUT/Spec Chum.app/Contents/Resources/roms/spec48.rom"
+          else
+            ROM_PROBE="dist/$OUT/roms/spec48.rom"
+          fi
+          if [[ ! -f "$ROM_PROBE" ]]; then
+            echo "error: redistributable ROMs missing from package ($ROM_PROBE)" >&2
             exit 1
           fi
           {
@@ -190,30 +229,34 @@ jobs:
             echo ""
             if [[ "$TARGET" == *apple-darwin* ]]; then
               echo "Contents:"
-              echo "  Spec Chum.app/   — egui host"
+              echo "  Spec Chum.app/   — SpecChumMac (SwiftUI) + bundled redistributable ROMs"
               echo "  Applications/   — shortcut (DMG only; drag Spec Chum.app here)"
               echo ""
               echo "Open the .dmg release asset and drag Spec Chum.app to Applications."
               echo ""
-              echo "Headless debugger / agent HTTP: run the binary inside the .app with"
-              echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum --serve …"
-              echo "  Spec\\ Chum.app/Contents/MacOS/spec_chum debug …"
+              echo "Agent Debug HTTP (embedded on the live GUI session):"
+              echo "  SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 open -a 'Spec Chum'"
+              echo "  or launch Contents/MacOS/SpecChumMac with the same env."
+              echo "Cross-platform headless --serve / debug remain on the egui binary"
+              echo "(Windows/Linux archives, or cargo run -p app from source)."
               echo ""
               echo "When Apple notary secrets are configured, the .dmg is notarised"
               echo "and stapled."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
-              echo "Contents: spec_chum.exe (portable zip) or Start Menu install via *-setup.exe"
+              echo "Contents: spec_chum.exe + roms/ (portable zip) or Start Menu install via *-setup.exe"
               echo "Headless: spec_chum.exe --serve …   or   spec_chum.exe debug …"
               echo ""
             else
-              echo "Contents: spec_chum (also shipped as AppImage and .deb)"
+              echo "Contents: spec_chum + roms/ (also shipped as AppImage and .deb)"
               echo "Headless: ./spec_chum --serve …   or   ./spec_chum debug …"
               echo "Runtime: GTK 3 + ALSA + udev (e.g. libgtk-3-0, libasound2, libudev1)."
               echo ""
             fi
-            echo "System ROMs are not included. Fetch them with ./scripts/fetch_roms.sh"
-            echo "from a source checkout, or see README.md."
+            echo "Redistributable Spectrum ROMs are bundled (Amstrad Lawson 1999 grant"
+            echo "and other grants in docs/ROMS.md / ROMS-NOTICE.txt). User-provided-only"
+            echo "firmware (IF1, Multiface, TR-DOS, …) is not included."
+            echo "Do not strip copyright strings inside .rom files."
           } > "dist/$OUT/README.txt"
           echo "dir=dist/$OUT" >> "$GITHUB_OUTPUT"
 
@@ -243,12 +286,15 @@ jobs:
           OUT="spec-chum-${VERSION}-${TARGET}"
           mkdir -p packed
           chmod +x .trusted-ci/scripts/ci/create-macos-dmg.sh
+          extras=("${STAGE_DIR}/LICENSE" "${STAGE_DIR}/README.txt")
+          if [[ -f "${STAGE_DIR}/ROMS-NOTICE.txt" ]]; then
+            extras+=("${STAGE_DIR}/ROMS-NOTICE.txt")
+          fi
           .trusted-ci/scripts/ci/create-macos-dmg.sh \
             "$VERSION" \
             "${STAGE_DIR}/Spec Chum.app" \
             "packed/${OUT}.dmg" \
-            "${STAGE_DIR}/LICENSE" \
-            "${STAGE_DIR}/README.txt"
+            "${extras[@]}"
           echo "asset=packed/${OUT}.dmg" >> "$GITHUB_OUTPUT"
 
       - name: Codesign macOS DMG
@@ -386,16 +432,19 @@ jobs:
           # Sanity: one primary application per platform (#231).
           if [[ "$TARGET" == *apple-darwin* ]]; then
             test -d "${STAGE_DIR}/Spec Chum.app/Contents/MacOS"
-            test -x "${STAGE_DIR}/Spec Chum.app/Contents/MacOS/spec_chum"
+            test -x "${STAGE_DIR}/Spec Chum.app/Contents/MacOS/SpecChumMac"
             test -f "${STAGE_DIR}/Spec Chum.app/Contents/Resources/AppIcon.icns"
+            test -f "${STAGE_DIR}/Spec Chum.app/Contents/Resources/roms/spec48.rom"
             test ! -e "${STAGE_DIR}/spec-chum-debug"
             test -f "${DMG_ASSET}"
           elif [[ "$TARGET" == *windows* ]]; then
             test -f "${STAGE_DIR}/spec_chum.exe"
+            test -f "${STAGE_DIR}/roms/spec48.rom"
             test ! -e "${STAGE_DIR}/spec-chum-debug.exe"
             test -f "${SETUP_ASSET}"
           else
             test -x "${STAGE_DIR}/spec_chum"
+            test -f "${STAGE_DIR}/roms/spec48.rom"
             test ! -e "${STAGE_DIR}/spec-chum-debug"
             test -f "${APPIMAGE_ASSET}"
             test -f "${DEB_ASSET}"
@@ -473,19 +522,23 @@ jobs:
           overwrite_files: true
           files: dist/*
           body: |
-            Cross-platform **egui** host (`spec_chum`) with headless debugger / agent HTTP
-            on the **same** binary (`spec_chum --serve` / `spec_chum debug …`).
+            **macOS** ships the native **SpecChumMac** SwiftUI app in a `.dmg`.
+            **Windows / Linux** ship the cross-platform **egui** host (`spec_chum`) with
+            headless debugger / agent HTTP on the same binary (`--serve` / `debug …`).
 
             | Platform | Archive contents |
             | --- | --- |
-            | **macOS** | **`.dmg`**: `Spec Chum.app` + Applications shortcut |
-            | **Windows** | Portable `.zip` (`spec_chum.exe`) **and** Inno Setup `*-setup.exe` (Start Menu + uninstall) |
-            | **Linux** | `.tar.gz` **and** AppImage **and** `.deb` (same `spec_chum` binary) |
+            | **macOS** | **`.dmg`**: SpecChumMac `Spec Chum.app` (bundled redistributable ROMs) + Applications shortcut |
+            | **Windows** | Portable `.zip` (`spec_chum.exe` + `roms/`) **and** Inno Setup `*-setup.exe` |
+            | **Linux** | `.tar.gz` / AppImage / `.deb` (`spec_chum` + redistributable `roms/`) |
 
-            System ROMs are **not** included — fetch with `./scripts/fetch_roms.sh`.
+            Redistributable Spectrum ROMs are **bundled inside** each app package
+            (Amstrad Lawson 1999 grant + grants in docs/ROMS.md). User-provided-only
+            firmware is not included. ROM bytes are still not committed to git.
 
             Verify downloads with `SHA256SUMS` (and `SHA256SUMS.asc` when GPG signing is configured).
             GitHub Artifact Attestations are attached to this workflow run.
 
             Linux runtime: GTK 3, ALSA, and udev (`libgtk-3-0`, `libasound2`/`libasound2t64`, `libudev1`).
             Shared Spectrum app icon on all packaged hosts. Notarisation secrets: issue #354.
+            Native UI epic (other platforms): issue #351.

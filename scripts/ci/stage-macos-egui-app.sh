@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Stage the egui `spec_chum` binary into a production macOS .app bundle.
 #
-# Release CI wraps this bundle in a .dmg (Applications shortcut) via
-# create-macos-dmg.sh. Notarisation: [#354](https://github.com/mward-sudo/spec_chum/issues/354)
-# (umbrella [#231](https://github.com/mward-sudo/spec_chum/issues/231)). SpecChumMac
-# native UI: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+# Historically used for GitHub Release DMGs. Release CI now stages SpecChumMac
+# via stage-macos-specchummac-app.sh (#363). This script remains for local /
+# experimental egui-on-macOS packaging.
 #
 # Usage:
 #   stage-macos-egui-app.sh <version> <spec_chum-binary> <dest-app-path>

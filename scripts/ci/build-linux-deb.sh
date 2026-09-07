@@ -4,11 +4,12 @@
 # Usage:
 #   build-linux-deb.sh <version> <stage-dir> <output.deb>
 #
-# Expects stage-dir to contain: spec_chum, LICENSE, README.txt.
+# Expects stage-dir to contain: spec_chum, LICENSE, README.txt, roms/.
 # Desktop entry + icon come from packaging/linux/ beside this scripts/ci tree
 # (release CI invokes this from the trusted default-branch checkout — CWE-829).
 #
-# Installs to /usr/bin/spec_chum with a .desktop entry and hicolor icon.
+# Installs to /usr/bin/spec_chum with redistributable ROMs under
+# /usr/share/spec-chum/roms, a .desktop entry, and hicolor icon.
 # Declares runtime Depends matching the release README (GTK 3, ALSA, udev).
 set -euo pipefail
 
@@ -31,12 +32,17 @@ fi
 BIN="$STAGE_DIR/spec_chum"
 LICENSE="$STAGE_DIR/LICENSE"
 README="$STAGE_DIR/README.txt"
+ROMS="$STAGE_DIR/roms"
 for required in "$BIN" "$LICENSE" "$README"; do
   if [[ ! -f "$required" ]]; then
     echo "error: staged release tree missing required file: $required" >&2
     exit 1
   fi
 done
+if [[ ! -d "$ROMS" || ! -f "$ROMS/spec48.rom" ]]; then
+  echo "error: staged release tree missing bundled roms/ (spec48.rom)" >&2
+  exit 1
+fi
 if [[ ! -x "$BIN" ]]; then
   echo "error: staged binary is not executable: $BIN" >&2
   exit 1
@@ -67,7 +73,8 @@ mkdir -p \
   "$ROOT/usr/bin" \
   "$ROOT/usr/share/applications" \
   "$ROOT/usr/share/icons/hicolor/256x256/apps" \
-  "$ROOT/usr/share/doc/spec-chum"
+  "$ROOT/usr/share/doc/spec-chum" \
+  "$ROOT/usr/share/spec-chum"
 cleanup() {
   rm -rf "$TMP"
 }
@@ -75,10 +82,14 @@ trap cleanup EXIT
 
 cp "$BIN" "$ROOT/usr/bin/spec_chum"
 chmod 755 "$ROOT/usr/bin/spec_chum"
+cp -a "$ROMS" "$ROOT/usr/share/spec-chum/roms"
 cp "$DESKTOP" "$ROOT/usr/share/applications/spec-chum.desktop"
 cp "$ICON" "$ROOT/usr/share/icons/hicolor/256x256/apps/spec-chum.png"
 cp "$LICENSE" "$ROOT/usr/share/doc/spec-chum/copyright"
 cp "$README" "$ROOT/usr/share/doc/spec-chum/README.txt"
+if [[ -f "$STAGE_DIR/ROMS-NOTICE.txt" ]]; then
+  cp "$STAGE_DIR/ROMS-NOTICE.txt" "$ROOT/usr/share/doc/spec-chum/ROMS-NOTICE.txt"
+fi
 gzip -9n -c "$README" >"$ROOT/usr/share/doc/spec-chum/README.txt.gz"
 rm -f "$ROOT/usr/share/doc/spec-chum/README.txt"
 
@@ -99,7 +110,8 @@ Homepage: https://github.com/mward-sudo/spec_chum
 Description: Hardware-accurate ZX Spectrum emulator
  Spec Chum is a from-scratch ZX Spectrum emulator (egui host). Headless
  debugger and agent HTTP live on the same binary (spec_chum --serve /
- spec_chum debug …). System ROMs are not included.
+ spec_chum debug …). Redistributable Spectrum ROMs are installed under
+ /usr/share/spec-chum/roms (see ROMS-NOTICE.txt / docs/ROMS.md).
 EOF
 
 mkdir -p "$(dirname "$OUT_DEB")"

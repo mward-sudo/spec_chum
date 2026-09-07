@@ -20,16 +20,20 @@ inside `.rom` files.
 
 ### What this project does today
 
-- System ROMs are **not** committed to git and are **not** attached to GitHub
-  Releases ([RELEASE.md](RELEASE.md)).
-- Fetch images with `./scripts/fetch_roms.sh` (pinned sparse checkouts — see
-  [Fetch inventory](#fetch-inventory) below).
+- System ROM **bytes are not committed to git**.
+- Release packaging **embeds** the managed redistributable set from
+  `./scripts/fetch_roms.sh` inside app packages (macOS `.app` Resources,
+  Windows install/zip next to the exe, Linux tar/AppImage/deb under
+  `share/spec-chum` or next to the binary) via `scripts/ci/bundle-release-roms.sh`.
+  See [RELEASE.md](RELEASE.md). User-provided-only firmware is never bundled.
+- Dev / source checkouts still fetch with `./scripts/fetch_roms.sh` (pinned sparse
+  checkouts — see [Fetch inventory](#fetch-inventory) below).
 - Official UK primary paths used by the emulator today:
   `roms/spec48.rom`, `roms/128/spec128uk.rom`, `roms/plus2/plus2uk.rom`,
   `roms/plus2a/plus2a.rom`, `roms/plus3/plus3.rom`.
 
-If we ever ship ROM bytes with a build, the Lawson notice above remains
-required, and in-image copyright messages must stay intact.
+Shipped ROM bytes must keep the Lawson notice (release `ROMS-NOTICE.txt` /
+README) and leave in-image copyright messages intact.
 
 ## Fetch inventory
 

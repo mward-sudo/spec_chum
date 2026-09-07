@@ -38,17 +38,20 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 - Binary (`app`): `anyhow` is fine for top-level error context.
 - `unsafe` is denied workspace-wide; only introduce it with a documented `SAFETY` rationale and a narrowly scoped `#[allow(unsafe_code)]`.
 
-GitHub Release archives (single primary `spec_chum` / `Spec Chum.app` per platform) are built by
+GitHub Release archives (single primary app per platform) are built by
 `.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
-Do not attach ROMs. macOS ships an egui-wrapped `Spec Chum.app` in a **`.dmg`**
-(Applications shortcut only — no secondary `.zip`; [#361](https://github.com/mward-sudo/spec_chum/issues/361);
+Do not commit ROM binaries. Release CI fetches redistributable ROMs and embeds
+them inside packages (macOS SpecChumMac `.app` / Windows / Linux — see
+[docs/ROMS.md](docs/ROMS.md)). macOS ships SpecChumMac in a **`.dmg`**
+(Applications shortcut only — no secondary `.zip`; [#361](https://github.com/mward-sudo/spec_chum/issues/361),
+[#363](https://github.com/mward-sudo/spec_chum/issues/363);
 notarisation + staple when Apple notary secrets are set — [#354](https://github.com/mward-sudo/spec_chum/issues/354));
 Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
 **AppImage**, and **`.deb`**. Shared Spectrum app icon (macOS `.icns` / Windows `.ico` /
 Linux PNG / egui window) lives under `packaging/` — regenerate with
 `python3 scripts/generate_app_icons.py`
 ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
-Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+Native UI shells (non-macOS): [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 **Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
 (z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
 

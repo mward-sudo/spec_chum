@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Fetch distributable ZX Spectrum ROM images into roms/.
-# ROMs are NOT redistributed by this project (not in git / not in Releases).
+# ROM bytes are NOT committed to git. Release packaging may embed the managed
+# redistributable set inside app bundles / installers (see docs/ROMS.md,
+# scripts/ci/bundle-release-roms.sh) — never user-provided-only firmware.
 #
 # Amstrad official Spectrum ROMs — Lawson 1999 grant; see docs/ROMS.md.
 # Non-Amstrad sets below cite their own grants in docs/ROMS.md and here.

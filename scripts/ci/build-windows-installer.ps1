@@ -23,10 +23,14 @@ if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$') {
 $exe = Join-Path $StageDir "spec_chum.exe"
 $license = Join-Path $StageDir "LICENSE"
 $readme = Join-Path $StageDir "README.txt"
+$rom48 = Join-Path $StageDir "roms\spec48.rom"
 foreach ($required in @($exe, $license, $readme)) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "staged release tree missing required file: $required"
     }
+}
+if (-not (Test-Path -LiteralPath $rom48)) {
+    throw "staged release tree missing bundled roms\spec48.rom"
 }
 
 $isccCandidates = @(

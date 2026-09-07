@@ -273,8 +273,8 @@ Pause / Play hold at LD-BYTES works in Experience mode.
 
 ## Not in this slice (still egui-only or follow-ups)
 
-- Signed / notarized SwiftUI distribution bundle (dev launch uses a staged `.app` via `open`)
-- Beta UI on macOS (egui Hardware stubs first); IF1 + MDR and DivMMC SD/EEPROM attach are in the native Hardware menu
+- Beta UI polish beyond current Hardware menu parity
+- Windows / Linux native shells ([#351](https://github.com/mward-sudo/spec_chum/issues/351))
 
 ## CI (`macos-shell` / `living-room` — [#68](https://github.com/mward-sudo/spec_chum/issues/68) / [#146](https://github.com/mward-sudo/spec_chum/issues/146))
 
@@ -292,9 +292,10 @@ exports `MACOSX_DEPLOYMENT_TARGET=14.0` and matching `CFLAGS`/`CXXFLAGS` before
 (especially blake3 NEON) are not stamped with the host SDK (26.x/27.x), which
 otherwise produces Swift-link `ld` warnings.
 
-GitHub Releases currently ship an **egui**-wrapped `Spec Chum.app` (see
-[RELEASE.md](RELEASE.md)). This SwiftUI shell is not yet a release artifact;
-DMG/notarisation remain follow-ups under [#68](https://github.com/mward-sudo/spec_chum/issues/68).
+GitHub Releases ship **SpecChumMac** as the macOS `.dmg` app
+([#363](https://github.com/mward-sudo/spec_chum/issues/363)), with redistributable
+ROMs under `Contents/Resources/roms`. egui remains the Windows/Linux (and
+source) host. Broader native-shell product work is [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 
 ## Layout
 
