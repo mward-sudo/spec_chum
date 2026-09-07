@@ -10,6 +10,7 @@ use parking_lot::Mutex as ParkingMutex;
 use crate::session::{HostSession, ModelId};
 
 #[derive(Debug)]
+// HostSession dominates either arm; boxing would add indirection on every FFI call (#171).
 #[allow(clippy::large_enum_variant)]
 pub enum SessionInner {
     Local(RefCell<HostSession>),
@@ -21,6 +22,7 @@ pub struct SessionHandle {
     pub inner: SessionInner,
 }
 
+// Same size skew as `SessionInner` — guard/ref carry the full session (#171).
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum SessionAccess<'a> {

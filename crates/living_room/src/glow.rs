@@ -60,6 +60,7 @@ pub struct CrtFillLight;
 /// Constant warm room lamp — not CRT-tinted (stays tungsten).
 /// Reserved for future fixture tagging; wall sconces currently carry their own lights.
 #[derive(Component, Debug)]
+// Marker reserved for future sconce tagging (#171 / living-room polish).
 #[allow(dead_code)]
 pub struct IncandescentLamp;
 

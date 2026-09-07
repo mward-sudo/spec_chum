@@ -354,16 +354,16 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/ffi.rs": {
-    "mtime": 1788732000.765048,
-    "seen": 1788732024.269098,
-    "ast_hash": "c33a84060a8634f7f3379466c1491273",
+    "mtime": 1788742343.4546092,
+    "seen": 1788742405.534763,
+    "ast_hash": "e9c37d04b00a883277ccc1cb17881f40",
     "semantic_hash": ""
   },
   "crates/host_api/src/handle.rs": {
-    "mtime": 1788729094.4421968,
-    "seen": 1788730076.22937,
-    "ast_hash": "e0268cc29468829326199ec9001c7153",
-    "semantic_hash": "e0268cc29468829326199ec9001c7153"
+    "mtime": 1788742336.7838497,
+    "seen": 1788742405.534763,
+    "ast_hash": "bf97809202f6077c2890ad1d49487a6e",
+    "semantic_hash": ""
   },
   "crates/host_api/src/keymap.rs": {
     "mtime": 1788729196.4407423,
@@ -432,15 +432,15 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/audio.rs": {
-    "mtime": 1788741581.9682932,
-    "seen": 1788741817.158819,
-    "ast_hash": "65b5bc2149121198119273c1a822c762",
+    "mtime": 1788742346.5235565,
+    "seen": 1788742405.5349262,
+    "ast_hash": "6a723a7ab099c14ddffe0385d32c3f97",
     "semantic_hash": ""
   },
   "crates/living_room/src/camera.rs": {
-    "mtime": 1788741677.2503765,
-    "seen": 1788741817.1588202,
-    "ast_hash": "3732841e0f0781979ef868519ff0a04e",
+    "mtime": 1788742350.2387085,
+    "seen": 1788742405.5349271,
+    "ast_hash": "b010130c33320a3d900e4a6398b7d9f5",
     "semantic_hash": ""
   },
   "crates/living_room/src/crt.rs": {
@@ -474,9 +474,9 @@
     "semantic_hash": "8cd78449039d538bba10b185dc3ea2f4"
   },
   "crates/living_room/src/glow.rs": {
-    "mtime": 1788741625.1475947,
-    "seen": 1788741817.158866,
-    "ast_hash": "0c5eb83e614b1bd13864b77766cc14dc",
+    "mtime": 1788742355.7938437,
+    "seen": 1788742405.535,
+    "ast_hash": "835999f043630da099917ef196f2a02e",
     "semantic_hash": ""
   },
   "crates/living_room/src/headless.rs": {
@@ -492,9 +492,9 @@
     "semantic_hash": "8ac89edf0166085b0b4192a17cc77dba"
   },
   "crates/living_room/src/hybrid.rs": {
-    "mtime": 1788741628.407562,
-    "seen": 1788741817.158883,
-    "ast_hash": "ca14c270b9cf9b9d5010012cdcb18d7f",
+    "mtime": 1788742358.856178,
+    "seen": 1788742405.5350301,
+    "ast_hash": "d766a5920f472d293a9b8298bd06dee8",
     "semantic_hash": ""
   },
   "crates/living_room/src/image_copy.rs": {
@@ -510,9 +510,9 @@
     "semantic_hash": "434813be0c20f6f1f3e89354b4ed0c26"
   },
   "crates/living_room/src/lib.rs": {
-    "mtime": 1788736341.8334458,
-    "seen": 1788738295.541329,
-    "ast_hash": "0a20cad0a2da7d80b8db78e63132053f",
+    "mtime": 1788742355.7938437,
+    "seen": 1788742405.53506,
+    "ast_hash": "0415157c63127bcd79f108c68c1c807d",
     "semantic_hash": ""
   },
   "crates/living_room/src/main.rs": {
@@ -552,10 +552,10 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/ui_overlay.rs": {
-    "mtime": 1788729094.446471,
-    "seen": 1788730076.229383,
-    "ast_hash": "f060302d095ed4cd34fe487e8d21a1dc",
-    "semantic_hash": "f060302d095ed4cd34fe487e8d21a1dc"
+    "mtime": 1788742351.394839,
+    "seen": 1788742405.535147,
+    "ast_hash": "36d42ae60dad1f8d5b1eea045d980a6a",
+    "semantic_hash": ""
   },
   "crates/machine/Cargo.toml": {
     "mtime": 1788729196.4424872,
@@ -630,10 +630,10 @@
     "semantic_hash": ""
   },
   "crates/tape/src/tzx.rs": {
-    "mtime": 1788729094.4486134,
-    "seen": 1788730076.229389,
-    "ast_hash": "88a80a995b7f62c24e719a7249a61f74",
-    "semantic_hash": "88a80a995b7f62c24e719a7249a61f74"
+    "mtime": 1788742336.4467213,
+    "seen": 1788742405.53532,
+    "ast_hash": "3c24f44cc1f49893a2276e6906fa1fa0",
+    "semantic_hash": ""
   },
   "crates/trace/Cargo.toml": {
     "mtime": 1788729196.4466243,
@@ -1122,9 +1122,9 @@
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
-    "mtime": 1788741668.9875805,
-    "seen": 1788741817.159918,
-    "ast_hash": "24f46ec06e8505f6c10c30bd9917eddb",
+    "mtime": 1788742330.4140832,
+    "seen": 1788742405.536,
+    "ast_hash": "1c0ecbb253ea8830f161f5c3ce054451",
     "semantic_hash": ""
   },
   "scripts/check_deny.sh": {

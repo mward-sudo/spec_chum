@@ -568,6 +568,7 @@ fn append_standard_block(
     crate::push_pulse(pulses, level, pause);
 }
 
+// Pilot/sync/zero/one timings + pause are one TZX turbo block (#171).
 #[allow(clippy::too_many_arguments)]
 fn append_turbo_block(
     pulses: &mut Vec<(u32, bool)>,

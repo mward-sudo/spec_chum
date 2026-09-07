@@ -334,6 +334,7 @@ fn output_rate_supported(device: &cpal::Device, rate: u32, channels: u16) -> boo
     })
 }
 
+// Shared mute/fade/live state arcs — matches cpal callback signature (#171).
 #[allow(clippy::too_many_arguments)]
 fn fill_output(
     data: &mut [f32],
