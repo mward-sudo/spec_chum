@@ -104,7 +104,8 @@ jobs:
           ref: ${{ needs.resolve.outputs.ref }}
           persist-credentials: false
 
-      # Signing scripts run with credentials — always take them from the default
+      # Signing / installer-build scripts run with credentials or produce
+      # Authenticode-signed artifacts — always take them from the default
       # branch, never from a tag-controlled tree (CWE-829).
       - name: Fetch trusted signing scripts
         if: runner.os == 'macOS' || runner.os == 'Windows'
@@ -113,6 +114,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: |
             scripts/ci
+            packaging/windows
           sparse-checkout-cone-mode: true
           path: .trusted-ci
           persist-credentials: false
@@ -290,7 +292,8 @@ jobs:
             "$env:STAGE_DIR/spec_chum.exe"
 
       # Inno Setup installer wraps the (optionally signed) staged exe.
-      # Install tool from Chocolatey; compile script from the release tree.
+      # Install tool from Chocolatey; compile script + .iss from the trusted
+      # default-branch tree (same CWE-829 pattern as codesign / notary).
       - name: Install Inno Setup
         if: runner.os == 'Windows'
         shell: pwsh
@@ -307,7 +310,7 @@ jobs:
         run: |
           $Out = "spec-chum-$env:VERSION-$env:TARGET-setup.exe"
           New-Item -ItemType Directory -Force -Path packed | Out-Null
-          & "scripts/ci/build-windows-installer.ps1" `
+          & ".trusted-ci/scripts/ci/build-windows-installer.ps1" `
             $env:VERSION `
             $env:STAGE_DIR `
             "packed/$Out"

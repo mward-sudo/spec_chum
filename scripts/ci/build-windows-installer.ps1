@@ -2,7 +2,9 @@
 # Usage:
 #   build-windows-installer.ps1 <version> <stage-dir> <output-setup.exe>
 #
-# Requires Inno Setup 6 (ISCC.exe). Release CI installs it via Chocolatey.
+# Requires Inno Setup 6 (ISCC.exe). Release CI installs it via Chocolatey and
+# invokes this script from the trusted default-branch checkout (.trusted-ci)
+# together with packaging/windows/spec-chum.iss (CWE-829).
 # Signing the resulting setup.exe is separate (sign-windows.ps1).
 $ErrorActionPreference = "Stop"
 
@@ -39,7 +41,7 @@ if (-not $iscc) {
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $iss = Join-Path $repoRoot "packaging\windows\spec-chum.iss"
 if (-not (Test-Path -LiteralPath $iss)) {
-    throw "Inno script not found: $iss"
+    throw "Inno script not found beside trusted CI tree: $iss (expected packaging/windows next to scripts/ci)"
 }
 
 $outDir = Split-Path -Parent $OutputExe
