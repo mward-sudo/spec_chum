@@ -762,10 +762,10 @@
     "semantic_hash": "362eb4cb3f635d0bee18984c38acc0b8"
   },
   "scripts/ci/stage-macos-egui-app.sh": {
-    "mtime": 1788745890.2022643,
-    "seen": 1788745999.972236,
-    "ast_hash": "db4614b124577f4d02be481953cd56b5",
-    "semantic_hash": ""
+    "mtime": 1788729094.451527,
+    "seen": 1788730076.229399,
+    "ast_hash": "81d5f7adc41edf789556bf87c278dcea",
+    "semantic_hash": "81d5f7adc41edf789556bf87c278dcea"
   },
   "scripts/fetch_living_room_assets.sh": {
     "mtime": 1788729094.451603,
@@ -864,15 +864,15 @@
     "semantic_hash": ""
   },
   ".github/workflows/release.yml": {
-    "mtime": 1788745996.4212065,
-    "seen": 1788745999.972487,
-    "ast_hash": "9b91b2074a0e1d7472e4dc32be406fd0",
+    "mtime": 1788743962.7755637,
+    "seen": 1788744476.6931899,
+    "ast_hash": "d121d64ca73e8731cc35004532fe4674",
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1788745918.8373091,
-    "seen": 1788745999.972487,
-    "ast_hash": "b4af7f733f7f90392e4a709a28ab4fe7",
+    "mtime": 1788744020.660877,
+    "seen": 1788744476.6931899,
+    "ast_hash": "4e85a16a61cfb65b4af3f6df2910f0a0",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -882,9 +882,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1788745918.7132368,
-    "seen": 1788745999.9725,
-    "ast_hash": "e22c32bb0afbe78c380b3017f0384245",
+    "mtime": 1788729196.421052,
+    "seen": 1788730076.229409,
+    "ast_hash": "0115d1ffd7b95dea602b8a848aa77704",
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
@@ -894,9 +894,9 @@
     "semantic_hash": ""
   },
   "docs/DEBUGGING.md": {
-    "mtime": 1788744721.4133632,
-    "seen": 1788745999.972513,
-    "ast_hash": "feadac79f5a4ff7150fa7793d5e5a4db",
+    "mtime": 1788743997.7934978,
+    "seen": 1788744476.693215,
+    "ast_hash": "ff88e5413ec478a366ce2d5d06af5912",
     "semantic_hash": ""
   },
   "docs/LIVING_ROOM.md": {
@@ -918,9 +918,9 @@
     "semantic_hash": "13e52d5e893eb3b2545929a0b1eba479"
   },
   "docs/RELEASE.md": {
-    "mtime": 1788745968.6636884,
-    "seen": 1788745999.9725509,
-    "ast_hash": "5ac10e61acb35de3ea68e04ef0526ff1",
+    "mtime": 1788743988.4927619,
+    "seen": 1788744476.693255,
+    "ast_hash": "f62ae952413becb97a5c6135dec73fab",
     "semantic_hash": ""
   },
   "docs/ROMS.md": {
@@ -1143,12 +1143,6 @@
     "mtime": 1788743892.703794,
     "seen": 1788744476.691704,
     "ast_hash": "5ecd20be189ac4ade2e86bf134501c9f",
-    "semantic_hash": ""
-  },
-  "scripts/ci/create-macos-dmg.sh": {
-    "mtime": 1788745959.0660396,
-    "seen": 1788745999.972206,
-    "ast_hash": "d6dc5dc791c8caf2554aa0728a8cceb1",
     "semantic_hash": ""
   }
 }
