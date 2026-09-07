@@ -89,6 +89,8 @@ Bevy’s supported embed pattern is **headless `SubApps`**: disable `WinitPlugin
 3. `Contents/Resources/living_room_assets` next to the executable
 4. `CARGO_MANIFEST_DIR/assets` (dev `cargo run`)
 
+Poly Haven CC0 meshes/textures under `polyhaven/` are **gitignored**. Fresh clones / worktrees must run `./scripts/fetch_living_room_assets.sh` (or let `build_macos_app.sh` / `run_macos_app.sh` auto-fetch). Staging validates `polyhaven.manifest` and hard-fails on incomplete trees unless `SPEC_CHUM_ALLOW_EMPTY_LIVING_ROOM_ASSETS=1`. Enabling living-room mode with a missing tree surfaces an actionable status error instead of a black void (#368).
+
 ## Dual-clock embed plan
 
 **Status:** **implemented** for SpecChumMac (Phases 0–3). Not research-only.

@@ -11,6 +11,10 @@ Cross-platform primary host remains the egui app (`cargo run -p app`).
 - Full **Xcode** (or Xcode beta), not Command Line Tools alone — SwiftUI macros need it
 - Rust toolchain (`rustup`)
 - Fetched ROMs: `./scripts/fetch_roms.sh`
+- Living-room Poly Haven assets (gitignored): `./scripts/fetch_living_room_assets.sh`  
+  `build_macos_app.sh` / `run_macos_app.sh` auto-fetch when incomplete by default (#368).  
+  Escape hatch: `SPEC_CHUM_ALLOW_EMPTY_LIVING_ROOM_ASSETS=1` (stage only; enabling living-room mode still errors).  
+  Disable auto-fetch: `SPEC_CHUM_FETCH_LIVING_ROOM_ASSETS=0`.
 
 ## Build & run
 
@@ -30,7 +34,9 @@ From the repository root:
 2. Sync `spec_chum_host.h` + `spec_chum_room.h` into the Swift package
 3. `swift build -c release` for `apps/macos` (sets `DEVELOPER_DIR` to Xcode if needed;
    `force_load`s `libspec_chum_room.a` — a living_room cdylib next to host panics/blacks)
-4. Copy `crates/living_room/assets` → staged app `Contents/Resources/living_room_assets`
+4. Ensure Poly Haven assets (`ensure_living_room_assets.sh`) then copy
+   `crates/living_room/assets` → staged app `Contents/Resources/living_room_assets`
+   (hard-fails on incomplete `polyhaven/` unless allow-empty is set)
 
 Environment:
 
@@ -38,6 +44,8 @@ Environment:
 - `SPEC_CHUM_LIVING_ROOM_ASSETS` — optional override for Bevy asset root (set by the staged launcher)
 - `SPEC_CHUM_LIVING_ROOM=1` — opt-in: start in living-room mode (`run_macos_app.sh` bakes into the
   staged wrapper only when set; default launch stays flat Spectrum)
+- `SPEC_CHUM_FETCH_LIVING_ROOM_ASSETS` — default `1` for build/run: auto-fetch when manifest incomplete
+- `SPEC_CHUM_ALLOW_EMPTY_LIVING_ROOM_ASSETS=1` — allow staging without Poly Haven (CI/headless that never opens living-room)
 - `SPEC_CHUM_ROOM_PERF=1` — opt-in: room/host Hz HUD + stderr (same wrapper bake rule)
 - `SPEC_CHUM_AUDIO_DEBUG=1` — AudioQueue init / enqueue / callback stats → stderr, NSLog, and `/tmp/spec-chum-audio.log` (same wrapper bake rule)
 - `SPEC_CHUM_AUDIO_CAPTURE=1` — write scheduled PCM to `/tmp/spec-chum-capture.wav` (direct binary launch; not baked by `run_macos_app.sh`)
