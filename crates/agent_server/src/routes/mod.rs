@@ -19,6 +19,7 @@ use axum::{
 };
 use control_plane::{ApiError, ErrorBody, ServerConfig};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tower_http::trace::TraceLayer;
 
 pub type SharedPlane = Arc<control_plane::ControlPlane>;
@@ -133,8 +134,17 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
+/// Failures signaled on the embedded-server ready channel before listen succeeds.
+#[derive(Debug, Error)]
+pub enum ReadyError {
+    #[error("tokio runtime failed: {0}")]
+    Runtime(#[source] std::io::Error),
+    #[error("bind failed: {0}")]
+    Bind(#[source] std::io::Error),
+}
+
 /// Optional one-shot channel signaled after the listen socket binds successfully.
-pub type ReadySender = std::sync::mpsc::SyncSender<Result<(), String>>;
+pub type ReadySender = std::sync::mpsc::SyncSender<Result<(), ReadyError>>;
 
 pub async fn serve(
     config: ServerConfig,
@@ -156,7 +166,10 @@ pub async fn serve(
         Ok(listener) => listener,
         Err(e) => {
             if let Some(tx) = ready {
-                let _ = tx.send(Err(format!("bind failed: {e}")));
+                let _ = tx.send(Err(ReadyError::Bind(std::io::Error::new(
+                    e.kind(),
+                    e.to_string(),
+                ))));
             }
             return Err(e.into());
         }
@@ -290,6 +303,20 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+
+    #[test]
+    fn ready_error_display_keeps_prefixes() {
+        let bind = ReadyError::Bind(std::io::Error::new(
+            std::io::ErrorKind::AddrInUse,
+            "address already in use",
+        ));
+        assert!(bind.to_string().starts_with("bind failed:"), "got {bind}");
+        let runtime = ReadyError::Runtime(std::io::Error::other("runtime boom"));
+        assert!(
+            runtime.to_string().starts_with("tokio runtime failed:"),
+            "got {runtime}"
+        );
+    }
 
     fn test_app() -> Router {
         let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
