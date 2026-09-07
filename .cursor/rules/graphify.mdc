@@ -29,4 +29,12 @@ After modifying **code** files, run `./scripts/graphify_update.sh` (or `graphify
 
 ## After each completed task (required)
 
-Before treating work as done, skim `graphify-out/GRAPH_REPORT.md` **Suggested Questions** (and Knowledge Gaps / God Nodes if relevant). For each item: **ignore** / **defer** / **do now** — short rationale vs open issues and current priorities (accuracy, #171 quality/CI, GUI parity). Act only when clearly actionable and small (or open/link an issue); do not derail the active branch for speculative refactors.
+Before treating work as done, skim `graphify-out/GRAPH_REPORT.md` **Suggested Questions** (and Knowledge Gaps / God Nodes if relevant). Disposition each item vs open issues and current priorities (accuracy, #171 quality/CI, GUI parity):
+
+| Disposition | Meaning |
+| --- | --- |
+| **do now** | Small, clearly actionable work — do it immediately in the same task / current PR when appropriate. |
+| **defer** | Real follow-up but not for this task — **must** file or link a GitHub issue (no silent defer). Prefer extending an existing issue over a duplicate. |
+| **ignore** | Noise, expected hubs (high betweenness), or not a defect — OK with a short rationale. |
+
+Do not derail the active branch for speculative refactors; if it is not tiny and safe on the current branch, **defer** with an issue rather than bloating unrelated WIP.
