@@ -1086,16 +1086,20 @@ mod tests {
         v.push(0x12);
         v.extend_from_slice(&2165u16.to_le_bytes());
         v.extend_from_slice(&4u16.to_le_bytes());
-        // Start mid-stream as if after a low-ending block: force initial high so
-        // 0x01's zero bits emit high/low pairs ending low? Simpler: assert pause
-        // level equals level after last data pulse's flip (current level).
         let p = TzxPlayer::parse(&v).unwrap();
         // 8 bits × 2 + pause + 4 tone
         assert_eq!(p.scheduled_pulses(), 16 + 1 + 4);
         let pause = p.pulses[16];
         let tone0 = p.pulses[17];
         assert_eq!(pause.0, 1750 * 3500);
+        assert!(
+            pause.1,
+            "pause continues high after last data half-pulse low"
+        );
         assert_eq!(tone0.0, 2165);
+        assert!(!tone0.1, "next Pure Tone starts low (Fuse LEVEL_LOW)");
+        assert_eq!(p.pulses[18].0, 2165);
+        assert!(p.pulses[18].1, "second tone pulse toggles high");
     }
 
     #[test]
