@@ -3,6 +3,8 @@
 //! Shared JSON schema for egui / `living_room`. macOS `SwiftUI` mirrors the same
 //! fields in `UserDefaults` (`specChum.*` keys). Instant / flash-load is never
 //! persisted as a sticky Play default.
+//!
+//! `online_tape_titles` (default **off**): opt-in `ZXInfo` hash→title lookup (#373).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -73,6 +75,9 @@ pub struct UiPreferences {
     /// User-picked ROM paths keyed `{pref_model_slug}_{slot_id}` (e.g. `pentagon128_main`).
     #[serde(default)]
     pub model_rom_paths: BTreeMap<String, String>,
+    /// When true, look up unknown tape titles via `ZXInfo` (hash only). Default off (#373).
+    #[serde(default)]
+    pub online_tape_titles: bool,
 }
 
 fn prefs_version() -> u32 {
@@ -114,6 +119,7 @@ impl Default for UiPreferences {
             custom_configs: Vec::new(),
             active_config_id: None,
             model_rom_paths: BTreeMap::new(),
+            online_tape_titles: false,
         }
     }
 }
@@ -657,6 +663,14 @@ mod tests {
         let s = p.sanitized();
         assert_eq!(s.window_width, MIN_WINDOW_WIDTH);
         assert_eq!(s.window_height, MIN_WINDOW_HEIGHT);
+    }
+
+    #[test]
+    fn online_tape_titles_defaults_off() {
+        assert!(!UiPreferences::default().online_tape_titles);
+        let json = br#"{"version":2}"#;
+        let p: UiPreferences = serde_json::from_slice(json).expect("parse");
+        assert!(!p.sanitized().online_tape_titles);
     }
 
     #[test]

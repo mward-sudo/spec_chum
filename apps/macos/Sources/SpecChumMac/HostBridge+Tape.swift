@@ -31,6 +31,12 @@ extension HostBridge {
         if progressPublishCounter % 12 == 0 || !tape {
             refreshTapeProgress()
         }
+        // Pull title each tick so background ZXInfo enrichment can upgrade chrome (#373).
+        if tape, let handle {
+            if let t = Self.takeMediaTitle(handle: handle), t != mediaTitle {
+                mediaTitle = t
+            }
+        }
     }
 
     func refreshTapeProgress() {

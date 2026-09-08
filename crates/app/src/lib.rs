@@ -1175,6 +1175,9 @@ impl SpecChumApp {
         session
             .host_mut()
             .set_joystick_mode(prefs.joystick_mode.to_mode());
+        session
+            .host_mut()
+            .set_online_tape_titles(prefs.online_tape_titles);
         session.kempston_mouse = prefs.kempston_mouse;
         if let Some(cfg) = prefs.active_custom_config().cloned() {
             match session.apply_user_machine_config(&cfg) {
@@ -1377,6 +1380,7 @@ impl SpecChumApp {
         self.prefs
             .set_joystick(self.session.host_mut().joystick_mode());
         self.prefs.kempston_mouse = self.session.kempston_mouse;
+        self.prefs.online_tape_titles = self.session.host_mut().online_tape_titles();
         {
             let host = &mut *self.session.host_mut();
             if let Some(m) = host.machine() {
@@ -2434,6 +2438,22 @@ impl SpecChumApp {
                                 self.mark_prefs_dirty();
                             }
                         }
+                        ui.separator();
+                        if ui
+                            .checkbox(
+                                &mut self.prefs.online_tape_titles,
+                                "Look up tape titles online (ZXInfo)",
+                            )
+                            .on_hover_text(
+                                "Opt-in (default off). Sends a SHA-512 of the opened tape file to api.zxinfo.dk — not the path or bytes. Failures keep the filename.",
+                            )
+                            .changed()
+                        {
+                            self.session
+                                .host_mut()
+                                .set_online_tape_titles(self.prefs.online_tape_titles);
+                            self.mark_prefs_dirty();
+                        }
                     });
                     ui.menu_button("Debug", |ui| {
                         if ui.button("Debugger window").clicked() {
@@ -2525,7 +2545,7 @@ of their copyrighted material but retain that copyright.",
                     });
                     ui.separator();
                     let (tape_title, has_tape, tape_progress) = {
-                        let host = self.session.host_mut();
+                        let mut host = self.session.host_mut();
                         (
                             host.media_title().map(str::to_owned),
                             host.machine().is_some_and(Machine::has_tape),

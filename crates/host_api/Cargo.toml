@@ -21,6 +21,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 directories = { workspace = true }
 parking_lot = { workspace = true }
+ureq = { workspace = true }
 
 # Crate-local lints (#171): pedantic warn with endemic cast/name allows.
 # Cannot mix `workspace = true` with overrides — keep in sync with root Cargo.toml.

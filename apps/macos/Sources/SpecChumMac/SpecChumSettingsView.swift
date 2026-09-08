@@ -30,6 +30,11 @@ struct SpecChumSettingsView: View {
                 Text("Toolbar Instant always opens a TAP/TZX panel, then flash-loads. Play alone stays on the EAR path at this speed. Disk images use Open Tape / Disk — Instant does not Type LOAD for DSK.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Toggle("Look up tape titles online (ZXInfo)", isOn: $host.onlineTapeTitles)
+                    .help("Opt-in (default off). Sends a SHA-512 of the opened tape file to api.zxinfo.dk — not the path or bytes. Failures keep the filename.")
+                Text("Privacy: only a content hash is sent when a tape opens. Emulation never waits on the network.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Audio") {
                 Toggle("Mute", isOn: $host.outputMuted)
@@ -74,6 +79,6 @@ struct SpecChumSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 440, height: 500)
+        .frame(width: 440, height: 560)
     }
 }
