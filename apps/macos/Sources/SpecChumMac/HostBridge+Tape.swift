@@ -57,7 +57,15 @@ extension HostBridge {
         }
         let within = pulses == 0 ? 0.0 : Double(min(pulse, pulses)) / Double(pulses)
         let frac = min(1.0, (Double(min(block, blocks)) + within) / Double(blocks))
-        let label = "Tape \(min(block + 1, blocks))/\(blocks)"
+        // After the deck finishes, Speedlock (Arkanoid) may sit in a long DI
+        // border-delay (~$F448). Prefer an honest label over a stuck "Tape N/N".
+        // Match egui / Machine::in_post_tape_di_delay (finished + !IFF1 + PC≥$8000).
+        let label: String
+        if sc_in_post_tape_di_delay(handle) != 0 {
+            label = "Speedlock delay…"
+        } else {
+            label = "Tape \(min(block + 1, blocks))/\(blocks)"
+        }
         if tapeFraction.map({ abs($0 - frac) > 0.002 }) ?? true {
             tapeFraction = frac
         }

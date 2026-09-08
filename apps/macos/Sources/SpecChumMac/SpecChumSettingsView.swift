@@ -25,8 +25,9 @@ struct SpecChumSettingsView: View {
                     Text("5x").tag(UInt32(5))
                     Text("10x").tag(UInt32(10))
                     Text("20x").tag(UInt32(20))
+                    Text("64x").tag(UInt32(64))
                 }
-                .help("While Play: N Spectrum frames per tick (wall-clock ≈ realtime/N). Instant flash ignores this.")
+                .help("While Play: N Spectrum frames per tick (wall-clock ≈ realtime/N). 64× shortens Speedlock post-tape delays. Instant flash ignores this.")
                 Text("Toolbar Instant always opens a TAP/TZX panel, then flash-loads. Play alone stays on the EAR path at this speed. Disk images use Open Tape / Disk — Instant does not Type LOAD for DSK.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

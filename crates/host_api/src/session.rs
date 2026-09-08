@@ -2021,6 +2021,83 @@ mod tests {
         assert!(s.status().contains("TZX") || s.media_title().is_some());
     }
 
+    /// First Speedlock DI delay stage must RET (~$F476) under Play turbo (#379).
+    /// Full multi-stage nest → IFF1/game entry is much longer; not asserted here.
+    #[ignore = "local Arkanoid fixture; ~5min @64× for first delay RET"]
+    #[test]
+    fn arkanoid_speedlock_first_delay_ret_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let arkanoid = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
+        if !arkanoid.is_file() {
+            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.open_tape(&arkanoid).expect("open");
+        {
+            let m = s.machine.as_mut().expect("machine");
+            m.set_tape_load_options(machine::TapeLoadOptions {
+                flash_load: false,
+                speed: 64,
+                experience_load: false,
+            });
+            m.set_tape_playing(false);
+        }
+        for _ in 0..200 {
+            let _ = s.machine.as_mut().expect("machine").run_frame();
+        }
+        {
+            let m = s.machine.as_mut().expect("machine");
+            m.type_load_quotes(false);
+            m.set_tape_playing(true);
+        }
+        for _ in 0..30_000u32 {
+            let _ = s.machine.as_mut().expect("machine").run_frame();
+            let m = s.machine.as_ref().expect("machine");
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        {
+            let m = s.machine.as_ref().expect("machine");
+            assert!(
+                m.in_post_tape_di_delay(),
+                "expected post-tape DI delay, pc={:#06x} iff1={}",
+                m.cpu().regs.pc,
+                u8::from(m.cpu().regs.iff1)
+            );
+            assert_ne!(m.cpu().regs.pc, 0xFD2A);
+            assert_eq!(
+                m.read_mem(0xF44E),
+                0xDD,
+                "Speedlock uses LD E,IXH at $F44E (not CALL)"
+            );
+        }
+        let mut saw_ret = false;
+        for i in 0..20_000u32 {
+            let _ = s.machine.as_mut().expect("machine").run_frame();
+            let m = s.machine.as_ref().expect("machine");
+            let p = m.cpu().regs.pc;
+            assert_ne!(p, 0xFD2A, "returned to sampler");
+            if p == 0xF476 {
+                saw_ret = true;
+                eprintln!("first delay RET at {p:#06x} after +{i} host frames");
+                break;
+            }
+        }
+        assert!(
+            saw_ret,
+            "Speedlock first DI delay stage did not RET within 20k turbo frames"
+        );
+    }
+
     /// Fast smoke: after EAR exhaust, PC must leave `$FD2A` (sampler desync).
     /// Full delay→game entry is covered by the slow ignored test below.
     #[ignore = "requires local Arkanoid fixture"]
@@ -2110,11 +2187,10 @@ mod tests {
 
     /// EAR Play path for Arkanoid Speedlock (#379 / #380).
     ///
-    /// After tape exhaust: must not sit in `$FD2A`, must show screen activity,
-    /// and should either remain in the Speedlock DI delay (turbo still on) or
-    /// reach `IFF1` / a non-stub PC with screen data. Nested delay can outlive
-    /// a short budget — remaining in `$Fxxx` with screen data is not a sampler
-    /// desync.
+    /// After tape exhaust: leave `$FD2A`, keep screen activity, stay in the
+    /// post-tape DI delay with turbo on. Full multi-stage nest → game/`IFF1`
+    /// outlives this budget (first stage alone is ~13k frames @64×); remaining
+    /// in `$Fxxx` with screen data is ROM-accurate, not sampler desync.
     #[ignore = "requires local Arkanoid fixture; run explicitly as a slow regression"]
     #[test]
     fn arkanoid_ear_load_leaves_speedlock_when_present() {

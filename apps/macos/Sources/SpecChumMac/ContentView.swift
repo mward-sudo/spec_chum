@@ -462,12 +462,13 @@ struct ContentView: View {
                 Text("5x").tag(UInt32(5))
                 Text("10x").tag(UInt32(10))
                 Text("20x").tag(UInt32(20))
+                Text("64x").tag(UInt32(64))
             }
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
             .controlSize(.mini)
-            .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick")
+            .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick (64× helps Speedlock delays)")
             .accessibilityLabel("Tape load mode")
             .accessibilityValue(tapeLoadModeAccessibilityValue)
         }
