@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1788835140.8007827,
-    "seen": 1788841075.9265301,
-    "ast_hash": "bc204a7d7cd77636afd8baf3ad501162",
+    "mtime": 1788889765.2089248,
+    "seen": 1788889806.3562171,
+    "ast_hash": "d8fa479d434c4a1fcf9e3c1d4e48ae3b",
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_room.h": {
@@ -348,15 +348,15 @@
     "semantic_hash": ""
   },
   "crates/host_api/include/spec_chum_host.h": {
-    "mtime": 1788832415.9598463,
-    "seen": 1788834469.099143,
-    "ast_hash": "bc204a7d7cd77636afd8baf3ad501162",
+    "mtime": 1788889761.7695308,
+    "seen": 1788889806.357733,
+    "ast_hash": "d8fa479d434c4a1fcf9e3c1d4e48ae3b",
     "semantic_hash": ""
   },
   "crates/host_api/src/ffi.rs": {
-    "mtime": 1788832415.960127,
-    "seen": 1788834469.099143,
-    "ast_hash": "df6d8429ab0ca7085467a3ba8f5ab026",
+    "mtime": 1788889789.9903722,
+    "seen": 1788889806.357734,
+    "ast_hash": "5c02a41736fc728cf4388fc8f6e07bcf",
     "semantic_hash": ""
   },
   "crates/host_api/src/handle.rs": {
@@ -1116,9 +1116,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Tape.swift": {
-    "mtime": 1788886602.6935856,
-    "seen": 1788886786.852944,
-    "ast_hash": "d62eb66ef62696e91d01852f4ff219b5",
+    "mtime": 1788889765.550526,
+    "seen": 1788889806.356517,
+    "ast_hash": "ccaa715c542c561a43dca21926449fe6",
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
