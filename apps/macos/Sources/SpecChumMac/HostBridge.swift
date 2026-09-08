@@ -122,7 +122,7 @@ final class HostBridge: ObservableObject {
     @Published var instantLoad: Bool = false {
         didSet { pushTapeLoadOptions() }
     }
-    /// EAR speed (1x…20x): while Play is active, that many Spectrum frames per host tick.
+    /// EAR speed (1x…64x): while Play is active, that many Spectrum frames per host tick.
     @Published var tapeSpeed: UInt32 = HostBridge.loadPersistedTapeSpeed() {
         didSet {
             if !suppressTapeOptsPush, tapeSpeed != 0 {

@@ -57,7 +57,15 @@ extension HostBridge {
         }
         let within = pulses == 0 ? 0.0 : Double(min(pulse, pulses)) / Double(pulses)
         let frac = min(1.0, (Double(min(block, blocks)) + within) / Double(blocks))
-        let label = "Tape \(min(block + 1, blocks))/\(blocks)"
+        // After the deck finishes, Speedlock (Arkanoid) may sit in a long DI
+        // border-delay (~$F448). Prefer an honest label over a stuck "Tape N/N".
+        let label: String
+        if frac >= 0.999, let r = regs(), r.pc >= 0x8000 {
+            // High-RAM PC + finished deck matches post-tape DI turbo (#379).
+            label = "Speedlock delay…"
+        } else {
+            label = "Tape \(min(block + 1, blocks))/\(blocks)"
+        }
         if tapeFraction.map({ abs($0 - frac) > 0.002 }) ?? true {
             tapeFraction = frac
         }

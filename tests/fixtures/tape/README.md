@@ -67,7 +67,9 @@ cargo test -p tape arkanoid_pause_polarity -- --nocapture
 cargo test -p host_api open_local_arkanoid -- --nocapture
 # EAR Play past Speedlock sampler + post-tape DI turbo (#379 / #380)
 cargo test -p host_api --release --lib arkanoid_ear_leaves_sampler -- --ignored --nocapture
-# Full delay stub → game entry (slow; drives Machine::run_frame to skip PCM)
+# First DI delay stage RET (~5 min @64×; multi-stage → game is longer)
+cargo test -p host_api --release --lib arkanoid_speedlock_first_delay_ret -- --ignored --nocapture
+# Bounded post-tape wait (screen + delay stub; not full game entry)
 cargo test -p host_api --release --lib arkanoid_ear_load_leaves_speedlock -- --ignored --nocapture
 ```
 
@@ -76,6 +78,13 @@ first edge after a non-zero pause). A bad `LEVEL_LOW` that emitted an *extra*
 low at tape start inverted the whole EAR schedule and stuck Arkanoid at `$FD2A`.
 Play turbo also continues after the deck finishes while `IFF1=0` and `PC≥$8000`
 so Speedlock border-delays do not appear hung at 1× after a turbo load.
+
+After EAR exhaust, Arkanoid sits in a **multi-stage** Speedlock DI delay at
+`$F448` (`LD E,IXH` at `$F44E`, not a CALL). The first stage RETs at `$F476`
+after ~12.7k host frames at EAR 64× (~4.5 hours of Spectrum time / ~4–5 minutes
+wall-clock). Further nested stages continue before `IFF1`/game entry — this is
+ROM-accurate protection delay, not an EAR desync. Prefer EAR **64×** (UI option)
+while waiting; chrome shows “Speedlock delay…” once the deck is finished.
 ### How to load The Boggit on 128K at 1×
 
 1. Model **128K**, insert Side 1 TZX (converted to TAP automatically).

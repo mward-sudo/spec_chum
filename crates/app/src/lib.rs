@@ -2407,7 +2407,7 @@ impl SpecChumApp {
                                         tape_prefs_changed = true;
                                     }
                                     ui.label("EAR speed:");
-                                    for speed in [1u32, 2, 5, 10, 20] {
+                                    for speed in [1u32, 2, 5, 10, 20, 64] {
                                         let selected =
                                             !opts.experience_load && opts.speed == speed;
                                         if ui
@@ -2561,15 +2561,24 @@ of their copyrighted material but retain that copyright.",
                                 .desired_width(120.0)
                                 .show_percentage(),
                         );
-                        ui.label(format!(
-                            "tape {}/{}",
-                            if p.block_count == 0 {
-                                0
-                            } else {
-                                p.block_index.saturating_add(1).min(p.block_count)
-                            },
-                            p.block_count
-                        ));
+                        let delay = self
+                            .session
+                            .host_mut()
+                            .machine()
+                            .is_some_and(Machine::in_post_tape_di_delay);
+                        if delay {
+                            ui.label("Speedlock delay…");
+                        } else {
+                            ui.label(format!(
+                                "tape {}/{}",
+                                if p.block_count == 0 {
+                                    0
+                                } else {
+                                    p.block_index.saturating_add(1).min(p.block_count)
+                                },
+                                p.block_count
+                            ));
+                        }
                     } else if has_tape {
                         if let Some(ref title) = tape_title {
                             ui.label(title);

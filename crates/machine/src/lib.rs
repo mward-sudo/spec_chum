@@ -1745,17 +1745,25 @@ impl Machine {
         if self.tape_playing() && !self.tape_finished() {
             return speed;
         }
-        // Speedlock (Arkanoid) runs a long DI border-delay after the bitstream
-        // ends (~$F448). Keep Play turbo until the loader re-enables interrupts
-        // or leaves high-RAM stub space so speed N does not look hung at 1× (#379).
+        // Speedlock (Arkanoid) runs long multi-stage DI border-delays after the
+        // bitstream ends (~$F448). Keep Play turbo until interrupts return or PC
+        // leaves high RAM so speed N does not look hung at 1× (#379).
         // Once IFF1 is set, return to 1× realtime (#178).
-        if self.tape_finished() {
-            let regs = &self.cpu().regs;
-            if !regs.iff1 && regs.pc >= 0x8000 {
-                return speed;
-            }
+        if self.in_post_tape_di_delay() {
+            return speed;
         }
         1
+    }
+
+    /// Speedlock-style post-tape DI delay: deck exhausted, interrupts still off,
+    /// PC in high RAM (e.g. Arkanoid `$F448` nest). Used for Play turbo and UI.
+    #[must_use]
+    pub fn in_post_tape_di_delay(&self) -> bool {
+        if !self.tape_finished() {
+            return false;
+        }
+        let regs = &self.cpu().regs;
+        !regs.iff1 && regs.pc >= 0x8000
     }
 
     /// True when an inserted deck has exhausted its bitstream / blocks.
@@ -6092,6 +6100,10 @@ mod tests {
             dt > 200_000,
             "finished tape + DI @ >=$8000 should keep EAR turbo (#379), got {dt}"
         );
+        assert!(
+            m.in_post_tape_di_delay(),
+            "helper must match turbo DI condition"
+        );
         // EI → back to 1× (#178).
         m.cpu_mut().regs.iff1 = true;
         let t1 = m.cpu().t;
@@ -6101,6 +6113,7 @@ mod tests {
             dt1 < 150_000,
             "IFF1 set must drop turbo to ~1× (#178), got {dt1}"
         );
+        assert!(!m.in_post_tape_di_delay());
     }
 
     #[test]

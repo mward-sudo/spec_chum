@@ -30,9 +30,9 @@
     "semantic_hash": "399e2949d9fb95371b20370ba2053f20"
   },
   "apps/macos/Sources/SpecChumMac/ContentView.swift": {
-    "mtime": 1788833136.3852415,
-    "seen": 1788834469.099107,
-    "ast_hash": "9188bc8617aeac7679a6eff061bd1acb",
+    "mtime": 1788886605.6622121,
+    "seen": 1788886786.852841,
+    "ast_hash": "8955c07582a3cffe7c5bfda717a07448",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/GlassChrome.swift": {
@@ -42,9 +42,9 @@
     "semantic_hash": "7f5409df2ce54f1fd9131a68f63f57fd"
   },
   "apps/macos/Sources/SpecChumMac/HostBridge.swift": {
-    "mtime": 1788832415.9563577,
-    "seen": 1788834469.099112,
-    "ast_hash": "6ece8dcb3cff1dfd12fc80e4d62a40f5",
+    "mtime": 1788886607.7385352,
+    "seen": 1788886786.8529449,
+    "ast_hash": "40a231c2fee19f32562267044634c7fb",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/KempstonMouseTracking.swift": {
@@ -78,9 +78,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/SpecChumSettingsView.swift": {
-    "mtime": 1788832415.9566264,
-    "seen": 1788834469.099115,
-    "ast_hash": "36cc2445ecdc8190b741e76bdc325649",
+    "mtime": 1788886606.402525,
+    "seen": 1788886786.853035,
+    "ast_hash": "51163f366dbd81d6378d7eaeb0ee05ff",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/SpectrumDisplayView.swift": {
@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/lib.rs": {
-    "mtime": 1788832415.9571714,
-    "seen": 1788834469.099125,
-    "ast_hash": "bc83bf61e53024914fc7551b00ca4d5a",
+    "mtime": 1788886618.4028158,
+    "seen": 1788886786.853392,
+    "ast_hash": "b68b344f93b594ec9bf34172846dfc54",
     "semantic_hash": ""
   },
   "crates/app/src/main.rs": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1788841056.5577307,
-    "seen": 1788841075.928234,
-    "ast_hash": "3fca038d27bc32037f4829f03da47dba",
+    "mtime": 1788886688.1154068,
+    "seen": 1788886786.8540869,
+    "ast_hash": "a76e60ffd74f18bc1b9c875b82b96391",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -582,9 +582,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788840688.576438,
-    "seen": 1788841075.92879,
-    "ast_hash": "bdf51659111c1b32190a1424cfa4d6e0",
+    "mtime": 1788886709.2726123,
+    "seen": 1788886786.854528,
+    "ast_hash": "4f1e31e2c1de520eca507ea172f3c3f5",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
@@ -630,9 +630,9 @@
     "semantic_hash": ""
   },
   "crates/tape/src/tzx.rs": {
-    "mtime": 1788840528.7973764,
-    "seen": 1788841075.928916,
-    "ast_hash": "b08acf6c3ac419c155e6e372b043aabc",
+    "mtime": 1788882375.6052177,
+    "seen": 1788886786.854632,
+    "ast_hash": "715245dab7c6d3de75b4066923dc2a68",
     "semantic_hash": ""
   },
   "crates/trace/Cargo.toml": {
@@ -960,9 +960,9 @@
     "semantic_hash": ""
   },
   "tests/fixtures/tape/README.md": {
-    "mtime": 1788841065.875642,
-    "seen": 1788841075.930088,
-    "ast_hash": "6610a5dba60cb69e7857a3ffaa2ba4dd",
+    "mtime": 1788886702.5164247,
+    "seen": 1788886786.8556108,
+    "ast_hash": "67838521effb1e8e57110370e5e0df6f",
     "semantic_hash": ""
   },
   "tests/fixtures/z80test/LICENSE.txt": {
@@ -1116,9 +1116,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Tape.swift": {
-    "mtime": 1788832415.956075,
-    "seen": 1788834469.0991108,
-    "ast_hash": "7f0bfccc945b386a255ecef75e90eb37",
+    "mtime": 1788886602.6935856,
+    "seen": 1788886786.852944,
+    "ast_hash": "d62eb66ef62696e91d01852f4ff219b5",
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
@@ -1371,12 +1371,6 @@
     "mtime": 1788803493.1607635,
     "seen": 1788834469.099205,
     "ast_hash": "85b08f0566ef63a8995a184ac208244d",
-    "semantic_hash": ""
-  },
-  "crates/host_api/src/arkanoid_probe.rs": {
-    "mtime": 1788840453.8488483,
-    "seen": 1788841075.92809,
-    "ast_hash": "72b31150d6068f1d04188d4c098bc857",
     "semantic_hash": ""
   }
 }
