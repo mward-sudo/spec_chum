@@ -800,7 +800,11 @@ fn append_pure_data(
     };
     for (bi, &byte) in block.iter().enumerate() {
         let bits = if bi + 1 == block.len() { used_bits } else { 8 };
-        for bit in (0..bits).rev() {
+        // TZX: last-byte `used_bits` are the *most significant* bits
+        // (e.g. used=6 → `xxxxxx00`). Emit MSB-first like a full byte.
+        let bit_hi = 7u8;
+        let bit_lo = bit_hi + 1 - bits;
+        for bit in (bit_lo..=bit_hi).rev() {
             let is_one = byte & (1 << bit) != 0;
             let len = if is_one { one } else { zero };
             crate::push_pulse(pulses, level, u32::from(len));
@@ -852,6 +856,29 @@ mod tests {
         assert_eq!(tap.blocks[0], payload);
         assert_eq!(tap.pause_t.len(), 1);
         assert_eq!(tap.pause_t[0], 1000 * 3500);
+    }
+
+    /// TZX last-byte `used_bits` are MSBs (`xxxxxx00` for 6), not LSBs.
+    /// Speedlock 0x14 markers (Arkanoid) use used=5/6 — LSB emission desyncs EAR load.
+    #[test]
+    fn pure_data_used_bits_are_most_significant() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x14);
+        v.extend_from_slice(&100u16.to_le_bytes()); // zero
+        v.extend_from_slice(&200u16.to_le_bytes()); // one
+        v.push(6); // used bits — top 6 of 0b1110_1000 → 1,1,1,0,1,0
+        v.extend_from_slice(&0u16.to_le_bytes()); // pause
+        v.extend_from_slice(&1u32.to_le_bytes()[..3]); // len = 1
+        v.push(0b1110_1000);
+        let p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(p.scheduled_pulses(), 12, "6 bits × 2 edges");
+        let expect = [
+            200u32, 200, 200, 200, 200, 200, 100, 100, 200, 200, 100, 100,
+        ];
+        let got: Vec<u32> = p.pulses.iter().map(|(d, _)| *d).collect();
+        assert_eq!(got, expect, "MSB-first bit order for used_bits=6");
     }
 
     #[test]
