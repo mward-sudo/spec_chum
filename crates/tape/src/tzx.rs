@@ -62,6 +62,14 @@ fn ensure_block_budget(block_starts: &[usize]) -> Result<(), TzxError> {
     Ok(())
 }
 
+/// Pulse count for a trailing TZX pause (0 = ignored; else 1 pulse).
+///
+/// Fuse emits the whole pause as a single edge (`do_tail_pause`) then forces the
+/// next block low (`END_OF_BLOCK_NEXT_LOW`).
+fn estimate_tzx_pause_pulses(pause_t: u32) -> usize {
+    usize::from(pause_t > 0)
+}
+
 /// Pulse count for a pure-data payload, matching [`append_pure_data`] emission.
 fn estimate_pure_data_pulses(block_len: usize, used_bits: u8, pause_ms: u16) -> Option<usize> {
     let used_bits = if used_bits == 0 || used_bits > 8 {
@@ -77,8 +85,7 @@ fn estimate_pure_data_pulses(block_len: usize, used_bits: u8, pause_ms: u16) -> 
         let last = usize::from(used_bits).checked_mul(2)?;
         full.checked_add(last)?
     };
-    let pause = usize::from(ms_to_t(pause_ms) > 0);
-    data.checked_add(pause)
+    data.checked_add(estimate_tzx_pause_pulses(ms_to_t(pause_ms)))
 }
 
 impl From<TzxError> for TapeError {
@@ -117,6 +124,8 @@ impl TzxPlayer {
         let mut pulses = Vec::new();
         let mut block_starts = Vec::new();
         let mut level = false;
+        // Fuse starts tapes with force_low_level; non-zero pauses re-arm it.
+        let mut force_low = true;
         let mut i = 10usize; // skip header (sig + ver)
                              // Loop Start (0x24) / Loop End (0x25): replay the enclosed section N times.
                              // `skip_depth` covers reps==0 (play zero times) and nested skips.
@@ -164,7 +173,13 @@ impl TzxPlayer {
                             })?;
                         ensure_pulse_room(&pulses, additional)?;
                         block_starts.push(pulses.len());
-                        append_standard_block(&mut pulses, &mut level, block, pause_ms);
+                        append_standard_block(
+                            &mut pulses,
+                            &mut level,
+                            &mut force_low,
+                            block,
+                            pause_ms,
+                        );
                         ensure_pulse_budget(&pulses)?;
                     }
                 }
@@ -209,6 +224,7 @@ impl TzxPlayer {
                         append_turbo_block(
                             &mut pulses,
                             &mut level,
+                            &mut force_low,
                             block,
                             pilot,
                             sync1,
@@ -234,7 +250,7 @@ impl TzxPlayer {
                         ensure_pulse_room(&pulses, usize::from(count))?;
                         block_starts.push(pulses.len());
                         for _ in 0..count {
-                            crate::push_pulse(&mut pulses, &mut level, u32::from(len));
+                            push_pulse_tzx(&mut pulses, &mut level, &mut force_low, u32::from(len));
                         }
                         ensure_pulse_budget(&pulses)?;
                     }
@@ -255,7 +271,7 @@ impl TzxPlayer {
                         for _ in 0..n {
                             let len = u16::from_le_bytes([data[i], data[i + 1]]);
                             i += 2;
-                            crate::push_pulse(&mut pulses, &mut level, u32::from(len));
+                            push_pulse_tzx(&mut pulses, &mut level, &mut force_low, u32::from(len));
                         }
                         ensure_pulse_budget(&pulses)?;
                     } else {
@@ -292,6 +308,7 @@ impl TzxPlayer {
                         append_pure_data(
                             &mut pulses,
                             &mut level,
+                            &mut force_low,
                             block,
                             zero,
                             one,
@@ -310,14 +327,12 @@ impl TzxPlayer {
                     if emit {
                         ensure_block_budget(&block_starts)?;
                         let t = ms_to_t(pause_ms);
-                        if t > 0 {
-                            ensure_pulse_room(&pulses, 1)?;
+                        let pause_pulses = estimate_tzx_pause_pulses(t);
+                        if pause_pulses > 0 {
+                            ensure_pulse_room(&pulses, pause_pulses)?;
                         }
                         block_starts.push(pulses.len());
-                        if t > 0 {
-                            pulses.push((t, false));
-                            level = false;
-                        }
+                        append_tzx_pause(&mut pulses, &mut level, &mut force_low, t);
                         ensure_pulse_budget(&pulses)?;
                     }
                 }
@@ -726,9 +741,52 @@ fn ms_to_t(ms: u16) -> u32 {
     u32::from(ms).saturating_mul(3500)
 }
 
+/// Emit one pulse. When `force_low` is set (tape start / after a non-zero pause),
+/// mimic Fuse `LEVEL_LOW`: the edge is absolute low, then the next edge is high.
+///
+/// Fuse sets `tape_microphone = 0` on that flag. Spec Chum stores the same sense
+/// as Fuse's mic (OR'd into ULA bit 6); with the speaker bit clear, Fuse's
+/// `r ^= mic` against `0xbf` also yields `ear_in` == mic.
+///
+/// Important: do **not** emit `*level` then pin low — when `*level` is already
+/// false that schedules two lows and inverts the rest of the tape (#379).
+fn push_pulse_tzx(
+    pulses: &mut Vec<(u32, bool)>,
+    level: &mut bool,
+    force_low: &mut bool,
+    duration: u32,
+) {
+    if *force_low {
+        pulses.push((duration, false));
+        // Next `push_pulse` emits high then flips — same as after a normal low.
+        *level = true;
+        *force_low = false;
+    } else {
+        crate::push_pulse(pulses, level, duration);
+    }
+}
+
+/// Emit a TZX pause / data-block tail silence (Fuse `do_tail_pause`).
+///
+/// One edge for the full duration; the next playable block re-arms
+/// `force_low` so its first edge gets Fuse `LEVEL_LOW` semantics.
+fn append_tzx_pause(
+    pulses: &mut Vec<(u32, bool)>,
+    level: &mut bool,
+    force_low: &mut bool,
+    pause_t: u32,
+) {
+    if pause_t == 0 {
+        return;
+    }
+    crate::push_pulse(pulses, level, pause_t);
+    *force_low = true;
+}
+
 fn append_standard_block(
     pulses: &mut Vec<(u32, bool)>,
     level: &mut bool,
+    force_low: &mut bool,
     block: &[u8],
     pause_ms: u16,
 ) {
@@ -738,18 +796,17 @@ fn append_standard_block(
     } else {
         PILOT_DATA_PULSES
     };
-    *level = true;
     for _ in 0..pilot_count {
-        crate::push_pulse(pulses, level, PILOT_PULSE_T);
+        push_pulse_tzx(pulses, level, force_low, PILOT_PULSE_T);
     }
-    crate::push_pulse(pulses, level, SYNC1_T);
-    crate::push_pulse(pulses, level, SYNC2_T);
+    push_pulse_tzx(pulses, level, force_low, SYNC1_T);
+    push_pulse_tzx(pulses, level, force_low, SYNC2_T);
     for &byte in block {
         for bit in (0..8).rev() {
             let one = byte & (1 << bit) != 0;
             let len = if one { BIT1_T } else { BIT0_T };
-            crate::push_pulse(pulses, level, len);
-            crate::push_pulse(pulses, level, len);
+            push_pulse_tzx(pulses, level, force_low, len);
+            push_pulse_tzx(pulses, level, force_low, len);
         }
     }
     let pause = if pause_ms == 0 {
@@ -757,7 +814,7 @@ fn append_standard_block(
     } else {
         ms_to_t(pause_ms)
     };
-    crate::push_pulse(pulses, level, pause);
+    append_tzx_pause(pulses, level, force_low, pause);
 }
 
 // Pilot/sync/zero/one timings + pause are one TZX turbo block (#171).
@@ -765,6 +822,7 @@ fn append_standard_block(
 fn append_turbo_block(
     pulses: &mut Vec<(u32, bool)>,
     level: &mut bool,
+    force_low: &mut bool,
     block: &[u8],
     pilot: u16,
     sync1: u16,
@@ -775,18 +833,20 @@ fn append_turbo_block(
     used_bits: u8,
     pause_ms: u16,
 ) {
-    *level = true;
     for _ in 0..pilot_pulses {
-        crate::push_pulse(pulses, level, u32::from(pilot));
+        push_pulse_tzx(pulses, level, force_low, u32::from(pilot));
     }
-    crate::push_pulse(pulses, level, u32::from(sync1));
-    crate::push_pulse(pulses, level, u32::from(sync2));
-    append_pure_data(pulses, level, block, zero, one, used_bits, pause_ms);
+    push_pulse_tzx(pulses, level, force_low, u32::from(sync1));
+    push_pulse_tzx(pulses, level, force_low, u32::from(sync2));
+    append_pure_data(
+        pulses, level, force_low, block, zero, one, used_bits, pause_ms,
+    );
 }
 
 fn append_pure_data(
     pulses: &mut Vec<(u32, bool)>,
     level: &mut bool,
+    force_low: &mut bool,
     block: &[u8],
     zero: u16,
     one: u16,
@@ -807,14 +867,11 @@ fn append_pure_data(
         for bit in (bit_lo..=bit_hi).rev() {
             let is_one = byte & (1 << bit) != 0;
             let len = if is_one { one } else { zero };
-            crate::push_pulse(pulses, level, u32::from(len));
-            crate::push_pulse(pulses, level, u32::from(len));
+            push_pulse_tzx(pulses, level, force_low, u32::from(len));
+            push_pulse_tzx(pulses, level, force_low, u32::from(len));
         }
     }
-    let pause = ms_to_t(pause_ms);
-    if pause > 0 {
-        crate::push_pulse(pulses, level, pause);
-    }
+    append_tzx_pause(pulses, level, force_low, ms_to_t(pause_ms));
 }
 
 #[cfg(test)]
@@ -844,7 +901,14 @@ mod tests {
         assert!(p.scheduled_pulses() > 10);
         let mut p = p;
         let _ = p.advance(PILOT_PULSE_T);
-        assert!(p.ear_level());
+        assert!(
+            !p.ear_level(),
+            "first pilot is low (Fuse LEVEL_LOW / classic start)"
+        );
+        let _ = p.advance(PILOT_PULSE_T);
+        assert!(p.ear_level(), "second pilot toggles high");
+        let _ = p.advance(PILOT_PULSE_T);
+        assert!(!p.ear_level(), "third pilot pulse is low");
     }
 
     #[test]
@@ -920,8 +984,8 @@ mod tests {
 
     #[test]
     fn advance_clears_high_ear_on_exact_final_pulse_end() {
-        // Pure-tone pulses alternate from initial low; the 2nd pulse is high.
-        // Exact end of that high pulse must not leave EAR latched high.
+        // LEVEL_LOW → low, toggle high, toggle low. Exact end of a high pulse
+        // (2nd) must clear latched EAR; use 2 pulses ending on high.
         let mut v = Vec::new();
         v.extend_from_slice(b"ZXTape!");
         v.extend_from_slice(&[0x1a, 1, 20]);
@@ -930,7 +994,7 @@ mod tests {
         v.extend_from_slice(&2u16.to_le_bytes());
         let mut p = TzxPlayer::parse(&v).unwrap();
         assert_eq!(p.scheduled_pulses(), 2);
-        let _ = p.advance(1000);
+        let _ = p.advance(1000); // low
         let mid = p.advance(500);
         assert!(
             mid && p.ear_level(),
@@ -949,7 +1013,7 @@ mod tests {
         v.extend_from_slice(b"ZXTape!");
         v.extend_from_slice(&[0x1a, 1, 20]);
         v.push(0x10);
-        v.extend_from_slice(&0u16.to_le_bytes()); // pause ms (no trailing silence block)
+        v.extend_from_slice(&0u16.to_le_bytes()); // pause ms → ROM default gap
         let payload = [0x00u8, 0x41, 0x00];
         v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
         v.extend_from_slice(&payload);
@@ -957,11 +1021,14 @@ mod tests {
         v.extend_from_slice(&500u16.to_le_bytes());
         v.extend_from_slice(&3u16.to_le_bytes());
         let p = TzxPlayer::parse(&v).unwrap();
+        // Data/pilot pulses must edge; Fuse LEVEL_LOW may hold consecutive lows.
         for w in p.pulses.windows(2) {
-            assert_ne!(
-                w[0].1, w[1].1,
-                "adjacent TZX pulses must toggle across 0x10→0x12"
-            );
+            if w[0].1 == w[1].1 {
+                assert!(
+                    !w[0].1,
+                    "only low (Fuse LEVEL_LOW) may repeat across 0x10 pause→0x12"
+                );
+            }
         }
     }
 
@@ -981,8 +1048,59 @@ mod tests {
         v.extend_from_slice(&500u16.to_le_bytes());
         let p = TzxPlayer::parse(&v).unwrap();
         for w in p.pulses.windows(2) {
-            assert_ne!(w[0].1, w[1].1, "0x10→0x13 must keep EAR edges");
+            if w[0].1 == w[1].1 {
+                assert!(
+                    !w[0].1,
+                    "only low (Fuse LEVEL_LOW) may repeat across 0x10→0x13"
+                );
+            }
         }
+    }
+
+    /// Tape start: Fuse `LEVEL_LOW` with initial low ≡ classic first pilot low.
+    #[test]
+    fn standard_block_starts_low_after_tape_start() {
+        let data = minimal_tzx_standard(&[0x00, 0x41, 0x00]);
+        let p = TzxPlayer::parse(&data).unwrap();
+        assert!(!p.pulses[0].1, "first pilot pulse must be low");
+        assert!(p.pulses[1].1, "second pilot toggles high");
+        assert!(!p.pulses[2].1, "third pilot pulse must be low");
+    }
+
+    /// Arkanoid-scale Pure Data pause must match Fuse: after an even number of
+    /// data half-pulses the pause starts low, then the next tone starts low
+    /// again via `LEVEL_LOW` (two consecutive lows).
+    #[test]
+    fn pure_data_pause_matches_fuse_polarity_before_next_tone() {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        // Eight bits → 16 half-pulses. Final high half leaves the pause low;
+        // LEVEL_LOW then repeats low for the first Pure Tone pulse.
+        v.push(0x14);
+        v.extend_from_slice(&100u16.to_le_bytes());
+        v.extend_from_slice(&200u16.to_le_bytes());
+        v.push(8);
+        v.extend_from_slice(&1750u16.to_le_bytes());
+        v.extend_from_slice(&1u32.to_le_bytes()[..3]);
+        v.push(0x01); // MSB=0 → first half-pulses are zeros (low if starting low)
+        v.push(0x12);
+        v.extend_from_slice(&2165u16.to_le_bytes());
+        v.extend_from_slice(&4u16.to_le_bytes());
+        let p = TzxPlayer::parse(&v).unwrap();
+        // 8 bits × 2 + pause + 4 tone
+        assert_eq!(p.scheduled_pulses(), 16 + 1 + 4);
+        let pause = p.pulses[16];
+        let tone0 = p.pulses[17];
+        assert_eq!(pause.0, 1750 * 3500);
+        assert!(
+            !pause.1,
+            "pause starts low after final data half-pulse high"
+        );
+        assert_eq!(tone0.0, 2165);
+        assert!(!tone0.1, "next Pure Tone starts low (Fuse LEVEL_LOW)");
+        assert_eq!(p.pulses[18].0, 2165);
+        assert!(p.pulses[18].1, "second tone pulse toggles high");
     }
 
     #[test]
@@ -1293,5 +1411,42 @@ mod tests {
         assert!(!TzxPlayer::is_standard_speed_only(
             &std::fs::read(&path).unwrap()
         ));
+    }
+
+    /// Fuse `LEVEL_LOW` after pauses (Arkanoid Speedlock gaps). Optional fixture.
+    #[test]
+    fn arkanoid_pause_polarity_matches_fuse_when_present() {
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let path = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
+        if !path.is_file() {
+            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
+            return;
+        }
+        let p = TzxPlayer::load(&path).expect("Arkanoid.tzx must parse");
+        // Tape start ≡ classic: low, high, low (LEVEL_LOW when already low).
+        assert!(!p.pulses[0].1 && p.pulses[1].1 && !p.pulses[2].1);
+        let p3984 = p
+            .pulses
+            .iter()
+            .position(|(d, _)| *d == 3984 * 3500)
+            .expect("3984ms Speedlock pause");
+        let p1750 = p
+            .pulses
+            .iter()
+            .position(|(d, _)| *d == 1750 * 3500)
+            .expect("1750ms pause");
+        // 3984ms pause ends high; LEVEL_LOW drops to low, then high (Fuse dump).
+        assert!(p.pulses[p3984].1, "3984ms pause high (Fuse)");
+        assert!(
+            !p.pulses[p3984 + 1].1,
+            "first Speedlock tone low (LEVEL_LOW)"
+        );
+        assert!(p.pulses[p3984 + 2].1, "next tone edge high");
+        // 1750ms pause ends low; LEVEL_LOW keeps low (two lows), then high.
+        assert!(!p.pulses[p1750].1, "1750ms pause low (Fuse)");
+        assert!(!p.pulses[p1750 + 1].1, "LEVEL_LOW stays low");
+        assert!(p.pulses[p1750 + 2].1, "next edge high");
     }
 }
