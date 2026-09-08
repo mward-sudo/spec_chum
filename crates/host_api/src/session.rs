@@ -2021,6 +2021,85 @@ mod tests {
         assert!(s.status().contains("TZX") || s.media_title().is_some());
     }
 
+    /// EAR Play path for Arkanoid Speedlock: TZX `used_bits` must be MSBs.
+    /// Before the MSB fix, type-load finished the tape but left PC in the
+    /// Speedlock sampler (~`0xFD2A`) with a blank/corrupt screen.
+    #[test]
+    fn arkanoid_ear_load_leaves_speedlock_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let arkanoid = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
+        if !arkanoid.is_file() {
+            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.open_tape(&arkanoid).expect("open");
+        {
+            let m = s.machine.as_mut().expect("machine");
+            m.set_tape_load_options(machine::TapeLoadOptions {
+                flash_load: false,
+                speed: 64,
+                experience_load: false,
+            });
+            m.set_tape_playing(false);
+        }
+        for _ in 0..200 {
+            s.run_frame();
+        }
+        {
+            let m = s.machine.as_mut().expect("machine");
+            m.type_load_quotes(false);
+            m.set_tape_playing(true);
+        }
+        // Stop once the deck finishes — do not spin for BASIC "OK" (games never returns).
+        let mut finished = false;
+        for _ in 0..20_000 {
+            s.run_frame();
+            let m = s.machine.as_ref().expect("machine");
+            if m.tape_finished() || !m.tape_playing() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "EAR deck did not finish within budget");
+        // A few frames after motor stop for the loader to branch.
+        for _ in 0..500 {
+            s.run_frame();
+        }
+        let m = s.machine.as_ref().expect("machine");
+        let pc = m.cpu().regs.pc;
+        let screen_bytes: Vec<u8> = (0u16..256).map(|i| m.read_mem(0x4000 + i)).collect();
+        eprintln!(
+            "arkanoid ear: pc={pc:#06x} iff1={} screen[0..16]={:02x?}",
+            u8::from(m.cpu().regs.iff1),
+            &screen_bytes[..16]
+        );
+        // Stuck sampler loop before used_bits MSB fix.
+        assert_ne!(
+            pc, 0xFD2A,
+            "PC still in Speedlock edge-sample loop — EAR bitstream desync"
+        );
+        // Speedlock payloads are encrypted on tape; assert non-blank screen RAM rather
+        // than a fixed plaintext prefix.
+        let nonzero = screen_bytes.iter().filter(|&&b| b != 0).count();
+        assert!(
+            nonzero >= 32,
+            "expected loaded/decrypted screen activity at $4000, nonzero={nonzero}/256 pc={pc:#06x}"
+        );
+        // Still sitting inside the high Speedlock stub is a fail even if screen changed.
+        assert!(
+            !(0xFD00..=0xFEFF).contains(&pc),
+            "PC {pc:#06x} still in Speedlock stub range after EAR play"
+        );
+    }
+
     #[test]
     fn model_id_roundtrip() {
         assert_eq!(ModelId::from_u32(0), Some(ModelId::Spectrum48));

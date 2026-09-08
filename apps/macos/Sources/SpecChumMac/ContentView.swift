@@ -301,9 +301,10 @@ struct ContentView: View {
                     Spacer(minLength: 0)
                 }
             }
-            // Host session / open errors (e.g. unsupported TZX block) — must stay visible
-            // when the deck is empty; #367 chrome dropped this and made failures look silent (#372).
-            if !host.status.isEmpty {
+            // Host status under the deck chrome. Always-on "Inserted…" duplicated the
+            // tape name row (#375 open-error surfacing). Keep errors + empty-deck
+            // messages, plus Instant progress; hide routine Inserted/Play/Pause clutter.
+            if statusFooterShowsHostStatus {
                 Text(host.status)
                     .font(.caption2)
                     .foregroundStyle(statusFooterMessageIsError ? Color.orange : Color.secondary)
@@ -338,6 +339,14 @@ struct ContentView: View {
             || s.contains("error")
             || s.contains("truncated")
             || s.contains("missing")
+    }
+
+    /// Second footer line: errors always; Instant feedback; any status when no deck chrome.
+    private var statusFooterShowsHostStatus: Bool {
+        guard !host.status.isEmpty else { return false }
+        if statusFooterMessageIsError { return true }
+        if !(host.hasTape || host.tapePlaying) { return true }
+        return host.status.hasPrefix("Instant")
     }
 
     @ViewBuilder
