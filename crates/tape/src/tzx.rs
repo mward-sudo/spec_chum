@@ -17,6 +17,8 @@ use crate::{
 /// Cap on expanded EAR pulse count while parsing (incl. Loop Start/End replay).
 /// Prevents pathological `0x24`/`0x25` nesting from unbounded `Vec` growth.
 const MAX_SCHEDULED_PULSES: usize = 16_777_216;
+/// Cap on logical block starts (`block_starts`) under the same expansion path.
+const MAX_LOGICAL_BLOCKS: usize = 1_048_576;
 
 #[derive(Debug, Error)]
 pub enum TzxError {
@@ -33,6 +35,39 @@ fn ensure_pulse_budget(pulses: &[(u32, bool)]) -> Result<(), TzxError> {
         )));
     }
     Ok(())
+}
+
+fn ensure_pulse_room(pulses: &[(u32, bool)], additional: usize) -> Result<(), TzxError> {
+    let Some(total) = pulses.len().checked_add(additional) else {
+        return Err(TzxError::Format(
+            "TZX pulse schedule size overflow (loop expansion?)".into(),
+        ));
+    };
+    if total > MAX_SCHEDULED_PULSES {
+        return Err(TzxError::Format(format!(
+            "TZX pulse schedule exceeded {MAX_SCHEDULED_PULSES} pulses (loop expansion?)"
+        )));
+    }
+    Ok(())
+}
+
+fn ensure_block_budget(block_starts: &[usize]) -> Result<(), TzxError> {
+    if block_starts.len() >= MAX_LOGICAL_BLOCKS {
+        return Err(TzxError::Format(format!(
+            "TZX logical block count exceeded {MAX_LOGICAL_BLOCKS} (loop expansion?)"
+        )));
+    }
+    Ok(())
+}
+
+fn estimate_pure_data_pulses(block_len: usize, used_bits: u8) -> Option<usize> {
+    if block_len == 0 {
+        return Some(1); // pause only
+    }
+    let full_bytes = block_len.saturating_sub(1);
+    let full = full_bytes.checked_mul(16)?;
+    let last = usize::from(used_bits.min(8)).checked_mul(2)?;
+    full.checked_add(last)?.checked_add(1) // + pause pulse
 }
 
 impl From<TzxError> for TapeError {
@@ -94,6 +129,24 @@ impl TzxPlayer {
                     let block = &data[i..i + len];
                     i += len;
                     if emit {
+                        ensure_block_budget(&block_starts)?;
+                        let flag = block.first().copied().unwrap_or(0);
+                        let pilot_count = if flag == 0 {
+                            PILOT_HEADER_PULSES
+                        } else {
+                            PILOT_DATA_PULSES
+                        };
+                        let data_pulses =
+                            estimate_pure_data_pulses(block.len(), 8).ok_or_else(|| {
+                                TzxError::Format("TZX 0x10 pulse estimate overflow".into())
+                            })?;
+                        let additional = (pilot_count as usize)
+                            .checked_add(2)
+                            .and_then(|n| n.checked_add(data_pulses))
+                            .ok_or_else(|| {
+                                TzxError::Format("TZX 0x10 pulse estimate overflow".into())
+                            })?;
+                        ensure_pulse_room(&pulses, additional)?;
                         block_starts.push(pulses.len());
                         append_standard_block(&mut pulses, &mut level, block, pause_ms);
                         ensure_pulse_budget(&pulses)?;
@@ -123,6 +176,18 @@ impl TzxPlayer {
                     let block = &data[i..i + len];
                     i += len;
                     if emit {
+                        ensure_block_budget(&block_starts)?;
+                        let data_pulses = estimate_pure_data_pulses(block.len(), used_bits)
+                            .ok_or_else(|| {
+                                TzxError::Format("TZX 0x11 pulse estimate overflow".into())
+                            })?;
+                        let additional = usize::from(pilot_pulses)
+                            .checked_add(2)
+                            .and_then(|n| n.checked_add(data_pulses))
+                            .ok_or_else(|| {
+                                TzxError::Format("TZX 0x11 pulse estimate overflow".into())
+                            })?;
+                        ensure_pulse_room(&pulses, additional)?;
                         block_starts.push(pulses.len());
                         append_turbo_block(
                             &mut pulses,
@@ -148,6 +213,8 @@ impl TzxPlayer {
                     let count = u16::from_le_bytes([data[i + 2], data[i + 3]]);
                     i += 4;
                     if emit {
+                        ensure_block_budget(&block_starts)?;
+                        ensure_pulse_room(&pulses, usize::from(count))?;
                         block_starts.push(pulses.len());
                         for _ in 0..count {
                             crate::push_pulse(&mut pulses, &mut level, u32::from(len));
@@ -165,6 +232,8 @@ impl TzxPlayer {
                         return Err(TzxError::Format("0x13 pulses truncated".into()));
                     }
                     if emit {
+                        ensure_block_budget(&block_starts)?;
+                        ensure_pulse_room(&pulses, n)?;
                         block_starts.push(pulses.len());
                         for _ in 0..n {
                             let len = u16::from_le_bytes([data[i], data[i + 1]]);
@@ -195,6 +264,12 @@ impl TzxPlayer {
                     let block = &data[i..i + len];
                     i += len;
                     if emit {
+                        ensure_block_budget(&block_starts)?;
+                        let data_pulses = estimate_pure_data_pulses(block.len(), used_bits)
+                            .ok_or_else(|| {
+                                TzxError::Format("TZX 0x14 pulse estimate overflow".into())
+                            })?;
+                        ensure_pulse_room(&pulses, data_pulses)?;
                         block_starts.push(pulses.len());
                         append_pure_data(
                             &mut pulses,
@@ -215,8 +290,12 @@ impl TzxPlayer {
                     let pause_ms = u16::from_le_bytes([data[i], data[i + 1]]);
                     i += 2;
                     if emit {
-                        block_starts.push(pulses.len());
+                        ensure_block_budget(&block_starts)?;
                         let t = ms_to_t(pause_ms);
+                        if t > 0 {
+                            ensure_pulse_room(&pulses, 1)?;
+                        }
+                        block_starts.push(pulses.len());
                         if t > 0 {
                             pulses.push((t, false));
                             level = false;
@@ -260,6 +339,10 @@ impl TzxPlayer {
                         } else {
                             loop_stack.pop();
                         }
+                    } else {
+                        return Err(TzxError::Format(
+                            "TZX Loop End (0x25) without matching Loop Start".into(),
+                        ));
                     }
                 }
                 0x30 => {
@@ -302,6 +385,11 @@ impl TzxPlayer {
                     )));
                 }
             }
+        }
+        if skip_depth != 0 || !loop_stack.is_empty() {
+            return Err(TzxError::Format(
+                "TZX Loop Start (0x24) without matching Loop End".into(),
+            ));
         }
         let playing = !pulses.is_empty();
         let mut player = Self {
