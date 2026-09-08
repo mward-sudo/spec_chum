@@ -1067,15 +1067,16 @@ mod tests {
         assert!(!p.pulses[2].1, "third pilot pulse must be low");
     }
 
-    /// Arkanoid-scale Pure Data pause must match Fuse: pause continues at the
-    /// post-data level (high when last data half-pulse was low), then next tone
-    /// starts low.
+    /// Arkanoid-scale Pure Data pause must match Fuse: after an even number of
+    /// data half-pulses the pause starts low, then the next tone starts low
+    /// again via `LEVEL_LOW` (two consecutive lows).
     #[test]
     fn pure_data_pause_matches_fuse_polarity_before_next_tone() {
         let mut v = Vec::new();
         v.extend_from_slice(b"ZXTape!");
         v.extend_from_slice(&[0x1a, 1, 20]);
-        // Odd number of pulses before pause so last data half is low → pause high.
+        // Eight bits → 16 half-pulses. Final high half leaves the pause low;
+        // LEVEL_LOW then repeats low for the first Pure Tone pulse.
         v.push(0x14);
         v.extend_from_slice(&100u16.to_le_bytes());
         v.extend_from_slice(&200u16.to_le_bytes());
@@ -1093,8 +1094,8 @@ mod tests {
         let tone0 = p.pulses[17];
         assert_eq!(pause.0, 1750 * 3500);
         assert!(
-            pause.1,
-            "pause continues high after last data half-pulse low"
+            !pause.1,
+            "pause starts low after final data half-pulse high"
         );
         assert_eq!(tone0.0, 2165);
         assert!(!tone0.1, "next Pure Tone starts low (Fuse LEVEL_LOW)");
