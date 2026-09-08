@@ -2021,9 +2021,92 @@ mod tests {
         assert!(s.status().contains("TZX") || s.media_title().is_some());
     }
 
-    /// EAR Play path for Arkanoid Speedlock: TZX `used_bits` must be MSBs.
-    /// Before the MSB fix, type-load finished the tape but left PC in the
-    /// Speedlock sampler (~`0xFD2A`) with a blank/corrupt screen.
+    /// Fast smoke: after EAR exhaust, PC must leave `$FD2A` (sampler desync).
+    /// Full delay→game entry is covered by the slow ignored test below.
+    #[ignore = "requires local Arkanoid fixture"]
+    #[test]
+    fn arkanoid_ear_leaves_sampler_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let arkanoid = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
+        if !arkanoid.is_file() {
+            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.open_tape(&arkanoid).expect("open");
+        {
+            let m = s.machine.as_mut().expect("machine");
+            m.set_tape_load_options(machine::TapeLoadOptions {
+                flash_load: false,
+                speed: 64,
+                experience_load: false,
+            });
+            m.set_tape_playing(false);
+        }
+        for _ in 0..200 {
+            let m = s.machine.as_mut().expect("machine");
+            let _ = m.run_frame();
+        }
+        {
+            let m = s.machine.as_mut().expect("machine");
+            m.type_load_quotes(false);
+            m.set_tape_playing(true);
+        }
+        let mut finished = false;
+        for _ in 0..20_000 {
+            {
+                let m = s.machine.as_mut().expect("machine");
+                let _ = m.run_frame();
+            }
+            let m = s.machine.as_ref().expect("machine");
+            if m.tape_finished() || !m.tape_playing() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "EAR deck did not finish");
+        let m = s.machine.as_ref().expect("machine");
+        let pc = m.cpu().regs.pc;
+        let bc = m.cpu().regs.bc();
+        let bytes: Vec<u8> = (0u16..16).map(|i| m.read_mem(pc.wrapping_add(i))).collect();
+        eprintln!(
+            "post-tape pc={pc:#06x} bc={bc:#06x} iff1={} bytes={:02x?}",
+            u8::from(m.cpu().regs.iff1),
+            bytes
+        );
+        assert_ne!(pc, 0xFD2A, "still in Speedlock edge sampler — EAR desync");
+        assert!(
+            (0xF000..=0xFEFF).contains(&pc) || m.cpu().regs.iff1,
+            "expected Speedlock stub or game entry, pc={pc:#06x}"
+        );
+        // Confirm post-tape DI turbo (#379): one host tick advances ≫ one frame.
+        let t0 = {
+            let m = s.machine.as_ref().expect("machine");
+            m.cpu().t
+        };
+        {
+            let m = s.machine.as_mut().expect("machine");
+            let _ = m.run_frame();
+        }
+        let m = s.machine.as_ref().expect("machine");
+        let dt = m.cpu().t.saturating_sub(t0);
+        eprintln!("post-tape turbo dt={dt}");
+        assert!(
+            dt > 200_000,
+            "expected post-tape DI turbo ≫ 1 frame, dt={dt}"
+        );
+    }
+
+    /// EAR Play path for Arkanoid Speedlock (#379 / #380).
+    /// After `used_bits` MSB + TZX pause polarity fixes, type-load should leave
+    /// the Speedlock delay stub (~`$F470`) and not sit forever in the sampler.
     #[ignore = "requires local Arkanoid fixture; run explicitly as a slow regression"]
     #[test]
     fn arkanoid_ear_load_leaves_speedlock_when_present() {
@@ -2052,7 +2135,8 @@ mod tests {
             m.set_tape_playing(false);
         }
         for _ in 0..200 {
-            s.run_frame();
+            let m = s.machine.as_mut().expect("machine");
+            let _ = m.run_frame();
         }
         {
             let m = s.machine.as_mut().expect("machine");
@@ -2062,7 +2146,10 @@ mod tests {
         // Stop once the deck finishes — do not spin for BASIC "OK" (games never returns).
         let mut finished = false;
         for _ in 0..20_000 {
-            s.run_frame();
+            {
+                let m = s.machine.as_mut().expect("machine");
+                let _ = m.run_frame();
+            }
             let m = s.machine.as_ref().expect("machine");
             if m.tape_finished() || !m.tape_playing() {
                 finished = true;
@@ -2070,34 +2157,78 @@ mod tests {
             }
         }
         assert!(finished, "EAR deck did not finish within budget");
-        // A few frames after motor stop for the loader to branch.
-        for _ in 0..500 {
-            s.run_frame();
+        // Speedlock runs long DI border-delays after the bitstream ends. Play turbo
+        // continues while IFF1=0 in high RAM (#379). Prefer IFF1=1 (game entry);
+        // also accept a stable PC outside the Speedlock high stub.
+        //
+        // Drive `Machine::run_frame` directly: `HostSession::run_frame` rebuilds
+        // PCM for every turbo burst and makes this wait wall-clock hours.
+        let mut ok = false;
+        let mut last_pc = 0u16;
+        let mut stable = 0u32;
+        for i in 0..120_000u32 {
+            {
+                let m = s.machine.as_mut().expect("machine");
+                let _ = m.run_frame();
+            }
+            let m = s.machine.as_ref().expect("machine");
+            let p = m.cpu().regs.pc;
+            let iff1 = m.cpu().regs.iff1;
+            if iff1 {
+                ok = true;
+                eprintln!("IFF1 after +{i} host frames: pc={p:#06x}");
+                break;
+            }
+            if (0xF000..=0xFEFF).contains(&p) {
+                stable = 0;
+                last_pc = p;
+            } else if p == last_pc {
+                stable += 1;
+                // Stable outside stub for ~1s of Spectrum time at turbo 64.
+                if stable >= 50 {
+                    ok = true;
+                    eprintln!("stable outside stub after +{i}: pc={p:#06x}");
+                    break;
+                }
+            } else {
+                stable = 0;
+                last_pc = p;
+            }
+            if i % 10_000 == 0 {
+                eprintln!(
+                    "post-tape +{i}: pc={p:#06x} bc={:#06x} iff1=0",
+                    m.cpu().regs.bc()
+                );
+            }
+        }
+        assert!(
+            ok,
+            "never reached IFF1=1 or stable PC outside Speedlock stub"
+        );
+        for _ in 0..200 {
+            let m = s.machine.as_mut().expect("machine");
+            let _ = m.run_frame();
         }
         let m = s.machine.as_ref().expect("machine");
         let pc = m.cpu().regs.pc;
         let screen_bytes: Vec<u8> = (0u16..256).map(|i| m.read_mem(0x4000 + i)).collect();
         eprintln!(
-            "arkanoid ear: pc={pc:#06x} iff1={} screen[0..16]={:02x?}",
+            "arkanoid final: pc={pc:#06x} iff1={} screen[0..16]={:02x?}",
             u8::from(m.cpu().regs.iff1),
             &screen_bytes[..16]
         );
-        // Stuck sampler loop before used_bits MSB fix.
         assert_ne!(
             pc, 0xFD2A,
             "PC still in Speedlock edge-sample loop — EAR bitstream desync"
         );
-        // Speedlock payloads are encrypted on tape; assert non-blank screen RAM rather
-        // than a fixed plaintext prefix.
+        assert!(
+            m.cpu().regs.iff1 || !(0xF000..=0xFEFF).contains(&pc),
+            "PC {pc:#06x} still in Speedlock high stub with IFF1=0"
+        );
         let nonzero = screen_bytes.iter().filter(|&&b| b != 0).count();
         assert!(
             nonzero >= 32,
             "expected loaded/decrypted screen activity at $4000, nonzero={nonzero}/256 pc={pc:#06x}"
-        );
-        // Still sitting inside the high Speedlock stub is a fail even if screen changed.
-        assert!(
-            !(0xFD00..=0xFEFF).contains(&pc),
-            "PC {pc:#06x} still in Speedlock stub range after EAR play"
         );
     }
 

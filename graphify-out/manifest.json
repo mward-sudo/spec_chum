@@ -12,8 +12,8 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1788832458.4390266,
-    "seen": 1788834469.099104,
+    "mtime": 1788835140.8007827,
+    "seen": 1788841075.9265301,
     "ast_hash": "bc204a7d7cd77636afd8baf3ad501162",
     "semantic_hash": ""
   },
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1788833873.744125,
-    "seen": 1788834469.099146,
-    "ast_hash": "fe3fe83dd11752cc50be46c7b52a0b98",
+    "mtime": 1788841056.5577307,
+    "seen": 1788841075.928234,
+    "ast_hash": "3fca038d27bc32037f4829f03da47dba",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -582,9 +582,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788799432.0758429,
-    "seen": 1788834469.099159,
-    "ast_hash": "d5612db2b5b3f63afdd65741f03a0b44",
+    "mtime": 1788840688.576438,
+    "seen": 1788841075.92879,
+    "ast_hash": "bdf51659111c1b32190a1424cfa4d6e0",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
@@ -630,9 +630,9 @@
     "semantic_hash": ""
   },
   "crates/tape/src/tzx.rs": {
-    "mtime": 1788834286.4892507,
-    "seen": 1788834469.0991628,
-    "ast_hash": "6ab4896b89f46022e327861b75029c8f",
+    "mtime": 1788840528.7973764,
+    "seen": 1788841075.928916,
+    "ast_hash": "b08acf6c3ac419c155e6e372b043aabc",
     "semantic_hash": ""
   },
   "crates/trace/Cargo.toml": {
@@ -960,9 +960,9 @@
     "semantic_hash": ""
   },
   "tests/fixtures/tape/README.md": {
-    "mtime": 1788828047.9095714,
-    "seen": 1788834469.099193,
-    "ast_hash": "826e41136526f2c9bd7a9782fcc4dc4d",
+    "mtime": 1788841065.875642,
+    "seen": 1788841075.930088,
+    "ast_hash": "6610a5dba60cb69e7857a3ffaa2ba4dd",
     "semantic_hash": ""
   },
   "tests/fixtures/z80test/LICENSE.txt": {
@@ -1371,6 +1371,12 @@
     "mtime": 1788803493.1607635,
     "seen": 1788834469.099205,
     "ast_hash": "85b08f0566ef63a8995a184ac208244d",
+    "semantic_hash": ""
+  },
+  "crates/host_api/src/arkanoid_probe.rs": {
+    "mtime": 1788840453.8488483,
+    "seen": 1788841075.92809,
+    "ast_hash": "72b31150d6068f1d04188d4c098bc857",
     "semantic_hash": ""
   }
 }

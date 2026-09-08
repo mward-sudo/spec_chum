@@ -1726,8 +1726,7 @@ impl Machine {
         }
     }
 
-    /// Run one video frame; returns beeper edges and AY samples for the frame.
-    /// Spectrum frames to run per [`Self::run_frame`] while EAR tape is playing.
+    /// Spectrum frames to run per [`Self::run_frame`] while EAR tape turbo applies.
     ///
     /// Speed multiplies wall-clock progress with CPU↔tape still 1:1 (ROM LD-BYTES
     /// stays locked). Flash-load / Instant keeps a single frame so traps stay snappy.
@@ -1735,12 +1734,28 @@ impl Machine {
     #[must_use]
     fn ear_play_frame_reps(&self) -> u32 {
         let opts = self.tape_load_options();
-        // Turbo only while EAR is actively playing a non-finished deck (#178).
-        if opts.flash_load || !self.tape_playing() || self.tape_finished() {
-            1
-        } else {
-            opts.speed.clamp(1, 64)
+        if opts.flash_load {
+            return 1;
         }
+        let speed = opts.speed.clamp(1, 64);
+        if speed <= 1 {
+            return 1;
+        }
+        // Turbo while EAR is actively playing a non-finished deck (#178).
+        if self.tape_playing() && !self.tape_finished() {
+            return speed;
+        }
+        // Speedlock (Arkanoid) runs a long DI border-delay after the bitstream
+        // ends (~$F448). Keep Play turbo until the loader re-enables interrupts
+        // or leaves high-RAM stub space so speed N does not look hung at 1× (#379).
+        // Once IFF1 is set, return to 1× realtime (#178).
+        if self.tape_finished() {
+            let regs = &self.cpu().regs;
+            if !regs.iff1 && regs.pc >= 0x8000 {
+                return speed;
+            }
+        }
+        1
     }
 
     /// True when an inserted deck has exhausted its bitstream / blocks.
@@ -1753,7 +1768,7 @@ impl Machine {
         }
     }
 
-    /// Run one or more Spectrum frames. While an EAR deck is playing, runs
+    /// Run one or more Spectrum frames. While EAR turbo applies, runs
     /// [`TapeLoadOptions::speed`] frames so wall-clock ≈ realtime / speed.
     /// Only the last inner frame's PCM/edges are returned (hosts should not try
     /// to play S seconds of audio in one tick).
@@ -1761,7 +1776,12 @@ impl Machine {
         let reps = self.ear_play_frame_reps();
         let mut audio = self.run_one_frame();
         for _ in 1..reps {
-            if self.debugger().paused || !self.tape_playing() {
+            if self.debugger().paused {
+                break;
+            }
+            // Re-check each inner frame so EI / leaving the loader drops to 1×
+            // mid-burst (#178 / #379).
+            if self.ear_play_frame_reps() <= 1 {
                 break;
             }
             audio = self.run_one_frame();
@@ -6016,7 +6036,13 @@ mod tests {
         );
         assert!(
             !m.tape_playing(),
-            "playing must clear when finished so turbo stops (#178)"
+            "playing must clear when finished so turbo stops for ROM/BASIC (#178)"
+        );
+        // Tiny TAP leaves PC in ROM with interrupts enabled → must be 1× (#178).
+        // High-RAM DI stubs (Speedlock) may keep turbo briefly (#379).
+        assert!(
+            m.cpu().regs.pc < 0x8000 || m.cpu().regs.iff1,
+            "fixture should not sit in a high-RAM DI loader"
         );
         let t1 = m.cpu().t;
         let _ = m.run_frame();
@@ -6024,7 +6050,56 @@ mod tests {
         // One Spectrum frame ≈ 69888 T-states (48K); allow slack, but not N× turbo.
         assert!(
             post_dt < 150_000,
-            "after tape end, run_frame should be ~1× (got {post_dt} T-states)"
+            "after tape end in ROM/BASIC, run_frame should be ~1× (got {post_dt} T-states)"
+        );
+    }
+
+    #[test]
+    fn ear_turbo_continues_while_di_in_high_ram_after_tape() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x00, 0xff]],
+            ..Default::default()
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 20,
+            ..Default::default()
+        });
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        for _ in 0..20_000 {
+            let _ = m.run_frame();
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        assert!(m.tape_finished() || !m.tape_playing());
+        // Plant a Speedlock-like DI stub in high RAM and point PC there.
+        m.cpu_mut().regs.iff1 = false;
+        m.cpu_mut().regs.iff2 = false;
+        m.cpu_mut().regs.pc = 0xF448;
+        m.write_mem(0xF448, 0x18); // JR 0 — tight loop
+        m.write_mem(0xF449, 0xFE);
+        let t0 = m.cpu().t;
+        let _ = m.run_frame();
+        let dt = m.cpu().t.saturating_sub(t0);
+        assert!(
+            dt > 200_000,
+            "finished tape + DI @ >=$8000 should keep EAR turbo (#379), got {dt}"
+        );
+        // EI → back to 1× (#178).
+        m.cpu_mut().regs.iff1 = true;
+        let t1 = m.cpu().t;
+        let _ = m.run_frame();
+        let dt1 = m.cpu().t.saturating_sub(t1);
+        assert!(
+            dt1 < 150_000,
+            "IFF1 set must drop turbo to ~1× (#178), got {dt1}"
         );
     }
 
@@ -7504,13 +7579,13 @@ mod tests {
         m.set_tape_playing(true);
         assert!(!m.ear(), "EAR idle before pulse advance");
 
-        let mut saw_high = false;
+        let mut saw_edges = false;
         let mut saw_progress = false;
         let mut last_pulse = 0u32;
         for _ in 0..8 {
-            m.run_frame();
-            if m.ear() {
-                saw_high = true;
+            let audio = m.run_frame();
+            if !audio.beeper_edges.is_empty() {
+                saw_edges = true;
             }
             if let Some(p) = m.tape_progress() {
                 if p.pulse_index > last_pulse {
@@ -7519,7 +7594,9 @@ mod tests {
                 }
             }
         }
-        assert!(saw_high, "turbo pilot must drive EAR high");
+        // Tiny turbo decks can finish within a frame; idle EAR is forced low on
+        // exhaust (#178), so end-of-frame `ear()` is not a reliable high sample.
+        assert!(saw_edges, "turbo pilot must emit EAR/beeper edges");
         assert!(saw_progress, "pulse index must advance under EAR path");
         assert!(
             m.tape_progress().map_or(0, |p| p.pulse_count) > 0,

@@ -63,9 +63,19 @@ Speedlock / Loop Start (`0x24`) example (optional local only):
 ```bash
 # ~/Downloads/Arkanoid.tzx — HostSession open + TzxPlayer parse
 cargo test -p tape arkanoid_downloads -- --nocapture
+cargo test -p tape arkanoid_pause_polarity -- --nocapture
 cargo test -p host_api open_local_arkanoid -- --nocapture
+# EAR Play past Speedlock sampler + post-tape DI turbo (#379 / #380)
+cargo test -p host_api --release --lib arkanoid_ear_leaves_sampler -- --ignored --nocapture
+# Full delay stub → game entry (slow; drives Machine::run_frame to skip PCM)
+cargo test -p host_api --release --lib arkanoid_ear_load_leaves_speedlock -- --ignored --nocapture
 ```
 
+TZX pause polarity follows Fuse `force_low` / `LEVEL_LOW` (absolute low on the
+first edge after a non-zero pause). A bad `LEVEL_LOW` that emitted an *extra*
+low at tape start inverted the whole EAR schedule and stuck Arkanoid at `$FD2A`.
+Play turbo also continues after the deck finishes while `IFF1=0` and `PC≥$8000`
+so Speedlock border-delays do not appear hung at 1× after a turbo load.
 ### How to load The Boggit on 128K at 1×
 
 1. Model **128K**, insert Side 1 TZX (converted to TAP automatically).
