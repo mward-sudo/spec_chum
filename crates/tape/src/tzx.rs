@@ -14,12 +14,25 @@ use crate::{
     PILOT_PULSE_T, SYNC1_T, SYNC2_T,
 };
 
+/// Cap on expanded EAR pulse count while parsing (incl. Loop Start/End replay).
+/// Prevents pathological `0x24`/`0x25` nesting from unbounded `Vec` growth.
+const MAX_SCHEDULED_PULSES: usize = 16_777_216;
+
 #[derive(Debug, Error)]
 pub enum TzxError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("{0}")]
     Format(String),
+}
+
+fn ensure_pulse_budget(pulses: &[(u32, bool)]) -> Result<(), TzxError> {
+    if pulses.len() > MAX_SCHEDULED_PULSES {
+        return Err(TzxError::Format(format!(
+            "TZX pulse schedule exceeded {MAX_SCHEDULED_PULSES} pulses (loop expansion?)"
+        )));
+    }
+    Ok(())
 }
 
 impl From<TzxError> for TapeError {
@@ -83,6 +96,7 @@ impl TzxPlayer {
                     if emit {
                         block_starts.push(pulses.len());
                         append_standard_block(&mut pulses, &mut level, block, pause_ms);
+                        ensure_pulse_budget(&pulses)?;
                     }
                 }
                 0x11 => {
@@ -123,6 +137,7 @@ impl TzxPlayer {
                             used_bits,
                             pause_ms,
                         );
+                        ensure_pulse_budget(&pulses)?;
                     }
                 }
                 0x12 => {
@@ -137,6 +152,7 @@ impl TzxPlayer {
                         for _ in 0..count {
                             crate::push_pulse(&mut pulses, &mut level, u32::from(len));
                         }
+                        ensure_pulse_budget(&pulses)?;
                     }
                 }
                 0x13 => {
@@ -155,6 +171,7 @@ impl TzxPlayer {
                             i += 2;
                             crate::push_pulse(&mut pulses, &mut level, u32::from(len));
                         }
+                        ensure_pulse_budget(&pulses)?;
                     } else {
                         i += n * 2;
                     }
@@ -188,6 +205,7 @@ impl TzxPlayer {
                             used_bits,
                             pause_ms,
                         );
+                        ensure_pulse_budget(&pulses)?;
                     }
                 }
                 0x20 => {
@@ -203,6 +221,7 @@ impl TzxPlayer {
                             pulses.push((t, false));
                             level = false;
                         }
+                        ensure_pulse_budget(&pulses)?;
                     }
                 }
                 0x21 => {
@@ -235,6 +254,8 @@ impl TzxPlayer {
                     } else if let Some((restart_at, remaining)) = loop_stack.last_mut() {
                         *remaining = remaining.saturating_sub(1);
                         if *remaining > 0 {
+                            // Bound expansion before replaying the loop body.
+                            ensure_pulse_budget(&pulses)?;
                             i = *restart_at;
                         } else {
                             loop_stack.pop();
@@ -449,8 +470,10 @@ impl TzxPlayer {
                     i += 1 + n;
                 }
                 0x22 => {}
-                0x24 => i += 2,
-                0x25 => {}
+                // Loop markers are not flash/TAP-convertible: expanding them into
+                // EAR pulses is required (reps>1), and TAP extraction would drop
+                // repetitions. Keep off the standard-speed-only path (#372 CR).
+                0x24 | 0x25 => return false,
                 0x30 => {
                     let n = data.get(i).copied().unwrap_or(0) as usize;
                     i += 1 + n;
@@ -999,6 +1022,52 @@ mod tests {
         v.extend_from_slice(&1u16.to_le_bytes());
         let p = TzxPlayer::parse(&v).unwrap();
         assert_eq!(p.scheduled_pulses(), 1, "reps=0 must skip loop body");
+    }
+
+    #[test]
+    fn loop_around_standard_blocks_not_flash_convertible() {
+        // Loop of standard 0x10 must stay on the TZX pulse path — converting to
+        // TAP would keep only one copy of the payload and drop repetitions.
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x24);
+        v.extend_from_slice(&3u16.to_le_bytes());
+        v.push(0x10);
+        v.extend_from_slice(&100u16.to_le_bytes());
+        let payload = [0xffu8, 1, 2, 0];
+        v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        v.extend_from_slice(&payload);
+        v.push(0x25);
+        assert!(
+            !TzxPlayer::is_standard_speed_only(&v),
+            "loop markers must disable flash/TAP-only conversion"
+        );
+        let p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(
+            p.block_count(),
+            3,
+            "parse must expand 0x10 three times via Loop Start/End"
+        );
+    }
+
+    #[test]
+    fn loop_expansion_respects_pulse_budget() {
+        // Tiny body + huge reps would otherwise OOM the pulse Vec.
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v.push(0x24);
+        v.extend_from_slice(&u16::MAX.to_le_bytes());
+        v.push(0x12);
+        v.extend_from_slice(&1u16.to_le_bytes());
+        v.extend_from_slice(&u16::MAX.to_le_bytes());
+        v.push(0x25);
+        let err = TzxPlayer::parse(&v).expect_err("pathological loop must fail");
+        assert!(
+            err.to_string().contains("exceeded"),
+            "expected pulse-budget Format error, got {err}"
+        );
     }
 
     #[test]
