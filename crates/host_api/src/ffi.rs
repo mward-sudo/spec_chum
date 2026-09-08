@@ -662,6 +662,43 @@ pub extern "C" fn sc_in_post_tape_di_delay(handle: *mut c_void) -> c_int {
         .unwrap_or(false) as c_int
 }
 
+/// 1 when PC is in the Speedlock outer stub / `$8224` key poll (#379).
+#[no_mangle]
+pub extern "C" fn sc_in_speedlock_key_gate(handle: *mut c_void) -> c_int {
+    session_mut(handle)
+        .and_then(|s| s.machine().map(machine::Machine::in_speedlock_key_gate))
+        .unwrap_or(false) as c_int
+}
+
+/// Speedlock stage id for chrome / probes (#379).
+/// 0=none 1=delay-f448 2=key-gate 3=cont-8230 4=decrypt-93 5=other-di 6=ei
+#[no_mangle]
+pub extern "C" fn sc_speedlock_stage(handle: *mut c_void) -> c_int {
+    session_mut(handle)
+        .and_then(|s| s.machine().map(|m| speedlock_stage_id(m.speedlock_stage())))
+        .unwrap_or(0)
+}
+
+/// `$F408` nest entry count (#379).
+#[no_mangle]
+pub extern "C" fn sc_speedlock_stage_count(handle: *mut c_void) -> c_uint {
+    session_mut(handle)
+        .and_then(|s| s.machine().map(machine::Machine::speedlock_stage_count))
+        .unwrap_or(0)
+}
+
+fn speedlock_stage_id(stage: machine::SpeedlockStage) -> c_int {
+    match stage {
+        machine::SpeedlockStage::None => 0,
+        machine::SpeedlockStage::DelayF448 => 1,
+        machine::SpeedlockStage::KeyGate => 2,
+        machine::SpeedlockStage::Continue8230 => 3,
+        machine::SpeedlockStage::Decrypt93 => 4,
+        machine::SpeedlockStage::OtherHighDi => 5,
+        machine::SpeedlockStage::InterruptsOn => 6,
+    }
+}
+
 /// Fill out-params with tape progress. Returns 0 on success, -1 if no tape/handle.
 #[no_mangle]
 pub extern "C" fn sc_tape_progress(

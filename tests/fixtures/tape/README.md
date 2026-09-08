@@ -82,9 +82,27 @@ so Speedlock border-delays do not appear hung at 1× after a turbo load.
 After EAR exhaust, Arkanoid sits in a **multi-stage** Speedlock DI delay at
 `$F448` (`LD E,IXH` at `$F44E`, not a CALL). The first stage RETs at `$F476`
 after ~12.7k host frames at EAR 64× (~4.5 hours of Spectrum time / ~4–5 minutes
-wall-clock). Further nested stages continue before `IFF1`/game entry — this is
-ROM-accurate protection delay, not an EAR desync. Prefer EAR **64×** (UI option)
-while waiting; chrome shows “Speedlock delay…” once the deck is finished.
+wall-clock).
+
+Outer stub after `$F408`: `CALL $8224` polls `IN A,(C)` with `BC=$00FE` — no key
+aborts with `E=$FF` and restarts the whole delay; any key continues into decrypt
+/ game setup (`$8230` / `$93xx`). **Do not hold a key during the `$F448` nest**
+(mid-delay visits to `$8224` with a non-outer return will corrupt the loader).
+
+At EAR turbo the outer key poll finishes inside one Spectrum frame after the DI
+delay, so a human tap cannot hit it. Play turbo (`speed > 1`) therefore
+**auto-acks** that outer gate (Space) when PC is on the stub/poll/F476 — same
+convenience class as keeping turbo through the DI delay. Realtime (`1×`) needs a
+manual tap when chrome shows “Speedlock — tap a key”.
+
+`Machine::speedlock_stage()` / `speedlock_stage_count()` classify delay vs decrypt
+vs key-gate (D vs E). Optional `SPEC_CHUM_SPEEDLOCK_SNAP=1` snaps `$F448`→`$F476`
+for H4 A/B only (default **off** — full snap caused `$837B`↔`$F408` loops).
+Prefer EAR **64×**; chrome shows stage-aware “Speedlock delay… / decrypt…”.
+
+Fuse snapshot bisect (load Fuse `.z80`/`.szx` post-load into Spec Chum) is the
+next oracle when a snapshot is available — dumps at `$F476` from
+`arkanoid_delay_probe` help compare regs/`LD A,R` state.
 ### How to load The Boggit on 128K at 1×
 
 1. Model **128K**, insert Side 1 TZX (converted to TAP automatically).
