@@ -423,6 +423,24 @@ pub extern "C" fn sc_media_sha512(handle: *mut c_void) -> *mut c_char {
     CString::new(hash.replace('\0', "")).map_or(ptr::null_mut(), CString::into_raw)
 }
 
+/// Enable/disable opt-in `ZXInfo` online tape title lookup (`enabled != 0`). Default off (#373).
+#[no_mangle]
+pub extern "C" fn sc_set_online_tape_titles(handle: *mut c_void, enabled: c_int) {
+    let Some(mut s) = session_mut(handle) else {
+        return;
+    };
+    s.set_online_tape_titles(enabled != 0);
+}
+
+/// `1` when online tape title lookup is enabled, else `0`.
+#[no_mangle]
+pub extern "C" fn sc_online_tape_titles(handle: *mut c_void) -> c_int {
+    let Some(s) = session_mut(handle) else {
+        return 0;
+    };
+    i32::from(s.online_tape_titles())
+}
+
 #[no_mangle]
 pub extern "C" fn sc_load_snapshot(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();

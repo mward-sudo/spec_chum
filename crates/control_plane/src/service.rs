@@ -1054,7 +1054,8 @@ impl ControlPlane {
     }
 
     pub fn status(&self) -> ApiResult<StatusResponse> {
-        self.with_session_ref(|s| {
+        // `&mut` so pending ZXInfo title enrichment can apply (#373).
+        self.with_session_mut(|s| {
             Ok(StatusResponse {
                 model: model_slug(s.model()),
                 has_machine: s.has_machine(),

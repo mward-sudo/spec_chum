@@ -38,6 +38,8 @@ allow = [
     "BSD-3-Clause",
     "BSL-1.0",
     "CC0-1.0",
+    # webpki-roots (ureq/rustls TLS roots) — CDLA-Permissive-2.0 (#373 ZXInfo HTTPS)
+    "CDLA-Permissive-2.0",
     "ISC",
     "MPL-2.0",
     "Unicode-3.0",

@@ -7,6 +7,7 @@ pub mod ffi;
 pub mod handle;
 pub mod keymap;
 pub mod machine_config;
+pub mod media_title_lookup;
 pub mod prefs;
 pub mod rom_setup;
 pub mod session;
@@ -14,6 +15,9 @@ pub mod session;
 pub use machine_config::{
     apply_user_config, expected_rom_bytes, hardware_compat, new_config_id, validate_main_rom,
     AppliedConfig, HardwareCompat, MachineConfigError, UserMachineConfig, MAX_CUSTOM_CONFIGS,
+};
+pub use media_title_lookup::{
+    default_cache_path as default_zxinfo_cache_path, user_agent as zxinfo_user_agent,
 };
 pub use prefs::{
     default_prefs_path, load_prefs, model_rom_path_key, pref_model_slug, save_prefs, update_prefs,

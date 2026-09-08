@@ -2,7 +2,11 @@
 
 use std::path::{Path, PathBuf};
 
+use formats::MediaTitleSource;
 use machine::{JoystickMode, JoystickState, Machine, Model, Watch};
+use parking_lot::Mutex;
+use std::sync::Arc;
+use std::thread;
 use thiserror::Error;
 
 /// Model identifiers for the C ABI (stable numeric values).
@@ -155,6 +159,14 @@ pub struct HostSession {
     media_title: Option<String>,
     /// SHA-512 (lowercase hex) of the last inserted tape file, when known.
     media_sha512: Option<String>,
+    /// Where [`Self::media_title`] came from (for debug / honesty).
+    media_title_source: Option<MediaTitleSource>,
+    /// Opt-in `ZXInfo` online title lookup (#373). Default off.
+    online_tape_titles: bool,
+    /// Bumped on each identity set/clear so stale background hits are ignored.
+    media_title_generation: u64,
+    /// Background enrichment inbox (cache / `ZXInfo` → title).
+    pending_media_title: Arc<Mutex<Option<PendingMediaTitle>>>,
     /// Mono PCM for the last frame (~882 samples @ 44100 Hz / 50 fps).
     audio_pcm: Vec<f32>,
     /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
@@ -165,6 +177,15 @@ pub struct HostSession {
     joystick_state: JoystickState,
     /// Host-held Spectrum matrix keys so Sinclair/Cursor joystick clears do not drop them.
     host_keys: [[bool; 5]; 8],
+}
+
+/// Background title enrichment waiting to be applied on the host thread.
+#[derive(Clone, Debug)]
+struct PendingMediaTitle {
+    generation: u64,
+    sha512_hex: String,
+    title: String,
+    source: MediaTitleSource,
 }
 
 impl HostSession {
@@ -183,6 +204,10 @@ impl HostSession {
             status: "No ROM loaded".into(),
             media_title: None,
             media_sha512: None,
+            media_title_source: None,
+            online_tape_titles: false,
+            media_title_generation: 0,
+            pending_media_title: Arc::new(Mutex::new(None)),
             audio_pcm: Vec::new(),
             last_speaker_level: false,
             joystick_mode: JoystickMode::Kempston,
@@ -281,10 +306,12 @@ impl HostSession {
         self.status = status.into();
     }
 
-    /// Human title for chrome / agent status (catalogue or filename).
+    /// Human title for chrome / agent status (catalogue, cache, online, or filename).
     /// Returns `None` when no tape is inserted (avoids stale titles after model/ROM reload).
+    /// Applies any completed background `ZXInfo` enrichment first (#373).
     #[must_use]
-    pub fn media_title(&self) -> Option<&str> {
+    pub fn media_title(&mut self) -> Option<&str> {
+        self.apply_pending_media_title();
         if !self.has_tape() {
             return None;
         }
@@ -294,37 +321,129 @@ impl HostSession {
     /// SHA-512 hex of the last inserted tape file, when known.
     /// Returns `None` when no tape is inserted.
     #[must_use]
-    pub fn media_sha512(&self) -> Option<&str> {
+    pub fn media_sha512(&mut self) -> Option<&str> {
+        self.apply_pending_media_title();
         if !self.has_tape() {
             return None;
         }
         self.media_sha512.as_deref()
     }
 
+    /// Opt-in `ZXInfo` online title lookup (hash only). Default off for privacy (#373).
+    pub fn set_online_tape_titles(&mut self, enabled: bool) {
+        self.online_tape_titles = enabled;
+    }
+
+    /// Whether online `ZXInfo` title lookup is enabled.
+    #[must_use]
+    pub fn online_tape_titles(&self) -> bool {
+        self.online_tape_titles
+    }
+
+    /// Where the current media title came from, when a tape is inserted.
+    #[must_use]
+    pub fn media_title_source(&mut self) -> Option<MediaTitleSource> {
+        self.apply_pending_media_title();
+        if !self.has_tape() {
+            return None;
+        }
+        self.media_title_source
+    }
+
     /// Resolve and store tape display identity from `path` (offline catalogue / filename).
     pub fn set_media_identity_from_path(&mut self, path: &Path) {
         if let Ok(id) = formats::identify_path(path) {
-            self.media_title = Some(id.display_title);
-            self.media_sha512 = Some(id.sha512_hex);
+            self.install_media_identity(id.display_title, Some(id.sha512_hex), id.source);
         } else {
-            self.media_title = path
+            let title = path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .filter(|s| !s.is_empty());
-            self.media_sha512 = None;
+            self.install_media_identity(
+                title.unwrap_or_else(|| path.display().to_string()),
+                None,
+                MediaTitleSource::Filename,
+            );
         }
     }
 
     /// Resolve identity from bytes already read for open (avoids a second read).
     pub fn set_media_identity_from_bytes(&mut self, bytes: &[u8], path: &Path) {
         let id = formats::identify_bytes(bytes, path);
-        self.media_title = Some(id.display_title);
-        self.media_sha512 = Some(id.sha512_hex);
+        self.install_media_identity(id.display_title, Some(id.sha512_hex), id.source);
+    }
+
+    fn install_media_identity(
+        &mut self,
+        title: String,
+        sha512_hex: Option<String>,
+        source: MediaTitleSource,
+    ) {
+        self.media_title_generation = self.media_title_generation.wrapping_add(1);
+        *self.pending_media_title.lock() = None;
+        self.media_title = Some(title);
+        self.media_sha512 = sha512_hex;
+        self.media_title_source = Some(source);
+        self.maybe_spawn_online_lookup();
     }
 
     fn clear_media_identity(&mut self) {
+        self.media_title_generation = self.media_title_generation.wrapping_add(1);
+        *self.pending_media_title.lock() = None;
         self.media_title = None;
         self.media_sha512 = None;
+        self.media_title_source = None;
+    }
+
+    fn maybe_spawn_online_lookup(&mut self) {
+        if !self.online_tape_titles {
+            return;
+        }
+        if self.media_title_source != Some(MediaTitleSource::Filename) {
+            return;
+        }
+        let Some(sha) = self.media_sha512.clone() else {
+            return;
+        };
+        let generation = self.media_title_generation;
+        let inbox = Arc::clone(&self.pending_media_title);
+        let cache_path = crate::media_title_lookup::default_cache_path();
+        thread::spawn(move || {
+            let Some(enrich) = crate::media_title_lookup::lookup_online(&sha, &cache_path) else {
+                return;
+            };
+            *inbox.lock() = Some(PendingMediaTitle {
+                generation,
+                sha512_hex: sha,
+                title: enrich.title,
+                source: enrich.source,
+            });
+        });
+    }
+
+    /// Apply a completed background title enrichment when still valid for this tape.
+    pub fn apply_pending_media_title(&mut self) {
+        let pending = self.pending_media_title.lock().take();
+        let Some(pending) = pending else {
+            return;
+        };
+        if pending.generation != self.media_title_generation {
+            return;
+        }
+        if self.media_sha512.as_deref() != Some(pending.sha512_hex.as_str()) {
+            return;
+        }
+        if !self.has_tape() {
+            return;
+        }
+        let old = self.media_title.clone();
+        self.media_title = Some(pending.title.clone());
+        self.media_title_source = Some(pending.source);
+        if let Some(old) = old {
+            if self.status.contains(&old) {
+                self.status = self.status.replacen(&old, &pending.title, 1);
+            }
+        }
     }
 
     #[must_use]
@@ -1208,6 +1327,7 @@ impl HostSession {
     /// beeper edges themselves (egui); mono PCM is always updated in
     /// [`Self::audio_pcm`] when a frame advances.
     pub fn run_frame(&mut self) -> machine::FrameAudio {
+        self.apply_pending_media_title();
         if !self.running || self.machine.is_none() {
             return machine::FrameAudio::default();
         }
@@ -2333,6 +2453,32 @@ mod tests {
         s.eject_tape().expect("eject");
         assert_eq!(s.media_title(), None);
         assert_eq!(s.media_sha512(), None);
+    }
+
+    #[test]
+    fn pending_online_title_applies_when_generation_matches() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/print_ok.tap");
+        s.open_tape(&fixture).expect("open");
+        // Simulate filename fallback + a completed background ZXInfo hit (#373).
+        let sha = s.media_sha512().expect("sha").to_string();
+        s.media_title = Some("print_ok.tap".into());
+        s.media_title_source = Some(MediaTitleSource::Filename);
+        let gen = s.media_title_generation;
+        *s.pending_media_title.lock() = Some(PendingMediaTitle {
+            generation: gen,
+            sha512_hex: sha,
+            title: "Online Title".into(),
+            source: MediaTitleSource::Online,
+        });
+        assert_eq!(s.media_title(), Some("Online Title"));
+        assert_eq!(s.media_title_source(), Some(MediaTitleSource::Online));
     }
 
     #[test]

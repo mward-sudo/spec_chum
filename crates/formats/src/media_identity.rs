@@ -11,10 +11,11 @@
 //!
 //! Offline resolution uses an **embedded local catalogue** of metadata-only
 //! entries (hash → human title). No ROM or tape images are shipped. Misses fall
-//! back to the filesystem basename. Optional live `ZXInfo` lookup is documented
-//! in `docs/TAPE_IDENTITY.md` and is not required for core emulation.
+//! back to the filesystem basename. Optional live `ZXInfo` lookup lives above
+//! this crate (`host_api::media_title_lookup`, [#373](https://github.com/mward-sudo/spec_chum/issues/373))
+//! and is not required for core emulation.
 //!
-//! See [#366](https://github.com/mward-sudo/spec_chum/issues/366).
+//! See [#366](https://github.com/mward-sudo/spec_chum/issues/366) / [#373](https://github.com/mward-sudo/spec_chum/issues/373).
 
 use std::path::Path;
 
@@ -27,7 +28,11 @@ use crate::FormatError;
 pub enum MediaTitleSource {
     /// Hit in the embedded local catalogue.
     LocalCatalogue,
-    /// No catalogue hit — basename (or full path fallback).
+    /// Hit in the on-disk `ZXInfo` / prior-lookup cache (host layer).
+    Cached,
+    /// Live `ZXInfo` `filecheck` hit (host layer; opt-in).
+    Online,
+    /// No catalogue/cache/online hit — basename (or full path fallback).
     Filename,
 }
 

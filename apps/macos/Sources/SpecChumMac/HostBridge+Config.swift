@@ -299,6 +299,11 @@ extension HostBridge {
         UserDefaults.standard.bool(forKey: experienceDefaultsKey)
     }
 
+    static func loadPersistedOnlineTapeTitles() -> Bool {
+        // Default off (key absent → false) for privacy (#373).
+        UserDefaults.standard.bool(forKey: onlineTapeTitlesDefaultsKey)
+    }
+
     static func loadPersistedJoystickMode() -> JoystickMode {
         let raw = UInt32(UserDefaults.standard.integer(forKey: joystickDefaultsKey))
         return JoystickMode(rawValue: raw) ?? .kempston

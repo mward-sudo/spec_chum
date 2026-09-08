@@ -143,6 +143,14 @@ final class HostBridge: ObservableObject {
             }
         }
     }
+    /// Opt-in ZXInfo online tape titles (hash only). Default off (#373).
+    @Published var onlineTapeTitles: Bool = HostBridge.loadPersistedOnlineTapeTitles() {
+        didSet {
+            guard let handle, !suppressPrefsPersist else { return }
+            sc_set_online_tape_titles(handle, onlineTapeTitles ? 1 : 0)
+            UserDefaults.standard.set(onlineTapeTitles, forKey: Self.onlineTapeTitlesDefaultsKey)
+        }
+    }
     /// Host PCM output gain 0…1 (what the user hears). Does not affect EAR / flash-load.
     @Published var outputVolume: Float = HostBridge.loadPersistedVolume() {
         didSet {
@@ -436,6 +444,9 @@ final class HostBridge: ObservableObject {
             return
         }
         sc_debug_init_from_env()
+        if let handle {
+            sc_set_online_tape_titles(handle, onlineTapeTitles ? 1 : 0)
+        }
         if let id = activeConfigId,
            let cfg = customConfigs.first(where: { $0.id == id }),
            applyCustomConfiguration(cfg)
@@ -541,6 +552,7 @@ final class HostBridge: ObservableObject {
     static let maxCustomConfigs = 32
     static let tapeSpeedDefaultsKey = "specChum.tapeEarSpeed"
     static let experienceDefaultsKey = "specChum.tapeExperience"
+    static let onlineTapeTitlesDefaultsKey = "specChum.onlineTapeTitles"
     static let joystickDefaultsKey = "specChum.joystickMode"
     static let kempstonMouseDefaultsKey = "specChum.kempstonMouse"
     static let recentFilesDefaultsKey = "specChum.recentFiles"
