@@ -52,6 +52,10 @@ unsigned int sc_framebuffer_width(void *handle);
 unsigned int sc_framebuffer_height(void *handle);
 
 int sc_open_tape(void *handle, const char *path);
+/* Heap UTF-8 display title for the inserted tape (catalogue or filename); free with sc_string_free. Null if none. */
+char *sc_media_title(void *handle);
+/* Heap UTF-8 lowercase SHA-512 hex of the inserted tape file; free with sc_string_free. Null if none. */
+char *sc_media_sha512(void *handle);
 /* SNA/Z80 snapshot, RZX recording, +3 DSK — path is UTF-8 filesystem path */
 int sc_load_snapshot(void *handle, const char *path);
 int sc_load_rzx(void *handle, const char *path);

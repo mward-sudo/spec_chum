@@ -20,6 +20,11 @@ extension HostBridge {
             tapePlaying = playing
         }
         if tape != hasTape {
+            if hasTape && !tape {
+                // Deck emptied — drop tape identity so chrome does not keep a stale title/hash.
+                mediaTitle = nil
+                mediaSha512 = nil
+            }
             hasTape = tape
         }
         progressPublishCounter &+= 1
@@ -59,7 +64,8 @@ extension HostBridge {
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "Tape open failed"
         } else {
-            mediaTitle = url.lastPathComponent
+            mediaTitle = Self.takeMediaTitle(handle: handle) ?? url.lastPathComponent
+            mediaSha512 = Self.takeMediaSha512(handle: handle)
             // Insert always leaves flash-load off; Instant turns it on ephemerally.
             instantFlashActive = false
             setFlashLoad(false)
@@ -69,6 +75,19 @@ extension HostBridge {
             refreshTapeProgress()
             noteRecentFile(url)
         }
+    }
+
+    /// Prefer Rust-resolved catalogue title (#366); caller frees via sc_string_free.
+    private static func takeMediaTitle(handle: UnsafeMutableRawPointer) -> String? {
+        guard let cstr = sc_media_title(handle) else { return nil }
+        defer { sc_string_free(cstr) }
+        return String(cString: cstr)
+    }
+
+    private static func takeMediaSha512(handle: UnsafeMutableRawPointer) -> String? {
+        guard let cstr = sc_media_sha512(handle) else { return nil }
+        defer { sc_string_free(cstr) }
+        return String(cString: cstr)
     }
 
     func typeLoadQuotes(withCode: Bool = false) {

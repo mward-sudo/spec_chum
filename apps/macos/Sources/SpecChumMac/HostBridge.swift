@@ -116,6 +116,8 @@ final class HostBridge: ObservableObject {
     @Published var hasTape: Bool = false
     /// Last opened media filename for the window title (tape / snapshot / RZX / disk / ROM).
     @Published var mediaTitle: String?
+    /// SHA-512 hex of the inserted tape file when known (#366); cleared when the deck is empty.
+    @Published var mediaSha512: String?
     /// Flash-load mirror of host options. Instant turns this on ephemerally; Play forces it off.
     @Published var instantLoad: Bool = false {
         didSet { pushTapeLoadOptions() }

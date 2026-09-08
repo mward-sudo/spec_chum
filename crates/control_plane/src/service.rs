@@ -1064,6 +1064,8 @@ impl ControlPlane {
                 status: s.status().to_string(),
                 tape_playing: s.tape_playing(),
                 has_tape: s.has_tape(),
+                media_title: s.media_title().map(str::to_owned),
+                media_sha512: s.media_sha512().map(str::to_owned),
             })
         })
     }
@@ -1244,6 +1246,12 @@ pub struct StatusResponse {
     pub status: String,
     pub tape_playing: bool,
     pub has_tape: bool,
+    /// Catalogue title or filename when a tape is inserted (#366).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_title: Option<String>,
+    /// Lowercase SHA-512 hex of the inserted tape file (#366).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_sha512: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

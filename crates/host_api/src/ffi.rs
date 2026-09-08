@@ -399,6 +399,30 @@ pub extern "C" fn sc_open_tape(handle: *mut c_void, path: *const c_char) -> c_in
     }
 }
 
+/// Heap-allocated UTF-8 display title for the inserted tape; free with [`sc_string_free`].
+#[no_mangle]
+pub extern "C" fn sc_media_title(handle: *mut c_void) -> *mut c_char {
+    let Some(mut s) = session_mut(handle) else {
+        return ptr::null_mut();
+    };
+    let Some(title) = s.media_title() else {
+        return ptr::null_mut();
+    };
+    CString::new(title.replace('\0', "")).map_or(ptr::null_mut(), CString::into_raw)
+}
+
+/// Heap-allocated lowercase SHA-512 hex of the inserted tape; free with [`sc_string_free`].
+#[no_mangle]
+pub extern "C" fn sc_media_sha512(handle: *mut c_void) -> *mut c_char {
+    let Some(mut s) = session_mut(handle) else {
+        return ptr::null_mut();
+    };
+    let Some(hash) = s.media_sha512() else {
+        return ptr::null_mut();
+    };
+    CString::new(hash.replace('\0', "")).map_or(ptr::null_mut(), CString::into_raw)
+}
+
 #[no_mangle]
 pub extern "C" fn sc_load_snapshot(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();
@@ -1199,7 +1223,8 @@ pub extern "C" fn sc_string_free(s: *mut c_char) {
         return;
     }
     // SAFETY: string from `CString::into_raw` via sc_status / sc_last_error /
-    // sc_inspect_json / sc_debug_dump / sc_debug_dump_json.
+    // sc_media_title / sc_media_sha512 / sc_inspect_json / sc_debug_dump /
+    // sc_debug_dump_json.
     drop(unsafe { CString::from_raw(s) });
 }
 

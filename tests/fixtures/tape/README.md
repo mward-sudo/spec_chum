@@ -21,6 +21,12 @@ That script writes `minimal_code.tap`, `attr_mark.tap`, `print_ok.tap`, and
 
 Do not add commercial game TAPs.
 
+## Content identity (#366)
+
+Fixture digests are registered in the offline catalogue
+(`formats::media_identity`) so hosts can show human titles (e.g. `PRINT "OK"`)
+instead of filenames. See [`docs/TAPE_IDENTITY.md`](../../../docs/TAPE_IDENTITY.md).
+
 ## Load matrix (CI)
 
 `cargo test -p machine --lib matrix` covers:

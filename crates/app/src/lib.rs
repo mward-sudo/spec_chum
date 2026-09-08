@@ -357,9 +357,20 @@ impl EmulatorSession {
     }
 
     pub fn load_tap(&mut self, path: &Path) {
-        match tape::TapImage::load(path) {
+        let data = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                self.host_mut().set_status(format!("TAP error: {e}"));
+                return;
+            }
+        };
+        match tape::TapImage::parse(&data) {
             Ok(img) => {
                 let host = &mut *self.host_mut();
+                if !host.has_machine() {
+                    host.set_status("Load a machine ROM before inserting tape");
+                    return;
+                }
                 if let Some(m) = host.machine_mut() {
                     m.insert_tape(tape::TapPlayer::new(img));
                     let mut opts = m.tape_load_options();
@@ -367,13 +378,15 @@ impl EmulatorSession {
                         opts.flash_load = false;
                         m.set_tape_load_options(opts);
                     }
-                    host.set_status(format!(
-                        "Inserted TAP {} (paused — Tape → Play for EAR, or Instant)",
-                        path.display()
-                    ));
-                } else {
-                    host.set_status("Load a machine ROM before inserting tape");
                 }
+                host.set_media_identity_from_bytes(&data, path);
+                let title = host
+                    .media_title()
+                    .unwrap_or_else(|| path.to_str().unwrap_or("tape"))
+                    .to_owned();
+                host.set_status(format!(
+                    "Inserted TAP {title} (paused — Tape → Play for EAR, or Instant)"
+                ));
             }
             Err(e) => self.host_mut().set_status(format!("TAP error: {e}")),
         }
@@ -403,11 +416,16 @@ impl EmulatorSession {
                         if let Some(m) = host.machine_mut() {
                             m.insert_tape(player);
                         }
+                        host.set_media_identity_from_bytes(&data, path);
                     }
                     self.force_flash_load(false);
+                    let title = self
+                        .host_mut()
+                        .media_title()
+                        .unwrap_or_else(|| path.to_str().unwrap_or("tape"))
+                        .to_owned();
                     self.host_mut().set_status(format!(
-                        "Inserted TZX {} as TAP ({n} blocks, paused). Type LOAD \"\" then Play (EAR), or Instant. 128K/+3: Type LOAD enters 48 BASIC (+3 disk Loader is not tape). +2A: Type LOAD uses menu Loader (tape).",
-                        path.display()
+                        "Inserted TZX {title} as TAP ({n} blocks, paused). Type LOAD \"\" then Play (EAR), or Instant. 128K/+3: Type LOAD enters 48 BASIC (+3 disk Loader is not tape). +2A: Type LOAD uses menu Loader (tape)."
                     ));
                     return;
                 }
@@ -424,11 +442,16 @@ impl EmulatorSession {
                     if let Some(m) = host.machine_mut() {
                         m.insert_tzx(player);
                     }
+                    host.set_media_identity_from_bytes(&data, path);
                 }
                 self.force_flash_load(false);
+                let title = self
+                    .host_mut()
+                    .media_title()
+                    .unwrap_or_else(|| path.to_str().unwrap_or("tape"))
+                    .to_owned();
                 self.host_mut().set_status(format!(
-                    "Inserted TZX {} (pulse playback, paused — Play when loader is ready)",
-                    path.display()
+                    "Inserted TZX {title} (pulse playback, paused — Play when loader is ready)"
                 ));
             }
             Err(e) => self.host_mut().set_status(format!("TZX error: {e}")),
@@ -2501,11 +2524,18 @@ of their copyrighted material but retain that copyright.",
                         );
                     });
                     ui.separator();
-                    if let Some(p) = self
-                        .session
-                        .host_mut().machine()
-                        .and_then(Machine::tape_progress)
-                    {
+                    let (tape_title, has_tape, tape_progress) = {
+                        let host = self.session.host_mut();
+                        (
+                            host.media_title().map(str::to_owned),
+                            host.machine().is_some_and(Machine::has_tape),
+                            host.machine().and_then(Machine::tape_progress),
+                        )
+                    };
+                    if let Some(p) = tape_progress {
+                        if let Some(ref title) = tape_title {
+                            ui.label(title);
+                        }
                         ui.add(
                             egui::ProgressBar::new(p.fraction())
                                 .desired_width(120.0)
@@ -2520,6 +2550,10 @@ of their copyrighted material but retain that copyright.",
                             },
                             p.block_count
                         ));
+                    } else if has_tape {
+                        if let Some(ref title) = tape_title {
+                            ui.label(title);
+                        }
                     }
                     if self
                         .session

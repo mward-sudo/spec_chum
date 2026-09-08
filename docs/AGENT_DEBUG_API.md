@@ -240,7 +240,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Disasm | `GET /v1/disasm?addr=&count=` |
 | Debugger state | `GET /v1/debug/breakpoints`, `/watches`, `/port-watches`, `/last-break` |
 | ROM | `GET /v1/rom/setup` — slots + availability (`sc_model_rom_setup_json` parity) |
-| Status | `GET /v1/status`, `/v1/health`; `GET /v1/errors/last` |
+| Status | `GET /v1/status`, `/v1/health`; `GET /v1/errors/last` — status may include optional `media_title` / `media_sha512` when a tape is inserted ([#366](https://github.com/mward-sudo/spec_chum/issues/366), [`TAPE_IDENTITY.md`](TAPE_IDENTITY.md)) |
 | Prefs | `GET /v1/prefs` snapshot |
 
 ### Debug
