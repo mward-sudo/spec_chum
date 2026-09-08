@@ -2086,7 +2086,7 @@ mod tests {
             let m = s.machine.as_ref().expect("machine");
             let p = m.cpu().regs.pc;
             assert_ne!(p, 0xFD2A, "returned to sampler");
-            if p == 0xF460 || p == 0xF476 {
+            if p == 0xF476 {
                 saw_ret = true;
                 eprintln!("first delay RET at {p:#06x} after +{i} host frames");
                 break;
