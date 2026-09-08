@@ -301,6 +301,19 @@ struct ContentView: View {
                     Spacer(minLength: 0)
                 }
             }
+            // Host session / open errors (e.g. unsupported TZX block) — must stay visible
+            // when the deck is empty; #367 chrome dropped this and made failures look silent (#372).
+            if !host.status.isEmpty {
+                Text(host.status)
+                    .font(.caption2)
+                    .foregroundStyle(statusFooterMessageIsError ? Color.orange : Color.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .textSelection(.enabled)
+                    .help(host.status)
+                    .accessibilityLabel("Host status")
+                    .accessibilityValue(host.status)
+            }
             if !host.roomPerfLine.isEmpty {
                 Text(host.roomPerfLine)
                     .font(.system(.caption2, design: .monospaced))
@@ -315,6 +328,16 @@ struct ContentView: View {
         .glassBarBackground()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tape status")
+    }
+
+    /// Heuristic: open/play/attach failures vs routine "Inserted…" / Instant progress.
+    private var statusFooterMessageIsError: Bool {
+        let s = host.status.lowercased()
+        return s.contains("fail")
+            || s.contains("unsupported")
+            || s.contains("error")
+            || s.contains("truncated")
+            || s.contains("missing")
     }
 
     @ViewBuilder

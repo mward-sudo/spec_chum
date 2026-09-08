@@ -1815,6 +1815,92 @@ mod tests {
         assert!(s.status().contains("TAP") || s.status().contains("TZX"));
     }
 
+    /// Synthetic Speedlock-style Loop Start/End TZX through `open_tape`
+    /// (`SpecChumMac` `sc_open_tape` / Open+Instant path). Always runs in CI —
+    /// would have failed before #372 with `unsupported TZX block ID 0x24`.
+    #[test]
+    fn open_tape_expands_tzx_loop_blocks() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let dir = tempfile_dir("spec_chum_tzx_loop");
+        let path = dir.join("loop_pure_tone.tzx");
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        // One standard block (so status / progress look like a real insert),
+        // then a loop of pure tone — the Arkanoid failure mode in miniature.
+        v.push(0x10);
+        v.extend_from_slice(&100u16.to_le_bytes());
+        let payload = [0x00u8, b'A', 0x00];
+        v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        v.extend_from_slice(&payload);
+        v.push(0x24);
+        v.extend_from_slice(&3u16.to_le_bytes());
+        v.push(0x12);
+        v.extend_from_slice(&1000u16.to_le_bytes());
+        v.extend_from_slice(&2u16.to_le_bytes());
+        v.push(0x25);
+        v.push(0x20);
+        v.extend_from_slice(&0u16.to_le_bytes());
+        std::fs::write(&path, &v).expect("write synthetic tzx");
+
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.open_tape(&path)
+            .expect("open_tape must accept TZX Loop Start/End (#372)");
+        assert!(s.has_tape(), "deck must show an inserted tape");
+        let p = s.tape_progress().expect("progress");
+        // 1× standard + 3× pure-tone iterations (+ optional zero pause).
+        assert!(
+            p.block_count >= 4,
+            "loop expansion must schedule repeated blocks, got {}",
+            p.block_count
+        );
+        assert!(
+            s.status().contains("TZX"),
+            "status should report TZX insert, got {:?}",
+            s.status()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn tempfile_dir(prefix: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("{prefix}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        dir
+    }
+
+    /// Speedlock Loop Start/End TZX — `SpecChumMac` Open path (#372).
+    #[test]
+    fn open_local_arkanoid_tzx_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let arkanoid = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
+        if !arkanoid.is_file() {
+            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.open_tape(&arkanoid).expect("Arkanoid.tzx open (#372)");
+        assert!(s.has_tape());
+        let p = s.tape_progress().expect("progress");
+        assert!(
+            p.block_count >= 4,
+            "expected Speedlock TZX pulse blocks, got {}",
+            p.block_count
+        );
+        assert!(s.status().contains("TZX") || s.media_title().is_some());
+    }
+
     #[test]
     fn model_id_roundtrip() {
         assert_eq!(ModelId::from_u32(0), Some(ModelId::Spectrum48));

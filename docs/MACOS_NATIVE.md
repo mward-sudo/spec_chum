@@ -111,7 +111,7 @@ Prefer HTTP over GUI automation or driving the SwiftUI shell. See
 - Optional experimental **living room** display (Bevy headless + IOSurface present); toggle in the UI.
   SpecChumMac always links the living_room staticlib; the *mode* defaults **off**.
   See [LIVING_ROOM.md](LIVING_ROOM.md).
-- **Open Tape** toolbar / File (⌘O): TAP/TZX via `NSOpenPanel`; on **+3** the control is **Open Tape / Disk** and also accepts `.dsk`; on Beta-capable models it is **Open Tape / TRD** and also accepts `.trd`. Snapshots / RZX stay separate File items
+- **Open Tape** toolbar / File (⌘O): TAP/TZX via `NSOpenPanel`; on **+3** the control is **Open Tape / Disk** and also accepts `.dsk`; on Beta-capable models it is **Open Tape / TRD** and also accepts `.trd`. Snapshots / RZX stay separate File items. Open failures (unsupported TZX block, I/O, etc.) set the host status string and appear as a caption under the tape footer — empty deck alone is not enough feedback (#372).
 - **Snapshots / RZX / DSK:** File → **Open Snapshot…** (`.sna` / `.z80`), **Open RZX…**, **Open Disk…** (`.dsk`, **+3 only**) via `sc_load_snapshot` / `sc_load_rzx` / `sc_load_dsk`
 - **Instant** toolbar **only** (not duplicated in Tape menu): always opens a TAP/TZX panel, inserts, flash-loads, types `LOAD ""`, then Play. Flash-load restores **off** when the deck stops (or on Pause / Rewind / Play). Instant does **not** offer `.dsk` or `.trd`
 - **Type LOAD ""** / **Type LOAD "" CODE** (**Tape** menu only): keyword script via `sc_set_key` (egui `KeyScript` parity); 128K/+3 navigates to **48 BASIC** first (+3 menu **Loader** is disk-only); **+2A** selects tape **Loader** for PROGRAM
@@ -132,7 +132,7 @@ segment show a **content-hash title** when the file matches the offline catalogu
 
 The core **holds** at ROM `LD-BYTES` (`0x056C`) while paused so Play can still arm EAR (or Instant flash-load). Pressing Play after the ROM has already run past that trap used to show a brief border flash (pilot) then stall — that race is fixed.
 
-Standard-speed TZX is converted to TAP for flash-load. **Instant** is a toolbar action: file panel → insert → flash on → Type LOAD `""` → Play. CODE blocks still need **Tape → Type LOAD "" CODE** then **Play** (EAR), or Instant after you are already at LD-BYTES with a CODE loader. ABI: `sc_tape_set_load_options_ex(handle, flash, speed, experience)`.
+Standard-speed TZX is converted to TAP for flash-load. Custom-loader TZX (turbo / Pure Tone / Pulse Sequence / Pure Data, including **Loop Start/End** `0x24`/`0x25` used by Speedlock) stays on the EAR pulse deck — Open inserts it; Instant still Type-LOADs but flash only applies to ROM `LD-BYTES` standard blocks. **Instant** is a toolbar action: file panel → insert → flash on → Type LOAD `""` → Play. CODE blocks still need **Tape → Type LOAD "" CODE** then **Play** (EAR), or Instant after you are already at LD-BYTES with a CODE loader. ABI: `sc_tape_set_load_options_ex(handle, flash, speed, experience)`.
 
 ### Disk UI (minimal — enough for now)
 
