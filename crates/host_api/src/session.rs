@@ -2024,6 +2024,7 @@ mod tests {
     /// EAR Play path for Arkanoid Speedlock: TZX `used_bits` must be MSBs.
     /// Before the MSB fix, type-load finished the tape but left PC in the
     /// Speedlock sampler (~`0xFD2A`) with a blank/corrupt screen.
+    #[ignore = "requires local Arkanoid fixture; run explicitly as a slow regression"]
     #[test]
     fn arkanoid_ear_load_leaves_speedlock_when_present() {
         let Some(rom) = rom48() else {
