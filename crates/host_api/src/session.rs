@@ -263,6 +263,9 @@ impl HostSession {
         self.machine = Some(machine);
         self.reapply_host_keys();
         self.last_speaker_level = false;
+        if !self.has_tape() {
+            self.clear_media_identity();
+        }
     }
 
     /// Drop the live machine (model selection retained).
@@ -270,6 +273,7 @@ impl HostSession {
         self.machine = None;
         self.audio_pcm.clear();
         self.last_speaker_level = false;
+        self.clear_media_identity();
     }
 
     /// Replace the host status string (UI / debug surfaces).
@@ -278,14 +282,22 @@ impl HostSession {
     }
 
     /// Human title for chrome / agent status (catalogue or filename).
+    /// Returns `None` when no tape is inserted (avoids stale titles after model/ROM reload).
     #[must_use]
     pub fn media_title(&self) -> Option<&str> {
+        if !self.has_tape() {
+            return None;
+        }
         self.media_title.as_deref()
     }
 
     /// SHA-512 hex of the last inserted tape file, when known.
+    /// Returns `None` when no tape is inserted.
     #[must_use]
     pub fn media_sha512(&self) -> Option<&str> {
+        if !self.has_tape() {
+            return None;
+        }
         self.media_sha512.as_deref()
     }
 
@@ -2233,6 +2245,23 @@ mod tests {
         assert_eq!(s.media_title(), Some("PRINT \"OK\""));
         assert_eq!(s.media_sha512().map(str::len), Some(128));
         s.eject_tape().expect("eject");
+        assert_eq!(s.media_title(), None);
+        assert_eq!(s.media_sha512(), None);
+    }
+
+    #[test]
+    fn media_title_clears_when_machine_replaced_without_tape() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        let tap = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/print_ok.tap");
+        s.open_tape(&tap).expect("open tape");
+        assert!(s.media_title().is_some());
+        s.clear_machine();
         assert_eq!(s.media_title(), None);
         assert_eq!(s.media_sha512(), None);
     }

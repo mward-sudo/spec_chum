@@ -2517,21 +2517,14 @@ of their copyrighted material but retain that copyright.",
                         );
                     });
                     ui.separator();
-                    let tape_title = self
-                        .session
-                        .host_mut()
-                        .media_title()
-                        .map(str::to_owned);
-                    let has_tape = self
-                        .session
-                        .host_mut()
-                        .machine()
-                        .is_some_and(Machine::has_tape);
-                    let tape_progress = self
-                        .session
-                        .host_mut()
-                        .machine()
-                        .and_then(Machine::tape_progress);
+                    let (tape_title, has_tape, tape_progress) = {
+                        let host = self.session.host_mut();
+                        (
+                            host.media_title().map(str::to_owned),
+                            host.machine().is_some_and(Machine::has_tape),
+                            host.machine().and_then(Machine::tape_progress),
+                        )
+                    };
                     if let Some(p) = tape_progress {
                         if let Some(ref title) = tape_title {
                             ui.label(title);

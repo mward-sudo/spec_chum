@@ -213,10 +213,8 @@ mod asset_verify_tests {
 
     #[test]
     fn empty_temp_root_reports_actionable_error() {
-        let dir = std::env::temp_dir().join(format!(
-            "spec_chum_polyhaven_verify_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("spec_chum_polyhaven_verify_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
         let err = verify_polyhaven_assets(&dir).expect_err("empty root");
