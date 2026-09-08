@@ -21,6 +21,16 @@ That script writes `minimal_code.tap`, `attr_mark.tap`, `print_ok.tap`, and
 
 Do not add commercial game TAPs.
 
+## TZX Loop Start/End regression (#372)
+
+CI always covers synthetic Loop Start (`0x24`) / Loop End (`0x25`) via:
+
+- `cargo test -p tape loop_start_end_expands_pure_tone` — pulse schedule expands N×
+- `cargo test -p host_api open_tape_expands_tzx_loop_blocks` — SpecChumMac `open_tape` path
+
+Prior fixtures (`minimal.tzx`, Boggit-style standard-only) never exercised loop blocks, so
+commercial Speedlock TZXs like Arkanoid failed open with no CI signal.
+
 ## Content identity (#366)
 
 Fixture digests are registered in the offline catalogue
@@ -46,6 +56,14 @@ Optional commercial tape for optional local tests (never commit):
 export SPEC_CHUM_BOGGIT_TZX="$HOME/Downloads/BoggitThe/The Boggit - Side 1.tzx"
 # Instant + EAR@2/5/10/20 on 48K/128K/+3; add FULL for EAR@1
 SPEC_CHUM_FULL_TAPE_MATRIX=1 cargo test -p machine --lib boggit -- --nocapture
+```
+
+Speedlock / Loop Start (`0x24`) example (optional local only):
+
+```bash
+# ~/Downloads/Arkanoid.tzx — HostSession open + TzxPlayer parse
+cargo test -p tape arkanoid_downloads -- --nocapture
+cargo test -p host_api open_local_arkanoid -- --nocapture
 ```
 
 ### How to load The Boggit on 128K at 1×
