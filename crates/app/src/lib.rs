@@ -357,7 +357,14 @@ impl EmulatorSession {
     }
 
     pub fn load_tap(&mut self, path: &Path) {
-        match tape::TapImage::load(path) {
+        let data = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                self.host_mut().set_status(format!("TAP error: {e}"));
+                return;
+            }
+        };
+        match tape::TapImage::parse(&data) {
             Ok(img) => {
                 let host = &mut *self.host_mut();
                 if !host.has_machine() {
@@ -372,7 +379,7 @@ impl EmulatorSession {
                         m.set_tape_load_options(opts);
                     }
                 }
-                host.set_media_identity_from_path(path);
+                host.set_media_identity_from_bytes(&data, path);
                 let title = host
                     .media_title()
                     .unwrap_or_else(|| path.to_str().unwrap_or("tape"))
