@@ -151,6 +151,10 @@ pub struct HostSession {
     height: usize,
     running: bool,
     status: String,
+    /// Display title for the last inserted tape (catalogue hit or filename).
+    media_title: Option<String>,
+    /// SHA-512 (lowercase hex) of the last inserted tape file, when known.
+    media_sha512: Option<String>,
     /// Mono PCM for the last frame (~882 samples @ 44100 Hz / 50 fps).
     audio_pcm: Vec<f32>,
     /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
@@ -177,6 +181,8 @@ impl HostSession {
             height,
             running: true,
             status: "No ROM loaded".into(),
+            media_title: None,
+            media_sha512: None,
             audio_pcm: Vec::new(),
             last_speaker_level: false,
             joystick_mode: JoystickMode::Kempston,
@@ -271,6 +277,44 @@ impl HostSession {
         self.status = status.into();
     }
 
+    /// Human title for chrome / agent status (catalogue or filename).
+    #[must_use]
+    pub fn media_title(&self) -> Option<&str> {
+        self.media_title.as_deref()
+    }
+
+    /// SHA-512 hex of the last inserted tape file, when known.
+    #[must_use]
+    pub fn media_sha512(&self) -> Option<&str> {
+        self.media_sha512.as_deref()
+    }
+
+    /// Resolve and store tape display identity from `path` (offline catalogue / filename).
+    pub fn set_media_identity_from_path(&mut self, path: &Path) {
+        if let Ok(id) = formats::identify_path(path) {
+            self.media_title = Some(id.display_title);
+            self.media_sha512 = Some(id.sha512_hex);
+        } else {
+            self.media_title = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .filter(|s| !s.is_empty());
+            self.media_sha512 = None;
+        }
+    }
+
+    /// Resolve identity from bytes already read for open (avoids a second read).
+    pub fn set_media_identity_from_bytes(&mut self, bytes: &[u8], path: &Path) {
+        let id = formats::identify_bytes(bytes, path);
+        self.media_title = Some(id.display_title);
+        self.media_sha512 = Some(id.sha512_hex);
+    }
+
+    fn clear_media_identity(&mut self) {
+        self.media_title = None;
+        self.media_sha512 = None;
+    }
+
     #[must_use]
     pub fn tape_playing(&self) -> bool {
         self.machine.as_ref().is_some_and(Machine::tape_playing)
@@ -362,9 +406,9 @@ impl HostSession {
     }
 
     pub fn open_tape(&mut self, path: &Path) -> Result<(), HostError> {
-        let Some(m) = self.machine.as_mut() else {
+        if self.machine.is_none() {
             return Err(HostError::NoMachine);
-        };
+        }
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
@@ -372,13 +416,18 @@ impl HostSession {
             .to_ascii_lowercase();
         match ext.as_str() {
             "tap" => {
+                let data = std::fs::read(path)?;
                 let img =
-                    tape::TapImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
-                m.insert_tape(tape::TapPlayer::new(img));
-                self.status = format!(
-                    "Inserted TAP {} (paused — Play when loader is ready)",
-                    path.display()
-                );
+                    tape::TapImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
+                if let Some(m) = self.machine.as_mut() {
+                    m.insert_tape(tape::TapPlayer::new(img));
+                }
+                self.set_media_identity_from_bytes(&data, path);
+                let title = self
+                    .media_title
+                    .clone()
+                    .unwrap_or_else(|| path.display().to_string());
+                self.status = format!("Inserted TAP {title} (paused — Play when loader is ready)");
             }
             "tzx" => {
                 let data = std::fs::read(path)?;
@@ -387,11 +436,16 @@ impl HostSession {
                         Ok(player) if player.image.blocks.is_empty() => {}
                         Ok(player) => {
                             let n = player.image.blocks.len();
-                            m.insert_tape(player);
-                            self.status = format!(
-                                "Inserted TZX {} as TAP ({n} blocks, paused)",
-                                path.display()
-                            );
+                            if let Some(m) = self.machine.as_mut() {
+                                m.insert_tape(player);
+                            }
+                            self.set_media_identity_from_bytes(&data, path);
+                            let title = self
+                                .media_title
+                                .clone()
+                                .unwrap_or_else(|| path.display().to_string());
+                            self.status =
+                                format!("Inserted TZX {title} as TAP ({n} blocks, paused)");
                             return Ok(());
                         }
                         Err(e) => return Err(HostError::Message(e.to_string())),
@@ -399,8 +453,15 @@ impl HostSession {
                 }
                 let player =
                     tape::TzxPlayer::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
-                m.insert_tzx(player);
-                self.status = format!("Inserted TZX {} (paused)", path.display());
+                if let Some(m) = self.machine.as_mut() {
+                    m.insert_tzx(player);
+                }
+                self.set_media_identity_from_bytes(&data, path);
+                let title = self
+                    .media_title
+                    .clone()
+                    .unwrap_or_else(|| path.display().to_string());
+                self.status = format!("Inserted TZX {title} (paused)");
             }
             _ => {
                 return Err(HostError::Message(format!(
@@ -621,6 +682,7 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         m.eject_tape();
+        self.clear_media_identity();
         self.status = "Tape ejected".into();
         Ok(())
     }
@@ -2155,6 +2217,24 @@ mod tests {
             }
             other => panic!("expected Message rejection, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn open_tape_resolves_catalogue_media_title() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, false);
+        s.load_rom_bytes(&rom).expect("rom");
+        let tap = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tape/print_ok.tap");
+        s.open_tape(&tap).expect("open tape");
+        assert_eq!(s.media_title(), Some("PRINT \"OK\""));
+        assert_eq!(s.media_sha512().map(str::len), Some(128));
+        s.eject_tape().expect("eject");
+        assert_eq!(s.media_title(), None);
+        assert_eq!(s.media_sha512(), None);
     }
 
     #[test]

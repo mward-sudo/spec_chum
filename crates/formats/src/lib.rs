@@ -5,6 +5,7 @@ mod dsk;
 mod error;
 mod fdc;
 mod mdr;
+pub mod media_identity;
 mod rzx;
 mod trd;
 
@@ -13,6 +14,9 @@ pub use dsk::{DskImage, Sector};
 pub use error::FormatError;
 pub use fdc::Plus3Fdc;
 pub use mdr::{MdrImage, MDR_DATA_LEN, MDR_HEAD_LEN, MDR_IMAGE_SIZE, MDR_SECTORS, MDR_SECTOR_SIZE};
+pub use media_identity::{
+    catalogue_title, identify_bytes, identify_path, sha512_hex, MediaIdentity, MediaTitleSource,
+};
 pub use rzx::{apply_input_byte, RzxFrame, RzxRecording};
 pub use trd::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 
