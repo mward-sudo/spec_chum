@@ -59,9 +59,9 @@ extension HostBridge {
         let frac = min(1.0, (Double(min(block, blocks)) + within) / Double(blocks))
         // After the deck finishes, Speedlock (Arkanoid) may sit in a long DI
         // border-delay (~$F448). Prefer an honest label over a stuck "Tape N/N".
+        // Match egui / Machine::in_post_tape_di_delay (finished + !IFF1 + PC≥$8000).
         let label: String
-        if frac >= 0.999, let r = regs(), r.pc >= 0x8000 {
-            // High-RAM PC + finished deck matches post-tape DI turbo (#379).
+        if sc_in_post_tape_di_delay(handle) != 0 {
             label = "Speedlock delay…"
         } else {
             label = "Tape \(min(block + 1, blocks))/\(blocks)"

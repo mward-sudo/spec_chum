@@ -653,6 +653,15 @@ pub extern "C" fn sc_has_tape(handle: *mut c_void) -> c_int {
     session_mut(handle).is_some_and(|s| s.has_tape()) as c_int
 }
 
+/// 1 when the deck is finished and the CPU is still in a post-tape DI delay
+/// (Speedlock-style high-RAM stub with IFF1 clear). Used for UI chrome (#379).
+#[no_mangle]
+pub extern "C" fn sc_in_post_tape_di_delay(handle: *mut c_void) -> c_int {
+    session_mut(handle)
+        .and_then(|s| s.machine().map(machine::Machine::in_post_tape_di_delay))
+        .unwrap_or(false) as c_int
+}
+
 /// Fill out-params with tape progress. Returns 0 on success, -1 if no tape/handle.
 #[no_mangle]
 pub extern "C" fn sc_tape_progress(

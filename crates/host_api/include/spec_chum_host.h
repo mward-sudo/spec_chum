@@ -73,6 +73,8 @@ int sc_tape_pause(void *handle);
 int sc_tape_rewind(void *handle);
 int sc_tape_playing(void *handle);
 int sc_has_tape(void *handle);
+/* 1 = finished deck + DI + PC in high RAM (Speedlock delay chrome / turbo). */
+int sc_in_post_tape_di_delay(void *handle);
 int sc_tape_progress(void *handle,
                      unsigned int *block_index,
                      unsigned int *block_count,
