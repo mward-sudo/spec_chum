@@ -17,6 +17,8 @@ tests/fixtures/system/*.tap
 tmp-crt-verify/
 tmp-perf-capture/
 tmp-crt-*.png
+# Local probe / Fuse oracle scratch (Arkanoid snaps, logs — never commit)
+tmp/
 
 # Fetched Poly Haven CC0 blobs (see scripts/fetch_living_room_assets.sh).
 # Keep assets/CREDITS and assets/shaders/ tracked; aperture glTF/bin/metrics

@@ -230,13 +230,16 @@ fn z80_machine_class(extra: usize, hw: u8, misc: u8) -> Z80MachineClass {
 }
 
 fn regs_from_z80_header(data: &[u8], pc: u16, ram: [u8; 49152]) -> Snapshot48 {
+    // `.z80` stores R[6:0] at byte 11; R bit 7 is byte 12 bit 0 (FAQ).
+    // Speedlock-style `LD A,R` decrypt keys depend on the full 8-bit R (#379 H5).
+    let r = (data[11] & 0x7f) | ((data[12] & 1) << 7);
     Snapshot48 {
         i: data[10],
         af: u16::from(data[0]) << 8 | u16::from(data[1]),
         bc: u16::from_le_bytes([data[2], data[3]]),
         hl: u16::from_le_bytes([data[4], data[5]]),
         sp: u16::from_le_bytes([data[8], data[9]]),
-        r: data[11],
+        r,
         de: u16::from_le_bytes([data[13], data[14]]),
         bc_: u16::from_le_bytes([data[15], data[16]]),
         de_: u16::from_le_bytes([data[17], data[18]]),
@@ -554,8 +557,8 @@ mod tests {
         data[8] = 0xfe; // SP lo
         data[9] = 0xff; // SP hi → 0xfffe
         data[10] = 0x3f; // I
-        data[11] = 0x11; // R
-        data[12] = (5 << 1) & 0x0e; // border 5, uncompressed
+        data[11] = 0x11; // R[6:0]
+        data[12] = 0x01 | ((5 << 1) & 0x0e); // R7=1, border 5, uncompressed
         data[13] = 0xbc; // E
         data[14] = 0x9a; // D → DE = 0x9abc
         data[27] = 1; // IFF1/IFF2
@@ -620,6 +623,19 @@ mod tests {
     }
 
     #[test]
+    fn parse_z80_v1_restores_r_bit7_from_flags_byte() {
+        let mut data = synthetic_z80_v1_uncompressed();
+        data[11] = 0x2a; // R[6:0]
+        data[12] = 0x01 | ((4 << 1) & 0x0e); // R7 + border 4
+        let s = Snapshot48::parse_z80(&data).unwrap();
+        assert_eq!(s.r, 0xaa);
+        assert_eq!(s.border, 4);
+        data[12] = (4 << 1) & 0x0e; // R7 clear
+        let s2 = Snapshot48::parse_z80(&data).unwrap();
+        assert_eq!(s2.r, 0x2a);
+    }
+
+    #[test]
     fn parse_z80_v1_uncompressed_regs_and_ram() {
         let s = Snapshot48::parse_z80(&synthetic_z80_v1_uncompressed()).unwrap();
         assert_eq!(s.af, 0xabcd);
@@ -629,7 +645,7 @@ mod tests {
         assert_eq!(s.pc, 0x8000);
         assert_eq!(s.sp, 0xfffe);
         assert_eq!(s.i, 0x3f);
-        assert_eq!(s.r, 0x11);
+        assert_eq!(s.r, 0x91); // R7 from byte12 bit0 + R[6:0]=0x11
         assert_eq!(s.border, 5);
         assert_eq!(s.im, 1);
         assert!(s.iff2);

@@ -100,9 +100,30 @@ vs key-gate (D vs E). Optional `SPEC_CHUM_SPEEDLOCK_SNAP=1` snaps `$F448`→`$F4
 for H4 A/B only (default **off** — full snap caused `$837B`↔`$F408` loops).
 Prefer EAR **64×**; chrome shows stage-aware “Speedlock delay… / decrypt…”.
 
-Fuse snapshot bisect (load Fuse `.z80`/`.szx` post-load into Spec Chum) is the
-next oracle when a snapshot is available — dumps at `$F476` from
-`arkanoid_delay_probe` help compare regs/`LD A,R` state.
+### Fuse Oracle C (#379)
+
+Fuse (accelerate loaders + high %) reaches Arkanoid’s high-score screen while
+the CPU can still sit in `$F44x` with `IFF1=0` (screen RAM already painted). A
+Fuse mid-delay `.szx` converted to `.z80` and loaded into Spec Chum still
+oscillates `delay-f448` ↔ `decrypt-93` without `IFF1` inside a ~15–20k @64×
+soak — same class of behaviour as the EAR path after #383. That points past
+“load-path only” toward **post-load delay/decrypt execution** (and/or the need
+for Fuse-style Speedlock delay acceleration beyond the unsafe full `$F476`
+snap).
+
+Local helpers (not CI — copyrighted media / large artifacts stay under `tmp/`):
+
+```bash
+# EAR stage soak (needs ~/Downloads/Arkanoid.tzx)
+cargo run -p host_api --release --example arkanoid_delay_probe -- ~/Downloads/Arkanoid.tzx 25000
+
+# Fuse snap → Spec Chum (after converting Fuse .szx → .z80)
+cargo run -p host_api --release --example fuse_oracle_probe -- \
+  tmp/fuse_oracle/arkanoid_fuse_postload.z80 20000
+```
+
+`.z80` load now restores **R bit 7** from header byte 12 bit 0 (FAQ) so
+snapshot `LD A,R` keys match Fuse when R7 is set.
 ### How to load The Boggit on 128K at 1×
 
 1. Model **128K**, insert Side 1 TZX (converted to TAP automatically).

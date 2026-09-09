@@ -318,9 +318,9 @@
     "semantic_hash": ""
   },
   "crates/formats/src/lib.rs": {
-    "mtime": 1788825556.6900287,
-    "seen": 1788834469.0991402,
-    "ast_hash": "5096c0cbb1ba54f74e54f96041a9c8cc",
+    "mtime": 1788914460.5096824,
+    "seen": 1788914612.385532,
+    "ast_hash": "eae7f72b623ecc57bd110065264f2559",
     "semantic_hash": ""
   },
   "crates/formats/src/mdr.rs": {
@@ -960,9 +960,9 @@
     "semantic_hash": ""
   },
   "tests/fixtures/tape/README.md": {
-    "mtime": 1788911296.6916757,
-    "seen": 1788911431.7543302,
-    "ast_hash": "449c411c595027f1d81a7f11c9e6764d",
+    "mtime": 1788914452.5581465,
+    "seen": 1788914612.389353,
+    "ast_hash": "9639a178e4e48a1630af58fc1d12218c",
     "semantic_hash": ""
   },
   "tests/fixtures/z80test/LICENSE.txt": {
@@ -1377,6 +1377,48 @@
     "mtime": 1788911341.8536913,
     "seen": 1788911431.7515461,
     "ast_hash": "7a65dcf2a7a4e44eae82fbb18273bd60",
+    "semantic_hash": ""
+  },
+  "crates/host_api/examples/fuse_oracle_probe.rs": {
+    "mtime": 1788914451.9115968,
+    "seen": 1788914612.385683,
+    "ast_hash": "e0c1d09ac728e4a40f661f4a42ad1aba",
+    "semantic_hash": ""
+  },
+  "tmp/fuse_oracle/fuse1.png": {
+    "mtime": 1788913005.3502696,
+    "seen": 1788914612.389569,
+    "ast_hash": "fbec7d23e834a2c00347142b3cf92b33",
+    "semantic_hash": ""
+  },
+  "tmp/fuse_oracle/fuse_general.png": {
+    "mtime": 1788913074.083625,
+    "seen": 1788914612.38957,
+    "ast_hash": "f72eb33d11ad4156dae4b524b574fe8b",
+    "semantic_hash": ""
+  },
+  "tmp/fuse_oracle/fuse_general2.png": {
+    "mtime": 1788913109.5420728,
+    "seen": 1788914612.3895721,
+    "ast_hash": "1bcff1deb94cdf02239b923ea3f26b27",
+    "semantic_hash": ""
+  },
+  "tmp/fuse_oracle/fuse_load1.png": {
+    "mtime": 1788913134.7410076,
+    "seen": 1788914612.389573,
+    "ast_hash": "88854b19a12db11e18736fd6ebe8d726",
+    "semantic_hash": ""
+  },
+  "tmp/fuse_oracle/fuse_region.png": {
+    "mtime": 1788913042.4269998,
+    "seen": 1788914612.3895738,
+    "ast_hash": "084484ba41fbf69362a794d317baab2d",
+    "semantic_hash": ""
+  },
+  "tmp/fuse_oracle/save_dlg.png": {
+    "mtime": 1788913229.9766092,
+    "seen": 1788914612.3895738,
+    "ast_hash": "d4f93b83f5d530cb34a3d5161a6477e0",
     "semantic_hash": ""
   }
 }
