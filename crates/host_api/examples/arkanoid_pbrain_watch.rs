@@ -491,7 +491,10 @@ fn main() {
                 // Fire pulse on attract `$8DC5` (shared `$8E2D` when `$94C5!=0`).
                 if in_attract {
                     attract_polls += 1;
-                    if attract_polls % pulse_every == 1 {
+                    // `(n-1) % period == 0` keeps the first tap on poll 1 and works
+                    // for `pulse_every == 1` (unlike `n % period == 1`, which never
+                    // matches when period is 1).
+                    if (attract_polls - 1).is_multiple_of(pulse_every) {
                         let m = s.machine_mut().expect("m");
                         m.keyboard_mut().set_key(7, 0, true);
                         m.keyboard_mut().set_key(4, 0, true);
