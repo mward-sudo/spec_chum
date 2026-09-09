@@ -582,9 +582,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788911335.637901,
-    "seen": 1788911431.7523992,
-    "ast_hash": "85224d06edfa69cb598088da58c18c8a",
+    "mtime": 1788912410.8399057,
+    "seen": 1788912478.973142,
+    "ast_hash": "331a70580c371484f1496552405bc19f",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
