@@ -123,6 +123,91 @@ fn dump_bottom_band(m: &machine::Machine) -> (u32, u32, u64) {
     (bitmap_nz, attr_interesting, hash)
 }
 
+/// Set bits per pixel row inside the playfield walls (cols 1..=22) for `y` in
+/// `140..192` — the bat lives somewhere in this band and shows up as a wide run.
+fn playfield_row_bits(m: &machine::Machine) -> Vec<(u8, u32)> {
+    (140u8..192)
+        .map(|y| {
+            let bits = (1u8..=22)
+                .map(|col| m.read_mem(screen_addr(col * 8, y)).count_ones())
+                .sum();
+            (y, bits)
+        })
+        .collect()
+}
+
+/// Longest horizontal run of non-zero bitmap bytes inside the walls, per row.
+///
+/// The bat is the only wide solid object near the floor, so `(y, col, len)` with
+/// `len >= 3` is a good "bat is on screen" signal; the ball is 1–2 bytes wide.
+fn widest_run(m: &machine::Machine) -> Option<(u8, u8, u8)> {
+    let mut best: Option<(u8, u8, u8)> = None;
+    for y in 150u8..192 {
+        let mut run = 0u8;
+        let mut start = 0u8;
+        for col in 1u8..=22 {
+            if m.read_mem(screen_addr(col * 8, y)) == 0 {
+                run = 0;
+                continue;
+            }
+            if run == 0 {
+                start = col;
+            }
+            run += 1;
+            if best.is_none_or(|(_, _, len)| run > len) {
+                best = Some((y, start, run));
+            }
+        }
+    }
+    best.filter(|&(_, _, len)| len >= 3)
+}
+
+fn row_bits_summary(rows: &[(u8, u32)]) -> String {
+    let mut s = String::new();
+    for &(y, bits) in rows {
+        if bits > 0 {
+            let _ = write!(s, " y{y}={bits}");
+        }
+    }
+    if s.is_empty() {
+        s.push_str(" (empty)");
+    }
+    s
+}
+
+/// Longest run of rendered ink pixels on the bat's scanlines.
+///
+/// The playfield is white ink on bright-blue paper, so bat pixels have a strong
+/// red/green component while the paper does not. The bat is the only ~32px solid
+/// horizontal run down there, which separates it from band text. This measures
+/// what the host actually displays, not what happens to be in memory at the frame
+/// boundary (#379).
+fn bat_ink_run(fb: &[u8], w: usize, h: usize, with_border: bool) -> u32 {
+    let (ox, oy) = if with_border { (48usize, 48) } else { (0, 0) };
+    let mut best = 0u32;
+    for py in 182..191 {
+        let y = oy + py;
+        if y >= h {
+            continue;
+        }
+        let mut run = 0u32;
+        for px in 16..176 {
+            let x = ox + px;
+            if x >= w {
+                continue;
+            }
+            let i = (y * w + x) * 4;
+            if i + 2 < fb.len() && (fb[i] > 96 || fb[i + 1] > 96) {
+                run += 1;
+                best = best.max(run);
+            } else {
+                run = 0;
+            }
+        }
+    }
+    best
+}
+
 fn count_bat_rgba(fb: &[u8], w: usize, h: usize, with_border: bool) -> u32 {
     // Paper-relative band: y 168..191. With border, paper origin is (48,48).
     let (ox, oy) = if with_border { (48usize, 48) } else { (0, 0) };
@@ -260,6 +345,8 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
     }
 
     let mut saw_8df1 = false;
+    let screen_act = env::var_os("SPEC_CHUM_SCREEN_ACT").is_some();
+    let mut prev_screen = vec![0u8; 0x1B00];
     let phase2 = track.saturating_sub(frames).max(4_000);
     for i in 0..phase2 {
         let m = s.machine_mut().expect("m");
@@ -285,6 +372,15 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
                 "vec $8403=$8DF1 +{frames}f pc={pc:#06x} $94C4={c4:#06x} stage={}",
                 m.speedlock_stage().as_str()
             );
+            // The bat is drawn in the pre-ball / serve-ready state and vanishes
+            // once the ball is live, so hand over to the 1× play loop straight
+            // away instead of soaking further under Speedlock turbo (#379).
+            if env::var_os("SPEC_CHUM_ARKANOID_AT_VEC").is_some() {
+                let mut opts = m.tape_load_options();
+                opts.speed = 1;
+                m.set_tape_load_options(opts);
+                return true;
+            }
         }
         if arkanoid_game_entry(pc, v8403, c4, dd) {
             eprintln!(
@@ -293,9 +389,22 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
             );
             return true;
         }
-        if frames.is_multiple_of(500) {
+        // `SPEC_CHUM_SCREEN_ACT=1`: is "the display file is static" a generic
+        // stand-in for "still in the Speedlock delay"? Measured answer is no —
+        // delay and game code interleave, and both show quiet frames (#379).
+        let mut changed = 0usize;
+        if screen_act {
+            let screen: Vec<u8> = (0x4000u16..0x5B00).map(|a| m.read_mem(a)).collect();
+            changed = prev_screen
+                .iter()
+                .zip(&screen)
+                .filter(|(a, b)| a != b)
+                .count();
+            prev_screen = screen;
+        }
+        if frames.is_multiple_of(100) {
             eprintln!(
-                "entry soak +{frames}f pc={pc:#06x} ($8403)={v8403:#06x} $94C4={c4:#06x} $94DD={dd:#04x} stage={}",
+                "entry soak +{frames}f pc={pc:#06x} changed={changed} ($8403)={v8403:#06x} $94C4={c4:#06x} stage={}",
                 m.speedlock_stage().as_str()
             );
         }
@@ -354,11 +463,103 @@ fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(400);
 
+    let mut rendered_bat_frames = 0u32;
+    let mut min_ink = u32::MAX;
+    let mut max_ink = 0u32;
+    let mut prev_bat: Option<(u8, u8, u8)> = None;
     let mut prev_hash = 0u64;
     let mut prev_rgba = 0u32;
     let mut prev_bitmap = 0u32;
     let mut first_drop: Option<u32> = None;
     let mut peak_rgba = 0u32;
+
+    // Who writes the bat char row? Arm write watches across `y = 184..191` and
+    // report the PCs that hit, so the draw/erase routines can be disassembled.
+    if env::var_os("SPEC_CHUM_BATWATCH").is_some() {
+        {
+            let m = s.machine_mut().expect("m");
+            let mut watches = Vec::new();
+            for y in 184u8..192 {
+                for col in 0u8..32 {
+                    watches.push(machine::Watch {
+                        addr: screen_addr(col * 8, y),
+                        read: false,
+                        write: true,
+                    });
+                }
+            }
+            m.debugger_mut().mem_watches = watches;
+            m.debugger_mut().paused = false;
+        }
+        let mut hits: std::collections::BTreeMap<u16, (u32, u16, u16)> =
+            std::collections::BTreeMap::new();
+        let mut frame = 0u32;
+        while frame < play_frames {
+            let m = s.machine_mut().expect("m");
+            let t0 = m.cpu().t;
+            let _ = m.run_frame();
+            if m.debugger().paused {
+                if let machine::BreakReason::Mem { addr, value, .. } = m.debugger().last_hit {
+                    let pc = m.cpu().regs.pc;
+                    let e = hits.entry(pc).or_insert((0, addr, u16::from(value)));
+                    e.0 += 1;
+                }
+                m.debugger_mut().paused = false;
+                m.debugger_mut().last_hit = machine::BreakReason::None;
+            }
+            if m.cpu().t.saturating_sub(t0) >= 60_000 {
+                frame += 1;
+            }
+        }
+        eprintln!("bat-row writers over {play_frames} frames:");
+        for (pc, (n, addr, value)) in hits {
+            eprintln!("  pc={pc:#06x} hits={n} last_addr={addr:#06x} last_value={value:#04x}");
+        }
+        return;
+    }
+
+    // Sub-frame sweep: step the CPU and sample the bat band far more often than
+    // once per host frame, so a draw/erase pair that never survives to the frame
+    // boundary still shows up (#379).
+    if env::var_os("SPEC_CHUM_SUBFRAME").is_some() {
+        // The beam paints paper line `y` at `14335 + y * 224`; row 184 (the bat)
+        // is around frame T 55551. Record which frame-T windows actually hold the
+        // bat so we can compare "on screen when scanned" against "on screen at
+        // the frame-end render point" (#379).
+        let bat_line_t = 14_335 + 184 * 224;
+        for f in 0..play_frames {
+            let mut on: Vec<u32> = Vec::new();
+            let mut samples = 0u32;
+            let m = s.machine_mut().expect("m");
+            let t_end = m.cpu().t + 69_888;
+            let mut at_bat_line: Option<bool> = None;
+            while m.cpu().t < t_end {
+                for _ in 0..16 {
+                    m.step_once();
+                }
+                samples += 1;
+                let frame_t = m.inspect().frame_t;
+                let bat = widest_run(m).is_some();
+                if bat {
+                    on.push(frame_t);
+                }
+                if at_bat_line.is_none() && (bat_line_t..bat_line_t + 400).contains(&frame_t) {
+                    at_bat_line = Some(bat);
+                }
+            }
+            let span = on
+                .iter()
+                .fold((u32::MAX, 0u32), |(lo, hi), &t| (lo.min(t), hi.max(t)));
+            eprintln!(
+                "sub +{f}f samples={samples} bat_on={} span_t={}..{} at_bat_line={at_bat_line:?} end_bat={}",
+                on.len(),
+                if on.is_empty() { 0 } else { span.0 },
+                span.1,
+                widest_run(m).is_some(),
+            );
+        }
+        return;
+    }
 
     for f in 0..play_frames {
         {
@@ -378,6 +579,23 @@ fn main() {
         }
         s.refresh_framebuffer();
 
+        let mut bat_flip = false;
+        {
+            let m = s.machine().expect("m");
+            let bat = widest_run(m);
+            if bat.is_some() != prev_bat.is_some() {
+                let rows = playfield_row_bits(m);
+                eprintln!(
+                    "BAT {} +{f}f pc={:#06x} run={bat:?} prev={prev_bat:?}{}",
+                    if bat.is_some() { "ON " } else { "OFF" },
+                    m.cpu().regs.pc,
+                    row_bits_summary(&rows)
+                );
+                bat_flip = true;
+            }
+            prev_bat = bat;
+        }
+
         let (bitmap_nz, attr_int, hash) = {
             let m = s.machine().expect("m");
             dump_bottom_band(m)
@@ -386,6 +604,12 @@ fn main() {
         let (w, h) = (s.width(), s.height());
         let rgba_nz = count_bat_rgba(fb, w, h, true);
         peak_rgba = peak_rgba.max(rgba_nz);
+        let ink = bat_ink_run(fb, w, h, true);
+        if ink >= 20 {
+            rendered_bat_frames += 1;
+        }
+        min_ink = min_ink.min(ink);
+        max_ink = max_ink.max(ink);
 
         let big_drop = prev_rgba > 80 && rgba_nz + 40 < prev_rgba
             || prev_bitmap > 80 && bitmap_nz + 40 < prev_bitmap;
@@ -398,6 +622,7 @@ fn main() {
             || f % 25 == 0
             || changed && f < 80
             || big_drop
+            || bat_flip
         {
             let m = s.machine().expect("m");
             eprintln!(
@@ -411,7 +636,7 @@ fn main() {
                 m.read_mem(0x94D8),
                 m.read_mem(0x94D9),
             );
-            if f <= 10 || big_drop {
+            if f <= 10 || big_drop || bat_flip {
                 eprintln!("  y176: {}", row_hex(m, 176));
                 eprintln!("  y184: {}", row_hex(m, 184));
                 eprintln!("  y188: {}", row_hex(m, 188));
@@ -436,6 +661,11 @@ fn main() {
         prev_bitmap = bitmap_nz;
     }
 
+    eprintln!(
+        "RENDERED BAT: {rendered_bat_frames}/{play_frames} frames render a >=20px bat run (run {}..{})",
+        if min_ink == u32::MAX { 0 } else { min_ink },
+        max_ink
+    );
     if let Some(f) = first_drop {
         eprintln!("RESULT: first bat-band drop around play frame {f} (peak_rgba={peak_rgba})");
     } else {
