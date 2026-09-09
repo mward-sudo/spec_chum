@@ -139,6 +139,10 @@ extension HostBridge {
     }
 
     /// Flash on → Type LOAD "" → Play (flash cleared when deck stops / Pause / Play).
+    ///
+    /// Decks with no LD-BYTES trap to poke (pulse TZX) load off EAR at the
+    /// fallback turbo — still fast, and chrome says so instead of claiming a
+    /// flash-load that cannot happen (#390).
     func beginInstantLoadAfterInsert() {
         instantFlashActive = true
         setFlashLoad(true)
@@ -146,12 +150,27 @@ extension HostBridge {
         if let r = regs(), r.pc == 0x056C {
             pendingInstantPlay = false
             playTapeKeepingFlash()
-            status = "Instant: flash-loading at LD-BYTES"
+            status = canFlashLoad
+                ? "Instant: flash-loading at LD-BYTES"
+                : "Instant: \(instantEarFallbackStatus)"
             return
         }
 
         beginTypeLoadQuotes(withCode: false, pendingPlay: true)
-        status = "Instant: typing LOAD \"\" then flash-load Play"
+        status = canFlashLoad
+            ? "Instant: typing LOAD \"\" then flash-load Play"
+            : "Instant: typing LOAD \"\" — \(instantEarFallbackStatus)"
+    }
+
+    /// True when the inserted deck exposes TAP blocks an LD-BYTES trap can poke.
+    var canFlashLoad: Bool {
+        guard let handle else { return false }
+        return sc_tape_flash_load_supported(handle) != 0
+    }
+
+    /// Chrome for Instant on a deck the LD-BYTES trap cannot serve.
+    var instantEarFallbackStatus: String {
+        "custom loader (no flash trap) — EAR at \(sc_instant_ear_fallback_speed())×"
     }
 
     func beginTypeLoadQuotes(withCode: Bool, pendingPlay: Bool) {

@@ -182,6 +182,8 @@ Global flags (before subcommand): `--model 48k|128k|plus3`, `--rom PATH`, `--tap
 
 Default load mode is **instant flash-load** at ROM `LD-BYTES` (`0x056C`). `--ear-load` disables the trap and uses the EAR bitstream; `--speed N` runs N Spectrum frames per `run_frame` while the deck is playing (wall-clock ≈ realtime/N; pulse widths stay ROM-accurate).
 
+Pulse-only TZX decks (custom loaders such as Speedlock) have no block list to poke, so flash mode falls back to the EAR bitstream at **64×** instead of inheriting `--speed` — Instant never degrades to a realtime load (#390). `tape.effective_speed` in `GET /v1/inspect` reports which rate is actually running.
+
 ### Recipes
 
 ```bash
@@ -209,7 +211,7 @@ Success signals from `type-load`:
 
 - Text: `load_ok=true` (exit 0); JSON includes `"load_ok":true`
 - CODE/`attr_mark`: peek `0x8000` starts `21 00 58 36 D7 C9`; attr `0x5800 == 0xD7`
-- Inspect tape fields: `playing`, `flash_load`, `speed`, `block_index` / `block_count`
+- Inspect tape fields: `playing`, `flash_load`, `speed` (setting), `effective_speed` (live rate), `block_index` / `block_count`
 
 ### Model notes (lessons from #99–#101 / PR #102)
 

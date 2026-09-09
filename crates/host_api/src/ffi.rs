@@ -666,6 +666,24 @@ pub extern "C" fn sc_effective_speed_multiplier(handle: *mut c_void) -> c_uint {
         .unwrap_or(1)
 }
 
+/// 1 when the inserted deck can serve LD-BYTES flash-load traps (TAP blocks).
+///
+/// Pulse-only TZX decks return 0: Instant on those loads off EAR at
+/// [`machine::INSTANT_EAR_FALLBACK_SPEED`], so hosts can say so (#390).
+#[no_mangle]
+pub extern "C" fn sc_tape_flash_load_supported(handle: *mut c_void) -> c_int {
+    session_mut(handle)
+        .and_then(|s| s.machine().map(machine::Machine::tape_supports_flash_load))
+        .unwrap_or(false) as c_int
+}
+
+/// EAR rate Instant falls back to when the deck cannot flash-load, so hosts do
+/// not hardcode a second copy of the policy (#390).
+#[no_mangle]
+pub extern "C" fn sc_instant_ear_fallback_speed() -> c_uint {
+    machine::INSTANT_EAR_FALLBACK_SPEED
+}
+
 /// Fill out-params with tape progress. Returns 0 on success, -1 if no tape/handle.
 #[no_mangle]
 pub extern "C" fn sc_tape_progress(

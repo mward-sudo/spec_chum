@@ -214,6 +214,16 @@ impl TapeDeck {
         }
     }
 
+    /// True when the deck exposes TAP blocks an LD-BYTES trap can poke.
+    ///
+    /// Pulse-only TZX decks (custom loaders such as Speedlock) have no block
+    /// list, so Instant cannot flash them — they must load off the EAR
+    /// bitstream instead.
+    #[must_use]
+    pub fn supports_flash_load(&self) -> bool {
+        matches!(self, Self::Tap(_))
+    }
+
     pub fn set_playing(&mut self, playing: bool) {
         match self {
             Self::Tap(t) => t.set_playing(playing),
@@ -246,17 +256,28 @@ impl TapeDeck {
     }
 }
 
+/// EAR rate used when Instant is asked for but the deck cannot flash-load.
+///
+/// Pulse-only TZX decks have no LD-BYTES trap to poke, so Instant falls back to
+/// the EAR bitstream. It stays *instant-ish* by running the maximum turbo
+/// instead of inheriting the EAR speed control the user picked for Play (#390).
+pub const INSTANT_EAR_FALLBACK_SPEED: u32 = 64;
+
 /// User controls for tape loading speed / instant flash-load.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TapeLoadOptions {
     /// When true, TAP decks trap at LD-BYTES and poke bytes immediately.
+    ///
+    /// Decks without TAP blocks (pulse TZX) cannot be flashed; they load off
+    /// the EAR bitstream at [`INSTANT_EAR_FALLBACK_SPEED`] instead of
+    /// [`Self::speed`].
     pub flash_load: bool,
     /// EAR bitstream speed multiplier (`1` = realtime). Clamped to `1..=64`.
     ///
     /// While a tape is **playing** on the EAR path (flash-load off), each
     /// [`Machine::run_frame`] executes this many Spectrum frames so wall-clock
     /// load time ≈ realtime / speed. Pulse widths stay ROM-accurate (CPU↔tape
-    /// 1:1); Instant/flash-load is unchanged (single frame per call).
+    /// 1:1); Instant on a flashable deck is unchanged (single frame per call).
     pub speed: u32,
     /// ~20s-class load: abbreviated inter-block pauses on the EAR path at
     /// [`tape::EXPERIENCE_EAR_SPEED`] (issue #82). Mutually exclusive with
@@ -1738,10 +1759,18 @@ impl Machine {
     #[must_use]
     fn ear_play_frame_reps(&self) -> u32 {
         let opts = self.tape_load_options();
-        if opts.flash_load {
-            return 1;
-        }
-        let speed = opts.speed.clamp(1, 64);
+        // Instant on a flashable deck pokes bytes at the LD-BYTES trap, so one
+        // frame per call keeps traps snappy. A pulse-only deck has no trap to
+        // hit: Instant then loads off EAR and must still be fast, so it uses
+        // the maximum turbo rather than the Play speed control (#390).
+        let speed = if opts.flash_load {
+            if self.tape_supports_flash_load() {
+                return 1;
+            }
+            INSTANT_EAR_FALLBACK_SPEED
+        } else {
+            opts.speed.clamp(1, 64)
+        };
         if speed <= 1 {
             return 1;
         }
@@ -1760,6 +1789,22 @@ impl Machine {
     #[must_use]
     pub fn effective_speed_multiplier(&self) -> u32 {
         self.ear_play_frame_reps()
+    }
+
+    /// True when the inserted deck can serve LD-BYTES flash-load traps.
+    ///
+    /// Hosts use this so Instant chrome can say what will really happen: TAP
+    /// decks (including standard-speed TZX converted on insert) flash; pulse
+    /// TZX decks fall back to EAR at [`INSTANT_EAR_FALLBACK_SPEED`] (#390).
+    #[must_use]
+    pub fn tape_supports_flash_load(&self) -> bool {
+        match self {
+            Self::Spec48 { tape, .. }
+            | Self::Spec128 { tape, .. }
+            | Self::SpecPlus3 { tape, .. } => {
+                tape.as_ref().is_some_and(TapeDeck::supports_flash_load)
+            }
+        }
     }
 
     /// True when an inserted deck has exhausted its bitstream / blocks.
@@ -6235,13 +6280,101 @@ mod tests {
             1,
             "finished deck → 1× regardless of the speed setting"
         );
-        // Flash-load never multiplies frames.
+        // Flash-load on a TAP deck pokes at the trap — never multiplies frames.
         m.set_tape_load_options(TapeLoadOptions {
             flash_load: true,
             speed: 64,
             ..Default::default()
         });
         assert_eq!(m.effective_speed_multiplier(), 1, "flash-load → 1×");
+    }
+
+    /// Pulse-only TZX (turbo block + long pause) — nothing for a trap to poke.
+    fn minimal_tzx_pulse_deck() -> Vec<u8> {
+        let mut v = minimal_tzx_turbo_machine(&[0xff, 0x00, 0xaa]);
+        v.push(0x20); // pause (ms) — keeps the deck busy for several host ticks
+        v.extend_from_slice(&5_000u16.to_le_bytes());
+        v
+    }
+
+    #[test]
+    fn instant_on_pulse_only_deck_uses_ear_turbo_not_the_play_speed() {
+        // Instant on a deck with no LD-BYTES trap (Speedlock-style TZX) used to
+        // fall through to a realtime EAR load, so "Instant" was the slowest
+        // option on offer and looked tied to the Play speed control (#390).
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let data = minimal_tzx_pulse_deck();
+        let player = TzxPlayer::parse(&data).expect("tzx");
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+            ..Default::default()
+        });
+        m.insert_tzx(player);
+        assert!(
+            !m.tape_supports_flash_load(),
+            "pulse TZX has no TAP blocks to flash"
+        );
+        assert_eq!(m.effective_speed_multiplier(), 1, "paused deck → 1×");
+
+        m.set_tape_playing(true);
+        assert_eq!(
+            m.effective_speed_multiplier(),
+            INSTANT_EAR_FALLBACK_SPEED,
+            "Instant must stay fast instead of inheriting the 1× EAR setting"
+        );
+        let t0 = m.cpu().t;
+        let _ = m.run_frame();
+        let dt = m.cpu().t.saturating_sub(t0);
+        assert!(
+            dt > u64::from(FRAME_TSTATES_48) * 8,
+            "one host tick should run many Spectrum frames, got {dt}"
+        );
+    }
+
+    #[test]
+    fn instant_ear_fallback_still_stops_when_the_deck_finishes() {
+        // The fallback is a *tape* convenience like EAR turbo: once the deck is
+        // exhausted the loaded program runs at 1× (#390).
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let data = minimal_tzx_pulse_deck();
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 1,
+            ..Default::default()
+        });
+        m.insert_tzx(TzxPlayer::parse(&data).expect("tzx"));
+        m.set_tape_playing(true);
+        for _ in 0..20_000 {
+            let _ = m.run_frame();
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        assert!(
+            m.tape_finished() || !m.tape_playing(),
+            "deck did not finish"
+        );
+        assert_eq!(
+            m.effective_speed_multiplier(),
+            1,
+            "finished pulse deck → 1× even with Instant still latched"
+        );
+        let t0 = m.cpu().t;
+        let _ = m.run_frame();
+        let dt = m.cpu().t.saturating_sub(t0);
+        assert!(
+            dt < 150_000,
+            "post-tape code must run at ~1× after an Instant EAR fallback, got {dt}"
+        );
     }
 
     #[test]

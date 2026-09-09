@@ -76,6 +76,11 @@ int sc_has_tape(void *handle);
 /* Spectrum frames per host tick right now: EAR turbo only while an unfinished
  * deck plays, so chrome can report the real rate instead of the setting. */
 unsigned int sc_effective_speed_multiplier(void *handle);
+/* 1 = deck has TAP blocks an LD-BYTES trap can poke. Pulse-only TZX decks
+ * return 0: Instant loads those off EAR at the fallback turbo instead. */
+int sc_tape_flash_load_supported(void *handle);
+/* EAR rate Instant falls back to when the deck cannot flash-load. */
+unsigned int sc_instant_ear_fallback_speed(void);
 int sc_tape_progress(void *handle,
                      unsigned int *block_index,
                      unsigned int *block_count,

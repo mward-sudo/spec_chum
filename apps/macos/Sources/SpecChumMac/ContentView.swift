@@ -128,7 +128,7 @@ struct ContentView: View {
             } label: {
                 Label("Instant", systemImage: "bolt.fill")
             }
-            .help("Always asks for a tape image, then flash-loads (Type LOAD \"\" + Play)")
+            .help("Always asks for a tape image, then flash-loads (Type LOAD \"\" + Play). Custom-loader decks have no flash trap and load off EAR at 64× instead.")
             .accessibilityLabel("Instant load")
         }
 

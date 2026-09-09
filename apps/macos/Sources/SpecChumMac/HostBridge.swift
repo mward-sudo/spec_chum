@@ -750,7 +750,9 @@ final class HostBridge: ObservableObject {
         guard pendingInstantPlay else { return }
         pendingInstantPlay = false
         playTapeKeepingFlash()
-        status = "Instant: flash-loading after LOAD \"\""
+        status = canFlashLoad
+            ? "Instant: flash-loading after LOAD \"\""
+            : "Instant: \(instantEarFallbackStatus)"
     }
 
     static func takeLastError() -> String? {
