@@ -415,7 +415,6 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
 }
 
 fn main() {
-    let tape = arkanoid_path();
     let out_dir = workspace_root().join("tmp/arkanoid_paddle");
     fs::create_dir_all(&out_dir).expect("outdir");
 
@@ -435,7 +434,7 @@ fn main() {
             word(m, 0x8403)
         );
     } else {
-        load_tape(&mut s, &tape);
+        load_tape(&mut s, &arkanoid_path());
         if !reach_game_entry(&mut s) {
             return;
         }
@@ -494,6 +493,7 @@ fn main() {
         let mut hits: std::collections::BTreeMap<u16, (u32, u16, u16)> =
             std::collections::BTreeMap::new();
         let mut frame = 0u32;
+        let mut elapsed = 0u64;
         while frame < play_frames {
             let m = s.machine_mut().expect("m");
             let t0 = m.cpu().t;
@@ -507,9 +507,8 @@ fn main() {
                 m.debugger_mut().paused = false;
                 m.debugger_mut().last_hit = machine::BreakReason::None;
             }
-            if m.cpu().t.saturating_sub(t0) >= 60_000 {
-                frame += 1;
-            }
+            elapsed += m.cpu().t.saturating_sub(t0);
+            frame = u32::try_from(elapsed / 69_888).unwrap_or(u32::MAX);
         }
         eprintln!("bat-row writers over {play_frames} frames:");
         for (pc, (n, addr, value)) in hits {
