@@ -31,6 +31,24 @@ CI always covers synthetic Loop Start (`0x24`) / Loop End (`0x25`) via:
 Prior fixtures (`minimal.tzx`, Boggit-style standard-only) never exercised loop blocks, so
 commercial Speedlock TZXs like Arkanoid failed open with no CI signal.
 
+## TZX block-ID capability matrix (#374)
+
+Beyond accuracy tiers ([docs/TESTING.md](../../../docs/TESTING.md)), CI runs a **synthetic
+block-ID matrix** so commercial/pulse TZX paths are not manual-only:
+
+| Gate | Command |
+| --- | --- |
+| Supported IDs parse | `cargo test -p tape tzx_block_matrix_supported_ids_parse` |
+| Unsupported IDs Err | `cargo test -p tape tzx_block_matrix_unsupported_ids_fail_loudly` |
+| TAP scan no truncate | `cargo test -p tape to_tap_image_errors_on_unsupported` / `to_tap_image_keeps_id10_across_skip_markers` |
+| Host open / `has_tape` | `cargo test -p host_api open_tape_tzx_block_matrix_supported_families` |
+| Unsupported leaves deck | `cargo test -p host_api open_tape_tzx_block_matrix_unsupported_leaves_deck` |
+
+Supported today: `0x10`–`0x14`, `0x20`, Group/Text/Archive/Hardware/Custom/Glue skip markers,
+Loop `0x24`/`0x25`. Intentionally unsupported (hard error with ID in message): Direct `0x15`,
+CSW `0x18`, GDB `0x19`, Jump/Call/Select/`Stop if 48K`/`Set signal level` — listed as known gaps
+under [#374](https://github.com/mward-sudo/spec_chum/issues/374).
+
 ## Content identity (#366)
 
 Fixture digests are registered in the offline catalogue
