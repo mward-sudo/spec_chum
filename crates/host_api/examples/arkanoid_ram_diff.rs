@@ -31,7 +31,14 @@ fn ram_image(s: &HostSession) -> Vec<u8> {
 }
 
 fn report_sig(label: &str, ram: &[u8]) {
-    let at = |a: u16| ram[usize::from(a) - 0x4000];
+    // `ptr` comes from guest RAM, so it can point below `$4000` (ROM) — read
+    // those as 0 rather than panicking on a negative index.
+    let at = |a: u16| {
+        usize::from(a)
+            .checked_sub(0x4000)
+            .and_then(|i| ram.get(i).copied())
+            .unwrap_or(0)
+    };
     let ptr = u16::from(at(0x94F6)) | (u16::from(at(0x94F7)) << 8);
     let hl = ptr.wrapping_add(1);
     let bytes: Vec<String> = (0..6)
