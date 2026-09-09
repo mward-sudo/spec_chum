@@ -16,9 +16,7 @@ use std::time::{Duration, Instant};
 
 use control_plane::ControlPlane;
 use eframe::egui;
-use machine::{
-    AyStereoMode, JoystickMode, JoystickState, Machine, Model, SpeedlockStage, TapeLoadOptions,
-};
+use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
 use spec_chum_host::{
     apply_user_config, default_prefs_path, hardware_compat, install_model_rom, load_prefs,
     model_requires_user_rom, model_rom_available, rom_setup_json, save_prefs,
@@ -2563,47 +2561,25 @@ of their copyrighted material but retain that copyright.",
                                 .desired_width(120.0)
                                 .show_percentage(),
                         );
-                        let stage = self
+                        ui.label(format!(
+                            "tape {}/{}",
+                            if p.block_count == 0 {
+                                0
+                            } else {
+                                p.block_index.saturating_add(1).min(p.block_count)
+                            },
+                            p.block_count
+                        ));
+                        // The rate actually being run, not the EAR speed setting:
+                        // turbo stops when the deck finishes (#390).
+                        let effective = self
                             .session
                             .host_mut()
                             .machine()
-                            .map_or(SpeedlockStage::None, Machine::speedlock_stage);
-                        let f408 = self
-                            .session
-                            .host_mut()
-                            .machine()
-                            .map_or(0, Machine::speedlock_stage_count);
-                        match stage {
-                            SpeedlockStage::KeyGate => {
-                                ui.label("Speedlock — tap a key");
-                            }
-                            SpeedlockStage::DelayF448 => {
-                                if f408 > 1 {
-                                    ui.label(format!("Speedlock delay… (#{f408})"));
-                                } else {
-                                    ui.label("Speedlock delay…");
-                                }
-                            }
-                            SpeedlockStage::Decrypt93 | SpeedlockStage::Continue8230 => {
-                                ui.label("Speedlock decrypt…");
-                            }
-                            SpeedlockStage::TitleAttract => {
-                                ui.label("Title / high score…");
-                            }
-                            SpeedlockStage::OtherHighDi => {
-                                ui.label("Speedlock delay…");
-                            }
-                            _ => {
-                                ui.label(format!(
-                                    "tape {}/{}",
-                                    if p.block_count == 0 {
-                                        0
-                                    } else {
-                                        p.block_index.saturating_add(1).min(p.block_count)
-                                    },
-                                    p.block_count
-                                ));
-                            }
+                            .map_or(1, Machine::effective_speed_multiplier);
+                        if effective > 1 {
+                            ui.strong(format!("{effective}×"))
+                                .on_hover_text("Spectrum frames per host tick while the tape plays");
                         }
                     } else if has_tape {
                         if let Some(ref title) = tape_title {

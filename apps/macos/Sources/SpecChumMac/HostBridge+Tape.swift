@@ -57,27 +57,12 @@ extension HostBridge {
         }
         let within = pulses == 0 ? 0.0 : Double(min(pulse, pulses)) / Double(pulses)
         let frac = min(1.0, (Double(min(block, blocks)) + within) / Double(blocks))
-        // After the deck finishes, Speedlock (Arkanoid) may sit in a long DI
-        // border-delay (~$F448). Prefer an honest label over a stuck "Tape N/N".
-        let label: String
-        switch sc_speedlock_stage(handle) {
-        case 2:
-            label = "Speedlock — tap a key"
-        case 1:
-            let n = sc_speedlock_stage_count(handle)
-            label = n > 1 ? "Speedlock delay… (#\(n))" : "Speedlock delay…"
-        case 3, 4:
-            label = "Speedlock decrypt…"
-        case 5:
-            label = "Speedlock delay…"
-        case 7:
-            label = "Title / high score…"
-        default:
-            if sc_in_post_tape_di_delay(handle) != 0 {
-                label = "Speedlock delay…"
-            } else {
-                label = "Tape \(min(block + 1, blocks))/\(blocks)"
-            }
+        // Report the rate the machine really runs at, not the EAR speed setting
+        // (turbo stops when the deck finishes) — #390.
+        var label = "Tape \(min(block + 1, blocks))/\(blocks)"
+        let effective = sc_effective_speed_multiplier(handle)
+        if effective > 1 {
+            label += " — \(effective)×"
         }
         if tapeFraction.map({ abs($0 - frac) > 0.002 }) ?? true {
             tapeFraction = frac

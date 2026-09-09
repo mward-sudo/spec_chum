@@ -264,57 +264,6 @@ pub struct TapeLoadOptions {
     pub experience_load: bool,
 }
 
-/// Coarse Arkanoid/Speedlock post-tape phase (#379). Distinguishes expected DI
-/// delay (D) from an unknown hang (E) for probes and chrome.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SpeedlockStage {
-    #[default]
-    None,
-    /// `$F448` DI border-delay nest (`CALL $F408`, ret `$F3D1`).
-    DelayF448,
-    /// Outer stub / `$8224` any-key poll.
-    KeyGate,
-    /// `$8230`–`$83FF` continue / setup.
-    Continue8230,
-    /// `$9300`–`$94FF` decrypt / unpack loops.
-    Decrypt93,
-    /// `$8080`–`$81FF` / `$8DC0`–`$8DFF` title / high-score / menu draw (#379).
-    TitleAttract,
-    /// Other DI code in high RAM after tape end.
-    OtherHighDi,
-    /// `IFF1` set — interrupts back (game-entry candidate).
-    InterruptsOn,
-}
-
-impl SpeedlockStage {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::DelayF448 => "delay-f448",
-            Self::KeyGate => "key-gate",
-            Self::Continue8230 => "cont-8230",
-            Self::Decrypt93 => "decrypt-93",
-            Self::TitleAttract => "title",
-            Self::OtherHighDi => "other-di",
-            Self::InterruptsOn => "ei",
-        }
-    }
-}
-
-/// Runtime counters for Speedlock stage transitions (#379).
-#[derive(Clone, Debug, Default)]
-pub struct SpeedlockWatch {
-    pub stage: SpeedlockStage,
-    /// Times PC entered the `$F448` nest with stacked return `$F3D1`.
-    pub f408_entries: u32,
-    pub stage_changes: u32,
-    /// Spectrum frames spent in [`Self::stage`] (via `run_one_frame`).
-    pub frames_in_stage: u64,
-    /// Turbo auto-ack injected Space (row 7 bit 0); cleared when not matching.
-    turbo_space_injected: bool,
-}
-
 impl Default for TapeLoadOptions {
     fn default() -> Self {
         // EAR path by default; UI Instant actions enable flash-load ephemerally.
@@ -819,7 +768,6 @@ pub enum Machine {
         ula: Ula48,
         tape: Option<TapeDeck>,
         tape_opts: TapeLoadOptions,
-        speedlock_watch: SpeedlockWatch,
         rzx: Option<RzxPlayer>,
         debugger: Debugger,
     },
@@ -829,7 +777,6 @@ pub enum Machine {
         ula: Ula48,
         tape: Option<TapeDeck>,
         tape_opts: TapeLoadOptions,
-        speedlock_watch: SpeedlockWatch,
         rzx: Option<RzxPlayer>,
         debugger: Debugger,
         /// Grey +2 uses the same 128K core with a distinct ROM / menu.
@@ -843,7 +790,6 @@ pub enum Machine {
         ula: Ula48,
         tape: Option<TapeDeck>,
         tape_opts: TapeLoadOptions,
-        speedlock_watch: SpeedlockWatch,
         rzx: Option<RzxPlayer>,
         debugger: Debugger,
     },
@@ -884,7 +830,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
         })
@@ -902,7 +847,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
         })
@@ -920,7 +864,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
         })
@@ -940,7 +883,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
         })
@@ -956,7 +898,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
             plus2_rom: false,
@@ -975,7 +916,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
             plus2_rom: true,
@@ -995,7 +935,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
             plus2_rom: false,
@@ -1027,7 +966,6 @@ impl Machine {
             ula: Ula48::new(),
             tape: None,
             tape_opts: TapeLoadOptions::default(),
-            speedlock_watch: SpeedlockWatch::default(),
             rzx: None,
             debugger: Debugger::default(),
         })
@@ -1793,6 +1731,10 @@ impl Machine {
     /// Speed multiplies wall-clock progress with CPU↔tape still 1:1 (ROM LD-BYTES
     /// stays locked). Flash-load / Instant keeps a single frame so traps stay snappy.
     /// At `speed == 1` this is always 1 — hardware-accurate path unchanged.
+    ///
+    /// Turbo is a *tape* convenience: it applies only while an unfinished deck
+    /// is playing. Once the bitstream is done the loaded program runs at 1×,
+    /// even when it plays with interrupts disabled from upper RAM (#390).
     #[must_use]
     fn ear_play_frame_reps(&self) -> u32 {
         let opts = self.tape_load_options();
@@ -1807,231 +1749,17 @@ impl Machine {
         if self.tape_playing() && !self.tape_finished() {
             return speed;
         }
-        // Speedlock (Arkanoid) runs long multi-stage DI border-delays after the
-        // bitstream ends (~$F448). Keep Play turbo until interrupts return or PC
-        // leaves high RAM so speed N does not look hung at 1× (#379).
-        // Once IFF1 is set, return to 1× realtime (#178).
-        // Yield to 1× on the outer key-gate stub so chrome / hosts can observe it.
-        if self.in_post_tape_di_delay() {
-            if self.in_speedlock_key_gate() {
-                return 1;
-            }
-            return speed.saturating_mul(Self::speedlock_soak_boost());
-        }
         1
     }
 
-    /// Opt-in extra Spectrum frames per host tick while in post-tape DI
-    /// protection, for offline soaks (`SPEC_CHUM_SPEEDLOCK_BOOST=<1..=16>`).
+    /// Spectrum frames actually run per [`Self::run_frame`] right now.
     ///
-    /// Default **1** (off): unlike EAR turbo, this multiplies the work done in a
-    /// single [`Machine::run_frame`] call, so a large value stalls the host UI
-    /// for that tick. Probes that need Spectrum-hours of protection time set it;
-    /// interactive hosts leave it alone (#379).
-    fn speedlock_soak_boost() -> u32 {
-        std::env::var("SPEC_CHUM_SPEEDLOCK_BOOST")
-            .ok()
-            .and_then(|v| v.trim().parse::<u32>().ok())
-            .unwrap_or(1)
-            .clamp(1, 16)
-    }
-
-    /// Speedlock-style post-tape DI delay: deck exhausted, interrupts still off,
-    /// PC in high RAM (e.g. Arkanoid `$F448` nest). Used for Play turbo and UI.
+    /// Hosts must report this (not [`TapeLoadOptions::speed`]) so chrome can
+    /// never claim 1× while the machine runs faster, or advertise turbo that no
+    /// longer applies (#390).
     #[must_use]
-    pub fn in_post_tape_di_delay(&self) -> bool {
-        if !self.tape_finished() {
-            return false;
-        }
-        let regs = &self.cpu().regs;
-        !regs.iff1 && regs.pc >= 0x8000
-    }
-
-    /// Arkanoid Speedlock outer stub / `$8224` key poll (stacked return `$F3D4`).
-    ///
-    /// At EAR turbo the poll finishes inside one Spectrum frame, so a human tap
-    /// cannot hit it unless we yield / auto-ack (#379).
-    ///
-    /// The real gate starts with `PUSH BC` / `PUSH AF` before `IN`, so the CALL
-    /// return `$F3D4` sits at `SP`, `SP+2`, or `SP+4` depending on PC (#388).
-    #[must_use]
-    pub fn in_speedlock_key_gate(&self) -> bool {
-        if !self.in_post_tape_di_delay() {
-            return false;
-        }
-        let pc = self.cpu().regs.pc;
-        if (0xF3CD..=0xF3D8).contains(&pc) {
-            return true;
-        }
-        if (0x8224..=0x822F).contains(&pc) {
-            return self.speedlock_gate_stacked_ret() == 0xF3D4;
-        }
-        false
-    }
-
-    /// Stacked return under `$8224` accounting for `PUSH BC` / `PUSH AF` (#388).
-    fn speedlock_gate_stacked_ret(&self) -> u16 {
-        let pc = self.cpu().regs.pc;
-        let sp = self.cpu().regs.sp;
-        let depth_bytes: u16 = match pc {
-            0x8224 => 0,          // before PUSH BC
-            0x8225 => 2,          // after PUSH BC, before PUSH AF
-            0x8226..=0x822F => 4, // after both PUSHes (IN / OR / INC / JR)
-            _ => 0,
-        };
-        let addr = sp.wrapping_add(depth_bytes);
-        u16::from(self.read_mem(addr)) | (u16::from(self.read_mem(addr.wrapping_add(1))) << 8)
-    }
-
-    /// Classify the current post-tape Speedlock-ish phase from PC / IFF1 (#379).
-    #[must_use]
-    pub fn speedlock_stage(&self) -> SpeedlockStage {
-        if !self.tape_finished() {
-            return SpeedlockStage::None;
-        }
-        let regs = &self.cpu().regs;
-        if regs.iff1 {
-            return SpeedlockStage::InterruptsOn;
-        }
-        if regs.pc < 0x8000 {
-            return SpeedlockStage::None;
-        }
-        let pc = regs.pc;
-        let sp = regs.sp;
-        let ret =
-            u16::from(self.read_mem(sp)) | (u16::from(self.read_mem(sp.wrapping_add(1))) << 8);
-        if self.in_speedlock_key_gate() || (pc == 0xF476 && ret == 0xF3D1) {
-            return SpeedlockStage::KeyGate;
-        }
-        if ret == 0xF3D1 && (0xF408..=0xF476).contains(&pc) {
-            return SpeedlockStage::DelayF448;
-        }
-        if (0x8230..=0x83FF).contains(&pc) {
-            return SpeedlockStage::Continue8230;
-        }
-        if (0x9300..=0x94FF).contains(&pc) {
-            return SpeedlockStage::Decrypt93;
-        }
-        if (0x8080..=0x81FF).contains(&pc) || (0x8DC0..=0x8DFF).contains(&pc) {
-            return SpeedlockStage::TitleAttract;
-        }
-        SpeedlockStage::OtherHighDi
-    }
-
-    /// Runtime Speedlock stage counters (F408 entries, frames-in-stage, …).
-    #[must_use]
-    pub fn speedlock_watch(&self) -> &SpeedlockWatch {
-        match self {
-            Self::Spec48 {
-                speedlock_watch, ..
-            }
-            | Self::Spec128 {
-                speedlock_watch, ..
-            }
-            | Self::SpecPlus3 {
-                speedlock_watch, ..
-            } => speedlock_watch,
-        }
-    }
-
-    /// Times the `$F448` nest was entered with stacked return `$F3D1` (#379).
-    #[must_use]
-    pub fn speedlock_stage_count(&self) -> u32 {
-        self.speedlock_watch().f408_entries
-    }
-
-    fn speedlock_watch_mut(&mut self) -> &mut SpeedlockWatch {
-        match self {
-            Self::Spec48 {
-                speedlock_watch, ..
-            }
-            | Self::Spec128 {
-                speedlock_watch, ..
-            }
-            | Self::SpecPlus3 {
-                speedlock_watch, ..
-            } => speedlock_watch,
-        }
-    }
-
-    fn update_speedlock_watch(&mut self) {
-        let stage = self.speedlock_stage();
-        let sp = self.cpu().regs.sp;
-        let ret =
-            u16::from(self.read_mem(sp)) | (u16::from(self.read_mem(sp.wrapping_add(1))) << 8);
-        // Count every transition into the F448 nest (incl. from OtherHighDi).
-        let entering_f408 = stage == SpeedlockStage::DelayF448
-            && ret == 0xF3D1
-            && self.speedlock_watch().stage != SpeedlockStage::DelayF448;
-        let watch = self.speedlock_watch_mut();
-        if stage == watch.stage {
-            watch.frames_in_stage = watch.frames_in_stage.saturating_add(1);
-        } else {
-            if entering_f408 {
-                watch.f408_entries = watch.f408_entries.saturating_add(1);
-            }
-            watch.stage = stage;
-            watch.stage_changes = watch.stage_changes.saturating_add(1);
-            watch.frames_in_stage = 0;
-        }
-    }
-
-    /// `SPEC_CHUM_SPEEDLOCK_SNAP=1` enables experimental `$F476` snap (H4 / #379).
-    /// Default off — full snap caused `$837B`↔`$F408` checksum loops in probing.
-    fn speedlock_snap_enabled() -> bool {
-        match std::env::var_os("SPEC_CHUM_SPEEDLOCK_SNAP") {
-            Some(v) => v != "0" && !v.is_empty(),
-            None => false,
-        }
-    }
-
-    /// Under Play turbo (`speed > 1`), auto-ack the outer `$8224` any-key poll
-    /// with Space when on the stub/gate/F476 so the poll is not missed inside a
-    /// 64× host tick (#379).
-    ///
-    /// Optional `SPEC_CHUM_SPEEDLOCK_SNAP=1` snaps `$F448`→`$F476` (corrupt on
-    /// Arkanoid — kept for H4 A/B only). Realtime (`speed == 1`) is unchanged.
-    /// Injected Space is released once the gate/delay pattern no longer matches
-    /// so the matrix is not left latched after the ack.
-    fn maybe_accelerate_speedlock_delay(&mut self) {
-        let speed = self.tape_load_options().speed.clamp(1, 64);
-        if speed <= 1 || !self.in_post_tape_di_delay() {
-            self.release_speedlock_turbo_space();
-            return;
-        }
-        let pc = self.cpu().regs.pc;
-        let sp = self.cpu().regs.sp;
-        let ret =
-            u16::from(self.read_mem(sp)) | (u16::from(self.read_mem(sp.wrapping_add(1))) << 8);
-
-        if Self::speedlock_snap_enabled() && ret == 0xF3D1 && (0xF408..=0xF476).contains(&pc) {
-            self.cpu_mut().regs.pc = 0xF476;
-            self.cpu_mut().regs.set_bc(0);
-            self.inject_speedlock_turbo_space();
-            return;
-        }
-
-        if (0xF3CD..=0xF3D8).contains(&pc)
-            || ((0x8224..=0x822F).contains(&pc) && self.speedlock_gate_stacked_ret() == 0xF3D4)
-            || (pc == 0xF476 && ret == 0xF3D1)
-        {
-            self.inject_speedlock_turbo_space();
-        } else {
-            self.release_speedlock_turbo_space();
-        }
-    }
-
-    fn inject_speedlock_turbo_space(&mut self) {
-        self.keyboard_mut().set_key(7, 0, true);
-        self.speedlock_watch_mut().turbo_space_injected = true;
-    }
-
-    fn release_speedlock_turbo_space(&mut self) {
-        if !self.speedlock_watch().turbo_space_injected {
-            return;
-        }
-        self.keyboard_mut().set_key(7, 0, false);
-        self.speedlock_watch_mut().turbo_space_injected = false;
+    pub fn effective_speed_multiplier(&self) -> u32 {
+        self.ear_play_frame_reps()
     }
 
     /// True when an inserted deck has exhausted its bitstream / blocks.
@@ -2055,8 +1783,8 @@ impl Machine {
             if self.debugger().paused {
                 break;
             }
-            // Re-check each inner frame so EI / leaving the loader drops to 1×
-            // mid-burst (#178 / #379).
+            // Re-check each inner frame so pausing or the deck finishing
+            // drops to 1× mid-burst (#178).
             if self.ear_play_frame_reps() <= 1 {
                 break;
             }
@@ -2070,9 +1798,6 @@ impl Machine {
             return FrameAudio::default();
         }
         self.apply_rzx_frame();
-        // After RZX input apply — Speedlock turbo ack must win on the keyboard matrix.
-        self.maybe_accelerate_speedlock_delay();
-        self.update_speedlock_watch();
         match self {
             Self::Spec48 {
                 cpu,
@@ -6318,7 +6043,6 @@ mod tests {
             "playing must clear when finished so turbo stops for ROM/BASIC (#178)"
         );
         // Tiny TAP leaves PC in ROM with interrupts enabled → must be 1× (#178).
-        // High-RAM DI stubs (Speedlock) may keep turbo briefly (#379).
         assert!(
             m.cpu().regs.pc < 0x8000 || m.cpu().regs.iff1,
             "fixture should not sit in a high-RAM DI loader"
@@ -6334,7 +6058,10 @@ mod tests {
     }
 
     #[test]
-    fn ear_turbo_continues_while_di_in_high_ram_after_tape() {
+    fn ear_turbo_stops_when_deck_finished_even_with_di_in_high_ram() {
+        // A *tape* speed must stop mattering once the deck is done, including
+        // for programs that run with interrupts disabled from upper RAM
+        // (Arkanoid plays like that) — #390.
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
             return;
@@ -6358,97 +6085,31 @@ mod tests {
             }
         }
         assert!(m.tape_finished() || !m.tape_playing());
-        // Plant a Speedlock-like DI stub in high RAM and point PC there.
+        // DI loop in upper RAM — the old gate kept turbo here forever.
         m.cpu_mut().regs.iff1 = false;
         m.cpu_mut().regs.iff2 = false;
         m.cpu_mut().regs.pc = 0xF448;
         m.write_mem(0xF448, 0x18); // JR 0 — tight loop
         m.write_mem(0xF449, 0xFE);
+        assert_eq!(
+            m.effective_speed_multiplier(),
+            1,
+            "finished deck must report 1× even for DI code in upper RAM"
+        );
         let t0 = m.cpu().t;
         let _ = m.run_frame();
         let dt = m.cpu().t.saturating_sub(t0);
         assert!(
-            dt > 200_000,
-            "finished tape + DI @ >=$8000 should keep EAR turbo (#379), got {dt}"
-        );
-        assert!(
-            m.in_post_tape_di_delay(),
-            "helper must match turbo DI condition"
-        );
-        // EI → back to 1× (#178).
-        m.cpu_mut().regs.iff1 = true;
-        let t1 = m.cpu().t;
-        let _ = m.run_frame();
-        let dt1 = m.cpu().t.saturating_sub(t1);
-        assert!(
-            dt1 < 150_000,
-            "IFF1 set must drop turbo to ~1× (#178), got {dt1}"
-        );
-        assert!(!m.in_post_tape_di_delay());
-    }
-
-    #[test]
-    fn speedlock_post_tape_di_keeps_turbo_while_key_gate_yields() {
-        // Post-tape DI protection keeps the full Play-turbo rate so the delay
-        // nest does not crawl at 1×, while the outer `$8224` key gate drops to
-        // 1× so chrome / auto-ack can observe it (#379).
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let img = TapImage {
-            blocks: vec![vec![0xff, 0x00, 0xff]],
-            ..Default::default()
-        };
-        let mut m = Machine::new_48k(&rom).unwrap();
-        m.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 16,
-            ..Default::default()
-        });
-        m.insert_tape(TapPlayer::new(img));
-        m.set_tape_playing(true);
-        for _ in 0..20_000 {
-            let _ = m.run_frame();
-            if m.tape_finished() || !m.tape_playing() {
-                break;
-            }
-        }
-        assert!(m.tape_finished() || !m.tape_playing());
-
-        m.cpu_mut().regs.iff1 = false;
-        m.cpu_mut().regs.iff2 = false;
-        m.cpu_mut().regs.sp = 0xFDDF;
-        m.write_mem(0xFDDF, 0xD1); // ret $F3D1 → DelayF448
-        m.write_mem(0xFDE0, 0xF3);
-        m.cpu_mut().regs.pc = 0xF448;
-        m.write_mem(0xF448, 0x18); // JR 0
-        m.write_mem(0xF449, 0xFE);
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::DelayF448);
-        let t0 = m.cpu().t;
-        let _ = m.run_frame();
-        let delay_dt = m.cpu().t.saturating_sub(t0);
-
-        // Outer key-gate yields to 1× so chrome can show “tap a key”.
-        m.cpu_mut().regs.pc = 0xF3D1;
-        m.write_mem(0xF3D1, 0x18);
-        m.write_mem(0xF3D2, 0xFE);
-        assert!(m.in_speedlock_key_gate());
-        let t1 = m.cpu().t;
-        let _ = m.run_frame();
-        let gate_dt = m.cpu().t.saturating_sub(t1);
-
-        assert!(
-            delay_dt > gate_dt.saturating_mul(8),
-            "post-tape DI should stay at Play turbo vs key-gate 1× \
-             (delay={delay_dt} gate={gate_dt})"
+            dt < 150_000,
+            "post-tape DI code must run at ~1× (one 69888 T frame), got {dt}"
         );
     }
 
     #[test]
-    fn speedlock_turbo_acks_outer_key_gate() {
-        // Finished deck + DI at the Arkanoid outer stub: turbo must auto-ack
-        // the `$8224` any-key poll inside one host tick (#379).
+    fn post_tape_turbo_never_injects_guest_keys() {
+        // The old turbo auto-acked Arkanoid's `$8224` any-key poll with Space.
+        // Synthetic guest input is not ours to fabricate, and measurement shows
+        // the protection completes on its own at 1× (#390).
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
             return;
@@ -6473,11 +6134,11 @@ mod tests {
         }
         assert!(m.tape_finished() || !m.tape_playing());
 
-        // Outer stub from CALL $8224 through EI / RET.
+        // Speedlock-shaped outer stub: CALL key gate / INC E / JR Z / EI / RET.
         let stub: &[u8] = &[
             0xCD, 0x24, 0x82, // F3D1 CALL 8224
             0x1C, // F3D4 INC E
-            0x28, 0xF7, // F3D5 JR Z,F3CE (not taken when E was $10)
+            0x28, 0xF7, // F3D5 JR Z,F3CE
             0xFB, // F3D7 EI
             0xC9, // F3D8 RET
         ];
@@ -6492,7 +6153,7 @@ mod tests {
             0x3C, // INC A
             0x28, 0xEF, // JR Z,$821F abort
             0xF1, 0xC1, // POP AF / POP BC
-            0xC9, // RET to stub (no EI here)
+            0xC9, // RET
         ];
         for (i, b) in gate.iter().enumerate() {
             m.write_mem(0x8224 + i as u16, *b);
@@ -6500,261 +6161,87 @@ mod tests {
         m.write_mem(0x821F, 0xF1);
         m.write_mem(0x8220, 0xC1);
         m.write_mem(0x8221, 0x1E);
-        m.write_mem(0x8222, 0xFF);
+        m.write_mem(0x8222, 0xFF); // LD E,$FF (abort)
         m.write_mem(0x8223, 0xC9);
 
         m.cpu_mut().regs.iff1 = false;
         m.cpu_mut().regs.iff2 = false;
         m.cpu_mut().regs.pc = 0xF3D1;
         m.cpu_mut().regs.sp = 0xFDE1;
-        m.write_mem(0xFDE1, 0x00); // stub RET → $8000
-        m.write_mem(0xFDE2, 0x80);
-        m.write_mem(0x8000, 0x18); // JR 0
-        m.write_mem(0x8001, 0xFE);
+        m.write_mem(0xFDE1, 0xCE);
+        m.write_mem(0xFDE2, 0xF3);
         m.cpu_mut().regs.e = 0x10;
-        // Ensure no host key is held — turbo must inject Space for the gate.
         m.keyboard_mut().reset();
-
-        let _ = m.run_frame();
-        assert!(
-            m.cpu().regs.iff1,
-            "turbo should auto-ack key gate to stub EI; pc={:#06x} e={:#04x}",
-            m.cpu().regs.pc,
-            m.cpu().regs.e
-        );
-        assert!(
-            (0x8000..=0x8001).contains(&m.cpu().regs.pc),
-            "stub should RET to parked $8000; pc={:#06x}",
-            m.cpu().regs.pc
-        );
-        // Next frame clears the inject once post-tape DI delay has ended.
-        let _ = m.run_frame();
-        assert!(
-            !m.speedlock_watch().turbo_space_injected,
-            "turbo Space inject flag should clear after gate exit"
-        );
         assert_eq!(
             m.keyboard_mut().read(0x7f),
             0x1f,
-            "row 7 (Space) must be released after turbo gate ack"
+            "precondition: no key held on row 7"
         );
-    }
 
-    #[test]
-    fn speedlock_key_gate_detects_return_under_push_af_bc() {
-        // Real `$8224` prologue pushes BC/AF before IN; return `$F3D4` is at SP+4 (#388).
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let img = TapImage {
-            blocks: vec![vec![0xff, 0x00, 0xff]],
-            ..Default::default()
-        };
-        let mut m = Machine::new_48k(&rom).unwrap();
-        m.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 64,
-            ..Default::default()
-        });
-        m.insert_tape(TapPlayer::new(img));
-        m.set_tape_playing(true);
-        for _ in 0..20_000 {
+        for _ in 0..4 {
             let _ = m.run_frame();
-            if m.tape_finished() || !m.tape_playing() {
-                break;
-            }
+            assert_eq!(
+                m.keyboard_mut().read(0x7f),
+                0x1f,
+                "emulator must not press Space for the guest; pc={:#06x}",
+                m.cpu().regs.pc
+            );
         }
-        assert!(m.tape_finished() || !m.tape_playing());
-
-        m.cpu_mut().regs.iff1 = false;
-        m.cpu_mut().regs.pc = 0x8229; // IN site after PUSH BC / PUSH AF
-        m.cpu_mut().regs.sp = 0xFDD0;
-        m.write_mem(0xFDD0, 0x50); // AF low (flags) — must NOT be mistaken for return
-        m.write_mem(0xFDD1, 0x10);
-        m.write_mem(0xFDD2, 0xFE); // BC
-        m.write_mem(0xFDD3, 0x00);
-        m.write_mem(0xFDD4, 0xD4); // real return $F3D4
-        m.write_mem(0xFDD5, 0xF3);
-
-        let sp_word = u16::from(m.read_mem(0xFDD0)) | (u16::from(m.read_mem(0xFDD1)) << 8);
-        assert_eq!(sp_word, 0x1050, "precondition: (SP) looks like saved AF");
-        assert!(
-            m.in_speedlock_key_gate(),
-            "gate detect must use SP+4 under PUSH frame"
-        );
-
-        m.keyboard_mut().reset();
-        m.maybe_accelerate_speedlock_delay();
-        assert!(
-            m.speedlock_watch().turbo_space_injected,
-            "turbo must inject Space while spinning on $8229"
-        );
-        assert_eq!(
-            m.keyboard_mut().read(0x7f) & 1,
-            0,
-            "Space (row7 bit0) active-low when injected"
-        );
-    }
-
-    #[test]
-    fn speedlock_f408_entries_count_from_other_high_di() {
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let img = TapImage {
-            blocks: vec![vec![0xff, 0x00, 0xff]],
-            ..Default::default()
-        };
-        let mut m = Machine::new_48k(&rom).unwrap();
-        m.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 64,
-            ..Default::default()
-        });
-        m.insert_tape(TapPlayer::new(img));
-        m.set_tape_playing(true);
-        for _ in 0..20_000 {
-            let _ = m.run_frame();
-            if m.tape_finished() || !m.tape_playing() {
-                break;
-            }
-        }
-        assert!(m.tape_finished() || !m.tape_playing());
-
-        m.cpu_mut().regs.iff1 = false;
-        m.cpu_mut().regs.pc = 0x9000;
-        m.cpu_mut().regs.sp = 0xFDDF;
-        m.write_mem(0xFDDF, 0xD1);
-        m.write_mem(0xFDE0, 0xF3);
-        m.update_speedlock_watch();
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::OtherHighDi);
-        assert_eq!(m.speedlock_stage_count(), 0);
-
-        m.cpu_mut().regs.pc = 0xF448;
-        m.update_speedlock_watch();
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::DelayF448);
-        assert_eq!(
-            m.speedlock_stage_count(),
-            1,
-            "OtherHighDi → DelayF448 with ret F3D1 must count as an F448 entry"
-        );
-    }
-
-    #[test]
-    fn speedlock_stage_classifies_delay_gate_and_ei() {
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let img = TapImage {
-            blocks: vec![vec![0xff, 0x00, 0xff]],
-            ..Default::default()
-        };
-        let mut m = Machine::new_48k(&rom).unwrap();
-        m.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 64,
-            ..Default::default()
-        });
-        m.insert_tape(TapPlayer::new(img));
-        m.set_tape_playing(true);
-        for _ in 0..20_000 {
-            let _ = m.run_frame();
-            if m.tape_finished() || !m.tape_playing() {
-                break;
-            }
-        }
-        assert!(m.tape_finished() || !m.tape_playing());
-
-        m.cpu_mut().regs.iff1 = false;
-        m.cpu_mut().regs.pc = 0xF448;
-        m.cpu_mut().regs.sp = 0xFDDF;
-        m.write_mem(0xFDDF, 0xD1);
-        m.write_mem(0xFDE0, 0xF3);
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::DelayF448);
-
-        m.cpu_mut().regs.pc = 0xF3D1;
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::KeyGate);
-
-        m.cpu_mut().regs.pc = 0x93AF;
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::Decrypt93);
-
-        m.cpu_mut().regs.pc = 0x808E;
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::TitleAttract);
-        m.cpu_mut().regs.pc = 0x8DC8;
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::TitleAttract);
-
-        m.cpu_mut().regs.iff1 = true;
-        assert_eq!(m.speedlock_stage(), SpeedlockStage::InterruptsOn);
-    }
-
-    #[test]
-    fn speedlock_realtime_does_not_auto_ack_key_gate() {
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let img = TapImage {
-            blocks: vec![vec![0xff, 0x00, 0xff]],
-            ..Default::default()
-        };
-        let mut m = Machine::new_48k(&rom).unwrap();
-        m.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 1,
-            ..Default::default()
-        });
-        m.insert_tape(TapPlayer::new(img));
-        m.set_tape_playing(true);
-        for _ in 0..20_000 {
-            let _ = m.run_frame();
-            if m.tape_finished() || !m.tape_playing() {
-                break;
-            }
-        }
-
-        let stub: &[u8] = &[
-            0xCD, 0x24, 0x82, // CALL 8224
-            0x1C, // INC E
-            0x28, 0xF7, // JR Z
-            0xFB, // EI
-            0xC9,
-        ];
-        for (i, b) in stub.iter().enumerate() {
-            m.write_mem(0xF3D1 + i as u16, *b);
-        }
-        let gate: &[u8] = &[
-            0xC5, 0xF5, 0x01, 0xFE, 0x00, 0xED, 0x78, 0xF6, 0xE0, 0x3C, 0x28, 0xEF, 0xF1, 0xC1,
-            0xC9,
-        ];
-        for (i, b) in gate.iter().enumerate() {
-            m.write_mem(0x8224 + i as u16, *b);
-        }
-        m.write_mem(0x821F, 0xF1);
-        m.write_mem(0x8220, 0xC1);
-        m.write_mem(0x8221, 0x1E);
-        m.write_mem(0x8222, 0xFF);
-        m.write_mem(0x8223, 0xC9);
-
-        m.cpu_mut().regs.iff1 = false;
-        m.cpu_mut().regs.pc = 0xF3D1;
-        m.cpu_mut().regs.sp = 0xFDE1;
-        m.write_mem(0xFDE1, 0x00);
-        m.write_mem(0xFDE2, 0x80);
-        m.write_mem(0x8000, 0x18);
-        m.write_mem(0x8001, 0xFE);
-        m.cpu_mut().regs.e = 0x10;
-        m.keyboard_mut().reset();
-
-        let _ = m.run_frame();
         assert!(
             !m.cpu().regs.iff1,
-            "1× must not auto-ack the key gate; pc={:#06x} e={:#04x}",
+            "gate must abort on its own with no key held; pc={:#06x} e={:#04x}",
             m.cpu().regs.pc,
             m.cpu().regs.e
         );
+    }
+
+    #[test]
+    fn effective_speed_multiplier_tracks_the_active_rate() {
+        // Hosts show this, so it must match what `run_frame` really does (#390).
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x00, 0xff]],
+            ..Default::default()
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        assert_eq!(m.effective_speed_multiplier(), 1, "no deck → 1×");
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 20,
+            ..Default::default()
+        });
+        m.insert_tape(TapPlayer::new(img));
+        assert_eq!(m.effective_speed_multiplier(), 1, "deck paused → 1×");
+        m.set_tape_playing(true);
+        assert_eq!(m.effective_speed_multiplier(), 20, "playing deck → speed");
+        let t0 = m.cpu().t;
+        let _ = m.run_frame();
+        let dt = m.cpu().t.saturating_sub(t0);
+        assert!(
+            dt > 20_000 * 10,
+            "reported 20× should match the T-states run, got {dt}"
+        );
+        for _ in 0..20_000 {
+            let _ = m.run_frame();
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        assert_eq!(
+            m.effective_speed_multiplier(),
+            1,
+            "finished deck → 1× regardless of the speed setting"
+        );
+        // Flash-load never multiplies frames.
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: true,
+            speed: 64,
+            ..Default::default()
+        });
+        assert_eq!(m.effective_speed_multiplier(), 1, "flash-load → 1×");
     }
 
     #[test]

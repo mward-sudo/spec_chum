@@ -65,45 +65,43 @@ Speedlock / Loop Start (`0x24`) example (optional local only):
 cargo test -p tape arkanoid_downloads -- --nocapture
 cargo test -p tape arkanoid_pause_polarity -- --nocapture
 cargo test -p host_api open_local_arkanoid -- --nocapture
-# EAR Play past Speedlock sampler + post-tape DI turbo (#379 / #380)
+# EAR Play past the Speedlock sampler (#379 / #380)
 cargo test -p host_api --release --lib arkanoid_ear_leaves_sampler -- --ignored --nocapture
-# First DI delay stage RET (~5 min @64×; multi-stage → game is longer)
-cargo test -p host_api --release --lib arkanoid_speedlock_first_delay_ret -- --ignored --nocapture
-# Bounded post-tape wait (screen + delay stub; not full game entry)
-cargo test -p host_api --release --lib arkanoid_ear_load_leaves_speedlock -- --ignored --nocapture
+# Protection completes at 1x after the deck finishes (#390)
+cargo test -p host_api --release --lib arkanoid_speedlock_completes_at_realtime -- --ignored --nocapture
 ```
 
 TZX pause polarity follows Fuse `force_low` / `LEVEL_LOW` (absolute low on the
 first edge after a non-zero pause). A bad `LEVEL_LOW` that emitted an *extra*
 low at tape start inverted the whole EAR schedule and stuck Arkanoid at `$FD2A`.
-Play turbo also continues after the deck finishes while `IFF1=0` and `PC≥$8000`
-so Speedlock border-delays do not appear hung at 1× after a turbo load.
 
-After EAR exhaust, Arkanoid sits in a **multi-stage** Speedlock DI delay at
-`$F448` (`LD E,IXH` at `$F44E`, not a CALL). The first stage RETs at `$F476`
-after ~12.7k host frames at EAR 64× (~4.5 hours of Spectrum time / ~4–5 minutes
-wall-clock).
+### The post-tape delay does not need turbo (#390)
 
-Outer stub after `$F408`: `CALL $8224` polls `IN A,(C)` with `BC=$00FE` — no key
-aborts with `E=$FF` and restarts the whole delay; any key continues into decrypt
-/ game setup (`$8230` / `$93xx`). **Do not hold a key during the `$F448` nest**
-(mid-delay visits to `$8224` with a non-outer return will corrupt the loader).
+EAR `speed` is a **loading** convenience: it stops applying the moment the deck
+finishes, including for programs that run with interrupts disabled from upper
+RAM (Arkanoid does). `Machine::effective_speed_multiplier()` reports the rate
+actually being run, and both hosts show that instead of the setting.
 
-At EAR turbo the outer key poll finishes inside one Spectrum frame after the DI
-delay, so a human tap cannot hit it. Play turbo (`speed > 1`) therefore
-**auto-acks** that outer gate (Space) when PC is on the stub/poll/F476 — same
-convenience class as keeping turbo through the DI delay. Realtime (`1×`) needs a
-manual tap when chrome shows “Speedlock — tap a key”.
+Measured with `arkanoid_realtime_gate` (steps instructions, times landmarks in
+T-states):
 
-`Machine::speedlock_stage()` / `speedlock_stage_count()` classify delay vs decrypt
-vs key-gate (D vs E). Optional `SPEC_CHUM_SPEEDLOCK_SNAP=1` snaps `$F448`→`$F476`
-for H4 A/B only (default **off** — full snap caused `$837B`↔`$F408` loops).
-Prefer EAR **64×**; chrome shows stage-aware “Speedlock delay… / decrypt…”.
+| Run | Result |
+| --- | --- |
+| 1x, **no** key input | `EI` at **20.05 s** of Spectrum time, 124 delay stages |
+| 1x, Space tapped 120 ms every 700 ms | gate passed 0.8 s, `$83DF` main loop at **20.7 s** |
+| 64x post-tape turbo (old gate), 4000 s Spectrum | never leaves protection; PC drifts in `$F1xx` |
 
-Post-tape DI protection keeps the full Play-turbo rate (the key gate still drops
-to 1×). `SPEC_CHUM_SPEEDLOCK_BOOST=<1..=16>` multiplies that rate for offline
-soaks only and defaults to **1**: unlike EAR turbo it multiplies the work inside
-one `run_frame` call, so a large value stalls the host UI for that tick.
+So the protection is a ~20 s multi-stage delay that ends on its own — the
+"~4.5 hours of Spectrum time" figure recorded earlier was an artifact of the
+turbo path itself: multi-frame bursts plus a synthetic Space auto-ack perturbed
+the loop so it never completed, which then looked like it needed *more* turbo.
+The auto-ack, `SPEC_CHUM_SPEEDLOCK_SNAP`, `SPEC_CHUM_SPEEDLOCK_BOOST` and the
+`speedlock_stage()` chrome are gone with it.
+
+After EAR exhaust, Arkanoid sits in a multi-stage Speedlock DI delay at `$F448`
+(`LD E,IXH` at `$F44E`, not a CALL). Outer stub after `$F408`: `CALL $8224`
+polls `IN A,(C)` with `BC=$00FE` — no key aborts with `E=$FF` and restarts the
+delay, any key continues into decrypt / game setup (`$8230` / `$93xx`).
 
 ### The load path is not the defect (#379)
 
@@ -163,17 +161,17 @@ only clears when `"PBRAIN"` sits at `($94F6)+1`. Measured behaviour:
   itself — in **both** the Spec Chum and Fuse images.
 - `$956F` is 0 in both images, so both take the `$8280` miss path.
 
-That is why the soak oscillates `delay-f448` ↔ `decrypt-93`: the miss path at
-`$8280` wipes the screen (`$8368` fills `$4000-$5AFF`, attrs `$47`) and re-enters
-the delay. Reaching `IFF1` needs whatever makes that compare succeed — still
-open. Fuse’s mid-delay snapshot is in the *same* state, so a post-`IFF1` Fuse
-snap (not another mid-delay one) is the oracle worth capturing next.
+The miss path at `$8280` wipes the screen (`$8368` fills `$4000-$5AFF`, attrs
+`$47`) and re-enters the delay, which is what made turbo soaks look like an
+endless `delay-f448` ↔ `decrypt-93` oscillation. It is not the boot gate: the
+`"PBRAIN"` compare is a cheat / name check, and at 1× the protection completes
+and starts the game without it ever matching (#390).
 
 Local helpers (not CI — copyrighted media / large artifacts stay under `tmp/`):
 
 ```bash
-# EAR stage soak (needs ~/Downloads/Arkanoid.tzx)
-cargo run -p host_api --release --example arkanoid_delay_probe -- ~/Downloads/Arkanoid.tzx 25000
+# Time the post-tape protection at a true 1x (needs ~/Downloads/Arkanoid.tzx)
+cargo run -p host_api --release --example arkanoid_realtime_gate -- ~/Downloads/Arkanoid.tzx
 
 # Decision-point breakpoints + live disassembly of the protection
 cargo run -p host_api --release --example arkanoid_stub_trace -- ~/Downloads/Arkanoid.tzx 40
@@ -182,10 +180,6 @@ cargo run -p host_api --release --example arkanoid_stub_trace -- ~/Downloads/Ark
 # Prove the load path: Spec Chum EAR image vs a Fuse snapshot of the same tape
 cargo run -p host_api --release --example arkanoid_ram_diff -- \
   tmp/fuse_oracle/arkanoid_fuse_postload.z80 ~/Downloads/Arkanoid.tzx
-
-# Fuse snap → Spec Chum (after converting Fuse .szx → .z80)
-cargo run -p host_api --release --example fuse_oracle_probe -- \
-  tmp/fuse_oracle/arkanoid_fuse_postload.z80 20000
 ```
 
 `.z80` load now restores **R bit 7** from header byte 12 bit 0 (FAQ) so

@@ -73,11 +73,9 @@ int sc_tape_pause(void *handle);
 int sc_tape_rewind(void *handle);
 int sc_tape_playing(void *handle);
 int sc_has_tape(void *handle);
-/* 1 = finished deck + DI + PC in high RAM (Speedlock delay chrome / turbo). */
-int sc_in_post_tape_di_delay(void *handle);
-int sc_in_speedlock_key_gate(void *handle);
-int sc_speedlock_stage(void *handle);
-unsigned int sc_speedlock_stage_count(void *handle);
+/* Spectrum frames per host tick right now: EAR turbo only while an unfinished
+ * deck plays, so chrome can report the real rate instead of the setting. */
+unsigned int sc_effective_speed_multiplier(void *handle);
 int sc_tape_progress(void *handle,
                      unsigned int *block_index,
                      unsigned int *block_count,

@@ -2021,11 +2021,14 @@ mod tests {
         assert!(s.status().contains("TZX") || s.media_title().is_some());
     }
 
-    /// First Speedlock DI delay stage must RET (~$F476) under Play turbo (#379).
-    /// Full multi-stage nest → IFF1/game entry is much longer; not asserted here.
-    #[ignore = "local Arkanoid fixture; ~5min @64× for first delay RET"]
+    /// Arkanoid's post-tape Speedlock protection must complete at **1×** (#390).
+    ///
+    /// Measured: `EI` lands ~20 s of Spectrum time after the deck finishes with
+    /// no input at all, so the delay never needed turbo. Debug builds run this
+    /// slower than realtime, hence `--release` and `--ignored`.
+    #[ignore = "local Arkanoid fixture; run with --release"]
     #[test]
-    fn arkanoid_speedlock_first_delay_ret_when_present() {
+    fn arkanoid_speedlock_completes_at_realtime_when_present() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
             return;
@@ -2066,35 +2069,45 @@ mod tests {
             }
         }
         {
-            let m = s.machine.as_ref().expect("machine");
-            assert!(
-                m.in_post_tape_di_delay(),
-                "expected post-tape DI delay, pc={:#06x} iff1={}",
-                m.cpu().regs.pc,
-                u8::from(m.cpu().regs.iff1)
-            );
-            assert_ne!(m.cpu().regs.pc, 0xFD2A);
+            let m = s.machine.as_mut().expect("machine");
+            assert!(m.tape_finished() || !m.tape_playing(), "deck should finish");
+            assert_ne!(m.cpu().regs.pc, 0xFD2A, "still in the EAR edge sampler");
             assert_eq!(
                 m.read_mem(0xF44E),
                 0xDD,
                 "Speedlock uses LD E,IXH at $F44E (not CALL)"
             );
+            let nz = (0u16..256)
+                .map(|i| m.read_mem(0x4000 + i))
+                .filter(|&b| b != 0)
+                .count();
+            assert!(
+                nz >= 32,
+                "expected loader screen activity at tape end, nonzero={nz}/256"
+            );
+            // Drop to a true 1×: nothing may multiply frames after tape end.
+            m.set_tape_load_options(machine::TapeLoadOptions {
+                flash_load: false,
+                speed: 1,
+                experience_load: false,
+            });
+            assert_eq!(m.effective_speed_multiplier(), 1);
         }
-        let mut saw_ret = false;
-        for i in 0..20_000u32 {
+        // 40 Spectrum seconds is ~2× the measured 20 s protection run.
+        let mut ei_frame = None;
+        for i in 0..2_000u32 {
             let _ = s.machine.as_mut().expect("machine").run_frame();
             let m = s.machine.as_ref().expect("machine");
-            let p = m.cpu().regs.pc;
-            assert_ne!(p, 0xFD2A, "returned to sampler");
-            if p == 0xF476 {
-                saw_ret = true;
-                eprintln!("first delay RET at {p:#06x} after +{i} host frames");
+            assert_ne!(m.cpu().regs.pc, 0xFD2A, "returned to sampler");
+            if m.cpu().regs.iff1 {
+                ei_frame = Some(i);
                 break;
             }
         }
-        assert!(
-            saw_ret,
-            "Speedlock first DI delay stage did not RET within 20k turbo frames"
+        let ei_frame = ei_frame.expect("Speedlock protection did not EI within 40s at 1×");
+        eprintln!(
+            "protection completed after {ei_frame} Spectrum frames ({:.1}s) at 1×",
+            f64::from(ei_frame) / 50.0
         );
     }
 
@@ -2182,135 +2195,6 @@ mod tests {
         assert!(
             dt > 200_000,
             "expected post-tape DI turbo ≫ 1 frame, dt={dt}"
-        );
-    }
-
-    /// EAR Play path for Arkanoid Speedlock (#379 / #380).
-    ///
-    /// After tape exhaust: leave `$FD2A`, keep screen activity, stay in the
-    /// post-tape DI delay with turbo on. Full multi-stage nest → game/`IFF1`
-    /// outlives this budget (first stage alone is ~13k frames @64×); remaining
-    /// in `$Fxxx` with screen data is ROM-accurate, not sampler desync.
-    #[ignore = "requires local Arkanoid fixture; run explicitly as a slow regression"]
-    #[test]
-    fn arkanoid_ear_load_leaves_speedlock_when_present() {
-        const POST_FRAMES: u32 = 20_000;
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let Some(home) = std::env::var_os("HOME") else {
-            return;
-        };
-        let arkanoid = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
-        if !arkanoid.is_file() {
-            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
-            return;
-        }
-        let mut s = HostSession::new(ModelId::Spectrum48, true);
-        s.load_rom_bytes(&rom).expect("rom");
-        s.open_tape(&arkanoid).expect("open");
-        {
-            let m = s.machine.as_mut().expect("machine");
-            m.set_tape_load_options(machine::TapeLoadOptions {
-                flash_load: false,
-                speed: 64,
-                experience_load: false,
-            });
-            m.set_tape_playing(false);
-        }
-        for _ in 0..200 {
-            let m = s.machine.as_mut().expect("machine");
-            let _ = m.run_frame();
-        }
-        {
-            let m = s.machine.as_mut().expect("machine");
-            m.type_load_quotes(false);
-            m.set_tape_playing(true);
-        }
-        let mut finished = false;
-        for _ in 0..20_000 {
-            {
-                let m = s.machine.as_mut().expect("machine");
-                let _ = m.run_frame();
-            }
-            let m = s.machine.as_ref().expect("machine");
-            if m.tape_finished() || !m.tape_playing() {
-                finished = true;
-                break;
-            }
-        }
-        assert!(finished, "EAR deck did not finish within budget");
-        let (pc0, screen0) = {
-            let m = s.machine.as_ref().expect("machine");
-            let pc = m.cpu().regs.pc;
-            let nz = (0u16..256)
-                .map(|i| m.read_mem(0x4000 + i))
-                .filter(|&b| b != 0)
-                .count();
-            eprintln!(
-                "post-tape start: pc={pc:#06x} bc={:#06x} iff1={} screen_nz={nz}",
-                m.cpu().regs.bc(),
-                u8::from(m.cpu().regs.iff1)
-            );
-            assert_ne!(
-                pc, 0xFD2A,
-                "PC still in Speedlock edge-sample loop — EAR desync"
-            );
-            assert!(
-                nz >= 32,
-                "expected screen activity at tape end, nonzero={nz}/256"
-            );
-            (pc, nz)
-        };
-        let _ = pc0;
-        let mut saw_iff1 = false;
-        for i in 0..POST_FRAMES {
-            {
-                let m = s.machine.as_mut().expect("machine");
-                let _ = m.run_frame();
-            }
-            let m = s.machine.as_ref().expect("machine");
-            let p = m.cpu().regs.pc;
-            assert_ne!(p, 0xFD2A, "returned to sampler mid-delay — EAR desync");
-            if m.cpu().regs.iff1 {
-                saw_iff1 = true;
-                eprintln!("IFF1 after +{i} host frames: pc={p:#06x}");
-                break;
-            }
-            if i % 5_000 == 0 {
-                let nz = (0u16..256)
-                    .map(|j| m.read_mem(0x4000 + j))
-                    .filter(|&b| b != 0)
-                    .count();
-                eprintln!(
-                    "post-tape +{i}: pc={p:#06x} bc={:#06x} screen_nz={nz}",
-                    m.cpu().regs.bc()
-                );
-            }
-        }
-        let m = s.machine.as_ref().expect("machine");
-        let pc = m.cpu().regs.pc;
-        let nonzero = (0u16..256)
-            .map(|i| m.read_mem(0x4000 + i))
-            .filter(|&b| b != 0)
-            .count();
-        eprintln!(
-            "arkanoid final: pc={pc:#06x} iff1={} screen_nz={nonzero} (start_nz={screen0}) saw_iff1={saw_iff1}",
-            u8::from(m.cpu().regs.iff1)
-        );
-        assert_ne!(pc, 0xFD2A);
-        assert!(
-            nonzero >= 32 || saw_iff1,
-            "screen activity lost during post-tape wait (nz={nonzero}) pc={pc:#06x}"
-        );
-        if saw_iff1 {
-            return;
-        }
-        // Still acceptable: productive DI delay in high RAM with screen intact.
-        assert!(
-            (0xF000..=0xFEFF).contains(&pc),
-            "left Speedlock stub without IFF1 and without keeping screen; pc={pc:#06x} nz={nonzero}"
         );
     }
 
