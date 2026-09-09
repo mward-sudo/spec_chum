@@ -70,6 +70,8 @@ extension HostBridge {
             label = "Speedlock decrypt…"
         case 5:
             label = "Speedlock delay…"
+        case 7:
+            label = "Title / high score…"
         default:
             if sc_in_post_tape_di_delay(handle) != 0 {
                 label = "Speedlock delay…"

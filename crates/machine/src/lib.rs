@@ -278,6 +278,8 @@ pub enum SpeedlockStage {
     Continue8230,
     /// `$9300`–`$94FF` decrypt / unpack loops.
     Decrypt93,
+    /// `$8080`–`$81FF` / `$8DC0`–`$8DFF` title / high-score / menu draw (#379).
+    TitleAttract,
     /// Other DI code in high RAM after tape end.
     OtherHighDi,
     /// `IFF1` set — interrupts back (game-entry candidate).
@@ -293,6 +295,7 @@ impl SpeedlockStage {
             Self::KeyGate => "key-gate",
             Self::Continue8230 => "cont-8230",
             Self::Decrypt93 => "decrypt-93",
+            Self::TitleAttract => "title",
             Self::OtherHighDi => "other-di",
             Self::InterruptsOn => "ei",
         }
@@ -1848,6 +1851,9 @@ impl Machine {
     ///
     /// At EAR turbo the poll finishes inside one Spectrum frame, so a human tap
     /// cannot hit it unless we yield / auto-ack (#379).
+    ///
+    /// The real gate starts with `PUSH BC` / `PUSH AF` before `IN`, so the CALL
+    /// return `$F3D4` sits at `SP`, `SP+2`, or `SP+4` depending on PC (#388).
     #[must_use]
     pub fn in_speedlock_key_gate(&self) -> bool {
         if !self.in_post_tape_di_delay() {
@@ -1858,12 +1864,23 @@ impl Machine {
             return true;
         }
         if (0x8224..=0x822F).contains(&pc) {
-            let sp = self.cpu().regs.sp;
-            let ret =
-                u16::from(self.read_mem(sp)) | (u16::from(self.read_mem(sp.wrapping_add(1))) << 8);
-            return ret == 0xF3D4;
+            return self.speedlock_gate_stacked_ret() == 0xF3D4;
         }
         false
+    }
+
+    /// Stacked return under `$8224` accounting for `PUSH BC` / `PUSH AF` (#388).
+    fn speedlock_gate_stacked_ret(&self) -> u16 {
+        let pc = self.cpu().regs.pc;
+        let sp = self.cpu().regs.sp;
+        let depth_bytes: u16 = match pc {
+            0x8224 => 0,          // before PUSH BC
+            0x8225 => 2,          // after PUSH BC, before PUSH AF
+            0x8226..=0x822F => 4, // after both PUSHes (IN / OR / INC / JR)
+            _ => 0,
+        };
+        let addr = sp.wrapping_add(depth_bytes);
+        u16::from(self.read_mem(addr)) | (u16::from(self.read_mem(addr.wrapping_add(1))) << 8)
     }
 
     /// Classify the current post-tape Speedlock-ish phase from PC / IFF1 (#379).
@@ -1894,6 +1911,9 @@ impl Machine {
         }
         if (0x9300..=0x94FF).contains(&pc) {
             return SpeedlockStage::Decrypt93;
+        }
+        if (0x8080..=0x81FF).contains(&pc) || (0x8DC0..=0x8DFF).contains(&pc) {
+            return SpeedlockStage::TitleAttract;
         }
         SpeedlockStage::OtherHighDi
     }
@@ -1992,7 +2012,7 @@ impl Machine {
         }
 
         if (0xF3CD..=0xF3D8).contains(&pc)
-            || ((0x8224..=0x822F).contains(&pc) && ret == 0xF3D4)
+            || ((0x8224..=0x822F).contains(&pc) && self.speedlock_gate_stacked_ret() == 0xF3D4)
             || (pc == 0xF476 && ret == 0xF3D1)
         {
             self.inject_speedlock_turbo_space();
@@ -6521,6 +6541,63 @@ mod tests {
     }
 
     #[test]
+    fn speedlock_key_gate_detects_return_under_push_af_bc() {
+        // Real `$8224` prologue pushes BC/AF before IN; return `$F3D4` is at SP+4 (#388).
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x00, 0xff]],
+            ..Default::default()
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 64,
+            ..Default::default()
+        });
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        for _ in 0..20_000 {
+            let _ = m.run_frame();
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        assert!(m.tape_finished() || !m.tape_playing());
+
+        m.cpu_mut().regs.iff1 = false;
+        m.cpu_mut().regs.pc = 0x8229; // IN site after PUSH BC / PUSH AF
+        m.cpu_mut().regs.sp = 0xFDD0;
+        m.write_mem(0xFDD0, 0x50); // AF low (flags) — must NOT be mistaken for return
+        m.write_mem(0xFDD1, 0x10);
+        m.write_mem(0xFDD2, 0xFE); // BC
+        m.write_mem(0xFDD3, 0x00);
+        m.write_mem(0xFDD4, 0xD4); // real return $F3D4
+        m.write_mem(0xFDD5, 0xF3);
+
+        let sp_word = u16::from(m.read_mem(0xFDD0)) | (u16::from(m.read_mem(0xFDD1)) << 8);
+        assert_eq!(sp_word, 0x1050, "precondition: (SP) looks like saved AF");
+        assert!(
+            m.in_speedlock_key_gate(),
+            "gate detect must use SP+4 under PUSH frame"
+        );
+
+        m.keyboard_mut().reset();
+        m.maybe_accelerate_speedlock_delay();
+        assert!(
+            m.speedlock_watch().turbo_space_injected,
+            "turbo must inject Space while spinning on $8229"
+        );
+        assert_eq!(
+            m.keyboard_mut().read(0x7f) & 1,
+            0,
+            "Space (row7 bit0) active-low when injected"
+        );
+    }
+
+    #[test]
     fn speedlock_f408_entries_count_from_other_high_di() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
@@ -6603,6 +6680,11 @@ mod tests {
 
         m.cpu_mut().regs.pc = 0x93AF;
         assert_eq!(m.speedlock_stage(), SpeedlockStage::Decrypt93);
+
+        m.cpu_mut().regs.pc = 0x808E;
+        assert_eq!(m.speedlock_stage(), SpeedlockStage::TitleAttract);
+        m.cpu_mut().regs.pc = 0x8DC8;
+        assert_eq!(m.speedlock_stage(), SpeedlockStage::TitleAttract);
 
         m.cpu_mut().regs.iff1 = true;
         assert_eq!(m.speedlock_stage(), SpeedlockStage::InterruptsOn);
@@ -8253,6 +8335,67 @@ mod tests {
             }
         ));
         assert!(m.frame_t() > 0, "mid-frame watch must keep raster time");
+    }
+
+    #[test]
+    fn port_read_watch_fires_on_in_a_c() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        // LD BC,$00FE / IN A,(C) / HALT
+        m.write_mem(0x8000, 0x01);
+        m.write_mem(0x8001, 0xFE);
+        m.write_mem(0x8002, 0x00);
+        m.write_mem(0x8003, 0xED);
+        m.write_mem(0x8004, 0x78);
+        m.write_mem(0x8005, 0x76);
+        m.cpu_mut().regs.pc = 0x8000;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        m.debugger_mut().add_port_watch(Watch {
+            addr: 0x00FE,
+            read: true,
+            write: false,
+        });
+        let reason = m.run_until_break(16);
+        assert!(
+            matches!(
+                reason,
+                BreakReason::Port {
+                    port: 0x00FE,
+                    write: false,
+                    ..
+                }
+            ),
+            "expected Port{{00FE read}}, got {reason:?}"
+        );
+        assert!(m.debugger().paused);
+
+        // Row-select keyboard ports (high byte ≠ 0) must NOT match an exact $00FE watch.
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.write_mem(0x8000, 0x01); // LD BC,$3CFE
+        m.write_mem(0x8001, 0xFE);
+        m.write_mem(0x8002, 0x3C);
+        m.write_mem(0x8003, 0xED); // IN A,(C)
+        m.write_mem(0x8004, 0x78);
+        m.write_mem(0x8005, 0x76);
+        m.cpu_mut().regs.pc = 0x8000;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        m.debugger_mut().add_port_watch(Watch {
+            addr: 0x00FE,
+            read: true,
+            write: false,
+        });
+        let reason = m.run_until_break(16);
+        assert!(
+            matches!(reason, BreakReason::Halt | BreakReason::Budget),
+            "exact $00FE watch must miss $3CFE row poll, got {reason:?}"
+        );
     }
 
     #[test]

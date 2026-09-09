@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/lib.rs": {
-    "mtime": 1788919605.6007087,
-    "seen": 1788921155.17769,
-    "ast_hash": "788fccfe6294f893ff6887eee89ce811",
+    "mtime": 1788921902.5121787,
+    "seen": 1788923074.00773,
+    "ast_hash": "aa1fde04a2cab96d06381b2bc4b9e23a",
     "semantic_hash": ""
   },
   "crates/app/src/main.rs": {
@@ -354,9 +354,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/ffi.rs": {
-    "mtime": 1788919605.6081269,
-    "seen": 1788921155.17771,
-    "ast_hash": "e0c5d7751affdd488db89369f97e7b37",
+    "mtime": 1788921898.486451,
+    "seen": 1788923074.008427,
+    "ast_hash": "25fe7000aedd09b8118a374c70b2579e",
     "semantic_hash": ""
   },
   "crates/host_api/src/handle.rs": {
@@ -582,9 +582,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1788919605.6154444,
-    "seen": 1788921155.177727,
-    "ast_hash": "c3eef7659cb6a75a5bc135f03df4e3f6",
+    "mtime": 1788922912.5796769,
+    "seen": 1788923074.009019,
+    "ast_hash": "c58e16784b07849b7fc882e3f66b1085",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
@@ -1116,9 +1116,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Tape.swift": {
-    "mtime": 1788919605.5971477,
-    "seen": 1788921155.1776772,
-    "ast_hash": "fb6dad8cd5433e95388cd6a5557e714a",
+    "mtime": 1788921902.5119731,
+    "seen": 1788923074.0072372,
+    "ast_hash": "9622f6ceae5a885691721cef77f3efa9",
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
@@ -1290,9 +1290,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/examples/arkanoid_pbrain_watch.rs": {
-    "mtime": 1788921145.7333229,
-    "seen": 1788921155.1777081,
-    "ast_hash": "43a62d0209be4573da3aa4f97b537d38",
+    "mtime": 1788922972.7497077,
+    "seen": 1788923074.0083609,
+    "ast_hash": "5723a4bf9523ae3504c9861596ec8dee",
     "semantic_hash": ""
   }
 }
