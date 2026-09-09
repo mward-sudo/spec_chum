@@ -263,6 +263,119 @@ pub fn palette_rgb(color: u8, bright: bool) -> [u8; 3] {
     }
 }
 
+/// Bitmap bytes (`6144`) plus one attribute byte per paper line (`192 * 32`).
+const BEAM_BITMAP_LEN: usize = 6144;
+const BEAM_ATTR_LEN: usize = 192 * 32;
+
+/// Screen bytes as the beam scanned them, for cells the CPU overwrote afterwards.
+///
+/// The Spectrum display is single-buffered, so games XOR-erase and redraw sprites
+/// while the frame is being scanned. Rendering purely from end-of-frame memory
+/// shows only the final state, which drops any sprite erased after the beam had
+/// already passed it — Arkanoid redraws its bat during the bottom border, so the
+/// bat was never in memory at the render point and vanished completely (#379).
+///
+/// Each bitmap byte is fetched exactly once per frame, so the first post-fetch
+/// write is enough to reconstruct what was displayed. Attribute bytes are fetched
+/// once per paper line, so they are shadowed per line.
+#[derive(Clone, Debug)]
+struct BeamShadow {
+    bitmap: Vec<u8>,
+    bitmap_set: Vec<bool>,
+    attr: Vec<u8>,
+    attr_set: Vec<bool>,
+    /// Fast path: nothing shadowed yet this frame.
+    any: bool,
+    /// Last beam position seen, to self-invalidate on frame wrap when the caller
+    /// drives the CPU with `step_once` and never opens a new frame.
+    last_frame_t: u32,
+}
+
+impl BeamShadow {
+    fn new() -> Self {
+        Self {
+            bitmap: vec![0; BEAM_BITMAP_LEN],
+            bitmap_set: vec![false; BEAM_BITMAP_LEN],
+            attr: vec![0; BEAM_ATTR_LEN],
+            attr_set: vec![false; BEAM_ATTR_LEN],
+            any: false,
+            last_frame_t: 0,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.last_frame_t = 0;
+        if !self.any {
+            return;
+        }
+        self.bitmap_set.fill(false);
+        self.attr_set.fill(false);
+        self.any = false;
+    }
+
+    /// Paper line holding bitmap offset `off` (`0..6144`).
+    #[inline]
+    const fn bitmap_line(off: usize) -> usize {
+        let third = off / 2048;
+        let yb = (off / 256) % 8;
+        let yo = (off / 32) % 8;
+        third * 64 + yo * 8 + yb
+    }
+
+    /// Record the pre-write byte when the beam has already fetched this cell.
+    fn note_write(&mut self, off: usize, old: u8, frame_t: u32, paper_start: u32, t_line: u32) {
+        if frame_t < self.last_frame_t {
+            self.clear();
+        }
+        self.last_frame_t = frame_t;
+        if off < BEAM_BITMAP_LEN {
+            let col = off % 32;
+            let py = Self::bitmap_line(off);
+            let fetch_t = paper_start + py as u32 * t_line + 3 + col as u32 * 4;
+            if frame_t > fetch_t && !self.bitmap_set[off] {
+                self.bitmap[off] = old;
+                self.bitmap_set[off] = true;
+                self.any = true;
+            }
+            return;
+        }
+        let idx = off - BEAM_BITMAP_LEN;
+        if idx >= 768 {
+            return;
+        }
+        let col = idx % 32;
+        let char_row = idx / 32;
+        for py in char_row * 8..char_row * 8 + 8 {
+            let fetch_t = paper_start + py as u32 * t_line + 4 + col as u32 * 4;
+            let slot = py * 32 + col;
+            if frame_t > fetch_t && !self.attr_set[slot] {
+                self.attr[slot] = old;
+                self.attr_set[slot] = true;
+                self.any = true;
+            }
+        }
+    }
+
+    #[inline]
+    fn bitmap_at(&self, off: usize, live: u8) -> u8 {
+        if self.any && self.bitmap_set.get(off) == Some(&true) {
+            self.bitmap[off]
+        } else {
+            live
+        }
+    }
+
+    #[inline]
+    fn attr_at(&self, py: usize, col: usize, live: u8) -> u8 {
+        let slot = py * 32 + col;
+        if self.any && self.attr_set.get(slot) == Some(&true) {
+            self.attr[slot]
+        } else {
+            live
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Ula48 {
     /// Border changes: (`frame_t`, color `0`–`7`)
@@ -277,6 +390,7 @@ pub struct Ula48 {
     pub frame: u64,
     /// Transient snow overrides (raster line/col → byte shown this frame).
     snow_overrides: Vec<SnowOverride>,
+    beam: BeamShadow,
 }
 
 impl Default for Ula48 {
@@ -296,7 +410,25 @@ impl Ula48 {
             flash_phase: false,
             frame: 0,
             snow_overrides: Vec::new(),
+            beam: BeamShadow::new(),
         }
+    }
+
+    /// Record a screen write so the frame renders what the beam actually scanned.
+    ///
+    /// `off` is a `0x4000`-relative offset into the 6912-byte display file, `old`
+    /// the byte being replaced, and `frame_t` the beam position at the write.
+    /// Writes that land before the ULA fetches the cell are ignored — the new
+    /// value is what gets displayed (#379).
+    pub fn note_screen_write(
+        &mut self,
+        off: usize,
+        old: u8,
+        frame_t: u32,
+        paper_start: u32,
+        t_line: u32,
+    ) {
+        self.beam.note_write(off, old, frame_t, paper_start, t_line);
     }
 
     /// Record a snow override (last write wins for a given raster fetch).
@@ -324,18 +456,14 @@ impl Ula48 {
     }
 
     #[inline]
-    fn snow_byte(
-        &self,
-        screen: &[u8],
-        offset: usize,
-        line: u32,
-        col: usize,
-        kind: SnowCellKind,
-    ) -> u8 {
+    fn snow_lookup(&self, line: u32, col: usize, kind: SnowCellKind) -> Option<u8> {
+        if self.snow_overrides.is_empty() {
+            return None;
+        }
         self.snow_overrides
             .iter()
             .find(|o| o.line == line && o.col == col && o.kind == kind)
-            .map_or_else(|| screen.get(offset).copied().unwrap_or(0), |o| o.byte)
+            .map(|o| o.byte)
     }
 
     pub fn set_border(&mut self, frame_t: u32, color: u8) {
@@ -357,6 +485,7 @@ impl Ula48 {
         self.screen_events.clear();
         self.screen_events.push((0, self.display_screen_bank));
         self.snow_overrides.clear();
+        self.beam.clear();
     }
 
     /// Schedule a display screen-bank change at frame T-state `t` (bank 5 or 7).
@@ -612,6 +741,9 @@ impl Ula48 {
                 return;
             }
         }
+        // Beam-time bytes are tracked for the standard display file only; the Timex
+        // alt-file and 128K shadow-screen paths still render end-of-frame memory.
+        let beam_shadow = screen_bank7.is_none() && matches!(mode, TimexLoresMode::Standard);
         for py in 0..192usize {
             let third = py / 64;
             let yb = py % 8;
@@ -641,8 +773,21 @@ impl Ula48 {
                 } else {
                     (screen, screen)
                 };
-                let bits = self.snow_byte(bits_src, bitmap_off, line, col, SnowCellKind::Bitmap);
-                let attr = self.snow_byte(attr_src, attr_off, line, col, SnowCellKind::Attr);
+                // Start from memory, prefer the byte the beam actually scanned for
+                // cells the CPU rewrote later in the frame (#379), and let snow
+                // (a ULA-fetch artefact) win over both.
+                let mut bits = bits_src.get(bitmap_off).copied().unwrap_or(0);
+                let mut attr = attr_src.get(attr_off).copied().unwrap_or(0);
+                if beam_shadow {
+                    bits = self.beam.bitmap_at(bitmap_off, bits);
+                    attr = self.beam.attr_at(py, col, attr);
+                }
+                if let Some(b) = self.snow_lookup(line, col, SnowCellKind::Bitmap) {
+                    bits = b;
+                }
+                if let Some(a) = self.snow_lookup(line, col, SnowCellKind::Attr) {
+                    attr = a;
+                }
                 let mut ink = attr & 7;
                 let mut paper = (attr >> 3) & 7;
                 let bright = attr & 0x40 != 0;
@@ -814,6 +959,123 @@ mod tests {
         assert_eq!(contention_delay_128(t + 128), 0);
         // Next display line starts 228 T later
         assert_eq!(contention_delay_128(t + T_LINE_128), 6);
+    }
+
+    /// Ink pixel at paper `(px, py)` for a rendered paper-only framebuffer.
+    fn paper_pixel(out: &[u8], px: usize, py: usize) -> [u8; 3] {
+        let i = (py * 256 + px) * 4;
+        [out[i], out[i + 1], out[i + 2]]
+    }
+
+    /// Screen with white-ink-on-black attrs everywhere and one solid bitmap byte.
+    fn screen_with_byte(off: usize, byte: u8) -> Vec<u8> {
+        let mut screen = vec![0u8; 6912];
+        screen[6144..6912].fill(0x07);
+        screen[off] = byte;
+        screen
+    }
+
+    #[test]
+    fn bitmap_erased_after_beam_still_renders_this_frame() {
+        // Single-buffer XOR games erase and redraw sprites while the frame is
+        // scanned. A sprite erased after the beam passed must still show, or it
+        // vanishes entirely (Arkanoid's bat — #379).
+        let off = 0; // paper line 0, col 0
+        let mut ula = Ula48::new();
+        ula.begin_frame();
+        let fetch_t = PAPER_START_48 + 3;
+        // Beam has passed the cell, then the CPU blanks it.
+        ula.note_screen_write(off, 0xff, fetch_t + 1, PAPER_START_48, T_LINE_48);
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba(&screen_with_byte(off, 0x00), &mut out, false);
+        assert_eq!(
+            paper_pixel(&out, 0, 0),
+            [0xd7, 0xd7, 0xd7],
+            "byte erased after the beam scanned it must still render as ink"
+        );
+    }
+
+    #[test]
+    fn bitmap_written_before_beam_renders_new_value() {
+        // The mirror case: a write that lands before the ULA fetch is displayed,
+        // so this must not freeze the old byte for the whole frame.
+        let off = 0;
+        let mut ula = Ula48::new();
+        ula.begin_frame();
+        let fetch_t = PAPER_START_48 + 3;
+        ula.note_screen_write(off, 0xff, fetch_t - 1, PAPER_START_48, T_LINE_48);
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba(&screen_with_byte(off, 0x00), &mut out, false);
+        assert_eq!(
+            paper_pixel(&out, 0, 0),
+            [0x00, 0x00, 0x00],
+            "write before the fetch must render the new byte"
+        );
+    }
+
+    #[test]
+    fn attr_rewrite_splits_char_row_at_the_beam() {
+        // Attributes are fetched once per paper line, so a mid-char-row rewrite
+        // shows the old colour above the beam and the new colour below.
+        let attr_off = 6144; // char row 0, col 0
+        let mut ula = Ula48::new();
+        ula.begin_frame();
+        // Beam is partway down char row 0: lines 0..=3 already fetched.
+        let frame_t = PAPER_START_48 + 4 * T_LINE_48 + 4;
+        ula.note_screen_write(attr_off, 0x02, frame_t, PAPER_START_48, T_LINE_48);
+        let mut screen = vec![0u8; 6912];
+        screen[6144..6912].fill(0x07);
+        // Solid bitmap on all 8 lines of char row 0, col 0.
+        for line in 0..8usize {
+            screen[line * 256] = 0xff;
+        }
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba(&screen, &mut out, false);
+        assert_eq!(
+            paper_pixel(&out, 0, 0),
+            [0xd7, 0x00, 0x00],
+            "lines already scanned keep the old attribute (red ink)"
+        );
+        assert_eq!(
+            paper_pixel(&out, 0, 7),
+            [0xd7, 0xd7, 0xd7],
+            "lines below the beam use the new attribute (white ink)"
+        );
+    }
+
+    #[test]
+    fn begin_frame_drops_previous_beam_shadow() {
+        let off = 0;
+        let mut ula = Ula48::new();
+        ula.begin_frame();
+        ula.note_screen_write(off, 0xff, PAPER_START_48 + 4, PAPER_START_48, T_LINE_48);
+        ula.begin_frame();
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba(&screen_with_byte(off, 0x00), &mut out, false);
+        assert_eq!(
+            paper_pixel(&out, 0, 0),
+            [0x00, 0x00, 0x00],
+            "a new frame must not keep last frame's beam bytes"
+        );
+    }
+
+    #[test]
+    fn beam_shadow_self_invalidates_on_frame_wrap() {
+        // `step_once` drivers never open a frame; a wrapped beam position must
+        // still drop stale shadow bytes rather than freezing the display.
+        let off = 0;
+        let mut ula = Ula48::new();
+        ula.begin_frame();
+        ula.note_screen_write(off, 0xff, PAPER_START_48 + 4, PAPER_START_48, T_LINE_48);
+        // Next frame, before paper: wrap detected, shadow dropped.
+        ula.note_screen_write(64, 0x00, 10, PAPER_START_48, T_LINE_48);
+        let mut out = vec![0u8; 256 * 192 * 4];
+        ula.render_rgba(&screen_with_byte(off, 0x00), &mut out, false);
+        assert_eq!(
+            paper_pixel(&out, 0, 0),
+            [0x00, 0x00, 0x00],
+            "frame wrap must invalidate the beam shadow"
+        );
     }
 
     #[test]

@@ -33,7 +33,7 @@ pub use timex_dock::{TimexDock, TimexDockChunk, TimexDockError};
 use thiserror::Error;
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
-    FRAME_TSTATES_48,
+    FRAME_TSTATES_48, PAPER_START_48, T_LINE_48,
 };
 
 /// Errors loading a fixed-size (or minimum-size) ROM / EEPROM image into the bus.
@@ -427,7 +427,15 @@ impl Bus48 {
             }
         }
         if addr >= 0x4000 && !(self.ram16k && addr >= 0x8000) {
-            self.ram[addr as usize - 0x4000] = value;
+            let off = addr as usize - 0x4000;
+            if off < 6912 {
+                let old = self.ram[off];
+                if old != value {
+                    self.ula
+                        .note_screen_write(off, old, self.frame_t, PAPER_START_48, T_LINE_48);
+                }
+            }
+            self.ram[off] = value;
         }
     }
 
@@ -1231,6 +1239,45 @@ mod tests {
         assert_eq!(b.contend_at(0x4000), 6);
         b.frame_t = ula::PAPER_START_48;
         assert_eq!(b.contend_at(0x4000), 0);
+    }
+
+    #[test]
+    fn sprite_erased_after_beam_still_renders_this_frame() {
+        // End-to-end for the single-buffer XOR pattern: draw a sprite byte, let
+        // the beam scan it, erase it later in the same frame. The rendered frame
+        // must still show it — rendering end-of-frame memory dropped it entirely
+        // (Arkanoid's bat, #379).
+        let mut b = Bus48::new();
+        b.ula.begin_frame();
+        b.frame_t = 0;
+        // Attrs: white ink on black paper across the screen.
+        for off in 6144..6912u16 {
+            b.write(0x4000 + off, 0x07);
+        }
+        // Draw at paper line 0, col 0 before the beam gets there.
+        b.write(0x4000, 0xff);
+        // Beam scans paper line 0 …
+        b.frame_t = ula::PAPER_START_48 + 8;
+        // … then the game erases the sprite during the rest of the frame.
+        b.write(0x4000, 0x00);
+        assert_eq!(b.screen_bytes()[0], 0x00, "memory really is erased");
+
+        let mut out = vec![0u8; 256 * 192 * 4];
+        b.ula.render_rgba(b.screen_bytes(), &mut out, false);
+        assert_eq!(
+            [out[0], out[1], out[2]],
+            [0xd7, 0xd7, 0xd7],
+            "sprite scanned by the beam must render even though memory is now clear"
+        );
+
+        // Next frame with no redraw: the sprite is genuinely gone.
+        b.ula.begin_frame();
+        b.ula.render_rgba(b.screen_bytes(), &mut out, false);
+        assert_eq!(
+            [out[0], out[1], out[2]],
+            [0x00, 0x00, 0x00],
+            "shadow must not persist into the next frame"
+        );
     }
 
     #[test]
