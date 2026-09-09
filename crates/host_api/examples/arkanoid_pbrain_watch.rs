@@ -224,7 +224,8 @@ fn main() {
         let pulse_every: u32 = env::var("SPEC_CHUM_FIRE_PULSE")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(64);
+            .unwrap_or(64)
+            .max(1);
 
         for i in 0..phase2_budget {
             // After the title `$8224` gate passes, soak on run_frame so turbo
