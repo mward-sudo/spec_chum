@@ -56,6 +56,13 @@ fn word(m: &machine::Machine, a: u16) -> u16 {
     u16::from(m.read_mem(a)) | (u16::from(m.read_mem(a.wrapping_add(1))) << 8)
 }
 
+/// Post-#388 playable markers: main loop at `$83DF`/`$841x` with `($8403)=$8DF1`
+/// and live `$94C4`/`$94DD`. `IFF1` stays 0 under DI polling — do not require it.
+fn arkanoid_game_entry(pc: u16, vec8403: u16, c4: u16, dd: u8) -> bool {
+    let in_main = (0x83DF..=0x83FF).contains(&pc) || (0x8410..=0x8428).contains(&pc);
+    vec8403 == 0x8DF1 && in_main && (c4 != 0 || dd != 0)
+}
+
 fn hex_range(m: &machine::Machine, base: u16, n: u16) -> String {
     (0..n)
         .map(|i| format!("{:02x}", m.read_mem(base.wrapping_add(i))))
@@ -278,11 +285,18 @@ fn main() {
                         }
                     }
                 }
-                if iff1 {
-                    eprintln!(
-                        "GAME ENTRY +{frames}f pc={pc:#06x} taps={space_taps} $94C5={c5:#04x} ($8403)={vec8403:#06x}"
-                    );
-                    break;
+                {
+                    let (c4, dd) = {
+                        let m = s.machine().expect("m");
+                        (word(m, 0x94C4), m.read_mem(0x94DD))
+                    };
+                    if arkanoid_game_entry(pc, vec8403, c4, dd) {
+                        eprintln!(
+                            "GAME ENTRY +{frames}f pc={pc:#06x} taps={space_taps} $94C5={c5:#04x} $94C4={c4:#06x} $94DD={dd:#04x} ($8403)={vec8403:#06x} iff1={}",
+                            u8::from(iff1)
+                        );
+                        break;
+                    }
                 }
                 if frames.is_multiple_of(500) {
                     let (c4, dc, db, dd) = {
@@ -333,11 +347,18 @@ fn main() {
             };
 
             frames += 1;
-            if iff1_now {
-                eprintln!(
-                    "GAME ENTRY +{frames}f pc={pc_now:#06x} attract={attract_polls} fire={fire_hits} taps={space_taps} $94C5={c5:#04x}"
-                );
-                break;
+            {
+                let (c4, dd) = {
+                    let m = s.machine().expect("m");
+                    (word(m, 0x94C4), m.read_mem(0x94DD))
+                };
+                if arkanoid_game_entry(pc_now, vec8403, c4, dd) {
+                    eprintln!(
+                        "GAME ENTRY +{frames}f pc={pc_now:#06x} attract={attract_polls} fire={fire_hits} taps={space_taps} $94C5={c5:#04x} $94C4={c4:#06x} $94DD={dd:#04x} ($8403)={vec8403:#06x} iff1={}",
+                        u8::from(iff1_now)
+                    );
+                    break;
+                }
             }
 
             match &reason {
@@ -506,12 +527,17 @@ fn main() {
                                 m.debugger_mut().paused = false;
                             }
                             let br = m.run_until_break(128);
-                            if m.cpu().regs.iff1 {
-                                eprintln!(
-                                    "GAME ENTRY during fire pulse pc={:#06x}",
-                                    m.cpu().regs.pc
-                                );
-                                break;
+                            {
+                                let pc_p = m.cpu().regs.pc;
+                                let v8403 = word(m, 0x8403);
+                                let c4 = word(m, 0x94C4);
+                                let dd = m.read_mem(0x94DD);
+                                if arkanoid_game_entry(pc_p, v8403, c4, dd) {
+                                    eprintln!(
+                                        "GAME ENTRY during fire pulse pc={pc_p:#06x} $94C4={c4:#06x} $94DD={dd:#04x} ($8403)={v8403:#06x}"
+                                    );
+                                    break;
+                                }
                             }
                             if matches!(br, BreakReason::Pc(0x8E2D | 0x8DF1 | 0xF2AC)) {
                                 eprintln!("fire pulse hit {br:?} pc={:#06x}", m.cpu().regs.pc);
