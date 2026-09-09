@@ -1813,9 +1813,24 @@ impl Machine {
             if self.in_speedlock_key_gate() {
                 return 1;
             }
-            return speed;
+            return speed.saturating_mul(Self::speedlock_soak_boost());
         }
         1
+    }
+
+    /// Opt-in extra Spectrum frames per host tick while in post-tape DI
+    /// protection, for offline soaks (`SPEC_CHUM_SPEEDLOCK_BOOST=<1..=16>`).
+    ///
+    /// Default **1** (off): unlike EAR turbo, this multiplies the work done in a
+    /// single [`Machine::run_frame`] call, so a large value stalls the host UI
+    /// for that tick. Probes that need Spectrum-hours of protection time set it;
+    /// interactive hosts leave it alone (#379).
+    fn speedlock_soak_boost() -> u32 {
+        std::env::var("SPEC_CHUM_SPEEDLOCK_BOOST")
+            .ok()
+            .and_then(|v| v.trim().parse::<u32>().ok())
+            .unwrap_or(1)
+            .clamp(1, 16)
     }
 
     /// Speedlock-style post-tape DI delay: deck exhausted, interrupts still off,
@@ -6350,6 +6365,64 @@ mod tests {
             "IFF1 set must drop turbo to ~1× (#178), got {dt1}"
         );
         assert!(!m.in_post_tape_di_delay());
+    }
+
+    #[test]
+    fn speedlock_post_tape_di_keeps_turbo_while_key_gate_yields() {
+        // Post-tape DI protection keeps the full Play-turbo rate so the delay
+        // nest does not crawl at 1×, while the outer `$8224` key gate drops to
+        // 1× so chrome / auto-ack can observe it (#379).
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x00, 0xff]],
+            ..Default::default()
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 16,
+            ..Default::default()
+        });
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        for _ in 0..20_000 {
+            let _ = m.run_frame();
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        assert!(m.tape_finished() || !m.tape_playing());
+
+        m.cpu_mut().regs.iff1 = false;
+        m.cpu_mut().regs.iff2 = false;
+        m.cpu_mut().regs.sp = 0xFDDF;
+        m.write_mem(0xFDDF, 0xD1); // ret $F3D1 → DelayF448
+        m.write_mem(0xFDE0, 0xF3);
+        m.cpu_mut().regs.pc = 0xF448;
+        m.write_mem(0xF448, 0x18); // JR 0
+        m.write_mem(0xF449, 0xFE);
+        assert_eq!(m.speedlock_stage(), SpeedlockStage::DelayF448);
+        let t0 = m.cpu().t;
+        let _ = m.run_frame();
+        let delay_dt = m.cpu().t.saturating_sub(t0);
+
+        // Outer key-gate yields to 1× so chrome can show “tap a key”.
+        m.cpu_mut().regs.pc = 0xF3D1;
+        m.write_mem(0xF3D1, 0x18);
+        m.write_mem(0xF3D2, 0xFE);
+        assert!(m.in_speedlock_key_gate());
+        let t1 = m.cpu().t;
+        let _ = m.run_frame();
+        let gate_dt = m.cpu().t.saturating_sub(t1);
+
+        assert!(
+            delay_dt > gate_dt.saturating_mul(8),
+            "post-tape DI should stay at Play turbo vs key-gate 1× \
+             (delay={delay_dt} gate={gate_dt})"
+        );
     }
 
     #[test]
