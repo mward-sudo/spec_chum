@@ -308,6 +308,8 @@ pub struct SpeedlockWatch {
     pub stage_changes: u32,
     /// Spectrum frames spent in [`Self::stage`] (via `run_one_frame`).
     pub frames_in_stage: u64,
+    /// Turbo auto-ack injected Space (row 7 bit 0); cleared when not matching.
+    turbo_space_injected: bool,
 }
 
 impl Default for TapeLoadOptions {
@@ -1922,16 +1924,10 @@ impl Machine {
         let sp = self.cpu().regs.sp;
         let ret =
             u16::from(self.read_mem(sp)) | (u16::from(self.read_mem(sp.wrapping_add(1))) << 8);
+        // Count every transition into the F448 nest (incl. from OtherHighDi).
         let entering_f408 = stage == SpeedlockStage::DelayF448
             && ret == 0xF3D1
-            && matches!(
-                self.speedlock_watch().stage,
-                SpeedlockStage::None
-                    | SpeedlockStage::KeyGate
-                    | SpeedlockStage::Continue8230
-                    | SpeedlockStage::Decrypt93
-                    | SpeedlockStage::InterruptsOn
-            );
+            && self.speedlock_watch().stage != SpeedlockStage::DelayF448;
         let watch = self.speedlock_watch_mut();
         if stage == watch.stage {
             watch.frames_in_stage = watch.frames_in_stage.saturating_add(1);
@@ -1960,9 +1956,12 @@ impl Machine {
     ///
     /// Optional `SPEC_CHUM_SPEEDLOCK_SNAP=1` snaps `$F448`→`$F476` (corrupt on
     /// Arkanoid — kept for H4 A/B only). Realtime (`speed == 1`) is unchanged.
+    /// Injected Space is released once the gate/delay pattern no longer matches
+    /// so the matrix is not left latched after the ack.
     fn maybe_accelerate_speedlock_delay(&mut self) {
         let speed = self.tape_load_options().speed.clamp(1, 64);
         if speed <= 1 || !self.in_post_tape_di_delay() {
+            self.release_speedlock_turbo_space();
             return;
         }
         let pc = self.cpu().regs.pc;
@@ -1973,7 +1972,7 @@ impl Machine {
         if Self::speedlock_snap_enabled() && ret == 0xF3D1 && (0xF408..=0xF476).contains(&pc) {
             self.cpu_mut().regs.pc = 0xF476;
             self.cpu_mut().regs.set_bc(0);
-            self.keyboard_mut().set_key(7, 0, true);
+            self.inject_speedlock_turbo_space();
             return;
         }
 
@@ -1981,8 +1980,23 @@ impl Machine {
             || ((0x8224..=0x822F).contains(&pc) && ret == 0xF3D4)
             || (pc == 0xF476 && ret == 0xF3D1)
         {
-            self.keyboard_mut().set_key(7, 0, true);
+            self.inject_speedlock_turbo_space();
+        } else {
+            self.release_speedlock_turbo_space();
         }
+    }
+
+    fn inject_speedlock_turbo_space(&mut self) {
+        self.keyboard_mut().set_key(7, 0, true);
+        self.speedlock_watch_mut().turbo_space_injected = true;
+    }
+
+    fn release_speedlock_turbo_space(&mut self) {
+        if !self.speedlock_watch().turbo_space_injected {
+            return;
+        }
+        self.keyboard_mut().set_key(7, 0, false);
+        self.speedlock_watch_mut().turbo_space_injected = false;
     }
 
     /// True when an inserted deck has exhausted its bitstream / blocks.
@@ -6419,6 +6433,62 @@ mod tests {
             (0x8000..=0x8001).contains(&m.cpu().regs.pc),
             "stub should RET to parked $8000; pc={:#06x}",
             m.cpu().regs.pc
+        );
+        // Next frame clears the inject once post-tape DI delay has ended.
+        let _ = m.run_frame();
+        assert!(
+            !m.speedlock_watch().turbo_space_injected,
+            "turbo Space inject flag should clear after gate exit"
+        );
+        assert_eq!(
+            m.keyboard_mut().read(0x7f),
+            0x1f,
+            "row 7 (Space) must be released after turbo gate ack"
+        );
+    }
+
+    #[test]
+    fn speedlock_f408_entries_count_from_other_high_di() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let img = TapImage {
+            blocks: vec![vec![0xff, 0x00, 0xff]],
+            ..Default::default()
+        };
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.set_tape_load_options(TapeLoadOptions {
+            flash_load: false,
+            speed: 64,
+            ..Default::default()
+        });
+        m.insert_tape(TapPlayer::new(img));
+        m.set_tape_playing(true);
+        for _ in 0..20_000 {
+            let _ = m.run_frame();
+            if m.tape_finished() || !m.tape_playing() {
+                break;
+            }
+        }
+        assert!(m.tape_finished() || !m.tape_playing());
+
+        m.cpu_mut().regs.iff1 = false;
+        m.cpu_mut().regs.pc = 0x9000;
+        m.cpu_mut().regs.sp = 0xFDDF;
+        m.write_mem(0xFDDF, 0xD1);
+        m.write_mem(0xFDE0, 0xF3);
+        m.update_speedlock_watch();
+        assert_eq!(m.speedlock_stage(), SpeedlockStage::OtherHighDi);
+        assert_eq!(m.speedlock_stage_count(), 0);
+
+        m.cpu_mut().regs.pc = 0xF448;
+        m.update_speedlock_watch();
+        assert_eq!(m.speedlock_stage(), SpeedlockStage::DelayF448);
+        assert_eq!(
+            m.speedlock_stage_count(),
+            1,
+            "OtherHighDi → DelayF448 with ret F3D1 must count as an F448 entry"
         );
     }
 
