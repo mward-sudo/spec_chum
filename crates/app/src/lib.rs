@@ -2404,9 +2404,10 @@ impl SpecChumApp {
                         ui.separator();
                         if ui
                             .button("Instant…")
-                            .on_hover_text(
-                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Decks with a custom loader (pulse TZX) have no flash trap and load off EAR at 64× instead — never at the EAR speed below. Play alone stays EAR-only. Use File → Open DSK for disks.",
-                            )
+                            .on_hover_text(format!(
+                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Decks with a custom loader (pulse TZX) have no flash trap and load off EAR at {}× instead — never at the EAR speed below. Play alone stays EAR-only. Use File → Open DSK for disks.",
+                                machine::INSTANT_EAR_FALLBACK_SPEED,
+                            ))
                             .clicked()
                         {
                             // Tape-only: Instant never fakes Type LOAD for DSK.
@@ -2437,9 +2438,10 @@ impl SpecChumApp {
                                             Some("Tape: experience load (~20s EAR)".into());
                                         tape_prefs_changed = true;
                                     }
-                                    ui.label("EAR speed:").on_hover_text(
-                                        "Play (EAR) loading only — the loaded program always runs at 1×. Instant ignores this: flashable decks poke bytes at LD-BYTES, custom-loader decks load off EAR at 64×.",
-                                    );
+                                    ui.label("EAR speed:").on_hover_text(format!(
+                                        "Play (EAR) loading only — the loaded program always runs at 1×. Instant ignores this: flashable decks poke bytes at LD-BYTES, custom-loader decks load off EAR at {}×.",
+                                        machine::INSTANT_EAR_FALLBACK_SPEED,
+                                    ));
                                     for speed in [1u32, 2, 5, 10, 20, 64] {
                                         let selected =
                                             !opts.experience_load && opts.speed == speed;

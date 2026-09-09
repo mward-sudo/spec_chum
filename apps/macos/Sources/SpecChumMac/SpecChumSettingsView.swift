@@ -28,7 +28,7 @@ struct SpecChumSettingsView: View {
                     Text("64x").tag(UInt32(64))
                 }
                 .help("While Play: N Spectrum frames per tick (wall-clock ≈ realtime/N). Applies to loading only — once the deck finishes the loaded program runs at 1×. Instant ignores this.")
-                Text("Toolbar Instant always opens a TAP/TZX panel, then flash-loads. Decks with a custom loader (pulse TZX) have no flash trap and load off EAR at 64× instead — never at the speed above. Play alone stays on the EAR path at this speed. Disk images use Open Tape / Disk — Instant does not Type LOAD for DSK.")
+                Text("Toolbar Instant always opens a TAP/TZX panel, then flash-loads. Decks with a custom loader (pulse TZX) have no flash trap and load off EAR at \(HostBridge.instantEarFallbackSpeed)× instead — never at the speed above. Play alone stays on the EAR path at this speed. Disk images use Open Tape / Disk — Instant does not Type LOAD for DSK.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Look up tape titles online (ZXInfo)", isOn: $host.onlineTapeTitles)

@@ -170,7 +170,7 @@ extension HostBridge {
 
     /// Chrome for Instant on a deck the LD-BYTES trap cannot serve.
     var instantEarFallbackStatus: String {
-        "custom loader (no flash trap) — EAR at \(sc_instant_ear_fallback_speed())×"
+        "custom loader (no flash trap) — EAR at \(HostBridge.instantEarFallbackSpeed)×"
     }
 
     func beginTypeLoadQuotes(withCode: Bool, pendingPlay: Bool) {
