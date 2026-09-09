@@ -178,7 +178,7 @@ fn main() {
                 eprintln!(
                     "+{i}f ($94F6)={ptr:#06x} delta={} to_9570={} pc={:#06x} iff1={}",
                     ptr.wrapping_sub(prev) as i16,
-                    0x956Fu16.wrapping_sub(ptr) as i32,
+                    i32::from(0x956F) - i32::from(ptr),
                     m.cpu().regs.pc,
                     u8::from(m.cpu().regs.iff1),
                 );

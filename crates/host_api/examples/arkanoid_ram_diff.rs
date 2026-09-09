@@ -120,8 +120,11 @@ fn main() {
     report_sig("fuse ", &fuse_ram);
     report_sig("spec ", &sc_ram);
 
-    // Contiguous differing runs, excluding the screen/attr area which both sides
-    // keep repainting while the protection loop runs.
+    // Contiguous differing runs over the *whole* $4000-$FFFF image, screen and
+    // attrs included. Excluding display RAM would be the obvious way to reduce
+    // noise, but finding zero differing runs there is exactly the evidence this
+    // probe exists to produce: it shows the EAR path painted the same bitmap
+    // Fuse did, so the loading screen is not where #379 goes wrong.
     let mut diffs = 0usize;
     let mut runs = 0usize;
     let mut start: Option<usize> = None;
