@@ -100,22 +100,88 @@ vs key-gate (D vs E). Optional `SPEC_CHUM_SPEEDLOCK_SNAP=1` snaps `$F448`→`$F4
 for H4 A/B only (default **off** — full snap caused `$837B`↔`$F408` loops).
 Prefer EAR **64×**; chrome shows stage-aware “Speedlock delay… / decrypt…”.
 
-### Fuse Oracle C (#379)
+Post-tape DI protection keeps the full Play-turbo rate (the key gate still drops
+to 1×). `SPEC_CHUM_SPEEDLOCK_BOOST=<1..=16>` multiplies that rate for offline
+soaks only and defaults to **1**: unlike EAR turbo it multiplies the work inside
+one `run_frame` call, so a large value stalls the host UI for that tick.
 
-Fuse (accelerate loaders + high %) reaches Arkanoid’s high-score screen while
-the CPU can still sit in `$F44x` with `IFF1=0` (screen RAM already painted). A
-Fuse mid-delay `.szx` converted to `.z80` and loaded into Spec Chum still
-oscillates `delay-f448` ↔ `decrypt-93` without `IFF1` inside a ~15–20k @64×
-soak — same class of behaviour as the EAR path after #383. That points past
-“load-path only” toward **post-load delay/decrypt execution** (and/or the need
-for Fuse-style Speedlock delay acceleration beyond the unsafe full `$F476`
-snap).
+### The load path is not the defect (#379)
+
+`arkanoid_ram_diff` loads `Arkanoid.tzx` through Spec Chum’s EAR path and diffs
+the resulting `$4000-$FFFF` image against a Fuse snapshot of the **same** tape:
+
+- **42 differing bytes out of 49152**, in 22 short runs.
+- Every run is loader scratch (`$94C8-$94F8`, `$956D`, `$9F03`, `$F13A-$F148`,
+  `$F3D9-$F3E0`, `$FDDE`, `$FFBE`) or BASIC system vars (`$5C02-$5C78`) — i.e.
+  state that legitimately differs between two sample points of the same loop.
+- No differing run anywhere in the loaded code or screen bitmap.
+
+So the TZX/EAR bitstream is decoded correctly and **the remaining #379 failure is
+post-load protection execution**, not tape decoding. Retire load-path hypotheses.
+
+### Decoded Speedlock 2 protection (#379)
+
+`arkanoid_stub_trace` breaks on the decision points (frame sampling only ever
+caught the delay nest) and disassembles the live, already-decrypted bytes:
+
+```text
+8138  LD ($94C8),SP        ; outer driver
+813C  LD A,$04
+813E  LD ($9F03),A         ; run the stub 4×
+8141  CALL $F3C1
+8144  DI
+8145  LD A,($9F03) / DEC A / LD ($9F03),A
+814C  JR NZ,$8141
+814E  LD ($956F),A         ; A = 0 → clears the “signature seen” flag
+
+F3CD  DI
+F3CE  CALL $F408           ; long border-delay nest ($F448 … RET $F476)
+F3D1  CALL $8224           ; any-key gate
+F3D4  INC E
+F3D5  JR Z,$F3CE           ; E=$FF ⇒ spin forever
+
+8211  IN A,(C) / OR $E0 / INC A       ; wait for key *release*, then
+821B  LD ($F3D2),BC        ; repoint the CALL at $F3D1 to $8224
+821F  POP AF / POP BC / LD E,$FF / RET
+
+8224  LD BC,$00FE / IN A,(C) / OR $E0 / INC A
+822E  JR Z,$821F           ; no key ⇒ E=$FF ⇒ spin
+8230  LD HL,($94F6) / INC HL
+823A  LD DE,$9570 / LD B,$06
+823F  LD A,(DE) / CP (HL) / JR NZ,$824A / INC HL / INC DE / DJNZ
+8247  LD ($956F),A         ; only when all six bytes match
+824A  LD SP,($94C8)        ; stack switch — never returns to $F3D4
+824E  LD A,($956F) / OR A / JR Z,$8280   ; miss ⇒ wipe screen, retry
+```
+
+The six expected bytes at `$9570` are ASCII **`"PBRAIN"`**. The gate therefore
+only clears when `"PBRAIN"` sits at `($94F6)+1`. Measured behaviour:
+
+- `($94F6)` is a **screen cursor**, ping-ponging around `$4E00-$58FF` (deltas of
+  ±200 and ±2500 per 25 host frames). It is not a search that converges.
+- `"PBRAIN"` occurs exactly once in RAM — in the `$9570` expected-value table
+  itself — in **both** the Spec Chum and Fuse images.
+- `$956F` is 0 in both images, so both take the `$8280` miss path.
+
+That is why the soak oscillates `delay-f448` ↔ `decrypt-93`: the miss path at
+`$8280` wipes the screen (`$8368` fills `$4000-$5AFF`, attrs `$47`) and re-enters
+the delay. Reaching `IFF1` needs whatever makes that compare succeed — still
+open. Fuse’s mid-delay snapshot is in the *same* state, so a post-`IFF1` Fuse
+snap (not another mid-delay one) is the oracle worth capturing next.
 
 Local helpers (not CI — copyrighted media / large artifacts stay under `tmp/`):
 
 ```bash
 # EAR stage soak (needs ~/Downloads/Arkanoid.tzx)
 cargo run -p host_api --release --example arkanoid_delay_probe -- ~/Downloads/Arkanoid.tzx 25000
+
+# Decision-point breakpoints + live disassembly of the protection
+cargo run -p host_api --release --example arkanoid_stub_trace -- ~/Downloads/Arkanoid.tzx 40
+# …or `0` for cursor mode (watch ($94F6) vs the $9570 table)
+
+# Prove the load path: Spec Chum EAR image vs a Fuse snapshot of the same tape
+cargo run -p host_api --release --example arkanoid_ram_diff -- \
+  tmp/fuse_oracle/arkanoid_fuse_postload.z80 ~/Downloads/Arkanoid.tzx
 
 # Fuse snap → Spec Chum (after converting Fuse .szx → .z80)
 cargo run -p host_api --release --example fuse_oracle_probe -- \
