@@ -5,7 +5,7 @@
 //! background restore erases the bat without a correct redraw.
 //!
 //! ```bash
-//! SPEC_CHUM_SPEEDLOCK_BOOST=16 cargo run -p host_api --release \
+//! cargo run -p host_api --release \
 //!   --example arkanoid_paddle_probe -- ~/Downloads/Arkanoid.tzx
 //! ```
 //!
@@ -330,13 +330,13 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
         return false;
     }
 
-    // Phase 2: pure `run_frame` soak so Speedlock turbo can inject Space across
-    // the `$8224` IN (#388). Debugger port watches break that path.
+    // Phase 2: pure `run_frame` soak — the probe taps keys itself for the
+    // `$8224` gate. Debugger port watches break that path.
     {
         let m = s.machine_mut().expect("m");
         m.debugger_mut().clear_breaks();
         m.debugger_mut().paused = false;
-        // Never hold keys through `$F448` — release everything; turbo owns the gate.
+        // Start from a clean matrix; the loop below taps the gate.
         for row in 0..8usize {
             for bit in 0..5u8 {
                 m.keyboard_mut().set_key(row, bit, false);
@@ -368,13 +368,10 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
         let dd = m.read_mem(0x94DD);
         if v8403 == 0x8DF1 && !saw_8df1 {
             saw_8df1 = true;
-            eprintln!(
-                "vec $8403=$8DF1 +{frames}f pc={pc:#06x} $94C4={c4:#06x} stage={}",
-                m.speedlock_stage().as_str()
-            );
+            eprintln!("vec $8403=$8DF1 +{frames}f pc={pc:#06x} $94C4={c4:#06x}");
             // The bat is drawn in the pre-ball / serve-ready state and vanishes
-            // once the ball is live, so hand over to the 1× play loop straight
-            // away instead of soaking further under Speedlock turbo (#379).
+            // once the ball is live, so hand over to the play loop straight
+            // away (#379).
             if env::var_os("SPEC_CHUM_ARKANOID_AT_VEC").is_some() {
                 let mut opts = m.tape_load_options();
                 opts.speed = 1;
@@ -404,8 +401,7 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
         }
         if frames.is_multiple_of(100) {
             eprintln!(
-                "entry soak +{frames}f pc={pc:#06x} changed={changed} ($8403)={v8403:#06x} $94C4={c4:#06x} stage={}",
-                m.speedlock_stage().as_str()
+                "entry soak +{frames}f pc={pc:#06x} changed={changed} ($8403)={v8403:#06x} $94C4={c4:#06x}"
             );
         }
         let _ = io::stderr().flush();

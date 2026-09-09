@@ -16,9 +16,7 @@ use std::time::{Duration, Instant};
 
 use control_plane::ControlPlane;
 use eframe::egui;
-use machine::{
-    AyStereoMode, JoystickMode, JoystickState, Machine, Model, SpeedlockStage, TapeLoadOptions,
-};
+use machine::{AyStereoMode, JoystickMode, JoystickState, Machine, Model, TapeLoadOptions};
 use spec_chum_host::{
     apply_user_config, default_prefs_path, hardware_compat, install_model_rom, load_prefs,
     model_requires_user_rom, model_rom_available, rom_setup_json, save_prefs,
@@ -536,16 +534,23 @@ impl EmulatorSession {
 
     /// Instant load: open a tape image, enable flash-load, Type LOAD "" (PROGRAM), then Play.
     /// UI always prompts for a path first (`instant_load_path`). If already at LD-BYTES, Play immediately.
+    ///
+    /// Decks with no LD-BYTES trap to poke (pulse TZX) load off EAR at
+    /// [`machine::INSTANT_EAR_FALLBACK_SPEED`] — still fast, and the status says
+    /// so rather than claiming a flash-load that cannot happen (#390).
     pub fn instant_load_tape(&mut self) {
         let check = {
             let host = &*self.host_mut();
             match host.machine() {
                 None => None,
                 Some(m) if !m.has_tape() => Some(None),
-                Some(m) => Some(Some(m.cpu().regs.pc == tape::LD_BYTES_TRAP_PC)),
+                Some(m) => Some(Some((
+                    m.cpu().regs.pc == tape::LD_BYTES_TRAP_PC,
+                    m.tape_supports_flash_load(),
+                ))),
             }
         };
-        let at_ld_bytes = match check {
+        let (at_ld_bytes, can_flash) = match check {
             None => {
                 self.host_mut().set_status("Instant: no machine");
                 return;
@@ -554,20 +559,37 @@ impl EmulatorSession {
                 self.host_mut().set_status("Instant: insert a tape first");
                 return;
             }
-            Some(Some(at)) => at,
+            Some(Some(state)) => state,
         };
         self.force_flash_load(true);
         if at_ld_bytes {
             self.pending_instant_play = false;
             self.play_tape_keeping_options();
-            self.host_mut()
-                .set_status("Instant: flash-loading at LD-BYTES");
+            self.host_mut().set_status(if can_flash {
+                "Instant: flash-loading at LD-BYTES".to_owned()
+            } else {
+                Self::instant_ear_fallback_status()
+            });
             return;
         }
 
         self.type_load_quotes_inner(false, true);
-        self.host_mut()
-            .set_status("Instant: typing LOAD \"\" then flash-load Play");
+        self.host_mut().set_status(if can_flash {
+            "Instant: typing LOAD \"\" then flash-load Play".to_owned()
+        } else {
+            format!(
+                "Instant: typing LOAD \"\" — {}",
+                Self::instant_ear_fallback_status()
+            )
+        });
+    }
+
+    /// Chrome for Instant on a deck the LD-BYTES trap cannot serve.
+    fn instant_ear_fallback_status() -> String {
+        format!(
+            "custom loader (no flash trap) — EAR at {}×",
+            machine::INSTANT_EAR_FALLBACK_SPEED
+        )
     }
 
     /// Always-prompt Instant: insert the chosen image, then flash + Type LOAD + Play.
@@ -685,8 +707,15 @@ impl EmulatorSession {
         }
         self.pending_instant_play = false;
         self.play_tape_keeping_options();
-        self.host_mut()
-            .set_status("Instant: flash-loading after LOAD \"\"");
+        let can_flash = self
+            .host_mut()
+            .machine()
+            .is_some_and(Machine::tape_supports_flash_load);
+        self.host_mut().set_status(if can_flash {
+            "Instant: flash-loading after LOAD \"\"".to_owned()
+        } else {
+            format!("Instant: {}", Self::instant_ear_fallback_status())
+        });
     }
 
     pub fn load_rzx(&mut self, path: &Path) {
@@ -2375,9 +2404,10 @@ impl SpecChumApp {
                         ui.separator();
                         if ui
                             .button("Instant…")
-                            .on_hover_text(
-                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Play alone stays EAR-only. Use File → Open DSK for disks.",
-                            )
+                            .on_hover_text(format!(
+                                "Always asks for a TAP/TZX, then flash-loads (Type LOAD \"\" + Play). Decks with a custom loader (pulse TZX) have no flash trap and load off EAR at {}× instead — never at the EAR speed below. Play alone stays EAR-only. Use File → Open DSK for disks.",
+                                machine::INSTANT_EAR_FALLBACK_SPEED,
+                            ))
                             .clicked()
                         {
                             // Tape-only: Instant never fakes Type LOAD for DSK.
@@ -2408,7 +2438,10 @@ impl SpecChumApp {
                                             Some("Tape: experience load (~20s EAR)".into());
                                         tape_prefs_changed = true;
                                     }
-                                    ui.label("EAR speed:");
+                                    ui.label("EAR speed:").on_hover_text(format!(
+                                        "Play (EAR) loading only — the loaded program always runs at 1×. Instant ignores this: flashable decks poke bytes at LD-BYTES, custom-loader decks load off EAR at {}×.",
+                                        machine::INSTANT_EAR_FALLBACK_SPEED,
+                                    ));
                                     for speed in [1u32, 2, 5, 10, 20, 64] {
                                         let selected =
                                             !opts.experience_load && opts.speed == speed;
@@ -2563,47 +2596,25 @@ of their copyrighted material but retain that copyright.",
                                 .desired_width(120.0)
                                 .show_percentage(),
                         );
-                        let stage = self
+                        ui.label(format!(
+                            "tape {}/{}",
+                            if p.block_count == 0 {
+                                0
+                            } else {
+                                p.block_index.saturating_add(1).min(p.block_count)
+                            },
+                            p.block_count
+                        ));
+                        // The rate actually being run, not the EAR speed setting:
+                        // turbo stops when the deck finishes (#390).
+                        let effective = self
                             .session
                             .host_mut()
                             .machine()
-                            .map_or(SpeedlockStage::None, Machine::speedlock_stage);
-                        let f408 = self
-                            .session
-                            .host_mut()
-                            .machine()
-                            .map_or(0, Machine::speedlock_stage_count);
-                        match stage {
-                            SpeedlockStage::KeyGate => {
-                                ui.label("Speedlock — tap a key");
-                            }
-                            SpeedlockStage::DelayF448 => {
-                                if f408 > 1 {
-                                    ui.label(format!("Speedlock delay… (#{f408})"));
-                                } else {
-                                    ui.label("Speedlock delay…");
-                                }
-                            }
-                            SpeedlockStage::Decrypt93 | SpeedlockStage::Continue8230 => {
-                                ui.label("Speedlock decrypt…");
-                            }
-                            SpeedlockStage::TitleAttract => {
-                                ui.label("Title / high score…");
-                            }
-                            SpeedlockStage::OtherHighDi => {
-                                ui.label("Speedlock delay…");
-                            }
-                            _ => {
-                                ui.label(format!(
-                                    "tape {}/{}",
-                                    if p.block_count == 0 {
-                                        0
-                                    } else {
-                                        p.block_index.saturating_add(1).min(p.block_count)
-                                    },
-                                    p.block_count
-                                ));
-                            }
+                            .map_or(1, Machine::effective_speed_multiplier);
+                        if effective > 1 {
+                            ui.strong(format!("{effective}×"))
+                                .on_hover_text("Spectrum frames per host tick while the tape plays");
                         }
                     } else if has_tape {
                         if let Some(ref title) = tape_title {

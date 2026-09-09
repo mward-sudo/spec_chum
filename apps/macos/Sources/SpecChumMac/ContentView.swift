@@ -128,7 +128,7 @@ struct ContentView: View {
             } label: {
                 Label("Instant", systemImage: "bolt.fill")
             }
-            .help("Always asks for a tape image, then flash-loads (Type LOAD \"\" + Play)")
+            .help("Always asks for a tape image, then flash-loads (Type LOAD \"\" + Play). Custom-loader decks have no flash trap and load off EAR at \(HostBridge.instantEarFallbackSpeed)× instead.")
             .accessibilityLabel("Instant load")
         }
 
@@ -468,7 +468,7 @@ struct ContentView: View {
             .labelsHidden()
             .fixedSize()
             .controlSize(.mini)
-            .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick (64× helps Speedlock delays)")
+            .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick while a tape plays (loading only — the loaded program always runs at 1×)")
             .accessibilityLabel("Tape load mode")
             .accessibilityValue(tapeLoadModeAccessibilityValue)
         }

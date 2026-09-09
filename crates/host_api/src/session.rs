@@ -2021,11 +2021,32 @@ mod tests {
         assert!(s.status().contains("TZX") || s.media_title().is_some());
     }
 
-    /// First Speedlock DI delay stage must RET (~$F476) under Play turbo (#379).
-    /// Full multi-stage nest → IFF1/game entry is much longer; not asserted here.
-    #[ignore = "local Arkanoid fixture; ~5min @64× for first delay RET"]
+    /// Spectrum seconds until the guest sets `IFF1`, stepping instructions.
+    ///
+    /// Speedlock re-enables interrupts only briefly, so sampling `iff1` at frame
+    /// boundaries walks straight past it (#390).
+    fn step_until_iff1(s: &mut HostSession, budget_frames: u64) -> Option<f64> {
+        const T_PER_FRAME: u64 = 69_888;
+        let m = s.machine.as_mut().expect("machine");
+        let t0 = m.cpu().t;
+        while m.cpu().t.saturating_sub(t0) < budget_frames * T_PER_FRAME {
+            m.step_once();
+            if m.cpu().regs.iff1 {
+                let dt = m.cpu().t.saturating_sub(t0);
+                return Some(dt as f64 / (T_PER_FRAME * 50) as f64);
+            }
+        }
+        None
+    }
+
+    /// Arkanoid's post-tape Speedlock protection must complete at **1×** (#390).
+    ///
+    /// Measured: `EI` lands ~20 s of Spectrum time after the deck finishes with
+    /// no input at all, so the delay never needed turbo. Debug builds run this
+    /// slower than realtime, hence `--release` and `--ignored`.
+    #[ignore = "local Arkanoid fixture; run with --release"]
     #[test]
-    fn arkanoid_speedlock_first_delay_ret_when_present() {
+    fn arkanoid_speedlock_completes_at_realtime_when_present() {
         let Some(rom) = rom48() else {
             eprintln!("skip: roms/spec48.rom missing");
             return;
@@ -2066,36 +2087,117 @@ mod tests {
             }
         }
         {
-            let m = s.machine.as_ref().expect("machine");
-            assert!(
-                m.in_post_tape_di_delay(),
-                "expected post-tape DI delay, pc={:#06x} iff1={}",
-                m.cpu().regs.pc,
-                u8::from(m.cpu().regs.iff1)
-            );
-            assert_ne!(m.cpu().regs.pc, 0xFD2A);
+            let m = s.machine.as_mut().expect("machine");
+            assert!(m.tape_finished() || !m.tape_playing(), "deck should finish");
+            assert_ne!(m.cpu().regs.pc, 0xFD2A, "still in the EAR edge sampler");
             assert_eq!(
                 m.read_mem(0xF44E),
                 0xDD,
                 "Speedlock uses LD E,IXH at $F44E (not CALL)"
             );
+            let nz = (0u16..256)
+                .map(|i| m.read_mem(0x4000 + i))
+                .filter(|&b| b != 0)
+                .count();
+            assert!(
+                nz >= 32,
+                "expected loader screen activity at tape end, nonzero={nz}/256"
+            );
+            // Drop to a true 1×: nothing may multiply frames after tape end.
+            m.set_tape_load_options(machine::TapeLoadOptions {
+                flash_load: false,
+                speed: 1,
+                experience_load: false,
+            });
+            assert_eq!(m.effective_speed_multiplier(), 1);
         }
-        let mut saw_ret = false;
-        for i in 0..20_000u32 {
+        // 40 Spectrum seconds is ~2× the measured 20 s protection run.
+        let ei_at = step_until_iff1(&mut s, 2_000).expect("protection did not EI within 40s at 1×");
+        eprintln!("protection completed after {ei_at:.1}s of Spectrum time at 1×");
+        assert_ne!(
+            s.machine.as_ref().expect("machine").cpu().regs.pc,
+            0xFD2A,
+            "returned to the EAR sampler"
+        );
+    }
+
+    /// Instant on Arkanoid must not crawl at the Play speed control (#390).
+    ///
+    /// Speedlock is a pulse TZX: there is no LD-BYTES trap for Instant to poke,
+    /// and the old fallback was a realtime EAR load — the slowest option in the
+    /// UI, from the button labelled Instant.
+    #[ignore = "local Arkanoid fixture; run with --release"]
+    #[test]
+    fn arkanoid_instant_falls_back_to_ear_turbo_when_present() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let arkanoid = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
+        if !arkanoid.is_file() {
+            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
+            return;
+        }
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        s.open_tape(&arkanoid).expect("open");
+        {
+            let m = s.machine.as_mut().expect("machine");
+            assert!(
+                !m.tape_supports_flash_load(),
+                "Speedlock TZX has no TAP blocks to flash"
+            );
+            // Instant with the Play speed left at 1× — the reported case.
+            m.set_tape_load_options(machine::TapeLoadOptions {
+                flash_load: true,
+                speed: 1,
+                experience_load: false,
+            });
+            m.set_tape_playing(false);
+        }
+        for _ in 0..200 {
+            let _ = s.machine.as_mut().expect("machine").run_frame();
+        }
+        {
+            let m = s.machine.as_mut().expect("machine");
+            m.type_load_quotes(false);
+            m.set_tape_playing(true);
+            assert_eq!(
+                m.effective_speed_multiplier(),
+                machine::INSTANT_EAR_FALLBACK_SPEED,
+                "Instant must fall back to EAR turbo, not the 1× setting"
+            );
+        }
+        // At 1× this deck needs ~15k host ticks; the fallback should need ~250.
+        const TICK_BUDGET: u32 = 2_000;
+        let mut ticks = None;
+        for i in 0..TICK_BUDGET {
             let _ = s.machine.as_mut().expect("machine").run_frame();
             let m = s.machine.as_ref().expect("machine");
-            let p = m.cpu().regs.pc;
-            assert_ne!(p, 0xFD2A, "returned to sampler");
-            if p == 0xF476 {
-                saw_ret = true;
-                eprintln!("first delay RET at {p:#06x} after +{i} host frames");
+            if m.tape_finished() || !m.tape_playing() {
+                ticks = Some(i);
                 break;
             }
         }
-        assert!(
-            saw_ret,
-            "Speedlock first DI delay stage did not RET within 20k turbo frames"
-        );
+        let ticks = ticks.expect("Instant fallback did not finish the deck in budget");
+        eprintln!("Instant EAR fallback finished the deck in {ticks} host ticks");
+        {
+            let m = s.machine.as_ref().expect("machine");
+            assert_ne!(m.cpu().regs.pc, 0xFD2A, "still in the EAR edge sampler");
+            assert_eq!(
+                m.effective_speed_multiplier(),
+                1,
+                "fallback turbo must stop with the deck, like EAR speed"
+            );
+        }
+        // …and the load is real: Speedlock's ~20 s protection still completes,
+        // exactly as it does after a plain EAR load.
+        let ei_at = step_until_iff1(&mut s, 2_000)
+            .expect("Instant EAR fallback did not clear protection within 40s");
+        eprintln!("protection completed {ei_at:.1}s after the Instant fallback load");
     }
 
     /// Fast smoke: after EAR exhaust, PC must leave `$FD2A` (sampler desync).
@@ -2163,11 +2265,24 @@ mod tests {
             bytes
         );
         assert_ne!(pc, 0xFD2A, "still in Speedlock edge sampler — EAR desync");
+        // Which loaded routine holds PC at tape end depends on where the deck
+        // runs out (`$80xx` setup, the `$F3xx`/`$F4xx` protection nest, …); the
+        // invariant is that loaded code above `$8000` is running.
         assert!(
-            (0xF000..=0xFEFF).contains(&pc) || m.cpu().regs.iff1,
-            "expected Speedlock stub or game entry, pc={pc:#06x}"
+            pc >= 0x8000 || m.cpu().regs.iff1,
+            "expected loaded code in upper RAM, pc={pc:#06x}"
         );
-        // Confirm post-tape DI turbo (#379): one host tick advances ≫ one frame.
+        assert!(
+            screen_nz >= 32,
+            "expected loader screen content, nonzero={screen_nz}/256"
+        );
+        // EAR speed 64 was selected, but the deck is done: one host tick must
+        // now advance exactly one Spectrum frame (#390).
+        assert_eq!(
+            m.effective_speed_multiplier(),
+            1,
+            "finished deck must report 1× while the loaded program runs"
+        );
         let t0 = {
             let m = s.machine.as_ref().expect("machine");
             m.cpu().t
@@ -2178,140 +2293,8 @@ mod tests {
         }
         let m = s.machine.as_ref().expect("machine");
         let dt = m.cpu().t.saturating_sub(t0);
-        eprintln!("post-tape turbo dt={dt}");
-        assert!(
-            dt > 200_000,
-            "expected post-tape DI turbo ≫ 1 frame, dt={dt}"
-        );
-    }
-
-    /// EAR Play path for Arkanoid Speedlock (#379 / #380).
-    ///
-    /// After tape exhaust: leave `$FD2A`, keep screen activity, stay in the
-    /// post-tape DI delay with turbo on. Full multi-stage nest → game/`IFF1`
-    /// outlives this budget (first stage alone is ~13k frames @64×); remaining
-    /// in `$Fxxx` with screen data is ROM-accurate, not sampler desync.
-    #[ignore = "requires local Arkanoid fixture; run explicitly as a slow regression"]
-    #[test]
-    fn arkanoid_ear_load_leaves_speedlock_when_present() {
-        const POST_FRAMES: u32 = 20_000;
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let Some(home) = std::env::var_os("HOME") else {
-            return;
-        };
-        let arkanoid = PathBuf::from(home).join("Downloads/Arkanoid.tzx");
-        if !arkanoid.is_file() {
-            eprintln!("skip: ~/Downloads/Arkanoid.tzx not present");
-            return;
-        }
-        let mut s = HostSession::new(ModelId::Spectrum48, true);
-        s.load_rom_bytes(&rom).expect("rom");
-        s.open_tape(&arkanoid).expect("open");
-        {
-            let m = s.machine.as_mut().expect("machine");
-            m.set_tape_load_options(machine::TapeLoadOptions {
-                flash_load: false,
-                speed: 64,
-                experience_load: false,
-            });
-            m.set_tape_playing(false);
-        }
-        for _ in 0..200 {
-            let m = s.machine.as_mut().expect("machine");
-            let _ = m.run_frame();
-        }
-        {
-            let m = s.machine.as_mut().expect("machine");
-            m.type_load_quotes(false);
-            m.set_tape_playing(true);
-        }
-        let mut finished = false;
-        for _ in 0..20_000 {
-            {
-                let m = s.machine.as_mut().expect("machine");
-                let _ = m.run_frame();
-            }
-            let m = s.machine.as_ref().expect("machine");
-            if m.tape_finished() || !m.tape_playing() {
-                finished = true;
-                break;
-            }
-        }
-        assert!(finished, "EAR deck did not finish within budget");
-        let (pc0, screen0) = {
-            let m = s.machine.as_ref().expect("machine");
-            let pc = m.cpu().regs.pc;
-            let nz = (0u16..256)
-                .map(|i| m.read_mem(0x4000 + i))
-                .filter(|&b| b != 0)
-                .count();
-            eprintln!(
-                "post-tape start: pc={pc:#06x} bc={:#06x} iff1={} screen_nz={nz}",
-                m.cpu().regs.bc(),
-                u8::from(m.cpu().regs.iff1)
-            );
-            assert_ne!(
-                pc, 0xFD2A,
-                "PC still in Speedlock edge-sample loop — EAR desync"
-            );
-            assert!(
-                nz >= 32,
-                "expected screen activity at tape end, nonzero={nz}/256"
-            );
-            (pc, nz)
-        };
-        let _ = pc0;
-        let mut saw_iff1 = false;
-        for i in 0..POST_FRAMES {
-            {
-                let m = s.machine.as_mut().expect("machine");
-                let _ = m.run_frame();
-            }
-            let m = s.machine.as_ref().expect("machine");
-            let p = m.cpu().regs.pc;
-            assert_ne!(p, 0xFD2A, "returned to sampler mid-delay — EAR desync");
-            if m.cpu().regs.iff1 {
-                saw_iff1 = true;
-                eprintln!("IFF1 after +{i} host frames: pc={p:#06x}");
-                break;
-            }
-            if i % 5_000 == 0 {
-                let nz = (0u16..256)
-                    .map(|j| m.read_mem(0x4000 + j))
-                    .filter(|&b| b != 0)
-                    .count();
-                eprintln!(
-                    "post-tape +{i}: pc={p:#06x} bc={:#06x} screen_nz={nz}",
-                    m.cpu().regs.bc()
-                );
-            }
-        }
-        let m = s.machine.as_ref().expect("machine");
-        let pc = m.cpu().regs.pc;
-        let nonzero = (0u16..256)
-            .map(|i| m.read_mem(0x4000 + i))
-            .filter(|&b| b != 0)
-            .count();
-        eprintln!(
-            "arkanoid final: pc={pc:#06x} iff1={} screen_nz={nonzero} (start_nz={screen0}) saw_iff1={saw_iff1}",
-            u8::from(m.cpu().regs.iff1)
-        );
-        assert_ne!(pc, 0xFD2A);
-        assert!(
-            nonzero >= 32 || saw_iff1,
-            "screen activity lost during post-tape wait (nz={nonzero}) pc={pc:#06x}"
-        );
-        if saw_iff1 {
-            return;
-        }
-        // Still acceptable: productive DI delay in high RAM with screen intact.
-        assert!(
-            (0xF000..=0xFEFF).contains(&pc),
-            "left Speedlock stub without IFF1 and without keeping screen; pc={pc:#06x} nz={nonzero}"
-        );
+        eprintln!("post-tape dt={dt}");
+        assert!(dt < 150_000, "expected ~1 frame after tape end, dt={dt}");
     }
 
     #[test]

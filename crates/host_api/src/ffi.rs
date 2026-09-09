@@ -653,51 +653,35 @@ pub extern "C" fn sc_has_tape(handle: *mut c_void) -> c_int {
     session_mut(handle).is_some_and(|s| s.has_tape()) as c_int
 }
 
-/// 1 when the deck is finished and the CPU is still in a post-tape DI delay
-/// (Speedlock-style high-RAM stub with IFF1 clear). Used for UI chrome (#379).
+/// Spectrum frames actually run per host tick right now (EAR turbo only
+/// applies while an unfinished deck is playing) — hosts show this so chrome
+/// cannot claim 1× while the machine runs faster (#390).
 #[no_mangle]
-pub extern "C" fn sc_in_post_tape_di_delay(handle: *mut c_void) -> c_int {
+pub extern "C" fn sc_effective_speed_multiplier(handle: *mut c_void) -> c_uint {
     session_mut(handle)
-        .and_then(|s| s.machine().map(machine::Machine::in_post_tape_di_delay))
+        .and_then(|s| {
+            s.machine()
+                .map(machine::Machine::effective_speed_multiplier)
+        })
+        .unwrap_or(1)
+}
+
+/// 1 when the inserted deck can serve LD-BYTES flash-load traps (TAP blocks).
+///
+/// Pulse-only TZX decks return 0: Instant on those loads off EAR at
+/// [`machine::INSTANT_EAR_FALLBACK_SPEED`], so hosts can say so (#390).
+#[no_mangle]
+pub extern "C" fn sc_tape_flash_load_supported(handle: *mut c_void) -> c_int {
+    session_mut(handle)
+        .and_then(|s| s.machine().map(machine::Machine::tape_supports_flash_load))
         .unwrap_or(false) as c_int
 }
 
-/// 1 when PC is in the Speedlock outer stub / `$8224` key poll (#379).
+/// EAR rate Instant falls back to when the deck cannot flash-load, so hosts do
+/// not hardcode a second copy of the policy (#390).
 #[no_mangle]
-pub extern "C" fn sc_in_speedlock_key_gate(handle: *mut c_void) -> c_int {
-    session_mut(handle)
-        .and_then(|s| s.machine().map(machine::Machine::in_speedlock_key_gate))
-        .unwrap_or(false) as c_int
-}
-
-/// Speedlock stage id for chrome / probes (#379).
-/// 0=none 1=delay-f448 2=key-gate 3=cont-8230 4=decrypt-93 5=other-di 6=ei
-#[no_mangle]
-pub extern "C" fn sc_speedlock_stage(handle: *mut c_void) -> c_int {
-    session_mut(handle)
-        .and_then(|s| s.machine().map(|m| speedlock_stage_id(m.speedlock_stage())))
-        .unwrap_or(0)
-}
-
-/// `$F408` nest entry count (#379).
-#[no_mangle]
-pub extern "C" fn sc_speedlock_stage_count(handle: *mut c_void) -> c_uint {
-    session_mut(handle)
-        .and_then(|s| s.machine().map(machine::Machine::speedlock_stage_count))
-        .unwrap_or(0)
-}
-
-fn speedlock_stage_id(stage: machine::SpeedlockStage) -> c_int {
-    match stage {
-        machine::SpeedlockStage::None => 0,
-        machine::SpeedlockStage::DelayF448 => 1,
-        machine::SpeedlockStage::KeyGate => 2,
-        machine::SpeedlockStage::Continue8230 => 3,
-        machine::SpeedlockStage::Decrypt93 => 4,
-        machine::SpeedlockStage::OtherHighDi => 5,
-        machine::SpeedlockStage::InterruptsOn => 6,
-        machine::SpeedlockStage::TitleAttract => 7,
-    }
+pub extern "C" fn sc_instant_ear_fallback_speed() -> c_uint {
+    machine::INSTANT_EAR_FALLBACK_SPEED
 }
 
 /// Fill out-params with tape progress. Returns 0 on success, -1 if no tape/handle.

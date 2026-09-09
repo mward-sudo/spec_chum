@@ -53,7 +53,11 @@ pub struct TapeInspect {
     pub playing: bool,
     pub flash_load: bool,
     pub experience_load: bool,
+    /// EAR speed *setting* (1..=64).
     pub speed: u32,
+    /// Spectrum frames per host tick right now — 1 unless an unfinished deck is
+    /// playing, so callers never read [`Self::speed`] as the live rate (#390).
+    pub effective_speed: u32,
     pub block_index: u32,
     pub block_count: u32,
 }
@@ -112,6 +116,7 @@ impl Machine {
         let regs = self.cpu().regs;
         let cpu_t = self.cpu().t;
         let pc = regs.pc;
+        let effective_speed = self.effective_speed_multiplier();
         match self {
             Self::Spec48 {
                 bus,
@@ -157,6 +162,7 @@ impl Machine {
                         flash_load: tape_opts.flash_load,
                         experience_load: tape_opts.experience_load,
                         speed: tape_opts.speed,
+                        effective_speed,
                         block_index: t.block().unwrap_or(0) as u32,
                         block_count: t.block_count() as u32,
                     }),
@@ -204,6 +210,7 @@ impl Machine {
                         flash_load: tape_opts.flash_load,
                         experience_load: tape_opts.experience_load,
                         speed: tape_opts.speed,
+                        effective_speed,
                         block_index: t.block().unwrap_or(0) as u32,
                         block_count: t.block_count() as u32,
                     }),
@@ -255,6 +262,7 @@ impl Machine {
                         flash_load: tape_opts.flash_load,
                         experience_load: tape_opts.experience_load,
                         speed: tape_opts.speed,
+                        effective_speed,
                         block_index: t.block().unwrap_or(0) as u32,
                         block_count: t.block_count() as u32,
                     }),
@@ -342,11 +350,12 @@ impl Machine {
 
 fn tape_json(t: &TapeInspect) -> String {
     format!(
-        "{{\"playing\":{},\"flash_load\":{},\"experience_load\":{},\"speed\":{},\"block\":{},\"blocks\":{}}}",
+        "{{\"playing\":{},\"flash_load\":{},\"experience_load\":{},\"speed\":{},\"effective_speed\":{},\"block\":{},\"blocks\":{}}}",
         u8::from(t.playing),
         u8::from(t.flash_load),
         u8::from(t.experience_load),
         t.speed,
+        t.effective_speed,
         t.block_index,
         t.block_count
     )
@@ -512,11 +521,12 @@ impl Display for Inspect {
         if let Some(t) = &self.tape {
             writeln!(
                 f,
-                "tape playing={} flash={} experience={} speed={}x block={}/{}",
+                "tape playing={} flash={} experience={} speed={}x effective={}x block={}/{}",
                 u8::from(t.playing),
                 u8::from(t.flash_load),
                 u8::from(t.experience_load),
                 t.speed,
+                t.effective_speed,
                 t.block_index,
                 t.block_count
             )?;
@@ -550,6 +560,7 @@ mod tests {
             flash_load: false,
             experience_load: false,
             speed: 1,
+            effective_speed: 1,
             block_index: 0,
             block_count: 2,
         };

@@ -7,6 +7,10 @@ import CSpecChumHost
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
+    /// EAR rate Instant falls back to on decks with no LD-BYTES trap (#390).
+    /// Read from the core so chrome cannot drift from the loading policy.
+    static let instantEarFallbackSpeed: UInt32 = sc_instant_ear_fallback_speed()
+
     /// Joystick presentation — matches `sc_set_joystick_mode` (default Kempston).
     enum JoystickMode: UInt32, CaseIterable, Identifiable {
         case kempston = 0
@@ -750,7 +754,9 @@ final class HostBridge: ObservableObject {
         guard pendingInstantPlay else { return }
         pendingInstantPlay = false
         playTapeKeepingFlash()
-        status = "Instant: flash-loading after LOAD \"\""
+        status = canFlashLoad
+            ? "Instant: flash-loading after LOAD \"\""
+            : "Instant: \(instantEarFallbackStatus)"
     }
 
     static func takeLastError() -> String? {

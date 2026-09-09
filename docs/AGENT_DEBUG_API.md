@@ -221,7 +221,7 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | --- | --- |
 | Machine | `POST /v1/model` — select built-in model; `POST /v1/config` — apply `#187` custom profile JSON; `POST /v1/reset`; `POST /v1/running` pause/run; `POST /v1/run` — advance within a **finite budget** (see below) |
 | Execution | `POST /v1/step` — one `step_once`; `POST /v1/step` body `{ "count": N }`; `POST /v1/continue` — resume after debugger stop (`continue_from_pc`); `POST /v1/run-until` — PC / budget (maps `Debugger::run_until`); `POST /v1/regs` — patch `pc` / `sp` / `af` (hex strings; #261 TR-DOS entry) |
-| Tape | `POST /v1/tape/open`, `/play`, `/pause`, `/rewind`, `/eject`; load options flash vs EAR vs experience + speed |
+| Tape | `POST /v1/tape/open`, `/play`, `/pause`, `/rewind`, `/eject`; load options flash vs EAR vs experience + speed. EAR `speed` is a *loading* multiplier only — `GET /v1/inspect` reports `tape.effective_speed` (1 once the deck finishes) as the live rate. `flash_load` on a pulse-only TZX has no LD-BYTES trap to poke, so it loads off EAR at 64× rather than at `speed` (#390) |
 | Type-load | `POST /v1/type-load` — scripted LOAD "" [CODE] (today's `type-load` subcommand) |
 | ROM | `POST /v1/rom` — load ROM image from host filesystem path |
 | Media | `POST /v1/snapshot`, `/rzx`, `/dsk`, `/trd`, … |
