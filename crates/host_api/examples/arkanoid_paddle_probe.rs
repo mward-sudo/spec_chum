@@ -10,10 +10,25 @@
 //! ```
 //!
 //! Writes PPM frames under `tmp/arkanoid_paddle/` when bat-band pixel counts jump.
+//!
+//! Reaching game entry costs minutes of Speedlock delay, so the probe can cache
+//! the post-gate machine as a 48K `.sna` and replay from it:
+//!
+//! ```bash
+//! # capture once (writes tmp/arkanoid_play.sna)
+//! SPEC_CHUM_ARKANOID_SNA=tmp/arkanoid_play.sna cargo run -p host_api --release \
+//!   --example arkanoid_paddle_probe
+//! # then iterate in seconds
+//! SPEC_CHUM_ARKANOID_FROM_SNA=tmp/arkanoid_play.sna cargo run -p host_api --release \
+//!   --example arkanoid_paddle_probe
+//! ```
+//!
+//! Snapshots of a commercial tape are debug artefacts — keep them out of git.
 
 use machine::TapeLoadOptions;
 use spec_chum_host::{HostSession, ModelId};
 use std::env;
+use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -88,7 +103,7 @@ fn dump_bottom_band(m: &machine::Machine) -> (u32, u32, u64) {
             let b = m.read_mem(a);
             hash = hash.wrapping_mul(131).wrapping_add(u64::from(b));
             if b != 0 {
-                bitmap_nz += u32::from(b.count_ones());
+                bitmap_nz += b.count_ones();
             }
         }
     }
@@ -138,24 +153,64 @@ fn count_bat_rgba(fb: &[u8], w: usize, h: usize, with_border: bool) -> u32 {
 fn write_ppm(path: &Path, fb: &[u8], w: usize, h: usize) -> io::Result<()> {
     let mut out = Vec::with_capacity(64 + w * h * 3);
     out.extend_from_slice(format!("P6\n{w} {h}\n255\n").as_bytes());
-    for px in fb.chunks_exact(4) {
+    for px in fb.as_chunks::<4>().0 {
         out.extend_from_slice(&px[..3]);
     }
     fs::write(path, out)
 }
 
+/// Serialise the live 48K machine as a `.sna` so later runs can skip Speedlock.
+///
+/// SNA takes PC from the stack, so this pushes PC below SP (clobbers 2 bytes of
+/// guest RAM — acceptable for a debug capture).
+fn write_sna(m: &mut machine::Machine, path: &Path) -> io::Result<()> {
+    let sp = m.cpu().regs.sp.wrapping_sub(2);
+    let pc = m.cpu().regs.pc;
+    m.write_mem(sp, (pc & 0xff) as u8);
+    m.write_mem(sp.wrapping_add(1), (pc >> 8) as u8);
+    let r = m.cpu().regs;
+    let mut out = Vec::with_capacity(49179);
+    out.push(r.i);
+    out.extend_from_slice(&u16::from_le_bytes([r.l_, r.h_]).to_le_bytes());
+    out.extend_from_slice(&u16::from_le_bytes([r.e_, r.d_]).to_le_bytes());
+    out.extend_from_slice(&u16::from_le_bytes([r.c_, r.b_]).to_le_bytes());
+    out.push(r.a_);
+    out.push(r.f_);
+    out.extend_from_slice(&u16::from_le_bytes([r.l, r.h]).to_le_bytes());
+    out.extend_from_slice(&u16::from_le_bytes([r.e, r.d]).to_le_bytes());
+    out.extend_from_slice(&u16::from_le_bytes([r.c, r.b]).to_le_bytes());
+    out.extend_from_slice(&u16::from_le_bytes([r.iyl, r.iyh]).to_le_bytes());
+    out.extend_from_slice(&u16::from_le_bytes([r.ixl, r.ixh]).to_le_bytes());
+    out.push(if r.iff2 { 0x04 } else { 0 });
+    out.push(r.r);
+    out.push(r.a);
+    out.push(r.f);
+    out.extend_from_slice(&sp.to_le_bytes());
+    out.push(r.im);
+    out.push(0); // border (cosmetic)
+    for a in 0x4000..=0xffffu32 {
+        out.push(m.read_mem(a as u16));
+    }
+    fs::write(path, out)
+}
+
 fn row_hex(m: &machine::Machine, y: u8) -> String {
-    (0u8..32)
-        .map(|col| format!("{:02x}", m.read_mem(screen_addr(col * 8, y))))
-        .collect::<Vec<_>>()
-        .join("")
+    let mut s = String::with_capacity(64);
+    for col in 0u8..32 {
+        let _ = write!(s, "{:02x}", m.read_mem(screen_addr(col * 8, y)));
+    }
+    s
 }
 
 fn attr_row_hex(m: &machine::Machine, row: u16) -> String {
-    (0u16..32)
-        .map(|col| format!("{:02x}", m.read_mem(0x5800 + row * 32 + col)))
-        .collect::<Vec<_>>()
-        .join(" ")
+    let mut s = String::with_capacity(96);
+    for col in 0u16..32 {
+        if col > 0 {
+            s.push(' ');
+        }
+        let _ = write!(s, "{:02x}", m.read_mem(0x5800 + row * 32 + col));
+    }
+    s
 }
 
 fn reach_game_entry(s: &mut HostSession) -> bool {
@@ -214,10 +269,7 @@ fn reach_game_entry(s: &mut HostSession) -> bool {
         if !in_delay && i.is_multiple_of(48) {
             m.keyboard_mut().set_key(7, 0, true);
             m.keyboard_mut().set_key(4, 0, true);
-        } else if !in_delay && i % 48 == 6 {
-            m.keyboard_mut().set_key(7, 0, false);
-            m.keyboard_mut().set_key(4, 0, false);
-        } else if in_delay {
+        } else if in_delay || i % 48 == 6 {
             m.keyboard_mut().set_key(7, 0, false);
             m.keyboard_mut().set_key(4, 0, false);
         }
@@ -261,10 +313,29 @@ fn main() {
     let rom = fs::read(workspace_root().join("roms/spec48.rom")).expect("rom");
     let mut s = HostSession::new(ModelId::Spectrum48, true);
     s.load_rom_bytes(&rom).expect("rom");
-    load_tape(&mut s, &tape);
 
-    if !reach_game_entry(&mut s) {
-        return;
+    if let Some(snap) = env::var_os("SPEC_CHUM_ARKANOID_FROM_SNA") {
+        let snap = PathBuf::from(snap);
+        s.load_snapshot(&snap).expect("snapshot");
+        let m = s.machine().expect("m");
+        eprintln!(
+            "replay from {} pc={:#06x} iff1={} ($8403)={:#06x}",
+            snap.display(),
+            m.cpu().regs.pc,
+            u8::from(m.cpu().regs.iff1),
+            word(m, 0x8403)
+        );
+    } else {
+        load_tape(&mut s, &tape);
+        if !reach_game_entry(&mut s) {
+            return;
+        }
+        if let Some(dst) = env::var_os("SPEC_CHUM_ARKANOID_SNA") {
+            let dst = PathBuf::from(dst);
+            let m = s.machine_mut().expect("m");
+            write_sna(m, &dst).expect("sna");
+            eprintln!("wrote {}", dst.display());
+        }
     }
 
     {
@@ -319,7 +390,14 @@ fn main() {
         let big_drop = prev_rgba > 80 && rgba_nz + 40 < prev_rgba
             || prev_bitmap > 80 && bitmap_nz + 40 < prev_bitmap;
         let changed = hash != prev_hash || rgba_nz != prev_rgba;
-        if f == 0 || f == 1 || f == 2 || f == 5 || f == 10 || f % 25 == 0 || changed && f < 80 || big_drop
+        if f == 0
+            || f == 1
+            || f == 2
+            || f == 5
+            || f == 10
+            || f % 25 == 0
+            || changed && f < 80
+            || big_drop
         {
             let m = s.machine().expect("m");
             eprintln!(

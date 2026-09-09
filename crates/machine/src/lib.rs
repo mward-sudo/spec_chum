@@ -1812,11 +1812,8 @@ impl Machine {
         // leaves high RAM so speed N does not look hung at 1× (#379).
         // Once IFF1 is set, return to 1× realtime (#178).
         // Yield to 1× on the outer key-gate stub so chrome / hosts can observe it.
-        // Also yield during Arkanoid's DI main loop (`($8403)=$8DF1`, PC in game
-        // RAM): leaving turbo on runs dozens of XOR sprite erase/redraw passes
-        // per host tick and the bat vanishes after the ball first moves (#379).
         if self.in_post_tape_di_delay() {
-            if self.in_speedlock_key_gate() || self.in_di_gameplay_main_loop() {
+            if self.in_speedlock_key_gate() {
                 return 1;
             }
             return speed.saturating_mul(Self::speedlock_soak_boost());
@@ -1841,35 +1838,13 @@ impl Machine {
 
     /// Speedlock-style post-tape DI delay: deck exhausted, interrupts still off,
     /// PC in high RAM (e.g. Arkanoid `$F448` nest). Used for Play turbo and UI.
-    ///
-    /// Excludes the Arkanoid DI **main loop** after the gate (`($8403)=$8DF1` in
-    /// `$8300`–`$8BFF`) so leftover EAR turbo does not erase XOR sprites (#379).
     #[must_use]
     pub fn in_post_tape_di_delay(&self) -> bool {
         if !self.tape_finished() {
             return false;
         }
         let regs = &self.cpu().regs;
-        if regs.iff1 || regs.pc < 0x8000 {
-            return false;
-        }
-        !self.in_di_gameplay_main_loop()
-    }
-
-    /// Arkanoid (and similar) DI main loop after the Speedlock gate: vector at
-    /// `($8403)=$8DF1` with PC in game RAM (`$8300`–`$8BFF`). Must not keep EAR
-    /// Play turbo — multi-frame XOR sprite passes leave the bat erased (#379).
-    #[must_use]
-    pub fn in_di_gameplay_main_loop(&self) -> bool {
-        if !self.tape_finished() || self.cpu().regs.iff1 {
-            return false;
-        }
-        let pc = self.cpu().regs.pc;
-        if !(0x8300..=0x8BFF).contains(&pc) {
-            return false;
-        }
-        let vec = u16::from(self.read_mem(0x8403)) | (u16::from(self.read_mem(0x8404)) << 8);
-        vec == 0x8DF1
+        !regs.iff1 && regs.pc >= 0x8000
     }
 
     /// Arkanoid Speedlock outer stub / `$8224` key poll (stacked return `$F3D4`).
@@ -1930,11 +1905,6 @@ impl Machine {
         }
         if ret == 0xF3D1 && (0xF408..=0xF476).contains(&pc) {
             return SpeedlockStage::DelayF448;
-        }
-        // Playable Arkanoid DI main loop (`$83DF`/`$841x`) sits inside the old
-        // `$8230`–`$83FF` "continue" window — classify gameplay first (#379).
-        if self.in_di_gameplay_main_loop() {
-            return SpeedlockStage::None;
         }
         if (0x8230..=0x83FF).contains(&pc) {
             return SpeedlockStage::Continue8230;
@@ -2025,7 +1995,7 @@ impl Machine {
     /// so the matrix is not left latched after the ack.
     fn maybe_accelerate_speedlock_delay(&mut self) {
         let speed = self.tape_load_options().speed.clamp(1, 64);
-        if speed <= 1 || !self.in_post_tape_di_delay() || self.in_di_gameplay_main_loop() {
+        if speed <= 1 || !self.in_post_tape_di_delay() {
             self.release_speedlock_turbo_space();
             return;
         }
@@ -6415,70 +6385,6 @@ mod tests {
             "IFF1 set must drop turbo to ~1× (#178), got {dt1}"
         );
         assert!(!m.in_post_tape_di_delay());
-    }
-
-    #[test]
-    fn di_gameplay_main_loop_drops_ear_turbo() {
-        // Arkanoid keeps IFF1=0 in the `$841x` main loop after the Speedlock gate.
-        // Post-tape DI turbo must not keep applying there — XOR bats vanish (#379).
-        let Some(rom) = rom48() else {
-            eprintln!("skip: roms/spec48.rom missing");
-            return;
-        };
-        let img = TapImage {
-            blocks: vec![vec![0xff, 0x00, 0xff]],
-            ..Default::default()
-        };
-        let mut m = Machine::new_48k(&rom).unwrap();
-        m.set_tape_load_options(TapeLoadOptions {
-            flash_load: false,
-            speed: 20,
-            ..Default::default()
-        });
-        m.insert_tape(TapPlayer::new(img));
-        m.set_tape_playing(true);
-        for _ in 0..20_000 {
-            let _ = m.run_frame();
-            if m.tape_finished() || !m.tape_playing() {
-                break;
-            }
-        }
-        assert!(m.tape_finished() || !m.tape_playing());
-        m.cpu_mut().regs.iff1 = false;
-        m.cpu_mut().regs.iff2 = false;
-        m.cpu_mut().regs.pc = 0x8410;
-        m.write_mem(0x8410, 0x18); // JR 0
-        m.write_mem(0x8411, 0xFE);
-        m.write_mem(0x8403, 0xF1);
-        m.write_mem(0x8404, 0x8D); // ($8403)=$8DF1
-        assert!(
-            m.in_di_gameplay_main_loop(),
-            "planted Arkanoid main-loop markers"
-        );
-        assert!(
-            !m.in_post_tape_di_delay(),
-            "gameplay must not count as Speedlock post-tape delay"
-        );
-        let t0 = m.cpu().t;
-        let _ = m.run_frame();
-        let dt = m.cpu().t.saturating_sub(t0);
-        assert!(
-            dt < 150_000,
-            "DI gameplay main loop must run ~1× despite tape speed 20 (got {dt})"
-        );
-        // Protection nest still turbos.
-        m.cpu_mut().regs.pc = 0xF448;
-        m.write_mem(0xF448, 0x18);
-        m.write_mem(0xF449, 0xFE);
-        assert!(!m.in_di_gameplay_main_loop());
-        assert!(m.in_post_tape_di_delay());
-        let t1 = m.cpu().t;
-        let _ = m.run_frame();
-        let dt1 = m.cpu().t.saturating_sub(t1);
-        assert!(
-            dt1 > 200_000,
-            "Speedlock delay nest must still turbo (got {dt1})"
-        );
     }
 
     #[test]
