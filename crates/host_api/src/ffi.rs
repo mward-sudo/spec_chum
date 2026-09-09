@@ -696,6 +696,7 @@ fn speedlock_stage_id(stage: machine::SpeedlockStage) -> c_int {
         machine::SpeedlockStage::Decrypt93 => 4,
         machine::SpeedlockStage::OtherHighDi => 5,
         machine::SpeedlockStage::InterruptsOn => 6,
+        machine::SpeedlockStage::TitleAttract => 7,
     }
 }
 

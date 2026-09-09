@@ -2587,6 +2587,9 @@ of their copyrighted material but retain that copyright.",
                             SpeedlockStage::Decrypt93 | SpeedlockStage::Continue8230 => {
                                 ui.label("Speedlock decrypt…");
                             }
+                            SpeedlockStage::TitleAttract => {
+                                ui.label("Title / high score…");
+                            }
                             SpeedlockStage::OtherHighDi => {
                                 ui.label("Speedlock delay…");
                             }
