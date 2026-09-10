@@ -4,8 +4,9 @@ GitHub Actions builds **macOS**, **Linux**, and **Windows** archives and attache
 them to a GitHub Release when a version tag is pushed.
 
 **macOS** ships the native **SpecChumMac** SwiftUI app (`apps/macos`) as a
-**`.dmg.zip`** (a zip containing the notarised/stapled `.dmg`). **Windows /
-Linux** ship the cross-platform **egui** host `spec_chum`. Headless debugger
+**`.dmg.zip`** (a zip containing the `.dmg`, which is notarised/stapled when
+Apple secrets are set). **Windows / Linux** ship the cross-platform **egui**
+host `spec_chum`. Headless debugger
 and agent HTTP live on the egui binary (`spec_chum --serve`, `spec_chum debug …`);
 on macOS, agents use the embedded loopback server (`SPEC_CHUM_AGENT=1` on
 SpecChumMac — see [MACOS_NATIVE.md](MACOS_NATIVE.md) /
@@ -159,7 +160,7 @@ git push origin v0.2.0
 | Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `/usr/bin/spec_chum` + `/usr/share/spec-chum/roms` + `.desktop` + icon |
 | Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe` + `roms/` + `LICENSE`/`README.txt`/`ROMS-NOTICE.txt` |
 | Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs exe + `roms/` |
-| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg.zip` | Zip of notarised SpecChumMac `.dmg` (`Spec Chum.app/` + Applications shortcut + bundled roms) |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg.zip` | Zip of SpecChumMac `.dmg` (`Spec Chum.app/` + Applications shortcut + bundled roms; notary when secrets set) |
 | macOS (Intel) | same `.dmg.zip` with `x86_64-apple-darwin` | same layout |
 
 One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).

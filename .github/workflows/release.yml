@@ -328,8 +328,8 @@ jobs:
           chmod +x .trusted-ci/scripts/ci/notarize-macos.sh
           .trusted-ci/scripts/ci/notarize-macos.sh "$DMG_ASSET"
 
-      # Zip the notarised/stapled .dmg for GitHub Releases (#403). Signing and
-      # notary remain on the inner .dmg; only the .dmg.zip is published.
+      # Zip the (optionally notarised/stapled) .dmg for GitHub Releases (#403).
+      # Signing and notary remain on the inner .dmg; only the .dmg.zip is published.
       - name: Zip macOS DMG for release
         id: dmg_zip
         if: runner.os == 'macOS'
@@ -473,7 +473,7 @@ jobs:
           fi
           mkdir -p packed
           if [[ "$ARCHIVE" == dmg.zip ]]; then
-            # Notarised .dmg already zipped under packed/ (#403); bare .dmg removed.
+            # Inner .dmg already zipped under packed/ (#403); bare .dmg removed.
             test -f "${DMG_ZIP_ASSET}"
             echo "asset=${DMG_ZIP_ASSET}" >> "$GITHUB_OUTPUT"
           elif [[ "$ARCHIVE" == zip ]]; then
@@ -545,13 +545,13 @@ jobs:
           files: dist/*
           body: |
             **macOS** ships the native **SpecChumMac** SwiftUI app as a **`.dmg.zip`**
-            (unzip → open the notarised `.dmg`). **Windows / Linux** ship the
-            cross-platform **egui** host (`spec_chum`) with headless debugger /
-            agent HTTP on the same binary (`--serve` / `debug …`).
+            (unzip → open the `.dmg`; notarised/stapled when Apple secrets are set).
+            **Windows / Linux** ship the cross-platform **egui** host (`spec_chum`) with
+            headless debugger / agent HTTP on the same binary (`--serve` / `debug …`).
 
             | Platform | Archive contents |
             | --- | --- |
-            | **macOS** | **`.dmg.zip`**: notarised SpecChumMac `.dmg` (app + Applications shortcut + bundled ROMs) |
+            | **macOS** | **`.dmg.zip`**: SpecChumMac `.dmg` (app + Applications shortcut + bundled ROMs; notary when secrets set) |
             | **Windows** | Portable `.zip` (`spec_chum.exe` + `roms/`) **and** Inno Setup `*-setup.exe` |
             | **Linux** | `.tar.gz` / AppImage / `.deb` (`spec_chum` + redistributable `roms/`) |
 

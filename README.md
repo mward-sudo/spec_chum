@@ -40,7 +40,8 @@ See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 ## Releases
 
 Push a `vX.Y.Z` tag to build release archives: macOS `.dmg.zip` (unzip →
-notarised SpecChumMac `.dmg` with `Spec Chum.app` + Applications shortcut),
+SpecChumMac `.dmg` with `Spec Chum.app` + Applications shortcut; notarised
+when Apple secrets are set),
 Windows portable `.zip` and Inno `*-setup.exe`, Linux `.tar.gz` + AppImage +
 `.deb`. Redistributable Spectrum ROMs are bundled inside each package (not
 committed to git). See [docs/RELEASE.md](docs/RELEASE.md) and

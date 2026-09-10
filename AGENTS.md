@@ -43,7 +43,8 @@ GitHub Release archives (single primary app per platform) are built by
 Do not commit ROM binaries. Release CI fetches redistributable ROMs and embeds
 them inside packages (macOS SpecChumMac `.app` / Windows / Linux — see
 [docs/ROMS.md](docs/ROMS.md)). macOS ships SpecChumMac as a **`.dmg.zip`**
-(unzip → notarised/stapled `.dmg` with Applications shortcut;
+(unzip → `.dmg` with Applications shortcut; notarised/stapled when Apple
+secrets are set;
 [#403](https://github.com/mward-sudo/spec_chum/issues/403),
 [#363](https://github.com/mward-sudo/spec_chum/issues/363),
 [#361](https://github.com/mward-sudo/spec_chum/issues/361),
