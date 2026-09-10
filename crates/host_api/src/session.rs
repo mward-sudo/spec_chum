@@ -2071,6 +2071,11 @@ mod tests {
                 v.extend_from_slice(b"grp");
                 with_tone(v)
             }),
+            ("id22_group_end", || {
+                let mut v = header();
+                v.push(0x22);
+                with_tone(v)
+            }),
             ("id24_loop", || {
                 let mut v = header();
                 v.push(0x24);
@@ -2086,6 +2091,34 @@ mod tests {
                 v.push(0x30);
                 v.push(2);
                 v.extend_from_slice(b"hi");
+                with_tone(v)
+            }),
+            ("id32_archive_info", || {
+                let mut v = header();
+                v.push(0x32);
+                let body = [0x00u8, 1, b'x'];
+                v.extend_from_slice(&(body.len() as u16).to_le_bytes());
+                v.extend_from_slice(&body);
+                with_tone(v)
+            }),
+            ("id33_hardware_type", || {
+                let mut v = header();
+                v.push(0x33);
+                v.push(1);
+                v.extend_from_slice(&[0x00, 0x00, 0x00]);
+                with_tone(v)
+            }),
+            ("id35_custom_info", || {
+                let mut v = header();
+                v.push(0x35);
+                v.extend_from_slice(b"CUSTOMINFOBLOCK!");
+                v.extend_from_slice(&0u32.to_le_bytes());
+                with_tone(v)
+            }),
+            ("id5a_glue", || {
+                let mut v = header();
+                v.push(0x5a);
+                v.extend_from_slice(&[0; 9]);
                 with_tone(v)
             }),
         ];
@@ -2125,7 +2158,7 @@ mod tests {
         good_bytes.extend_from_slice(&2u16.to_le_bytes());
         std::fs::write(&good, &good_bytes).expect("write good");
 
-        const UNSUPPORTED: &[u8] = &[0x15, 0x18, 0x19, 0x23, 0x26, 0x28, 0x2a, 0x2b];
+        const UNSUPPORTED: &[u8] = &[0x15, 0x18, 0x19, 0x23, 0x26, 0x27, 0x28, 0x2a, 0x2b];
         for &id in UNSUPPORTED {
             let bad = dir.join(format!("bad_{id:02x}.tzx"));
             let mut v = Vec::new();
