@@ -103,11 +103,37 @@ pub const BIT1_T: u32 = 1710;
 /// Inter-block pause (~1s at 3.5 MHz).
 pub const PAUSE_T: u32 = 3_500_000;
 
-/// Experience load: abbreviated inter-block pause for ~20s-class wall clock at [`EXPERIENCE_EAR_SPEED`].
-/// Pilot/sync/data pulse widths stay ROM-accurate so LD-BYTES keeps syncing.
+/// Experience load: abbreviated inter-block pause for EAR-fallback decks at
+/// [`EXPERIENCE_EAR_SPEED`]. Flashable TAP decks use hybrid flash + cosmetic
+/// border instead (#167); pulse **widths** on the EAR path stay ROM-accurate.
 pub const EXPERIENCE_PAUSE_T: u32 = 175_000;
-/// EAR frame multiplier paired with abbreviated pauses (see issue #82).
+/// EAR frame multiplier for Experience (issue #82); also paces hybrid cosmetic frames.
 pub const EXPERIENCE_EAR_SPEED: u32 = 16;
+
+/// Cosmetic header-pilot stripe count for hybrid Experience ([#167](https://github.com/mward-sudo/spec_chum/issues/167)).
+///
+/// Not fed into ROM LD-BYTES (short EAR pilots break `attr_mark` sync). Painted as
+/// border/beeper stripes while the flash trap is deferred.
+pub const EXPERIENCE_PILOT_HEADER_PULSES: u32 = 1023;
+/// Cosmetic data-block pilot stripe count for hybrid Experience.
+pub const EXPERIENCE_PILOT_DATA_PULSES: u32 = 511;
+/// Border/beeper stripe toggles applied per Spectrum frame during hybrid cosmetic hold.
+pub const EXPERIENCE_COSMETIC_STRIPES_PER_FRAME: u32 = 32;
+
+/// Deferred flash-load completion while hybrid Experience paints cosmetic pilots.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExperiencePendingFlash {
+    pub pulses_left: u32,
+    pub level: bool,
+    pub dest: u16,
+    pub len: u16,
+    pub success: bool,
+    pub load: bool,
+    pub ret_lo: u8,
+    pub ret_hi: u8,
+    /// Index of the TAP block to poke when `load` (already consumed by the trap eval).
+    pub poke_block: usize,
+}
 
 /// Append one edge-to-edge pulse and toggle the EAR level.
 pub(crate) fn push_pulse(pulses: &mut Vec<(u32, bool)>, level: &mut bool, duration: u32) {
@@ -134,6 +160,8 @@ pub struct TapPlayer {
     experience: bool,
     /// Optional per-block pause override (TZX 0x10). Empty → [`PAUSE_T`].
     block_pause_t: Vec<u32>,
+    /// Hybrid Experience (#167): flash deferred while cosmetic pilots paint.
+    pub experience_pending: Option<ExperiencePendingFlash>,
 }
 
 impl TapPlayer {
@@ -150,6 +178,7 @@ impl TapPlayer {
             speed: 1,
             experience: false,
             block_pause_t: Vec::new(),
+            experience_pending: None,
         };
         p.block_pause_t = p.image.pause_t.clone();
         p.queue_block(0);
@@ -191,9 +220,13 @@ impl TapPlayer {
             return;
         }
         self.experience = experience;
-        // Only the trailing pause differs between modes. Patch it in place so a
-        // mid-block toggle does not restart the ROM-accurate pilot/sync/data
-        // pulses currently in flight (mirrors `set_speed`'s mid-load guarantee).
+        // Do not clear `experience_pending` when leaving Experience: the TAP block
+        // was already consumed when the trap scheduled the hybrid flash. Dropping
+        // pending would lose the poke/RET; `Machine` completes it on the next
+        // frame/step tick instead (#167 / CodeRabbit).
+        // Only the trailing pause differs on the EAR-fallback path. Patch it in
+        // place so a mid-block toggle does not restart ROM-accurate pilot/sync/data
+        // already in flight (mirrors `set_speed`'s mid-load guarantee).
         let pause = if experience {
             EXPERIENCE_PAUSE_T
         } else {
@@ -268,7 +301,9 @@ impl TapPlayer {
             self.level = false;
             return;
         };
-        // Pilot: full ROM counts. Wall-clock turbo is machine multi-frame while playing
+        // Pilot: full ROM counts. Hybrid Experience paints abbreviated cosmetic
+        // pilots separately (#167); do not shrink EAR pilots here (breaks LD-BYTES).
+        // Wall-clock turbo is machine multi-frame while playing
         // (see Machine::ear_play_frame_reps) — do not shrink bit/sync widths here.
         let flag = block.first().copied().unwrap_or(0);
         let mut level = true;
@@ -553,6 +588,27 @@ mod tests {
         let exp_pause = *p.pulses.last().expect("pause pulse");
         assert_eq!(full_pause.0, PAUSE_T);
         assert_eq!(exp_pause.0, EXPERIENCE_PAUSE_T);
+    }
+
+    #[test]
+    fn experience_cosmetic_pilot_counts_are_abbreviated_and_odd() {
+        assert_eq!(EXPERIENCE_PILOT_HEADER_PULSES % 2, 1);
+        assert_eq!(EXPERIENCE_PILOT_DATA_PULSES % 2, 1);
+        const {
+            assert!(EXPERIENCE_PILOT_HEADER_PULSES < PILOT_HEADER_PULSES);
+            assert!(EXPERIENCE_PILOT_DATA_PULSES < PILOT_DATA_PULSES);
+            assert!(EXPERIENCE_COSMETIC_STRIPES_PER_FRAME > 0);
+        }
+        // EAR schedule stays full ROM length even in Experience (hybrid paints
+        // abbreviated pilots separately — short EAR pilots break LD-BYTES sync).
+        let header = TapImage {
+            blocks: vec![vec![0x00, 0x11, 0x22]],
+            ..Default::default()
+        };
+        let mut ph = TapPlayer::new(header);
+        let full_h = ph.scheduled_pulses();
+        ph.set_experience(true);
+        assert_eq!(ph.scheduled_pulses(), full_h);
     }
 
     #[test]

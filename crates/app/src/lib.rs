@@ -2452,7 +2452,7 @@ impl SpecChumApp {
                                     if ui
                                         .selectable_label(opts.experience_load, "Experience (~20s)")
                                         .on_hover_text(
-                                            "Abbreviated pauses on the EAR path at 16× (~20s-class; issue #82)",
+                                            "Hybrid flash + cosmetic abbreviated pilots (~20s-class; #82 / #167). Pulse-only decks fall back to EAR at 16×.",
                                         )
                                         .clicked()
                                     {

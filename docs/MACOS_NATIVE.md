@@ -162,7 +162,12 @@ All Spectrum models have EAR/tape hardware; “no tape chrome” means **no tape
 
 ### Experience ~20s load
 
-Toolbar / Settings **Experience** (~20s): abbreviated inter-block pauses on the EAR path at **16×** ([#82](https://github.com/mward-sudo/spec_chum/issues/82)). Same Play / Pause / LD-BYTES hold behaviour as normal EAR; ABI via `sc_tape_set_load_options_ex(..., experience)`.
+Toolbar / Settings **Experience** (~20s):
+
+- **Flashable TAP** (standard ROM LD-BYTES blocks): **hybrid** — flash-poke bytes at the trap, with **abbreviated cosmetic pilots** (border stripes + beeper) deferred across frames ([#167](https://github.com/mward-sudo/spec_chum/issues/167)). Not Instant: you still see loading stripes; wall-clock stays ~20s-class for multi-block decks.
+- **EAR fallback** (pulse-only / custom-loader decks): abbreviated inter-block pauses at **16×** ([#82](https://github.com/mward-sudo/spec_chum/issues/82)); full ROM pilot counts on the EAR path (short EAR pilots break LD-BYTES sync).
+
+Same Play / Pause / LD-BYTES hold behaviour as normal EAR; ABI via `sc_tape_set_load_options_ex(..., experience)`. Hardware EAR accuracy tests keep Experience off (full ROM pilots + pauses).
 
 ## Keyboard (Mac native shell)
 
@@ -277,7 +282,7 @@ tracks the display when living room is on.
 | Mode | Behaviour |
 | --- | --- |
 | **Play** (default) | Realtime EAR bitstream; optional **1×–20×** speed multiplier |
-| **Experience (~20s)** | Abbreviated inter-block pauses on the EAR path at **16×** ([#82](https://github.com/mward-sudo/spec_chum/issues/82)) |
+| **Experience (~20s)** | Hybrid flash + cosmetic abbreviated pilots on TAP; EAR pause-abbrev at **16×** for pulse-only decks ([#82](https://github.com/mward-sudo/spec_chum/issues/82), [#167](https://github.com/mward-sudo/spec_chum/issues/167)) |
 | **Instant** | Flash-load at LD-BYTES (Type LOAD + Play); no EAR timing |
 
 Pause / Play hold at LD-BYTES works in Experience mode.
