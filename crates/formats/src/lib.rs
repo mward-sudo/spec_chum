@@ -1,4 +1,4 @@
-//! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK, TRD, Timex DCK.
+//! Spec Chum formats — SNA/Z80 snapshots, RZX, DSK, TRD, Timex DCK, MDR.
 
 mod dck;
 mod dsk;
@@ -13,7 +13,10 @@ pub use dck::{DckBank, DckBankId, DckChunkAccess, DckImage, DCK_CHUNK_SIZE, DCK_
 pub use dsk::{DskImage, Sector};
 pub use error::FormatError;
 pub use fdc::Plus3Fdc;
-pub use mdr::{MdrImage, MDR_DATA_LEN, MDR_HEAD_LEN, MDR_IMAGE_SIZE, MDR_SECTORS, MDR_SECTOR_SIZE};
+pub use mdr::{
+    mdr_checksum, sector_checksums_ok, MdrImage, MDR_DATA_LEN, MDR_DES_LEN, MDR_HEAD_LEN,
+    MDR_IMAGE_SIZE, MDR_NAME_LEN, MDR_SECTORS, MDR_SECTOR_SIZE,
+};
 pub use media_identity::{
     catalogue_title, identify_bytes, identify_path, sha512_hex, MediaIdentity, MediaTitleSource,
 };
