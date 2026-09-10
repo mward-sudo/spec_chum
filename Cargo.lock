@@ -6699,6 +6699,7 @@ dependencies = [
 name = "tape"
 version = "0.6.1"
 dependencies = [
+ "flate2",
  "thiserror 2.0.20",
  "trace",
 ]

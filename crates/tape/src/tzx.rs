@@ -1,13 +1,16 @@
 //! TZX tape image parsing and EAR pulse playback.
 //!
-//! Supported block IDs for playback: 0x10, 0x11, 0x12, 0x13, 0x14, 0x20,
-//! plus Loop Start/End (`0x24` / `0x25`) and Jump/Call/Return/Select
-//! (`0x23`, `0x26`–`0x28`) expanded into the pulse schedule (Speedlock and
-//! similar custom loaders; Select auto-picks the first entry for headless open).
+//! Supported block IDs for playback: 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+//! 0x18, 0x19, 0x20, plus Loop Start/End (`0x24` / `0x25`), Jump/Call/Return/Select
+//! (`0x23`, `0x26`–`0x28`), Stop-if-48K (`0x2A`, accepted as a no-op at expand —
+//! model-aware stop is not applied during schedule build), and Set signal level
+//! (`0x2B`). Select auto-picks the first entry for headless open.
 //! Informational / skip blocks: 0x21, 0x22, 0x30, 0x32, 0x33, 0x35, 0x5A.
 
+use std::io::Read;
 use std::path::Path;
 
+use flate2::read::ZlibDecoder;
 use thiserror::Error;
 
 use crate::{
@@ -112,6 +115,22 @@ fn advance_past_tzx_block_body(data: &[u8], id: u8, mut i: usize) -> Result<usiz
                 | (u32::from(data[i + 9]) << 16)) as usize;
             i += 10 + len;
         }
+        0x15 => {
+            if i + 8 > data.len() {
+                return Err(TzxError::Format("truncated 0x15".into()));
+            }
+            let len = (u32::from(data[i + 5])
+                | (u32::from(data[i + 6]) << 8)
+                | (u32::from(data[i + 7]) << 16)) as usize;
+            i += 8 + len;
+        }
+        0x18 | 0x19 => {
+            if i + 4 > data.len() {
+                return Err(TzxError::Format(format!("truncated 0x{id:02x}")));
+            }
+            let len = u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as usize;
+            i += 4 + len;
+        }
         0x20 => i += 2,
         0x21 => {
             let n = data.get(i).copied().unwrap_or(0) as usize;
@@ -134,6 +153,8 @@ fn advance_past_tzx_block_body(data: &[u8], id: u8, mut i: usize) -> Result<usiz
             let len = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
             i += 2 + len;
         }
+        0x2a => i += 4,
+        0x2b => i += 5,
         0x30 => {
             let n = data.get(i).copied().unwrap_or(0) as usize;
             i += 1 + n;
@@ -492,6 +513,112 @@ impl TzxPlayer {
                         ensure_pulse_budget(&pulses)?;
                     }
                 }
+                0x15 => {
+                    // Direct recording — absolute EAR samples (bit 0=low, 1=high).
+                    if i + 8 > data.len() {
+                        return Err(TzxError::Format("truncated 0x15".into()));
+                    }
+                    let t_per_sample = u16::from_le_bytes([data[i], data[i + 1]]);
+                    let pause_ms = u16::from_le_bytes([data[i + 2], data[i + 3]]);
+                    let used_bits = data[i + 4];
+                    let len = (u32::from(data[i + 5])
+                        | (u32::from(data[i + 6]) << 8)
+                        | (u32::from(data[i + 7]) << 16)) as usize;
+                    i += 8;
+                    if i + len > data.len() {
+                        return Err(TzxError::Format("0x15 data truncated".into()));
+                    }
+                    let samples = &data[i..i + len];
+                    i += len;
+                    if emit {
+                        ensure_block_budget(&block_starts)?;
+                        let sample_pulses = estimate_direct_samples(samples.len(), used_bits)
+                            .ok_or_else(|| {
+                                TzxError::Format("TZX 0x15 pulse estimate overflow".into())
+                            })?;
+                        let pause_pulses = estimate_tzx_pause_pulses(ms_to_t(pause_ms));
+                        let additional =
+                            sample_pulses.checked_add(pause_pulses).ok_or_else(|| {
+                                TzxError::Format("TZX 0x15 pulse estimate overflow".into())
+                            })?;
+                        ensure_pulse_room(&pulses, additional)?;
+                        block_starts.push(pulses.len());
+                        append_direct_recording(
+                            &mut pulses,
+                            &mut level,
+                            &mut force_low,
+                            samples,
+                            u32::from(t_per_sample),
+                            used_bits,
+                            pause_ms,
+                        )?;
+                        ensure_pulse_budget(&pulses)?;
+                    }
+                }
+                0x18 => {
+                    // CSW recording (RLE / Z-RLE) — alternating absolute pulses.
+                    if i + 4 > data.len() {
+                        return Err(TzxError::Format("truncated 0x18".into()));
+                    }
+                    let body_len =
+                        u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]])
+                            as usize;
+                    i += 4;
+                    if body_len < 10 || i + body_len > data.len() {
+                        return Err(TzxError::Format("truncated 0x18 body".into()));
+                    }
+                    let body = &data[i..i + body_len];
+                    i += body_len;
+                    if emit {
+                        let pause_ms = u16::from_le_bytes([body[0], body[1]]);
+                        let sample_rate = u32::from(body[2])
+                            | (u32::from(body[3]) << 8)
+                            | (u32::from(body[4]) << 16);
+                        let compression = body[5];
+                        let stored_pulses =
+                            u32::from_le_bytes([body[6], body[7], body[8], body[9]]);
+                        let csw_data = &body[10..];
+                        ensure_block_budget(&block_starts)?;
+                        let budget = (stored_pulses as usize)
+                            .saturating_add(estimate_tzx_pause_pulses(ms_to_t(pause_ms)));
+                        ensure_pulse_room(&pulses, budget)?;
+                        block_starts.push(pulses.len());
+                        append_csw_recording(
+                            &mut pulses,
+                            &mut level,
+                            &mut force_low,
+                            csw_data,
+                            sample_rate,
+                            compression,
+                            stored_pulses,
+                            pause_ms,
+                        )?;
+                        ensure_pulse_budget(&pulses)?;
+                    }
+                }
+                0x19 => {
+                    // Generalized data block — symbol alphabet + pilot/data streams.
+                    if i + 4 > data.len() {
+                        return Err(TzxError::Format("truncated 0x19".into()));
+                    }
+                    let body_len =
+                        u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]])
+                            as usize;
+                    i += 4;
+                    if body_len < 14 || i + body_len > data.len() {
+                        return Err(TzxError::Format("truncated 0x19 body".into()));
+                    }
+                    let body = &data[i..i + body_len];
+                    i += body_len;
+                    if emit {
+                        ensure_block_budget(&block_starts)?;
+                        // Worst-case pulse count is hard to bound tightly; room-check
+                        // incrementally inside the append helper.
+                        block_starts.push(pulses.len());
+                        append_generalized_data(&mut pulses, &mut level, &mut force_low, body)?;
+                        ensure_pulse_budget(&pulses)?;
+                    }
+                }
                 0x20 => {
                     if i + 2 > data.len() {
                         return Err(TzxError::Format("truncated 0x20".into()));
@@ -673,6 +800,27 @@ impl TzxPlayer {
                                 )?;
                             }
                         }
+                    }
+                }
+                0x2a => {
+                    // Stop the tape if in 48K mode — accepted as a no-op while
+                    // building the EAR schedule (no machine model at parse).
+                    // Open/`has_tape` succeed; runtime model-aware stop can deepen later.
+                    if i + 4 > data.len() {
+                        return Err(TzxError::Format("truncated 0x2a".into()));
+                    }
+                    i += 4;
+                }
+                0x2b => {
+                    // Set signal level — absolute EAR polarity for the next pulse.
+                    if i + 5 > data.len() {
+                        return Err(TzxError::Format("truncated 0x2b".into()));
+                    }
+                    let signal_high = data[i + 4] != 0;
+                    i += 5;
+                    if emit {
+                        force_low = false;
+                        level = signal_high;
                     }
                 }
                 0x30 => {
@@ -886,7 +1034,7 @@ impl TzxPlayer {
                     let len = u16::from_le_bytes([data[i + 2], data[i + 3]]) as usize;
                     i += 4 + len;
                 }
-                0x11..=0x14 => return false,
+                0x11..=0x15 | 0x18 | 0x19 => return false,
                 0x20 => i += 2,
                 0x21 => {
                     let n = data.get(i).copied().unwrap_or(0) as usize;
@@ -900,6 +1048,9 @@ impl TzxPlayer {
                 // EAR pulses is required (reps>1), and TAP extraction would drop
                 // repetitions. Keep off the standard-speed-only path (#372 CR).
                 0x24 | 0x25 => return false,
+                // Stop-if-48K / Set signal are EAR-schedule concerns, not TAP.
+                0x2a => i += 4,
+                0x2b => i += 5,
                 0x30 => {
                     let n = data.get(i).copied().unwrap_or(0) as usize;
                     i += 1 + n;
@@ -983,6 +1134,19 @@ impl TzxPlayer {
                         | (u32::from(data[i + 9]) << 16)) as usize;
                     i += 10 + len;
                 }
+                0x15 => {
+                    // Direct recording is not TAP-extractable — fail loudly (#374).
+                    return Err(TzxError::Format(format!(
+                        "unsupported TZX block ID 0x15 at offset {} (direct recording — use EAR)",
+                        i - 1
+                    )));
+                }
+                0x18 | 0x19 => {
+                    return Err(TzxError::Format(format!(
+                        "unsupported TZX block ID 0x{id:02x} at offset {} (pulse recording — use EAR)",
+                        i - 1
+                    )));
+                }
                 0x20 => i += 2,
                 0x21 => {
                     let n = data.get(i).copied().unwrap_or(0) as usize;
@@ -999,6 +1163,8 @@ impl TzxPlayer {
                         i - 1
                     )));
                 }
+                0x2a => i += 4,
+                0x2b => i += 5,
                 0x30 => {
                     let n = data.get(i).copied().unwrap_or(0) as usize;
                     i += 1 + n;
@@ -1182,6 +1348,336 @@ fn append_pure_data(
         }
     }
     append_tzx_pause(pulses, level, force_low, ms_to_t(pause_ms));
+}
+
+/// Upper bound on Direct-recording sample pulses (one per bit before merge).
+fn estimate_direct_samples(byte_len: usize, used_bits: u8) -> Option<usize> {
+    if byte_len == 0 {
+        return Some(0);
+    }
+    let used = if used_bits == 0 || used_bits > 8 {
+        8
+    } else {
+        used_bits
+    };
+    let full = byte_len.saturating_sub(1).checked_mul(8)?;
+    full.checked_add(usize::from(used))
+}
+
+/// Emit an absolute EAR level for `duration` T-states, merging with the prior
+/// pulse when the level matches (Direct / CSW / GDB force-polarity paths).
+fn push_absolute_level(
+    pulses: &mut Vec<(u32, bool)>,
+    level: &mut bool,
+    force_low: &mut bool,
+    ear_high: bool,
+    duration: u32,
+) -> Result<(), TzxError> {
+    if duration == 0 {
+        return Ok(());
+    }
+    *force_low = false;
+    if let Some(last) = pulses.last_mut() {
+        if last.1 == ear_high {
+            last.0 = last.0.saturating_add(duration);
+            *level = !ear_high;
+            return Ok(());
+        }
+    }
+    ensure_pulse_room(pulses, 1)?;
+    pulses.push((duration, ear_high));
+    *level = !ear_high;
+    Ok(())
+}
+
+fn append_direct_recording(
+    pulses: &mut Vec<(u32, bool)>,
+    level: &mut bool,
+    force_low: &mut bool,
+    samples: &[u8],
+    t_per_sample: u32,
+    used_bits: u8,
+    pause_ms: u16,
+) -> Result<(), TzxError> {
+    if samples.is_empty() || t_per_sample == 0 {
+        append_tzx_pause(pulses, level, force_low, ms_to_t(pause_ms));
+        return Ok(());
+    }
+    let used_bits = if used_bits == 0 || used_bits > 8 {
+        8
+    } else {
+        used_bits
+    };
+    *force_low = false;
+    for (bi, &byte) in samples.iter().enumerate() {
+        let bits = if bi + 1 == samples.len() {
+            used_bits
+        } else {
+            8
+        };
+        let bit_hi = 7u8;
+        let bit_lo = bit_hi + 1 - bits;
+        for bit in (bit_lo..=bit_hi).rev() {
+            let ear_high = byte & (1 << bit) != 0;
+            push_absolute_level(pulses, level, force_low, ear_high, t_per_sample)?;
+        }
+    }
+    append_tzx_pause(pulses, level, force_low, ms_to_t(pause_ms));
+    Ok(())
+}
+
+fn decode_csw_rle(data: &[u8]) -> Result<Vec<u32>, TzxError> {
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < data.len() {
+        let b = data[i];
+        i += 1;
+        let samples = if b == 0 {
+            if i + 4 > data.len() {
+                return Err(TzxError::Format("truncated CSW RLE dword".into()));
+            }
+            let n = u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]);
+            i += 4;
+            n
+        } else {
+            u32::from(b)
+        };
+        out.push(samples);
+    }
+    Ok(out)
+}
+
+fn append_csw_recording(
+    pulses: &mut Vec<(u32, bool)>,
+    level: &mut bool,
+    force_low: &mut bool,
+    csw_data: &[u8],
+    sample_rate: u32,
+    compression: u8,
+    stored_pulses: u32,
+    pause_ms: u16,
+) -> Result<(), TzxError> {
+    if sample_rate == 0 {
+        return Err(TzxError::Format("TZX CSW sample rate is 0".into()));
+    }
+    // T-states per CSW sample ≈ 3_500_000 / rate (Fuse / CLK convention).
+    let t_per_sample = 3_500_000u32 / sample_rate;
+    if t_per_sample == 0 {
+        return Err(TzxError::Format("TZX CSW sample rate too high".into()));
+    }
+    let raw = match compression {
+        0x01 => csw_data.to_vec(),
+        0x02 => {
+            let mut zlib = ZlibDecoder::new(csw_data);
+            let mut plain = Vec::new();
+            zlib.read_to_end(&mut plain)
+                .map_err(|e| TzxError::Format(format!("TZX CSW Z-RLE inflate failed: {e}")))?;
+            plain
+        }
+        other => {
+            return Err(TzxError::Format(format!(
+                "unsupported TZX CSW compression 0x{other:02x}"
+            )));
+        }
+    };
+    let sample_counts = decode_csw_rle(&raw)?;
+    if stored_pulses != 0 && sample_counts.len() as u32 != stored_pulses {
+        return Err(TzxError::Format(format!(
+            "TZX CSW pulse count mismatch (got {}, header {stored_pulses})",
+            sample_counts.len()
+        )));
+    }
+    ensure_pulse_room(pulses, sample_counts.len())?;
+    // CSW pulses alternate; first edge flips from the current level (CLK/Fuse).
+    for &samples in &sample_counts {
+        let duration = samples.saturating_mul(t_per_sample);
+        push_pulse_tzx(pulses, level, force_low, duration);
+    }
+    append_tzx_pause(pulses, level, force_low, ms_to_t(pause_ms));
+    Ok(())
+}
+
+fn alphabet_size(raw: u8, present: bool) -> usize {
+    if !present {
+        0
+    } else if raw == 0 {
+        256
+    } else {
+        usize::from(raw)
+    }
+}
+
+fn bits_per_symbol(alphabet: usize) -> usize {
+    if alphabet <= 1 {
+        return 0;
+    }
+    let mut bits = 1usize;
+    let mut base = 2usize;
+    while base < alphabet {
+        base = base.saturating_mul(2);
+        bits += 1;
+    }
+    bits
+}
+
+struct SymDef {
+    flags: u8,
+    pulses: Vec<u16>,
+}
+
+fn read_symdefs(
+    data: &[u8],
+    mut off: usize,
+    count: usize,
+    max_pulses: usize,
+) -> Result<(Vec<SymDef>, usize), TzxError> {
+    let mut out = Vec::with_capacity(count);
+    let row = 1usize
+        .checked_add(
+            max_pulses
+                .checked_mul(2)
+                .ok_or_else(|| TzxError::Format("TZX GDB symbol row overflow".into()))?,
+        )
+        .ok_or_else(|| TzxError::Format("TZX GDB symbol row overflow".into()))?;
+    for _ in 0..count {
+        if off + row > data.len() {
+            return Err(TzxError::Format("truncated TZX GDB SYMDEF".into()));
+        }
+        let flags = data[off];
+        off += 1;
+        let mut pulses = Vec::with_capacity(max_pulses);
+        for _ in 0..max_pulses {
+            pulses.push(u16::from_le_bytes([data[off], data[off + 1]]));
+            off += 2;
+        }
+        out.push(SymDef { flags, pulses });
+    }
+    Ok((out, off))
+}
+
+fn emit_gdb_symbol(
+    pulses: &mut Vec<(u32, bool)>,
+    level: &mut bool,
+    force_low: &mut bool,
+    symbol: &SymDef,
+) -> Result<(), TzxError> {
+    // TZX SYMDEF flags b0-b1: starting polarity.
+    match symbol.flags & 0x03 {
+        0x00 => {
+            // Opposite to current — normal edge (default push_pulse_tzx).
+        }
+        0x01 => {
+            // Same as current — no edge: emit first pulse at previous EAR level.
+            *force_low = false;
+            *level = !*level;
+        }
+        0x02 => {
+            *force_low = false;
+            *level = false; // force low
+        }
+        0x03 => {
+            *force_low = false;
+            *level = true; // force high
+        }
+        _ => unreachable!(),
+    }
+    for &len in &symbol.pulses {
+        if len == 0 {
+            break;
+        }
+        ensure_pulse_room(pulses, 1)?;
+        push_pulse_tzx(pulses, level, force_low, u32::from(len));
+    }
+    Ok(())
+}
+
+fn append_generalized_data(
+    pulses: &mut Vec<(u32, bool)>,
+    level: &mut bool,
+    force_low: &mut bool,
+    body: &[u8],
+) -> Result<(), TzxError> {
+    // body starts at pause WORD (block length already consumed).
+    if body.len() < 14 {
+        return Err(TzxError::Format("truncated 0x19 header".into()));
+    }
+    let pause_ms = u16::from_le_bytes([body[0], body[1]]);
+    let pilot_symbol_count = u32::from_le_bytes([body[2], body[3], body[4], body[5]]);
+    let npp = body[6] as usize;
+    let pilot_alphabet_raw = body[7];
+    let data_symbol_count = u32::from_le_bytes([body[8], body[9], body[10], body[11]]);
+    let npd = body[12] as usize;
+    let data_alphabet_raw = body[13];
+    let asp = alphabet_size(pilot_alphabet_raw, pilot_symbol_count > 0);
+    let asd = alphabet_size(data_alphabet_raw, data_symbol_count > 0);
+    let mut off = 14usize;
+
+    let (pilot_syms, next) = if pilot_symbol_count > 0 {
+        read_symdefs(body, off, asp, npp)?
+    } else {
+        (Vec::new(), off)
+    };
+    off = next;
+
+    if pilot_symbol_count > 0 {
+        let need = (pilot_symbol_count as usize)
+            .checked_mul(3)
+            .ok_or_else(|| TzxError::Format("TZX GDB pilot stream overflow".into()))?;
+        if off + need > body.len() {
+            return Err(TzxError::Format("truncated TZX GDB pilot stream".into()));
+        }
+        for _ in 0..pilot_symbol_count {
+            let sym = body[off] as usize;
+            let reps = u16::from_le_bytes([body[off + 1], body[off + 2]]);
+            off += 3;
+            if sym >= pilot_syms.len() {
+                return Err(TzxError::Format(format!(
+                    "TZX GDB pilot symbol {sym} out of range ({})",
+                    pilot_syms.len()
+                )));
+            }
+            for _ in 0..reps {
+                emit_gdb_symbol(pulses, level, force_low, &pilot_syms[sym])?;
+            }
+        }
+    }
+
+    let (data_syms, next) = if data_symbol_count > 0 {
+        read_symdefs(body, off, asd, npd)?
+    } else {
+        (Vec::new(), off)
+    };
+    off = next;
+
+    if data_symbol_count > 0 {
+        let nb = bits_per_symbol(asd);
+        let stream = &body[off..];
+        let mut bit_i = 0usize;
+        for _ in 0..data_symbol_count {
+            let mut symbol = 0usize;
+            for _ in 0..nb {
+                let byte_i = bit_i / 8;
+                let bit = 7 - (bit_i % 8);
+                if byte_i >= stream.len() {
+                    return Err(TzxError::Format("truncated TZX GDB data stream".into()));
+                }
+                let bit_val = (stream[byte_i] >> bit) & 1;
+                symbol = (symbol << 1) | usize::from(bit_val);
+                bit_i += 1;
+            }
+            // ASD==1 → NB==0: always symbol 0 (no bits consumed).
+            if symbol >= data_syms.len() {
+                return Err(TzxError::Format(format!(
+                    "TZX GDB data symbol {symbol} out of range ({})",
+                    data_syms.len()
+                )));
+            }
+            emit_gdb_symbol(pulses, level, force_low, &data_syms[symbol])?;
+        }
+    }
+
+    append_tzx_pause(pulses, level, force_low, ms_to_t(pause_ms));
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1946,6 +2442,71 @@ mod tests {
                 },
             },
             Case {
+                id: 0x15,
+                name: "Direct recording",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x15);
+                    v.extend_from_slice(&158u16.to_le_bytes()); // ~22050 Hz
+                    v.extend_from_slice(&0u16.to_le_bytes()); // pause
+                    v.push(8); // used bits
+                    let samples = [0b1010_1010u8];
+                    v.extend_from_slice(&(samples.len() as u32).to_le_bytes()[..3]);
+                    v.extend_from_slice(&samples);
+                    v
+                },
+            },
+            Case {
+                id: 0x18,
+                name: "CSW recording (RLE)",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x18);
+                    // body: pause + rate + compression + pulse count + RLE data
+                    let csw = [10u8, 20, 30]; // three pulses
+                    let body_len = 10 + csw.len();
+                    v.extend_from_slice(&(body_len as u32).to_le_bytes());
+                    v.extend_from_slice(&0u16.to_le_bytes()); // pause
+                    v.extend_from_slice(&22_050u32.to_le_bytes()[..3]); // rate
+                    v.push(0x01); // RLE
+                    v.extend_from_slice(&(csw.len() as u32).to_le_bytes());
+                    v.extend_from_slice(&csw);
+                    v
+                },
+            },
+            Case {
+                id: 0x19,
+                name: "Generalized data",
+                expect: Expect::Pulses,
+                build: || {
+                    // Minimal GDB: no pilot, 2 data symbols (0/1), one data symbol.
+                    // SYMDEF: flags=0 (edge), one pulse length each.
+                    let mut v = tzx_header();
+                    v.push(0x19);
+                    let mut body = Vec::new();
+                    body.extend_from_slice(&0u16.to_le_bytes()); // pause
+                    body.extend_from_slice(&0u32.to_le_bytes()); // TOTP
+                    body.push(0); // NPP
+                    body.push(0); // ASP
+                    body.extend_from_slice(&1u32.to_le_bytes()); // TOTD = 1
+                    body.push(1); // NPD = 1 pulse max
+                    body.push(2); // ASD = 2 symbols
+                                  // Symbol 0: edge, pulse 500
+                    body.push(0x00);
+                    body.extend_from_slice(&500u16.to_le_bytes());
+                    // Symbol 1: edge, pulse 1000
+                    body.push(0x00);
+                    body.extend_from_slice(&1000u16.to_le_bytes());
+                    // Data stream: 1 bit → symbol 0 (MSB first → 0x00)
+                    body.push(0x00);
+                    v.extend_from_slice(&(body.len() as u32).to_le_bytes());
+                    v.extend_from_slice(&body);
+                    v
+                },
+            },
+            Case {
                 id: 0x20,
                 name: "Pause",
                 expect: Expect::Pulses,
@@ -2046,6 +2607,29 @@ mod tests {
                 },
             },
             Case {
+                id: 0x2a,
+                name: "Stop if 48K (accepted no-op)",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x2a);
+                    v.extend_from_slice(&0u32.to_le_bytes());
+                    v
+                },
+            },
+            Case {
+                id: 0x2b,
+                name: "Set signal level",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x2b);
+                    v.extend_from_slice(&1u32.to_le_bytes());
+                    v.push(1); // high
+                    v
+                },
+            },
+            Case {
                 id: 0x30,
                 name: "Text description",
                 expect: Expect::SkipOk,
@@ -2134,17 +2718,18 @@ mod tests {
         }
     }
 
-    /// Intentionally unsupported commercial-common IDs must fail loudly with the
-    /// hex ID in the message (host Open surfaces this via `sc_last_error`).
+    /// Intentionally unsupported IDs must fail loudly with the hex ID in the
+    /// message (host Open surfaces this via `sc_last_error`). Commercial-common
+    /// Direct/CSW/GDB/0x2A/0x2B are supported (#374); keep the gate on reserved /
+    /// deprecated IDs that remain hard errors.
     #[test]
     fn tzx_block_matrix_unsupported_ids_fail_loudly() {
         // Minimal byte after the ID is enough — parse rejects before reading a body.
         const UNSUPPORTED: &[u8] = &[
-            0x15, // Direct recording
-            0x18, // CSW recording
-            0x19, // Generalized data
-            0x2a, // Stop if 48K
-            0x2b, // Set signal level
+            0x16, // C64 ROM (deprecated)
+            0x17, // C64 turbo (deprecated)
+            0x34, // Emulation info (deprecated)
+            0x40, // Snapshot block (deprecated)
         ];
         for &id in UNSUPPORTED {
             let mut v = tzx_header();
