@@ -1986,6 +1986,208 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Media capability matrix (#374): each supported TZX block family must open
+    /// through `HostSession::open_tape` (`SpecChumMac` `sc_open_tape`) and leave
+    /// `has_tape()`. Info/skip markers are paired with a Pure Tone so the deck
+    /// is non-empty after insert.
+    #[test]
+    fn open_tape_tzx_block_matrix_supported_families() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+
+        fn header() -> Vec<u8> {
+            let mut v = Vec::new();
+            v.extend_from_slice(b"ZXTape!");
+            v.extend_from_slice(&[0x1a, 1, 20]);
+            v
+        }
+        fn with_tone(mut v: Vec<u8>) -> Vec<u8> {
+            v.push(0x12);
+            v.extend_from_slice(&1000u16.to_le_bytes());
+            v.extend_from_slice(&2u16.to_le_bytes());
+            v
+        }
+
+        type FamilyBuild = fn() -> Vec<u8>;
+        let families: &[(&str, FamilyBuild)] = &[
+            ("id10_standard", || {
+                let mut v = header();
+                v.push(0x10);
+                v.extend_from_slice(&100u16.to_le_bytes());
+                let payload = [0x00u8, b'A', 0x00];
+                v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+                v.extend_from_slice(&payload);
+                v
+            }),
+            ("id11_turbo", || {
+                let mut v = header();
+                v.push(0x11);
+                v.extend_from_slice(&800u16.to_le_bytes());
+                v.extend_from_slice(&400u16.to_le_bytes());
+                v.extend_from_slice(&400u16.to_le_bytes());
+                v.extend_from_slice(&300u16.to_le_bytes());
+                v.extend_from_slice(&600u16.to_le_bytes());
+                v.extend_from_slice(&10u16.to_le_bytes());
+                v.push(8);
+                v.extend_from_slice(&0u16.to_le_bytes());
+                let payload = [0xffu8, 0x00];
+                v.extend_from_slice(&(payload.len() as u32).to_le_bytes()[..3]);
+                v.extend_from_slice(&payload);
+                v
+            }),
+            ("id12_pure_tone", || with_tone(header())),
+            ("id13_pulse_seq", || {
+                let mut v = header();
+                v.push(0x13);
+                v.push(2);
+                v.extend_from_slice(&500u16.to_le_bytes());
+                v.extend_from_slice(&600u16.to_le_bytes());
+                v
+            }),
+            ("id14_pure_data", || {
+                let mut v = header();
+                v.push(0x14);
+                v.extend_from_slice(&100u16.to_le_bytes());
+                v.extend_from_slice(&200u16.to_le_bytes());
+                v.push(8);
+                v.extend_from_slice(&0u16.to_le_bytes());
+                let payload = [0xa5u8];
+                v.extend_from_slice(&(payload.len() as u32).to_le_bytes()[..3]);
+                v.extend_from_slice(&payload);
+                v
+            }),
+            ("id20_pause", || {
+                let mut v = header();
+                v.push(0x20);
+                v.extend_from_slice(&10u16.to_le_bytes());
+                v
+            }),
+            ("id21_group_start", || {
+                let mut v = header();
+                v.push(0x21);
+                v.push(3);
+                v.extend_from_slice(b"grp");
+                with_tone(v)
+            }),
+            ("id22_group_end", || {
+                let mut v = header();
+                v.push(0x22);
+                with_tone(v)
+            }),
+            ("id24_loop", || {
+                let mut v = header();
+                v.push(0x24);
+                v.extend_from_slice(&2u16.to_le_bytes());
+                v.push(0x12);
+                v.extend_from_slice(&1000u16.to_le_bytes());
+                v.extend_from_slice(&2u16.to_le_bytes());
+                v.push(0x25);
+                v
+            }),
+            ("id30_text", || {
+                let mut v = header();
+                v.push(0x30);
+                v.push(2);
+                v.extend_from_slice(b"hi");
+                with_tone(v)
+            }),
+            ("id32_archive_info", || {
+                let mut v = header();
+                v.push(0x32);
+                let body = [0x00u8, 1, b'x'];
+                v.extend_from_slice(&(body.len() as u16).to_le_bytes());
+                v.extend_from_slice(&body);
+                with_tone(v)
+            }),
+            ("id33_hardware_type", || {
+                let mut v = header();
+                v.push(0x33);
+                v.push(1);
+                v.extend_from_slice(&[0x00, 0x00, 0x00]);
+                with_tone(v)
+            }),
+            ("id35_custom_info", || {
+                let mut v = header();
+                v.push(0x35);
+                v.extend_from_slice(b"CUSTOMINFOBLOCK!");
+                v.extend_from_slice(&0u32.to_le_bytes());
+                with_tone(v)
+            }),
+            ("id5a_glue", || {
+                let mut v = header();
+                v.push(0x5a);
+                v.extend_from_slice(&[0; 9]);
+                with_tone(v)
+            }),
+        ];
+
+        let dir = tempfile_dir("spec_chum_tzx_matrix");
+        for (name, build) in families {
+            let path = dir.join(format!("{name}.tzx"));
+            std::fs::write(&path, build()).expect("write synthetic tzx");
+            let mut s = HostSession::new(ModelId::Spectrum48, true);
+            s.load_rom_bytes(&rom).expect("rom");
+            s.open_tape(&path).unwrap_or_else(|e| {
+                panic!("open_tape must accept supported family {name}: {e}");
+            });
+            assert!(
+                s.has_tape(),
+                "supported family {name} must leave has_tape() true"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Unsupported TZX IDs must fail open with the ID in the message and leave
+    /// any previously inserted tape in the deck (#374).
+    #[test]
+    fn open_tape_tzx_block_matrix_unsupported_leaves_deck() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let dir = tempfile_dir("spec_chum_tzx_unsup");
+        let good = dir.join("good.tzx");
+        let mut good_bytes = Vec::new();
+        good_bytes.extend_from_slice(b"ZXTape!");
+        good_bytes.extend_from_slice(&[0x1a, 1, 20]);
+        good_bytes.push(0x12);
+        good_bytes.extend_from_slice(&1000u16.to_le_bytes());
+        good_bytes.extend_from_slice(&2u16.to_le_bytes());
+        std::fs::write(&good, &good_bytes).expect("write good");
+
+        const UNSUPPORTED: &[u8] = &[0x15, 0x18, 0x19, 0x23, 0x26, 0x27, 0x28, 0x2a, 0x2b];
+        for &id in UNSUPPORTED {
+            let bad = dir.join(format!("bad_{id:02x}.tzx"));
+            let mut v = Vec::new();
+            v.extend_from_slice(b"ZXTape!");
+            v.extend_from_slice(&[0x1a, 1, 20]);
+            v.push(id);
+            v.extend_from_slice(&[0u8; 16]);
+            std::fs::write(&bad, &v).expect("write bad");
+
+            let mut s = HostSession::new(ModelId::Spectrum48, true);
+            s.load_rom_bytes(&rom).expect("rom");
+            s.open_tape(&good).expect("seed good tape");
+            assert!(s.has_tape());
+            let err = s
+                .open_tape(&bad)
+                .expect_err("unsupported TZX must fail open");
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("0x{id:02x}")),
+                "open error must name 0x{id:02x}, got {msg}"
+            );
+            assert!(
+                s.has_tape(),
+                "failed open must leave prior tape inserted (0x{id:02x})"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn tempfile_dir(prefix: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("{prefix}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

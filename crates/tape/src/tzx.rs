@@ -724,7 +724,14 @@ impl TzxPlayer {
                     i += 0x14 + n;
                 }
                 0x5a => i += 9,
-                _ => break,
+                // Do not silently truncate: an unknown ID after a leading 0x10
+                // used to drop trailing standard blocks (#374 / Arkanoid-class miss).
+                other => {
+                    return Err(TzxError::Format(format!(
+                        "unsupported TZX block ID 0x{other:02x} at offset {}",
+                        i - 1
+                    )));
+                }
             }
         }
         Ok(TapImage { blocks, pause_t })
@@ -1448,5 +1455,331 @@ mod tests {
         assert!(!p.pulses[p1750].1, "1750ms pause low (Fuse)");
         assert!(!p.pulses[p1750 + 1].1, "LEVEL_LOW stays low");
         assert!(p.pulses[p1750 + 2].1, "next edge high");
+    }
+
+    // --- Media / TZX capability matrix (#374) ---------------------------------
+
+    fn tzx_header() -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"ZXTape!");
+        v.extend_from_slice(&[0x1a, 1, 20]);
+        v
+    }
+
+    fn append_id10(v: &mut Vec<u8>, payload: &[u8], pause_ms: u16) {
+        v.push(0x10);
+        v.extend_from_slice(&pause_ms.to_le_bytes());
+        v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        v.extend_from_slice(payload);
+    }
+
+    fn append_pure_tone(v: &mut Vec<u8>, len: u16, count: u16) {
+        v.push(0x12);
+        v.extend_from_slice(&len.to_le_bytes());
+        v.extend_from_slice(&count.to_le_bytes());
+    }
+
+    /// Pulse-producing / skippable IDs currently accepted by [`TzxPlayer::parse`].
+    ///
+    /// Info-only blocks (`SkipOk`) parse successfully with an empty schedule; CI
+    /// still covers them so a future regression that hard-errors on skip markers
+    /// is caught. Pulse families require a non-empty schedule.
+    #[test]
+    fn tzx_block_matrix_supported_ids_parse() {
+        #[derive(Clone, Copy)]
+        enum Expect {
+            Pulses,
+            SkipOk,
+        }
+        struct Case {
+            id: u8,
+            name: &'static str,
+            expect: Expect,
+            build: fn() -> Vec<u8>,
+        }
+
+        let cases: &[Case] = &[
+            Case {
+                id: 0x10,
+                name: "Standard Speed Data",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    append_id10(&mut v, &[0x00, 0x41, 0x00], 100);
+                    v
+                },
+            },
+            Case {
+                id: 0x11,
+                name: "Turbo Speed Data",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x11);
+                    v.extend_from_slice(&800u16.to_le_bytes()); // pilot
+                    v.extend_from_slice(&400u16.to_le_bytes()); // sync1
+                    v.extend_from_slice(&400u16.to_le_bytes()); // sync2
+                    v.extend_from_slice(&300u16.to_le_bytes()); // zero
+                    v.extend_from_slice(&600u16.to_le_bytes()); // one
+                    v.extend_from_slice(&10u16.to_le_bytes()); // pilot pulses
+                    v.push(8); // used bits
+                    v.extend_from_slice(&0u16.to_le_bytes()); // pause
+                    let payload = [0xffu8, 0x00];
+                    v.extend_from_slice(&(payload.len() as u32).to_le_bytes()[..3]);
+                    v.extend_from_slice(&payload);
+                    v
+                },
+            },
+            Case {
+                id: 0x12,
+                name: "Pure Tone",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    append_pure_tone(&mut v, 1000, 4);
+                    v
+                },
+            },
+            Case {
+                id: 0x13,
+                name: "Pulse Sequence",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x13);
+                    v.push(3); // n
+                    v.extend_from_slice(&500u16.to_le_bytes());
+                    v.extend_from_slice(&600u16.to_le_bytes());
+                    v.extend_from_slice(&700u16.to_le_bytes());
+                    v
+                },
+            },
+            Case {
+                id: 0x14,
+                name: "Pure Data",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x14);
+                    v.extend_from_slice(&100u16.to_le_bytes()); // zero
+                    v.extend_from_slice(&200u16.to_le_bytes()); // one
+                    v.push(8);
+                    v.extend_from_slice(&0u16.to_le_bytes());
+                    let payload = [0xa5u8];
+                    v.extend_from_slice(&(payload.len() as u32).to_le_bytes()[..3]);
+                    v.extend_from_slice(&payload);
+                    v
+                },
+            },
+            Case {
+                id: 0x20,
+                name: "Pause",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x20);
+                    v.extend_from_slice(&10u16.to_le_bytes()); // non-zero → one silence pulse
+                    v
+                },
+            },
+            Case {
+                id: 0x21,
+                name: "Group Start",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x21);
+                    let name = b"grp";
+                    v.push(name.len() as u8);
+                    v.extend_from_slice(name);
+                    v
+                },
+            },
+            Case {
+                id: 0x22,
+                name: "Group End",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x22);
+                    v
+                },
+            },
+            Case {
+                id: 0x24,
+                name: "Loop Start/End",
+                expect: Expect::Pulses,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x24);
+                    v.extend_from_slice(&2u16.to_le_bytes());
+                    append_pure_tone(&mut v, 1000, 2);
+                    v.push(0x25);
+                    v
+                },
+            },
+            Case {
+                id: 0x30,
+                name: "Text description",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x30);
+                    let text = b"hi";
+                    v.push(text.len() as u8);
+                    v.extend_from_slice(text);
+                    v
+                },
+            },
+            Case {
+                id: 0x32,
+                name: "Archive info",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x32);
+                    let body = [0x00u8, 1, b'x']; // one text entry
+                    v.extend_from_slice(&(body.len() as u16).to_le_bytes());
+                    v.extend_from_slice(&body);
+                    v
+                },
+            },
+            Case {
+                id: 0x33,
+                name: "Hardware type",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x33);
+                    v.push(1); // one entry
+                    v.extend_from_slice(&[0x00, 0x00, 0x00]);
+                    v
+                },
+            },
+            Case {
+                id: 0x35,
+                name: "Custom info",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x35);
+                    v.extend_from_slice(b"CUSTOMINFOBLOCK!"); // 16-byte id
+                    v.extend_from_slice(&0u32.to_le_bytes()); // length
+                    v
+                },
+            },
+            Case {
+                id: 0x5a,
+                name: "Glue block",
+                expect: Expect::SkipOk,
+                build: || {
+                    let mut v = tzx_header();
+                    v.push(0x5a);
+                    v.extend_from_slice(&[0; 9]);
+                    v
+                },
+            },
+        ];
+
+        for case in cases {
+            let data = (case.build)();
+            let p = TzxPlayer::parse(&data).unwrap_or_else(|e| {
+                panic!(
+                    "supported TZX 0x{:02x} ({}) must parse: {e}",
+                    case.id, case.name
+                )
+            });
+            match case.expect {
+                Expect::Pulses => assert!(
+                    p.scheduled_pulses() > 0,
+                    "0x{:02x} ({}) must schedule pulses, got 0",
+                    case.id,
+                    case.name
+                ),
+                Expect::SkipOk => assert_eq!(
+                    p.scheduled_pulses(),
+                    0,
+                    "0x{:02x} ({}) is info/skip-only — expect empty schedule",
+                    case.id,
+                    case.name
+                ),
+            }
+        }
+    }
+
+    /// Intentionally unsupported commercial-common IDs must fail loudly with the
+    /// hex ID in the message (host Open surfaces this via `sc_last_error`).
+    #[test]
+    fn tzx_block_matrix_unsupported_ids_fail_loudly() {
+        // Minimal byte after the ID is enough — parse rejects before reading a body.
+        const UNSUPPORTED: &[u8] = &[
+            0x15, // Direct recording
+            0x18, // CSW recording
+            0x19, // Generalized data
+            0x23, // Jump to block
+            0x26, // Call sequence
+            0x27, // Return from sequence
+            0x28, // Select block
+            0x2a, // Stop if 48K
+            0x2b, // Set signal level
+        ];
+        for &id in UNSUPPORTED {
+            let mut v = tzx_header();
+            v.push(id);
+            // Padding so truncated-body paths are not what we exercise.
+            v.extend_from_slice(&[0u8; 16]);
+            let err = TzxPlayer::parse(&v).expect_err("unsupported ID must Err");
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("0x{id:02x}")) || msg.contains(&format!("0x{id:02X}")),
+                "error must name block ID 0x{id:02x}, got {msg}"
+            );
+            assert!(
+                msg.to_ascii_lowercase().contains("unsupported"),
+                "error must say unsupported, got {msg}"
+            );
+        }
+    }
+
+    /// `#374` scan harden: unknown IDs must not `_ => break` and drop a trailing
+    /// standard `0x10` that a flash/TAP conversion would otherwise keep.
+    #[test]
+    fn to_tap_image_errors_on_unsupported_instead_of_truncating() {
+        let mut v = tzx_header();
+        append_id10(&mut v, &[0xff, 1, 2, 0], 100);
+        v.push(0x23); // Jump — unsupported
+        v.extend_from_slice(&1i16.to_le_bytes());
+        append_id10(&mut v, &[0x00, 0x41, 0x00], 50);
+
+        let err = TzxPlayer::to_tap_image(&v).expect_err("must not silently truncate");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("0x23"),
+            "TAP scan must surface unsupported 0x23, got {msg}"
+        );
+    }
+
+    /// Skip/info markers between two `0x10`s must not truncate the trailing block.
+    #[test]
+    fn to_tap_image_keeps_id10_across_skip_markers() {
+        let mut v = tzx_header();
+        let first = [0xffu8, 1, 2, 0];
+        let second = [0x00u8, 0x41, 0x00];
+        append_id10(&mut v, &first, 100);
+        v.push(0x21);
+        v.push(3);
+        v.extend_from_slice(b"grp");
+        v.push(0x30);
+        v.push(2);
+        v.extend_from_slice(b"hi");
+        v.push(0x22);
+        v.push(0x5a);
+        v.extend_from_slice(&[0; 9]);
+        append_id10(&mut v, &second, 50);
+
+        let tap = TzxPlayer::to_tap_image(&v).unwrap();
+        assert_eq!(tap.blocks.len(), 2);
+        assert_eq!(tap.blocks[0], first);
+        assert_eq!(tap.blocks[1], second);
     }
 }
