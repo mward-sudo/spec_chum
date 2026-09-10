@@ -1180,6 +1180,8 @@ pub struct WatchSpec {
     pub addr: u16,
     pub read: bool,
     pub write: bool,
+    /// Comparison mask (`0xFFFF` = exact). See `machine::Watch::mask` (#387).
+    pub mask: u16,
 }
 
 impl From<machine::Watch> for WatchSpec {
@@ -1188,6 +1190,7 @@ impl From<machine::Watch> for WatchSpec {
             addr: w.addr,
             read: w.read,
             write: w.write,
+            mask: w.mask,
         }
     }
 }

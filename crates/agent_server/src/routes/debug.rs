@@ -180,6 +180,23 @@ pub(crate) struct WatchBody {
     read: bool,
     #[serde(default)]
     write: bool,
+    /// Optional hex mask (e.g. `"ff"`). Omitted/`null` → exact (`0xFFFF`).
+    #[serde(default)]
+    mask: Option<String>,
+}
+
+fn watch_from_body(body: &WatchBody) -> Result<Watch, ApiError> {
+    let addr = parse_addr(&body.addr)?;
+    if !body.read && !body.write {
+        return Err(ApiError::BadRequest(
+            "watch must enable read and/or write".into(),
+        ));
+    }
+    let mask = match &body.mask {
+        Some(s) if !s.trim().is_empty() => parse_addr(s)?,
+        _ => 0xFFFF,
+    };
+    Ok(Watch::with_mask(addr, mask, body.read, body.write))
 }
 
 pub(crate) async fn add_watch(
@@ -190,20 +207,9 @@ pub(crate) async fn add_watch(
     if let Err(e) = check_auth(&state, &headers) {
         return api_error(&state.plane, e);
     }
-    let addr = match parse_addr(&body.addr) {
-        Ok(a) => a,
+    let watch = match watch_from_body(&body) {
+        Ok(w) => w,
         Err(e) => return api_error(&state.plane, e),
-    };
-    if !body.read && !body.write {
-        return api_error(
-            &state.plane,
-            ApiError::BadRequest("watch must enable read and/or write".into()),
-        );
-    }
-    let watch = Watch {
-        addr,
-        read: body.read,
-        write: body.write,
     };
     auth_empty(&state, &headers, || state.plane.add_mem_watch(watch))
 }
@@ -238,20 +244,9 @@ pub(crate) async fn add_port_watch(
     if let Err(e) = check_auth(&state, &headers) {
         return api_error(&state.plane, e);
     }
-    let addr = match parse_addr(&body.addr) {
-        Ok(a) => a,
+    let watch = match watch_from_body(&body) {
+        Ok(w) => w,
         Err(e) => return api_error(&state.plane, e),
-    };
-    if !body.read && !body.write {
-        return api_error(
-            &state.plane,
-            ApiError::BadRequest("watch must enable read and/or write".into()),
-        );
-    }
-    let watch = Watch {
-        addr,
-        read: body.read,
-        write: body.write,
     };
     auth_empty(&state, &headers, || state.plane.add_port_watch(watch))
 }
