@@ -259,9 +259,16 @@ impl Interface1 {
                 }
                 let hd_ok = sec[0] == 0x01 && sec[14] == mdr_checksum(&sec[0..14]);
                 if hd_ok && sec[29] == mdr_checksum(&sec[15..29]) {
-                    let dcalc = mdr_checksum(&sec[30..542]);
+                    let data = &sec[30..542];
+                    let dcalc = mdr_checksum(data);
+                    // Heal only the known FORMAT incomplete-write: solid fill where
+                    // the stored DCHK byte equals the fill (never a valid sum-mod-255
+                    // of that block). Leave other DCHK mismatches alone.
                     if sec[542] != dcalc {
-                        sec[542] = dcalc;
+                        let fill = sec[30];
+                        if data.iter().all(|&b| b == fill) && sec[542] == fill {
+                            sec[542] = dcalc;
+                        }
                     }
                 }
                 let v = if hd_ok { 0xff } else { 0 };
