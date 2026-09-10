@@ -1468,10 +1468,16 @@ fn append_csw_recording(
     let raw = match compression {
         0x01 => csw_data.to_vec(),
         0x02 => {
-            let mut zlib = ZlibDecoder::new(csw_data);
+            // Bound inflate so a crafted stream cannot exhaust memory before
+            // RLE/pulse-budget checks (#374 CR).
+            const MAX_CSW_PLAIN: u64 = (MAX_SCHEDULED_PULSES as u64).saturating_mul(5);
+            let mut zlib = ZlibDecoder::new(csw_data).take(MAX_CSW_PLAIN + 1);
             let mut plain = Vec::new();
             zlib.read_to_end(&mut plain)
                 .map_err(|e| TzxError::Format(format!("TZX CSW Z-RLE inflate failed: {e}")))?;
+            if plain.len() as u64 > MAX_CSW_PLAIN {
+                return Err(TzxError::Format("TZX CSW Z-RLE stream too large".into()));
+            }
             plain
         }
         other => {
@@ -1651,6 +1657,13 @@ fn append_generalized_data(
 
     if data_symbol_count > 0 {
         let nb = bits_per_symbol(asd);
+        // ASD==1 → NB==0 is a degenerate alphabet; reject huge no-bit streams
+        // that would otherwise spin without consuming input (#374 CR).
+        if nb == 0 && data_symbol_count > 1 {
+            return Err(TzxError::Format(
+                "TZX GDB data stream with ASD<=1 and TOTD>1 is invalid".into(),
+            ));
+        }
         let stream = &body[off..];
         let mut bit_i = 0usize;
         for _ in 0..data_symbol_count {
