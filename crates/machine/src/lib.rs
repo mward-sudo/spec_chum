@@ -5886,7 +5886,7 @@ mod tests {
             let pc = m.cpu().regs.pc;
             if saw_motor
                 && m.interface1_mut()
-                    .is_some_and(|i| i.mdr().is_some_and(|c| c.looks_formatted()))
+                    .is_some_and(|i| i.mdr().is_some_and(formats::MdrImage::looks_formatted))
                 && (0x12a0..=0x1600).contains(&pc)
             {
                 break;
