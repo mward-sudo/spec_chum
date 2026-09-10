@@ -344,7 +344,14 @@ impl TapeLoadOptions {
         self.flash_load || self.experience_load
     }
 
-    /// Skip advancing TAP EAR while flash/hybrid owns the block stream.
+    /// Skip advancing TAP EAR while Instant flash or hybrid Experience owns the
+    /// block stream.
+    ///
+    /// Experience keeps this true for the whole mode (not only while
+    /// `experience_pending` is set): advancing EAR between LD-BYTES traps would
+    /// consume later TAP blocks before the next flash (same Boggit/`0xC8` hazard
+    /// Instant guards against). Pulse-only decks are not TAP, so they still
+    /// advance under Experience EAR-fallback.
     #[must_use]
     pub fn skip_tap_ear_advance(self) -> bool {
         self.flash_load || self.experience_load
@@ -3022,6 +3029,18 @@ impl Machine {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
+                // Step paths have no per-frame cosmetic paint loop — finish any
+                // deferred hybrid Experience flash immediately (#167 CodeRabbit).
+                if let Some(pending) = tape
+                    .as_mut()
+                    .and_then(TapeDeck::as_tap_mut)
+                    .and_then(|p| p.experience_pending.take())
+                {
+                    Self::complete_experience_pending_flash(cpu, tape, &pending, |a, v| {
+                        bus.write(a, v);
+                    });
+                    return;
+                }
                 Self::timex_redirect_spectrum_ld_bytes(cpu, bus);
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
@@ -3154,6 +3173,16 @@ impl Machine {
                 if debugger.check_pc(cpu.regs.pc) {
                     return;
                 }
+                if let Some(pending) = tape
+                    .as_mut()
+                    .and_then(TapeDeck::as_tap_mut)
+                    .and_then(|p| p.experience_pending.take())
+                {
+                    Self::complete_experience_pending_flash(cpu, tape, &pending, |a, v| {
+                        bus.write(a, v);
+                    });
+                    return;
+                }
                 if Self::hold_ld_bytes_until_play(cpu.regs.pc, tape.as_ref(), |a| bus.read(a)) {
                     const HOLD_T: u32 = 4;
                     Self::advance_tape_ear(
@@ -3277,6 +3306,21 @@ impl Machine {
                 ..
             } => {
                 if debugger.check_pc(cpu.regs.pc) {
+                    return;
+                }
+                if let Some(pending) = tape
+                    .as_mut()
+                    .and_then(TapeDeck::as_tap_mut)
+                    .and_then(|p| p.experience_pending.take())
+                {
+                    Self::complete_experience_pending_flash(cpu, tape, &pending, |a, v| {
+                        bus.write(a, v);
+                    });
+                    if !bus.disk_interface {
+                        if let Some(TapeDeck::Tap(player)) = tape.as_ref() {
+                            Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
+                        }
+                    }
                     return;
                 }
                 if !bus.disk_interface {

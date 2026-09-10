@@ -220,9 +220,10 @@ impl TapPlayer {
             return;
         }
         self.experience = experience;
-        if !experience {
-            self.experience_pending = None;
-        }
+        // Do not clear `experience_pending` when leaving Experience: the TAP block
+        // was already consumed when the trap scheduled the hybrid flash. Dropping
+        // pending would lose the poke/RET; `Machine` completes it on the next
+        // frame/step tick instead (#167 / CodeRabbit).
         // Only the trailing pause differs on the EAR-fallback path. Patch it in
         // place so a mid-block toggle does not restart ROM-accurate pilot/sync/data
         // already in flight (mirrors `set_speed`'s mid-load guarantee).
