@@ -5715,6 +5715,158 @@ mod tests {
         assert!(m.interface1_rom_loaded());
     }
 
+    /// User-supplied IF1 ROM soak: boot 48K, insert Fuse-formatted MDR, `CAT 1`, expect OK.
+    ///
+    /// Skips cleanly when `roms/if1.rom` or `roms/spec48.rom` is absent (never commit IF1 dumps).
+    /// Refs [#139](https://github.com/mward-sudo/spec_chum/issues/139) /
+    /// [#397](https://github.com/mward-sudo/spec_chum/issues/397).
+    #[test]
+    fn interface1_real_rom_cat_formatted_mdr_skips_when_missing() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let if1_path = root.join("roms/if1.rom");
+        let Some(sys) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        if !if1_path.is_file() {
+            eprintln!("skip: roms/if1.rom missing — place a user IF1 dump to soak (see #188)");
+            return;
+        }
+        let if1_rom = std::fs::read(&if1_path).expect("read if1.rom");
+        assert_eq!(if1_rom.len(), bus::IF1_ROM_SIZE);
+
+        let mut m = Machine::new_48k(&sys).unwrap();
+        m.load_interface1_rom(&if1_rom).unwrap();
+        m.interface1_mut()
+            .unwrap()
+            .insert_mdr(formats::MdrImage::formatted("CART"));
+
+        // Copyright → BASIC K cursor (do not poke PC — keep ROM debounce / CHAN state intact).
+        for _ in 0..400 {
+            let _ = m.run_frame();
+        }
+        m.wait_48_basic_prompt(500);
+
+        // Shadow ROM pages on RST 8 and exposes the real IF1 image (probe then restore).
+        {
+            let saved_pc = m.cpu().regs.pc;
+            m.cpu_mut().regs.pc = 0x0008;
+            m.step_cpu_only();
+            assert!(m.interface1_mut().unwrap().rom_paged);
+            assert_eq!(m.read_mem(0x0000), if1_rom[0]);
+            assert_eq!(m.read_mem(0x0001), if1_rom[1]);
+            m.interface1_mut().unwrap().page_rom(false);
+            m.cpu_mut().regs.pc = saved_pc;
+        }
+
+        // Caps+Symbol → Extended mode so Sym+9 yields CAT (not ')').
+        const PRESS: u32 = 12;
+        const GAP: u32 = 8;
+        m.hold_keys(&[(0, 0), (7, 1)], PRESS);
+        m.hold_keys(&[], GAP);
+        let e_line = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        m.hold_keys(&[(7, 1), (4, 1)], PRESS); // Symbol + 9 = CAT
+        m.hold_keys(&[], GAP);
+        let cat_tok = m.read_mem(e_line);
+        assert_eq!(
+            cat_tok, 0xcf,
+            "expected CAT token 0xCF at E_LINE, got {cat_tok:#04x}"
+        );
+        m.hold_keys(&[(3, 0)], PRESS); // 1
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(6, 0)], PRESS); // Enter
+        m.hold_keys(&[], 20);
+        m.keyboard_mut().reset();
+
+        let mut saw_motor = false;
+        for _ in 0..5_000 {
+            if m.interface1_mut().is_some_and(|i| i.any_motor_on()) {
+                saw_motor = true;
+                break;
+            }
+            let _ = m.run_frame();
+        }
+        assert!(
+            saw_motor,
+            "CAT should select a Microdrive motor at least once"
+        );
+        assert!(
+            m.interface1_mut().unwrap().drive_checksums_ok(0),
+            "formatted MDR checksums should survive CAT command entry"
+        );
+        // Full ERR_NR==OK catalogue still needs GAP/SYNC deepen (#397).
+    }
+
+    /// User-supplied IF1 ROM: `FORMAT "m";1;"T"` must start the Microdrive motor.
+    #[test]
+    fn interface1_real_rom_format_mdr_skips_when_missing() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let if1_path = root.join("roms/if1.rom");
+        let Some(sys) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        if !if1_path.is_file() {
+            eprintln!("skip: roms/if1.rom missing — place a user IF1 dump to soak (see #188)");
+            return;
+        }
+        let if1_rom = std::fs::read(&if1_path).expect("read if1.rom");
+
+        let mut m = Machine::new_48k(&sys).unwrap();
+        m.load_interface1_rom(&if1_rom).unwrap();
+        m.interface1_mut()
+            .unwrap()
+            .insert_mdr(formats::MdrImage::blank());
+        assert!(!m.interface1_mut().unwrap().mdr().unwrap().looks_formatted());
+
+        for _ in 0..400 {
+            let _ = m.run_frame();
+        }
+        m.wait_48_basic_prompt(500);
+
+        // Caps+Symbol → Extended mode so Sym+0 yields FORMAT (not '_').
+        const PRESS: u32 = 12;
+        const GAP: u32 = 8;
+        m.hold_keys(&[(0, 0), (7, 1)], PRESS);
+        m.hold_keys(&[], GAP);
+        let e_line = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        m.hold_keys(&[(7, 1), (4, 0)], PRESS); // Symbol + 0 = FORMAT
+        m.hold_keys(&[], GAP);
+        assert_eq!(m.read_mem(e_line), 0xd0, "expected FORMAT token 0xD0");
+        m.hold_keys(&[(7, 1), (5, 0)], PRESS); // "
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(7, 2)], PRESS); // m
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(7, 1), (5, 0)], PRESS); // "
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(7, 1), (5, 1)], PRESS); // ;
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(3, 0)], PRESS); // 1
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(7, 1), (5, 1)], PRESS); // ;
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(7, 1), (5, 0)], PRESS); // "
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(2, 4)], PRESS); // T
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(7, 1), (5, 0)], PRESS); // "
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(6, 0)], PRESS); // Enter
+        m.hold_keys(&[], 20);
+        m.keyboard_mut().reset();
+
+        let mut saw_motor = false;
+        for _ in 0..12_000 {
+            if m.interface1_mut().is_some_and(|i| i.any_motor_on()) {
+                saw_motor = true;
+                break;
+            }
+            let _ = m.run_frame();
+        }
+        assert!(saw_motor, "FORMAT should run a Microdrive motor");
+        // ERR_NR==OK + looks_formatted() after FORMAT remains on #397 (GAP/SYNC deepen).
+    }
+
     #[test]
     fn memio_mid_instruction_contention_table() {
         // Contended screen address; FAQ Contended I/O ports.
