@@ -3,11 +3,41 @@
 use std::cell::Cell;
 
 /// Access watch on a memory address or I/O port.
+///
+/// Matching uses `(access & mask) == (addr & mask)`. Default `mask = 0xFFFF`
+/// is an exact 16-bit match. For Spectrum keyboard row polls (`IN A,(C)` with
+/// high-byte row select), watch `addr = 0x00FE` with `mask = 0x00FF` (#387).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Watch {
     pub addr: u16,
     pub read: bool,
     pub write: bool,
+    /// Bits compared against the accessed address/port. `0xFFFF` = exact.
+    pub mask: u16,
+}
+
+impl Watch {
+    /// Exact 16-bit address/port watch (`mask = 0xFFFF`).
+    #[must_use]
+    pub const fn new(addr: u16, read: bool, write: bool) -> Self {
+        Self {
+            addr,
+            read,
+            write,
+            mask: 0xFFFF,
+        }
+    }
+
+    /// Masked watch: `(access & mask) == (addr & mask)`.
+    #[must_use]
+    pub const fn with_mask(addr: u16, mask: u16, read: bool, write: bool) -> Self {
+        Self {
+            addr,
+            read,
+            write,
+            mask,
+        }
+    }
 }
 
 /// Why execution stopped.
@@ -122,9 +152,12 @@ impl Debugger {
         false
     }
 
+    fn matches(w: Watch, addr: u16, write: bool) -> bool {
+        (addr & w.mask) == (w.addr & w.mask) && ((write && w.write) || (!write && w.read))
+    }
+
     fn hit_watch(list: &[Watch], addr: u16, write: bool) -> bool {
-        list.iter()
-            .any(|w| w.addr == addr && ((write && w.write) || (!write && w.read)))
+        list.iter().copied().any(|w| Self::matches(w, addr, write))
     }
 
     /// Apply a watch/break hit recorded during `step_once`.
@@ -170,5 +203,27 @@ impl WatchHook<'_> {
         if Debugger::hit_watch(self.port, port, write) {
             self.hit.set(Some(BreakReason::Port { port, write, value }));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_mask_requires_full_port_match() {
+        let w = Watch::new(0x00FE, true, false);
+        assert!(Debugger::matches(w, 0x00FE, false));
+        assert!(!Debugger::matches(w, 0x3CFE, false));
+    }
+
+    #[test]
+    fn low_byte_mask_matches_keyboard_row_ports() {
+        let w = Watch::with_mask(0x00FE, 0x00FF, true, false);
+        assert!(Debugger::matches(w, 0x00FE, false));
+        assert!(Debugger::matches(w, 0x3CFE, false));
+        assert!(Debugger::matches(w, 0x7FFE, false));
+        assert!(!Debugger::matches(w, 0x00FF, false));
+        assert!(!Debugger::matches(w, 0x3CFE, true)); // write not enabled
     }
 }

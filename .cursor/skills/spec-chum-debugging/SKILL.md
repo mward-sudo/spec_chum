@@ -175,7 +175,7 @@ Global flags (before subcommand): `--model 48k|128k|plus3`, `--rom PATH`, `--tap
 | `disasm [--addr A] [--count N]` | Disasm at PC or addr |
 | `until-pc PC [--max N]` | Run until PC break |
 | `break-pc PC [--frames N]` | PC break over frames |
-| `watch-write ADDR [--port] [--max N]` | Break on mem or I/O port write (HTTP: `/v1/debug/watches` or `/v1/debug/port-watches`) |
+| `watch-write ADDR [--port] [--max N]` | Break on mem or I/O port write (HTTP: `/v1/debug/watches` or `/v1/debug/port-watches`). Agent HTTP also accepts optional `"mask"` hex for low-byte keyboard polls (`"fe"` + `"ff"` → any `$xxFE`; #387) |
 | `type-load [--code] [--warmup N] [--max N]` | Boot, type LOAD, wait for load |
 
 ## Tape debugging

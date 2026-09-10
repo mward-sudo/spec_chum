@@ -281,11 +281,11 @@ Remaining control/inspect/debug rows land in later phases on [#210](https://gith
 
 | Route | Notes |
 | --- | --- |
-| `GET /v1/debug/port-watches` | List I/O port watches (`addr`, `read`, `write`) |
-| `POST /v1/debug/port-watches` | Body `{ "addr", "read"?, "write"? }` — at least one of read/write |
-| `DELETE /v1/debug/port-watches/{addr}` | Remove port watch (idempotent) |
+| `GET /v1/debug/port-watches` | List I/O port watches (`addr`, `read`, `write`, `mask`) |
+| `POST /v1/debug/port-watches` | Body `{ "addr", "read"?, "write"?, "mask"? }` — at least one of read/write; optional hex `mask` (default `0xFFFF` = exact). Keyboard row polls: `{ "addr": "fe", "read": true, "mask": "ff" }` matches `$xxFE` ([#387](https://github.com/mward-sudo/spec_chum/issues/387)) |
+| `DELETE /v1/debug/port-watches/{addr}` | Remove port watch by configured `addr` (idempotent) |
 
-Mem watches remain on `/v1/debug/watches` (`GET` lists both mem and port; `POST` adds mem;
+Mem watches remain on `/v1/debug/watches` (`GET` lists both mem and port; `POST` adds mem with the same optional `mask`;
 `DELETE /v1/debug/watches/{addr}` removes mem). `spec-chum-debug watch-write --port` uses the
 port-watch HTTP path when `--agent-url` is set.
 

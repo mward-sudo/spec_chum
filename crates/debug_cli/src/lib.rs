@@ -483,19 +483,11 @@ fn run_local(cli: &Cli, session: &mut HostSession, cmd: &Cmd) -> Result<()> {
             let addr = parse_u16(addr)?;
             if *port {
                 session
-                    .add_port_watch(Watch {
-                        addr,
-                        read: false,
-                        write: true,
-                    })
+                    .add_port_watch(Watch::new(addr, false, true))
                     .map_err(host_err)?;
             } else {
                 session
-                    .add_mem_watch(Watch {
-                        addr,
-                        read: false,
-                        write: true,
-                    })
+                    .add_mem_watch(Watch::new(addr, false, true))
                     .map_err(host_err)?;
             }
             let max = u32::try_from(*max).unwrap_or(u32::MAX);

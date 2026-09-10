@@ -7917,11 +7917,8 @@ mod tests {
         if let Machine::Spec48 { bus, .. } = &mut m {
             bus.frame_t = INT_LENGTH_48; // avoid IRQ
         }
-        m.debugger_mut().add_mem_watch(Watch {
-            addr: 0x4000,
-            read: false,
-            write: true,
-        });
+        m.debugger_mut()
+            .add_mem_watch(Watch::new(0x4000, false, true));
         m.step_once();
         assert_eq!(m.read_mem(0x4000), 0xaa);
         assert!(matches!(
@@ -7938,11 +7935,8 @@ mod tests {
         m.cpu_mut().regs.pc = 0x8000;
         m.cpu_mut().regs.set_hl(0x4000);
         m.cpu_mut().regs.a = 0x55;
-        m.debugger_mut().add_mem_watch(Watch {
-            addr: 0x4000,
-            read: false,
-            write: true,
-        });
+        m.debugger_mut()
+            .add_mem_watch(Watch::new(0x4000, false, true));
         m.run_frame();
         assert_eq!(m.read_mem(0x4000), 0x55);
         assert!(m.debugger().paused);
@@ -7975,11 +7969,8 @@ mod tests {
         if let Machine::Spec48 { bus, .. } = &mut m {
             bus.frame_t = INT_LENGTH_48;
         }
-        m.debugger_mut().add_port_watch(Watch {
-            addr: 0x00FE,
-            read: true,
-            write: false,
-        });
+        m.debugger_mut()
+            .add_port_watch(Watch::new(0x00FE, true, false));
         let reason = m.run_until_break(16);
         assert!(
             matches!(
@@ -8006,16 +7997,41 @@ mod tests {
         if let Machine::Spec48 { bus, .. } = &mut m {
             bus.frame_t = INT_LENGTH_48;
         }
-        m.debugger_mut().add_port_watch(Watch {
-            addr: 0x00FE,
-            read: true,
-            write: false,
-        });
+        m.debugger_mut()
+            .add_port_watch(Watch::new(0x00FE, true, false));
         let reason = m.run_until_break(16);
         assert!(
             matches!(reason, BreakReason::Halt | BreakReason::Budget),
             "exact $00FE watch must miss $3CFE row poll, got {reason:?}"
         );
+
+        // Low-byte mask catches any keyboard-row IN (#387).
+        let mut m = Machine::new_48k(&rom).unwrap();
+        m.write_mem(0x8000, 0x01); // LD BC,$3CFE
+        m.write_mem(0x8001, 0xFE);
+        m.write_mem(0x8002, 0x3C);
+        m.write_mem(0x8003, 0xED); // IN A,(C)
+        m.write_mem(0x8004, 0x78);
+        m.write_mem(0x8005, 0x76);
+        m.cpu_mut().regs.pc = 0x8000;
+        if let Machine::Spec48 { bus, .. } = &mut m {
+            bus.frame_t = INT_LENGTH_48;
+        }
+        m.debugger_mut()
+            .add_port_watch(Watch::with_mask(0x00FE, 0x00FF, true, false));
+        let reason = m.run_until_break(16);
+        assert!(
+            matches!(
+                reason,
+                BreakReason::Port {
+                    port: 0x3CFE,
+                    write: false,
+                    ..
+                }
+            ),
+            "masked $00FE/$00FF watch must hit $3CFE row poll, got {reason:?}"
+        );
+        assert!(m.debugger().paused);
     }
 
     #[test]

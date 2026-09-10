@@ -384,6 +384,44 @@ async fn agent_api_port_watch_crud() {
         serde_json::from_slice(&body2).expect("port watch json 2");
     assert_eq!(watches2.len(), 1);
     assert_eq!(watches2[0]["addr"], 254);
+    assert_eq!(watches2[0]["mask"], 65535);
+
+    let add_masked = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/debug/port-watches")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"addr":"fe","read":true,"mask":"ff"}"#))
+                .unwrap(),
+        )
+        .await
+        .expect("add masked port watch");
+    assert_eq!(add_masked.status(), StatusCode::NO_CONTENT);
+
+    let list_masked = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/debug/port-watches")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("list after masked add");
+    let body_masked = axum::body::to_bytes(list_masked.into_body(), usize::MAX)
+        .await
+        .expect("masked list body");
+    let watches_masked: Vec<serde_json::Value> =
+        serde_json::from_slice(&body_masked).expect("masked json");
+    assert_eq!(watches_masked.len(), 2);
+    let masked = watches_masked
+        .iter()
+        .find(|w| w["mask"] == 255)
+        .expect("masked watch present");
+    assert_eq!(masked["addr"], 254);
+    assert_eq!(masked["read"], true);
 
     let del = app
         .clone()

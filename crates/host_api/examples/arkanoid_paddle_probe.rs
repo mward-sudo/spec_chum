@@ -476,11 +476,7 @@ fn main() {
             let mut watches = Vec::new();
             for y in 184u8..192 {
                 for col in 0u8..32 {
-                    watches.push(machine::Watch {
-                        addr: screen_addr(col * 8, y),
-                        read: false,
-                        write: true,
-                    });
+                    watches.push(machine::Watch::new(screen_addr(col * 8, y), false, true));
                 }
             }
             m.debugger_mut().mem_watches = watches;
