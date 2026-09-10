@@ -1,8 +1,9 @@
 //! TZX tape image parsing and EAR pulse playback.
 //!
 //! Supported block IDs for playback: 0x10, 0x11, 0x12, 0x13, 0x14, 0x20,
-//! plus Loop Start/End (`0x24` / `0x25`) expanded into the pulse schedule
-//! (Speedlock and similar custom loaders).
+//! plus Loop Start/End (`0x24` / `0x25`) and Jump/Call/Return/Select
+//! (`0x23`, `0x26`–`0x28`) expanded into the pulse schedule (Speedlock and
+//! similar custom loaders; Select auto-picks the first entry for headless open).
 //! Informational / skip blocks: 0x21, 0x22, 0x30, 0x32, 0x33, 0x35, 0x5A.
 
 use std::path::Path;
@@ -21,6 +22,20 @@ const MAX_SCHEDULED_PULSES: usize = 16_777_216;
 const MAX_LOGICAL_BLOCKS: usize = 1_048_576;
 /// Cap on Loop End → Loop Start replay jumps (empty nested loops add no pulses).
 const MAX_LOOP_REPLAYS: usize = 1_048_576;
+/// Cap on Jump / Call / Select control-flow transfers while expanding.
+const MAX_CONTROL_TRANSFERS: usize = 1_048_576;
+
+/// Open Call sequence (`0x26`) frame — nesting of Call blocks is forbidden by the TZX spec.
+struct CallFrame {
+    /// Block index of the Call sequence (relative offsets are from this block).
+    call_bi: usize,
+    /// Absolute block index to resume after all calls finish (`call_bi + 1`).
+    return_bi: usize,
+    /// Relative offsets from the Call block.
+    offsets: Vec<i16>,
+    /// Index of the *next* call to run after the current subroutine Returns.
+    next_call: usize,
+}
 
 #[derive(Debug, Error)]
 pub enum TzxError {
@@ -57,6 +72,155 @@ fn ensure_block_budget(block_starts: &[usize]) -> Result<(), TzxError> {
     if block_starts.len() >= MAX_LOGICAL_BLOCKS {
         return Err(TzxError::Format(format!(
             "TZX logical block count exceeded {MAX_LOGICAL_BLOCKS} (loop expansion?)"
+        )));
+    }
+    Ok(())
+}
+
+/// Advance `i` past the body of a known TZX block (`id` already consumed).
+///
+/// Used to build the block-offset index for Jump/Call/Select relative addressing.
+fn advance_past_tzx_block_body(data: &[u8], id: u8, mut i: usize) -> Result<usize, TzxError> {
+    match id {
+        0x10 => {
+            if i + 4 > data.len() {
+                return Err(TzxError::Format("truncated 0x10".into()));
+            }
+            let len = u16::from_le_bytes([data[i + 2], data[i + 3]]) as usize;
+            i += 4 + len;
+        }
+        0x11 => {
+            if i + 18 > data.len() {
+                return Err(TzxError::Format("truncated 0x11".into()));
+            }
+            let len = (u32::from(data[i + 15])
+                | (u32::from(data[i + 16]) << 8)
+                | (u32::from(data[i + 17]) << 16)) as usize;
+            i += 18 + len;
+        }
+        0x12 => i += 4,
+        0x13 => {
+            let n = data.get(i).copied().unwrap_or(0) as usize;
+            i += 1 + n * 2;
+        }
+        0x14 => {
+            if i + 10 > data.len() {
+                return Err(TzxError::Format("truncated 0x14".into()));
+            }
+            let len = (u32::from(data[i + 7])
+                | (u32::from(data[i + 8]) << 8)
+                | (u32::from(data[i + 9]) << 16)) as usize;
+            i += 10 + len;
+        }
+        0x20 => i += 2,
+        0x21 => {
+            let n = data.get(i).copied().unwrap_or(0) as usize;
+            i += 1 + n;
+        }
+        0x22 | 0x25 | 0x27 => {}
+        0x23 => i += 2,
+        0x24 => i += 2,
+        0x26 => {
+            if i + 2 > data.len() {
+                return Err(TzxError::Format("truncated 0x26".into()));
+            }
+            let n = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+            i += 2 + n * 2;
+        }
+        0x28 => {
+            if i + 2 > data.len() {
+                return Err(TzxError::Format("truncated 0x28".into()));
+            }
+            let len = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+            i += 2 + len;
+        }
+        0x30 => {
+            let n = data.get(i).copied().unwrap_or(0) as usize;
+            i += 1 + n;
+        }
+        0x32 => {
+            if i + 2 > data.len() {
+                return Err(TzxError::Format("truncated 0x32".into()));
+            }
+            let n = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+            i += 2 + n;
+        }
+        0x33 => {
+            let n = data.get(i).copied().unwrap_or(0) as usize;
+            i += 1 + n * 3;
+        }
+        0x35 => {
+            if i + 0x14 > data.len() {
+                return Err(TzxError::Format("truncated 0x35".into()));
+            }
+            let n = u32::from_le_bytes([
+                data[i + 0x10],
+                data[i + 0x11],
+                data[i + 0x12],
+                data[i + 0x13],
+            ]) as usize;
+            i += 0x14 + n;
+        }
+        0x5a => i += 9,
+        other => {
+            return Err(TzxError::Format(format!(
+                "unsupported TZX block ID 0x{other:02x} at offset {}",
+                i.saturating_sub(1)
+            )));
+        }
+    }
+    if i > data.len() {
+        return Err(TzxError::Format(format!(
+            "truncated TZX block ID 0x{id:02x}"
+        )));
+    }
+    Ok(i)
+}
+
+/// Byte offsets of each top-level block's ID byte (for relative Jump/Call/Select).
+fn index_tzx_blocks(data: &[u8]) -> Result<Vec<usize>, TzxError> {
+    let mut offsets = Vec::new();
+    let mut i = 10usize;
+    while i < data.len() {
+        offsets.push(i);
+        let id = data[i];
+        i = advance_past_tzx_block_body(data, id, i + 1)?;
+    }
+    Ok(offsets)
+}
+
+fn resolve_relative_block(
+    from_bi: usize,
+    relative: i16,
+    block_count: usize,
+    kind: &str,
+) -> Result<usize, TzxError> {
+    if relative == 0 {
+        return Err(TzxError::Format(format!(
+            "TZX {kind} relative 0 is an infinite loop"
+        )));
+    }
+    let target = i32::try_from(from_bi)
+        .ok()
+        .and_then(|b| b.checked_add(i32::from(relative)))
+        .ok_or_else(|| TzxError::Format(format!("TZX {kind} target overflow")))?;
+    // `block_count` means end-of-tape (Jump past the last block to skip a trailing
+    // subroutine — common after Call/Return resume).
+    if target < 0 || target as usize > block_count {
+        return Err(TzxError::Format(format!(
+            "TZX {kind} target out of range (from {from_bi} + {relative}, {block_count} blocks)"
+        )));
+    }
+    Ok(target as usize)
+}
+
+fn bump_control_transfers(steps: &mut usize) -> Result<(), TzxError> {
+    *steps = steps
+        .checked_add(1)
+        .ok_or_else(|| TzxError::Format("TZX control-flow transfer counter overflow".into()))?;
+    if *steps > MAX_CONTROL_TRANSFERS {
+        return Err(TzxError::Format(format!(
+            "TZX control-flow transfer count exceeded {MAX_CONTROL_TRANSFERS}"
         )));
     }
     Ok(())
@@ -126,15 +290,25 @@ impl TzxPlayer {
         let mut level = false;
         // Fuse starts tapes with force_low_level; non-zero pauses re-arm it.
         let mut force_low = true;
-        let mut i = 10usize; // skip header (sig + ver)
-                             // Loop Start (0x24) / Loop End (0x25): replay the enclosed section N times.
-                             // `skip_depth` covers reps==0 (play zero times) and nested skips.
+        // Relative Jump/Call/Select need a stable block index (#374).
+        let block_offsets = index_tzx_blocks(data)?;
+        let mut bi = 0usize;
+        // Loop Start (0x24) / Loop End (0x25): replay the enclosed section N times.
+        // `skip_depth` covers reps==0 (play zero times) and nested skips.
+        // Stack entries are (restart_block_index, remaining_reps).
         let mut loop_stack: Vec<(usize, u16)> = Vec::new();
+        let mut call_stack: Vec<CallFrame> = Vec::new();
         let mut skip_depth: usize = 0;
         let mut loop_replays: usize = 0;
-        while i < data.len() {
-            let id = data[i];
-            i += 1;
+        let mut control_transfers: usize = 0;
+        // `i` is a per-arm decode cursor; after each arm we only need `next_bi`.
+        // Clippy still flags trailing `i += …` in skip/info arms as unused_assignments.
+        #[allow(unused_assignments)]
+        while bi < block_offsets.len() {
+            let id_off = block_offsets[bi];
+            let id = data[id_off];
+            let mut i = id_off + 1;
+            let mut next_bi = bi + 1;
             let emit = skip_depth == 0;
             match id {
                 0x10 => {
@@ -344,13 +518,28 @@ impl TzxPlayer {
                     i += 1 + n;
                 }
                 0x22 => {}
+                0x23 => {
+                    // Jump to block — relative signed word from this block's index.
+                    if i + 2 > data.len() {
+                        return Err(TzxError::Format("truncated 0x23".into()));
+                    }
+                    let relative = i16::from_le_bytes([data[i], data[i + 1]]);
+                    if emit {
+                        bump_control_transfers(&mut control_transfers)?;
+                        next_bi = resolve_relative_block(
+                            bi,
+                            relative,
+                            block_offsets.len(),
+                            "Jump (0x23)",
+                        )?;
+                    }
+                }
                 0x24 => {
                     // Loop Start — repetitions N means play enclosed blocks N times.
                     if i + 2 > data.len() {
                         return Err(TzxError::Format("truncated 0x24".into()));
                     }
                     let reps = u16::from_le_bytes([data[i], data[i + 1]]);
-                    i += 2;
                     if skip_depth > 0 {
                         skip_depth = skip_depth.checked_add(1).ok_or_else(|| {
                             TzxError::Format("TZX skip-depth overflow (nested Loop Start)".into())
@@ -358,17 +547,17 @@ impl TzxPlayer {
                     } else if reps == 0 {
                         skip_depth = 1;
                     } else {
-                        loop_stack.push((i, reps));
+                        // Restart at the first enclosed block (bi + 1).
+                        loop_stack.push((bi + 1, reps));
                     }
                 }
                 0x25 => {
                     // Loop End — jump back to matching Loop Start until N plays done.
                     if skip_depth > 0 {
                         skip_depth -= 1;
-                    } else if let Some((restart_at, remaining)) = loop_stack.last_mut() {
+                    } else if let Some((restart_bi, remaining)) = loop_stack.last_mut() {
                         *remaining = remaining.saturating_sub(1);
                         if *remaining > 0 {
-                            // Bound expansion before replaying the loop body.
                             ensure_pulse_budget(&pulses)?;
                             loop_replays = loop_replays.checked_add(1).ok_or_else(|| {
                                 TzxError::Format("TZX loop replay counter overflow".into())
@@ -378,7 +567,7 @@ impl TzxPlayer {
                                     "TZX loop replay count exceeded {MAX_LOOP_REPLAYS}"
                                 )));
                             }
-                            i = *restart_at;
+                            next_bi = *restart_bi;
                         } else {
                             loop_stack.pop();
                         }
@@ -386,6 +575,104 @@ impl TzxPlayer {
                         return Err(TzxError::Format(
                             "TZX Loop End (0x25) without matching Loop Start".into(),
                         ));
+                    }
+                }
+                0x26 => {
+                    // Call sequence — non-nestable; relatives from this Call block.
+                    if i + 2 > data.len() {
+                        return Err(TzxError::Format("truncated 0x26".into()));
+                    }
+                    let n = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+                    i += 2;
+                    if i + n * 2 > data.len() {
+                        return Err(TzxError::Format("truncated 0x26 call list".into()));
+                    }
+                    let mut offsets = Vec::with_capacity(n);
+                    for _ in 0..n {
+                        offsets.push(i16::from_le_bytes([data[i], data[i + 1]]));
+                        i += 2;
+                    }
+                    if !emit {
+                        // Skipping (zero-rep loop body): ignore control flow.
+                    } else if offsets.is_empty() {
+                        // N=0 → fall through.
+                    } else {
+                        if !call_stack.is_empty() {
+                            return Err(TzxError::Format(
+                                "TZX nested Call sequence (0x26) is not allowed".into(),
+                            ));
+                        }
+                        bump_control_transfers(&mut control_transfers)?;
+                        let first = offsets[0];
+                        call_stack.push(CallFrame {
+                            call_bi: bi,
+                            return_bi: bi + 1,
+                            offsets,
+                            next_call: 1,
+                        });
+                        next_bi =
+                            resolve_relative_block(bi, first, block_offsets.len(), "Call (0x26)")?;
+                    }
+                }
+                0x27 => {
+                    // Return from sequence.
+                    if emit {
+                        let (call_bi, return_bi, next_relative) = {
+                            let frame = call_stack.last().ok_or_else(|| {
+                                TzxError::Format(
+                                    "TZX Return (0x27) without matching Call sequence".into(),
+                                )
+                            })?;
+                            (
+                                frame.call_bi,
+                                frame.return_bi,
+                                frame.offsets.get(frame.next_call).copied(),
+                            )
+                        };
+                        bump_control_transfers(&mut control_transfers)?;
+                        if let Some(relative) = next_relative {
+                            call_stack.last_mut().expect("call frame present").next_call += 1;
+                            next_bi = resolve_relative_block(
+                                call_bi,
+                                relative,
+                                block_offsets.len(),
+                                "Call (0x26)",
+                            )?;
+                        } else {
+                            call_stack.pop();
+                            next_bi = return_bi;
+                        }
+                    }
+                }
+                0x28 => {
+                    // Select block — headless open auto-picks the first selection (#374).
+                    if i + 2 > data.len() {
+                        return Err(TzxError::Format("truncated 0x28".into()));
+                    }
+                    let len = u16::from_le_bytes([data[i], data[i + 1]]) as usize;
+                    i += 2;
+                    if i + len > data.len() {
+                        return Err(TzxError::Format("truncated 0x28 body".into()));
+                    }
+                    let body = &data[i..i + len];
+                    if emit {
+                        if body.is_empty() {
+                            // No selections — fall through.
+                        } else {
+                            let n = body[0];
+                            if n == 0 || body.len() < 3 {
+                                // Empty menu — fall through.
+                            } else {
+                                let relative = i16::from_le_bytes([body[1], body[2]]);
+                                bump_control_transfers(&mut control_transfers)?;
+                                next_bi = resolve_relative_block(
+                                    bi,
+                                    relative,
+                                    block_offsets.len(),
+                                    "Select (0x28)",
+                                )?;
+                            }
+                        }
                     }
                 }
                 0x30 => {
@@ -423,15 +710,20 @@ impl TzxPlayer {
                 }
                 other => {
                     return Err(TzxError::Format(format!(
-                        "unsupported TZX block ID 0x{other:02x} at offset {}",
-                        i - 1
+                        "unsupported TZX block ID 0x{other:02x} at offset {id_off}"
                     )));
                 }
             }
+            bi = next_bi;
         }
         if skip_depth != 0 || !loop_stack.is_empty() {
             return Err(TzxError::Format(
                 "TZX Loop Start (0x24) without matching Loop End".into(),
+            ));
+        }
+        if !call_stack.is_empty() {
+            return Err(TzxError::Format(
+                "TZX Call sequence (0x26) without matching Return (0x27)".into(),
             ));
         }
         let playing = !pulses.is_empty();
@@ -601,6 +893,9 @@ impl TzxPlayer {
                     i += 1 + n;
                 }
                 0x22 => {}
+                // Jump / Call / Select / Return are not flash/TAP-convertible: control
+                // flow must expand into the EAR schedule (#374).
+                0x23 | 0x26 | 0x27 | 0x28 => return false,
                 // Loop markers are not flash/TAP-convertible: expanding them into
                 // EAR pulses is required (reps>1), and TAP extraction would drop
                 // repetitions. Keep off the standard-speed-only path (#372 CR).
@@ -696,6 +991,14 @@ impl TzxPlayer {
                 0x22 => {}
                 0x24 => i += 2,
                 0x25 => {}
+                // Control-flow blocks are not linear TAP extractable — fail loudly
+                // rather than walking past Jump/Call/Select in file order (#374).
+                0x23 | 0x26 | 0x27 | 0x28 => {
+                    return Err(TzxError::Format(format!(
+                        "unsupported TZX block ID 0x{id:02x} at offset {} (control flow — use EAR)",
+                        i - 1
+                    )));
+                }
                 0x30 => {
                     let n = data.get(i).copied().unwrap_or(0) as usize;
                     i += 1 + n;
@@ -1274,6 +1577,77 @@ mod tests {
         assert_eq!(p.block_count(), 3);
     }
 
+    /// Jump (`0x23`) relative +2 skips the next block (#374).
+    #[test]
+    fn jump_skips_next_block() {
+        let mut v = tzx_header();
+        v.push(0x23);
+        v.extend_from_slice(&2i16.to_le_bytes());
+        append_pure_tone(&mut v, 1000, 4);
+        append_pure_tone(&mut v, 1000, 2);
+        let p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(
+            p.scheduled_pulses(),
+            2,
+            "Jump +2 must skip the 4-pulse tone"
+        );
+    }
+
+    /// Call (`0x26`) / Return (`0x27`): play subroutine then resume (#374).
+    ///
+    /// After Return, a Jump skips the in-file subroutine so linear fall-through
+    /// does not re-enter it (common TZX layout).
+    #[test]
+    fn call_sequence_plays_subroutine_then_resumes() {
+        let mut v = tzx_header();
+        // 0: Call +3 → subroutine at block 3
+        v.push(0x26);
+        v.extend_from_slice(&1u16.to_le_bytes());
+        v.extend_from_slice(&3i16.to_le_bytes());
+        // 1: resume tone (after Return)
+        append_pure_tone(&mut v, 1000, 1);
+        // 2: Jump +3 → past Return
+        v.push(0x23);
+        v.extend_from_slice(&3i16.to_le_bytes());
+        // 3: subroutine body
+        append_pure_tone(&mut v, 1000, 3);
+        // 4: Return
+        v.push(0x27);
+        let p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(
+            p.scheduled_pulses(),
+            4,
+            "Call must play 3-pulse subroutine then 1-pulse resume"
+        );
+    }
+
+    /// Select (`0x28`) auto-picks the first menu entry for headless open (#374).
+    #[test]
+    fn select_auto_picks_first_entry() {
+        let mut v = tzx_header();
+        v.push(0x28);
+        let desc = b"part";
+        let body_len = 1 + 2 + 1 + desc.len();
+        v.extend_from_slice(&(body_len as u16).to_le_bytes());
+        v.push(1);
+        v.extend_from_slice(&2i16.to_le_bytes());
+        v.push(desc.len() as u8);
+        v.extend_from_slice(desc);
+        append_pure_tone(&mut v, 1000, 5);
+        append_pure_tone(&mut v, 1000, 2);
+        let p = TzxPlayer::parse(&v).unwrap();
+        assert_eq!(p.scheduled_pulses(), 2, "Select must jump to first entry");
+    }
+
+    #[test]
+    fn jump_relative_zero_is_rejected() {
+        let mut v = tzx_header();
+        v.push(0x23);
+        v.extend_from_slice(&0i16.to_le_bytes());
+        let err = TzxPlayer::parse(&v).expect_err("rel 0 must Err");
+        assert!(err.to_string().contains("infinite"), "got {err}");
+    }
+
     #[test]
     fn loop_reps_zero_skips_body() {
         let mut v = Vec::new();
@@ -1606,6 +1980,20 @@ mod tests {
                 },
             },
             Case {
+                id: 0x23,
+                name: "Jump to block",
+                expect: Expect::Pulses,
+                build: || {
+                    // Jump +2 skips a 4-pulse tone; land on a 2-pulse tone.
+                    let mut v = tzx_header();
+                    v.push(0x23);
+                    v.extend_from_slice(&2i16.to_le_bytes());
+                    append_pure_tone(&mut v, 1000, 4);
+                    append_pure_tone(&mut v, 1000, 2);
+                    v
+                },
+            },
+            Case {
                 id: 0x24,
                 name: "Loop Start/End",
                 expect: Expect::Pulses,
@@ -1615,6 +2003,45 @@ mod tests {
                     v.extend_from_slice(&2u16.to_le_bytes());
                     append_pure_tone(&mut v, 1000, 2);
                     v.push(0x25);
+                    v
+                },
+            },
+            Case {
+                id: 0x26,
+                name: "Call sequence / Return",
+                expect: Expect::Pulses,
+                build: || {
+                    // Call → sub → Return → resume tone → Jump past sub.
+                    let mut v = tzx_header();
+                    v.push(0x26);
+                    v.extend_from_slice(&1u16.to_le_bytes());
+                    v.extend_from_slice(&3i16.to_le_bytes());
+                    append_pure_tone(&mut v, 1000, 1); // resume
+                    v.push(0x23);
+                    v.extend_from_slice(&3i16.to_le_bytes()); // skip sub
+                    append_pure_tone(&mut v, 1000, 2); // subroutine
+                    v.push(0x27);
+                    v
+                },
+            },
+            Case {
+                id: 0x28,
+                name: "Select block (first entry)",
+                expect: Expect::Pulses,
+                build: || {
+                    // Select first option → jump +2 over a 4-pulse tone onto a 2-pulse tone.
+                    let mut v = tzx_header();
+                    v.push(0x28);
+                    let desc = b"A";
+                    // body: N + SELECT (rel WORD + L + text)
+                    let body_len = 1 + 2 + 1 + desc.len();
+                    v.extend_from_slice(&(body_len as u16).to_le_bytes());
+                    v.push(1); // one selection
+                    v.extend_from_slice(&2i16.to_le_bytes());
+                    v.push(desc.len() as u8);
+                    v.extend_from_slice(desc);
+                    append_pure_tone(&mut v, 1000, 4);
+                    append_pure_tone(&mut v, 1000, 2);
                     v
                 },
             },
@@ -1716,10 +2143,6 @@ mod tests {
             0x15, // Direct recording
             0x18, // CSW recording
             0x19, // Generalized data
-            0x23, // Jump to block
-            0x26, // Call sequence
-            0x27, // Return from sequence
-            0x28, // Select block
             0x2a, // Stop if 48K
             0x2b, // Set signal level
         ];
@@ -1747,7 +2170,8 @@ mod tests {
     fn to_tap_image_errors_on_unsupported_instead_of_truncating() {
         let mut v = tzx_header();
         append_id10(&mut v, &[0xff, 1, 2, 0], 100);
-        v.push(0x23); // Jump — unsupported
+        // Jump is parseable for EAR but not linear TAP-extractable (#374).
+        v.push(0x23);
         v.extend_from_slice(&1i16.to_le_bytes());
         append_id10(&mut v, &[0x00, 0x41, 0x00], 50);
 

@@ -2092,6 +2092,47 @@ mod tests {
                 v.push(0x25);
                 v
             }),
+            ("id23_jump", || {
+                let mut v = header();
+                v.push(0x23);
+                v.extend_from_slice(&2i16.to_le_bytes());
+                v.push(0x12);
+                v.extend_from_slice(&1000u16.to_le_bytes());
+                v.extend_from_slice(&4u16.to_le_bytes());
+                with_tone(v)
+            }),
+            ("id26_call", || {
+                let mut v = header();
+                // Call +3 → sub; resume tone; Jump past Return; sub; Return.
+                v.push(0x26);
+                v.extend_from_slice(&1u16.to_le_bytes());
+                v.extend_from_slice(&3i16.to_le_bytes());
+                v.push(0x12);
+                v.extend_from_slice(&1000u16.to_le_bytes());
+                v.extend_from_slice(&1u16.to_le_bytes());
+                v.push(0x23);
+                v.extend_from_slice(&3i16.to_le_bytes());
+                v.push(0x12);
+                v.extend_from_slice(&1000u16.to_le_bytes());
+                v.extend_from_slice(&2u16.to_le_bytes());
+                v.push(0x27);
+                v
+            }),
+            ("id28_select", || {
+                let mut v = header();
+                v.push(0x28);
+                let desc = b"A";
+                let body_len = 1 + 2 + 1 + desc.len();
+                v.extend_from_slice(&(body_len as u16).to_le_bytes());
+                v.push(1);
+                v.extend_from_slice(&2i16.to_le_bytes());
+                v.push(desc.len() as u8);
+                v.extend_from_slice(desc);
+                v.push(0x12);
+                v.extend_from_slice(&1000u16.to_le_bytes());
+                v.extend_from_slice(&4u16.to_le_bytes());
+                with_tone(v)
+            }),
             ("id30_text", || {
                 let mut v = header();
                 v.push(0x30);
@@ -2164,7 +2205,7 @@ mod tests {
         good_bytes.extend_from_slice(&2u16.to_le_bytes());
         std::fs::write(&good, &good_bytes).expect("write good");
 
-        const UNSUPPORTED: &[u8] = &[0x15, 0x18, 0x19, 0x23, 0x26, 0x27, 0x28, 0x2a, 0x2b];
+        const UNSUPPORTED: &[u8] = &[0x15, 0x18, 0x19, 0x2a, 0x2b];
         for &id in UNSUPPORTED {
             let bad = dir.join(format!("bad_{id:02x}.tzx"));
             let mut v = Vec::new();
