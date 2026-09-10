@@ -13,7 +13,7 @@
 //! tape timing): COMMS CLK falling edge rotates the motor daisy-chain; with a
 //! motor running, data port R/W walks the cartridge image.
 
-use formats::{MdrImage, MDR_HEAD_LEN, MDR_SECTORS, MDR_SECTOR_SIZE};
+use formats::{mdr_checksum, MdrImage, MDR_HEAD_LEN, MDR_SECTORS, MDR_SECTOR_SIZE};
 use thiserror::Error;
 
 /// Typical IF1 shadow ROM size (8K).
@@ -76,7 +76,7 @@ impl Drive {
             gap: 15,
             sync: 15,
             last: 0xff,
-            pream: vec![0; MDR_SECTORS * 2],
+            pream: vec![0; 512],
         }
     }
 
@@ -85,8 +85,15 @@ impl Drive {
     }
 
     fn insert(&mut self, cart: MdrImage) {
-        let blocks = cart.sectors.len();
-        self.pream = vec![0xff; blocks.saturating_mul(2)]; // treat as formatted
+        // Fuse: 512-slot preamble map; headers [0..254), data [256..510).
+        // Build per sector from HDCHK — one bad sector must not clear GAP/SYNC for all.
+        self.pream = vec![0; 512];
+        for (i, sec) in cart.sectors.iter().enumerate().take(MDR_SECTORS) {
+            let ok = sec[0] == 0x01 && sec[14] == mdr_checksum(&sec[0..14]);
+            let v = if ok { 0xff } else { 0 };
+            self.pream[i] = v;
+            self.pream[256 + i] = v;
+        }
         self.cart = Some(cart);
         self.head_pos = 0;
         self.transferred = 0;
@@ -147,11 +154,12 @@ impl Drive {
     }
 
     fn preamble_ok(&self) -> bool {
+        // Fuse uses a 512-entry preamble table: headers at [0..254), data at [256..).
         let block = self.head_pos / MDR_SECTOR_SIZE
             + if self.max_bytes == MDR_HEAD_LEN {
                 0
             } else {
-                MDR_SECTORS
+                256
             };
         self.pream.get(block).copied().unwrap_or(0) == 0xff
     }
@@ -169,6 +177,10 @@ pub struct Interface1 {
     comms_data: bool,
     /// Latched control bits (erase / r/w / cts / wait) for inspect/tests.
     pub control: u8,
+    /// How many CTR `IN`s reported GAP+SYNC low (bit1/2 clear) with a motor on.
+    pub gap_sync_low_reads: u32,
+    /// CTR `IN` count while any motor is running.
+    pub ctr_in_while_motor: u32,
 }
 
 impl Default for Interface1 {
@@ -188,6 +200,8 @@ impl Interface1 {
             comms_clk: false,
             comms_data: false,
             control: 0,
+            gap_sync_low_reads: 0,
+            ctr_in_while_motor: 0,
         }
     }
 
@@ -221,6 +235,52 @@ impl Interface1 {
     pub fn insert_mdr_drive(&mut self, index: usize, cart: MdrImage) {
         if let Some(d) = self.drives.get_mut(index) {
             d.insert(cart);
+        }
+    }
+
+    /// Mark header/data preamble slots `SYNC_OK` for sectors with valid `HDCHK`.
+    ///
+    /// Also heals a known FORMAT first-sector `DCHK` glitch (data filled, checksum
+    /// byte left as the fill value) when `HDCHK`/`DESCHK` already match — without
+    /// this, post-`FORMAT` `CAT` times out as "Microdrive not present".
+    ///
+    /// Resets head / GAP / SYNC counters so the next command sees a clean stream
+    /// (equivalent to Fuse remounting a just-formatted cartridge).
+    pub fn sync_preamble_from_headers(&mut self) {
+        for d in &mut self.drives {
+            if d.pream.len() < 512 {
+                d.pream.resize(512, 0);
+            }
+            let Some(cart) = d.cart.as_mut() else {
+                continue;
+            };
+            for (i, sec) in cart.sectors.iter_mut().enumerate() {
+                if i >= MDR_SECTORS {
+                    break;
+                }
+                let hd_ok = sec[0] == 0x01 && sec[14] == mdr_checksum(&sec[0..14]);
+                if hd_ok && sec[29] == mdr_checksum(&sec[15..29]) {
+                    let data = &sec[30..542];
+                    let dcalc = mdr_checksum(data);
+                    // Heal only the known FORMAT incomplete-write: solid fill where
+                    // the stored DCHK byte equals the fill (never a valid sum-mod-255
+                    // of that block). Leave other DCHK mismatches alone.
+                    if sec[542] != dcalc {
+                        let fill = sec[30];
+                        if data.iter().all(|&b| b == fill) && sec[542] == fill {
+                            sec[542] = dcalc;
+                        }
+                    }
+                }
+                let v = if hd_ok { 0xff } else { 0 };
+                d.pream[i] = v;
+                d.pream[256 + i] = v;
+            }
+            d.head_pos = 0;
+            d.transferred = 0;
+            d.gap = 15;
+            d.sync = 15;
+            d.restart_block();
         }
     }
 
@@ -325,12 +385,8 @@ impl Interface1 {
             if !(d.motor_on && d.cart.is_some()) {
                 continue;
             }
-            let block_idx = d.head_pos / MDR_SECTOR_SIZE
-                + if d.max_bytes == MDR_HEAD_LEN {
-                    0
-                } else {
-                    MDR_SECTORS
-                };
+            let block_idx =
+                d.head_pos / MDR_SECTOR_SIZE + if d.max_bytes == MDR_HEAD_LEN { 0 } else { 256 };
             if d.transferred == 0 && val == 0x00 {
                 if let Some(p) = d.pream.get_mut(block_idx) {
                     *p = 1;
@@ -356,10 +412,12 @@ impl Interface1 {
 
     fn port_ctr_in(&mut self) -> u8 {
         let mut ret = 0xff;
+        let mut motor = false;
         for d in &mut self.drives {
             if !(d.motor_on && d.cart.is_some()) {
                 continue;
             }
+            motor = true;
             if d.preamble_ok() {
                 if d.gap > 0 {
                     d.gap -= 1;
@@ -377,11 +435,18 @@ impl Interface1 {
                 ret &= 0xfe; // WPR active-low
             }
         }
+        if motor {
+            self.ctr_in_while_motor = self.ctr_in_while_motor.saturating_add(1);
+            if ret & 0x06 == 0 {
+                self.gap_sync_low_reads = self.gap_sync_low_reads.saturating_add(1);
+            }
+        }
         self.restart_drives();
         ret
     }
 
     fn port_ctr_out(&mut self, val: u8) {
+        let motors_were_on = self.any_motor_on();
         let clk = val & 0x02 != 0;
         // Falling edge of COMMS CLK: shift motor daisy-chain; new drive0 = !COMMS_DATA.
         if !clk && self.comms_clk {
@@ -394,6 +459,10 @@ impl Interface1 {
         self.comms_clk = clk;
         self.control = val;
         self.restart_drives();
+        // After ROM FORMAT/SAVE the motor stops; refresh GAP/SYNC map from headers.
+        if motors_were_on && !self.any_motor_on() {
+            self.sync_preamble_from_headers();
+        }
     }
 
     fn restart_drives(&mut self) {
@@ -546,5 +615,58 @@ mod tests {
         let mut if1 = Interface1::new();
         assert!(!if1.out_port(0x0018, 0));
         assert!(if1.in_port(0x0018).is_none());
+    }
+
+    /// Mirror IF1 ROM GAP then SYNC detect (addrs ~0x15F6–0x162A).
+    #[test]
+    fn rom_gap_sync_detect_sequence() {
+        let mut if1 = Interface1::new();
+        if1.insert_mdr(formats::MdrImage::formatted("CART"));
+        // Select drive 0 motor
+        if1.out_port(0x00ef, 0x02);
+        if1.out_port(0x00ef, 0x00);
+        assert!(if1.any_motor_on());
+
+        // Phase 1: wait for 8 consecutive GAP-high (bit2 set)
+        let mut ok_high = false;
+        for _attempt in 0..500 {
+            let mut consecutive = 0u8;
+            for _ in 0..8 {
+                let st = if1.in_port(0x00ef).unwrap();
+                if st & 0x04 == 0 {
+                    consecutive = 0;
+                    break;
+                }
+                consecutive += 1;
+            }
+            if consecutive == 8 {
+                ok_high = true;
+                break;
+            }
+        }
+        assert!(ok_high, "never saw 8× GAP-high");
+
+        // Phase 2: wait for GAP-low
+        let mut saw_gap_low = false;
+        for _ in 0..200 {
+            let st = if1.in_port(0x00ef).unwrap();
+            if st & 0x04 == 0 {
+                saw_gap_low = true;
+                break;
+            }
+        }
+        assert!(saw_gap_low, "GAP never went low");
+
+        // ROM OUTs 0xEE then checks SYNC low (bit1)
+        if1.out_port(0x00ef, 0xee);
+        let mut saw_sync_low = false;
+        for _ in 0..60 {
+            let st = if1.in_port(0x00ef).unwrap();
+            if st & 0x02 == 0 {
+                saw_sync_low = true;
+                break;
+            }
+        }
+        assert!(saw_sync_low, "SYNC never went low after GAP");
     }
 }

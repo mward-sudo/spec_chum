@@ -5715,7 +5715,8 @@ mod tests {
         assert!(m.interface1_rom_loaded());
     }
 
-    /// User-supplied IF1 ROM soak: boot 48K, insert Fuse-formatted MDR, `CAT 1`, expect OK.
+    /// User-supplied IF1 ROM soak: boot 48K, insert Fuse-formatted MDR, `CAT 1`,
+    /// wait for motor-off, expect `ERR_NR==OK`.
     ///
     /// Skips cleanly when `roms/if1.rom` or `roms/spec48.rom` is absent (never commit IF1 dumps).
     /// Refs [#139](https://github.com/mward-sudo/spec_chum/issues/139) /
@@ -5778,26 +5779,40 @@ mod tests {
         m.hold_keys(&[], 20);
         m.keyboard_mut().reset();
 
+        // IF1 presets ERR_NR to $17 ("Microdrive not present") while hunting
+        // GAP/SYNC; only the value after the motor stops is authoritative.
         let mut saw_motor = false;
-        for _ in 0..5_000 {
-            if m.interface1_mut().is_some_and(|i| i.any_motor_on()) {
+        let mut saw_motor_off = false;
+        let mut last_err = 0xffu8;
+        for _ in 0..25_000u32 {
+            let motor = m.interface1_mut().is_some_and(|i| i.any_motor_on());
+            if motor {
                 saw_motor = true;
-                break;
+            } else if saw_motor {
+                saw_motor_off = true;
             }
             let _ = m.run_frame();
+            last_err = m.read_mem(0x5c3a);
+            if saw_motor_off && !motor {
+                break;
+            }
         }
         assert!(
             saw_motor,
             "CAT should select a Microdrive motor at least once"
         );
         assert!(
-            m.interface1_mut().unwrap().drive_checksums_ok(0),
-            "formatted MDR checksums should survive CAT command entry"
+            saw_motor_off,
+            "CAT should release the motor (ERR_NR={last_err:#04x})"
         );
-        // Full ERR_NR==OK catalogue still needs GAP/SYNC deepen (#397).
+        assert_eq!(last_err, 0xff, "CAT should end with ERR_NR OK");
+        assert!(
+            m.interface1_mut().unwrap().drive_checksums_ok(0),
+            "formatted MDR checksums should survive CAT"
+        );
     }
 
-    /// User-supplied IF1 ROM: `FORMAT "m";1;"T"` must start the Microdrive motor.
+    /// User-supplied IF1 ROM: `FORMAT "m";1;"T"` then motor-off, `ERR_NR==OK`, formatted MDR.
     #[test]
     fn interface1_real_rom_format_mdr_skips_when_missing() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -5856,15 +5871,75 @@ mod tests {
         m.keyboard_mut().reset();
 
         let mut saw_motor = false;
-        for _ in 0..12_000 {
-            if m.interface1_mut().is_some_and(|i| i.any_motor_on()) {
+        let mut saw_motor_off = false;
+        let mut last_err = 0xffu8;
+        // FORMAT rewrites every sector; allow a long soak (byte-level MDR is still
+        // many revolutions of ROM loops).
+        for _ in 0..80_000u32 {
+            let motor = m.interface1_mut().is_some_and(|i| i.any_motor_on());
+            if motor {
                 saw_motor = true;
-                break;
+            } else if saw_motor {
+                saw_motor_off = true;
             }
             let _ = m.run_frame();
+            last_err = m.read_mem(0x5c3a);
+            if saw_motor_off && !motor {
+                break;
+            }
         }
         assert!(saw_motor, "FORMAT should run a Microdrive motor");
-        // ERR_NR==OK + looks_formatted() after FORMAT remains on #397 (GAP/SYNC deepen).
+        assert!(
+            saw_motor_off,
+            "FORMAT should release the motor (ERR_NR={last_err:#04x})"
+        );
+        assert_eq!(last_err, 0xff, "FORMAT should end with ERR_NR OK");
+        assert!(
+            m.interface1_mut()
+                .unwrap()
+                .mdr()
+                .is_some_and(formats::MdrImage::looks_formatted),
+            "FORMAT should leave a Fuse-layout formatted cartridge"
+        );
+
+        // FORMAT blank → CAT empty (acceptance): Extended-mode CAT 1 after OK.
+        for _ in 0..200 {
+            let _ = m.run_frame();
+        }
+        m.wait_48_basic_prompt(500);
+        m.hold_keys(&[(0, 0), (7, 1)], PRESS);
+        m.hold_keys(&[], GAP);
+        let e_line = u16::from(m.read_mem(0x5c59)) | (u16::from(m.read_mem(0x5c5a)) << 8);
+        m.hold_keys(&[(7, 1), (4, 1)], PRESS); // CAT
+        m.hold_keys(&[], GAP);
+        assert_eq!(m.read_mem(e_line), 0xcf, "post-FORMAT CAT token");
+        m.hold_keys(&[(3, 0)], PRESS); // 1
+        m.hold_keys(&[], GAP);
+        m.hold_keys(&[(6, 0)], PRESS); // Enter
+        m.hold_keys(&[], 20);
+        m.keyboard_mut().reset();
+
+        let mut cat_motor = false;
+        let mut cat_motor_off = false;
+        let mut cat_err = 0xffu8;
+        for _ in 0..25_000u32 {
+            let motor = m.interface1_mut().is_some_and(|i| i.any_motor_on());
+            if motor {
+                cat_motor = true;
+            } else if cat_motor {
+                cat_motor_off = true;
+            }
+            let _ = m.run_frame();
+            cat_err = m.read_mem(0x5c3a);
+            if cat_motor_off && !motor {
+                break;
+            }
+        }
+        assert!(
+            cat_motor && cat_motor_off,
+            "post-FORMAT CAT should run motor"
+        );
+        assert_eq!(cat_err, 0xff, "post-FORMAT CAT should end with ERR_NR OK");
     }
 
     #[test]
