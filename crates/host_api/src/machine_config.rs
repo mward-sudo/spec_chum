@@ -141,7 +141,13 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
     HardwareCompat {
         multiface: matches!(
             m,
-            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068
+            Model::Spectrum16K
+                | Model::Spectrum48
+                | Model::TimexTC2048
+                | Model::TimexTS2068
+                | Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::Pentagon128
         ),
         divmmc: matches!(
             m,

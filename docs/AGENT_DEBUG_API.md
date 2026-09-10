@@ -296,7 +296,7 @@ Living-room display toggle is **deferred** (not modeled in shared prefs yet).
 | Route | Notes |
 | --- | --- |
 | `GET /v1/hardware` | `{ has_multiface, has_interface1, has_divmmc, has_timex_dock, has_beta }` |
-| `POST /v1/hardware/multiface` | Body `{ "path" }` — 8 KiB Multiface 1 ROM (48K only); Refs [#137](https://github.com/mward-sudo/spec_chum/issues/137) |
+| `POST /v1/hardware/multiface` | Body `{ "path" }` — 8 KiB Multiface ROM (MF1 on 48K-class, MF128 on 128K/+2; +2A/+3 reject); Refs [#168](https://github.com/mward-sudo/spec_chum/issues/168) |
 | `POST /v1/hardware/multiface/nmi` | Red-button NMI when attached |
 | `POST /v1/hardware/interface1` | Attach IF1 (loads `roms/if1*.rom` if present); Refs [#139](https://github.com/mward-sudo/spec_chum/issues/139) |
 | `POST /v1/hardware/interface1/rom` | Body `{ "path" }` — explicit IF1 ROM |

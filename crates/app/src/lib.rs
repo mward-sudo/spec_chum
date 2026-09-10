@@ -760,14 +760,20 @@ impl EmulatorSession {
             Ok(data) => {
                 let host = &mut *self.host_mut();
                 if let Some(m) = host.machine_mut() {
+                    let label = match m.model() {
+                        Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 => {
+                            "Multiface 128"
+                        }
+                        _ => "Multiface 1",
+                    };
                     match m.attach_multiface(&data) {
                         Ok(()) => {
-                            host.set_status(format!("Attached Multiface 1 {}", path.display()));
+                            host.set_status(format!("Attached {label} {}", path.display()));
                         }
                         Err(e) => host.set_status(e.to_string()),
                     }
                 } else {
-                    host.set_status("Load a 48K ROM before Multiface");
+                    host.set_status("Load a ROM before Multiface");
                 }
             }
             Err(e) => self
@@ -1725,7 +1731,7 @@ impl SpecChumApp {
                     if compat.multiface || compat.divmmc || compat.interface1 || compat.beta {
                         if compat.multiface {
                             if ui
-                                .checkbox(&mut draft.attach_multiface, "Multiface 1")
+                                .checkbox(&mut draft.attach_multiface, "Multiface (1 / 128)")
                                 .changed()
                                 && !draft.attach_multiface
                             {
@@ -2213,8 +2219,25 @@ impl SpecChumApp {
                         ui.label("Peripherals (partial where noted)");
                         ui.separator();
 
-                        if matches!(model, Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068) {
-                            if ui.button("Attach Multiface 1 ROM…").clicked() {
+                        if matches!(
+                            model,
+                            Model::Spectrum16K
+                                | Model::Spectrum48
+                                | Model::TimexTC2048
+                                | Model::TimexTS2068
+                                | Model::Spectrum128
+                                | Model::SpectrumPlus2
+                                | Model::Pentagon128
+                        ) {
+                            let mf_label = if matches!(
+                                model,
+                                Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128
+                            ) {
+                                "Attach Multiface 128 ROM…"
+                            } else {
+                                "Attach Multiface 1 ROM…"
+                            };
+                            if ui.button(mf_label).clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("Multiface ROM", &["rom", "bin"])
                                     .pick_file()
@@ -2234,7 +2257,7 @@ impl SpecChumApp {
                                 ui.label("Multiface: attached");
                             }
                         } else {
-                            ui.label("Multiface 1: 48K / 16K only");
+                            ui.label("Multiface: 48K-class (MF1) or 128K/+2 (MF128); not +2A/+3");
                         }
 
                         if model == Model::TimexTS2068 {

@@ -1233,7 +1233,11 @@ fn apply_prefs_to_session(s: &mut HostSession, prefs: &SessionPrefs) -> ApiResul
 /// Map model-incompatible host errors to 400 for clearer agent feedback.
 fn map_host_model_error(err: HostError) -> ApiError {
     let msg = err.to_string();
-    if msg.contains("only supported") || msg.contains("requires") {
+    if msg.contains("only supported")
+        || msg.contains("not supported")
+        || msg.contains("requires")
+        || msg.contains("unsupported")
+    {
         ApiError::BadRequest(msg)
     } else {
         ApiError::from(err)

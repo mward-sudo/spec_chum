@@ -152,7 +152,7 @@ struct HardwareCompatFlags {
             )
         case .spectrum128, .spectrumPlus2, .pentagon128:
             return HardwareCompatFlags(
-                multiface: false, divmmc: true, interface1: true, beta: true, ayStereo: true
+                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: true
             )
         case .spectrumPlus2A, .spectrumPlus3:
             return HardwareCompatFlags(
