@@ -41,8 +41,9 @@ use formats::{apply_input_byte, DskImage, RzxRecording, Snapshot128, Snapshot48}
 pub use tape::LD_BYTES_TRAP_PC;
 pub use tape::TIMEX_EXROM_LD_BYTES_PC;
 use tape::{
-    evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, TapPlayer, TapeTrapResult,
-    TzxPlayer, LD_BYTES_PROLOGUE,
+    evaluate_ld_bytes_trap, flash_load_block, is_ld_bytes_trap_pc, ExperiencePendingFlash,
+    TapPlayer, TapeTrapResult, TzxPlayer, EXPERIENCE_COSMETIC_STRIPES_PER_FRAME,
+    EXPERIENCE_PILOT_DATA_PULSES, EXPERIENCE_PILOT_HEADER_PULSES, LD_BYTES_PROLOGUE,
 };
 use thiserror::Error;
 use ula::{
@@ -216,6 +217,14 @@ impl TapeDeck {
         }
     }
 
+    #[must_use]
+    pub fn as_tap(&self) -> Option<&TapPlayer> {
+        match self {
+            Self::Tap(t) => Some(t),
+            Self::Tzx(_) => None,
+        }
+    }
+
     /// True when the deck exposes TAP blocks an LD-BYTES trap can poke.
     ///
     /// Pulse-only TZX decks (custom loaders such as Speedlock) have no block
@@ -281,9 +290,12 @@ pub struct TapeLoadOptions {
     /// load time ≈ realtime / speed. Pulse widths stay ROM-accurate (CPU↔tape
     /// 1:1); Instant on a flashable deck is unchanged (single frame per call).
     pub speed: u32,
-    /// ~20s-class load: abbreviated inter-block pauses on the EAR path at
-    /// [`tape::EXPERIENCE_EAR_SPEED`] (issue #82). Mutually exclusive with
-    /// [`Self::flash_load`].
+    /// ~20s-class load: hybrid flash + cosmetic abbreviated pilots/border on
+    /// flashable TAP decks ([#167](https://github.com/mward-sudo/spec_chum/issues/167));
+    /// EAR-fallback decks keep abbreviated pauses at [`tape::EXPERIENCE_EAR_SPEED`]
+    /// ([#82](https://github.com/mward-sudo/spec_chum/issues/82)). Mutually exclusive
+    /// with sticky Instant [`Self::flash_load`] in the UI (Experience still uses the
+    /// LD-BYTES flash trap internally).
     pub experience_load: bool,
 }
 
@@ -324,6 +336,18 @@ impl TapeLoadOptions {
         }
         self.speed = self.speed.clamp(1, 64);
         self
+    }
+
+    /// Instant or hybrid Experience: LD-BYTES trap pokes TAP bytes.
+    #[must_use]
+    pub fn ld_bytes_flash_trap(self) -> bool {
+        self.flash_load || self.experience_load
+    }
+
+    /// Skip advancing TAP EAR while flash/hybrid owns the block stream.
+    #[must_use]
+    pub fn skip_tap_ear_advance(self) -> bool {
+        self.flash_load || self.experience_load
     }
 }
 
@@ -1805,6 +1829,13 @@ impl Machine {
                 return 1;
             }
             INSTANT_EAR_FALLBACK_SPEED
+        } else if opts.experience_load {
+            // Hybrid flash + cosmetic stripes are paced one Spectrum frame per
+            // host tick so abbreviated pilots take wall-clock time (#167).
+            if self.tape_supports_flash_load() {
+                return 1;
+            }
+            opts.speed.clamp(1, 64)
         } else {
             opts.speed.clamp(1, 64)
         };
@@ -1897,6 +1928,19 @@ impl Machine {
                 bus.ula.begin_frame();
                 ula.border = bus.border;
                 ula.begin_frame();
+                if let Some(pending) = Self::tick_experience_cosmetic_paint(
+                    tape,
+                    &mut bus.border,
+                    &mut bus.ula.border_events,
+                    &mut bus.beeper_edges,
+                    FRAME_TSTATES_48,
+                ) {
+                    Self::complete_experience_pending_flash(cpu, tape, &pending, |a, v| {
+                        bus.write(a, v);
+                    });
+                }
+                bus.ula.border = bus.border;
+                ula.border = bus.border;
                 if trace::enabled(trace::Category::ULA) {
                     let frame = next_frame_n();
                     trace::emit(trace::EventKind::UlaFrame { frame });
@@ -1936,7 +1980,9 @@ impl Machine {
                         frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_48);
                         continue;
                     }
-                    if tape_opts.flash_load && Self::try_flash_load_48(cpu, bus, tape) {
+                    if tape_opts.ld_bytes_flash_trap()
+                        && Self::try_flash_load_48(cpu, bus, tape, tape_opts.experience_load)
+                    {
                         continue;
                     }
                     if int_active_48(bus.frame_t) && !(bus.timex && bus.timex_scld.int_disabled()) {
@@ -1956,7 +2002,7 @@ impl Machine {
                                 bus.frame_t,
                                 irq_t,
                                 tape_opts.speed,
-                                tape_opts.flash_load,
+                                tape_opts.skip_tap_ear_advance(),
                             );
                             if has_ay {
                                 ay_t = ay_t.saturating_add(irq_t);
@@ -2024,7 +2070,7 @@ impl Machine {
                         bus.frame_t,
                         dt,
                         tape_opts.speed,
-                        tape_opts.flash_load,
+                        tape_opts.skip_tap_ear_advance(),
                     );
                     if has_ay {
                         ay_t = ay_t.saturating_add(dt);
@@ -2079,6 +2125,19 @@ impl Machine {
                 ula.border = bus.border;
                 ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
+                if let Some(pending) = Self::tick_experience_cosmetic_paint(
+                    tape,
+                    &mut bus.border,
+                    &mut bus.ula.border_events,
+                    &mut bus.beeper_edges,
+                    frame_len,
+                ) {
+                    Self::complete_experience_pending_flash(cpu, tape, &pending, |a, v| {
+                        bus.write(a, v);
+                    });
+                }
+                bus.ula.border = bus.border;
+                ula.border = bus.border;
                 if trace::enabled(trace::Category::ULA) {
                     let frame = next_frame_n();
                     trace::emit(trace::EventKind::UlaFrame { frame });
@@ -2104,7 +2163,9 @@ impl Machine {
                         frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, frame_len);
                         continue;
                     }
-                    if tape_opts.flash_load && Self::try_flash_load_128(cpu, bus, tape) {
+                    if tape_opts.ld_bytes_flash_trap()
+                        && Self::try_flash_load_128(cpu, bus, tape, tape_opts.experience_load)
+                    {
                         continue;
                     }
                     let int_window = if is_pentagon {
@@ -2130,7 +2191,7 @@ impl Machine {
                                 bus.frame_t,
                                 irq_t,
                                 tape_opts.speed,
-                                tape_opts.flash_load,
+                                tape_opts.skip_tap_ear_advance(),
                             );
                             bus.ay.advance(irq_t);
                             ay_t = ay_t.saturating_add(irq_t);
@@ -2196,7 +2257,7 @@ impl Machine {
                         bus.frame_t,
                         dt,
                         tape_opts.speed,
-                        tape_opts.flash_load,
+                        tape_opts.skip_tap_ear_advance(),
                     );
                     bus.ay.advance(dt);
                     ay_t = ay_t.saturating_add(dt);
@@ -2235,6 +2296,24 @@ impl Machine {
                 ula.border = bus.border;
                 ula.display_screen_bank = bus.ula.display_screen_bank;
                 ula.begin_frame();
+                if let Some(pending) = Self::tick_experience_cosmetic_paint(
+                    tape,
+                    &mut bus.border,
+                    &mut bus.ula.border_events,
+                    &mut bus.beeper_edges,
+                    FRAME_TSTATES_128,
+                ) {
+                    Self::complete_experience_pending_flash(cpu, tape, &pending, |a, v| {
+                        bus.write(a, v);
+                    });
+                    if !bus.disk_interface {
+                        if let Some(TapeDeck::Tap(player)) = tape.as_ref() {
+                            Self::plus2a_repair_menu_loader_stack_if_needed(bus, cpu, player);
+                        }
+                    }
+                }
+                bus.ula.border = bus.border;
+                ula.border = bus.border;
                 if trace::enabled(trace::Category::ULA) {
                     let frame = next_frame_n();
                     trace::emit(trace::EventKind::UlaFrame { frame });
@@ -2260,7 +2339,9 @@ impl Machine {
                         frame_done = advance_frame_t(&mut bus.frame_t, HOLD_T, FRAME_TSTATES_128);
                         continue;
                     }
-                    if tape_opts.flash_load && Self::try_flash_load_plus3(cpu, bus, tape) {
+                    if tape_opts.ld_bytes_flash_trap()
+                        && Self::try_flash_load_plus3(cpu, bus, tape, tape_opts.experience_load)
+                    {
                         continue;
                     }
                     if bus.frame_t < INT_LENGTH_128 {
@@ -2279,7 +2360,7 @@ impl Machine {
                                 bus.frame_t,
                                 irq_t,
                                 tape_opts.speed,
-                                tape_opts.flash_load,
+                                tape_opts.skip_tap_ear_advance(),
                             );
                             bus.ay.advance(irq_t);
                             ay_t = ay_t.saturating_add(irq_t);
@@ -2342,7 +2423,7 @@ impl Machine {
                         bus.frame_t,
                         dt,
                         tape_opts.speed,
-                        tape_opts.flash_load,
+                        tape_opts.skip_tap_ear_advance(),
                     );
                     bus.ay.advance(dt);
                     ay_t = ay_t.saturating_add(dt);
@@ -2374,11 +2455,10 @@ impl Machine {
 
     /// Advance the tape EAR bitstream.
     ///
-    /// Instant flash-load (`flash_load`) never plays TAP pulses: the LD-BYTES
-    /// trap (ROM or relocated RAM clone) consumes blocks. Advancing EAR while
-    /// BASIC/`USR` runs would skip later TAP blocks (The Boggit flag `0xC8`).
-    /// Pure TZX pulse decks have no flash trap, so they still advance.
-    /// Loaders that only poll EAR without an LD-BYTES-shaped trap need Instant off.
+    /// Instant flash-load and hybrid Experience never play TAP pulses: the
+    /// LD-BYTES trap consumes blocks (Experience paints cosmetic pilots instead).
+    /// Advancing EAR while BASIC/`USR` runs would skip later TAP blocks (The Boggit
+    /// flag `0xC8`). Pure TZX pulse decks have no flash trap, so they still advance.
     fn advance_tape_ear(
         tape: &mut Option<TapeDeck>,
         ear: &mut bool,
@@ -2387,12 +2467,12 @@ impl Machine {
         frame_t: u32,
         dt: u32,
         _speed: u32,
-        flash_load: bool,
+        skip_tap_ear: bool,
     ) {
         if dt == 0 {
             return;
         }
-        if flash_load && matches!(tape.as_ref(), Some(TapeDeck::Tap(_))) {
+        if skip_tap_ear && matches!(tape.as_ref(), Some(TapeDeck::Tap(_))) {
             return;
         }
         let Some(t) = tape.as_mut() else {
@@ -2430,14 +2510,19 @@ impl Machine {
         }
     }
 
-    /// Tape inserted but paused at LD-BYTES: hold PC so Play can still flash-load / EAR-load.
+    /// Tape inserted but paused at LD-BYTES, or hybrid Experience cosmetic hold:
+    /// freeze PC so Play / stripe painting can finish before flash RET.
     #[must_use]
     fn hold_ld_bytes_until_play(
         pc: u16,
         tape: Option<&TapeDeck>,
         read: impl Fn(u16) -> u8,
     ) -> bool {
-        let holding = tape.is_some_and(|t| !t.playing()) && is_ld_bytes_trap_pc(pc, read);
+        let at_trap = is_ld_bytes_trap_pc(pc, read);
+        let paused = tape.is_some_and(|t| !t.playing()) && at_trap;
+        let cosmetic = at_trap
+            && tape.is_some_and(|t| t.as_tap().is_some_and(|p| p.experience_pending.is_some()));
+        let holding = paused || cosmetic;
         if holding && trace::enabled(trace::Category::MACHINE) {
             // Sampled: one event per hold check would flood; emit sparsely via counter.
             static HOLD_N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -2486,7 +2571,90 @@ impl Machine {
         cpu.regs.pc = u16::from_le_bytes([lo, hi]);
     }
 
-    fn try_flash_load_48(cpu: &mut Cpu, bus: &mut Bus48, tape: &mut Option<TapeDeck>) -> bool {
+    /// Paint one Spectrum frame of hybrid Experience cosmetic pilots (#167).
+    ///
+    /// When the abbreviated stripe budget is exhausted, returns the completed
+    /// pending flash for the caller to poke/RET (avoids borrowing the bus for
+    /// writes while border/beeper buffers are also borrowed).
+    fn tick_experience_cosmetic_paint(
+        tape: &mut Option<TapeDeck>,
+        border: &mut u8,
+        border_events: &mut Vec<(u32, u8)>,
+        beeper_edges: &mut Vec<(u32, bool)>,
+        frame_tstates: u32,
+    ) -> Option<ExperiencePendingFlash> {
+        let player = tape.as_mut()?.as_tap_mut()?;
+        let pending = player.experience_pending.as_mut()?;
+        let stripes = EXPERIENCE_COSMETIC_STRIPES_PER_FRAME.max(1);
+        let step = (frame_tstates / stripes).max(1);
+        for i in 0..stripes {
+            let t = i.saturating_mul(step).min(frame_tstates.saturating_sub(1));
+            // Classic loader feel: red ↔ cyan border stripes + tone edges.
+            let color = if pending.level { 2 } else { 5 };
+            *border = color;
+            border_events.push((t, color));
+            beeper_edges.push((t, pending.level));
+            pending.level = !pending.level;
+        }
+        pending.pulses_left = pending.pulses_left.saturating_sub(stripes);
+        if pending.pulses_left > 0 {
+            return None;
+        }
+        player.experience_pending.take()
+    }
+
+    fn complete_experience_pending_flash(
+        cpu: &mut Cpu,
+        tape: &mut Option<TapeDeck>,
+        pending: &ExperiencePendingFlash,
+        mut write_mem: impl FnMut(u16, u8),
+    ) {
+        let block_after = tape
+            .as_ref()
+            .and_then(TapeDeck::as_tap)
+            .map_or(0, |p| p.block as u32);
+        let poke = if pending.success && pending.load {
+            tape.as_ref()
+                .and_then(TapeDeck::as_tap)
+                .and_then(|p| p.image.blocks.get(pending.poke_block).cloned())
+        } else {
+            None
+        };
+        if pending.success {
+            if let Some(block) = poke.as_ref() {
+                flash_load_block(&mut write_mem, block, pending.dest);
+            }
+            if pending.load {
+                cpu.regs.set_ix(pending.dest.wrapping_add(pending.len));
+            }
+            Self::ret_from_tape_trap(cpu, pending.ret_lo, pending.ret_hi, true);
+            if trace::enabled(trace::Category::TAPE) {
+                trace::emit(trace::EventKind::FlashLoadExit {
+                    success: true,
+                    bytes: pending.len,
+                    block_after,
+                    regs: reg_snap(cpu),
+                });
+            }
+        } else {
+            Self::ret_from_tape_trap(cpu, pending.ret_lo, pending.ret_hi, false);
+            if trace::enabled(trace::Category::TAPE) {
+                trace::emit(trace::EventKind::FlashLoadExit {
+                    success: false,
+                    bytes: 0,
+                    block_after,
+                    regs: reg_snap(cpu),
+                });
+            }
+        }
+    }
+
+    fn try_flash_load_48(
+        cpu: &mut Cpu,
+        bus: &mut Bus48,
+        tape: &mut Option<TapeDeck>,
+        experience: bool,
+    ) -> bool {
         if !is_ld_bytes_trap_pc(cpu.regs.pc, |a| bus.read(a)) {
             return false;
         }
@@ -2496,6 +2664,10 @@ impl Machine {
         let Some(player) = deck.as_tap_mut() else {
             return false;
         };
+        // Hybrid cosmetic already scheduled — hold path advances time until tick completes.
+        if player.experience_pending.is_some() {
+            return false;
+        }
         // ROM did `EX AF,AF'` before 0x056C — flag + load/verify carry are in A′/F′.
         let flag_expected = cpu.regs.a_;
         let load = cpu.regs.f_ & flag::C != 0;
@@ -2520,6 +2692,25 @@ impl Machine {
         match result {
             TapeTrapResult::Ignored => false,
             TapeTrapResult::Success { addr: dest, len: n } => {
+                if experience {
+                    let pulses = if flag_expected == 0 {
+                        EXPERIENCE_PILOT_HEADER_PULSES
+                    } else {
+                        EXPERIENCE_PILOT_DATA_PULSES
+                    };
+                    player.experience_pending = Some(ExperiencePendingFlash {
+                        pulses_left: pulses,
+                        level: true,
+                        dest,
+                        len: n,
+                        success: true,
+                        load,
+                        ret_lo,
+                        ret_hi,
+                        poke_block: player.block.wrapping_sub(1),
+                    });
+                    return true;
+                }
                 if load {
                     if let Some(block) = player.image.blocks.get(player.block.wrapping_sub(1)) {
                         flash_load_block(&mut |a, v| bus.write(a, v), block, dest);
@@ -2552,7 +2743,12 @@ impl Machine {
         }
     }
 
-    fn try_flash_load_128(cpu: &mut Cpu, bus: &mut Bus128, tape: &mut Option<TapeDeck>) -> bool {
+    fn try_flash_load_128(
+        cpu: &mut Cpu,
+        bus: &mut Bus128,
+        tape: &mut Option<TapeDeck>,
+        experience: bool,
+    ) -> bool {
         if !is_ld_bytes_trap_pc(cpu.regs.pc, |a| bus.read(a)) {
             return false;
         }
@@ -2562,6 +2758,9 @@ impl Machine {
         let Some(player) = deck.as_tap_mut() else {
             return false;
         };
+        if player.experience_pending.is_some() {
+            return false;
+        }
         let flag_expected = cpu.regs.a_;
         let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
@@ -2585,6 +2784,25 @@ impl Machine {
         match result {
             TapeTrapResult::Ignored => false,
             TapeTrapResult::Success { addr: dest, len: n } => {
+                if experience {
+                    let pulses = if flag_expected == 0 {
+                        EXPERIENCE_PILOT_HEADER_PULSES
+                    } else {
+                        EXPERIENCE_PILOT_DATA_PULSES
+                    };
+                    player.experience_pending = Some(ExperiencePendingFlash {
+                        pulses_left: pulses,
+                        level: true,
+                        dest,
+                        len: n,
+                        success: true,
+                        load,
+                        ret_lo,
+                        ret_hi,
+                        poke_block: player.block.wrapping_sub(1),
+                    });
+                    return true;
+                }
                 if load {
                     if let Some(block) = player.image.blocks.get(player.block.wrapping_sub(1)) {
                         flash_load_block(&mut |a, v| bus.write(a, v), block, dest);
@@ -2621,6 +2839,7 @@ impl Machine {
         cpu: &mut Cpu,
         bus: &mut BusPlus3,
         tape: &mut Option<TapeDeck>,
+        experience: bool,
     ) -> bool {
         if !is_ld_bytes_trap_pc(cpu.regs.pc, |a| bus.read(a)) {
             return false;
@@ -2631,6 +2850,9 @@ impl Machine {
         let Some(player) = deck.as_tap_mut() else {
             return false;
         };
+        if player.experience_pending.is_some() {
+            return false;
+        }
         let flag_expected = cpu.regs.a_;
         let load = cpu.regs.f_ & flag::C != 0;
         let addr = cpu.regs.ix();
@@ -2654,6 +2876,25 @@ impl Machine {
         match result {
             TapeTrapResult::Ignored => false,
             TapeTrapResult::Success { addr: dest, len: n } => {
+                if experience {
+                    let pulses = if flag_expected == 0 {
+                        EXPERIENCE_PILOT_HEADER_PULSES
+                    } else {
+                        EXPERIENCE_PILOT_DATA_PULSES
+                    };
+                    player.experience_pending = Some(ExperiencePendingFlash {
+                        pulses_left: pulses,
+                        level: true,
+                        dest,
+                        len: n,
+                        success: true,
+                        load,
+                        ret_lo,
+                        ret_hi,
+                        poke_block: player.block.wrapping_sub(1),
+                    });
+                    return true;
+                }
                 if load {
                     if let Some(block) = player.image.blocks.get(player.block.wrapping_sub(1)) {
                         flash_load_block(&mut |a, v| bus.write(a, v), block, dest);
@@ -2792,7 +3033,7 @@ impl Machine {
                         bus.frame_t,
                         HOLD_T,
                         tape_opts.speed,
-                        tape_opts.flash_load,
+                        tape_opts.skip_tap_ear_advance(),
                     );
                     if bus.timex_2068 {
                         bus.ay.advance(HOLD_T);
@@ -2801,7 +3042,9 @@ impl Machine {
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
                 }
-                if tape_opts.flash_load && Self::try_flash_load_48(cpu, bus, tape) {
+                if tape_opts.ld_bytes_flash_trap()
+                    && Self::try_flash_load_48(cpu, bus, tape, tape_opts.experience_load)
+                {
                     return;
                 }
                 if int_active_48(bus.frame_t) && !(bus.timex && bus.timex_scld.int_disabled()) {
@@ -2832,7 +3075,7 @@ impl Machine {
                             bus.frame_t,
                             irq_t,
                             tape_opts.speed,
-                            tape_opts.flash_load,
+                            tape_opts.skip_tap_ear_advance(),
                         );
                         if bus.timex_2068 {
                             bus.ay.advance(irq_t);
@@ -2886,7 +3129,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
-                    tape_opts.flash_load,
+                    tape_opts.skip_tap_ear_advance(),
                 );
                 if bus.timex_2068 {
                     bus.ay.advance(dt);
@@ -2921,14 +3164,16 @@ impl Machine {
                         bus.frame_t,
                         HOLD_T,
                         tape_opts.speed,
-                        tape_opts.flash_load,
+                        tape_opts.skip_tap_ear_advance(),
                     );
                     bus.ay.advance(HOLD_T);
                     bus.frame_t = (bus.frame_t + HOLD_T) % frame_len;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
                 }
-                if tape_opts.flash_load && Self::try_flash_load_128(cpu, bus, tape) {
+                if tape_opts.ld_bytes_flash_trap()
+                    && Self::try_flash_load_128(cpu, bus, tape, tape_opts.experience_load)
+                {
                     return;
                 }
                 let int_window = if is_pentagon {
@@ -2965,7 +3210,7 @@ impl Machine {
                             bus.frame_t,
                             irq_t,
                             tape_opts.speed,
-                            tape_opts.flash_load,
+                            tape_opts.skip_tap_ear_advance(),
                         );
                         bus.ay.advance(irq_t);
                         bus.frame_t = (bus.frame_t + irq_t) % frame_len;
@@ -3018,7 +3263,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
-                    tape_opts.flash_load,
+                    tape_opts.skip_tap_ear_advance(),
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % frame_len;
@@ -3049,14 +3294,16 @@ impl Machine {
                         bus.frame_t,
                         HOLD_T,
                         tape_opts.speed,
-                        tape_opts.flash_load,
+                        tape_opts.skip_tap_ear_advance(),
                     );
                     bus.ay.advance(HOLD_T);
                     bus.frame_t = (bus.frame_t + HOLD_T) % FRAME_TSTATES_128;
                     cpu.t = cpu.t.wrapping_add(u64::from(HOLD_T));
                     return;
                 }
-                if tape_opts.flash_load && Self::try_flash_load_plus3(cpu, bus, tape) {
+                if tape_opts.ld_bytes_flash_trap()
+                    && Self::try_flash_load_plus3(cpu, bus, tape, tape_opts.experience_load)
+                {
                     return;
                 }
                 if bus.frame_t < INT_LENGTH_128 {
@@ -3086,7 +3333,7 @@ impl Machine {
                             bus.frame_t,
                             irq_t,
                             tape_opts.speed,
-                            tape_opts.flash_load,
+                            tape_opts.skip_tap_ear_advance(),
                         );
                         bus.ay.advance(irq_t);
                         bus.frame_t = (bus.frame_t + irq_t) % FRAME_TSTATES_128;
@@ -3135,7 +3382,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
-                    tape_opts.flash_load,
+                    tape_opts.skip_tap_ear_advance(),
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -3172,7 +3419,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
-                    tape_opts.flash_load,
+                    tape_opts.skip_tap_ear_advance(),
                 );
                 if bus.timex_2068 {
                     bus.ay.advance(dt);
@@ -3213,7 +3460,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
-                    tape_opts.flash_load,
+                    tape_opts.skip_tap_ear_advance(),
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % frame_len;
@@ -3241,7 +3488,7 @@ impl Machine {
                     bus.frame_t,
                     dt,
                     tape_opts.speed,
-                    tape_opts.flash_load,
+                    tape_opts.skip_tap_ear_advance(),
                 );
                 bus.ay.advance(dt);
                 bus.frame_t = (bus.frame_t + dt) % FRAME_TSTATES_128;
@@ -7439,14 +7686,79 @@ mod tests {
         m.set_tape_load_options(TapeLoadOptions::experience());
         m.insert_tape(TapPlayer::new(img));
         m.set_tape_playing(true);
+        // Hybrid Experience advances TAP via LD-BYTES flash + cosmetic holds
+        // (EAR is skipped). Drive each block from the trap like Instant would.
+        // Block index advances when the trap is *scheduled*; wait until cosmetic
+        // pending clears before starting the next block.
         let max_host_frames = 25 * 50;
-        for _n in 0..max_host_frames {
-            let _ = m.run_frame();
-            if m.tape_block().is_none_or(|b| b >= 30) {
-                return;
+        let mut host_frames = 0u32;
+        for block_i in 0..30usize {
+            // Finish any prior cosmetic hold first.
+            while matches!(
+                &m,
+                Machine::Spec48 {
+                    tape: Some(TapeDeck::Tap(p)),
+                    ..
+                } if p.experience_pending.is_some()
+            ) {
+                let _ = m.run_frame();
+                host_frames += 1;
+                assert!(
+                    host_frames <= max_host_frames,
+                    "experience hybrid cosmetic overrun before block {block_i}"
+                );
+            }
+            let ret = 0x12abu16;
+            m.cpu_mut().regs.sp = 0x5f00;
+            m.write_mem(0x5f00, (ret & 0xff) as u8);
+            m.write_mem(0x5f01, (ret >> 8) as u8);
+            m.cpu_mut().regs.pc = LD_BYTES_TRAP_PC;
+            m.cpu_mut().regs.a = 0;
+            m.cpu_mut().regs.f = 0;
+            m.cpu_mut().regs.a_ = 0xff;
+            m.cpu_mut().regs.f_ = flag::C;
+            m.cpu_mut().regs.set_ix(0x8000);
+            m.cpu_mut().regs.set_de(payload_len as u16);
+            if let Machine::Spec48 { bus, .. } = &mut m {
+                bus.frame_t = INT_LENGTH_48;
+            }
+            let mut saw_pending = false;
+            let mut block_frames = 0u32;
+            loop {
+                let _ = m.run_frame();
+                host_frames += 1;
+                block_frames += 1;
+                let pending = matches!(
+                    &m,
+                    Machine::Spec48 {
+                        tape: Some(TapeDeck::Tap(p)),
+                        ..
+                    } if p.experience_pending.is_some()
+                );
+                if pending {
+                    saw_pending = true;
+                }
+                if saw_pending && !pending {
+                    break;
+                }
+                assert!(
+                    block_frames <= 80,
+                    "experience hybrid block {block_i} stuck after {block_frames} frames (block={:?} playing={} pc={:04X} pending={pending})",
+                    m.tape_block(),
+                    m.tape_playing(),
+                    m.cpu().regs.pc,
+                );
+                assert!(
+                    host_frames <= max_host_frames,
+                    "experience hybrid exceeded {max_host_frames} host frames at block {block_i} (used {host_frames})"
+                );
             }
         }
-        panic!("experience load did not finish within {max_host_frames} host frames");
+        assert!(
+            m.tape_block().is_none_or(|b| b >= 30),
+            "expected all 30 blocks consumed, got {:?}",
+            m.tape_block()
+        );
     }
 
     #[test]

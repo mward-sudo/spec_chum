@@ -468,7 +468,7 @@ struct ContentView: View {
             .labelsHidden()
             .fixedSize()
             .controlSize(.mini)
-            .help("Experience: ~20s abbreviated EAR load; otherwise N Spectrum frames/tick while a tape plays (loading only — the loaded program always runs at 1×)")
+            .help("Experience: ~20s hybrid flash + cosmetic pilots on TAP (not Instant); pulse-only decks use EAR at 16× with abbreviated pauses. Otherwise N Spectrum frames/tick while a tape plays (loading only — the loaded program always runs at 1×)")
             .accessibilityLabel("Tape load mode")
             .accessibilityValue(tapeLoadModeAccessibilityValue)
         }
