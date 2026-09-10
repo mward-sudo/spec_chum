@@ -198,9 +198,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/interface1.rs": {
-    "mtime": 1789005897.7197459,
-    "seen": 1789005978.25869,
-    "ast_hash": "2b96a6ff6865192bcf21986f634831bf",
+    "mtime": 1789010300.02212,
+    "seen": 1789010348.828415,
+    "ast_hash": "cdc6e051a88150db4d57b5612d88f7ef",
     "semantic_hash": ""
   },
   "crates/bus/src/kempston.rs": {
@@ -582,9 +582,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1789007285.7738304,
-    "seen": 1789007302.177284,
-    "ast_hash": "dc8cfd1d54bbfd45e4e7e19e929d15f4",
+    "mtime": 1789010300.144321,
+    "seen": 1789010348.829505,
+    "ast_hash": "9280855bf32686ca7c108839120f2335",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
@@ -1122,9 +1122,9 @@
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
-    "mtime": 1789007298.8719559,
-    "seen": 1789007302.1782458,
-    "ast_hash": "7ad78fd45211359a97d319767ea6a51e",
+    "mtime": 1789009946.4663837,
+    "seen": 1789010348.830519,
+    "ast_hash": "15c6b407153e3d9df7de89f39d2bd1a4",
     "semantic_hash": ""
   },
   "scripts/check_deny.sh": {
