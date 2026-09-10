@@ -34,21 +34,24 @@ Accuracy tiers above (#171 Fuse / z80test / system-tests) prove **CPU/ULA correc
 | Capability | CI gate | Notes |
 | --- | --- | --- |
 | TAP Instant + EAR matrix | `cargo test -p machine --lib matrix` | Models × speeds; optional Boggit when local path set — see `tests/fixtures/tape/README.md` |
-| TZX supported block-ID matrix | `cargo test -p tape tzx_block_matrix_supported` | Synthetic bytes per ID (`0x10`–`0x14`, `0x20`, skip/info, Loop `0x24`/`0x25`, Jump/Call/Select `0x23`/`0x26`–`0x28`, glue) |
-| TZX unsupported IDs fail loudly | `cargo test -p tape tzx_block_matrix_unsupported` | Direct/CSW/GDB/Stop if 48K/Set signal — error names the hex ID |
+| TZX supported block-ID matrix | `cargo test -p tape tzx_block_matrix_supported` | Synthetic bytes per ID (`0x10`–`0x15`, `0x18`–`0x20`, skip/info, Loop/Jump/Call/Select, `0x2A`/`0x2B`, glue) |
+| TZX unsupported IDs fail loudly | `cargo test -p tape tzx_block_matrix_unsupported` | Deprecated/reserved IDs (`0x16`/`0x17`/`0x34`/`0x40`) — error names the hex ID |
 | Host open / `has_tape` | `cargo test -p host_api open_tape_tzx_block_matrix` | SpecChumMac `sc_open_tape` path; unsupported leaves prior deck inserted |
 | TAP scan harden | `cargo test -p tape to_tap_image_errors_on_unsupported` | No silent truncate of trailing `0x10`s on unknown IDs |
 
-**Known gaps** (intentionally unsupported until a title needs them — deepen under #374 / per-block issues, do not commit commercial dumps):
+**Supported pulse / control families** (EAR schedule expansion; Select auto-picks the first menu entry for headless open):
 
-| Block | ID | Status |
+| Block | ID | Notes |
 | --- | --- | --- |
-| Direct recording | `0x15` | Unsupported — hard open error |
-| CSW recording | `0x18` | Unsupported |
-| Generalized data (GDB) | `0x19` | Unsupported |
-| Stop if 48K / Set signal level | `0x2A`, `0x2B` | Unsupported |
-
-Jump / Call / Return / Select (`0x23`, `0x26`–`0x28`) are supported via pulse-schedule expansion (Select auto-picks the first menu entry for headless open).
+| Standard / turbo / tone / pulse / data | `0x10`–`0x14` | |
+| Direct recording | `0x15` | Absolute EAR samples |
+| CSW recording | `0x18` | RLE + Z-RLE (`flate2`) |
+| Generalized data (GDB) | `0x19` | Symbol alphabet + pilot/data streams |
+| Pause | `0x20` | |
+| Jump / Call / Return / Select | `0x23`, `0x26`–`0x28` | |
+| Loop Start/End | `0x24`/`0x25` | |
+| Stop if 48K | `0x2A` | Accepted at open; schedule expand is a no-op (no model at parse) |
+| Set signal level | `0x2B` | Absolute next-pulse polarity |
 
 Optional local Speedlock / commercial TZXs skip cleanly when absent (`~/Downloads/Arkanoid.tzx`, `SPEC_CHUM_BOGGIT_TZX`, …). Never commit those images.
 

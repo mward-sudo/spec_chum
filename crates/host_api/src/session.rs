@@ -2064,6 +2064,50 @@ mod tests {
                 v.extend_from_slice(&payload);
                 v
             }),
+            ("id15_direct", || {
+                let mut v = header();
+                v.push(0x15);
+                v.extend_from_slice(&158u16.to_le_bytes());
+                v.extend_from_slice(&0u16.to_le_bytes());
+                v.push(8);
+                let samples = [0b1010_1010u8];
+                v.extend_from_slice(&(samples.len() as u32).to_le_bytes()[..3]);
+                v.extend_from_slice(&samples);
+                v
+            }),
+            ("id18_csw_rle", || {
+                let mut v = header();
+                v.push(0x18);
+                let csw = [10u8, 20, 30];
+                let body_len = 10 + csw.len();
+                v.extend_from_slice(&(body_len as u32).to_le_bytes());
+                v.extend_from_slice(&0u16.to_le_bytes());
+                v.extend_from_slice(&22_050u32.to_le_bytes()[..3]);
+                v.push(0x01);
+                v.extend_from_slice(&(csw.len() as u32).to_le_bytes());
+                v.extend_from_slice(&csw);
+                v
+            }),
+            ("id19_gdb", || {
+                let mut v = header();
+                v.push(0x19);
+                let mut body = Vec::new();
+                body.extend_from_slice(&0u16.to_le_bytes());
+                body.extend_from_slice(&0u32.to_le_bytes());
+                body.push(0);
+                body.push(0);
+                body.extend_from_slice(&1u32.to_le_bytes());
+                body.push(1);
+                body.push(2);
+                body.push(0x00);
+                body.extend_from_slice(&500u16.to_le_bytes());
+                body.push(0x00);
+                body.extend_from_slice(&1000u16.to_le_bytes());
+                body.push(0x00);
+                v.extend_from_slice(&(body.len() as u32).to_le_bytes());
+                v.extend_from_slice(&body);
+                v
+            }),
             ("id20_pause", || {
                 let mut v = header();
                 v.push(0x20);
@@ -2131,6 +2175,19 @@ mod tests {
                 v.push(0x12);
                 v.extend_from_slice(&1000u16.to_le_bytes());
                 v.extend_from_slice(&4u16.to_le_bytes());
+                with_tone(v)
+            }),
+            ("id2a_stop48", || {
+                let mut v = header();
+                v.push(0x2a);
+                v.extend_from_slice(&0u32.to_le_bytes());
+                with_tone(v)
+            }),
+            ("id2b_set_signal", || {
+                let mut v = header();
+                v.push(0x2b);
+                v.extend_from_slice(&1u32.to_le_bytes());
+                v.push(1);
                 with_tone(v)
             }),
             ("id30_text", || {
@@ -2205,7 +2262,7 @@ mod tests {
         good_bytes.extend_from_slice(&2u16.to_le_bytes());
         std::fs::write(&good, &good_bytes).expect("write good");
 
-        const UNSUPPORTED: &[u8] = &[0x15, 0x18, 0x19, 0x2a, 0x2b];
+        const UNSUPPORTED: &[u8] = &[0x16, 0x17, 0x34, 0x40];
         for &id in UNSUPPORTED {
             let bad = dir.join(format!("bad_{id:02x}.tzx"));
             let mut v = Vec::new();

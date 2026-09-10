@@ -6,6 +6,7 @@ license.workspace = true
 description = "Spec Chum tape crate"
 
 [dependencies]
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 thiserror = { workspace = true }
 trace = { workspace = true }
 

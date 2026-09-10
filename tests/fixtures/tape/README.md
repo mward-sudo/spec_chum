@@ -44,11 +44,11 @@ block-ID matrix** so commercial/pulse TZX paths are not manual-only:
 | Host open / `has_tape` | `cargo test -p host_api open_tape_tzx_block_matrix_supported_families` |
 | Unsupported leaves deck | `cargo test -p host_api open_tape_tzx_block_matrix_unsupported_leaves_deck` |
 
-Supported today: `0x10`–`0x14`, `0x20`, Group/Text/Archive/Hardware/Custom/Glue skip markers,
+Supported today: `0x10`–`0x15`, `0x18`–`0x20`, Group/Text/Archive/Hardware/Custom/Glue skip markers,
 Loop `0x24`/`0x25`, Jump/Call/Return/Select `0x23`/`0x26`–`0x28` (Select auto-picks the first
-entry). Intentionally unsupported (hard error with ID in message): Direct `0x15`, CSW `0x18`,
-GDB `0x19`, `Stop if 48K` `0x2A`, `Set signal level` `0x2B` — listed as known gaps under
-[#374](https://github.com/mward-sudo/spec_chum/issues/374).
+entry), Stop-if-48K `0x2A` (open accepts; expand no-op), Set signal `0x2B`. Intentionally
+unsupported (hard error with ID in message): deprecated/reserved `0x16`/`0x17`/`0x34`/`0x40`.
+See [#374](https://github.com/mward-sudo/spec_chum/issues/374).
 
 ## Content identity (#366)
 
