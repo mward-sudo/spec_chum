@@ -13,7 +13,7 @@
 //! tape timing): COMMS CLK falling edge rotates the motor daisy-chain; with a
 //! motor running, data port R/W walks the cartridge image.
 
-use formats::{MdrImage, MDR_SECTORS, MDR_SECTOR_SIZE};
+use formats::{MdrImage, MDR_HEAD_LEN, MDR_SECTORS, MDR_SECTOR_SIZE};
 use thiserror::Error;
 
 /// Typical IF1 shadow ROM size (8K).
@@ -31,8 +31,6 @@ pub enum Interface1RomError {
 /// Number of Microdrive units on the daisy chain (hardware max).
 pub const MICRODRIVE_COUNT: usize = 8;
 
-/// Header block length inside each 543-byte MDR sector (Fuse `HEAD_LEN`).
-const MDR_HEAD_LEN: usize = 15;
 /// Data payload + checksum after the header (`HEAD_LEN + DATA_LEN + 1`).
 const MDR_DATA_MAX: usize = MDR_HEAD_LEN + 512 + 1;
 
@@ -168,8 +166,6 @@ pub struct Interface1 {
     /// Previous COMMS CLK level (bit1 of control OUT).
     comms_clk: bool,
     /// COMMS DATA (bit0) — also selects RS232 vs net on real hardware.
-    /// Latched for upcoming IF1 deepen / inspect (#139); not read by the stub path yet (#171).
-    #[allow(dead_code)]
     comms_data: bool,
     /// Latched control bits (erase / r/w / cts / wait) for inspect/tests.
     pub control: u8,
@@ -242,6 +238,21 @@ impl Interface1 {
     #[must_use]
     pub fn any_motor_on(&self) -> bool {
         self.drives.iter().any(|d| d.motor_on)
+    }
+
+    /// Latched COMMS DATA bit from the last control `OUT`.
+    #[must_use]
+    pub fn comms_data(&self) -> bool {
+        self.comms_data
+    }
+
+    /// True when drive `index` has a cartridge whose sector checksums validate (Fuse layout).
+    #[must_use]
+    pub fn drive_checksums_ok(&self, index: usize) -> bool {
+        self.drives
+            .get(index)
+            .and_then(|d| d.cart.as_ref())
+            .is_some_and(MdrImage::checksums_ok)
     }
 
     /// Page in before opcode fetch at `0x0008` / `0x1708`.
@@ -443,16 +454,18 @@ mod tests {
     #[test]
     fn motor_select_and_sector_stream_read() {
         let mut if1 = Interface1::new();
-        let mut cart = MdrImage::blank();
-        // Put a recognizable byte at the start of sector 0 (header region).
+        let mut cart = MdrImage::formatted("TEST");
+        // Put a recognizable byte at the start of sector 0 (header region) and fix HDCHK.
         cart.sectors[0][0] = 0x5a;
         cart.sectors[0][1] = 0xa5;
+        // Not a valid Fuse header anymore — raw stream test only.
         if1.insert_mdr(cart);
 
         // Select drive 0: COMMS_DATA=0, pulse COMMS_CLK high→low.
         assert!(if1.out_port(0x00ef, 0x02)); // clk=1, data=0
         assert!(if1.out_port(0x00ef, 0x00)); // falling edge → motor0 on
         assert!(if1.any_motor_on());
+        assert!(!if1.comms_data());
 
         // Status poll restarts block alignment to sector start.
         let _ = if1.in_port(0x00ef);
@@ -461,6 +474,30 @@ mod tests {
         let b1 = if1.in_port(0x00e7).unwrap();
         assert_eq!(b0, 0x5a);
         assert_eq!(b1, 0xa5);
+    }
+
+    #[test]
+    fn formatted_cartridge_checksums_ok_via_if1() {
+        let mut if1 = Interface1::new();
+        if1.insert_mdr(MdrImage::formatted("CART"));
+        assert!(if1.drive_checksums_ok(0));
+        assert!(if1.mdr().unwrap().looks_formatted());
+
+        // Stream first two header bytes from a valid formatted sector.
+        if1.out_port(0x00ef, 0x02);
+        if1.out_port(0x00ef, 0x00);
+        let _ = if1.in_port(0x00ef);
+        assert_eq!(if1.in_port(0x00e7).unwrap(), 0x01); // HDFLAG
+        assert_eq!(if1.in_port(0x00e7).unwrap(), 254); // HDNUMB
+    }
+
+    #[test]
+    fn motor_select_latches_comms_data() {
+        let mut if1 = Interface1::new();
+        if1.out_port(0x00ef, 0x03); // clk=1, data=1
+        if1.out_port(0x00ef, 0x01); // falling edge, data still 1 → motor0 off
+        assert!(if1.comms_data());
+        assert!(!if1.any_motor_on());
     }
 
     #[test]
