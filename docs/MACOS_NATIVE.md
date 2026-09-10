@@ -311,9 +311,12 @@ re-stamps SpecChumMac’s `LC_BUILD_VERSION` with `vtool` (`minos` 14.0, `sdk` =
 active Xcode SDK) so macOS still applies Liquid Glass toolbar shared-background
 pills — linking the staticlib alone leaves `sdk 14.0` and the chrome goes flat.
 
-GitHub Releases ship **SpecChumMac** as the macOS `.dmg` app
-([#363](https://github.com/mward-sudo/spec_chum/issues/363)), with redistributable
-ROMs under `Contents/Resources/roms`. egui remains the Windows/Linux (and
+GitHub Releases ship **SpecChumMac** as a macOS **`.dmg.zip`**
+([#403](https://github.com/mward-sudo/spec_chum/issues/403),
+[#363](https://github.com/mward-sudo/spec_chum/issues/363)): unzip, open the
+`.dmg` (notarised/stapled when Apple secrets are set), then drag
+`Spec Chum.app` to Applications. Redistributable
+ROMs live under `Contents/Resources/roms`. egui remains the Windows/Linux (and
 source) host. Broader native-shell product work is [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 
 ## Layout
