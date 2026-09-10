@@ -86,10 +86,11 @@ impl Drive {
 
     fn insert(&mut self, cart: MdrImage) {
         // Fuse: 512-slot preamble map; headers [0..254), data [256..510).
-        let formatted = cart.looks_formatted();
+        // Build per sector from HDCHK — one bad sector must not clear GAP/SYNC for all.
         self.pream = vec![0; 512];
-        for i in 0..MDR_SECTORS {
-            let v = if formatted { 0xff } else { 0 };
+        for (i, sec) in cart.sectors.iter().enumerate().take(MDR_SECTORS) {
+            let ok = sec[0] == 0x01 && sec[14] == mdr_checksum(&sec[0..14]);
+            let v = if ok { 0xff } else { 0 };
             self.pream[i] = v;
             self.pream[256 + i] = v;
         }
