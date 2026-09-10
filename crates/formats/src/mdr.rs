@@ -146,16 +146,17 @@ impl MdrImage {
     /// True when every sector has a valid header + record descriptor + data checksum.
     #[must_use]
     pub fn checksums_ok(&self) -> bool {
-        self.sectors.iter().all(sector_checksums_ok)
+        self.sectors.len() == MDR_SECTORS && self.sectors.iter().all(sector_checksums_ok)
     }
 
     /// True when headers look formatted (`HDFLAG==1`, `HDNUMB` 254…1, checksums OK).
     #[must_use]
     pub fn looks_formatted(&self) -> bool {
-        self.sectors.iter().enumerate().all(|(i, s)| {
-            let expect = (MDR_SECTORS - i) as u8;
-            s[0] == 0x01 && s[1] == expect && sector_checksums_ok(s)
-        })
+        self.sectors.len() == MDR_SECTORS
+            && self.sectors.iter().enumerate().all(|(i, s)| {
+                let expect = (MDR_SECTORS - i) as u8;
+                s[0] == 0x01 && s[1] == expect && sector_checksums_ok(s)
+            })
     }
 
     /// Serialize to `.mdr` bytes (always includes write-protect trailing byte).
@@ -225,10 +226,12 @@ mod tests {
     }
 
     #[test]
-    fn blank_is_not_formatted() {
-        let img = MdrImage::blank();
-        assert!(!img.looks_formatted());
-        // All-zero HDCHK happens to match sum(0)=0, but HDFLAG≠1 / HDNUMB wrong.
+    fn empty_sectors_vec_is_not_formatted() {
+        let img = MdrImage {
+            sectors: vec![],
+            write_protected: false,
+        };
+        assert!(!img.checksums_ok());
         assert!(!img.looks_formatted());
     }
 
