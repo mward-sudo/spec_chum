@@ -920,14 +920,14 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
     assert_eq!(hw["has_interface1"], true);
     assert_eq!(hw["has_beta"], true);
 
-    // Multiface is 48K-only — reject on 128K.
+    // Multiface 128 attaches on 128K; +2A/+3 still reject.
     let plane128 = Arc::new(ControlPlane::new(ModelId::Spectrum128, false));
     if let Some(rom128) =
         machine::resolve_rom_path(Model::Spectrum128).and_then(|p| std::fs::read(p).ok())
     {
         plane128.load_rom_bytes(&rom128).expect("128 rom");
-        let bad = router(AppState {
-            plane: plane128,
+        let ok128 = router(AppState {
+            plane: plane128.clone(),
             token: None,
             insecure: true,
         })
@@ -944,8 +944,55 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
         .await
         .expect("mf on 128");
         assert!(
+            ok128.status().is_success(),
+            "128K must accept Multiface 128 ROM"
+        );
+        let status128 = router(AppState {
+            plane: plane128,
+            token: None,
+            insecure: true,
+        })
+        .oneshot(
+            Request::builder()
+                .uri("/v1/hardware")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("hw 128");
+        let body128 = axum::body::to_bytes(status128.into_body(), usize::MAX)
+            .await
+            .expect("hw128 body");
+        let hw128: serde_json::Value = serde_json::from_slice(&body128).expect("hw128 json");
+        assert_eq!(hw128["has_multiface"], true);
+    }
+
+    let plane_plus2a = Arc::new(ControlPlane::new(ModelId::SpectrumPlus2A, false));
+    if let Some(rom_p2a) =
+        machine::resolve_rom_path(Model::SpectrumPlus2A).and_then(|p| std::fs::read(p).ok())
+    {
+        plane_plus2a.load_rom_bytes(&rom_p2a).expect("+2A rom");
+        let bad = router(AppState {
+            plane: plane_plus2a,
+            token: None,
+            insecure: true,
+        })
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/multiface")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": mf })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("mf on +2A");
+        assert!(
             bad.status().is_client_error(),
-            "128K must reject Multiface 1"
+            "+2A must reject Multiface (use 128K/+2); got {}",
+            bad.status()
         );
     }
 

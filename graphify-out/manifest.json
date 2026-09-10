@@ -60,9 +60,9 @@
     "semantic_hash": "3c987064e137201f57886d4ec5e79ed5"
   },
   "apps/macos/Sources/SpecChumMac/MachineConfigEditorView.swift": {
-    "mtime": 1788919605.598268,
-    "seen": 1788921155.177679,
-    "ast_hash": "4b9961186122fb7afef916bffc82c0fc",
+    "mtime": 1789001040.3886328,
+    "seen": 1789001237.8239338,
+    "ast_hash": "b1db0a0186cd2c09ba76d55d8a2abfc5",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/RomSetupView.swift": {
@@ -72,9 +72,9 @@
     "semantic_hash": "5e5e716fd6d1823b18a4899c0bff2718"
   },
   "apps/macos/Sources/SpecChumMac/SpecChumMacApp.swift": {
-    "mtime": 1788999905.4504366,
-    "seen": 1789000151.366295,
-    "ast_hash": "d46932d423defedfe2033dc5318b2c4c",
+    "mtime": 1789001028.4824717,
+    "seen": 1789001237.823953,
+    "ast_hash": "3f40ea09722860e273d08c29bcf25c58",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/SpecChumSettingsView.swift": {
@@ -102,9 +102,9 @@
     "semantic_hash": "3dde7d369564c0b2f7f0d044d690d1b8"
   },
   "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift": {
-    "mtime": 1788919605.5985625,
-    "seen": 1788921155.177682,
-    "ast_hash": "ce11670396f7057b712420891055469f",
+    "mtime": 1789000956.7472994,
+    "seen": 1789001237.824028,
+    "ast_hash": "bba3de0cb801bfac4cc76523d177a6c8",
     "semantic_hash": ""
   },
   "crates/agent_server/Cargo.toml": {
@@ -132,9 +132,9 @@
     "semantic_hash": "10bab6f6581240038ba9f49ae3b016b3"
   },
   "crates/agent_server/tests/http_smoke.rs": {
-    "mtime": 1789000044.9169292,
-    "seen": 1789000151.366553,
-    "ast_hash": "2415a9433967b142fa9ed05e1849d649",
+    "mtime": 1789001134.9318488,
+    "seen": 1789001237.824269,
+    "ast_hash": "154c3dcac584adbe8fe64eacc03269c8",
     "semantic_hash": ""
   },
   "crates/app/Cargo.toml": {
@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/lib.rs": {
-    "mtime": 1788995957.2691493,
-    "seen": 1788996080.54355,
-    "ast_hash": "45311e4a8de59b903cd98bdcb85bbc47",
+    "mtime": 1789001025.9583333,
+    "seen": 1789001237.82433,
+    "ast_hash": "9d3785ded9c51e6ec11099d41324ae76",
     "semantic_hash": ""
   },
   "crates/app/src/main.rs": {
@@ -216,15 +216,15 @@
     "semantic_hash": "bcecf352bc883e60b41a725cb598f184"
   },
   "crates/bus/src/lib.rs": {
-    "mtime": 1788932589.2690005,
-    "seen": 1788933158.629419,
-    "ast_hash": "db80f7a2ddc8f82c3765f33706c79f7d",
+    "mtime": 1789002390.5996892,
+    "seen": 1789002482.401349,
+    "ast_hash": "98dc04dec52e4a5fdb5fb0d62bf3b9b3",
     "semantic_hash": ""
   },
   "crates/bus/src/multiface.rs": {
-    "mtime": 1788919605.6023443,
-    "seen": 1788921155.177696,
-    "ast_hash": "f23d320c51ca465eb6226518ba84631f",
+    "mtime": 1789001156.1559315,
+    "seen": 1789001237.824482,
+    "ast_hash": "3546aff6b054572c1b2b929b91db9c3f",
     "semantic_hash": ""
   },
   "crates/bus/src/plus3.rs": {
@@ -270,9 +270,9 @@
     "semantic_hash": ""
   },
   "crates/control_plane/src/service.rs": {
-    "mtime": 1789000018.8435395,
-    "seen": 1789000151.3669288,
-    "ast_hash": "aac4add7a5c0d19e51236c7f85e5e2d5",
+    "mtime": 1789001133.9863346,
+    "seen": 1789001237.824618,
+    "ast_hash": "bdf32e32534b07fa158ba2e97a9e33a0",
     "semantic_hash": ""
   },
   "crates/debug_cli/Cargo.toml": {
@@ -378,9 +378,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/machine_config.rs": {
-    "mtime": 1788919605.6089544,
-    "seen": 1788921155.1777122,
-    "ast_hash": "5a518ae9e477d411443b98c77bd33da1",
+    "mtime": 1789000954.439959,
+    "seen": 1789001237.8249972,
+    "ast_hash": "a35da6854f0a3b78f1166c0c27039584",
     "semantic_hash": ""
   },
   "crates/host_api/src/prefs.rs": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1788998649.7670462,
-    "seen": 1789000151.367312,
-    "ast_hash": "aa162d9222fbf79d67ed742c9dbce23e",
+    "mtime": 1789000955.0538278,
+    "seen": 1789001237.825042,
+    "ast_hash": "f161e05322cd864b7726385c9b897d08",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -582,9 +582,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1789000007.4260886,
-    "seen": 1789000151.3677208,
-    "ast_hash": "76cb1625dd14f784a0eb5c0234037844",
+    "mtime": 1789002387.702562,
+    "seen": 1789002482.4024372,
+    "ast_hash": "43853c8576f13ef2a29121014c92619b",
     "semantic_hash": ""
   },
   "crates/machine/src/rom.rs": {
@@ -774,8 +774,8 @@
     "semantic_hash": "80a0bf4b3fdbc7423fb7d998a545ab90"
   },
   "scripts/fetch_roms.sh": {
-    "mtime": 1788919605.7436173,
-    "seen": 1788921155.1777449,
+    "mtime": 1789000767.9291496,
+    "seen": 1789001237.826153,
     "ast_hash": "dc3ba5ed5dfa1732c5f486f81c45f00c",
     "semantic_hash": ""
   },
@@ -888,9 +888,9 @@
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
-    "mtime": 1789000043.3367448,
-    "seen": 1789000151.368541,
-    "ast_hash": "3d6a266dadd2ff58a934e4b49ae2d4bc",
+    "mtime": 1789001051.6951652,
+    "seen": 1789001237.826478,
+    "ast_hash": "e1ac0fdee6f5f6f677474b52940cdc06",
     "semantic_hash": ""
   },
   "docs/DEBUGGING.md": {
@@ -906,16 +906,16 @@
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
-    "mtime": 1788919605.6187315,
-    "seen": 1788921155.1777549,
-    "ast_hash": "4bc1904c606d5dc3e65fe26880f98ffb",
+    "mtime": 1789001059.6666534,
+    "seen": 1789001237.826506,
+    "ast_hash": "aad827ebbedb1c6e24f94a9923db0b05",
     "semantic_hash": ""
   },
   "docs/MULTIFACE.md": {
-    "mtime": 1788999911.6078107,
-    "seen": 1789000151.368577,
-    "ast_hash": "13e52d5e893eb3b2545929a0b1eba479",
-    "semantic_hash": "13e52d5e893eb3b2545929a0b1eba479"
+    "mtime": 1789001040.7579064,
+    "seen": 1789001237.826507,
+    "ast_hash": "74f5b2da468d18a6f221cbc68af5addb",
+    "semantic_hash": ""
   },
   "docs/RELEASE.md": {
     "mtime": 1788919605.6188483,
@@ -924,9 +924,9 @@
     "semantic_hash": ""
   },
   "docs/ROMS.md": {
-    "mtime": 1788919605.6189644,
-    "seen": 1788921155.177757,
-    "ast_hash": "cdcc055688300a601b6516567956cfcc",
+    "mtime": 1789001071.217628,
+    "seen": 1789001237.8265212,
+    "ast_hash": "ccfc1a3981754aded12146ef74ef0082",
     "semantic_hash": ""
   },
   "docs/TIMEX.md": {

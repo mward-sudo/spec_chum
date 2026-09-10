@@ -952,7 +952,7 @@ impl HostSession {
         }
     }
 
-    /// Attach Multiface 1 (48K only) from an 8 KiB ROM image path.
+    /// Attach Multiface 1 (48K-class) or Multiface 128 (128K/+2) from an 8 KiB ROM path.
     pub fn attach_multiface(&mut self, path: &Path) -> Result<(), HostError> {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
@@ -960,7 +960,13 @@ impl HostSession {
         let data = std::fs::read(path)?;
         m.attach_multiface(&data)
             .map_err(|e| HostError::Message(e.to_string()))?;
-        self.status = format!("Attached Multiface 1 from {}", path.display());
+        let label = match m.model() {
+            machine::Model::Spectrum128
+            | machine::Model::SpectrumPlus2
+            | machine::Model::Pentagon128 => "Multiface 128",
+            _ => "Multiface 1",
+        };
+        self.status = format!("Attached {label} from {}", path.display());
         Ok(())
     }
 
@@ -975,7 +981,7 @@ impl HostSession {
                 Ok(())
             }
             None => Err(HostError::Message(
-                "Multiface not attached (48K + 8K MF ROM)".into(),
+                "Multiface not attached (48K → MF1, 128K/+2 → MF128; 8 KiB ROM)".into(),
             )),
         }
     }

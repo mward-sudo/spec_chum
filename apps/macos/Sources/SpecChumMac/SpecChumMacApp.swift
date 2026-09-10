@@ -170,7 +170,7 @@ struct SpecChumMacApp: App {
 
             // Hardware — Multiface / IF1 / DivMMC / Beta; Joystick mode lives in Settings
             CommandMenu("Hardware") {
-                Button("Attach Multiface 1 ROM…") {
+                Button("Attach Multiface ROM…") {
                     openMultifaceRom()
                 }
                 Button("Multiface NMI") {
@@ -391,7 +391,7 @@ struct SpecChumMacApp: App {
             UTType(filenameExtension: "rom") ?? .data,
             UTType(filenameExtension: "bin") ?? .data,
         ]
-        panel.title = "Attach Multiface 1 ROM (8 KiB, 48K)"
+        panel.title = "Attach Multiface ROM (8 KiB; MF1 on 48K, MF128 on 128K/+2)"
         if panel.runModal() == .OK, let url = panel.url {
             host.attachMultiface(at: url)
         }

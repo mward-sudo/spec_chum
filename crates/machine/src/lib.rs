@@ -59,10 +59,12 @@ pub enum Interface1Error {
     Rom(#[from] bus::Interface1RomError),
 }
 
-/// Errors attaching Multiface 1 or loading its ROM.
+/// Errors attaching Multiface 1 / 128 or loading its ROM.
 #[derive(Debug, Error)]
 pub enum MultifaceError {
-    #[error("Multiface 1 is only supported on 48K-class models (16K/48K/Timex)")]
+    #[error(
+        "Multiface is not supported on this model (Multiface 1: 48K-class; Multiface 128: 128K/+2; +2A/+3 unsupported)"
+    )]
     UnsupportedModel,
     #[error(transparent)]
     Rom(#[from] bus::RomLoadError),
@@ -1076,10 +1078,14 @@ impl Machine {
                 bus.frame_t = 0;
                 bus.page = 0;
                 bus.locked = false;
+                bus.last_7ffd = 0;
                 bus.beeper_edges.clear();
                 bus.ay.reset();
                 bus.kempston.reset();
                 bus.mouse.reset();
+                if let Some(mf) = bus.multiface.as_mut() {
+                    mf.reset();
+                }
                 if let Some(if1) = bus.interface1.as_mut() {
                     if1.page_rom(false);
                 }
@@ -1466,15 +1472,20 @@ impl Machine {
         }
     }
 
-    /// Attach Multiface 1 with an 8 KiB ROM image (48K only).
+    /// Attach Multiface with an 8 KiB ROM image.
+    ///
+    /// - **48K-class** → Multiface 1
+    /// - **128K / grey +2** (and Pentagon on the same bus) → Multiface 128
+    /// - **+2A / +3** → [`MultifaceError::UnsupportedModel`] (hardware incompatible)
     pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), MultifaceError> {
         match self {
             Self::Spec48 { bus, .. } => Ok(bus.attach_multiface(rom)?),
-            _ => Err(MultifaceError::UnsupportedModel),
+            Self::Spec128 { bus, .. } => Ok(bus.attach_multiface(rom)?),
+            Self::SpecPlus3 { .. } => Err(MultifaceError::UnsupportedModel),
         }
     }
 
-    /// Press Multiface 1 red button (if attached) and raise NMI.
+    /// Press Multiface red button (if attached) and raise NMI.
     ///
     /// Asserts NMI pending, runs the Z80 NMI sequence to `0x0066`, then pages MF
     /// ROM/RAM over `0000–3FFF` (vector-fetch latch). Returns NMI T-states, or
@@ -1503,7 +1514,32 @@ impl Machine {
                 }
                 Some(dt)
             }
-            _ => None,
+            Self::Spec128 {
+                cpu, bus, pentagon, ..
+            } => {
+                let mf = bus.multiface.as_mut()?;
+                if !mf.press_button() {
+                    return Some(0);
+                }
+                let t_step_start = cpu.t;
+                let frame_len = bus.frame_tstates.max(1);
+                let dt = {
+                    let mut mio = MemIo128 {
+                        bus: bus.as_mut(),
+                        watch: None,
+                        t_step_start,
+                        opcode_pc: None,
+                        pentagon: *pentagon,
+                    };
+                    cpu.nmi(&mut mio)
+                };
+                let _ = advance_frame_t(&mut bus.frame_t, dt, frame_len);
+                if let Some(mf) = bus.multiface.as_mut() {
+                    mf.page_on_nmi_vector();
+                }
+                Some(dt)
+            }
+            Self::SpecPlus3 { .. } => None,
         }
     }
 
@@ -1667,7 +1703,8 @@ impl Machine {
     pub fn has_multiface(&self) -> bool {
         match self {
             Self::Spec48 { bus, .. } => bus.multiface.is_some(),
-            _ => false,
+            Self::Spec128 { bus, .. } => bus.multiface.is_some(),
+            Self::SpecPlus3 { .. } => false,
         }
     }
 
@@ -3644,10 +3681,106 @@ mod tests {
         ));
 
         let mut m128 = Machine::new_128k(&[0u8; 32768]).unwrap();
+        m128.attach_multiface(&[0u8; bus::MULTIFACE128_SIZE])
+            .expect("Multiface 128 attaches on 128K");
+        assert!(m128.has_multiface());
+
+        let mut plus2a = Machine::new_plus2a(&[0u8; 65536]).unwrap();
         assert!(matches!(
-            m128.attach_multiface(&[0u8; bus::MULTIFACE1_SIZE]),
+            plus2a.attach_multiface(&[0u8; bus::MULTIFACE128_SIZE]),
             Err(MultifaceError::UnsupportedModel)
         ));
+    }
+
+    #[test]
+    fn multiface128_nmi_pages_and_bf_3f_toggle() {
+        let mut mf_rom = [0u8; bus::MULTIFACE128_SIZE];
+        // 0066: 3E 42       LD A,42h
+        // 0068: 32 00 20    LD (2000h),A
+        // 006B: 76          HALT
+        mf_rom[0x66] = 0x3e;
+        mf_rom[0x67] = 0x42;
+        mf_rom[0x68] = 0x32;
+        mf_rom[0x69] = 0x00;
+        mf_rom[0x6a] = 0x20;
+        mf_rom[0x6b] = 0x76;
+
+        let mut m = Machine::new_128k(&[0u8; 32768]).unwrap();
+        m.attach_multiface(&mf_rom).unwrap();
+        m.cpu_mut().regs.sp = 0xfffd;
+        m.cpu_mut().regs.pc = 0x8000;
+
+        // Stealth OFF: IN BFh must not page.
+        match &mut m {
+            Machine::Spec128 { bus, .. } => {
+                assert_eq!(bus.in_port(0x00bf), 0xff);
+                assert!(!bus.multiface.as_ref().unwrap().paged);
+            }
+            _ => unreachable!(),
+        }
+
+        let t = m.multiface_nmi().expect("MF128 attached");
+        assert_eq!(t, 11);
+        assert_eq!(m.cpu().regs.pc, 0x0066);
+        match &m {
+            Machine::Spec128 { bus, .. } => {
+                assert!(bus.multiface.as_ref().unwrap().paged);
+                assert!(bus.multiface.as_ref().unwrap().enabled);
+            }
+            _ => unreachable!(),
+        }
+
+        for _ in 0..8 {
+            if m.cpu().regs.halted {
+                break;
+            }
+            m.step_once();
+        }
+        assert!(m.cpu().regs.halted);
+        assert_eq!(m.read_mem(0x2000), 0x42);
+
+        match &mut m {
+            Machine::Spec128 { bus, .. } => {
+                assert_eq!(bus.in_port(0x003f), 0xff);
+                assert!(!bus.multiface.as_ref().unwrap().paged);
+                assert_eq!(bus.in_port(0x00bf), 0x7f);
+                assert!(bus.multiface.as_ref().unwrap().paged);
+                assert_eq!(bus.read(0x0066), 0x3e);
+                bus.out_7ffd(0x08);
+                assert_eq!(bus.in_port(0x00bf), 0xff, "screen bit set → D7 high");
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn multiface128_real_rom_soak_skips_when_missing() {
+        // User-supplied dump only (Romantic Robot; never redistributed). See docs/MULTIFACE.md.
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let candidates = [
+            root.join("roms/multiface/mf128.rom"),
+            root.join("roms/mf128.rom"),
+        ];
+        let Some(path) = candidates.iter().find(|p| p.is_file()) else {
+            eprintln!(
+                "skip: no roms/multiface/mf128.rom — place a user Multiface 128 dump to soak"
+            );
+            return;
+        };
+        let data = std::fs::read(path).expect("read mf128");
+        assert_eq!(data.len(), bus::MULTIFACE128_SIZE);
+        let mut m = Machine::new_128k(&[0u8; 32768]).unwrap();
+        m.attach_multiface(&data).unwrap();
+        m.cpu_mut().regs.sp = 0xfffd;
+        let _ = m.multiface_nmi().expect("NMI");
+        match &m {
+            Machine::Spec128 { bus, .. } => {
+                assert!(bus.multiface.as_ref().unwrap().paged);
+                assert!(bus.multiface.as_ref().unwrap().enabled);
+                assert_ne!(bus.read(0x0066), 0x00);
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn synthetic_trd_with_marker(b0: u8, b1: u8) -> formats::TrdImage {

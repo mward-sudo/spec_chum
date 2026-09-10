@@ -140,7 +140,7 @@ wired. Display supports Sinclair **256×192** plus Timex **alt display file**,
 **hi-colour (8×1)**, and **512×192 hi-res** (SCLD modes 4–7). See [TIMEX.md](TIMEX.md).
 
 Peripheral attach UX: Multiface ([MULTIFACE.md](MULTIFACE.md)), Interface 1,
-Beta, DivMMC — see GitHub issues #137–#140 / #169.
+Beta, DivMMC — see GitHub issues #138–#140 / #168 / #169.
 
 ## Manual verify
 
@@ -155,6 +155,17 @@ cat roms/.zx-roms-ref roms/.fuse-roms-ref
 
 User-provided firmware (Multiface, TR-DOS, etc.) may also live under `roms/` but is
 **not** part of the managed fetch count.
+
+### Multiface 1 / 128 — user-provided paths (#168)
+
+Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
+
+| File | Size | Notes |
+| --- | --- | --- |
+| `roms/multiface/mf1.rom` | 8 KiB | Multiface 1 (late pcb 2.1 preferred) |
+| `roms/multiface/mf128.rom` | 8 KiB | Multiface 128 |
+
+See [MULTIFACE.md](MULTIFACE.md). Optional soak tests skip cleanly when these files are absent.
 
 Compare bytes against a known-good tree if refreshing upstream pins (see issue
 [#190](https://github.com/mward-sudo/spec_chum/issues/190) acceptance criteria).

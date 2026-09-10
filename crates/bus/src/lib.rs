@@ -23,7 +23,10 @@ pub use kempston_mouse::{
     KempstonMouse, PORT_BUTTONS as MOUSE_PORT_BUTTONS, PORT_X as MOUSE_PORT_X,
     PORT_Y as MOUSE_PORT_Y,
 };
-pub use multiface::{multiface1_port_match, Multiface1, MULTIFACE1_SIZE};
+pub use multiface::{
+    multiface128_port_match, multiface1_port_match, Multiface1, Multiface128, MULTIFACE128_SIZE,
+    MULTIFACE1_SIZE,
+};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 pub use timex::{
     timex_joystick_mask, TimexScld, TimexScreenMode, TIMEX_ALTDFILE_OFFSET, TIMEX_EXROM_SIZE,
@@ -655,6 +658,10 @@ pub struct Bus128 {
     pub pending_screen_switch: Option<(u32, u8)>,
     pub kempston: Kempston,
     pub mouse: KempstonMouse,
+    /// Last byte written to `#7FFD` (including writes after paging lock).
+    /// Multiface 128 page-in `IN` reports screen bit D3 from this latch.
+    pub last_7ffd: u8,
+    pub multiface: Option<Multiface128>,
     pub divmmc: Option<DivMmc>,
     pub interface1: Option<Interface1>,
     pub beta: Option<BetaDisk>,
@@ -687,10 +694,20 @@ impl Bus128 {
             pending_screen_switch: None,
             kempston: Kempston::new(),
             mouse: KempstonMouse::new(),
+            last_7ffd: 0,
+            multiface: None,
             divmmc: None,
             interface1: None,
             beta: None,
         }
+    }
+
+    /// Attach Multiface 128 with an 8 KiB ROM image (creates the peripheral if absent).
+    pub fn attach_multiface(&mut self, rom: &[u8]) -> Result<(), RomLoadError> {
+        let mut mf = Multiface128::new();
+        mf.load_rom(rom)?;
+        self.multiface = Some(mf);
+        Ok(())
     }
 
     /// Attach a `DivMMC` (creates default peripheral if absent).
@@ -766,6 +783,12 @@ impl Bus128 {
 
     #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
+        // Multiface NMI overlay wins over DivMMC / IF1 when paged.
+        if let Some(mf) = self.multiface.as_ref() {
+            if let Some(v) = mf.read(addr) {
+                return v;
+            }
+        }
         if let Some(d) = self.divmmc.as_ref() {
             if let Some(v) = d.read_overlay(addr) {
                 return v;
@@ -790,6 +813,11 @@ impl Bus128 {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
+        if let Some(mf) = self.multiface.as_mut() {
+            if mf.write(addr, value) {
+                return;
+            }
+        }
         if let Some(d) = self.divmmc.as_mut() {
             if d.write_overlay(addr, value) {
                 return;
@@ -835,6 +863,8 @@ impl Bus128 {
     }
 
     pub fn out_7ffd(&mut self, value: u8) {
+        // MF128 spies on #7FFD independently of the Spectrum paging lock.
+        self.last_7ffd = value;
         if self.locked {
             return;
         }
@@ -872,6 +902,12 @@ impl Bus128 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
+        let last_7ffd = self.last_7ffd;
+        let mf_data = if let Some(mf) = self.multiface.as_mut() {
+            mf.in_port(port, last_7ffd)
+        } else {
+            None
+        };
         if let Some(beta) = self.beta.as_mut() {
             if let Some(v) = beta.in_port(port) {
                 return v;
@@ -887,6 +923,9 @@ impl Bus128 {
             if let Some(v) = if1.in_port(port) {
                 return v;
             }
+        }
+        if let Some(v) = mf_data {
+            return v;
         }
         if port & 0xff == 0x1f {
             return self.kempston.read();
@@ -930,6 +969,10 @@ impl Bus128 {
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) {
+        // MF128 OUT is side-effect only (NMI clear / stealth); do not exclusive-claim.
+        if let Some(mf) = self.multiface.as_mut() {
+            let _ = mf.out_port(port, value);
+        }
         if let Some(beta) = self.beta.as_mut() {
             if beta.out_port(port, value) {
                 return;
@@ -1548,5 +1591,38 @@ mod tests {
         b.notify_beta_m1(0x3d00);
         assert!(b.beta.as_ref().unwrap().paged);
         assert_eq!(b.read(0x0000), 0x42);
+    }
+
+    #[test]
+    fn bus128_multiface_nmi_overlay_and_bf_3f() {
+        let mut mf_rom = [0u8; MULTIFACE128_SIZE];
+        mf_rom[0x66] = 0xed;
+        let mut b = Bus128::new();
+        b.rom[0][0x66] = 0x11;
+        b.attach_multiface(&mf_rom).unwrap();
+        assert_eq!(b.in_port(0x00bf), 0xff);
+        assert!(!b.multiface.as_ref().unwrap().paged);
+        {
+            let mf = b.multiface.as_mut().unwrap();
+            assert!(mf.press_button());
+            mf.page_on_nmi_vector();
+        }
+        assert_eq!(b.read(0x0066), 0xed);
+        assert_eq!(b.in_port(0x003f), 0xff);
+        assert!(!b.multiface.as_ref().unwrap().paged);
+        assert_eq!(b.read(0x0066), 0x11);
+        assert_eq!(b.in_port(0x00bf), 0x7f);
+        assert!(b.multiface.as_ref().unwrap().paged);
+        b.out_7ffd(0x08);
+        assert_eq!(b.in_port(0x00bf), 0xff);
+        // After paging lock, further #7FFD writes still update Multiface's latch.
+        b.out_7ffd(0x20); // lock
+        assert!(b.locked);
+        b.out_7ffd(0x08); // ignored by Spectrum paging, latched for MF128
+        assert_eq!(b.page & 0x08, 0, "paging lock holds prior page");
+        assert_eq!(b.last_7ffd, 0x08);
+        assert_eq!(b.in_port(0x00bf), 0xff, "MF128 sees post-lock #7FFD D3");
+        b.out_7ffd(0x00);
+        assert_eq!(b.in_port(0x00bf), 0x7f);
     }
 }

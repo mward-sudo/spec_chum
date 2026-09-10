@@ -76,7 +76,7 @@ struct MachineConfigEditorView: View {
                         || hardwareCompat.beta
                     {
                         if hardwareCompat.multiface {
-                            Toggle("Multiface 1", isOn: $draft.attachMultiface)
+                            Toggle("Multiface (1 / 128)", isOn: $draft.attachMultiface)
                                 .onChange(of: draft.attachMultiface) { _, on in
                                     if !on { draft.multifaceRomPath = nil }
                                 }
