@@ -658,6 +658,9 @@ pub struct Bus128 {
     pub pending_screen_switch: Option<(u32, u8)>,
     pub kempston: Kempston,
     pub mouse: KempstonMouse,
+    /// Last byte written to `#7FFD` (including writes after paging lock).
+    /// Multiface 128 page-in `IN` reports screen bit D3 from this latch.
+    pub last_7ffd: u8,
     pub multiface: Option<Multiface128>,
     pub divmmc: Option<DivMmc>,
     pub interface1: Option<Interface1>,
@@ -691,6 +694,7 @@ impl Bus128 {
             pending_screen_switch: None,
             kempston: Kempston::new(),
             mouse: KempstonMouse::new(),
+            last_7ffd: 0,
             multiface: None,
             divmmc: None,
             interface1: None,
@@ -859,6 +863,8 @@ impl Bus128 {
     }
 
     pub fn out_7ffd(&mut self, value: u8) {
+        // MF128 spies on #7FFD independently of the Spectrum paging lock.
+        self.last_7ffd = value;
         if self.locked {
             return;
         }
@@ -896,7 +902,7 @@ impl Bus128 {
     }
 
     pub fn in_port(&mut self, port: u16) -> u8 {
-        let last_7ffd = self.page;
+        let last_7ffd = self.last_7ffd;
         let mf_data = if let Some(mf) = self.multiface.as_mut() {
             mf.in_port(port, last_7ffd)
         } else {
@@ -1609,5 +1615,14 @@ mod tests {
         assert!(b.multiface.as_ref().unwrap().paged);
         b.out_7ffd(0x08);
         assert_eq!(b.in_port(0x00bf), 0xff);
+        // After paging lock, further #7FFD writes still update Multiface's latch.
+        b.out_7ffd(0x20); // lock
+        assert!(b.locked);
+        b.out_7ffd(0x08); // ignored by Spectrum paging, latched for MF128
+        assert_eq!(b.page & 0x08, 0, "paging lock holds prior page");
+        assert_eq!(b.last_7ffd, 0x08);
+        assert_eq!(b.in_port(0x00bf), 0xff, "MF128 sees post-lock #7FFD D3");
+        b.out_7ffd(0x00);
+        assert_eq!(b.in_port(0x00bf), 0x7f);
     }
 }

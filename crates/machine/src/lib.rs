@@ -1078,6 +1078,7 @@ impl Machine {
                 bus.frame_t = 0;
                 bus.page = 0;
                 bus.locked = false;
+                bus.last_7ffd = 0;
                 bus.beeper_edges.clear();
                 bus.ay.reset();
                 bus.kempston.reset();
