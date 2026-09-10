@@ -42,10 +42,12 @@ GitHub Release archives (single primary app per platform) are built by
 `.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
 Do not commit ROM binaries. Release CI fetches redistributable ROMs and embeds
 them inside packages (macOS SpecChumMac `.app` / Windows / Linux — see
-[docs/ROMS.md](docs/ROMS.md)). macOS ships SpecChumMac in a **`.dmg`**
-(Applications shortcut only — no secondary `.zip`; [#361](https://github.com/mward-sudo/spec_chum/issues/361),
-[#363](https://github.com/mward-sudo/spec_chum/issues/363);
-notarisation + staple when Apple notary secrets are set — [#354](https://github.com/mward-sudo/spec_chum/issues/354));
+[docs/ROMS.md](docs/ROMS.md)). macOS ships SpecChumMac as a **`.dmg.zip`**
+(unzip → notarised/stapled `.dmg` with Applications shortcut;
+[#403](https://github.com/mward-sudo/spec_chum/issues/403),
+[#363](https://github.com/mward-sudo/spec_chum/issues/363),
+[#361](https://github.com/mward-sudo/spec_chum/issues/361),
+[#354](https://github.com/mward-sudo/spec_chum/issues/354));
 Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
 **AppImage**, and **`.deb`**. Shared Spectrum app icon (macOS `.icns` / Windows `.ico` /
 Linux PNG / egui window) lives under `packaging/` — regenerate with

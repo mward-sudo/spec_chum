@@ -14406,7 +14406,7 @@
       "file_type": "code",
       "norm_label": "active_pulse_counters_are_block_relative()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1936"
+      "source_location": "L1953"
     },
     {
       "id": "crates_tape_src_tzx_advance_clears_high_ear_on_exact_final_pulse_end",
@@ -14417,7 +14417,7 @@
       "file_type": "code",
       "norm_label": "advance_clears_high_ear_on_exact_final_pulse_end()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1788"
+      "source_location": "L1805"
     },
     {
       "id": "crates_tape_src_tzx_advance_clears_playing_on_exact_final_pulse_boundary",
@@ -14428,7 +14428,7 @@
       "file_type": "code",
       "norm_label": "advance_clears_playing_on_exact_final_pulse_boundary()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1763"
+      "source_location": "L1780"
     },
     {
       "id": "crates_tape_src_tzx_advance_past_tzx_block_body",
@@ -14450,7 +14450,7 @@
       "file_type": "code",
       "norm_label": "alphabet_size()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1505"
+      "source_location": "L1506"
     },
     {
       "id": "crates_tape_src_tzx_append_csw_recording",
@@ -14461,7 +14461,7 @@
       "file_type": "code",
       "norm_label": "append_csw_recording()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1454"
+      "source_location": "L1450"
     },
     {
       "id": "crates_tape_src_tzx_append_direct_recording",
@@ -14472,7 +14472,7 @@
       "file_type": "code",
       "norm_label": "append_direct_recording()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1397"
+      "source_location": "L1393"
     },
     {
       "id": "crates_tape_src_tzx_append_generalized_data",
@@ -14483,7 +14483,7 @@
       "file_type": "code",
       "norm_label": "append_generalized_data()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1590"
+      "source_location": "L1600"
     },
     {
       "id": "crates_tape_src_tzx_append_id10",
@@ -14494,7 +14494,7 @@
       "file_type": "code",
       "norm_label": "append_id10()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2335"
+      "source_location": "L2352"
     },
     {
       "id": "crates_tape_src_tzx_append_pure_data",
@@ -14505,7 +14505,7 @@
       "file_type": "code",
       "norm_label": "append_pure_data()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1326"
+      "source_location": "L1322"
     },
     {
       "id": "crates_tape_src_tzx_append_pure_tone",
@@ -14516,7 +14516,7 @@
       "file_type": "code",
       "norm_label": "append_pure_tone()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2342"
+      "source_location": "L2359"
     },
     {
       "id": "crates_tape_src_tzx_append_standard_block",
@@ -14527,7 +14527,7 @@
       "file_type": "code",
       "norm_label": "append_standard_block()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1266"
+      "source_location": "L1262"
     },
     {
       "id": "crates_tape_src_tzx_append_turbo_block",
@@ -14538,7 +14538,7 @@
       "file_type": "code",
       "norm_label": "append_turbo_block()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1302"
+      "source_location": "L1298"
     },
     {
       "id": "crates_tape_src_tzx_append_tzx_pause",
@@ -14549,7 +14549,7 @@
       "file_type": "code",
       "norm_label": "append_tzx_pause()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1253"
+      "source_location": "L1249"
     },
     {
       "id": "crates_tape_src_tzx_arkanoid_downloads_parses_when_present",
@@ -14560,7 +14560,7 @@
       "file_type": "code",
       "norm_label": "arkanoid_downloads_parses_when_present()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2268"
+      "source_location": "L2285"
     },
     {
       "id": "crates_tape_src_tzx_arkanoid_pause_polarity_matches_fuse_when_present",
@@ -14571,7 +14571,7 @@
       "file_type": "code",
       "norm_label": "arkanoid_pause_polarity_matches_fuse_when_present()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2291"
+      "source_location": "L2308"
     },
     {
       "id": "crates_tape_src_tzx_bits_per_symbol",
@@ -14582,7 +14582,7 @@
       "file_type": "code",
       "norm_label": "bits_per_symbol()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1515"
+      "source_location": "L1516"
     },
     {
       "id": "crates_tape_src_tzx_bump_control_transfers",
@@ -14604,7 +14604,7 @@
       "file_type": "code",
       "norm_label": "call_sequence_plays_subroutine_then_resumes()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2093"
+      "source_location": "L2110"
     },
     {
       "id": "crates_tape_src_tzx_callframe",
@@ -14626,7 +14626,7 @@
       "file_type": "code",
       "norm_label": "decode_csw_rle()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1433"
+      "source_location": "L1429"
     },
     {
       "id": "crates_tape_src_tzx_emit_gdb_symbol",
@@ -14637,7 +14637,7 @@
       "file_type": "code",
       "norm_label": "emit_gdb_symbol()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1554"
+      "source_location": "L1564"
     },
     {
       "id": "crates_tape_src_tzx_empty_tzx_reports_zero_blocks",
@@ -14648,7 +14648,7 @@
       "file_type": "code",
       "norm_label": "empty_tzx_reports_zero_blocks()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1963"
+      "source_location": "L1980"
     },
     {
       "id": "crates_tape_src_tzx_ensure_block_budget",
@@ -14692,7 +14692,7 @@
       "file_type": "code",
       "norm_label": "estimate_direct_samples()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1358"
+      "source_location": "L1354"
     },
     {
       "id": "crates_tape_src_tzx_estimate_pure_data_pulses",
@@ -14736,7 +14736,7 @@
       "file_type": "code",
       "norm_label": "jump_relative_zero_is_rejected()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2135"
+      "source_location": "L2152"
     },
     {
       "id": "crates_tape_src_tzx_jump_skips_next_block",
@@ -14747,7 +14747,7 @@
       "file_type": "code",
       "norm_label": "jump_skips_next_block()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2074"
+      "source_location": "L2091"
     },
     {
       "id": "crates_tape_src_tzx_loop_around_standard_blocks_not_flash_convertible",
@@ -14758,7 +14758,7 @@
       "file_type": "code",
       "norm_label": "loop_around_standard_blocks_not_flash_convertible()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2162"
+      "source_location": "L2179"
     },
     {
       "id": "crates_tape_src_tzx_loop_expansion_respects_pulse_budget",
@@ -14769,7 +14769,7 @@
       "file_type": "code",
       "norm_label": "loop_expansion_respects_pulse_budget()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2189"
+      "source_location": "L2206"
     },
     {
       "id": "crates_tape_src_tzx_loop_reps_zero_skips_body",
@@ -14780,7 +14780,7 @@
       "file_type": "code",
       "norm_label": "loop_reps_zero_skips_body()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2144"
+      "source_location": "L2161"
     },
     {
       "id": "crates_tape_src_tzx_loop_start_end_expands_pure_tone",
@@ -14791,7 +14791,7 @@
       "file_type": "code",
       "norm_label": "loop_start_end_expands_pure_tone()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2057"
+      "source_location": "L2074"
     },
     {
       "id": "crates_tape_src_tzx_minimal_tzx_standard",
@@ -14802,7 +14802,7 @@
       "file_type": "code",
       "norm_label": "minimal_tzx_standard()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1684"
+      "source_location": "L1701"
     },
     {
       "id": "crates_tape_src_tzx_minimal_tzx_turbo",
@@ -14813,7 +14813,7 @@
       "file_type": "code",
       "norm_label": "minimal_tzx_turbo()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1976"
+      "source_location": "L1993"
     },
     {
       "id": "crates_tape_src_tzx_ms_to_t",
@@ -14824,7 +14824,7 @@
       "file_type": "code",
       "norm_label": "ms_to_t()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1219"
+      "source_location": "L1215"
     },
     {
       "id": "crates_tape_src_tzx_nested_empty_loops_hit_replay_budget",
@@ -14835,7 +14835,7 @@
       "file_type": "code",
       "norm_label": "nested_empty_loops_hit_replay_budget()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2208"
+      "source_location": "L2225"
     },
     {
       "id": "crates_tape_src_tzx_parse_standard_block_schedules_pulses",
@@ -14846,7 +14846,7 @@
       "file_type": "code",
       "norm_label": "parse_standard_block_schedules_pulses()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1700"
+      "source_location": "L1717"
     },
     {
       "id": "crates_tape_src_tzx_paused_player_does_not_advance",
@@ -14857,7 +14857,7 @@
       "file_type": "code",
       "norm_label": "paused_player_does_not_advance()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1925"
+      "source_location": "L1942"
     },
     {
       "id": "crates_tape_src_tzx_pure_data_pause_matches_fuse_polarity_before_next_tone",
@@ -14868,7 +14868,7 @@
       "file_type": "code",
       "norm_label": "pure_data_pause_matches_fuse_polarity_before_next_tone()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1876"
+      "source_location": "L1893"
     },
     {
       "id": "crates_tape_src_tzx_pure_data_used_bits_are_most_significant",
@@ -14879,7 +14879,7 @@
       "file_type": "code",
       "norm_label": "pure_data_used_bits_are_most_significant()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1730"
+      "source_location": "L1747"
     },
     {
       "id": "crates_tape_src_tzx_pure_tone_block",
@@ -14890,7 +14890,7 @@
       "file_type": "code",
       "norm_label": "pure_tone_block()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1751"
+      "source_location": "L1768"
     },
     {
       "id": "crates_tape_src_tzx_push_absolute_level",
@@ -14901,7 +14901,7 @@
       "file_type": "code",
       "norm_label": "push_absolute_level()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1373"
+      "source_location": "L1369"
     },
     {
       "id": "crates_tape_src_tzx_push_pulse_tzx",
@@ -14912,7 +14912,7 @@
       "file_type": "code",
       "norm_label": "push_pulse_tzx()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1233"
+      "source_location": "L1229"
     },
     {
       "id": "crates_tape_src_tzx_read_symdefs",
@@ -14923,7 +14923,7 @@
       "file_type": "code",
       "norm_label": "read_symdefs()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1533"
+      "source_location": "L1534"
     },
     {
       "id": "crates_tape_src_tzx_resolve_relative_block",
@@ -15033,7 +15033,7 @@
       "file_type": "code",
       "norm_label": "select_auto_picks_first_entry()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2118"
+      "source_location": "L2135"
     },
     {
       "id": "crates_tape_src_tzx_standard_block_starts_low_after_tape_start",
@@ -15044,7 +15044,7 @@
       "file_type": "code",
       "norm_label": "standard_block_starts_low_after_tape_start()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1864"
+      "source_location": "L1881"
     },
     {
       "id": "crates_tape_src_tzx_standard_only_detects_boggit_style",
@@ -15055,7 +15055,7 @@
       "file_type": "code",
       "norm_label": "standard_only_detects_boggit_style()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1909"
+      "source_location": "L1926"
     },
     {
       "id": "crates_tape_src_tzx_standard_then_pulse_sequence_keeps_alternating_levels",
@@ -15066,7 +15066,7 @@
       "file_type": "code",
       "norm_label": "standard_then_pulse_sequence_keeps_alternating_levels()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1838"
+      "source_location": "L1855"
     },
     {
       "id": "crates_tape_src_tzx_standard_then_pure_tone_keeps_alternating_levels",
@@ -15077,7 +15077,7 @@
       "file_type": "code",
       "norm_label": "standard_then_pure_tone_keeps_alternating_levels()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1813"
+      "source_location": "L1830"
     },
     {
       "id": "crates_tape_src_tzx_symdef",
@@ -15088,7 +15088,7 @@
       "file_type": "code",
       "norm_label": "symdef",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1528"
+      "source_location": "L1529"
     },
     {
       "id": "crates_tape_src_tzx_tapeerror",
@@ -15121,7 +15121,7 @@
       "file_type": "code",
       "norm_label": "to_tap_extracts_id10()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1717"
+      "source_location": "L1734"
     },
     {
       "id": "crates_tape_src_tzx_to_tap_image_errors_on_unsupported_instead_of_truncating",
@@ -15132,7 +15132,7 @@
       "file_type": "code",
       "norm_label": "to_tap_image_errors_on_unsupported_instead_of_truncating()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2751"
+      "source_location": "L2768"
     },
     {
       "id": "crates_tape_src_tzx_to_tap_image_keeps_id10_across_skip_markers",
@@ -15143,7 +15143,7 @@
       "file_type": "code",
       "norm_label": "to_tap_image_keeps_id10_across_skip_markers()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2769"
+      "source_location": "L2786"
     },
     {
       "id": "crates_tape_src_tzx_to_tap_image_skips_loop_markers_and_keeps_id10",
@@ -15154,7 +15154,7 @@
       "file_type": "code",
       "norm_label": "to_tap_image_skips_loop_markers_and_keeps_id10()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2228"
+      "source_location": "L2245"
     },
     {
       "id": "crates_tape_src_tzx_to_tap_image_skips_turbo_blocks",
@@ -15165,7 +15165,7 @@
       "file_type": "code",
       "norm_label": "to_tap_image_skips_turbo_blocks()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2014"
+      "source_location": "L2031"
     },
     {
       "id": "crates_tape_src_tzx_turbo_block_schedules_custom_pulse_widths",
@@ -15176,7 +15176,7 @@
       "file_type": "code",
       "norm_label": "turbo_block_schedules_custom_pulse_widths()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1998"
+      "source_location": "L2015"
     },
     {
       "id": "crates_tape_src_tzx_tzx_block_matrix_supported_ids_parse",
@@ -15187,7 +15187,7 @@
       "file_type": "code",
       "norm_label": "tzx_block_matrix_supported_ids_parse()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2354"
+      "source_location": "L2371"
     },
     {
       "id": "crates_tape_src_tzx_tzx_block_matrix_unsupported_ids_fail_loudly",
@@ -15198,7 +15198,7 @@
       "file_type": "code",
       "norm_label": "tzx_block_matrix_unsupported_ids_fail_loudly()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2722"
+      "source_location": "L2739"
     },
     {
       "id": "crates_tape_src_tzx_tzx_header",
@@ -15209,7 +15209,7 @@
       "file_type": "code",
       "norm_label": "tzx_header()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2328"
+      "source_location": "L2345"
     },
     {
       "id": "crates_tape_src_tzx_tzxerror",
@@ -15242,7 +15242,7 @@
       "file_type": "code",
       "norm_label": ".active_pulse_count()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L961"
+      "source_location": "L957"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_active_pulse_index",
@@ -15253,7 +15253,7 @@
       "file_type": "code",
       "norm_label": ".active_pulse_index()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L954"
+      "source_location": "L950"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_advance",
@@ -15264,7 +15264,7 @@
       "file_type": "code",
       "norm_label": ".advance()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L977"
+      "source_location": "L973"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_block_count",
@@ -15275,7 +15275,7 @@
       "file_type": "code",
       "norm_label": ".block_count()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L972"
+      "source_location": "L968"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_ear_level",
@@ -15286,7 +15286,7 @@
       "file_type": "code",
       "norm_label": ".ear_level()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L932"
+      "source_location": "L928"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_finished",
@@ -15297,7 +15297,7 @@
       "file_type": "code",
       "norm_label": ".finished()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L948"
+      "source_location": "L944"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_is_standard_speed_only",
@@ -15308,7 +15308,7 @@
       "file_type": "code",
       "norm_label": ".is_standard_speed_only()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1023"
+      "source_location": "L1019"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_load",
@@ -15341,7 +15341,7 @@
       "file_type": "code",
       "norm_label": ".pulse_index()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L942"
+      "source_location": "L938"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_rewind",
@@ -15352,7 +15352,7 @@
       "file_type": "code",
       "norm_label": ".rewind()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L902"
+      "source_location": "L898"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_scheduled_pulses",
@@ -15363,7 +15363,7 @@
       "file_type": "code",
       "norm_label": ".scheduled_pulses()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L937"
+      "source_location": "L933"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_set_playing",
@@ -15374,7 +15374,7 @@
       "file_type": "code",
       "norm_label": ".set_playing()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L897"
+      "source_location": "L893"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_start",
@@ -15385,7 +15385,7 @@
       "file_type": "code",
       "norm_label": ".start()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L908"
+      "source_location": "L904"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_sync_block",
@@ -15396,7 +15396,7 @@
       "file_type": "code",
       "norm_label": ".sync_block()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L923"
+      "source_location": "L919"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_to_tap_image",
@@ -15407,7 +15407,7 @@
       "file_type": "code",
       "norm_label": ".to_tap_image()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1093"
+      "source_location": "L1089"
     },
     {
       "id": "crates_tape_src_tzx_tzxplayer_to_tap_player",
@@ -15418,7 +15418,7 @@
       "file_type": "code",
       "norm_label": ".to_tap_player()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1214"
+      "source_location": "L1210"
     },
     {
       "id": "crates_tape_src_tzx_zero_pulse_blocks_sync_logical_index",
@@ -15429,7 +15429,7 @@
       "file_type": "code",
       "norm_label": "zero_pulse_blocks_sync_logical_index()",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2024"
+      "source_location": "L2041"
     },
     {
       "id": "scripts_fetch_living_room_assets",
@@ -98321,7 +98321,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1946",
+      "source_location": "L1963",
       "weight": 1.0
     },
     {
@@ -98333,7 +98333,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1954",
+      "source_location": "L1971",
       "weight": 1.0
     },
     {
@@ -98345,7 +98345,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1797",
+      "source_location": "L1814",
       "weight": 1.0
     },
     {
@@ -98357,7 +98357,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1799",
+      "source_location": "L1816",
       "weight": 1.0
     },
     {
@@ -98369,7 +98369,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1770",
+      "source_location": "L1787",
       "weight": 1.0
     },
     {
@@ -98381,7 +98381,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1773",
+      "source_location": "L1790",
       "weight": 1.0
     },
     {
@@ -98405,7 +98405,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1511",
+      "source_location": "L1512",
       "weight": 1.0
     },
     {
@@ -98417,7 +98417,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1488",
+      "source_location": "L1489",
       "weight": 1.0
     },
     {
@@ -98429,7 +98429,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1495",
+      "source_location": "L1496",
       "weight": 1.0
     },
     {
@@ -98441,7 +98441,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1499",
+      "source_location": "L1500",
       "weight": 1.0
     },
     {
@@ -98453,7 +98453,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1501",
+      "source_location": "L1502",
       "weight": 1.0
     },
     {
@@ -98465,7 +98465,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1501",
+      "source_location": "L1502",
       "weight": 1.0
     },
     {
@@ -98477,7 +98477,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1407",
+      "source_location": "L1403",
       "weight": 1.0
     },
     {
@@ -98489,7 +98489,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1407",
+      "source_location": "L1403",
       "weight": 1.0
     },
     {
@@ -98501,7 +98501,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1426",
+      "source_location": "L1422",
       "weight": 1.0
     },
     {
@@ -98513,7 +98513,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1607",
+      "source_location": "L1617",
       "weight": 1.0
     },
     {
@@ -98525,7 +98525,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1612",
+      "source_location": "L1622",
       "weight": 1.0
     },
     {
@@ -98537,7 +98537,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1636",
+      "source_location": "L1646",
       "weight": 1.0
     },
     {
@@ -98549,7 +98549,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1649",
+      "source_location": "L1659",
       "weight": 1.0
     },
     {
@@ -98561,7 +98561,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1661",
+      "source_location": "L1678",
       "weight": 1.0
     },
     {
@@ -98573,7 +98573,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1675",
+      "source_location": "L1692",
       "weight": 1.0
     },
     {
@@ -98585,12 +98585,36 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1675",
+      "source_location": "L1692",
       "weight": 1.0
     },
     {
       "source": "crates_tape_src_tzx_append_pure_data",
       "target": "crates_tape_src_tzx_push_pulse_tzx",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/tape/src/tzx.rs",
+      "source_location": "L1346",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_tape_src_tzx_append_pure_data",
+      "target": "crates_tape_src_tzx_tapeerror_from",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/tape/src/tzx.rs",
+      "source_location": "L1346",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_tape_src_tzx_append_pure_data",
+      "target": "crates_tape_src_tzx_append_tzx_pause",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -98602,7 +98626,7 @@
     },
     {
       "source": "crates_tape_src_tzx_append_pure_data",
-      "target": "crates_tape_src_tzx_tapeerror_from",
+      "target": "crates_tape_src_tzx_ms_to_t",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -98613,30 +98637,6 @@
       "weight": 1.0
     },
     {
-      "source": "crates_tape_src_tzx_append_pure_data",
-      "target": "crates_tape_src_tzx_append_tzx_pause",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1354",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_tape_src_tzx_append_pure_data",
-      "target": "crates_tape_src_tzx_ms_to_t",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1354",
-      "weight": 1.0
-    },
-    {
       "source": "crates_tape_src_tzx_append_standard_block",
       "target": "crates_tape_src_tzx_push_pulse_tzx",
       "relation": "calls",
@@ -98645,7 +98645,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1280",
+      "source_location": "L1276",
       "weight": 1.0
     },
     {
@@ -98657,7 +98657,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1295",
+      "source_location": "L1291",
       "weight": 1.0
     },
     {
@@ -98669,7 +98669,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1297",
+      "source_location": "L1293",
       "weight": 1.0
     },
     {
@@ -98681,7 +98681,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1317",
+      "source_location": "L1313",
       "weight": 1.0
     },
     {
@@ -98693,7 +98693,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1317",
+      "source_location": "L1313",
       "weight": 1.0
     },
     {
@@ -98705,7 +98705,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1321",
+      "source_location": "L1317",
       "weight": 1.0
     },
     {
@@ -98717,7 +98717,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2272",
+      "source_location": "L2289",
       "weight": 1.0
     },
     {
@@ -98729,7 +98729,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2277",
+      "source_location": "L2294",
       "weight": 1.0
     },
     {
@@ -98741,7 +98741,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2295",
+      "source_location": "L2312",
       "weight": 1.0
     },
     {
@@ -98753,7 +98753,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2300",
+      "source_location": "L2317",
       "weight": 1.0
     },
     {
@@ -98765,7 +98765,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2094",
+      "source_location": "L2111",
       "weight": 1.0
     },
     {
@@ -98777,7 +98777,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2100",
+      "source_location": "L2117",
       "weight": 1.0
     },
     {
@@ -98789,7 +98789,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2108",
+      "source_location": "L2125",
       "weight": 1.0
     },
     {
@@ -98801,7 +98801,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1447",
+      "source_location": "L1443",
       "weight": 1.0
     },
     {
@@ -98813,7 +98813,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1584",
+      "source_location": "L1594",
       "weight": 1.0
     },
     {
@@ -98825,7 +98825,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1585",
+      "source_location": "L1595",
       "weight": 1.0
     },
     {
@@ -98837,7 +98837,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1585",
+      "source_location": "L1595",
       "weight": 1.0
     },
     {
@@ -98849,7 +98849,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1967",
+      "source_location": "L1984",
       "weight": 1.0
     },
     {
@@ -98861,7 +98861,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1368",
+      "source_location": "L1364",
       "weight": 1.0
     },
     {
@@ -98933,7 +98933,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2136",
+      "source_location": "L2153",
       "weight": 1.0
     },
     {
@@ -98945,7 +98945,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2139",
+      "source_location": "L2156",
       "weight": 1.0
     },
     {
@@ -98957,7 +98957,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2075",
+      "source_location": "L2092",
       "weight": 1.0
     },
     {
@@ -98969,7 +98969,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2078",
+      "source_location": "L2095",
       "weight": 1.0
     },
     {
@@ -98981,7 +98981,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2080",
+      "source_location": "L2097",
       "weight": 1.0
     },
     {
@@ -98993,7 +98993,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2180",
+      "source_location": "L2197",
       "weight": 1.0
     },
     {
@@ -99005,7 +99005,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2200",
+      "source_location": "L2217",
       "weight": 1.0
     },
     {
@@ -99017,7 +99017,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2157",
+      "source_location": "L2174",
       "weight": 1.0
     },
     {
@@ -99029,7 +99029,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2067",
+      "source_location": "L2084",
       "weight": 1.0
     },
     {
@@ -99041,7 +99041,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1221",
+      "source_location": "L1217",
       "weight": 1.0
     },
     {
@@ -99053,7 +99053,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2220",
+      "source_location": "L2237",
       "weight": 1.0
     },
     {
@@ -99065,7 +99065,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1701",
+      "source_location": "L1718",
       "weight": 1.0
     },
     {
@@ -99077,7 +99077,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1702",
+      "source_location": "L1719",
       "weight": 1.0
     },
     {
@@ -99089,7 +99089,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1705",
+      "source_location": "L1722",
       "weight": 1.0
     },
     {
@@ -99101,7 +99101,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1926",
+      "source_location": "L1943",
       "weight": 1.0
     },
     {
@@ -99113,7 +99113,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1927",
+      "source_location": "L1944",
       "weight": 1.0
     },
     {
@@ -99125,7 +99125,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1928",
+      "source_location": "L1945",
       "weight": 1.0
     },
     {
@@ -99137,7 +99137,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1929",
+      "source_location": "L1946",
       "weight": 1.0
     },
     {
@@ -99149,7 +99149,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1930",
+      "source_location": "L1947",
       "weight": 1.0
     },
     {
@@ -99161,7 +99161,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1892",
+      "source_location": "L1909",
       "weight": 1.0
     },
     {
@@ -99173,7 +99173,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1741",
+      "source_location": "L1758",
       "weight": 1.0
     },
     {
@@ -99185,7 +99185,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1758",
+      "source_location": "L1775",
       "weight": 1.0
     },
     {
@@ -99197,7 +99197,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1391",
+      "source_location": "L1387",
       "weight": 1.0
     },
     {
@@ -99221,7 +99221,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2119",
+      "source_location": "L2136",
       "weight": 1.0
     },
     {
@@ -99233,7 +99233,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2128",
+      "source_location": "L2145",
       "weight": 1.0
     },
     {
@@ -99245,7 +99245,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2130",
+      "source_location": "L2147",
       "weight": 1.0
     },
     {
@@ -99257,7 +99257,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1865",
+      "source_location": "L1882",
       "weight": 1.0
     },
     {
@@ -99269,7 +99269,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1866",
+      "source_location": "L1883",
       "weight": 1.0
     },
     {
@@ -99281,7 +99281,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1910",
+      "source_location": "L1927",
       "weight": 1.0
     },
     {
@@ -99293,7 +99293,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1913",
+      "source_location": "L1930",
       "weight": 1.0
     },
     {
@@ -99305,7 +99305,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1919",
+      "source_location": "L1936",
       "weight": 1.0
     },
     {
@@ -99317,7 +99317,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1851",
+      "source_location": "L1868",
       "weight": 1.0
     },
     {
@@ -99329,7 +99329,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1825",
+      "source_location": "L1842",
       "weight": 1.0
     },
     {
@@ -99341,7 +99341,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1719",
+      "source_location": "L1736",
       "weight": 1.0
     },
     {
@@ -99353,7 +99353,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1720",
+      "source_location": "L1737",
       "weight": 1.0
     },
     {
@@ -99365,36 +99365,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2752",
+      "source_location": "L2769",
       "weight": 1.0
     },
     {
       "source": "crates_tape_src_tzx_to_tap_image_errors_on_unsupported_instead_of_truncating",
       "target": "crates_tape_src_tzx_append_id10",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2753",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_tape_src_tzx_to_tap_image_errors_on_unsupported_instead_of_truncating",
-      "target": "crates_tape_src_tzx_tzxplayer_to_tap_image",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2759",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_tape_src_tzx_to_tap_image_keeps_id10_across_skip_markers",
-      "target": "crates_tape_src_tzx_tzx_header",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -99405,6 +99381,30 @@
       "weight": 1.0
     },
     {
+      "source": "crates_tape_src_tzx_to_tap_image_errors_on_unsupported_instead_of_truncating",
+      "target": "crates_tape_src_tzx_tzxplayer_to_tap_image",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/tape/src/tzx.rs",
+      "source_location": "L2776",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_tape_src_tzx_to_tap_image_keeps_id10_across_skip_markers",
+      "target": "crates_tape_src_tzx_tzx_header",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/tape/src/tzx.rs",
+      "source_location": "L2787",
+      "weight": 1.0
+    },
+    {
       "source": "crates_tape_src_tzx_to_tap_image_keeps_id10_across_skip_markers",
       "target": "crates_tape_src_tzx_append_id10",
       "relation": "calls",
@@ -99413,7 +99413,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2773",
+      "source_location": "L2790",
       "weight": 1.0
     },
     {
@@ -99425,7 +99425,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2785",
+      "source_location": "L2802",
       "weight": 1.0
     },
     {
@@ -99437,7 +99437,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2252",
+      "source_location": "L2269",
       "weight": 1.0
     },
     {
@@ -99449,7 +99449,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2015",
+      "source_location": "L2032",
       "weight": 1.0
     },
     {
@@ -99461,7 +99461,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2016",
+      "source_location": "L2033",
       "weight": 1.0
     },
     {
@@ -99473,7 +99473,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2000",
+      "source_location": "L2017",
       "weight": 1.0
     },
     {
@@ -99485,7 +99485,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2001",
+      "source_location": "L2018",
       "weight": 1.0
     },
     {
@@ -99497,7 +99497,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2373",
+      "source_location": "L2390",
       "weight": 1.0
     },
     {
@@ -99509,7 +99509,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2374",
+      "source_location": "L2391",
       "weight": 1.0
     },
     {
@@ -99521,7 +99521,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2405",
+      "source_location": "L2422",
       "weight": 1.0
     },
     {
@@ -99533,7 +99533,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2693",
+      "source_location": "L2710",
       "weight": 1.0
     },
     {
@@ -99545,7 +99545,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2731",
+      "source_location": "L2748",
       "weight": 1.0
     },
     {
@@ -99557,7 +99557,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2735",
+      "source_location": "L2752",
       "weight": 1.0
     },
     {
@@ -99569,7 +99569,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1015",
+      "source_location": "L1011",
       "weight": 1.0
     },
     {
@@ -99581,7 +99581,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L983",
+      "source_location": "L979",
       "weight": 1.0
     },
     {
@@ -99761,7 +99761,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L545",
+      "source_location": "L546",
       "weight": 1.0
     },
     {
@@ -99773,7 +99773,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L585",
+      "source_location": "L586",
       "weight": 1.0
     },
     {
@@ -99785,7 +99785,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L617",
+      "source_location": "L618",
       "weight": 1.0
     },
     {
@@ -99797,7 +99797,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L640",
+      "source_location": "L636",
       "weight": 1.0
     },
     {
@@ -99809,7 +99809,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L659",
+      "source_location": "L655",
       "weight": 1.0
     },
     {
@@ -99821,7 +99821,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L660",
+      "source_location": "L656",
       "weight": 1.0
     },
     {
@@ -99833,7 +99833,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L893",
+      "source_location": "L889",
       "weight": 1.0
     },
     {
@@ -99845,7 +99845,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L905",
+      "source_location": "L901",
       "weight": 1.0
     },
     {
@@ -99857,7 +99857,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L918",
+      "source_location": "L914",
       "weight": 1.0
     },
     {
@@ -99869,7 +99869,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1115",
+      "source_location": "L1111",
       "weight": 1.0
     },
     {
@@ -99881,7 +99881,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1122",
+      "source_location": "L1118",
       "weight": 1.0
     },
     {
@@ -99893,7 +99893,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1215",
+      "source_location": "L1211",
       "weight": 1.0
     },
     {
@@ -99905,7 +99905,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2037",
+      "source_location": "L2054",
       "weight": 1.0
     },
     {
@@ -99917,7 +99917,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2043",
+      "source_location": "L2060",
       "weight": 1.0
     },
     {
@@ -99929,7 +99929,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2044",
+      "source_location": "L2061",
       "weight": 1.0
     },
     {
@@ -109649,7 +109649,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1530",
+      "source_location": "L1531",
       "weight": 1.0
     },
     {
@@ -121325,7 +121325,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1454",
+      "source_location": "L1450",
       "weight": 1.0
     },
     {
@@ -121337,7 +121337,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1397",
+      "source_location": "L1393",
       "weight": 1.0
     },
     {
@@ -121349,7 +121349,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1590",
+      "source_location": "L1600",
       "weight": 1.0
     },
     {
@@ -121373,7 +121373,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1433",
+      "source_location": "L1429",
       "weight": 1.0
     },
     {
@@ -121385,7 +121385,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1433",
+      "source_location": "L1429",
       "weight": 1.0
     },
     {
@@ -121397,7 +121397,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1554",
+      "source_location": "L1564",
       "weight": 1.0
     },
     {
@@ -121469,7 +121469,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1373",
+      "source_location": "L1369",
       "weight": 1.0
     },
     {
@@ -121481,7 +121481,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1533",
+      "source_location": "L1534",
       "weight": 1.0
     },
     {
@@ -121493,7 +121493,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1533",
+      "source_location": "L1534",
       "weight": 1.0
     },
     {
@@ -121505,7 +121505,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1533",
+      "source_location": "L1534",
       "weight": 1.0
     },
     {
@@ -121589,7 +121589,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1093",
+      "source_location": "L1089",
       "weight": 1.0
     },
     {
@@ -121601,7 +121601,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1093",
+      "source_location": "L1089",
       "weight": 1.0
     },
     {
@@ -121613,7 +121613,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1214",
+      "source_location": "L1210",
       "weight": 1.0
     },
     {
@@ -121625,7 +121625,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1214",
+      "source_location": "L1210",
       "weight": 1.0
     },
     {
@@ -139313,7 +139313,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1454",
+      "source_location": "L1450",
       "weight": 1.0
     },
     {
@@ -139325,7 +139325,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1397",
+      "source_location": "L1393",
       "weight": 1.0
     },
     {
@@ -139337,7 +139337,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1590",
+      "source_location": "L1600",
       "weight": 1.0
     },
     {
@@ -139349,7 +139349,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2335",
+      "source_location": "L2352",
       "weight": 1.0
     },
     {
@@ -139361,7 +139361,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1326",
+      "source_location": "L1322",
       "weight": 1.0
     },
     {
@@ -139373,7 +139373,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2342",
+      "source_location": "L2359",
       "weight": 1.0
     },
     {
@@ -139385,7 +139385,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1266",
+      "source_location": "L1262",
       "weight": 1.0
     },
     {
@@ -139397,7 +139397,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1302",
+      "source_location": "L1298",
       "weight": 1.0
     },
     {
@@ -139409,7 +139409,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1253",
+      "source_location": "L1249",
       "weight": 1.0
     },
     {
@@ -139421,7 +139421,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1554",
+      "source_location": "L1564",
       "weight": 1.0
     },
     {
@@ -139433,7 +139433,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1554",
+      "source_location": "L1564",
       "weight": 1.0
     },
     {
@@ -139445,7 +139445,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1373",
+      "source_location": "L1369",
       "weight": 1.0
     },
     {
@@ -139457,7 +139457,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1233",
+      "source_location": "L1229",
       "weight": 1.0
     },
     {
@@ -152354,7 +152354,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1454",
+      "source_location": "L1450",
       "weight": 1.0
     },
     {
@@ -152366,7 +152366,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1397",
+      "source_location": "L1393",
       "weight": 1.0
     },
     {
@@ -152378,7 +152378,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1590",
+      "source_location": "L1600",
       "weight": 1.0
     },
     {
@@ -152402,7 +152402,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1433",
+      "source_location": "L1429",
       "weight": 1.0
     },
     {
@@ -152414,7 +152414,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1554",
+      "source_location": "L1564",
       "weight": 1.0
     },
     {
@@ -152462,7 +152462,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1358",
+      "source_location": "L1354",
       "weight": 1.0
     },
     {
@@ -152498,7 +152498,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1684",
+      "source_location": "L1701",
       "weight": 1.0
     },
     {
@@ -152510,7 +152510,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1976",
+      "source_location": "L1993",
       "weight": 1.0
     },
     {
@@ -152522,7 +152522,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1373",
+      "source_location": "L1369",
       "weight": 1.0
     },
     {
@@ -152534,7 +152534,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1533",
+      "source_location": "L1534",
       "weight": 1.0
     },
     {
@@ -152570,7 +152570,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2328",
+      "source_location": "L2345",
       "weight": 1.0
     },
     {
@@ -152606,7 +152606,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1093",
+      "source_location": "L1089",
       "weight": 1.0
     },
     {
@@ -152618,7 +152618,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1214",
+      "source_location": "L1210",
       "weight": 1.0
     },
     {
@@ -171523,7 +171523,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1219",
+      "source_location": "L1215",
       "weight": 1.0
     },
     {
@@ -171534,7 +171534,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1233",
+      "source_location": "L1229",
       "weight": 1.0
     },
     {
@@ -171545,7 +171545,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1253",
+      "source_location": "L1249",
       "weight": 1.0
     },
     {
@@ -171556,7 +171556,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1266",
+      "source_location": "L1262",
       "weight": 1.0
     },
     {
@@ -171567,7 +171567,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1302",
+      "source_location": "L1298",
       "weight": 1.0
     },
     {
@@ -171578,7 +171578,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1326",
+      "source_location": "L1322",
       "weight": 1.0
     },
     {
@@ -171589,7 +171589,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1358",
+      "source_location": "L1354",
       "weight": 1.0
     },
     {
@@ -171600,7 +171600,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1373",
+      "source_location": "L1369",
       "weight": 1.0
     },
     {
@@ -171611,7 +171611,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1397",
+      "source_location": "L1393",
       "weight": 1.0
     },
     {
@@ -171622,7 +171622,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1433",
+      "source_location": "L1429",
       "weight": 1.0
     },
     {
@@ -171633,7 +171633,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1454",
+      "source_location": "L1450",
       "weight": 1.0
     },
     {
@@ -171644,7 +171644,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1505",
+      "source_location": "L1506",
       "weight": 1.0
     },
     {
@@ -171655,7 +171655,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1515",
+      "source_location": "L1516",
       "weight": 1.0
     },
     {
@@ -171666,7 +171666,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1528",
+      "source_location": "L1529",
       "weight": 1.0
     },
     {
@@ -171677,7 +171677,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1533",
+      "source_location": "L1534",
       "weight": 1.0
     },
     {
@@ -171688,7 +171688,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1554",
+      "source_location": "L1564",
       "weight": 1.0
     },
     {
@@ -171699,7 +171699,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1590",
+      "source_location": "L1600",
       "weight": 1.0
     },
     {
@@ -171710,7 +171710,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1684",
+      "source_location": "L1701",
       "weight": 1.0
     },
     {
@@ -171721,7 +171721,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1700",
+      "source_location": "L1717",
       "weight": 1.0
     },
     {
@@ -171732,7 +171732,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1717",
+      "source_location": "L1734",
       "weight": 1.0
     },
     {
@@ -171743,7 +171743,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1730",
+      "source_location": "L1747",
       "weight": 1.0
     },
     {
@@ -171754,7 +171754,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1751",
+      "source_location": "L1768",
       "weight": 1.0
     },
     {
@@ -171765,7 +171765,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1763",
+      "source_location": "L1780",
       "weight": 1.0
     },
     {
@@ -171776,7 +171776,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1788",
+      "source_location": "L1805",
       "weight": 1.0
     },
     {
@@ -171787,7 +171787,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1813",
+      "source_location": "L1830",
       "weight": 1.0
     },
     {
@@ -171798,7 +171798,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1838",
+      "source_location": "L1855",
       "weight": 1.0
     },
     {
@@ -171809,7 +171809,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1864",
+      "source_location": "L1881",
       "weight": 1.0
     },
     {
@@ -171820,7 +171820,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1876",
+      "source_location": "L1893",
       "weight": 1.0
     },
     {
@@ -171831,7 +171831,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1909",
+      "source_location": "L1926",
       "weight": 1.0
     },
     {
@@ -171842,7 +171842,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1925",
+      "source_location": "L1942",
       "weight": 1.0
     },
     {
@@ -171853,7 +171853,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1936",
+      "source_location": "L1953",
       "weight": 1.0
     },
     {
@@ -171864,7 +171864,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1963",
+      "source_location": "L1980",
       "weight": 1.0
     },
     {
@@ -171875,7 +171875,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1976",
+      "source_location": "L1993",
       "weight": 1.0
     },
     {
@@ -171886,18 +171886,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1998",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_tape_src_tzx",
-      "target": "crates_tape_src_tzx_to_tap_image_skips_turbo_blocks",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2014",
+      "source_location": "L2015",
       "weight": 1.0
     },
     {
@@ -171913,13 +171902,24 @@
     },
     {
       "source": "crates_tape_src_tzx",
+      "target": "crates_tape_src_tzx_to_tap_image_skips_turbo_blocks",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/tape/src/tzx.rs",
+      "source_location": "L2031",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_tape_src_tzx",
       "target": "crates_tape_src_tzx_zero_pulse_blocks_sync_logical_index",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2024",
+      "source_location": "L2041",
       "weight": 1.0
     },
     {
@@ -171930,7 +171930,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2057",
+      "source_location": "L2074",
       "weight": 1.0
     },
     {
@@ -171941,7 +171941,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2074",
+      "source_location": "L2091",
       "weight": 1.0
     },
     {
@@ -171952,18 +171952,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2093",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_tape_src_tzx",
-      "target": "crates_tape_src_tzx_select_auto_picks_first_entry",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2118",
+      "source_location": "L2110",
       "weight": 1.0
     },
     {
@@ -171979,7 +171968,7 @@
     },
     {
       "source": "crates_tape_src_tzx",
-      "target": "crates_tape_src_tzx_jump_relative_zero_is_rejected",
+      "target": "crates_tape_src_tzx_select_auto_picks_first_entry",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -171990,13 +171979,24 @@
     },
     {
       "source": "crates_tape_src_tzx",
+      "target": "crates_tape_src_tzx_jump_relative_zero_is_rejected",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/tape/src/tzx.rs",
+      "source_location": "L2152",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_tape_src_tzx",
       "target": "crates_tape_src_tzx_loop_reps_zero_skips_body",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2144",
+      "source_location": "L2161",
       "weight": 1.0
     },
     {
@@ -172007,7 +172007,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2162",
+      "source_location": "L2179",
       "weight": 1.0
     },
     {
@@ -172018,7 +172018,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2189",
+      "source_location": "L2206",
       "weight": 1.0
     },
     {
@@ -172029,7 +172029,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2208",
+      "source_location": "L2225",
       "weight": 1.0
     },
     {
@@ -172040,7 +172040,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2228",
+      "source_location": "L2245",
       "weight": 1.0
     },
     {
@@ -172051,7 +172051,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2268",
+      "source_location": "L2285",
       "weight": 1.0
     },
     {
@@ -172062,7 +172062,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2291",
+      "source_location": "L2308",
       "weight": 1.0
     },
     {
@@ -172073,7 +172073,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2328",
+      "source_location": "L2345",
       "weight": 1.0
     },
     {
@@ -172084,7 +172084,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2335",
+      "source_location": "L2352",
       "weight": 1.0
     },
     {
@@ -172095,7 +172095,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2342",
+      "source_location": "L2359",
       "weight": 1.0
     },
     {
@@ -172106,7 +172106,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2354",
+      "source_location": "L2371",
       "weight": 1.0
     },
     {
@@ -172150,7 +172150,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2722",
+      "source_location": "L2739",
       "weight": 1.0
     },
     {
@@ -172161,7 +172161,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2751",
+      "source_location": "L2768",
       "weight": 1.0
     },
     {
@@ -172172,7 +172172,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L2769",
+      "source_location": "L2786",
       "weight": 1.0
     },
     {
@@ -191851,7 +191851,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1023",
+      "source_location": "L1019",
       "weight": 1.0
     },
     {
@@ -191862,7 +191862,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1093",
+      "source_location": "L1089",
       "weight": 1.0
     },
     {
@@ -191873,7 +191873,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L1214",
+      "source_location": "L1210",
       "weight": 1.0
     },
     {
@@ -191906,7 +191906,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L897",
+      "source_location": "L893",
       "weight": 1.0
     },
     {
@@ -191917,7 +191917,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L902",
+      "source_location": "L898",
       "weight": 1.0
     },
     {
@@ -191928,7 +191928,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L908",
+      "source_location": "L904",
       "weight": 1.0
     },
     {
@@ -191939,7 +191939,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L923",
+      "source_location": "L919",
       "weight": 1.0
     },
     {
@@ -191950,7 +191950,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L932",
+      "source_location": "L928",
       "weight": 1.0
     },
     {
@@ -191961,7 +191961,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L937",
+      "source_location": "L933",
       "weight": 1.0
     },
     {
@@ -191972,7 +191972,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L942",
+      "source_location": "L938",
       "weight": 1.0
     },
     {
@@ -191983,7 +191983,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L948",
+      "source_location": "L944",
       "weight": 1.0
     },
     {
@@ -191994,7 +191994,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L954",
+      "source_location": "L950",
       "weight": 1.0
     },
     {
@@ -192005,7 +192005,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L961",
+      "source_location": "L957",
       "weight": 1.0
     },
     {
@@ -192016,7 +192016,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L972",
+      "source_location": "L968",
       "weight": 1.0
     },
     {
@@ -192027,7 +192027,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/tape/src/tzx.rs",
-      "source_location": "L977",
+      "source_location": "L973",
       "weight": 1.0
     },
     {
@@ -199739,5 +199739,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "ef10c74d00d6605e7822fc50d6843ffb24035821"
+  "built_at_commit": "4c85983a173a340abaa193abc56b890486a7b6e7"
 }

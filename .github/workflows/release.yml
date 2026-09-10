@@ -91,13 +91,13 @@ jobs:
             target: x86_64-pc-windows-msvc
             archive: zip
           # Windows also builds Inno Setup *-setup.exe (see Build Windows installer).
-          # macOS: .dmg only (app + Applications shortcut).
+          # macOS: notarised .dmg wrapped as .dmg.zip for GitHub Releases (#403).
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive: dmg
+            archive: dmg.zip
           - os: macos-latest
             target: x86_64-apple-darwin
-            archive: dmg
+            archive: dmg.zip
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -232,7 +232,8 @@ jobs:
               echo "  Spec Chum.app/   — SpecChumMac (SwiftUI) + bundled redistributable ROMs"
               echo "  Applications/   — shortcut (DMG only; drag Spec Chum.app here)"
               echo ""
-              echo "Open the .dmg release asset and drag Spec Chum.app to Applications."
+              echo "Download the .dmg.zip release asset, unzip it, open the .dmg,"
+              echo "and drag Spec Chum.app to Applications."
               echo ""
               echo "Agent Debug HTTP (embedded on the live GUI session; loopback only):"
               echo "  Prefer SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN=… open -a 'Spec Chum'"
@@ -241,8 +242,8 @@ jobs:
               echo "Cross-platform headless --serve / debug remain on the egui binary"
               echo "(Windows/Linux archives, or cargo run -p app from source)."
               echo ""
-              echo "When Apple notary secrets are configured, the .dmg is notarised"
-              echo "and stapled."
+              echo "When Apple notary secrets are configured, the inner .dmg is notarised"
+              echo "and stapled before it is zipped for GitHub Releases."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
               echo "Contents: spec_chum.exe + roms/ (portable zip) or Start Menu install via *-setup.exe"
@@ -326,6 +327,25 @@ jobs:
         run: |
           chmod +x .trusted-ci/scripts/ci/notarize-macos.sh
           .trusted-ci/scripts/ci/notarize-macos.sh "$DMG_ASSET"
+
+      # Zip the notarised/stapled .dmg for GitHub Releases (#403). Signing and
+      # notary remain on the inner .dmg; only the .dmg.zip is published.
+      - name: Zip macOS DMG for release
+        id: dmg_zip
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          DMG_ASSET: ${{ steps.dmg.outputs.asset }}
+        run: |
+          set -euo pipefail
+          test -f "${DMG_ASSET}"
+          ZIP_ASSET="${DMG_ASSET}.zip"
+          rm -f "${ZIP_ASSET}"
+          # Store the .dmg at the zip root (basename only).
+          (cd "$(dirname "${DMG_ASSET}")" && zip -9 "$(basename "${ZIP_ASSET}")" "$(basename "${DMG_ASSET}")")
+          rm -f "${DMG_ASSET}"
+          test -f "${ZIP_ASSET}"
+          echo "asset=${ZIP_ASSET}" >> "$GITHUB_OUTPUT"
 
       - name: Authenticode-sign Windows
         if: runner.os == 'Windows'
@@ -423,7 +443,7 @@ jobs:
           ARCHIVE: ${{ matrix.archive }}
           VERSION: ${{ steps.version.outputs.version }}
           STAGE_DIR: ${{ steps.stage.outputs.dir }}
-          DMG_ASSET: ${{ steps.dmg.outputs.asset }}
+          DMG_ZIP_ASSET: ${{ steps.dmg_zip.outputs.asset }}
           SETUP_ASSET: ${{ steps.win_setup.outputs.asset }}
           APPIMAGE_ASSET: ${{ steps.appimage.outputs.asset }}
           DEB_ASSET: ${{ steps.deb.outputs.asset }}
@@ -437,7 +457,8 @@ jobs:
             test -f "${STAGE_DIR}/Spec Chum.app/Contents/Resources/AppIcon.icns"
             test -f "${STAGE_DIR}/Spec Chum.app/Contents/Resources/roms/spec48.rom"
             test ! -e "${STAGE_DIR}/spec-chum-debug"
-            test -f "${DMG_ASSET}"
+            test -f "${DMG_ZIP_ASSET}"
+            test ! -e "${DMG_ZIP_ASSET%.zip}"
           elif [[ "$TARGET" == *windows* ]]; then
             test -f "${STAGE_DIR}/spec_chum.exe"
             test -f "${STAGE_DIR}/roms/spec48.rom"
@@ -451,10 +472,10 @@ jobs:
             test -f "${DEB_ASSET}"
           fi
           mkdir -p packed
-          if [[ "$ARCHIVE" == dmg ]]; then
-            # DMG already written under packed/ by Build macOS DMG; no .zip.
-            test -f "${DMG_ASSET}"
-            echo "asset=${DMG_ASSET}" >> "$GITHUB_OUTPUT"
+          if [[ "$ARCHIVE" == dmg.zip ]]; then
+            # Notarised .dmg already zipped under packed/ (#403); bare .dmg removed.
+            test -f "${DMG_ZIP_ASSET}"
+            echo "asset=${DMG_ZIP_ASSET}" >> "$GITHUB_OUTPUT"
           elif [[ "$ARCHIVE" == zip ]]; then
             (cd dist && python -c "import shutil; shutil.make_archive('../packed/${OUT}', 'zip', '.', '${OUT}')")
             echo "asset=packed/${OUT}.zip" >> "$GITHUB_OUTPUT"
@@ -491,7 +512,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.dmg' -o -name '*-setup.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} dist/ \;
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*-setup.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} dist/ \;
           cd dist
           sha256sum spec-chum-* > SHA256SUMS
           if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
@@ -523,13 +544,14 @@ jobs:
           overwrite_files: true
           files: dist/*
           body: |
-            **macOS** ships the native **SpecChumMac** SwiftUI app in a `.dmg`.
-            **Windows / Linux** ship the cross-platform **egui** host (`spec_chum`) with
-            headless debugger / agent HTTP on the same binary (`--serve` / `debug …`).
+            **macOS** ships the native **SpecChumMac** SwiftUI app as a **`.dmg.zip`**
+            (unzip → open the notarised `.dmg`). **Windows / Linux** ship the
+            cross-platform **egui** host (`spec_chum`) with headless debugger /
+            agent HTTP on the same binary (`--serve` / `debug …`).
 
             | Platform | Archive contents |
             | --- | --- |
-            | **macOS** | **`.dmg`**: SpecChumMac `Spec Chum.app` (bundled redistributable ROMs) + Applications shortcut |
+            | **macOS** | **`.dmg.zip`**: notarised SpecChumMac `.dmg` (app + Applications shortcut + bundled ROMs) |
             | **Windows** | Portable `.zip` (`spec_chum.exe` + `roms/`) **and** Inno Setup `*-setup.exe` |
             | **Linux** | `.tar.gz` / AppImage / `.deb` (`spec_chum` + redistributable `roms/`) |
 

@@ -3,12 +3,13 @@
 GitHub Actions builds **macOS**, **Linux**, and **Windows** archives and attaches
 them to a GitHub Release when a version tag is pushed.
 
-**macOS** ships the native **SpecChumMac** SwiftUI app (`apps/macos`) in a
-**`.dmg`**. **Windows / Linux** ship the cross-platform **egui** host
-`spec_chum`. Headless debugger and agent HTTP live on the egui binary
-(`spec_chum --serve`, `spec_chum debug …`); on macOS, agents use the embedded
-loopback server (`SPEC_CHUM_AGENT=1` on SpecChumMac — see
-[MACOS_NATIVE.md](MACOS_NATIVE.md) / [AGENT_DEBUG_API.md](AGENT_DEBUG_API.md)).
+**macOS** ships the native **SpecChumMac** SwiftUI app (`apps/macos`) as a
+**`.dmg.zip`** (a zip containing the notarised/stapled `.dmg`). **Windows /
+Linux** ship the cross-platform **egui** host `spec_chum`. Headless debugger
+and agent HTTP live on the egui binary (`spec_chum --serve`, `spec_chum debug …`);
+on macOS, agents use the embedded loopback server (`SPEC_CHUM_AGENT=1` on
+SpecChumMac — see [MACOS_NATIVE.md](MACOS_NATIVE.md) /
+[AGENT_DEBUG_API.md](AGENT_DEBUG_API.md)).
 
 Redistributable Spectrum ROMs (Amstrad Lawson 1999 grant and other grants in
 [ROMS.md](ROMS.md)) are **fetched at packaging time** and **bundled inside** each
@@ -16,13 +17,16 @@ app package. ROM bytes are still **not** committed to git. User-provided-only
 firmware (IF1, Multiface, TR-DOS, …) is never bundled.
 
 On macOS, release CI builds SpecChumMac via `./scripts/build_macos_app.sh`,
-stages `Spec Chum.app` with `scripts/ci/stage-macos-specchummac-app.sh`, and
-ships a **`.dmg`** with an **Applications** folder shortcut (no secondary
-`.zip` — [#361](https://github.com/mward-sudo/spec_chum/issues/361)). This is
-the release-artifact switch from egui-on-macOS ([#363](https://github.com/mward-sudo/spec_chum/issues/363));
-cross-platform native shells remain [#351](https://github.com/mward-sudo/spec_chum/issues/351).
-When Apple notary secrets are set, CI notarises and staples the `.dmg` — see
-signing table below ([#354](https://github.com/mward-sudo/spec_chum/issues/354),
+stages `Spec Chum.app` with `scripts/ci/stage-macos-specchummac-app.sh`, builds
+a **`.dmg`** with an **Applications** folder shortcut, then publishes a
+**`.dmg.zip`** of that DMG ([#403](https://github.com/mward-sudo/spec_chum/issues/403);
+not the old secondary `.app` zip dropped in [#361](https://github.com/mward-sudo/spec_chum/issues/361)).
+This is the release-artifact switch from egui-on-macOS
+([#363](https://github.com/mward-sudo/spec_chum/issues/363)); cross-platform
+native shells remain [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+When Apple notary secrets are set, CI notarises and staples the **inner** `.dmg`
+before zipping — see signing table below
+([#354](https://github.com/mward-sudo/spec_chum/issues/354),
 Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows ships a
 **portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall).
 Linux ships **`.tar.gz`**, **AppImage**, and **`.deb`** of the egui binary plus
@@ -155,11 +159,12 @@ git push origin v0.2.0
 | Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `/usr/bin/spec_chum` + `/usr/share/spec-chum/roms` + `.desktop` + icon |
 | Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe` + `roms/` + `LICENSE`/`README.txt`/`ROMS-NOTICE.txt` |
 | Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs exe + `roms/` |
-| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg` | SpecChumMac `Spec Chum.app/` (AppIcon + `Contents/Resources/roms`), Applications shortcut |
-| macOS (Intel) | same `.dmg` with `x86_64-apple-darwin` | same layout |
+| macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg.zip` | Zip of notarised SpecChumMac `.dmg` (`Spec Chum.app/` + Applications shortcut + bundled roms) |
+| macOS (Intel) | same `.dmg.zip` with `x86_64-apple-darwin` | same layout |
 
 One primary application per platform ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
-On macOS, open the **`.dmg`** and drag **Spec Chum.app** onto **Applications**.
+On macOS, download the **`.dmg.zip`**, unzip it, open the **`.dmg`**, and drag
+**Spec Chum.app** onto **Applications**.
 On Windows, prefer the **`*-setup.exe`** for Start Menu / uninstall, or the portable
 `.zip` for unzip-and-run. On Linux, prefer the **`.deb`** on Debian/Ubuntu, the
 **AppImage** for distro-agnostic double-click, or the **`.tar.gz`** for unpack-and-run.
@@ -185,7 +190,8 @@ SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" open -a "Spec 
 **not** attached to GitHub Release archives.)
 
 Linux ships `.tar.gz` + AppImage + `.deb`; Windows ships a portable `.zip` and an
-Inno Setup `*-setup.exe`; macOS ships a `.dmg` only.
+Inno Setup `*-setup.exe`; macOS ships a `.dmg.zip` only (inner `.dmg` is
+notarised/stapled when secrets are set).
 ROM **bytes are not in git**; release CI runs `./scripts/fetch_roms.sh` and embeds
 the managed redistributable set (see [ROMS.md](ROMS.md)). Shared app icon assets
 live under `packaging/` (see `packaging/icon/README.md`); regenerate with
@@ -214,8 +220,8 @@ is absent so a first release does not require certificates.
 | --- | --- | --- |
 | All | SHA-256 checksums | none |
 | All | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (Sigstore) | none (OIDC) |
-| macOS | Developer ID `codesign` on `Spec Chum.app` and the release `.dmg` (hardened runtime + timestamp on Mach-O / `.app`; DMG signed when the same secrets are set) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
-| macOS | Notarisation + staple (`notarytool submit --wait`, then `stapler staple` on the `.dmg`) | **Preferred:** `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`. **Fallback:** `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` |
+| macOS | Developer ID `codesign` on `Spec Chum.app` and the inner `.dmg` (hardened runtime + timestamp on Mach-O / `.app`; DMG signed when the same secrets are set) | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` |
+| macOS | Notarisation + staple (`notarytool submit --wait`, then `stapler staple` on the inner `.dmg`), then zip for GitHub Releases | **Preferred:** `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`. **Fallback:** `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` |
 | Windows | Authenticode (`signtool`, SHA-256, DigiCert timestamp) on `spec_chum.exe` and the Inno `*-setup.exe` | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` |
 | Checksums | Detached ASCII-armored GPG signature `SHA256SUMS.asc` | `GPG_PRIVATE_KEY`, optional `GPG_PASSPHRASE` |
 
@@ -226,7 +232,8 @@ Developer ID Application certificate, for example
 
 **Notarisation** ([#354](https://github.com/mward-sudo/spec_chum/issues/354)):
 after the `.dmg` is codesigned, `scripts/ci/notarize-macos.sh` submits it with
-`xcrun notarytool`, waits for Accepted, and staples the `.dmg`. Prefer an
+`xcrun notarytool`, waits for Accepted, and staples the `.dmg`. CI then zips
+that DMG as the published `*.dmg.zip` asset ([#403](https://github.com/mward-sudo/spec_chum/issues/403)). Prefer an
 **App Store Connect API key** (Team key: Issuer UUID + Key ID + `.p8`
 base64). Apple ID + app-specific password + Team ID works as a fallback. When
 neither credential set is complete, the step **no-ops** (codesigned-but-
@@ -238,6 +245,7 @@ Verify a notarised download (after install / mount):
 
 ```bash
 spctl --assess --type open --verbose=4 /path/to/Spec\ Chum.app
+unzip spec-chum-….dmg.zip
 xcrun stapler validate /path/to/spec-chum-….dmg
 ```
 
@@ -256,6 +264,6 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 Attestations from the release workflow run:
 
 ```bash
-gh attestation verify spec-chum-0.2.0-aarch64-apple-darwin.dmg \
+gh attestation verify spec-chum-0.7.0-aarch64-apple-darwin.dmg.zip \
   --owner mward-sudo --repo spec_chum
 ```
