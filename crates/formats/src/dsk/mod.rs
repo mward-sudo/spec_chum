@@ -60,7 +60,10 @@ impl DskImage {
         let total = usize::from(tracks) * usize::from(sides);
 
         if extended {
-            // Track size table at 0x34
+            // Track size table at 0x34..0x100 (204 entries max).
+            if total > 0x100 - 0x34 {
+                return Err(FormatError::Format("extended track table overflow".into()));
+            }
             for t in 0..total {
                 let size = usize::from(data[0x34 + t]) * 256;
                 if size == 0 {

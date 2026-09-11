@@ -217,15 +217,22 @@ pub(crate) fn maybe_append(ev: &TraceEvent) {
 /// Flush append-mode output so short CLI runs are not left empty.
 ///
 /// Returns `Err` if an earlier append write failed or the final flush fails.
+/// Buffered events are flushed first so a prior write error does not leave
+/// later successful `writeln`s stranded in the `BufWriter`.
 pub fn flush_append() -> io::Result<()> {
     let Ok(mut sink) = APPEND.lock() else {
         return Err(io::Error::other("trace append lock poisoned"));
     };
+    let flush_err = if let Some(w) = sink.writer.as_mut() {
+        w.flush().err()
+    } else {
+        None
+    };
     if let Some(err) = sink.last_error.take() {
         return Err(io::Error::other(err));
     }
-    if let Some(w) = sink.writer.as_mut() {
-        w.flush()?;
+    if let Some(e) = flush_err {
+        return Err(e);
     }
     Ok(())
 }

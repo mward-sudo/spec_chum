@@ -93,3 +93,17 @@ fn synthetic_plus3_disk_basic_has_plus3dos_disk_file() {
     assert_eq!(plus3_cpm_chs(0), (1, 1));
     assert_eq!(plus3_cpm_chs(4), (1, 5));
 }
+
+#[test]
+fn extended_dsk_rejects_track_table_overflow() {
+    let mut data = vec![0u8; 0x100];
+    data[0..8].copy_from_slice(b"EXTENDED");
+    // 205 tracks × 1 side exceeds the 204-byte size table at 0x34..0x100.
+    data[0x30] = 205;
+    data[0x31] = 1;
+    let err = DskImage::parse(&data).expect_err("oversized extended table");
+    assert!(
+        err.to_string().contains("extended track table overflow"),
+        "got {err}"
+    );
+}
