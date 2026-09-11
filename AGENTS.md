@@ -54,7 +54,7 @@ Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
 Linux PNG / egui window) lives under `packaging/` — regenerate with
 `python3 scripts/generate_app_icons.py`
 ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
-Native UI shells (non-macOS): [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+Native UI shells (non-macOS): [#351](https://github.com/mward-sudo/spec_chum/issues/351) — strategy in [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md#native-shells-351) (Linux = egui; Windows egui today, WinUI/`host_api` later).
 **Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
 (z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
 

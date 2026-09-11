@@ -4,7 +4,7 @@
 
 A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust with an egui frontend (plus an optional native macOS SwiftUI shell).
 
-UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libretro): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md).
+UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libretro): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md). Native-shell strategy (macOS SpecChumMac; Linux = egui; Windows egui today, WinUI/`host_api` later): [Native shells (#351)](docs/UI_ARCHITECTURE.md#native-shells-351).
 
 Native macOS (liquid glass): [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md) — `./scripts/run_macos_app.sh`.
 
