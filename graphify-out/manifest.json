@@ -569,12 +569,6 @@
     "ast_hash": "9280855bf32686ca7c108839120f2335",
     "semantic_hash": ""
   },
-  "crates/machine/src/rom.rs": {
-    "mtime": 1788919605.6155627,
-    "seen": 1789091745.075027,
-    "ast_hash": "069af2db7c9642a9b044df5b7679ea54",
-    "semantic_hash": ""
-  },
   "crates/machine/src/system_tests.rs": {
     "mtime": 1788919605.6157093,
     "seen": 1789091745.075028,
@@ -1374,9 +1368,9 @@
     "semantic_hash": ""
   },
   "crates/formats/src/dsk/mod.rs": {
-    "mtime": 1789094272.0089548,
-    "seen": 1789094288.4794738,
-    "ast_hash": "de2ed5d23fee83ea18737f59d9a3cc94",
+    "mtime": 1789094542.4948158,
+    "seen": 1789095698.824754,
+    "ast_hash": "6ea1215e37df13b845a5f9d22ce397e4",
     "semantic_hash": ""
   },
   "crates/formats/src/dsk/synthetic.rs": {
@@ -1386,21 +1380,21 @@
     "semantic_hash": ""
   },
   "crates/formats/src/dsk/tests.rs": {
-    "mtime": 1789094285.0170863,
-    "seen": 1789094288.479476,
-    "ast_hash": "0e4b49aead3ad1dda06ec7b31ea9aded",
+    "mtime": 1789094551.1786253,
+    "seen": 1789095698.8247738,
+    "ast_hash": "62f8c73483d823b7710bf36d940ab501",
     "semantic_hash": ""
   },
   "crates/trace/src/category.rs": {
-    "mtime": 1789094237.8911781,
-    "seen": 1789094288.4806201,
+    "mtime": 1789094750.9966404,
+    "seen": 1789095698.826123,
     "ast_hash": "0c4d66ce08a8366981f047ebf1d923fc",
     "semantic_hash": ""
   },
   "crates/trace/src/dump.rs": {
-    "mtime": 1789094249.6559987,
-    "seen": 1789094288.4806201,
-    "ast_hash": "0e2e6bf0fdd3809b80a033ec4f5f4512",
+    "mtime": 1789094542.954973,
+    "seen": 1789095698.826123,
+    "ast_hash": "a840a6e6881ee5e219b377d29279b124",
     "semantic_hash": ""
   },
   "crates/trace/src/event.rs": {
@@ -1413,6 +1407,54 @@
     "mtime": 1789094237.8914428,
     "seen": 1789094288.480622,
     "ast_hash": "a65da676e2e97f3b4b5d30c671b89ff1",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/catalog.rs": {
+    "mtime": 1789095643.8749347,
+    "seen": 1789095698.825989,
+    "ast_hash": "4482cc9c9e265c1c80f4522845278622",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/mod.rs": {
+    "mtime": 1789095643.8751073,
+    "seen": 1789095698.825989,
+    "ast_hash": "b7b5ca4aa1736948271d5eb562084cc1",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/read.rs": {
+    "mtime": 1789095643.8755622,
+    "seen": 1789095698.82599,
+    "ast_hash": "4f3190b10287f6f24b567f0315a6a1d7",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/resolve.rs": {
+    "mtime": 1789095650.3028214,
+    "seen": 1789095698.825991,
+    "ast_hash": "232343a98f856bfba034dee27349685c",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/slots.rs": {
+    "mtime": 1789095643.8769805,
+    "seen": 1789095698.825991,
+    "ast_hash": "bc33bdf820d5bb064b29d8e96597262e",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/tests.rs": {
+    "mtime": 1789095643.877834,
+    "seen": 1789095698.8259919,
+    "ast_hash": "838f67cb2e7d6f491bbbb258112f0886",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/trdos.rs": {
+    "mtime": 1789095643.877989,
+    "seen": 1789095698.8259919,
+    "ast_hash": "5f6462aa0cc1123b50b1e623369eab4f",
+    "semantic_hash": ""
+  },
+  "crates/machine/src/rom/types.rs": {
+    "mtime": 1789095643.8781273,
+    "seen": 1789095698.825993,
+    "ast_hash": "acb1aa310121f6c381706614bfc70c23",
     "semantic_hash": ""
   }
 }
