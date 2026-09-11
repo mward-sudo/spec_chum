@@ -828,9 +828,9 @@
     "semantic_hash": ""
   },
   ".github/workflows/ci.yml": {
-    "mtime": 1788919605.5929704,
-    "seen": 1789091745.075053,
-    "ast_hash": "ad2bb9500cca30525379abc492627de4",
+    "mtime": 1789096451.9446435,
+    "seen": 1789096714.521714,
+    "ast_hash": "eecf89f3202fe994da84ee022e4fe9a5",
     "semantic_hash": ""
   },
   ".github/workflows/pr-bot-reviews.yml": {
@@ -846,9 +846,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1789090503.5282483,
-    "seen": 1789091745.0750542,
-    "ast_hash": "b52ebbbe571f56b17ad28c3cbcfc3f39",
+    "mtime": 1789096700.203253,
+    "seen": 1789096714.5217469,
+    "ast_hash": "0d20faf9b6ef65a4f97cd1444ed3b2f6",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -858,9 +858,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1789090499.2773275,
-    "seen": 1789091745.0750551,
-    "ast_hash": "9fe9c6dd9fa16b98269309846106ac88",
+    "mtime": 1789096437.7323492,
+    "seen": 1789096714.521761,
+    "ast_hash": "e2638d515c169955319e6062ada50808",
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
@@ -882,9 +882,9 @@
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
-    "mtime": 1789090498.3649936,
-    "seen": 1789091745.0750568,
-    "ast_hash": "7c39828fdfcbfa200c8edbb94ebcea04",
+    "mtime": 1789096451.4347265,
+    "seen": 1789096714.521805,
+    "ast_hash": "645e242b749812a170d7033eb3168a7c",
     "semantic_hash": ""
   },
   "docs/MULTIFACE.md": {
@@ -912,9 +912,9 @@
     "semantic_hash": "1f835e66063769d604364c5a96da7e8b"
   },
   "docs/UI_ARCHITECTURE.md": {
-    "mtime": 1789090495.8178601,
-    "seen": 1789091745.07506,
-    "ast_hash": "540b7a1338a14aca4dfc0de7f6914413",
+    "mtime": 1789096691.5361743,
+    "seen": 1789096714.521889,
+    "ast_hash": "7ae2def9975ed37e27dc883161416a17",
     "semantic_hash": ""
   },
   "tests/fixtures/fuse/README.md": {
@@ -1455,6 +1455,66 @@
     "mtime": 1789095643.8781273,
     "seen": 1789095698.825993,
     "ast_hash": "acb1aa310121f6c381706614bfc70c23",
+    "semantic_hash": ""
+  },
+  "crates/windows_shell/Cargo.toml": {
+    "mtime": 1789096407.3886802,
+    "seen": 1789096714.520622,
+    "ast_hash": "6928dd608b6b261c73eb69905814fb35",
+    "semantic_hash": ""
+  },
+  "crates/windows_shell/src/audio.rs": {
+    "mtime": 1789096268.5024657,
+    "seen": 1789096714.5206249,
+    "ast_hash": "81f7658975afbba53949ab1897df164f",
+    "semantic_hash": ""
+  },
+  "crates/windows_shell/src/keymap.rs": {
+    "mtime": 1789096554.4483926,
+    "seen": 1789096714.5206258,
+    "ast_hash": "3d3a3d7350549862372acf8b37233ade",
+    "semantic_hash": ""
+  },
+  "crates/windows_shell/src/lib.rs": {
+    "mtime": 1789096362.763813,
+    "seen": 1789096714.520627,
+    "ast_hash": "6b4b1580a27406f42e059b4792361157",
+    "semantic_hash": ""
+  },
+  "crates/windows_shell/src/main.rs": {
+    "mtime": 1789096366.337815,
+    "seen": 1789096714.520627,
+    "ast_hash": "f866579a353e3d553e0ccfdc6a3cade3",
+    "semantic_hash": ""
+  },
+  "crates/windows_shell/src/win32.rs": {
+    "mtime": 1789096675.354597,
+    "seen": 1789096714.520628,
+    "ast_hash": "5738734daa08c2efcf784be46a5897b4",
+    "semantic_hash": ""
+  },
+  "scripts/build_windows_app.ps1": {
+    "mtime": 1789096413.5808735,
+    "seen": 1789096714.521021,
+    "ast_hash": "4f2214750e58425ea2da5a5c4792b35e",
+    "semantic_hash": ""
+  },
+  "scripts/build_windows_app.sh": {
+    "mtime": 1789096411.98662,
+    "seen": 1789096714.5210218,
+    "ast_hash": "a0021911009f978f72d3bdb14ee077f4",
+    "semantic_hash": ""
+  },
+  "scripts/run_windows_app.ps1": {
+    "mtime": 1789096413.8981817,
+    "seen": 1789096714.521612,
+    "ast_hash": "3595a4bfe6a0f5b5708a63ae05c1d4d3",
+    "semantic_hash": ""
+  },
+  "docs/WINDOWS_NATIVE.md": {
+    "mtime": 1789096691.9596584,
+    "seen": 1789096714.5218902,
+    "ast_hash": "7ebe16909fbc6d3819b0fcc6375920cd",
     "semantic_hash": ""
   }
 }

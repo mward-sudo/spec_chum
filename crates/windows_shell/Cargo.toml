@@ -1,0 +1,49 @@
+[package]
+name = "windows_shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native Win32 Spec Chum shell over host_api (#351)"
+publish = false
+default-run = "spec_chum_windows"
+
+[lib]
+name = "windows_shell"
+path = "src/lib.rs"
+
+[[bin]]
+name = "spec_chum_windows"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+cpal = { workspace = true }
+host_api = { workspace = true }
+parking_lot = { workspace = true }
+rfd = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+agent_server = { workspace = true }
+control_plane = { workspace = true }
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# Win32 window-proc / GDI / USERDATA require unsafe; each site has SAFETY notes.
+[lints.rust]
+unsafe_code = "allow"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+pedantic = { level = "allow", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unwrap_used = "warn"
+expect_used = "allow"
