@@ -17,5 +17,5 @@ verified_correct_#345`.
 Swift AST extraction often leaves property/`@StateObject` edges as INFERRED;
 promotion here is deliberate verification, not a code change.
 
-Remaining #345 items (optional cohesion splits of `host_api` FFI / `Plus3Fdc`)
+#345 checklist complete after Plus3Fdc split (`crates/formats/src/fdc/` — commands / sector / result); host_api FFI split landed in #407.
 are separate follow-ups — not part of this slice.

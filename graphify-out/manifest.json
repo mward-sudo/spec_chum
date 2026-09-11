@@ -311,12 +311,6 @@
     "ast_hash": "a15ea3ac6c461f0265046afaef99a969",
     "semantic_hash": ""
   },
-  "crates/formats/src/fdc.rs": {
-    "mtime": 1788919605.605191,
-    "seen": 1789091745.074997,
-    "ast_hash": "ef5756dc96248e311d685455d6c062e5",
-    "semantic_hash": ""
-  },
   "crates/formats/src/lib.rs": {
     "mtime": 1789005903.433992,
     "seen": 1789091745.074997,
@@ -1320,9 +1314,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/ffi/mod.rs": {
-    "mtime": 1789091724.939641,
-    "seen": 1789091745.075007,
-    "ast_hash": "d949f8e12923b5a5f9ac1943c3f4e1ac",
+    "mtime": 1789092018.575155,
+    "seen": 1789092771.374719,
+    "ast_hash": "50962802b77f90e932d9a5cb52a7d808",
     "semantic_hash": ""
   },
   "crates/host_api/src/ffi/rom.rs": {
@@ -1332,9 +1326,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/ffi/session.rs": {
-    "mtime": 1789091694.4730494,
-    "seen": 1789091745.075008,
-    "ast_hash": "307e46ca230d2d249d36e0b27e1f53ad",
+    "mtime": 1789092033.439295,
+    "seen": 1789092771.3747342,
+    "ast_hash": "a69ff726000e9c20a1b3750f3c369378",
     "semantic_hash": ""
   },
   "crates/host_api/src/ffi/status.rs": {
@@ -1353,6 +1347,36 @@
     "mtime": 1789091683.9828448,
     "seen": 1789091745.075009,
     "ast_hash": "5abcdccff06b3ab0eb151f3d4cefef04",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/fdc/commands.rs": {
+    "mtime": 1789092714.1743655,
+    "seen": 1789092771.374472,
+    "ast_hash": "927360539f57a68d02442b0fd068fbf6",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/fdc/mod.rs": {
+    "mtime": 1789092649.8757298,
+    "seen": 1789092771.3744729,
+    "ast_hash": "a1006ee246cfe22550686c983f5c316f",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/fdc/result.rs": {
+    "mtime": 1789092678.984123,
+    "seen": 1789092771.3744729,
+    "ast_hash": "7761c00178e86effa62979d28490e90a",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/fdc/sector.rs": {
+    "mtime": 1789092714.1761756,
+    "seen": 1789092771.374474,
+    "ast_hash": "46554dad9cfe904628a935a3359719c7",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/fdc/tests.rs": {
+    "mtime": 1789092692.9109342,
+    "seen": 1789092771.374474,
+    "ast_hash": "3f5a9ad0be319825487ca5d442cb28fc",
     "semantic_hash": ""
   }
 }
