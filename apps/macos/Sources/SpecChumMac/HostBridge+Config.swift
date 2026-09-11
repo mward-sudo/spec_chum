@@ -381,6 +381,8 @@ extension HostBridge {
                 return ["roms/plus2/plus2uk.rom"]
             case .spectrumPlus3:
                 return ["roms/plus3/plus3.rom"]
+            case .spectrumPlus3e:
+                return ["roms/plus3e/plus3e.rom"]
             case .spectrumPlus2A:
                 return ["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"]
             case .pentagon128:
