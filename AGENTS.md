@@ -23,11 +23,12 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 | `host_api` | C ABI host surface for native shells / future cores |
 | `control_plane` / `agent_server` | Localhost agent debug HTTP API ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`; see [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md) |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
+| `windows_shell` | Optional Win32 native shell (`spec_chum_windows`) over `host_api` — [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) / [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
 | `living_room` | Experimental Bevy 3D CRT host (`spec-chum-room`); excluded from default `./scripts/check.sh` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1` — see `docs/LIVING_ROOM.md` / #146. SpecChumMac **always links** the living_room staticlib for `host_api`; living-room is opt-in only as a *display mode*. |
 
 Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`). Models include distinct **+2A** (tape Loader) and **+3** (disk Loader).
 
-**GUI parity:** egui (`crates/app`) and SpecChumMac must stay feature-aligned unless a capability is genuinely platform-specific. Shared logic in `control_plane` / `host_api`; both hosts get the same agent HTTP surface. **Never leave the other host as a follow-up.** See `.cursor/rules/gui-app-parity.mdc`.
+**GUI parity:** egui (`crates/app`), SpecChumMac, and the optional Windows Win32 shell (`crates/windows_shell`) must stay **feature-aligned** unless a capability is genuinely platform-specific. **Chrome may follow platform HIG** (⌘ vs Ctrl, native menus/materials). Shared logic in `control_plane` / `host_api`; hosts get the same agent HTTP surface. **Never leave another host as a silent follow-up** (vertical-slice deferrals must be explicit in docs). See `.cursor/rules/gui-app-parity.mdc`.
 
 ## Hard constraints
 
@@ -54,7 +55,7 @@ Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
 Linux PNG / egui window) lives under `packaging/` — regenerate with
 `python3 scripts/generate_app_icons.py`
 ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
-Native UI shells (non-macOS): [#351](https://github.com/mward-sudo/spec_chum/issues/351) — strategy in [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md#native-shells-351) (Linux = egui; Windows egui today, WinUI/`host_api` later).
+Native UI shells (non-macOS): [#351](https://github.com/mward-sudo/spec_chum/issues/351) — strategy in [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md#native-shells-351) (Linux = egui; Windows egui release + optional Win32 `windows_shell`, see [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md)).
 **Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
 (z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
 

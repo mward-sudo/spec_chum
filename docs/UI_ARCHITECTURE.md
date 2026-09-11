@@ -86,7 +86,7 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
 | Optional **Bevy living-room** | Experimental immersion host; SpecChumMac links staticlib, display opt-in; keep out of default CI; #146 |
 | **Linux native shell = egui** | Ship egui as the Linux product UI; desktop integration via packaging (#231), not a second GTK/Qt host — see [Native shells](#native-shells-351) |
-| **Windows native shell deferred** | Ship egui today; future thin WinUI 3 / Win32 host over `host_api` only if menus/a11y demand it — see [Native shells](#native-shells-351) |
+| **Windows native shell deferred** | Ship egui today; classic Win32 `windows_shell` vertical slice in-tree ([WINDOWS_NATIVE.md](WINDOWS_NATIVE.md)); WinUI later if needed — see [Native shells](#native-shells-351) |
 
 ## Native shells (#351)
 
@@ -96,7 +96,8 @@ Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / i
 
 - Accuracy stays in Rust (`machine` / `ula` / `z80` / …). Native shells are **thin adapters** over `host_api` / `control_plane` — same pattern as SpecChumMac.
 - Cross-platform **egui** (`crates/app`) remains the CI baseline and the fallback host everywhere a native shell is absent or incomplete.
-- **GUI parity:** Agent Debug HTTP, inspect/status, media, hardware attach, and prefs semantics must match across egui and each native shell (see `.cursor/rules/gui-app-parity.mdc`). Do not ship “egui-only” agent routes.
+- **Feature parity (mandatory):** Agent Debug HTTP, inspect/status, media, hardware attach, and prefs **semantics** must match across egui and each native shell (see `.cursor/rules/gui-app-parity.mdc`). Do not ship “egui-only” agent routes or invent host-only product features.
+- **Chrome may follow platform HIG:** SwiftUI/AppKit on macOS, classic Win32 / Fluent on Windows, egui conventions on Linux — menus, spacing, window chrome, and shortcut modifiers (⌘ vs Ctrl) may differ. Make product capabilities as similar as possible; do not force one OS’s look onto another.
 - Living-room display mode stays opt-in where Metal/wgpu allow; SpecChumMac already links the living_room staticlib (display defaults off).
 
 ### macOS — first-class native shell (done)
@@ -121,17 +122,18 @@ Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** 
 
 **Today:** Windows releases ship the **egui** portable `.zip` and Inno Setup installer — that is the supported Windows product UI.
 
-**If/when a native Windows shell is justified**, use the same thin-host architecture as SpecChumMac:
+**Native vertical slice (in-tree):** classic **Win32** host `crates/windows_shell` (`spec_chum_windows`) over `host_api` — window, framebuffer blit, File/Tape menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP. Docs: [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md). Opt-in CI job `windows-shell`. egui remains the release primary until packaging deliberately switches.
+
+**If/when a richer native Windows shell is justified**, keep the same thin-host architecture as SpecChumMac:
 
 | Choice | Notes |
 | --- | --- |
-| **Preferred spike** | **WinUI 3** (or classic Win32) window + menus/file dialogs, calling `host_api` `sc_*` for machine/session — no webview, no Tauri |
+| **Current spike** | **Classic Win32** Rust host (`windows` crate) + `host_api` — no webview, no Tauri |
+| **Provisional later** | **WinUI 3** chrome if menus/a11y need XAML; still call `host_api` / shared session |
 | **Not preferred** | Win32+webview / Electron-style hosts (extra IPC on the frame path) |
 | **Out of scope here** | Replacing egui in CI; living-room as the Windows default |
 
-Vertical slice when started: native window, framebuffer present, tape/snapshot open, keyboard → matrix, audio path, Agent Debug HTTP parity with egui. Builds must not break Linux/macOS gates (opt-in CI job is fine).
-
-Until that slice lands, “Windows native shell” in [#351](https://github.com/mward-sudo/spec_chum/issues/351) means **documented intent**, not an unfinished second app in-tree.
+Vertical slice checklist: native window, framebuffer present, tape/snapshot open, keyboard → matrix, audio path, Agent Debug HTTP embed. Builds must not break Linux/macOS gates (opt-in CI job is fine).
 
 ### Relationship to packaging
 

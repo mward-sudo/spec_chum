@@ -290,7 +290,7 @@ Pause / Play hold at LD-BYTES works in Experience mode.
 ## Not in this slice (still egui-only or follow-ups)
 
 - Beta UI polish beyond current Hardware menu parity
-- Windows / Linux native-shell strategy and decisions: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351) ([#351](https://github.com/mward-sudo/spec_chum/issues/351)). Linux ships egui as the product UI; Windows stays egui until a WinUI/`host_api` vertical slice lands.
+- Windows / Linux native-shell strategy and decisions: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351) ([#351](https://github.com/mward-sudo/spec_chum/issues/351)). Linux ships egui as the product UI; Windows ships egui in releases and has an optional Win32 vertical slice — [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md).
 
 ## CI (`macos-shell` / `living-room` — [#68](https://github.com/mward-sudo/spec_chum/issues/68) / [#146](https://github.com/mward-sudo/spec_chum/issues/146))
 
