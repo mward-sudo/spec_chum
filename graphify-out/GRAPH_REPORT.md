@@ -6,7 +6,7 @@
 
 ## Summary
 - 4632 nodes · 12602 edges · 212 communities (167 shown, 36 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 455 edges (avg confidence: 0.84)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 449 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
@@ -236,10 +236,10 @@
   AGENTS.md → docs/AGENT_DEBUG_API.md
 - `Agent Debug HTTP API` --references--> `control_plane crate`  [EXTRACTED]
   docs/AGENT_DEBUG_API.md → AGENTS.md
-- `.statusFooterMessageIsError` --references--> `HostBridge`  [INFERRED]
-  apps/macos/Sources/SpecChumMac/ContentView.swift → apps/macos/Sources/SpecChumMac/HostBridge.swift
-- `.statusFooterShowsHostStatus` --references--> `HostBridge`  [INFERRED]
-  apps/macos/Sources/SpecChumMac/ContentView.swift → apps/macos/Sources/SpecChumMac/HostBridge.swift
+- `.statusFooterMessageIsError` --references--> `HostBridge`  [EXTRACTED]
+  apps/macos/Sources/SpecChumMac/ContentView.swift → apps/macos/Sources/SpecChumMac/HostBridge.swift (verified #345)
+- `.statusFooterShowsHostStatus` --references--> `HostBridge`  [EXTRACTED]
+  apps/macos/Sources/SpecChumMac/ContentView.swift → apps/macos/Sources/SpecChumMac/HostBridge.swift (verified #345)
 - `exec_main()` --calls--> `add16()`  [INFERRED]
   crates/z80/src/opcodes.rs → crates/z80/src/flags.rs
 
@@ -935,7 +935,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `Machine` connect `Machine` to `Cpu`, `.step_once`, `Ula48`, `custom_loader_matrix_models_instant_and_ear`, `rzx_replay_applies_keyboard_and_kempston`, `.new_48k`, `joystick.rs`, `.attach_multiface`, `DivMmc`, `TapeLoadOptions`, `Kempston`, `Bus48`, `Debugger`, `machine/src/lib.rs`, `BusPlus3`, `Ay8912`, `KempstonMouse`?**
   _High betweenness centrality (0.166) - this node is a cross-community bridge._
 - **Are the 6 inferred relationships involving `HostBridge` (e.g. with `.livingRoomToolbar` and `.statusFooterMessageIsError`) actually correct?**
-  _`HostBridge` has 6 INFERRED edges - model-reasoned connections that need verification._
+  _**Verified correct (#345):** all six were real SpecChumMac ownership / `host.` uses; promoted to EXTRACTED. Audit: `graphify-out/audits/hostbridge-inferred-edges.md`._
 - **What connects `PackageDescription`, `Notification.Name`, `.statusFooterTapeName` to the rest of the system?**
   _181 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `host_api/src/ffi.rs` be split into smaller, more focused modules?**

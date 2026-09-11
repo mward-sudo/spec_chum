@@ -194453,48 +194453,52 @@
       "target": "apps_macos_sources_specchummac_hostbridge_hostbridge",
       "relation": "references",
       "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/ContentView.swift",
       "source_location": "L168",
-      "weight": 1.0
+      "weight": 1.0,
+      "_audit": "verified_correct_#345"
     },
     {
       "source": "apps_macos_sources_specchummac_contentview_contentview_statusfootermessageiserror",
       "target": "apps_macos_sources_specchummac_hostbridge_hostbridge",
       "relation": "references",
       "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/ContentView.swift",
       "source_location": "L336",
-      "weight": 1.0
+      "weight": 1.0,
+      "_audit": "verified_correct_#345"
     },
     {
       "source": "apps_macos_sources_specchummac_contentview_contentview_statusfootershowshoststatus",
       "target": "apps_macos_sources_specchummac_hostbridge_hostbridge",
       "relation": "references",
       "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/ContentView.swift",
       "source_location": "L349",
-      "weight": 1.0
+      "weight": 1.0,
+      "_audit": "verified_correct_#345"
     },
     {
       "source": "apps_macos_sources_specchummac_specchummacapp_specchummacapp_body",
       "target": "apps_macos_sources_specchummac_hostbridge_hostbridge",
       "relation": "references",
       "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/SpecChumMacApp.swift",
       "source_location": "L67",
-      "weight": 1.0
+      "weight": 1.0,
+      "_audit": "verified_correct_#345"
     },
     {
       "source": "apps_macos_sources_specchummac_contentview_contentview_body",
@@ -194789,12 +194793,13 @@
       "target": "apps_macos_sources_specchummac_tapeaudioplayer_tapeaudioplayer",
       "relation": "calls",
       "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge.swift",
       "source_location": "L387",
-      "weight": 1.0
+      "weight": 1.0,
+      "_audit": "verified_correct_#345"
     },
     {
       "source": "apps_macos_sources_specchummac_hostbridge_hostbridge_deinit",
@@ -195677,12 +195682,13 @@
       "target": "apps_macos_sources_specchummac_hostbridge_hostbridge",
       "relation": "calls",
       "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/SpecChumMacApp.swift",
       "source_location": "L8",
-      "weight": 1.0
+      "weight": 1.0,
+      "_audit": "verified_correct_#345"
     },
     {
       "source": "apps_macos_sources_specchummac_specchummacapp_specchummacapp_body",
