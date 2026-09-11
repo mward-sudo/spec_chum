@@ -3,7 +3,10 @@
 //! Mirrors [`app::keymap`] / [`spec_chum_host::keymap`] semantics: Ctrl → Symbol,
 //! Shift → Caps (unless punctuation owns Symbol), arrows → Caps cursor.
 
-use spec_chum_host::keymap::{Chord, CAPS, SYM};
+use spec_chum_host::keymap::Chord;
+
+#[cfg(test)]
+use spec_chum_host::keymap::{CAPS, SYM};
 
 /// Windows Virtual-Key codes used by the shell (subset of Winuser.h).
 pub mod vk {
