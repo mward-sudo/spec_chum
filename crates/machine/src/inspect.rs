@@ -227,11 +227,7 @@ impl Machine {
             } => {
                 let frame_t = bus.frame_t;
                 Inspect {
-                    model: if bus.disk_interface {
-                        Model::SpectrumPlus3
-                    } else {
-                        Model::SpectrumPlus2A
-                    },
+                    model: self.model(),
                     regs,
                     cpu_t,
                     frame_t,

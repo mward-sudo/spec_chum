@@ -7717,6 +7717,12 @@ mod tests {
             "expected +3e menu pixels, got {screen_nz} nonzero (PC={:04X})",
             cpu.regs.pc
         );
+        let snap = m.inspect();
+        assert_eq!(snap.model, Model::SpectrumPlus3e);
+        assert!(
+            snap.to_json().contains("\"model\":\"plus3e\""),
+            "inspect JSON must label +3e distinctly from stock +3"
+        );
     }
 
     #[test]

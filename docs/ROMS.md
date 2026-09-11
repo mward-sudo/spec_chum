@@ -37,7 +37,7 @@ README) and leave in-image copyright messages intact.
 
 ## Fetch inventory
 
-`./scripts/fetch_roms.sh` installs **40** distributable `.rom` files into
+`./scripts/fetch_roms.sh` installs **41** distributable `.rom` files into
 `roms/` (refs recorded in `roms/.zx-roms-ref` and `roms/.fuse-roms-ref`).
 Tracking: [#190](https://github.com/mward-sudo/spec_chum/issues/190) /
 licence matrix on [#188](https://github.com/mward-sudo/spec_chum/issues/188#issuecomment-5465132775).
