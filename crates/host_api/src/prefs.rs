@@ -134,6 +134,7 @@ pub fn pref_model_slug(model: PrefModel) -> &'static str {
         PrefModel::SpectrumPlus2 => "spectrum_plus2",
         PrefModel::SpectrumPlus2A => "spectrum_plus2_a",
         PrefModel::SpectrumPlus3 => "spectrum_plus3",
+        PrefModel::SpectrumPlus3e => "spectrum_plus3e",
         PrefModel::Pentagon128 => "pentagon128",
         PrefModel::TimexTC2048 => "timex_tc2048",
         PrefModel::TimexTS2068 => "timex_ts2068",
@@ -347,6 +348,7 @@ pub enum PrefModel {
     SpectrumPlus2,
     SpectrumPlus2A,
     SpectrumPlus3,
+    SpectrumPlus3e,
     Pentagon128,
     TimexTC2048,
     TimexTS2068,
@@ -354,13 +356,14 @@ pub enum PrefModel {
 
 impl PrefModel {
     /// Canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
         Self::SpectrumPlus2,
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
+        Self::SpectrumPlus3e,
         Self::Pentagon128,
         Self::TimexTC2048,
         Self::TimexTS2068,
@@ -375,6 +378,7 @@ impl PrefModel {
             Model::SpectrumPlus2 => Self::SpectrumPlus2,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
+            Model::SpectrumPlus3e => Self::SpectrumPlus3e,
             Model::Pentagon128 => Self::Pentagon128,
             Model::TimexTC2048 => Self::TimexTC2048,
             Model::TimexTS2068 => Self::TimexTS2068,
@@ -395,6 +399,7 @@ impl PrefModel {
             Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
+            Self::SpectrumPlus3e => Model::SpectrumPlus3e,
             Self::Pentagon128 => Model::Pentagon128,
             Self::TimexTC2048 => Model::TimexTC2048,
             Self::TimexTS2068 => Model::TimexTS2068,
@@ -410,6 +415,7 @@ impl PrefModel {
             Self::SpectrumPlus2 => ModelId::SpectrumPlus2,
             Self::SpectrumPlus2A => ModelId::SpectrumPlus2A,
             Self::SpectrumPlus3 => ModelId::SpectrumPlus3,
+            Self::SpectrumPlus3e => ModelId::SpectrumPlus3e,
             Self::Pentagon128 => ModelId::Pentagon128,
             Self::TimexTC2048 => ModelId::TimexTC2048,
             Self::TimexTS2068 => ModelId::TimexTS2068,
@@ -774,6 +780,7 @@ mod tests {
             (PrefModel::Spectrum48, "spectrum48"),
             (PrefModel::SpectrumPlus2, "spectrum_plus2"),
             (PrefModel::SpectrumPlus2A, "spectrum_plus2_a"),
+            (PrefModel::SpectrumPlus3e, "spectrum_plus3e"),
             (PrefModel::Pentagon128, "pentagon128"),
         ];
         for (model, want) in cases {

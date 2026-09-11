@@ -280,5 +280,6 @@ mod tests {
         assert_eq!(model_label(ModelId::SpectrumPlus2), "+2");
         assert_eq!(model_label(ModelId::SpectrumPlus2A), "+2A");
         assert_eq!(model_label(ModelId::SpectrumPlus3), "+3");
+        assert_eq!(model_label(ModelId::SpectrumPlus3e), "+3e");
     }
 }

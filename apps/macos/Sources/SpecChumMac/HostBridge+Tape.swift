@@ -186,7 +186,7 @@ extension HostBridge {
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
                 : "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan"
-        case .spectrum128, .spectrumPlus2, .spectrumPlus3, .pentagon128:
+        case .spectrum128, .spectrumPlus2, .spectrumPlus3, .spectrumPlus3e, .pentagon128:
             keyScript = LoadKeyScript.loadQuotes128OrPlus3(withCode: withCode)
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"

@@ -63,6 +63,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
     case spectrumPlus2 = "spectrum_plus2"
     case spectrumPlus2A = "spectrum_plus2_a"
     case spectrumPlus3 = "spectrum_plus3"
+    case spectrumPlus3e = "spectrum_plus3e"
     case pentagon128 = "pentagon128"
     case timexTC2048 = "timex_tc2048"
     case timexTS2068 = "timex_ts2068"
@@ -78,6 +79,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
         case .spectrumPlus2: .spectrumPlus2
         case .spectrumPlus2A: .spectrumPlus2A
         case .spectrumPlus3: .spectrumPlus3
+        case .spectrumPlus3e: .spectrumPlus3e
         case .pentagon128: .pentagon128
         case .timexTC2048: .timexTC2048
         case .timexTS2068: .timexTS2068
@@ -94,6 +96,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
         case .spectrumPlus2: .spectrumPlus2
         case .spectrumPlus2A: .spectrumPlus2A
         case .spectrumPlus3: .spectrumPlus3
+        case .spectrumPlus3e: .spectrumPlus3e
         case .pentagon128: .pentagon128
         case .timexTC2048: .timexTC2048
         case .timexTS2068: .timexTS2068
@@ -154,7 +157,7 @@ struct HardwareCompatFlags {
             return HardwareCompatFlags(
                 multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: true
             )
-        case .spectrumPlus2A, .spectrumPlus3:
+        case .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e:
             return HardwareCompatFlags(
                 multiface: false, divmmc: false, interface1: false, beta: false, ayStereo: true
             )

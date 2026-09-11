@@ -125,6 +125,9 @@ mkdir -p "$ROM_DIR/plus3e"
 for name in plus3e-0.rom plus3e-1.rom plus3e-2.rom plus3e-3.rom; do
   copy_rom "$FUSE_SRC/$name" "$ROM_DIR/plus3e/$name"
 done
+# Hosts load a single 64 KiB image (same layout as stock plus3.rom).
+cat "$ROM_DIR/plus3e/plus3e-0.rom" "$ROM_DIR/plus3e/plus3e-1.rom"   "$ROM_DIR/plus3e/plus3e-2.rom" "$ROM_DIR/plus3e/plus3e-3.rom"   > "$ROM_DIR/plus3e/plus3e.rom"
+echo "  ok plus3e/plus3e.rom (65536 bytes, concatenated banks)"
 
 echo "Datel DISCiPLE / +D (https://www.shadowmagic.org.uk/spectrum/datel.html)"
 mkdir -p "$ROM_DIR/peripherals/datel"
@@ -179,7 +182,7 @@ count_managed_roms() {
   done
   echo "$n"
 }
-EXPECTED_ROM_COUNT=40
+EXPECTED_ROM_COUNT=41
 ACTUAL="$(count_managed_roms)"
 if [[ "$ACTUAL" -eq "$EXPECTED_ROM_COUNT" ]]; then
   echo "ok: ${ACTUAL} managed ROM files (expected ${EXPECTED_ROM_COUNT})"

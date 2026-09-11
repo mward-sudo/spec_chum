@@ -57,7 +57,9 @@ pub fn expected_rom_bytes(model: PrefModel) -> usize {
         | PrefModel::TimexTC2048
         | PrefModel::TimexTS2068 => 16 * 1024,
         PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 | PrefModel::Pentagon128 => 32 * 1024,
-        PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 => 64 * 1024,
+        PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 | PrefModel::SpectrumPlus3e => {
+            64 * 1024
+        }
     }
 }
 
@@ -185,6 +187,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::SpectrumPlus2
                 | Model::SpectrumPlus2A
                 | Model::SpectrumPlus3
+                | Model::SpectrumPlus3e
                 | Model::Pentagon128
                 | Model::TimexTS2068
         ),
@@ -419,6 +422,7 @@ fn build_machine(
         Model::SpectrumPlus2 => Machine::new_plus2(rom),
         Model::SpectrumPlus2A => Machine::new_plus2a(rom),
         Model::SpectrumPlus3 => Machine::new_plus3(rom),
+        Model::SpectrumPlus3e => Machine::new_plus3e(rom),
         Model::Pentagon128 => {
             let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
                 .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;

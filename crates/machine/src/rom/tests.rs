@@ -21,11 +21,24 @@ fn all_models_ui_order() {
             Model::SpectrumPlus2,
             Model::SpectrumPlus2A,
             Model::SpectrumPlus3,
+            Model::SpectrumPlus3e,
             Model::Pentagon128,
             Model::TimexTC2048,
             Model::TimexTS2068,
         ]
     );
+}
+
+#[test]
+fn plus3e_uses_fetched_concatenated_rom() {
+    assert!(!requires_user_rom(Model::SpectrumPlus3e));
+    assert_eq!(
+        rom_candidates(Model::SpectrumPlus3e),
+        &["roms/plus3e/plus3e.rom"]
+    );
+    assert_eq!(expected_main_rom_bytes(Model::SpectrumPlus3e), 64 * 1024);
+    assert_eq!(model_label(Model::SpectrumPlus3e), "+3e");
+    assert!(model_title(Model::SpectrumPlus3e).contains("+3e"));
 }
 
 #[test]

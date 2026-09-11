@@ -37,7 +37,7 @@ README) and leave in-image copyright messages intact.
 
 ## Fetch inventory
 
-`./scripts/fetch_roms.sh` installs **40** distributable `.rom` files into
+`./scripts/fetch_roms.sh` installs **41** distributable `.rom` files into
 `roms/` (refs recorded in `roms/.zx-roms-ref` and `roms/.fuse-roms-ref`).
 Tracking: [#190](https://github.com/mward-sudo/spec_chum/issues/190) /
 licence matrix on [#188](https://github.com/mward-sudo/spec_chum/issues/188#issuecomment-5465132775).
@@ -79,7 +79,8 @@ Sparse checkout **excludes** `peripherals/Interface1` and `zx80-81` (see
 
 | Destination | Grant | Notes |
 | --- | --- | --- |
-| `roms/plus3e/plus3e-0.rom` … `plus3e-3.rom` | Amstrad modify/distribute + Garry Lancaster free distribution; Fuse ships | Optional enhanced +3 ([#194](https://github.com/mward-sudo/spec_chum/issues/194)) |
+| `roms/plus3e/plus3e-0.rom` … `plus3e-3.rom` | Amstrad modify/distribute + Garry Lancaster free distribution; Fuse ships | Bank sources (Fuse layout) |
+| `roms/plus3e/plus3e.rom` | Same (concatenated by `fetch_roms.sh`) | **Selectable model** `Spectrum +3e (enhanced)` ([#194](https://github.com/mward-sudo/spec_chum/issues/194)); same +3 hardware / disk path as stock +3, enhanced firmware (not Amstrad stock) |
 
 ### Datel +D / DISCiPLE — Fuse `disciple.rom`, `plusd.rom`
 
@@ -139,6 +140,18 @@ Phase 1 (TC2048) + Phase 2a (TS2068 smoke-boot / horizontal MMU / AY ports) are
 wired. Display supports Sinclair **256×192** plus Timex **alt display file**,
 **hi-colour (8×1)**, and **512×192 hi-res** (SCLD modes 4–7). See [TIMEX.md](TIMEX.md).
 
+### +3e — fetched path (#194)
+
+After `./scripts/fetch_roms.sh`:
+
+| File | Size | Notes |
+| --- | --- | --- |
+| `roms/plus3e/plus3e.rom` | 64 KiB | Concatenated Fuse `plus3e-0`…`3`; picker label **Spectrum +3e (enhanced)** |
+
+Same Amstrad +3 gate array and `µPD765` disk path as stock +3. Credit **Amstrad**
+(shared ROM bytes) and **Garry Lancaster** (enhancements). Do not treat this preset as
+stock Amstrad +3.
+
 Peripheral attach UX: Multiface ([MULTIFACE.md](MULTIFACE.md)), Interface 1,
 Beta, DivMMC — see GitHub issues #138–#140 / #168 / #169.
 
@@ -149,7 +162,7 @@ After `./scripts/fetch_roms.sh`:
 ```bash
 # Managed fetch set (ignores user-provided dumps you may add under roms/)
 find roms/{alternate,128,plus2,plus2a,plus3,fuse-16k,timex,opense,plus3e,peripherals} \
-  -name '*.rom' 2>/dev/null | wc -l   # expect 39, plus roms/spec48.rom → 40 total
+  -name '*.rom' 2>/dev/null | wc -l   # expect 40, plus roms/spec48.rom → 41 total
 cat roms/.zx-roms-ref roms/.fuse-roms-ref
 ```
 

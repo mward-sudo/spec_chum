@@ -227,11 +227,7 @@ impl Machine {
             } => {
                 let frame_t = bus.frame_t;
                 Inspect {
-                    model: if bus.disk_interface {
-                        Model::SpectrumPlus3
-                    } else {
-                        Model::SpectrumPlus2A
-                    },
+                    model: self.model(),
                     regs,
                     cpu_t,
                     frame_t,
@@ -391,6 +387,7 @@ impl Inspect {
             Model::SpectrumPlus2 => "plus2",
             Model::SpectrumPlus2A => "plus2a",
             Model::SpectrumPlus3 => "plus3",
+            Model::SpectrumPlus3e => "plus3e",
             Model::Pentagon128 => "pentagon128",
             Model::TimexTC2048 => "timex_tc2048",
             Model::TimexTS2068 => "timex_ts2068",

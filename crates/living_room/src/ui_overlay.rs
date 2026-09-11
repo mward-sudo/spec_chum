@@ -25,6 +25,7 @@ enum ChromeAction {
     ModelPlus2,
     ModelPlus2A,
     ModelPlus3,
+    ModelPlus3e,
     ModelPentagon,
 }
 
@@ -109,6 +110,7 @@ fn setup_ui(mut commands: Commands) {
                 chrome_button(bar, "+2", ChromeAction::ModelPlus2);
                 chrome_button(bar, "+2A", ChromeAction::ModelPlus2A);
                 chrome_button(bar, "+3", ChromeAction::ModelPlus3);
+                chrome_button(bar, "+3e", ChromeAction::ModelPlus3e);
                 chrome_button(bar, "Pent", ChromeAction::ModelPentagon);
             });
 
@@ -255,6 +257,9 @@ fn chrome_buttons(
                     }
                     ChromeAction::ModelPlus3 => {
                         select_model_if_rom(&mut host, ModelId::SpectrumPlus3);
+                    }
+                    ChromeAction::ModelPlus3e => {
+                        select_model_if_rom(&mut host, ModelId::SpectrumPlus3e);
                     }
                     ChromeAction::ModelPentagon => {
                         select_model_if_rom(&mut host, ModelId::Pentagon128);

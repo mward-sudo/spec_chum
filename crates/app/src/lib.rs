@@ -286,6 +286,7 @@ impl EmulatorSession {
             Model::SpectrumPlus2 => Ok(Machine::new_plus2(data)?),
             Model::SpectrumPlus2A => Ok(Machine::new_plus2a(data)?),
             Model::SpectrumPlus3 => Ok(Machine::new_plus3(data)?),
+            Model::SpectrumPlus3e => Ok(Machine::new_plus3e(data)?),
             Model::Spectrum128 => Ok(Machine::new_128k(data)?),
             Model::Pentagon128 => {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
@@ -636,6 +637,7 @@ impl EmulatorSession {
             Model::Spectrum128
             | Model::SpectrumPlus2
             | Model::SpectrumPlus3
+            | Model::SpectrumPlus3e
             | Model::Pentagon128 => KeyScript::load_quotes_128_or_plus3(with_code),
         });
         if pending_play {
@@ -1248,6 +1250,7 @@ impl SpecChumApp {
                         | Model::SpectrumPlus2
                         | Model::SpectrumPlus2A
                         | Model::SpectrumPlus3
+                        | Model::SpectrumPlus3e
                         | Model::Pentagon128
                         | Model::TimexTS2068
                 ) {
@@ -1466,6 +1469,7 @@ impl SpecChumApp {
                         | Model::SpectrumPlus2
                         | Model::SpectrumPlus2A
                         | Model::SpectrumPlus3
+                        | Model::SpectrumPlus3e
                         | Model::Pentagon128
                         | Model::TimexTS2068
                 ) {
@@ -2158,6 +2162,7 @@ impl SpecChumApp {
                                 | Model::SpectrumPlus2
                                 | Model::SpectrumPlus2A
                                 | Model::SpectrumPlus3
+                                | Model::SpectrumPlus3e
                                 | Model::Pentagon128
                                 | Model::TimexTS2068
                         ) {
@@ -2388,7 +2393,7 @@ impl SpecChumApp {
                             ui.label("DivMMC / IF1 / Beta: not on +2A/+3");
                         }
 
-                        if model == Model::SpectrumPlus3 {
+                        if model == Model::SpectrumPlus3 || model == Model::SpectrumPlus3e {
                             ui.separator();
                             ui.label("+3 disk: File → Open DSK…");
                         } else if model == Model::SpectrumPlus2A {
