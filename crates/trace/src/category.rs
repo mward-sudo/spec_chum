@@ -33,7 +33,7 @@ impl Category {
     }
 
     #[must_use]
-    pub(crate) const fn from_bits(bits: u64) -> Self {
+    pub const fn from_bits(bits: u64) -> Self {
         Self(bits)
     }
 
