@@ -85,6 +85,57 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 | Avoid Tauri/Dioxus-web for the machine loop | Extra process/IPC is the wrong complexity for a Spectrum core |
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
 | Optional **Bevy living-room** | Experimental immersion host; SpecChumMac links staticlib, display opt-in; keep out of default CI; #146 |
+| **Linux native shell = egui** | Ship egui as the Linux product UI; desktop integration via packaging (#231), not a second GTK/Qt host — see [Native shells](#native-shells-351) |
+| **Windows native shell deferred** | Ship egui today; future thin WinUI 3 / Win32 host over `host_api` only if menus/a11y demand it — see [Native shells](#native-shells-351) |
+
+## Native shells (#351)
+
+Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / installers stay on [#231](https://github.com/mward-sudo/spec_chum/issues/231) (and follow-ups); this section is **which chrome hosts the emulator**, not how archives are built.
+
+### Shared rules (all platforms)
+
+- Accuracy stays in Rust (`machine` / `ula` / `z80` / …). Native shells are **thin adapters** over `host_api` / `control_plane` — same pattern as SpecChumMac.
+- Cross-platform **egui** (`crates/app`) remains the CI baseline and the fallback host everywhere a native shell is absent or incomplete.
+- **GUI parity:** Agent Debug HTTP, inspect/status, media, hardware attach, and prefs semantics must match across egui and each native shell (see `.cursor/rules/gui-app-parity.mdc`). Do not ship “egui-only” agent routes.
+- Living-room display mode stays opt-in where Metal/wgpu allow; SpecChumMac already links the living_room staticlib (display defaults off).
+
+### macOS — first-class native shell (done)
+
+- **SpecChumMac** (`apps/macos`) is the primary macOS product shell and the GitHub Release `.dmg` app.
+- Driven by the `host_api` C ABI; docs and build path: [MACOS_NATIVE.md](MACOS_NATIVE.md).
+- egui remains available for source builds and as the Windows/Linux (and CI) host.
+
+### Linux — decision: egui *is* the native experience
+
+**Decision (2026-09):** do **not** build a separate GTK4 / Qt / iced-chrome Linux shell unless a concrete product need appears (a11y, desktop portal gaps, or user demand that egui cannot meet).
+
+Rationale:
+
+1. Release packages already ship the **egui** binary (`.tar.gz`, AppImage, `.deb`) with `.desktop` + icon under `packaging/linux/` ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
+2. A second Linux UI would be another full host to keep in parity with egui and SpecChumMac — the wrong trade for a small team focused on hardware accuracy.
+3. egui already covers framebuffer, menus, `rfd` file dialogs, audio (`cpal`), and headless tests used in CI.
+
+Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** concern, not a reason to fork the UI stack.
+
+### Windows — decision: ship egui; provisional native stack
+
+**Today:** Windows releases ship the **egui** portable `.zip` and Inno Setup installer — that is the supported Windows product UI.
+
+**If/when a native Windows shell is justified**, use the same thin-host architecture as SpecChumMac:
+
+| Choice | Notes |
+| --- | --- |
+| **Preferred spike** | **WinUI 3** (or classic Win32) window + menus/file dialogs, calling `host_api` `sc_*` for machine/session — no webview, no Tauri |
+| **Not preferred** | Win32+webview / Electron-style hosts (extra IPC on the frame path) |
+| **Out of scope here** | Replacing egui in CI; living-room as the Windows default |
+
+Vertical slice when started: native window, framebuffer present, tape/snapshot open, keyboard → matrix, audio path, Agent Debug HTTP parity with egui. Builds must not break Linux/macOS gates (opt-in CI job is fine).
+
+Until that slice lands, “Windows native shell” in [#351](https://github.com/mward-sudo/spec_chum/issues/351) means **documented intent**, not an unfinished second app in-tree.
+
+### Relationship to packaging
+
+Native shells, when ready, are what release packaging wraps. Packaging does **not** wait on Windows/Linux native shells: egui is already the wrapped primary on those OSes. See [RELEASE.md](RELEASE.md).
 
 ## Practical chrome rules (current shell)
 

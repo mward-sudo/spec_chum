@@ -23,8 +23,9 @@ a **`.dmg`** with an **Applications** folder shortcut, then publishes a
 **`.dmg.zip`** of that DMG ([#403](https://github.com/mward-sudo/spec_chum/issues/403);
 not the old secondary `.app` zip dropped in [#361](https://github.com/mward-sudo/spec_chum/issues/361)).
 This is the release-artifact switch from egui-on-macOS
-([#363](https://github.com/mward-sudo/spec_chum/issues/363)); cross-platform
-native shells remain [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+([#363](https://github.com/mward-sudo/spec_chum/issues/363)); Windows/Linux keep
+shipping egui (strategy: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351),
+[#351](https://github.com/mward-sudo/spec_chum/issues/351)).
 When Apple notary secrets are set, CI notarises and staples the **inner** `.dmg`
 before zipping — see signing table below
 ([#354](https://github.com/mward-sudo/spec_chum/issues/354),
