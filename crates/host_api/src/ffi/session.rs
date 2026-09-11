@@ -6,7 +6,7 @@ use std::ptr;
 use crate::handle::{SessionHandle, SessionInner};
 use crate::session::{HostSession, ModelId};
 
-use super::{clear_last_error, session_mut, set_last_error};
+use super::{clear_last_error, clear_output_snapshots, session_mut, set_last_error};
 
 /// Promote session for embedded agent HTTP. Returns 0 on success.
 #[no_mangle]
@@ -41,6 +41,7 @@ pub extern "C" fn sc_destroy(handle: *mut c_void) {
     if handle.is_null() {
         return;
     }
+    clear_output_snapshots();
     // SAFETY: handle from `sc_create`; unique ownership.
     drop(unsafe { Box::from_raw(handle.cast::<SessionHandle>()) });
 }

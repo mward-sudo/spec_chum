@@ -67,6 +67,13 @@ pub(super) fn heap_cstring(s: &str) -> *mut c_char {
     CString::new(s.replace('\0', "")).map_or(ptr::null_mut(), CString::into_raw)
 }
 
+/// Drop cached framebuffer / audio snapshots (call from [`sc_destroy`]).
+pub(super) fn clear_output_snapshots() {
+    FB_SNAPSHOT.with(|cell| cell.borrow_mut().clear());
+    FB_META.with(|meta| *meta.borrow_mut() = (0, 0, 0));
+    AUDIO_SNAPSHOT.with(|cell| cell.borrow_mut().clear());
+}
+
 // Re-export entry points so `host_api::ffi::sc_*` paths stay stable for Rust callers/tests.
 pub use audio::*;
 pub use config::*;
@@ -80,7 +87,6 @@ pub use status::*;
 pub use tape::*;
 pub use video::*;
 
-#[cfg(test)]
 #[cfg(test)]
 mod tests {
     use super::*;
