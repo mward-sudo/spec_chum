@@ -33,9 +33,9 @@ windows = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
-# Win32 window-proc / GDI / USERDATA require unsafe; each site has SAFETY notes.
+# Win32 FFI lives in `src/win32.rs` with a module-level `unsafe_code` allow.
 [lints.rust]
-unsafe_code = "allow"
+unsafe_code = "deny"
 missing_debug_implementations = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 

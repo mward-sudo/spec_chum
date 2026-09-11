@@ -213,7 +213,8 @@ pub fn apply_chord(set_key: &mut dyn FnMut(usize, u8, bool), chord: &Chord, pres
     }
 }
 
-/// Apply standalone modifiers (Caps / Sym).
+/// Apply standalone modifiers (Caps / Sym). Does not clear other matrix bits —
+/// callers should [`HostSession::clear_keys`] (or equivalent) first.
 pub fn apply_modifiers(
     set_key: &mut dyn FnMut(usize, u8, bool),
     shift: bool,
@@ -221,9 +222,6 @@ pub fn apply_modifiers(
     ctrl: bool,
     suppress_caps: bool,
 ) {
-    // Clear then re-apply so we don't leave sticky Caps/Sym.
-    set_key(CAPS.0, CAPS.1, false);
-    set_key(SYM.0, SYM.1, false);
     for &(row, bit) in &modifier_keys(shift, alt, ctrl, suppress_caps) {
         set_key(row, bit, true);
     }

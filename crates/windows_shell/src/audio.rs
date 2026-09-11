@@ -35,10 +35,10 @@ impl PcmRing {
     }
 
     fn pop_sample(&mut self) -> f32 {
+        let s = self.samples.pop_front().unwrap_or(0.0);
         if self.muted {
             return 0.0;
         }
-        let s = self.samples.pop_front().unwrap_or(0.0);
         (s * self.volume.clamp(0.0, 1.0)).clamp(-1.0, 1.0)
     }
 }

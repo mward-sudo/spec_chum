@@ -1,5 +1,7 @@
 //! Classic Win32 message-loop host (#351 vertical slice).
 
+#![allow(unsafe_code)] // Win32 window-proc / GDI / USERDATA — SAFETY at each site.
+
 use std::mem::{size_of, zeroed};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -71,6 +73,9 @@ struct AppState {
     bgra: Vec<u8>,
     status: String,
     last_frame: Instant,
+    /// Menu / Ctrl+O actions queued from `wnd_proc` so modal `rfd` dialogs
+    /// never run while `&mut AppState` is borrowed inside the window procedure.
+    pending_cmd: Option<usize>,
 }
 
 impl AppState {
@@ -111,12 +116,13 @@ impl AppState {
             bgra: Vec::new(),
             status: "Ready".into(),
             last_frame: Instant::now(),
+            pending_cmd: None,
         })
     }
 
     fn tick_frame(&mut self, hwnd: HWND) {
-        // Pace toward ~50 Hz Spectrum frames (catch up a little if behind).
-        let min_dt = Duration::from_millis(16);
+        // Pace toward ~50 Hz Spectrum frames (20 ms).
+        let min_dt = Duration::from_millis(20);
         if self.last_frame.elapsed() < min_dt {
             return;
         }
@@ -160,48 +166,46 @@ impl AppState {
     }
 
     fn paint(&mut self, hwnd: HWND) {
-        let (w, h) = self.host.with_mut(|s| (s.width(), s.height()));
-        if w == 0 || h == 0 || self.bgra.len() < w * h * 4 {
-            return;
-        }
-
-        // SAFETY: standard BeginPaint/EndPaint pair for our HWND.
+        // SAFETY: always pair BeginPaint/EndPaint for WM_PAINT, even when we skip blit.
         unsafe {
             let mut ps = PAINTSTRUCT::default();
             let hdc = BeginPaint(hwnd, &mut ps);
-            let mut client = RECT::default();
-            let _ = GetClientRect(hwnd, &mut client);
-            let cw = (client.right - client.left).max(1);
-            let ch = (client.bottom - client.top).max(1);
+            let (w, h) = self.host.with_mut(|s| (s.width(), s.height()));
+            if w > 0 && h > 0 && self.bgra.len() >= w * h * 4 {
+                let mut client = RECT::default();
+                let _ = GetClientRect(hwnd, &mut client);
+                let cw = (client.right - client.left).max(1);
+                let ch = (client.bottom - client.top).max(1);
 
-            let mut info = BITMAPINFO {
-                bmiHeader: BITMAPINFOHEADER {
-                    biSize: size_of::<BITMAPINFOHEADER>() as u32,
-                    biWidth: w as i32,
-                    biHeight: -(h as i32), // top-down
-                    biPlanes: 1,
-                    biBitCount: 32,
-                    biCompression: BI_RGB.0,
+                let info = BITMAPINFO {
+                    bmiHeader: BITMAPINFOHEADER {
+                        biSize: size_of::<BITMAPINFOHEADER>() as u32,
+                        biWidth: w as i32,
+                        biHeight: -(h as i32), // top-down
+                        biPlanes: 1,
+                        biBitCount: 32,
+                        biCompression: BI_RGB.0,
+                        ..zeroed()
+                    },
                     ..zeroed()
-                },
-                ..zeroed()
-            };
+                };
 
-            let _ = StretchDIBits(
-                hdc,
-                0,
-                0,
-                cw,
-                ch,
-                0,
-                0,
-                w as i32,
-                h as i32,
-                Some(self.bgra.as_ptr().cast()),
-                &info,
-                DIB_RGB_COLORS,
-                SRCCOPY,
-            );
+                let _ = StretchDIBits(
+                    hdc,
+                    0,
+                    0,
+                    cw,
+                    ch,
+                    0,
+                    0,
+                    w as i32,
+                    h as i32,
+                    Some(self.bgra.as_ptr().cast()),
+                    &info,
+                    DIB_RGB_COLORS,
+                    SRCCOPY,
+                );
+            }
             let _ = EndPaint(hwnd, &ps);
         }
     }
@@ -215,7 +219,6 @@ impl AppState {
         let ctrl = key_down(VK_CONTROL.0);
         let alt = key_down(VK_MENU.0);
 
-        // Clear matrix then re-apply held keys + modifiers.
         let _ = self.host.with_mut(HostSession::clear_keys);
 
         let mut suppress = false;
@@ -224,13 +227,18 @@ impl AppState {
             if suppresses_modifier_caps(vk) {
                 suppress = true;
             }
+        }
+        // Modifiers first, then chords (arrows/punct may also hold Caps/Sym).
+        {
+            let mut apply = |row, bit, pressed| self.set_key_matrix(row, bit, pressed);
+            apply_modifiers(&mut apply, shift, alt, ctrl, suppress);
+        }
+        for &vk in &held {
             if let Some(ch) = chord_for_vk(vk, shift) {
                 let mut apply = |row, bit, pressed| self.set_key_matrix(row, bit, pressed);
                 apply_chord(&mut apply, &ch, true);
             }
         }
-        let mut apply = |row, bit, pressed| self.set_key_matrix(row, bit, pressed);
-        apply_modifiers(&mut apply, shift, alt, ctrl, suppress);
     }
 
     fn on_key(&mut self, vk: u16, pressed: bool) {
@@ -303,16 +311,27 @@ impl AppState {
         );
     }
 
-    fn on_command(&mut self, id: usize) {
+    fn queue_command(&mut self, id: usize) {
+        // Exit can run immediately (no modal dialog).
+        if id == IDM_FILE_EXIT {
+            unsafe {
+                PostQuitMessage(0);
+            }
+            return;
+        }
+        self.pending_cmd = Some(id);
+    }
+
+    fn drain_pending_command(&mut self) {
+        let Some(id) = self.pending_cmd.take() else {
+            return;
+        };
         match id {
             IDM_FILE_OPEN_TAPE => self.open_tape(),
             IDM_FILE_OPEN_SNAPSHOT => self.open_snapshot(),
             IDM_FILE_OPEN_RZX => self.open_rzx(),
             IDM_FILE_OPEN_DSK => self.open_dsk(),
             IDM_FILE_OPEN_TRD => self.open_trd(),
-            IDM_FILE_EXIT => unsafe {
-                PostQuitMessage(0);
-            },
             IDM_TAPE_PLAY => {
                 let _ = self.host.with_mut(HostSession::play_tape);
             }
@@ -416,7 +435,7 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
             if !state_ptr.is_null() {
                 let id = (wparam.0 as usize) & 0xffff;
                 let state = unsafe { &mut *state_ptr };
-                state.on_command(id);
+                state.queue_command(id);
             }
             LRESULT(0)
         }
@@ -426,7 +445,7 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
                 let state = unsafe { &mut *state_ptr };
                 // Windows HIG: Ctrl+O opens tape (Cmd+O on macOS SpecChumMac).
                 if vk == 0x4F && key_down(keymap::vk::CONTROL) {
-                    state.open_tape();
+                    state.queue_command(IDM_FILE_OPEN_TAPE);
                 } else {
                     state.on_key(vk, true);
                 }
@@ -517,6 +536,8 @@ pub fn run() -> Result<()> {
             if state_ptr.is_null() {
                 break;
             }
+            // Drain modal file opens outside wnd_proc (no re-entrant borrow).
+            (*state_ptr).drain_pending_command();
             (*state_ptr).tick_frame(hwnd);
             std::thread::sleep(Duration::from_millis(1));
         }
