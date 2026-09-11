@@ -28,6 +28,8 @@ pub enum ModelId {
     TimexTC2048 = 7,
     /// Timex TS2068 / TC2068 (#192 Phase 2a).
     TimexTS2068 = 8,
+    /// Spectrum +3e enhanced firmware (#194).
+    SpectrumPlus3e = 9,
 }
 
 impl ModelId {
@@ -43,6 +45,7 @@ impl ModelId {
             6 => Some(Self::Pentagon128),
             7 => Some(Self::TimexTC2048),
             8 => Some(Self::TimexTS2068),
+            9 => Some(Self::SpectrumPlus3e),
             _ => None,
         }
     }
@@ -55,6 +58,7 @@ impl ModelId {
             Self::Spectrum128 => Model::Spectrum128,
             Self::SpectrumPlus2 => Model::SpectrumPlus2,
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
+            Self::SpectrumPlus3e => Model::SpectrumPlus3e,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::Pentagon128 => Model::Pentagon128,
             Self::TimexTC2048 => Model::TimexTC2048,
@@ -70,6 +74,7 @@ impl ModelId {
             Model::Spectrum128 => Self::Spectrum128,
             Model::SpectrumPlus2 => Self::SpectrumPlus2,
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
+            Model::SpectrumPlus3e => Self::SpectrumPlus3e,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::Pentagon128 => Self::Pentagon128,
             Model::TimexTC2048 => Self::TimexTC2048,
@@ -78,13 +83,14 @@ impl ModelId {
     }
 
     /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
         Self::SpectrumPlus2,
         Self::SpectrumPlus2A,
         Self::SpectrumPlus3,
+        Self::SpectrumPlus3e,
         Self::Pentagon128,
         Self::TimexTC2048,
         Self::TimexTS2068,
@@ -755,6 +761,7 @@ impl HostSession {
             ModelId::Spectrum128 => Machine::new_128k(rom),
             ModelId::SpectrumPlus2 => Machine::new_plus2(rom),
             ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
+            ModelId::SpectrumPlus3e => Machine::new_plus3e(rom),
             ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
             ModelId::Pentagon128 => {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
@@ -1352,7 +1359,8 @@ impl HostSession {
                 machine::Model::Spectrum128
                 | machine::Model::SpectrumPlus2
                 | machine::Model::SpectrumPlus2A
-                | machine::Model::SpectrumPlus3 => 70_908,
+                | machine::Model::SpectrumPlus3
+                | machine::Model::SpectrumPlus3e => 70_908,
                 machine::Model::Pentagon128 => 71_680,
             };
             let (w, h) = m.framebuffer_dims(self.with_border);
@@ -2614,11 +2622,13 @@ mod tests {
         assert_eq!(ModelId::from_u32(6), Some(ModelId::Pentagon128));
         assert_eq!(ModelId::from_u32(7), Some(ModelId::TimexTC2048));
         assert_eq!(ModelId::from_u32(8), Some(ModelId::TimexTS2068));
-        assert_eq!(ModelId::from_u32(9), None);
+        assert_eq!(ModelId::from_u32(9), Some(ModelId::SpectrumPlus3e));
+        assert_eq!(ModelId::from_u32(10), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
         assert_eq!(ModelId::SpectrumPlus2.to_model(), Model::SpectrumPlus2);
         assert_eq!(ModelId::Spectrum16K.to_model(), Model::Spectrum16K);
         assert_eq!(ModelId::SpectrumPlus2A.to_model(), Model::SpectrumPlus2A);
+        assert_eq!(ModelId::SpectrumPlus3e.to_model(), Model::SpectrumPlus3e);
     }
 
     #[test]

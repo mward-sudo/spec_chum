@@ -164,6 +164,7 @@ fn load_program_tap(machine: &mut Machine, tap: &Path) {
         | Model::SpectrumPlus2
         | Model::SpectrumPlus2A
         | Model::SpectrumPlus3
+        | Model::SpectrumPlus3e
         | Model::Pentagon128
         | Model::TimexTC2048
         | Model::TimexTS2068 => {
@@ -308,7 +309,9 @@ fn new_model(model: Model) -> Option<Machine> {
             Machine::new_plus2a(&rom).ok()
         }
         // System-test TAPs target Sinclair UK machines; other models are out of scope here.
-        Model::Pentagon128 | Model::TimexTC2048 | Model::TimexTS2068 => None,
+        Model::SpectrumPlus3e | Model::Pentagon128 | Model::TimexTC2048 | Model::TimexTS2068 => {
+            None
+        }
     }
 }
 

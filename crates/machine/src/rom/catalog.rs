@@ -13,6 +13,7 @@ pub fn rom_candidates(model: Model) -> &'static [&'static str] {
         Model::SpectrumPlus2 => &["roms/plus2/plus2uk.rom"],
         Model::SpectrumPlus2A => &["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"],
         Model::SpectrumPlus3 => &["roms/plus3/plus3.rom"],
+        Model::SpectrumPlus3e => &["roms/plus3e/plus3e.rom"],
         Model::Pentagon128 => &["roms/pentagon/pentagon.rom", "roms/pentagon/128p.rom"],
     }
 }
@@ -52,7 +53,7 @@ pub fn expected_main_rom_bytes(model: Model) -> usize {
             16 * 1024
         }
         Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 => 32 * 1024,
-        Model::SpectrumPlus2A | Model::SpectrumPlus3 => 64 * 1024,
+        Model::SpectrumPlus2A | Model::SpectrumPlus3 | Model::SpectrumPlus3e => 64 * 1024,
     }
 }
 
@@ -84,6 +85,7 @@ pub fn model_label(model: Model) -> &'static str {
         Model::SpectrumPlus2 => "+2",
         Model::SpectrumPlus2A => "+2A",
         Model::SpectrumPlus3 => "+3",
+        Model::SpectrumPlus3e => "+3e",
         Model::Pentagon128 => "Pentagon",
         Model::TimexTC2048 => "TC2048",
         Model::TimexTS2068 => "TS2068",
@@ -100,6 +102,7 @@ pub fn model_title(model: Model) -> &'static str {
         Model::SpectrumPlus2 => "Spectrum +2 (grey)",
         Model::SpectrumPlus2A => "Spectrum +2A",
         Model::SpectrumPlus3 => "Spectrum +3",
+        Model::SpectrumPlus3e => "Spectrum +3e (enhanced)",
         Model::Pentagon128 => "Pentagon 128",
         Model::TimexTC2048 => "Timex TC2048",
         Model::TimexTS2068 => "Timex TS2068",
@@ -107,13 +110,14 @@ pub fn model_title(model: Model) -> &'static str {
 }
 
 /// Canonical UI order for every host picker / menu.
-pub const ALL_MODELS: [Model; 9] = [
+pub const ALL_MODELS: [Model; 10] = [
     Model::Spectrum16K,
     Model::Spectrum48,
     Model::Spectrum128,
     Model::SpectrumPlus2,
     Model::SpectrumPlus2A,
     Model::SpectrumPlus3,
+    Model::SpectrumPlus3e,
     Model::Pentagon128,
     Model::TimexTC2048,
     Model::TimexTS2068,

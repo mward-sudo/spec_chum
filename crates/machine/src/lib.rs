@@ -407,6 +407,8 @@ pub enum Model {
     SpectrumPlus2A,
     /// Amstrad +3 (same gate array with `µPD765` — menu Loader is +3DOS disk).
     SpectrumPlus3,
+    /// Garry Lancaster +3e enhanced firmware on +3 hardware (#194).
+    SpectrumPlus3e,
     /// Pentagon 128 clone (#188 Phase B / #193): user ROM + TR-DOS, distinct timing.
     Pentagon128,
     /// Timex TC2048 (#192 Phase 1): 48K-class + SCLD ports, distributable ROM.
@@ -416,10 +418,19 @@ pub enum Model {
 }
 
 impl Model {
-    /// +2A or +3 (shared Amstrad gate array).
+    /// +2A, +3, or +3e (shared Amstrad gate array).
     #[must_use]
     pub fn is_amstrad_plus(self) -> bool {
-        matches!(self, Self::SpectrumPlus2A | Self::SpectrumPlus3)
+        matches!(
+            self,
+            Self::SpectrumPlus2A | Self::SpectrumPlus3 | Self::SpectrumPlus3e
+        )
+    }
+
+    /// +3 or +3e (disk interface present).
+    #[must_use]
+    pub fn has_plus3_disk(self) -> bool {
+        matches!(self, Self::SpectrumPlus3 | Self::SpectrumPlus3e)
     }
 
     /// 128K-class bus (Sinclair 128 / grey +2 / Pentagon banking).
@@ -846,6 +857,8 @@ pub enum Machine {
         tape_opts: TapeLoadOptions,
         rzx: Option<RzxPlayer>,
         debugger: Debugger,
+        /// +3e enhanced ROM set on otherwise identical +3 hardware (#194).
+        plus3e: bool,
     },
 }
 
@@ -1001,18 +1014,33 @@ impl Machine {
     }
 
     pub fn new_plus3(rom: &[u8]) -> Result<Self, MachineBuildError> {
-        Self::new_amstrad_plus(rom, true)
+        Self::new_amstrad_plus(rom, true, false)
+    }
+
+    /// Spectrum +3e: same +3 hardware with Garry Lancaster enhanced ROMs (#194).
+    pub fn new_plus3e(rom: &[u8]) -> Result<Self, MachineBuildError> {
+        Self::new_amstrad_plus(rom, true, true)
     }
 
     /// Spectrum +2A: same gate array as +3 but FDC ports float (`disk_interface = false`).
     pub fn new_plus2a(rom: &[u8]) -> Result<Self, MachineBuildError> {
-        Self::new_amstrad_plus(rom, false)
+        Self::new_amstrad_plus(rom, false, false)
     }
 
-    fn new_amstrad_plus(rom: &[u8], disk_interface: bool) -> Result<Self, MachineBuildError> {
+    fn new_amstrad_plus(
+        rom: &[u8],
+        disk_interface: bool,
+        plus3e: bool,
+    ) -> Result<Self, MachineBuildError> {
         let mut bus = BusPlus3::new_with_disk(disk_interface);
         bus.load_rom64(rom)?;
-        let model_id = if disk_interface { 2 } else { 3 };
+        let model_id = if plus3e {
+            9
+        } else if disk_interface {
+            2
+        } else {
+            3
+        };
         trace::emit(trace::EventKind::MachineModel { model: model_id });
         Ok(Self::SpecPlus3 {
             cpu: Cpu::new(),
@@ -1022,6 +1050,7 @@ impl Machine {
             tape_opts: TapeLoadOptions::default(),
             rzx: None,
             debugger: Debugger::default(),
+            plus3e,
         })
     }
 
@@ -1044,6 +1073,9 @@ impl Machine {
                 plus2_rom: true, ..
             } => Model::SpectrumPlus2,
             Self::Spec128 { .. } => Model::Spectrum128,
+            Self::SpecPlus3 {
+                bus, plus3e: true, ..
+            } if bus.disk_interface => Model::SpectrumPlus3e,
             Self::SpecPlus3 { bus, .. } => {
                 if bus.disk_interface {
                     Model::SpectrumPlus3
@@ -3818,7 +3850,7 @@ impl Machine {
             Model::Spectrum128 => self.type_load_quotes_128k(with_code),
             Model::SpectrumPlus2 => self.type_load_quotes_plus2(with_code),
             Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
-            Model::SpectrumPlus3 => self.type_load_quotes_plus3(with_code),
+            Model::SpectrumPlus3 | Model::SpectrumPlus3e => self.type_load_quotes_plus3(with_code),
             Model::Pentagon128 => self.type_load_quotes_128k(with_code),
         }
     }
@@ -7390,6 +7422,11 @@ mod tests {
         std::fs::read(p).ok()
     }
 
+    fn rom_plus3e_only() -> Option<Vec<u8>> {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus3e/plus3e.rom");
+        std::fs::read(p).ok()
+    }
+
     fn rom_plus2() -> Option<Vec<u8>> {
         let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../roms/plus2/plus2uk.rom");
         std::fs::read(p).ok()
@@ -7643,6 +7680,43 @@ mod tests {
         };
         assert!(bus.disk_interface);
         assert_eq!(bus.in_port(0x2ffd) & 0x80, 0x80);
+    }
+
+    /// +3e is the same +3 gate array / disk path with Garry Lancaster firmware (#194).
+    #[test]
+    fn plus3e_boots_as_enhanced_plus3() {
+        let Some(rom) = rom_plus3e_only() else {
+            eprintln!("skip: roms/plus3e/plus3e.rom missing — run ./scripts/fetch_roms.sh");
+            return;
+        };
+        assert_eq!(rom.len(), 64 * 1024);
+        assert!(
+            rom.windows(b"128 +3e".len()).any(|w| w == b"128 +3e"),
+            "expected +3e banner bytes in concatenated Fuse plus3e ROM"
+        );
+        let mut m = Machine::new_plus3e(&rom).unwrap();
+        assert_eq!(m.model(), Model::SpectrumPlus3e);
+        assert!(m.model().has_plus3_disk());
+        assert!(m.model().is_amstrad_plus());
+        for _ in 0..120 {
+            m.run_frame();
+        }
+        let Machine::SpecPlus3 {
+            bus,
+            plus3e: true,
+            cpu,
+            ..
+        } = &m
+        else {
+            panic!("expected SpecPlus3 with plus3e");
+        };
+        assert!(bus.disk_interface);
+        let screen_nz = bus.screen_bytes().iter().filter(|&&b| b != 0).count();
+        assert!(
+            screen_nz > 100,
+            "expected +3e menu pixels, got {screen_nz} nonzero (PC={:04X})",
+            cpu.regs.pc
+        );
     }
 
     #[test]
@@ -8867,6 +8941,7 @@ mod tests {
                         Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                         Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                         Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                        Model::SpectrumPlus3e => Machine::new_plus3e(rom).unwrap(),
                         Model::Pentagon128 => {
                             let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                             Machine::new_pentagon128(rom, &trdos).unwrap()
@@ -8924,6 +8999,7 @@ mod tests {
                         Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                         Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                         Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                        Model::SpectrumPlus3e => Machine::new_plus3e(rom).unwrap(),
                         Model::Pentagon128 => {
                             let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                             Machine::new_pentagon128(rom, &trdos).unwrap()
@@ -9028,6 +9104,7 @@ mod tests {
                     Model::SpectrumPlus2 => Machine::new_plus2(rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(rom).unwrap(),
+                    Model::SpectrumPlus3e => Machine::new_plus3e(rom).unwrap(),
                     Model::Pentagon128 => {
                         let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                         Machine::new_pentagon128(rom, &trdos).unwrap()
@@ -9197,6 +9274,7 @@ mod tests {
                     Model::SpectrumPlus2 => Machine::new_plus2(&rom).unwrap(),
                     Model::SpectrumPlus2A => Machine::new_plus2a(&rom).unwrap(),
                     Model::SpectrumPlus3 => Machine::new_plus3(&rom).unwrap(),
+                    Model::SpectrumPlus3e => Machine::new_plus3e(&rom).unwrap(),
                     Model::Pentagon128 => {
                         let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                         Machine::new_pentagon128(&rom, &trdos).unwrap()

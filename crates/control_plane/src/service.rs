@@ -1324,6 +1324,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_model_slug_accepts_plus3e() {
+        assert_eq!(
+            parse_model_slug("plus3e").expect("plus3e"),
+            ModelId::SpectrumPlus3e
+        );
+        assert_eq!(
+            parse_model_slug("+3e").expect("+3e"),
+            ModelId::SpectrumPlus3e
+        );
+    }
+
+    #[test]
     fn parse_model_slug_accepts_canonical_timex_aliases() {
         assert_eq!(
             parse_model_slug("timex_ts2068").expect("ts2068"),
