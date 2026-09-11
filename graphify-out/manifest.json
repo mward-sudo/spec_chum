@@ -305,12 +305,6 @@
     "ast_hash": "b48b7a77d0565f0916e04c70fee647ba",
     "semantic_hash": ""
   },
-  "crates/formats/src/dsk.rs": {
-    "mtime": 1788919605.6049044,
-    "seen": 1789091745.074995,
-    "ast_hash": "a15ea3ac6c461f0265046afaef99a969",
-    "semantic_hash": ""
-  },
   "crates/formats/src/lib.rs": {
     "mtime": 1789005903.433992,
     "seen": 1789091745.074997,
@@ -630,9 +624,9 @@
     "semantic_hash": ""
   },
   "crates/trace/src/lib.rs": {
-    "mtime": 1788919605.6165042,
-    "seen": 1789091745.075031,
-    "ast_hash": "8d1315723fbead3440b10678ff8376ad",
+    "mtime": 1789094285.1557374,
+    "seen": 1789094288.480622,
+    "ast_hash": "cdc3f06870c69ad7f21ded16582097aa",
     "semantic_hash": ""
   },
   "crates/ula/Cargo.toml": {
@@ -1377,6 +1371,48 @@
     "mtime": 1789092692.9109342,
     "seen": 1789092771.374474,
     "ast_hash": "3f5a9ad0be319825487ca5d442cb28fc",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/dsk/mod.rs": {
+    "mtime": 1789094272.0089548,
+    "seen": 1789094288.4794738,
+    "ast_hash": "de2ed5d23fee83ea18737f59d9a3cc94",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/dsk/synthetic.rs": {
+    "mtime": 1789094285.0166245,
+    "seen": 1789094288.479475,
+    "ast_hash": "2f375ab5e85e8b3668e6ca7064f03710",
+    "semantic_hash": ""
+  },
+  "crates/formats/src/dsk/tests.rs": {
+    "mtime": 1789094285.0170863,
+    "seen": 1789094288.479476,
+    "ast_hash": "0e4b49aead3ad1dda06ec7b31ea9aded",
+    "semantic_hash": ""
+  },
+  "crates/trace/src/category.rs": {
+    "mtime": 1789094237.8911781,
+    "seen": 1789094288.4806201,
+    "ast_hash": "0c4d66ce08a8366981f047ebf1d923fc",
+    "semantic_hash": ""
+  },
+  "crates/trace/src/dump.rs": {
+    "mtime": 1789094249.6559987,
+    "seen": 1789094288.4806201,
+    "ast_hash": "0e2e6bf0fdd3809b80a033ec4f5f4512",
+    "semantic_hash": ""
+  },
+  "crates/trace/src/event.rs": {
+    "mtime": 1789094237.8912919,
+    "seen": 1789094288.480621,
+    "ast_hash": "163fc979b83ce1c7438203aa69ddd2a4",
+    "semantic_hash": ""
+  },
+  "crates/trace/src/tests.rs": {
+    "mtime": 1789094237.8914428,
+    "seen": 1789094288.480622,
+    "ast_hash": "a65da676e2e97f3b4b5d30c671b89ff1",
     "semantic_hash": ""
   }
 }
