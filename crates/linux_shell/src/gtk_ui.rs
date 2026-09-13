@@ -49,9 +49,12 @@ struct AppState {
     prefs: UiPreferences,
     prefs_path: std::path::PathBuf,
     held: Vec<u32>,
-    shift: bool,
-    ctrl: bool,
-    alt: bool,
+    shift_l: bool,
+    shift_r: bool,
+    ctrl_l: bool,
+    ctrl_r: bool,
+    alt_l: bool,
+    alt_r: bool,
     last_frame: Instant,
     status: String,
 }
@@ -107,9 +110,12 @@ impl AppState {
             prefs,
             prefs_path,
             held: Vec::new(),
-            shift: false,
-            ctrl: false,
-            alt: false,
+            shift_l: false,
+            shift_r: false,
+            ctrl_l: false,
+            ctrl_r: false,
+            alt_l: false,
+            alt_r: false,
             last_frame: Instant::now(),
             status: "Ready".into(),
         })
@@ -119,6 +125,18 @@ impl AppState {
         if let Err(e) = save_prefs(&self.prefs_path, &self.prefs) {
             eprintln!("spec-chum-linux: save prefs failed: {e}");
         }
+    }
+
+    fn shift(&self) -> bool {
+        self.shift_l || self.shift_r
+    }
+
+    fn ctrl(&self) -> bool {
+        self.ctrl_l || self.ctrl_r
+    }
+
+    fn alt(&self) -> bool {
+        self.alt_l || self.alt_r
     }
 
     fn set_key_matrix(&mut self, row: usize, bit: u8, pressed: bool) {
@@ -133,11 +151,13 @@ impl AppState {
                 suppress = true;
             }
         }
+        let shift = self.shift();
+        let alt = self.alt();
+        let ctrl = self.ctrl();
         {
             let mut apply = |row, bit, pressed| self.set_key_matrix(row, bit, pressed);
-            apply_modifiers(&mut apply, self.shift, self.alt, self.ctrl, suppress);
+            apply_modifiers(&mut apply, shift, alt, ctrl, suppress);
         }
-        let shift = self.shift;
         let held = self.held.clone();
         for &kv in &held {
             if let Some(ch) = chord_for_keyval(kv, shift) {
@@ -150,15 +170,12 @@ impl AppState {
     fn on_key(&mut self, keyval: u32, pressed: bool) {
         if is_modifier_keyval(keyval) {
             match keyval {
-                linux_shell::keymap::key::SHIFT_L | linux_shell::keymap::key::SHIFT_R => {
-                    self.shift = pressed;
-                }
-                linux_shell::keymap::key::CONTROL_L | linux_shell::keymap::key::CONTROL_R => {
-                    self.ctrl = pressed;
-                }
-                linux_shell::keymap::key::ALT_L | linux_shell::keymap::key::ALT_R => {
-                    self.alt = pressed;
-                }
+                linux_shell::keymap::key::SHIFT_L => self.shift_l = pressed,
+                linux_shell::keymap::key::SHIFT_R => self.shift_r = pressed,
+                linux_shell::keymap::key::CONTROL_L => self.ctrl_l = pressed,
+                linux_shell::keymap::key::CONTROL_R => self.ctrl_r = pressed,
+                linux_shell::keymap::key::ALT_L => self.alt_l = pressed,
+                linux_shell::keymap::key::ALT_R => self.alt_r = pressed,
                 _ => {}
             }
             self.refresh_input();
@@ -268,6 +285,10 @@ pub fn run() -> Result<()> {
         #[strong]
         state,
         move |app| {
+            if let Some(window) = app.active_window() {
+                window.present();
+                return;
+            }
             build_ui(app, Rc::clone(&state));
         }
     ));
@@ -289,7 +310,7 @@ fn build_ui(app: &Application, state: Rc<RefCell<AppState>>) {
         .build();
 
     let picture = Picture::new();
-    picture.set_content_fit(gtk4::ContentFit::Contain);
+    picture.set_keep_aspect_ratio(true);
     picture.set_hexpand(true);
     picture.set_vexpand(true);
     picture.set_can_focus(true);

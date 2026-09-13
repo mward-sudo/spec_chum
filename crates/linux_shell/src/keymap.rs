@@ -39,7 +39,7 @@ pub mod key {
 /// Map a GDK keyval + Shift to Spectrum matrix chords.
 #[must_use]
 pub fn chord_for_keyval(keyval: u32, shift: bool) -> Option<Chord> {
-    let kv = normalize_letter(keyval);
+    let kv = canonical_keyval(keyval);
     match kv {
         key::LEFT => return Some(Chord::with_caps(3, 4)),
         key::DOWN => return Some(Chord::with_caps(4, 4)),
@@ -65,7 +65,7 @@ pub fn modifier_keys(shift: bool, alt: bool, ctrl: bool, suppress_caps: bool) ->
 /// True when this key owns Symbol/Caps itself (punctuation / arrows / Backspace).
 #[must_use]
 pub fn suppresses_modifier_caps(keyval: u32) -> bool {
-    let kv = normalize_letter(keyval);
+    let kv = canonical_keyval(keyval);
     matches!(
         kv,
         key::LEFT
@@ -114,6 +114,36 @@ pub fn apply_modifiers(
     for &(row, bit) in &modifier_keys(shift, alt, ctrl, suppress_caps) {
         set_key(row, bit, true);
     }
+}
+
+fn canonical_keyval(keyval: u32) -> u32 {
+    // GDK may deliver the shifted Unicode keyval (e.g. '!' for Shift+1). Map those
+    // back to the base US key so letter_digit / punct_chord stay consistent.
+    let base = match keyval {
+        0x021 => 0x031,             // !
+        0x040 => 0x032,             // @
+        0x023 => 0x033,             // #
+        0x024 => 0x034,             // $
+        0x025 => 0x035,             // %
+        0x05e => 0x036,             // ^
+        0x026 => 0x037,             // &
+        0x02a => 0x038,             // *
+        0x028 => 0x039,             // (
+        0x029 => 0x030,             // )
+        0x022 => key::APOSTROPHE,   // "
+        0x03a => key::SEMICOLON,    // :
+        0x03c => key::COMMA,        // <
+        0x03e => key::PERIOD,       // >
+        0x03f => key::SLASH,        // ?
+        0x05f => key::MINUS,        // _
+        0x02b => key::EQUAL,        // +
+        0x07b => key::BRACKETLEFT,  // {
+        0x07d => key::BRACKETRIGHT, // }
+        0x07c => key::BACKSLASH,    // |
+        0x07e => key::GRAVE,        // ~
+        other => other,
+    };
+    normalize_letter(base)
 }
 
 fn normalize_letter(keyval: u32) -> u32 {
@@ -255,6 +285,12 @@ fn punct_chord(keyval: u32, shift: bool) -> Option<Chord> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shifted_exclam_maps_to_digit_one() {
+        let ch = chord_for_keyval(0x021, true).expect("!");
+        assert_eq!(ch.keys, vec![(3, 0)]);
+    }
 
     #[test]
     fn letter_j_is_load_keyword_row() {
