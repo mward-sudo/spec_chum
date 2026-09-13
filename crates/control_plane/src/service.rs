@@ -1014,8 +1014,17 @@ impl ControlPlane {
     }
 
     pub fn load_divmmc_sd(&self, path: &Path) -> ApiResult<()> {
+        self.load_divmmc_sd_slot(path, 0)
+    }
+
+    pub fn load_divmmc_sd_slot(&self, path: &Path, slot: u8) -> ApiResult<()> {
+        if slot > 1 {
+            return Err(ApiError::BadRequest(format!(
+                "DivMMC SD slot {slot} is invalid (only 0 and 1)"
+            )));
+        }
         self.with_session_mut(|s| {
-            s.load_divmmc_sd(path)?;
+            s.load_divmmc_sd_slot(path, slot)?;
             Ok(())
         })
     }

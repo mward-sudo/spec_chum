@@ -1116,17 +1116,20 @@ impl HostSession {
         Ok(())
     }
 
-    /// Attach `DivMMC` and load a flat SD/MMC image.
+    /// Attach `DivMMC` and load a flat SD/MMC image into slot 0.
     pub fn load_divmmc_sd(&mut self, path: &Path) -> Result<(), HostError> {
+        self.load_divmmc_sd_slot(path, 0)
+    }
+
+    /// Attach `DivMMC` and load a flat SD/MMC image into slot `0` or `1`.
+    pub fn load_divmmc_sd_slot(&mut self, path: &Path, slot: u8) -> Result<(), HostError> {
         let Some(m) = self.machine.as_mut() else {
             return Err(HostError::NoMachine);
         };
         let data = std::fs::read(path)?;
-        let div = m
-            .attach_divmmc()
+        m.attach_divmmc_sd_slot(slot, data)
             .map_err(|e| HostError::Message(e.to_string()))?;
-        div.attach_sd(data);
-        self.status = format!("DivMMC SD {}", path.display());
+        self.status = format!("DivMMC SD slot {slot} {}", path.display());
         Ok(())
     }
 
@@ -1682,6 +1685,39 @@ mod tests {
         assert_eq!(s.height(), 296);
         assert_eq!(s.framebuffer().len(), 352 * 296 * 4);
         assert!(!s.has_machine());
+    }
+
+    #[test]
+    fn load_divmmc_sd_slot_attaches_both_images() {
+        let Some(rom) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let mut s = HostSession::new(ModelId::Spectrum48, true);
+        s.load_rom_bytes(&rom).expect("rom");
+        let dir = std::env::temp_dir().join("spec_chum_host_divmmc_sd_slots");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let slot0 = dir.join("slot0.img");
+        let slot1 = dir.join("slot1.img");
+        std::fs::write(&slot0, vec![0x10u8; 512]).expect("slot0");
+        std::fs::write(&slot1, vec![0x11u8; 512]).expect("slot1");
+        s.load_divmmc_sd(&slot0).expect("slot 0 via legacy");
+        s.load_divmmc_sd_slot(&slot1, 1).expect("slot 1");
+        assert!(s.has_divmmc());
+        let div = s
+            .machine
+            .as_mut()
+            .and_then(Machine::divmmc_mut)
+            .expect("div");
+        assert_eq!(div.sd.first().copied(), Some(0x10));
+        assert_eq!(div.sd1.first().copied(), Some(0x11));
+        let err = s
+            .load_divmmc_sd_slot(&slot0, 2)
+            .expect_err("slot 2 invalid");
+        assert!(
+            err.to_string().contains("slot 2"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
