@@ -819,14 +819,17 @@ impl EmulatorSession {
     }
 
     pub fn attach_divmmc_sd(&mut self, path: &Path) {
+        self.attach_divmmc_sd_slot(path, 0);
+    }
+
+    pub fn attach_divmmc_sd_slot(&mut self, path: &Path, slot: u8) {
         match std::fs::read(path) {
             Ok(data) => {
                 let host = &mut *self.host_mut();
                 if let Some(m) = host.machine_mut() {
-                    match m.attach_divmmc() {
-                        Ok(div) => {
-                            div.attach_sd(data);
-                            host.set_status(format!("DivMMC SD {}", path.display()));
+                    match m.attach_divmmc_sd_slot(slot, data) {
+                        Ok(()) => {
+                            host.set_status(format!("DivMMC SD slot {slot} {}", path.display()));
                         }
                         Err(e) => host.set_status(e.to_string()),
                     }
@@ -2326,6 +2329,21 @@ impl SpecChumApp {
                                     .pick_file()
                                 {
                                     self.session.attach_divmmc_sd(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            if ui
+                                .add_enabled(
+                                    has_div,
+                                    egui::Button::new("Open DivMMC SD image (slot 1)…"),
+                                )
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("SD image", &["img", "bin", "mmc", "sd"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_divmmc_sd_slot(&path, 1);
                                 }
                                 ui.close_menu();
                             }

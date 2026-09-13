@@ -204,7 +204,11 @@ struct SpecChumMacApp: App {
                 }
                 .disabled(!host.model.supportsBeta)
                 Button("Open DivMMC SD image…") {
-                    openDivmmcSd()
+                    openDivmmcSd(slot: 0)
+                }
+                .disabled(!host.model.supportsBeta)
+                Button("Open DivMMC SD image (slot 1)…") {
+                    openDivmmcSd(slot: 1)
                 }
                 .disabled(!host.model.supportsBeta)
                 Button("Open DivMMC EEPROM (ESXDOS)…") {
@@ -338,7 +342,7 @@ struct SpecChumMacApp: App {
         }
     }
 
-    private func openDivmmcSd() {
+    private func openDivmmcSd(slot: UInt32) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -348,9 +352,9 @@ struct SpecChumMacApp: App {
             UTType(filenameExtension: "mmc") ?? .data,
             UTType(filenameExtension: "sd") ?? .data,
         ]
-        panel.title = "Open DivMMC SD image"
+        panel.title = slot == 0 ? "Open DivMMC SD image (slot 0)" : "Open DivMMC SD image (slot 1)"
         if panel.runModal() == .OK, let url = panel.url {
-            host.loadDivmmcSd(at: url)
+            host.loadDivmmcSd(at: url, slot: slot)
         }
     }
 

@@ -875,6 +875,60 @@ async fn agent_api_hardware_attach_multiface_and_divmmc() {
         .expect("divmmc");
     assert_eq!(div.status(), StatusCode::NO_CONTENT);
 
+    let sd0 = dir.join("sd0.img");
+    let sd1 = dir.join("sd1.img");
+    std::fs::write(&sd0, vec![0x20u8; 512]).expect("sd0");
+    std::fs::write(&sd1, vec![0x21u8; 512]).expect("sd1");
+    let load0 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/divmmc/sd")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": sd0 })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("divmmc sd0");
+    assert_eq!(load0.status(), StatusCode::NO_CONTENT);
+    let load1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/divmmc/sd")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": sd1, "slot": 1 })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("divmmc sd1");
+    assert_eq!(load1.status(), StatusCode::NO_CONTENT);
+    let bad_slot = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/hardware/divmmc/sd")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({ "path": sd0, "slot": 2 })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("divmmc bad slot");
+    assert!(
+        bad_slot.status().is_client_error(),
+        "slot 2 must fail; got {}",
+        bad_slot.status()
+    );
+
     let if1 = app
         .clone()
         .oneshot(

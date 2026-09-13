@@ -71,11 +71,14 @@ pub enum MultifaceError {
     Rom(#[from] bus::RomLoadError),
 }
 
-/// Errors attaching `DivMMC` or loading its EEPROM.
+/// Errors attaching `DivMMC` or loading its EEPROM / SD images.
 #[derive(Debug, Error)]
 pub enum DivMmcError {
     #[error("DivMMC is not supported on Spectrum +2A/+3")]
     UnsupportedModel,
+    /// Only slots `0` and `1` exist on the `DivMMC` CPLD (port `0xE7` CS bits).
+    #[error("DivMMC SD slot {slot} is invalid (only 0 and 1)")]
+    InvalidSdSlot { slot: u8 },
     #[error(transparent)]
     Rom(#[from] bus::RomLoadError),
 }
@@ -1666,11 +1669,17 @@ impl Machine {
         Ok(div.attach_eeprom(data)?)
     }
 
-    /// Attach `DivMMC` (if needed) and load a flat SD/MMC sector image.
+    /// Attach `DivMMC` (if needed) and load a flat SD/MMC sector image into slot 0.
     pub fn attach_divmmc_sd(&mut self, data: Vec<u8>) -> Result<(), DivMmcError> {
+        self.attach_divmmc_sd_slot(0, data)
+    }
+
+    /// Attach `DivMMC` (if needed) and load a flat SD/MMC image into slot `0` or `1`.
+    pub fn attach_divmmc_sd_slot(&mut self, slot: u8, data: Vec<u8>) -> Result<(), DivMmcError> {
         let div = self.attach_divmmc()?;
-        div.attach_sd(data);
-        Ok(())
+        div.attach_sd_slot(slot, data).map_err(|e| match e {
+            bus::SdSlotError::InvalidSlot { slot, .. } => DivMmcError::InvalidSdSlot { slot },
+        })
     }
 
     pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
@@ -4047,6 +4056,10 @@ mod tests {
             Err(DivMmcError::UnsupportedModel)
         ));
         assert!(matches!(
+            plus3.attach_divmmc_sd_slot(0, vec![0u8; 512]),
+            Err(DivMmcError::UnsupportedModel)
+        ));
+        assert!(matches!(
             plus3.attach_beta(),
             Err(BetaDiskError::UnsupportedModel)
         ));
@@ -4064,6 +4077,24 @@ mod tests {
         assert!(matches!(
             plus2a.attach_multiface(&[0u8; bus::MULTIFACE128_SIZE]),
             Err(MultifaceError::UnsupportedModel)
+        ));
+    }
+
+    #[test]
+    fn attach_divmmc_sd_slot_loads_both_and_rejects_invalid() {
+        let mut m = Machine::new_48k(&[0u8; 16384]).unwrap();
+        let mut slot0 = vec![0u8; 512];
+        slot0[0] = 0xa0;
+        let mut slot1 = vec![0u8; 512];
+        slot1[0] = 0xa1;
+        m.attach_divmmc_sd_slot(0, slot0).expect("slot 0");
+        m.attach_divmmc_sd_slot(1, slot1).expect("slot 1");
+        let div = m.divmmc_mut().expect("divmmc");
+        assert_eq!(div.sd.first().copied(), Some(0xa0));
+        assert_eq!(div.sd1.first().copied(), Some(0xa1));
+        assert!(matches!(
+            m.attach_divmmc_sd_slot(2, vec![0u8; 512]),
+            Err(DivMmcError::InvalidSdSlot { slot: 2 })
         ));
     }
 

@@ -226,6 +226,15 @@ pub extern "C" fn sc_attach_divmmc(handle: *mut c_void) -> c_int {
 
 #[no_mangle]
 pub extern "C" fn sc_load_divmmc_sd(handle: *mut c_void, path: *const c_char) -> c_int {
+    sc_load_divmmc_sd_slot(handle, path, 0)
+}
+
+#[no_mangle]
+pub extern "C" fn sc_load_divmmc_sd_slot(
+    handle: *mut c_void,
+    path: *const c_char,
+    slot: u32,
+) -> c_int {
     clear_last_error();
     let Some(mut s) = session_mut(handle) else {
         set_last_error("null handle");
@@ -235,13 +244,17 @@ pub extern "C" fn sc_load_divmmc_sd(handle: *mut c_void, path: *const c_char) ->
         set_last_error("null path");
         return -1;
     }
+    if slot > u32::from(u8::MAX) {
+        set_last_error("DivMMC SD slot out of range");
+        return -1;
+    }
     // SAFETY: caller provides a valid NUL-terminated C string.
     let cstr = unsafe { CStr::from_ptr(path) };
     let Ok(path) = cstr.to_str() else {
         set_last_error("path not utf-8");
         return -1;
     };
-    match s.load_divmmc_sd(Path::new(path)) {
+    match s.load_divmmc_sd_slot(Path::new(path), slot as u8) {
         Ok(()) => 0,
         Err(e) => {
             set_last_error(e.to_string());

@@ -247,9 +247,9 @@ extension HostBridge {
         }
     }
 
-    func loadDivmmcSd(at url: URL) {
+    func loadDivmmcSd(at url: URL, slot: UInt32 = 0) {
         guard let handle else { return }
-        let ok = url.path.withCString { sc_load_divmmc_sd(handle, $0) }
+        let ok = url.path.withCString { sc_load_divmmc_sd_slot(handle, $0, slot) }
         if ok != 0 {
             status = HostBridge.takeLastError() ?? "DivMMC SD load failed"
         } else {

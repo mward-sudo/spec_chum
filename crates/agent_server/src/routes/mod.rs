@@ -36,6 +36,14 @@ pub(crate) struct PathBody {
     pub(crate) path: String,
 }
 
+/// `POST /v1/hardware/divmmc/sd` — optional `slot` defaults to 0 (CS bit0).
+#[derive(Debug, Deserialize)]
+pub(crate) struct DivmmcSdBody {
+    pub(crate) path: String,
+    #[serde(default)]
+    pub(crate) slot: u8,
+}
+
 pub(crate) fn default_one() -> u32 {
     1
 }

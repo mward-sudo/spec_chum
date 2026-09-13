@@ -302,7 +302,7 @@ Living-room display toggle is **deferred** (not modeled in shared prefs yet).
 | `POST /v1/hardware/interface1/rom` | Body `{ "path" }` — explicit IF1 ROM |
 | `POST /v1/hardware/mdr` | Body `{ "path" }` — Microdrive cartridge (attaches IF1) |
 | `POST /v1/hardware/divmmc` | Attach DivMMC (no media); Refs [#138](https://github.com/mward-sudo/spec_chum/issues/138) |
-| `POST /v1/hardware/divmmc/sd` | Body `{ "path" }` — flat SD image |
+| `POST /v1/hardware/divmmc/sd` | Body `{ "path", "slot"? }` — flat SD image; `slot` defaults to `0` (CS bit0); use `1` for the second card (CS bit1) |
 | `POST /v1/hardware/divmmc/eeprom` | Body `{ "path" }` — ESXDOS EEPROM |
 | `POST /v1/hardware/beta` | Attach Beta Disk (no media); Refs [#140](https://github.com/mward-sudo/spec_chum/issues/140) |
 | `POST /v1/hardware/trdos/rom` | Body `{ "path" }` — 16 KiB TR-DOS ROM / Beta attach; Refs [#140](https://github.com/mward-sudo/spec_chum/issues/140). Disk images remain `POST /v1/trd` |

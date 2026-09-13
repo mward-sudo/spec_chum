@@ -193,11 +193,11 @@ Place your own dumps under `roms/divmmc/` (preferred) or the legacy aliases:
 | `roms/divmmc/ESXMMC.BIN` | 8 KiB | DivMMC EEPROM from the official esxDOS zip (`ESXMMC.BIN`). Also accepted: `roms/esxdos.rom`, `roms/divmmc.rom` |
 | `roms/divmmc/esxdos.img` | flat FAT | Sector image (LBA×512) with `/SYS` (and usually `/BIN`) from the same zip. Also accepted: `roms/divmmc/sd.img` |
 
-Obtain from [esxdos.org](http://www.esxdos.org/) (e.g. `esxdos089.zip`): flash/use `ESXMMC.BIN` as the EEPROM, and copy the zip’s `SYS` + `BIN` directories onto a FAT16/FAT32 card image for the flat SD attach. egui / SpecChumMac Hardware menus already expose DivMMC attach + EEPROM/SD open.
+Obtain from [esxdos.org](http://www.esxdos.org/) (e.g. `esxdos089.zip`): flash/use `ESXMMC.BIN` as the EEPROM, and copy the zip’s `SYS` + `BIN` directories onto a FAT16/FAT32 card image for the flat SD attach. egui / SpecChumMac Hardware menus expose DivMMC attach, EEPROM open, and **two** SD image opens (slot 0 / slot 1 — DivMMC dual-card CS on port `0xE7`).
 
 Machine smoke `esxdos_eeprom_boots_prompt_when_fixtures_present` skips cleanly when either fixture is absent; with both present it boots to the ESXDOS banner/prompt.
 
-DivMMC Ready-oriented SPI/SRAM coverage (unit tests in `bus::divmmc`): 512 KiB paging, SDHC (ACMD41 HCS + OCR CCS + block LBA) vs SDSC byte addressing, CS-deselect abort mid-command, multi-block CMD18/CMD12 + CMD25/`0xFD` (FAT cluster I/O), and dual-slot CS (port `0xE7` bit0/bit1). Host UI for attaching a second SD image remains open on [#138](https://github.com/mward-sudo/spec_chum/issues/138).
+DivMMC Ready-oriented SPI/SRAM coverage (unit tests in `bus::divmmc`): 512 KiB paging, SDHC (ACMD41 HCS + OCR CCS + block LBA) vs SDSC byte addressing, CS-deselect abort mid-command, multi-block CMD18/CMD12 + CMD25/`0xFD` (FAT cluster I/O), and dual-slot CS (port `0xE7` bit0/bit1). Host attach for both SD slots is available via egui / SpecChumMac / `sc_load_divmmc_sd_slot` / `POST /v1/hardware/divmmc/sd` (`slot` optional, default 0) — Refs [#138](https://github.com/mward-sudo/spec_chum/issues/138).
 
 ### Multiface 1 / 128 — user-provided paths (#168)
 

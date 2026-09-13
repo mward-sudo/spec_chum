@@ -124,7 +124,10 @@ int sc_has_multiface(void *handle);
 
 /* DivMMC (48K/128K): attach, flat SD image, ESXDOS EEPROM. Returns 0 ok, -1 error. */
 int sc_attach_divmmc(void *handle);
+/* Flat SD into slot 0 (CS bit0). Prefer sc_load_divmmc_sd_slot for slot 1. */
 int sc_load_divmmc_sd(void *handle, const char *path);
+/* Flat SD into slot 0 or 1 (DivMMC dual-card CS on port 0xE7). */
+int sc_load_divmmc_sd_slot(void *handle, const char *path, unsigned slot);
 int sc_load_divmmc_eeprom(void *handle, const char *path);
 /* Returns 1 if DivMMC is attached, 0 if not attached or handle is null. */
 int sc_has_divmmc(void *handle);

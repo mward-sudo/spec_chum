@@ -8,7 +8,8 @@ use axum::{
 };
 
 use super::{
-    api_error, auth_empty, auth_empty_blocking, auth_json, check_auth, AppState, PathBody,
+    api_error, auth_empty, auth_empty_blocking, auth_json, check_auth, AppState, DivmmcSdBody,
+    PathBody,
 };
 
 pub(crate) async fn rom_setup(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -98,12 +99,13 @@ pub(crate) async fn attach_beta(State(state): State<AppState>, headers: HeaderMa
 pub(crate) async fn load_divmmc_sd(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(body): Json<PathBody>,
+    Json(body): Json<DivmmcSdBody>,
 ) -> Response {
     let plane = state.plane.clone();
     let path = body.path;
+    let slot = body.slot;
     auth_empty_blocking(&state, &headers, move || {
-        plane.load_divmmc_sd(path.as_ref())
+        plane.load_divmmc_sd_slot(path.as_ref(), slot)
     })
     .await
 }
