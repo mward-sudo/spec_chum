@@ -85,7 +85,7 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 | Avoid Tauri/Dioxus-web for the machine loop | Extra process/IPC is the wrong complexity for a Spectrum core |
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
 | Optional **Bevy living-room** | Experimental immersion host; SpecChumMac links staticlib, display opt-in; keep out of default CI; #146 |
-| **Linux native shell wanted** | egui is the **current** Linux release/CI host; product preference is a first-party native toolkit shell (GTK/Qt/other TBD) — tracked in [#351](https://github.com/mward-sudo/spec_chum/issues/351) / [Native shells](#native-shells-351) |
+| **Linux native shell in progress** | egui is the **current** Linux release/CI host; GTK4 `linux_shell` vertical slice in-tree ([LINUX_NATIVE.md](LINUX_NATIVE.md)); deepen + promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
 | **Windows native shell in progress** | Ship egui today; classic Win32 `windows_shell` vertical slice in-tree ([WINDOWS_NATIVE.md](WINDOWS_NATIVE.md)); deepen + promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
 
 ## Native shells (#351)
@@ -106,11 +106,13 @@ Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / i
 - Driven by the `host_api` C ABI; docs and build path: [MACOS_NATIVE.md](MACOS_NATIVE.md).
 - egui remains available for source builds and as the Windows/Linux (and CI) host.
 
-### Linux — egui today; native toolkit shell wanted (#351)
+### Linux — egui today; GTK4 native shell vertical slice (#351)
 
 **Today:** Linux releases ship the **egui** binary (`.tar.gz`, AppImage, `.deb`) with `.desktop` + icon under `packaging/linux/` ([#231](https://github.com/mward-sudo/spec_chum/issues/231)). egui remains the CI baseline and interim product UI.
 
-**Product preference (2026-09):** a **first-party native Linux GUI** (not egui chrome) — thin host over `host_api` / `control_plane`, feature-parity with SpecChumMac and egui (`.cursor/rules/gui-app-parity.mdc`). Toolkit/stack is **open** (GTK4, Qt, or other; no webview/Electron). Track and checklist: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Do not start implementation until Windows deepen sequencing allows.
+**Toolkit decision:** **GTK4 via gtk-rs** — thin Rust host over `host_api` / `control_plane`, HIG-friendly, no webview. Qt remains a rejected-for-now alternative (heavier tooling tax).
+
+**Native vertical slice (in-tree):** `crates/linux_shell` (`spec_chum_linux`) — window, framebuffer present, File/Tape menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP. Docs: [LINUX_NATIVE.md](LINUX_NATIVE.md). Opt-in CI job `linux-shell`. Machine/Hardware/Settings/Debug deepen and release promotion remain open under [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 
 Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** concern (#231) whether the wrapped binary is egui or a future native shell.
 

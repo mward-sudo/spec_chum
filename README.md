@@ -4,11 +4,12 @@
 
 A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust with an egui frontend (plus an optional native macOS SwiftUI shell).
 
-UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libretro): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md). Native-shell strategy (macOS SpecChumMac; Linux = egui; Windows egui release + optional Win32 `windows_shell`): [Native shells (#351)](docs/UI_ARCHITECTURE.md#native-shells-351).
+UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libretro): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md). Native-shell strategy (macOS SpecChumMac; Linux egui release + optional GTK4 `linux_shell`; Windows egui release + optional Win32 `windows_shell`): [Native shells (#351)](docs/UI_ARCHITECTURE.md#native-shells-351).
 
 Native macOS (liquid glass): [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md) — `./scripts/run_macos_app.sh`.
 
 Optional native Windows Win32 shell: [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) — `./scripts/run_windows_app.ps1` (#351).
+Optional native Linux GTK4 shell: [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) — `./scripts/run_linux_shell.sh` (#351); egui remains Linux release primary.
 
 Experimental Bevy 3D living-room CRT host: [docs/LIVING_ROOM.md](docs/LIVING_ROOM.md) — `cargo run -p living_room --release` ([#146](https://github.com/mward-sudo/spec_chum/issues/146)).
 

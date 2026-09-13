@@ -86,4 +86,4 @@ Opt-in job `windows-shell` in `.github/workflows/ci.yml` builds the crate on
 
 - Replacing egui in Windows release packages ([#231](https://github.com/mward-sudo/spec_chum/issues/231))
 - WinUI 3 XAML chrome (provisional future; this shell is classic Win32)
-- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Linux native toolkit track remains open
+- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Linux GTK4 deepen + release promotion remain open (see [LINUX_NATIVE.md](LINUX_NATIVE.md))

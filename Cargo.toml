@@ -15,6 +15,7 @@ members = [
     "crates/debug_cli",
     "crates/living_room",
     "crates/windows_shell",
+    "crates/linux_shell",
 ]
 default-members = ["crates/app"]
 
