@@ -116,7 +116,7 @@ impl AppState {
             anyhow::bail!("48K ROM not found — run ./scripts/fetch_roms.sh from the repo root");
         }
 
-        apply_session_prefs(&mut session, &prefs);
+        apply_session_prefs(&mut session, &prefs).context("apply session prefs")?;
 
         let pcm = Arc::new(Mutex::new(PcmRing::new()));
         {
@@ -169,12 +169,13 @@ impl AppState {
         }
     }
 
-    fn apply_prefs_to_host(&mut self) {
+    fn apply_prefs_to_host(&mut self) -> Result<(), HostError> {
         let prefs = self.prefs.clone();
-        self.host.with_mut(|s| apply_session_prefs(s, &prefs));
+        self.host.with_mut(|s| apply_session_prefs(s, &prefs))?;
         let mut ring = self.pcm.lock();
         ring.volume = prefs.volume;
         ring.muted = prefs.muted;
+        Ok(())
     }
 
     fn tick_frame(&mut self, hwnd: HWND) {
@@ -378,17 +379,17 @@ impl AppState {
     }
 
     fn select_model(&mut self, model: ModelId) {
-        self.prefs
-            .select_builtin_model(PrefModel::from_model_id(model));
-        sync_model_rom_paths(self.prefs.model_rom_paths.clone());
-        let prefs = self.prefs.clone();
+        let mut next = self.prefs.clone();
+        next.select_builtin_model(PrefModel::from_model_id(model));
+        sync_model_rom_paths(next.model_rom_paths.clone());
         let result = self.host.with_mut(|s| {
             s.select_model(model)?;
-            apply_session_prefs(s, &prefs);
+            apply_session_prefs(s, &next)?;
             Ok::<(), HostError>(())
         });
         match result {
             Ok(()) => {
+                self.prefs = next;
                 self.persist_prefs();
             }
             Err(e) => self.report_err("Select model", &e),
@@ -402,21 +403,36 @@ impl AppState {
     }
 
     fn set_joystick(&mut self, joy: spec_chum_host::PrefJoystick) {
+        let previous = self.prefs.clone();
         self.prefs.set_joystick(joy.to_mode());
-        self.apply_prefs_to_host();
+        if let Err(e) = self.apply_prefs_to_host() {
+            self.prefs = previous;
+            self.report_err("Joystick", &e);
+            return;
+        }
         self.persist_prefs();
     }
 
     fn set_tape_ear_speed(&mut self, speed: u32) {
+        let previous = self.prefs.clone();
         self.prefs.tape_experience = false;
         self.prefs.tape_ear_speed = speed;
-        self.apply_prefs_to_host();
+        if let Err(e) = self.apply_prefs_to_host() {
+            self.prefs = previous;
+            self.report_err("Tape EAR speed", &e);
+            return;
+        }
         self.persist_prefs();
     }
 
     fn set_tape_experience(&mut self) {
+        let previous = self.prefs.clone();
         self.prefs.tape_experience = true;
-        self.apply_prefs_to_host();
+        if let Err(e) = self.apply_prefs_to_host() {
+            self.prefs = previous;
+            self.report_err("Experience load", &e);
+            return;
+        }
         self.persist_prefs();
     }
 
@@ -456,13 +472,13 @@ impl AppState {
     }
 
     fn set_ay(&mut self, mode: PrefAyStereo) {
+        let previous = self.prefs.clone();
         self.prefs.set_ay_stereo(mode.to_mode());
-        let stereo = self.prefs.effective_ay_stereo();
-        self.host.with_mut(|s| {
-            if let Some(m) = s.machine_mut() {
-                m.set_ay_stereo_mode(stereo);
-            }
-        });
+        if let Err(e) = self.apply_prefs_to_host() {
+            self.prefs = previous;
+            self.report_err("AY stereo", &e);
+            return;
+        }
         self.persist_prefs();
     }
 
@@ -687,13 +703,14 @@ impl AppState {
     }
 }
 
-fn apply_session_prefs(session: &mut HostSession, prefs: &UiPreferences) {
+fn apply_session_prefs(session: &mut HostSession, prefs: &UiPreferences) -> Result<(), HostError> {
     session.set_joystick_mode(prefs.joystick_mode.to_mode());
     session.set_online_tape_titles(prefs.online_tape_titles);
-    let _ = session.set_tape_load_options(prefs.tape_load_options());
+    session.set_tape_load_options(prefs.tape_load_options())?;
     if let Some(m) = session.machine_mut() {
         m.set_ay_stereo_mode(prefs.effective_ay_stereo());
     }
+    Ok(())
 }
 
 fn key_down(vk: u16) -> bool {
