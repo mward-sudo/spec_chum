@@ -195,7 +195,9 @@ Place your own dumps under `roms/divmmc/` (preferred) or the legacy aliases:
 
 Obtain from [esxdos.org](http://www.esxdos.org/) (e.g. `esxdos089.zip`): flash/use `ESXMMC.BIN` as the EEPROM, and copy the zip’s `SYS` + `BIN` directories onto a FAT16/FAT32 card image for the flat SD attach. egui / SpecChumMac Hardware menus already expose DivMMC attach + EEPROM/SD open.
 
-Machine smoke `esxdos_eeprom_boots_prompt_when_fixtures_present` skips cleanly when either fixture is absent; with both present it boots to the ESXDOS banner/prompt. Ready-card / full compatibility remains open on [#138](https://github.com/mward-sudo/spec_chum/issues/138).
+Machine smoke `esxdos_eeprom_boots_prompt_when_fixtures_present` skips cleanly when either fixture is absent; with both present it boots to the ESXDOS banner/prompt.
+
+DivMMC Ready-oriented SPI/SRAM coverage (unit tests in `bus::divmmc`): 512 KiB paging, SDHC (ACMD41 HCS + OCR CCS + block LBA) vs SDSC byte addressing, and CS-deselect abort mid-command. Deeper FAT/multi-block / dual-slot edge cases remain open on [#138](https://github.com/mward-sudo/spec_chum/issues/138).
 
 ### Multiface 1 / 128 — user-provided paths (#168)
 

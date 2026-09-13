@@ -10,9 +10,11 @@
 //! 8 KiB image for ROM overlay; without it, only MAPRAM / CONMEM RAM paging and
 //! SPI SD I/O remain useful.
 //!
-//! SPI speaks a minimal MMC/SD subset (CMD0/8/16/17/24/55/58 + ACMD41) over a
-//! flat sector image so loaders can smoke-test sector read/write. Full ESXDOS
-//! boot needs a user-supplied EEPROM + FAT SD image (see `docs/ROMS.md`).
+//! SPI speaks a minimal MMC/SD/SDHC subset (CMD0/8/16/17/24/55/58 + ACMD41) over
+//! a flat sector image. ACMD41 HCS (bit 30) selects SDHC block addressing + OCR
+//! CCS; without HCS the card stays SDSC (byte-addressed CMD17/24) — matching
+//! `DivMMC` Ready / ESXDOS real-card init. Full ESXDOS boot needs a user-supplied
+//! EEPROM + FAT SD image (see `docs/ROMS.md`).
 
 use crate::RomLoadError;
 
@@ -24,10 +26,12 @@ pub const PORT_SPI_CS: u16 = 0x00e7;
 pub const PORT_SPI_DATA: u16 = 0x00eb;
 
 const PAGE_SIZE: usize = 8192;
-/// Foundational SRAM: 16 × 8 KiB pages (128 KiB; real cards may be larger).
-pub const RAM_PAGES: usize = 16;
+/// `DivMMC` Ready-compatible SRAM: 64 × 8 KiB pages (512 KiB; control bits 0–5).
+pub const RAM_PAGES: usize = 64;
 /// SD / MMC block size used by CMD17 / CMD24.
 pub const SD_SECTOR_SIZE: usize = 512;
+/// ACMD41 Host Capacity Support — request SDHC / block addressing.
+const ACMD41_HCS: u32 = 0x4000_0000;
 
 /// DivIDE-compatible **delayed** automap entry points (apply after opcode M1).
 const AUTOMAP_ENTRIES_DELAYED: &[u16] = &[0x0000, 0x0008, 0x0038, 0x0066, 0x04c6, 0x0562];
@@ -61,6 +65,9 @@ struct SdSpi {
     idle: bool,
     /// Next command is an application command (after CMD55).
     app_next: bool,
+    /// SDHC (block LBA) when true; SDSC (byte address) when false.
+    /// Latched from ACMD41 HCS; cleared by CMD0 / soft reset.
+    high_capacity: bool,
 }
 
 impl Default for SdSpi {
@@ -69,6 +76,7 @@ impl Default for SdSpi {
             phase: SpiPhase::Idle,
             idle: true,
             app_next: false,
+            high_capacity: false,
         }
     }
 }
@@ -204,6 +212,8 @@ impl SdSpi {
 
         if is_acmd && cmd == 41 {
             self.idle = false;
+            // DivMMC Ready / ESXDOS: HCS ⇒ SDHC + CCS; clear HCS ⇒ SDSC byte addr.
+            self.high_capacity = arg & ACMD41_HCS != 0;
             return (0x00, SpiPhase::Idle);
         }
 
@@ -228,14 +238,25 @@ impl SdSpi {
                 if self.idle {
                     (0x01, SpiPhase::Idle)
                 } else {
-                    (0x00, SpiPhase::WaitToken { lba: arg, left: 1 })
+                    (
+                        0x00,
+                        SpiPhase::WaitToken {
+                            lba: self.arg_to_lba(arg),
+                            left: 1,
+                        },
+                    )
                 }
             }
             24 => {
                 if self.idle {
                     (0x01, SpiPhase::Idle)
                 } else {
-                    (0x00, SpiPhase::WaitWriteToken { lba: arg })
+                    (
+                        0x00,
+                        SpiPhase::WaitWriteToken {
+                            lba: self.arg_to_lba(arg),
+                        },
+                    )
                 }
             }
             55 => {
@@ -244,7 +265,14 @@ impl SdSpi {
             }
             58 => {
                 let r1 = if self.idle { 0x01 } else { 0x00 };
-                let ocr0 = if self.idle { 0x00 } else { 0xc0 };
+                // OCR[31]=power-up done; OCR[30]=CCS (SDHC) when high_capacity.
+                let ocr0 = if self.idle {
+                    0x00
+                } else if self.high_capacity {
+                    0xc0
+                } else {
+                    0x80
+                };
                 (
                     r1,
                     SpiPhase::SendExtra {
@@ -254,6 +282,14 @@ impl SdSpi {
                 )
             }
             _ => (0x04 | if self.idle { 0x01 } else { 0x00 }, SpiPhase::Idle),
+        }
+    }
+
+    fn arg_to_lba(&self, arg: u32) -> u32 {
+        if self.high_capacity {
+            arg
+        } else {
+            arg / SD_SECTOR_SIZE as u32
         }
     }
 
@@ -516,6 +552,7 @@ mod tests {
     }
 
     fn spi_init_ready(d: &mut DivMmc) {
+        // ESXDOS / DivMMC Ready SDHC path: CMD0 → CMD8 → ACMD41(HCS).
         spi_select(d);
         assert_eq!(spi_cmd(d, 0, 0, 0x95), 0x01);
         spi_deselect(d);
@@ -527,8 +564,36 @@ mod tests {
         spi_deselect(d);
         spi_select(d);
         assert_eq!(spi_cmd(d, 55, 0, 0x65), 0x01);
-        assert_eq!(spi_cmd(d, 41, 0x4000_0000, 0x77), 0x00);
+        assert_eq!(spi_cmd(d, 41, ACMD41_HCS, 0x77), 0x00);
         spi_deselect(d);
+    }
+
+    fn spi_init_sdsc(d: &mut DivMmc) {
+        spi_select(d);
+        assert_eq!(spi_cmd(d, 0, 0, 0x95), 0x01);
+        spi_deselect(d);
+        spi_select(d);
+        assert_eq!(spi_cmd(d, 8, 0x1aa, 0x87), 0x01);
+        for _ in 0..4 {
+            let _ = spi_rx(d);
+        }
+        spi_deselect(d);
+        spi_select(d);
+        assert_eq!(spi_cmd(d, 55, 0, 0x65), 0x01);
+        // No HCS → SDSC byte addressing (legacy cards).
+        assert_eq!(spi_cmd(d, 41, 0, 0x77), 0x00);
+        spi_deselect(d);
+    }
+
+    fn spi_wait_token(d: &mut DivMmc) -> u8 {
+        let mut token = 0xff;
+        for _ in 0..8 {
+            token = spi_rx(d);
+            if token == 0xfe {
+                break;
+            }
+        }
+        token
     }
 
     #[test]
@@ -612,14 +677,7 @@ mod tests {
 
         spi_select(&mut d);
         assert_eq!(spi_cmd(&mut d, 17, 1, 0xff), 0x00);
-        let mut token = 0xff;
-        for _ in 0..8 {
-            token = spi_rx(&mut d);
-            if token == 0xfe {
-                break;
-            }
-        }
-        assert_eq!(token, 0xfe);
+        assert_eq!(spi_wait_token(&mut d), 0xfe);
         assert_eq!(spi_rx(&mut d), 0xaa);
         spi_deselect(&mut d);
     }
@@ -652,5 +710,92 @@ mod tests {
         d.attach_eeprom(&big).unwrap();
         assert!(d.eeprom_loaded);
         assert_eq!(d.eeprom[0], 0xa5);
+    }
+
+    /// `DivMMC` Ready ships up to 512 KiB SRAM (64 × 8 KiB); page bits 0–5.
+    #[test]
+    fn ready_card_sram_pages_reach_512kib() {
+        let mut d = DivMmc::new();
+        assert_eq!(d.ram.len(), RAM_PAGES * PAGE_SIZE);
+        assert_eq!(RAM_PAGES, 64);
+        let last = RAM_PAGES - 1;
+        d.ram[last * PAGE_SIZE] = 0xbe;
+        d.out_port(PORT_CONTROL, 0x80 | (last as u8));
+        assert_eq!(d.ram_page(), last);
+        assert_eq!(d.read_overlay(0x2000), Some(0xbe));
+    }
+
+    /// ESXDOS SDHC init: ACMD41(HCS) ⇒ OCR CCS and block-addressed CMD17.
+    #[test]
+    fn ready_card_sdhc_cmd58_reports_ccs_and_block_lba() {
+        let mut img = vec![0u8; SD_SECTOR_SIZE * 2];
+        img[SD_SECTOR_SIZE] = 0xcd;
+        let mut d = DivMmc::new();
+        d.attach_sd(img);
+        spi_init_ready(&mut d);
+
+        spi_select(&mut d);
+        assert_eq!(spi_cmd(&mut d, 58, 0, 0xff), 0x00);
+        let ocr0 = spi_rx(&mut d);
+        assert_eq!(ocr0 & 0xc0, 0xc0, "power-up + CCS for SDHC");
+        for _ in 0..3 {
+            let _ = spi_rx(&mut d);
+        }
+        spi_deselect(&mut d);
+
+        spi_select(&mut d);
+        assert_eq!(spi_cmd(&mut d, 17, 1, 0xff), 0x00);
+        assert_eq!(spi_wait_token(&mut d), 0xfe);
+        assert_eq!(spi_rx(&mut d), 0xcd);
+        spi_deselect(&mut d);
+    }
+
+    /// Legacy SDSC path: ACMD41 without HCS ⇒ no CCS; CMD17 arg is byte address.
+    #[test]
+    fn ready_card_sdsc_uses_byte_addressing() {
+        let mut img = vec![0u8; SD_SECTOR_SIZE * 2];
+        img[SD_SECTOR_SIZE] = 0xab;
+        let mut d = DivMmc::new();
+        d.attach_sd(img);
+        spi_init_sdsc(&mut d);
+
+        spi_select(&mut d);
+        assert_eq!(spi_cmd(&mut d, 58, 0, 0xff), 0x00);
+        let ocr0 = spi_rx(&mut d);
+        assert_eq!(ocr0 & 0xc0, 0x80, "power-up without CCS for SDSC");
+        for _ in 0..3 {
+            let _ = spi_rx(&mut d);
+        }
+        spi_deselect(&mut d);
+
+        spi_select(&mut d);
+        // Byte address of sector 1 (not LBA 1).
+        assert_eq!(spi_cmd(&mut d, 17, SD_SECTOR_SIZE as u32, 0xff), 0x00);
+        assert_eq!(spi_wait_token(&mut d), 0xfe);
+        assert_eq!(spi_rx(&mut d), 0xab);
+        spi_deselect(&mut d);
+    }
+
+    /// Real `DivMMC` CPLD: raising CS mid-command aborts the SPI transaction.
+    #[test]
+    fn ready_card_cs_deselect_aborts_spi_command() {
+        let mut d = DivMmc::new();
+        d.attach_sd(vec![0u8; SD_SECTOR_SIZE]);
+        spi_init_ready(&mut d);
+
+        spi_select(&mut d);
+        spi_tx(&mut d, 0x40 | 0x11); // start CMD17
+        spi_tx(&mut d, 0x00);
+        spi_deselect(&mut d); // abort mid-arg
+
+        spi_select(&mut d);
+        assert_eq!(
+            spi_cmd(&mut d, 58, 0, 0xff),
+            0x00,
+            "fresh command after CS abort must succeed"
+        );
+        let ocr0 = spi_rx(&mut d);
+        assert_eq!(ocr0 & 0xc0, 0xc0);
+        spi_deselect(&mut d);
     }
 }
