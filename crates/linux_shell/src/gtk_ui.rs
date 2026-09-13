@@ -191,6 +191,17 @@ impl AppState {
         self.refresh_input();
     }
 
+    fn clear_all_input(&mut self) {
+        self.held.clear();
+        self.shift_l = false;
+        self.shift_r = false;
+        self.ctrl_l = false;
+        self.ctrl_r = false;
+        self.alt_l = false;
+        self.alt_r = false;
+        self.refresh_input();
+    }
+
     fn report_err(&mut self, title: &str, err: &HostError) {
         let msg = format!("{title}: {err}");
         eprintln!("spec-chum-linux: {msg}");
@@ -242,24 +253,24 @@ impl AppState {
         }
         self.last_frame = Instant::now();
 
-        let (pcm_snap, title, w, h, rgba) = self.host.with_mut(|s| {
+        let (pcm_snap, window_title, status_text, w, h, rgba) = self.host.with_mut(|s| {
             let _ = s.run_frame();
             let pcm = s.audio_pcm().to_vec();
             let status = s.status().to_owned();
-            let title = match s.media_title() {
+            let window_title = match s.media_title() {
                 Some(t) => format!("Spec Chum — {t}"),
                 None => format!("Spec Chum — {status}"),
             };
             let w = s.width();
             let h = s.height();
             let rgba = s.framebuffer().to_vec();
-            (pcm, title, w, h, rgba)
+            (pcm, window_title, status, w, h, rgba)
         });
 
         self.pcm.lock().push_frame(&pcm_snap);
-        self.status = title.clone();
-        status_label.set_text(&title);
-        window.set_title(Some(&title));
+        self.status = status_text.clone();
+        status_label.set_text(&status_text);
+        window.set_title(Some(&window_title));
 
         if w > 0 && h > 0 && rgba.len() >= w * h * 4 {
             let bytes = glib::Bytes::from_owned(rgba);
@@ -331,9 +342,14 @@ fn build_ui(app: &Application, state: Rc<RefCell<AppState>>) {
     install_menubar(app);
     install_keys(&window, &picture, Rc::clone(&state));
 
-    // ~50 Hz frame pump (throttled further when prefs.throttle is on).
+    // ~50 Hz frame pump when unthrottled; 20 ms when prefs.throttle is on.
+    let period = if state.borrow().prefs.throttle {
+        Duration::from_millis(20)
+    } else {
+        Duration::from_millis(16)
+    };
     glib::timeout_add_local(
-        Duration::from_millis(16),
+        period,
         clone!(
             #[strong]
             state,
@@ -463,6 +479,16 @@ fn install_keys(window: &ApplicationWindow, picture: &Picture, state: Rc<RefCell
     ));
 
     window.add_controller(controller);
+
+    let focus = gtk4::EventControllerFocus::new();
+    focus.connect_leave(clone!(
+        #[strong]
+        state,
+        move |_| {
+            state.borrow_mut().clear_all_input();
+        }
+    ));
+    window.add_controller(focus);
 
     // Also attach to the picture so key focus works after clicking the display.
     let pic_controller = gtk4::EventControllerKey::new();
