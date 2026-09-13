@@ -6215,17 +6215,6 @@
       "source_location": "L260"
     },
     {
-      "id": "crates_living_room_src_crt_crtattachedtotv",
-      "label": "CrtAttachedToTv",
-      "_origin": "ast",
-      "community": 107,
-      "community_name": "attach_crt_to_television",
-      "file_type": "code",
-      "norm_label": "crtattachedtotv",
-      "source_file": "crates/living_room/src/crt.rs",
-      "source_location": "L99"
-    },
-    {
       "id": "crates_living_room_src_crt_rs_entity",
       "label": "Entity",
       "_origin": "ast",
@@ -7546,28 +7535,6 @@
       "source_location": "L1"
     },
     {
-      "id": "crates_living_room_src_camera_cameraplugin",
-      "label": "CameraPlugin",
-      "_origin": "ast",
-      "community": 112,
-      "community_name": "camera.rs",
-      "file_type": "code",
-      "norm_label": "cameraplugin",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L242"
-    },
-    {
-      "id": "crates_living_room_src_camera_cameraplugin_build",
-      "label": ".build()",
-      "_origin": "ast",
-      "community": 112,
-      "community_name": "camera.rs",
-      "file_type": "code",
-      "norm_label": ".build()",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L245"
-    },
-    {
       "id": "crates_living_room_src_camera_clamp01",
       "label": "clamp01()",
       "_origin": "ast",
@@ -7656,6 +7623,17 @@
       "source_location": "L531"
     },
     {
+      "id": "crates_living_room_src_camera_introskiprequest",
+      "label": "IntroSkipRequest",
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "camera.rs",
+      "file_type": "code",
+      "norm_label": "introskiprequest",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L127"
+    },
+    {
       "id": "crates_living_room_src_camera_lerp_eye_pullback_rise",
       "label": "lerp_eye_pullback_rise()",
       "_origin": "ast",
@@ -7700,6 +7678,17 @@
       "source_location": "L557"
     },
     {
+      "id": "crates_living_room_src_camera_pose_at_zoom",
+      "label": "pose_at_zoom()",
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "camera.rs",
+      "file_type": "code",
+      "norm_label": "pose_at_zoom()",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L282"
+    },
+    {
       "id": "crates_living_room_src_camera_preset0_is_near_fullscreen_crt",
       "label": "preset0_is_near_fullscreen_crt()",
       "_origin": "ast",
@@ -7733,24 +7722,24 @@
       "source_location": "L563"
     },
     {
-      "id": "crates_living_room_src_camera_rs_app",
-      "label": "App",
+      "id": "crates_living_room_src_camera_rs_commands",
+      "label": "Commands",
       "_origin": "ast",
       "community": 112,
       "community_name": "camera.rs",
       "file_type": "code",
-      "norm_label": "app",
+      "norm_label": "commands",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "crates_living_room_src_camera_rs_plugin",
-      "label": "Plugin",
+      "id": "crates_living_room_src_camera_rs_transform",
+      "label": "Transform",
       "_origin": "ast",
       "community": 112,
       "community_name": "camera.rs",
       "file_type": "code",
-      "norm_label": "plugin",
+      "norm_label": "transform",
       "source_file": "",
       "source_location": ""
     },
@@ -7777,6 +7766,17 @@
       "source_location": "L266"
     },
     {
+      "id": "crates_living_room_src_camera_setup_camera",
+      "label": "setup_camera()",
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "camera.rs",
+      "file_type": "code",
+      "norm_label": "setup_camera()",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L295"
+    },
+    {
       "id": "crates_living_room_src_camera_zoompreset",
       "label": "ZoomPreset",
       "_origin": "ast",
@@ -7786,6 +7786,17 @@
       "norm_label": "zoompreset",
       "source_file": "crates/living_room/src/camera.rs",
       "source_location": "L75"
+    },
+    {
+      "id": "crates_living_room_src_camera_zoomscrollaccum",
+      "label": "ZoomScrollAccum",
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "camera.rs",
+      "file_type": "code",
+      "norm_label": "zoomscrollaccum",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L236"
     },
     {
       "id": "crates_agent_server_src_routes_session",
@@ -9445,6 +9456,17 @@
       "source_location": "L168"
     },
     {
+      "id": "crates_living_room_src_crt_crtattachedtotv",
+      "label": "CrtAttachedToTv",
+      "_origin": "ast",
+      "community": 120,
+      "community_name": "crt.rs",
+      "file_type": "code",
+      "norm_label": "crtattachedtotv",
+      "source_file": "crates/living_room/src/crt.rs",
+      "source_location": "L99"
+    },
+    {
       "id": "crates_living_room_src_crt_env_flag",
       "label": "env_flag()",
       "_origin": "ast",
@@ -10875,6 +10897,17 @@
       "source_location": "L872"
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_apply_config",
+      "label": ".apply_config()",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "ControlPlane",
+      "file_type": "code",
+      "norm_label": ".apply_config()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L479"
+    },
+    {
       "id": "crates_control_plane_src_service_controlplane_attach_beta",
       "label": ".attach_beta()",
       "_origin": "ast",
@@ -10917,6 +10950,17 @@
       "norm_label": ".attach_multiface()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L974"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_autoload_model",
+      "label": ".autoload_model()",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "ControlPlane",
+      "file_type": "code",
+      "norm_label": ".autoload_model()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L673"
     },
     {
       "id": "crates_control_plane_src_service_controlplane_clear_breakpoints",
@@ -10983,17 +11027,6 @@
       "norm_label": ".host_view()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L204"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_host_window_png",
-      "label": ".host_window_png()",
-      "_origin": "ast",
-      "community": 13,
-      "community_name": "ControlPlane",
-      "file_type": "code",
-      "norm_label": ".host_window_png()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L219"
     },
     {
       "id": "crates_control_plane_src_service_controlplane_insert_dck",
@@ -11150,6 +11183,17 @@
       "source_location": "L823"
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_prefs",
+      "label": ".prefs()",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "ControlPlane",
+      "file_type": "code",
+      "norm_label": ".prefs()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L555"
+    },
+    {
       "id": "crates_control_plane_src_service_controlplane_remove_breakpoint",
       "label": ".remove_breakpoint()",
       "_origin": "ast",
@@ -11247,6 +11291,28 @@
       "norm_label": ".set_key()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L486"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_set_model",
+      "label": ".set_model()",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "ControlPlane",
+      "file_type": "code",
+      "norm_label": ".set_model()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L665"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_set_mouse",
+      "label": ".set_mouse()",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "ControlPlane",
+      "file_type": "code",
+      "norm_label": ".set_mouse()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L517"
     },
     {
       "id": "crates_control_plane_src_service_controlplane_set_running",
@@ -11370,15 +11436,15 @@
       "source_location": "L948"
     },
     {
-      "id": "crates_control_plane_src_service_controlplane_type_load",
-      "label": ".type_load()",
+      "id": "crates_control_plane_src_service_controlplane_with_machine_load",
+      "label": ".with_machine_load()",
       "_origin": "ast",
       "community": 13,
       "community_name": "ControlPlane",
       "file_type": "code",
-      "norm_label": ".type_load()",
+      "norm_label": ".with_machine_load()",
       "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L808"
+      "source_location": "L346"
     },
     {
       "id": "crates_control_plane_src_service_controlplane_with_session_mut",
@@ -11432,6 +11498,17 @@
       "community_name": "ControlPlane",
       "file_type": "code",
       "norm_label": "sharedhostview",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_control_plane_src_service_rs_usermachineconfig",
+      "label": "UserMachineConfig",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "ControlPlane",
+      "file_type": "code",
+      "norm_label": "usermachineconfig",
       "source_file": "",
       "source_location": ""
     },
@@ -15696,7 +15773,7 @@
       "file_type": "code",
       "norm_label": "automap_3dxx_is_instant()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L800"
+      "source_location": "L802"
     },
     {
       "id": "crates_bus_src_divmmc_automap_entry_and_exit_with_eeprom_is_delayed",
@@ -15707,7 +15784,7 @@
       "file_type": "code",
       "norm_label": "automap_entry_and_exit_with_eeprom_is_delayed()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L782"
+      "source_location": "L784"
     },
     {
       "id": "crates_bus_src_divmmc_automap_ignored_without_eeprom_or_mapram",
@@ -15718,7 +15795,7 @@
       "file_type": "code",
       "norm_label": "automap_ignored_without_eeprom_or_mapram()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L809"
+      "source_location": "L811"
     },
     {
       "id": "crates_bus_src_divmmc_control_port_conmem_shows_ram_page",
@@ -15729,7 +15806,7 @@
       "file_type": "code",
       "norm_label": "control_port_conmem_shows_ram_page()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L748"
+      "source_location": "L750"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc",
@@ -15740,7 +15817,7 @@
       "file_type": "code",
       "norm_label": "divmmc",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L396"
+      "source_location": "L397"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_active_sd_slot",
@@ -15751,7 +15828,7 @@
       "file_type": "code",
       "norm_label": ".active_sd_slot()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L551"
+      "source_location": "L553"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_after_m1_refresh",
@@ -15762,7 +15839,7 @@
       "file_type": "code",
       "norm_label": ".after_m1_refresh()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L536"
+      "source_location": "L538"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_attach_eeprom",
@@ -15773,7 +15850,7 @@
       "file_type": "code",
       "norm_label": ".attach_eeprom()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L465"
+      "source_location": "L467"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_attach_sd",
@@ -15784,7 +15861,7 @@
       "file_type": "code",
       "norm_label": ".attach_sd()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L439"
+      "source_location": "L440"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_attach_sd_slot",
@@ -15795,7 +15872,7 @@
       "file_type": "code",
       "norm_label": ".attach_sd_slot()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L447"
+      "source_location": "L449"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_conmem",
@@ -15806,7 +15883,7 @@
       "file_type": "code",
       "norm_label": ".conmem()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L489"
+      "source_location": "L491"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_default",
@@ -15817,7 +15894,7 @@
       "file_type": "code",
       "norm_label": ".default()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L416"
+      "source_location": "L417"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_exchange_active",
@@ -15828,7 +15905,7 @@
       "file_type": "code",
       "norm_label": ".exchange_active()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L561"
+      "source_location": "L563"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_in_port",
@@ -15839,7 +15916,7 @@
       "file_type": "code",
       "norm_label": ".in_port()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L594"
+      "source_location": "L596"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_mapped",
@@ -15850,7 +15927,7 @@
       "file_type": "code",
       "norm_label": ".mapped()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L505"
+      "source_location": "L507"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_mapram",
@@ -15861,7 +15938,7 @@
       "file_type": "code",
       "norm_label": ".mapram()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L494"
+      "source_location": "L496"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_new",
@@ -15872,7 +15949,7 @@
       "file_type": "code",
       "norm_label": ".new()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L423"
+      "source_location": "L424"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_notify_m1",
@@ -15883,7 +15960,7 @@
       "file_type": "code",
       "norm_label": ".notify_m1()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L518"
+      "source_location": "L520"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_out_port",
@@ -15894,7 +15971,7 @@
       "file_type": "code",
       "norm_label": ".out_port()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L569"
+      "source_location": "L571"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_ram_page",
@@ -15905,7 +15982,7 @@
       "file_type": "code",
       "norm_label": ".ram_page()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L499"
+      "source_location": "L501"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_read_overlay",
@@ -15916,7 +15993,7 @@
       "file_type": "code",
       "norm_label": ".read_overlay()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L606"
+      "source_location": "L608"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_reset_soft",
@@ -15927,7 +16004,7 @@
       "file_type": "code",
       "norm_label": ".reset_soft()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L479"
+      "source_location": "L481"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_slot_cs_active",
@@ -15938,7 +16015,7 @@
       "file_type": "code",
       "norm_label": ".slot_cs_active()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L541"
+      "source_location": "L543"
     },
     {
       "id": "crates_bus_src_divmmc_divmmc_write_overlay",
@@ -15949,7 +16026,7 @@
       "file_type": "code",
       "norm_label": ".write_overlay()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L623"
+      "source_location": "L625"
     },
     {
       "id": "crates_bus_src_divmmc_dual_slot_cs_selects_independent_sd_images",
@@ -15960,7 +16037,7 @@
       "file_type": "code",
       "norm_label": "dual_slot_cs_selects_independent_sd_images()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1023"
+      "source_location": "L1025"
     },
     {
       "id": "crates_bus_src_divmmc_eeprom_accepts_larger_image_prefix",
@@ -15971,7 +16048,7 @@
       "file_type": "code",
       "norm_label": "eeprom_accepts_larger_image_prefix()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L855"
+      "source_location": "L857"
     },
     {
       "id": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
@@ -15982,7 +16059,7 @@
       "file_type": "code",
       "norm_label": "fat_cmd18_reads_two_sectors_then_cmd12_stops()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L952"
+      "source_location": "L954"
     },
     {
       "id": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
@@ -15993,7 +16070,7 @@
       "file_type": "code",
       "norm_label": "fat_cmd25_writes_two_sectors_then_stop_tran()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L986"
+      "source_location": "L988"
     },
     {
       "id": "crates_bus_src_divmmc_mapram_is_sticky_across_control_writes",
@@ -16004,7 +16081,7 @@
       "file_type": "code",
       "norm_label": "mapram_is_sticky_across_control_writes()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L768"
+      "source_location": "L770"
     },
     {
       "id": "crates_bus_src_divmmc_mapram_uses_page_3_in_lower_8k",
@@ -16015,7 +16092,7 @@
       "file_type": "code",
       "norm_label": "mapram_uses_page_3_in_lower_8k()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L760"
+      "source_location": "L762"
     },
     {
       "id": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
@@ -16026,7 +16103,7 @@
       "file_type": "code",
       "norm_label": "ready_card_cs_deselect_aborts_spi_command()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L929"
+      "source_location": "L931"
     },
     {
       "id": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
@@ -16037,7 +16114,7 @@
       "file_type": "code",
       "norm_label": "ready_card_sdhc_cmd58_reports_ccs_and_block_lba()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L878"
+      "source_location": "L880"
     },
     {
       "id": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
@@ -16048,7 +16125,7 @@
       "file_type": "code",
       "norm_label": "ready_card_sdsc_uses_byte_addressing()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L903"
+      "source_location": "L905"
     },
     {
       "id": "crates_bus_src_divmmc_ready_card_sram_pages_reach_512kib",
@@ -16059,7 +16136,7 @@
       "file_type": "code",
       "norm_label": "ready_card_sram_pages_reach_512kib()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L865"
+      "source_location": "L867"
     },
     {
       "id": "crates_bus_src_divmmc_rs_default",
@@ -16125,7 +16202,7 @@
       "file_type": "code",
       "norm_label": "sd_spi_cmd17_reads_sector()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L817"
+      "source_location": "L819"
     },
     {
       "id": "crates_bus_src_divmmc_sd_spi_cmd24_writes_sector",
@@ -16136,7 +16213,7 @@
       "file_type": "code",
       "norm_label": "sd_spi_cmd24_writes_sector()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L834"
+      "source_location": "L836"
     },
     {
       "id": "crates_bus_src_divmmc_sdsloterror",
@@ -16158,7 +16235,7 @@
       "file_type": "code",
       "norm_label": "sdspi",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L78"
+      "source_location": "L79"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_arg_to_lba",
@@ -16169,7 +16246,7 @@
       "file_type": "code",
       "norm_label": ".arg_to_lba()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L367"
+      "source_location": "L368"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_begin_response",
@@ -16180,7 +16257,7 @@
       "file_type": "code",
       "norm_label": ".begin_response()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L278"
+      "source_location": "L279"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_clock",
@@ -16191,7 +16268,7 @@
       "file_type": "code",
       "norm_label": ".clock()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L114"
+      "source_location": "L115"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_default",
@@ -16202,7 +16279,7 @@
       "file_type": "code",
       "norm_label": ".default()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L90"
+      "source_location": "L91"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_exchange",
@@ -16213,7 +16290,7 @@
       "file_type": "code",
       "norm_label": ".exchange()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L109"
+      "source_location": "L110"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_reset_transaction",
@@ -16224,7 +16301,7 @@
       "file_type": "code",
       "norm_label": ".reset_transaction()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L101"
+      "source_location": "L102"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_sector_byte",
@@ -16235,7 +16312,7 @@
       "file_type": "code",
       "norm_label": ".sector_byte()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L375"
+      "source_location": "L376"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_soft_reset_card",
@@ -16246,7 +16323,7 @@
       "file_type": "code",
       "norm_label": ".soft_reset_card()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L105"
+      "source_location": "L106"
     },
     {
       "id": "crates_bus_src_divmmc_sdspi_write_sector_byte",
@@ -16257,7 +16334,7 @@
       "file_type": "code",
       "norm_label": ".write_sector_byte()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L382"
+      "source_location": "L383"
     },
     {
       "id": "crates_bus_src_divmmc_spi_cmd",
@@ -16268,7 +16345,7 @@
       "file_type": "code",
       "norm_label": "spi_cmd()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L667"
+      "source_location": "L669"
     },
     {
       "id": "crates_bus_src_divmmc_spi_deselect",
@@ -16279,7 +16356,7 @@
       "file_type": "code",
       "norm_label": "spi_deselect()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L655"
+      "source_location": "L657"
     },
     {
       "id": "crates_bus_src_divmmc_spi_init_ready",
@@ -16290,7 +16367,7 @@
       "file_type": "code",
       "norm_label": "spi_init_ready()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L679"
+      "source_location": "L681"
     },
     {
       "id": "crates_bus_src_divmmc_spi_init_ready_slot1",
@@ -16301,7 +16378,7 @@
       "file_type": "code",
       "norm_label": "spi_init_ready_slot1()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L696"
+      "source_location": "L698"
     },
     {
       "id": "crates_bus_src_divmmc_spi_init_sdsc",
@@ -16312,7 +16389,7 @@
       "file_type": "code",
       "norm_label": "spi_init_sdsc()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L712"
+      "source_location": "L714"
     },
     {
       "id": "crates_bus_src_divmmc_spi_rx",
@@ -16323,7 +16400,7 @@
       "file_type": "code",
       "norm_label": "spi_rx()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L663"
+      "source_location": "L665"
     },
     {
       "id": "crates_bus_src_divmmc_spi_select",
@@ -16334,7 +16411,7 @@
       "file_type": "code",
       "norm_label": "spi_select()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L647"
+      "source_location": "L649"
     },
     {
       "id": "crates_bus_src_divmmc_spi_select_slot1",
@@ -16345,7 +16422,7 @@
       "file_type": "code",
       "norm_label": "spi_select_slot1()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L651"
+      "source_location": "L653"
     },
     {
       "id": "crates_bus_src_divmmc_spi_skip_sector_rest",
@@ -16356,7 +16433,7 @@
       "file_type": "code",
       "norm_label": "spi_skip_sector_rest()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L740"
+      "source_location": "L742"
     },
     {
       "id": "crates_bus_src_divmmc_spi_tx",
@@ -16367,7 +16444,7 @@
       "file_type": "code",
       "norm_label": "spi_tx()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L659"
+      "source_location": "L661"
     },
     {
       "id": "crates_bus_src_divmmc_spi_wait_token",
@@ -16378,7 +16455,7 @@
       "file_type": "code",
       "norm_label": "spi_wait_token()",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L729"
+      "source_location": "L731"
     },
     {
       "id": "crates_bus_src_divmmc_spiphase",
@@ -16389,7 +16466,7 @@
       "file_type": "code",
       "norm_label": "spiphase",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L56"
+      "source_location": "L57"
     },
     {
       "id": "scripts_run_system_tests",
@@ -17585,17 +17662,6 @@
       "source_location": "L31"
     },
     {
-      "id": "crates_agent_server_src_routes_health_lasterrorresponse",
-      "label": "LastErrorResponse",
-      "_origin": "ast",
-      "community": 174,
-      "community_name": "health",
-      "file_type": "code",
-      "norm_label": "lasterrorresponse",
-      "source_file": "crates/agent_server/src/routes/health.rs",
-      "source_location": "L27"
-    },
-    {
       "id": "crates_agent_server_src_routes_health_rs_appstate",
       "label": "AppState",
       "_origin": "ast",
@@ -17614,17 +17680,6 @@
       "community_name": "health",
       "file_type": "code",
       "norm_label": "headermap",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_agent_server_src_routes_health_rs_option",
-      "label": "Option",
-      "_origin": "ast",
-      "community": 174,
-      "community_name": "health",
-      "file_type": "code",
-      "norm_label": "option",
       "source_file": "",
       "source_location": ""
     },
@@ -20841,224 +20896,48 @@
       "source_location": "L1"
     },
     {
-      "id": "crates_control_plane_src_service_apply_prefs_to_session",
-      "label": "apply_prefs_to_session()",
+      "id": "crates_living_room_src_camera_cameraplugin",
+      "label": "CameraPlugin",
       "_origin": "ast",
       "community": 196,
-      "community_name": ".patch_prefs",
+      "community_name": "CameraPlugin",
       "file_type": "code",
-      "norm_label": "apply_prefs_to_session()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L1225"
+      "norm_label": "cameraplugin",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L242"
     },
     {
-      "id": "crates_control_plane_src_service_controlplane_from_shared",
-      "label": ".from_shared()",
+      "id": "crates_living_room_src_camera_cameraplugin_build",
+      "label": ".build()",
       "_origin": "ast",
       "community": 196,
-      "community_name": ".patch_prefs",
+      "community_name": "CameraPlugin",
       "file_type": "code",
-      "norm_label": ".from_shared()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L192"
+      "norm_label": ".build()",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L245"
     },
     {
-      "id": "crates_control_plane_src_service_controlplane_patch_prefs",
-      "label": ".patch_prefs()",
+      "id": "crates_living_room_src_camera_rs_app",
+      "label": "App",
       "_origin": "ast",
       "community": 196,
-      "community_name": ".patch_prefs",
+      "community_name": "CameraPlugin",
       "file_type": "code",
-      "norm_label": ".patch_prefs()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L563"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_prefs",
-      "label": ".prefs()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".prefs()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L555"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_set_mouse",
-      "label": ".set_mouse()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".set_mouse()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L517"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_set_window_capture",
-      "label": ".set_window_capture()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".set_window_capture()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L214"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_shared_host",
-      "label": ".shared_host()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".shared_host()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L297"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_with_session",
-      "label": ".with_session()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".with_session()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L186"
-    },
-    {
-      "id": "crates_control_plane_src_service_prefs_patch_round_trip",
-      "label": "prefs_patch_round_trip()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": "prefs_patch_round_trip()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L1474"
-    },
-    {
-      "id": "crates_control_plane_src_service_prefspatch",
-      "label": "PrefsPatch",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": "prefspatch",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L170"
-    },
-    {
-      "id": "crates_control_plane_src_service_rs_arc",
-      "label": "Arc",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": "arc",
+      "norm_label": "app",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "crates_control_plane_src_service_rs_default",
-      "label": "Default",
+      "id": "crates_living_room_src_camera_rs_plugin",
+      "label": "Plugin",
       "_origin": "ast",
       "community": 196,
-      "community_name": ".patch_prefs",
+      "community_name": "CameraPlugin",
       "file_type": "code",
-      "norm_label": "default",
+      "norm_label": "plugin",
       "source_file": "",
       "source_location": ""
-    },
-    {
-      "id": "crates_control_plane_src_service_rs_parkingmutex",
-      "label": "ParkingMutex",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": "parkingmutex",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_control_plane_src_service_rs_self",
-      "label": "Self",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": "self",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_control_plane_src_service_serverconfig_from_env",
-      "label": ".from_env()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".from_env()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L33"
-    },
-    {
-      "id": "crates_control_plane_src_service_sessionprefs",
-      "label": "SessionPrefs",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": "sessionprefs",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L121"
-    },
-    {
-      "id": "crates_control_plane_src_service_sessionprefs_default",
-      "label": ".default()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".default()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L132"
-    },
-    {
-      "id": "crates_control_plane_src_service_sessionprefs_sanitized",
-      "label": ".sanitized()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".sanitized()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L146"
-    },
-    {
-      "id": "crates_control_plane_src_service_sessionprefs_tape_load_options",
-      "label": ".tape_load_options()",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": ".tape_load_options()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L159"
-    },
-    {
-      "id": "crates_host_api_src_prefs_prefjoystick",
-      "label": "PrefJoystick",
-      "_origin": "ast",
-      "community": 196,
-      "community_name": ".patch_prefs",
-      "file_type": "code",
-      "norm_label": "prefjoystick",
-      "source_file": "crates/host_api/src/prefs.rs",
-      "source_location": "L439"
     },
     {
       "id": "scripts_ci_build_linux_deb",
@@ -21581,17 +21460,6 @@
       "source_location": "L138"
     },
     {
-      "id": "crates_living_room_src_camera_introskiprequest",
-      "label": "IntroSkipRequest",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "apply_zoom_camera",
-      "file_type": "code",
-      "norm_label": "introskiprequest",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L127"
-    },
-    {
       "id": "crates_living_room_src_camera_nudge_clamps",
       "label": "nudge_clamps()",
       "_origin": "ast",
@@ -21601,17 +21469,6 @@
       "norm_label": "nudge_clamps()",
       "source_file": "crates/living_room/src/camera.rs",
       "source_location": "L576"
-    },
-    {
-      "id": "crates_living_room_src_camera_pose_at_zoom",
-      "label": "pose_at_zoom()",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "apply_zoom_camera",
-      "file_type": "code",
-      "norm_label": "pose_at_zoom()",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L282"
     },
     {
       "id": "crates_living_room_src_camera_postintrozoom",
@@ -21643,17 +21500,6 @@
       "community_name": "apply_zoom_camera",
       "file_type": "code",
       "norm_label": "buttoninput",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_camera_rs_commands",
-      "label": "Commands",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "apply_zoom_camera",
-      "file_type": "code",
-      "norm_label": "commands",
       "source_file": "",
       "source_location": ""
     },
@@ -21790,17 +21636,6 @@
       "source_location": ""
     },
     {
-      "id": "crates_living_room_src_camera_rs_transform",
-      "label": "Transform",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "apply_zoom_camera",
-      "file_type": "code",
-      "norm_label": "transform",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
       "id": "crates_living_room_src_camera_rs_with",
       "label": "With",
       "_origin": "ast",
@@ -21821,17 +21656,6 @@
       "norm_label": "without",
       "source_file": "",
       "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_camera_setup_camera",
-      "label": "setup_camera()",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "apply_zoom_camera",
-      "file_type": "code",
-      "norm_label": "setup_camera()",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L295"
     },
     {
       "id": "crates_living_room_src_camera_skip_intro",
@@ -21876,17 +21700,6 @@
       "norm_label": "zoom_from_scroll()",
       "source_file": "crates/living_room/src/camera.rs",
       "source_location": "L422"
-    },
-    {
-      "id": "crates_living_room_src_camera_zoomscrollaccum",
-      "label": "ZoomScrollAccum",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "apply_zoom_camera",
-      "file_type": "code",
-      "norm_label": "zoomscrollaccum",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L236"
     },
     {
       "id": "crates_living_room_src_crt_crtglass",
@@ -22106,15 +21919,15 @@
       "source_location": "L599"
     },
     {
-      "id": "crates_control_plane_src_service_controlplane_disasm",
-      "label": ".disasm()",
+      "id": "crates_control_plane_src_service_controlplane_inspect_json",
+      "label": ".inspect_json()",
       "_origin": "ast",
       "community": 206,
       "community_name": "String",
       "file_type": "code",
-      "norm_label": ".disasm()",
+      "norm_label": ".inspect_json()",
       "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L843"
+      "source_location": "L390"
     },
     {
       "id": "crates_control_plane_src_service_controlplane_last_break",
@@ -22128,28 +21941,6 @@
       "source_location": "L609"
     },
     {
-      "id": "crates_control_plane_src_service_controlplane_peek",
-      "label": ".peek()",
-      "_origin": "ast",
-      "community": 206,
-      "community_name": "String",
-      "file_type": "code",
-      "norm_label": ".peek()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L819"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_rom_setup",
-      "label": ".rom_setup()",
-      "_origin": "ast",
-      "community": 206,
-      "community_name": "String",
-      "file_type": "code",
-      "norm_label": ".rom_setup()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L953"
-    },
-    {
       "id": "crates_control_plane_src_service_controlplane_trace_dump",
       "label": ".trace_dump()",
       "_origin": "ast",
@@ -22159,6 +21950,17 @@
       "norm_label": ".trace_dump()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L931"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_type_load",
+      "label": ".type_load()",
+      "_origin": "ast",
+      "community": 206,
+      "community_name": "String",
+      "file_type": "code",
+      "norm_label": ".type_load()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L808"
     },
     {
       "id": "crates_control_plane_src_service_format_break_reason",
@@ -22181,6 +21983,39 @@
       "norm_label": "lastbreakresponse",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L95"
+    },
+    {
+      "id": "crates_control_plane_src_service_memorymapresponse",
+      "label": "MemoryMapResponse",
+      "_origin": "ast",
+      "community": 206,
+      "community_name": "String",
+      "file_type": "code",
+      "norm_label": "memorymapresponse",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L1152"
+    },
+    {
+      "id": "crates_control_plane_src_service_memoryregion",
+      "label": "MemoryRegion",
+      "_origin": "ast",
+      "community": 206,
+      "community_name": "String",
+      "file_type": "code",
+      "norm_label": "memoryregion",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L1131"
+    },
+    {
+      "id": "crates_control_plane_src_service_pagingsnapshot",
+      "label": "PagingSnapshot",
+      "_origin": "ast",
+      "community": 206,
+      "community_name": "String",
+      "file_type": "code",
+      "norm_label": "pagingsnapshot",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L1141"
     },
     {
       "id": "crates_control_plane_src_service_rs_string",
@@ -22214,6 +22049,17 @@
       "norm_label": "serverconfig",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L23"
+    },
+    {
+      "id": "crates_control_plane_src_service_serverconfig_from_env",
+      "label": ".from_env()",
+      "_origin": "ast",
+      "community": 206,
+      "community_name": "String",
+      "file_type": "code",
+      "norm_label": ".from_env()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L33"
     },
     {
       "id": "crates_control_plane_src_service_serverconfig_socket_addr",
@@ -22271,6 +22117,17 @@
       "source_location": "L1172"
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_disasm",
+      "label": ".disasm()",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": ".disasm()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L843"
+    },
+    {
       "id": "crates_control_plane_src_service_controlplane_framebuffer_png",
       "label": ".framebuffer_png()",
       "_origin": "ast",
@@ -22302,6 +22159,17 @@
       "norm_label": ".hardware_status()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1044"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_host_window_png",
+      "label": ".host_window_png()",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": ".host_window_png()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L219"
     },
     {
       "id": "crates_control_plane_src_service_controlplane_list_breakpoints",
@@ -22337,6 +22205,50 @@
       "source_location": "L893"
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_peek",
+      "label": ".peek()",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": ".peek()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L819"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_rom_setup",
+      "label": ".rom_setup()",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": ".rom_setup()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L953"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_with_host_mut",
+      "label": ".with_host_mut()",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": ".with_host_mut()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L368"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_with_host_ref",
+      "label": ".with_host_ref()",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": ".with_host_ref()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L374"
+    },
+    {
       "id": "crates_control_plane_src_service_controlplane_with_session_ref",
       "label": ".with_session_ref()",
       "_origin": "ast",
@@ -22370,6 +22282,17 @@
       "source_location": "L1234"
     },
     {
+      "id": "crates_control_plane_src_service_rs_fnonce",
+      "label": "FnOnce",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": "fnonce",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_control_plane_src_service_rs_from",
       "label": "From",
       "_origin": "ast",
@@ -22377,6 +22300,17 @@
       "community_name": ".with_session_ref",
       "file_type": "code",
       "norm_label": "from",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_control_plane_src_service_rs_r",
+      "label": "R",
+      "_origin": "ast",
+      "community": 207,
+      "community_name": ".with_session_ref",
+      "file_type": "code",
+      "norm_label": "r",
       "source_file": "",
       "source_location": ""
     },
@@ -26259,182 +26193,6 @@
       "source_location": "L38"
     },
     {
-      "id": "crates_tape_src_lib_advances_to_next_block_after_pause",
-      "label": "advances_to_next_block_after_pause()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": "advances_to_next_block_after_pause()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L720"
-    },
-    {
-      "id": "crates_tape_src_lib_experiencependingflash",
-      "label": "ExperiencePendingFlash",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": "experiencependingflash",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L125"
-    },
-    {
-      "id": "crates_tape_src_lib_push_pulse",
-      "label": "push_pulse()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": "push_pulse()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L139"
-    },
-    {
-      "id": "crates_tape_src_lib_rs_option",
-      "label": "Option",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": "option",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_rs_vec",
-      "label": "Vec",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": "vec",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer",
-      "label": "TapPlayer",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": "tapplayer",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L146"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_advance",
-      "label": ".advance()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".advance()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L346"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_consume_block",
-      "label": ".consume_block()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".consume_block()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L278"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_current_block_bytes",
-      "label": ".current_block_bytes()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".current_block_bytes()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L292"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_experience",
-      "label": ".experience()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".experience()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L214"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_finished",
-      "label": ".finished()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".finished()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L273"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_queue_block",
-      "label": ".queue_block()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".queue_block()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L296"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_rewind",
-      "label": ".rewind()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".rewind()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L249"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_rewind_to_block",
-      "label": ".rewind_to_block()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".rewind_to_block()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L286"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_set_block_pauses",
-      "label": ".set_block_pauses()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".set_block_pauses()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L189"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_speed",
-      "label": ".speed()",
-      "_origin": "ast",
-      "community": 234,
-      "community_name": "TapPlayer",
-      "file_type": "code",
-      "norm_label": ".speed()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L209"
-    },
-    {
       "id": "crates_living_room_src_ui_overlay_rs_app",
       "label": "App",
       "_origin": "ast",
@@ -26477,248 +26235,6 @@
       "norm_label": ".build()",
       "source_file": "crates/living_room/src/ui_overlay.rs",
       "source_location": "L59"
-    },
-    {
-      "id": "crates_control_plane_src_framebuffer_parse_model_slug",
-      "label": "parse_model_slug()",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": "parse_model_slug()",
-      "source_file": "crates/control_plane/src/framebuffer.rs",
-      "source_location": "L48"
-    },
-    {
-      "id": "crates_control_plane_src_framebuffer_rs_apiresult",
-      "label": "ApiResult",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": "apiresult",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_apply_config",
-      "label": ".apply_config()",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": ".apply_config()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L479"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_autoload_model",
-      "label": ".autoload_model()",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": ".autoload_model()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L673"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_set_model",
-      "label": ".set_model()",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": ".set_model()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L665"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_with_host_mut",
-      "label": ".with_host_mut()",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": ".with_host_mut()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L368"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_with_host_ref",
-      "label": ".with_host_ref()",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": ".with_host_ref()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L374"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_with_machine_load",
-      "label": ".with_machine_load()",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": ".with_machine_load()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L346"
-    },
-    {
-      "id": "crates_control_plane_src_service_rs_fnonce",
-      "label": "FnOnce",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": "fnonce",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_control_plane_src_service_rs_r",
-      "label": "R",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": "r",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_control_plane_src_service_rs_usermachineconfig",
-      "label": "UserMachineConfig",
-      "_origin": "ast",
-      "community": 236,
-      "community_name": ".with_machine_load",
-      "file_type": "code",
-      "norm_label": "usermachineconfig",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_parse_empty",
-      "label": "parse_empty()",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "parse_empty()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L543"
-    },
-    {
-      "id": "crates_tape_src_lib_parse_one_block",
-      "label": "parse_one_block()",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "parse_one_block()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L549"
-    },
-    {
-      "id": "crates_tape_src_lib_rs_error",
-      "label": "Error",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "error",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_rs_path",
-      "label": "Path",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "path",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_rs_result",
-      "label": "Result",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "result",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_rs_self",
-      "label": "Self",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "self",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_rs_string",
-      "label": "String",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "string",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_tapeerror",
-      "label": "TapeError",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "tapeerror",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L20"
-    },
-    {
-      "id": "crates_tape_src_lib_tapimage",
-      "label": "TapImage",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": "tapimage",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L12"
-    },
-    {
-      "id": "crates_tape_src_lib_tapimage_load",
-      "label": ".load()",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": ".load()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L28"
-    },
-    {
-      "id": "crates_tape_src_lib_tapimage_parse",
-      "label": ".parse()",
-      "_origin": "ast",
-      "community": 237,
-      "community_name": "TapImage",
-      "file_type": "code",
-      "norm_label": ".parse()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L33"
     },
     {
       "id": "crates_ula_src_lib_bank_switch_between_bitmap_and_attr_fetch",
@@ -27599,215 +27115,6 @@
       "norm_label": "trdos_rom_has_native_file_services()",
       "source_file": "crates/machine/src/rom/trdos.rs",
       "source_location": "L34"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe",
-      "label": "deathchase_probe.rs",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "deathchase_probe.rs",
-      "source_file": "crates/machine/tests/deathchase_probe.rs",
-      "source_location": "L1"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_game_running",
-      "label": "game_running()",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "game_running()",
-      "source_file": "crates/machine/tests/deathchase_probe.rs",
-      "source_location": "L20"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_load_deathchase",
-      "label": "load_deathchase()",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "load_deathchase()",
-      "source_file": "crates/machine/tests/deathchase_probe.rs",
-      "source_location": "L14"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_plus2a_48basic_instant_still_runs_deathchase",
-      "label": "plus2a_48basic_instant_still_runs_deathchase()",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "plus2a_48basic_instant_still_runs_deathchase()",
-      "source_file": "crates/machine/tests/deathchase_probe.rs",
-      "source_location": "L61"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_plus2a_menu_loader_ear_runs_deathchase",
-      "label": "plus2a_menu_loader_ear_runs_deathchase()",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "plus2a_menu_loader_ear_runs_deathchase()",
-      "source_file": "crates/machine/tests/deathchase_probe.rs",
-      "source_location": "L95"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_plus2a_menu_loader_instant_runs_deathchase",
-      "label": "plus2a_menu_loader_instant_runs_deathchase()",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "plus2a_menu_loader_instant_runs_deathchase()",
-      "source_file": "crates/machine/tests/deathchase_probe.rs",
-      "source_location": "L25"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_rom_plus2a",
-      "label": "rom_plus2a()",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "rom_plus2a()",
-      "source_file": "crates/machine/tests/deathchase_probe.rs",
-      "source_location": "L9"
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_rs_machine",
-      "label": "Machine",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "machine",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_rs_option",
-      "label": "Option",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "option",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_machine_tests_deathchase_probe_rs_vec",
-      "label": "Vec",
-      "_origin": "ast",
-      "community": 240,
-      "community_name": "deathchase_probe.rs",
-      "file_type": "code",
-      "norm_label": "vec",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_tape_src_lib_experience_cosmetic_pilot_counts_are_abbreviated_and_odd",
-      "label": "experience_cosmetic_pilot_counts_are_abbreviated_and_odd()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": "experience_cosmetic_pilot_counts_are_abbreviated_and_odd()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L594"
-    },
-    {
-      "id": "crates_tape_src_lib_experience_pause_is_shorter_than_rom",
-      "label": "experience_pause_is_shorter_than_rom()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": "experience_pause_is_shorter_than_rom()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L580"
-    },
-    {
-      "id": "crates_tape_src_lib_set_experience_mid_block_keeps_pulse_position",
-      "label": "set_experience_mid_block_keeps_pulse_position()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": "set_experience_mid_block_keeps_pulse_position()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L615"
-    },
-    {
-      "id": "crates_tape_src_lib_set_speed_does_not_rebuild_or_shorten_schedule",
-      "label": "set_speed_does_not_rebuild_or_shorten_schedule()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": "set_speed_does_not_rebuild_or_shorten_schedule()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L679"
-    },
-    {
-      "id": "crates_tape_src_lib_set_speed_mid_block_keeps_pulse_position",
-      "label": "set_speed_mid_block_keeps_pulse_position()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": "set_speed_mid_block_keeps_pulse_position()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L699"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_pulse_index",
-      "label": ".pulse_index()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": ".pulse_index()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L263"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_scheduled_pulses",
-      "label": ".scheduled_pulses()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": ".scheduled_pulses()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L257"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_set_experience",
-      "label": ".set_experience()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": ".set_experience()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L218"
-    },
-    {
-      "id": "crates_tape_src_lib_tapplayer_set_speed",
-      "label": ".set_speed()",
-      "_origin": "ast",
-      "community": 242,
-      "community_name": "set_experience_mid_block_keeps_pulse_position",
-      "file_type": "code",
-      "norm_label": ".set_speed()",
-      "source_file": "crates/tape/src/lib.rs",
-      "source_location": "L204"
     },
     {
       "id": "crates_machine_src_lib_machine_debugger",
@@ -35918,6 +35225,50 @@
       "source_location": ""
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_set_window_capture",
+      "label": ".set_window_capture()",
+      "_origin": "ast",
+      "community": 41,
+      "community_name": "HostViewState",
+      "file_type": "code",
+      "norm_label": ".set_window_capture()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L214"
+    },
+    {
+      "id": "crates_control_plane_src_service_controlplane_shared_host",
+      "label": ".shared_host()",
+      "_origin": "ast",
+      "community": 41,
+      "community_name": "HostViewState",
+      "file_type": "code",
+      "norm_label": ".shared_host()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L297"
+    },
+    {
+      "id": "crates_control_plane_src_service_rs_arc",
+      "label": "Arc",
+      "_origin": "ast",
+      "community": 41,
+      "community_name": "HostViewState",
+      "file_type": "code",
+      "norm_label": "arc",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_control_plane_src_service_rs_parkingmutex",
+      "label": "ParkingMutex",
+      "_origin": "ast",
+      "community": 41,
+      "community_name": "HostViewState",
+      "file_type": "code",
+      "norm_label": "parkingmutex",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "send",
       "label": "Send",
       "_origin": "ast",
@@ -43178,28 +42529,6 @@
       "source_location": "L58"
     },
     {
-      "id": "crates_living_room_src_glow_frameglow",
-      "label": "FrameGlow",
-      "_origin": "ast",
-      "community": 62,
-      "community_name": "glow.rs",
-      "file_type": "code",
-      "norm_label": "frameglow",
-      "source_file": "crates/living_room/src/glow.rs",
-      "source_location": "L9"
-    },
-    {
-      "id": "crates_living_room_src_glow_frameglow_update_from_rgba",
-      "label": ".update_from_rgba()",
-      "_origin": "ast",
-      "community": 62,
-      "community_name": "glow.rs",
-      "file_type": "code",
-      "norm_label": ".update_from_rgba()",
-      "source_file": "crates/living_room/src/glow.rs",
-      "source_location": "L15"
-    },
-    {
       "id": "crates_living_room_src_glow_glowdriven",
       "label": "GlowDriven",
       "_origin": "ast",
@@ -43242,17 +42571,6 @@
       "norm_label": "incandescentlamp",
       "source_file": "crates/living_room/src/glow.rs",
       "source_location": "L65"
-    },
-    {
-      "id": "crates_living_room_src_glow_red_border_dominates_glow",
-      "label": "red_border_dominates_glow()",
-      "_origin": "ast",
-      "community": 62,
-      "community_name": "glow.rs",
-      "file_type": "code",
-      "norm_label": "red_border_dominates_glow()",
-      "source_file": "crates/living_room/src/glow.rs",
-      "source_location": "L210"
     },
     {
       "id": "crates_living_room_src_glow_rs_app",
@@ -43374,17 +42692,6 @@
       "norm_label": "sync_glow_tints()",
       "source_file": "crates/living_room/src/glow.rs",
       "source_location": "L187"
-    },
-    {
-      "id": "linearrgba",
-      "label": "LinearRgba",
-      "_origin": "ast",
-      "community": 62,
-      "community_name": "glow.rs",
-      "file_type": "code",
-      "norm_label": "linearrgba",
-      "source_file": "",
-      "source_location": ""
     },
     {
       "id": "pointlight",
@@ -43985,18 +43292,29 @@
       "label": "framebuffer.rs",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "framebuffer.rs",
       "source_file": "crates/control_plane/src/framebuffer.rs",
       "source_location": "L1"
     },
     {
+      "id": "crates_control_plane_src_framebuffer_encode_framebuffer_png",
+      "label": "encode_framebuffer_png()",
+      "_origin": "ast",
+      "community": 65,
+      "community_name": ".capture_framebuffer",
+      "file_type": "code",
+      "norm_label": "encode_framebuffer_png()",
+      "source_file": "crates/control_plane/src/framebuffer.rs",
+      "source_location": "L67"
+    },
+    {
       "id": "crates_control_plane_src_framebuffer_framebuffermeta",
       "label": "FramebufferMeta",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "framebuffermeta",
       "source_file": "crates/control_plane/src/framebuffer.rs",
@@ -44007,7 +43325,7 @@
       "label": ".from_session()",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": ".from_session()",
       "source_file": "crates/control_plane/src/framebuffer.rs",
@@ -44018,18 +43336,40 @@
       "label": "model_slug()",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "model_slug()",
       "source_file": "crates/control_plane/src/framebuffer.rs",
       "source_location": "L32"
     },
     {
+      "id": "crates_control_plane_src_framebuffer_parse_model_slug",
+      "label": "parse_model_slug()",
+      "_origin": "ast",
+      "community": 65,
+      "community_name": ".capture_framebuffer",
+      "file_type": "code",
+      "norm_label": "parse_model_slug()",
+      "source_file": "crates/control_plane/src/framebuffer.rs",
+      "source_location": "L48"
+    },
+    {
+      "id": "crates_control_plane_src_framebuffer_rs_apiresult",
+      "label": "ApiResult",
+      "_origin": "ast",
+      "community": 65,
+      "community_name": ".capture_framebuffer",
+      "file_type": "code",
+      "norm_label": "apiresult",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_control_plane_src_framebuffer_rs_option",
       "label": "Option",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "option",
       "source_file": "",
@@ -44040,7 +43380,7 @@
       "label": "Self",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "self",
       "source_file": "",
@@ -44051,9 +43391,20 @@
       "label": "String",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "string",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_control_plane_src_framebuffer_rs_vec",
+      "label": "Vec",
+      "_origin": "ast",
+      "community": 65,
+      "community_name": ".capture_framebuffer",
+      "file_type": "code",
+      "norm_label": "vec",
       "source_file": "",
       "source_location": ""
     },
@@ -44062,18 +43413,29 @@
       "label": "control_plane/src/lib.rs",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "control_plane/src/lib.rs",
       "source_file": "crates/control_plane/src/lib.rs",
       "source_location": "L1"
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_capture_framebuffer",
+      "label": ".capture_framebuffer()",
+      "_origin": "ast",
+      "community": 65,
+      "community_name": ".capture_framebuffer",
+      "file_type": "code",
+      "norm_label": ".capture_framebuffer()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L633"
+    },
+    {
       "id": "crates_control_plane_src_service_controlplane_framebuffer_meta",
       "label": ".framebuffer_meta()",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": ".framebuffer_meta()",
       "source_file": "crates/control_plane/src/service.rs",
@@ -44084,7 +43446,7 @@
       "label": ".health()",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": ".health()",
       "source_file": "crates/control_plane/src/service.rs",
@@ -44095,18 +43457,29 @@
       "label": ".memory_map()",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": ".memory_map()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L403"
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_run_frames",
+      "label": ".run_frames()",
+      "_origin": "ast",
+      "community": 65,
+      "community_name": ".capture_framebuffer",
+      "file_type": "code",
+      "norm_label": ".run_frames()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L736"
+    },
+    {
       "id": "crates_control_plane_src_service_controlplane_status",
       "label": ".status()",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": ".status()",
       "source_file": "crates/control_plane/src/service.rs",
@@ -44117,7 +43490,7 @@
       "label": ".video_meta()",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": ".video_meta()",
       "source_file": "crates/control_plane/src/service.rs",
@@ -44128,18 +43501,29 @@
       "label": "HealthResponse",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "healthresponse",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1123"
     },
     {
+      "id": "crates_control_plane_src_service_runresponse",
+      "label": "RunResponse",
+      "_origin": "ast",
+      "community": 65,
+      "community_name": ".capture_framebuffer",
+      "file_type": "code",
+      "norm_label": "runresponse",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L1159"
+    },
+    {
       "id": "crates_control_plane_src_service_statusresponse",
       "label": "StatusResponse",
       "_origin": "ast",
       "community": 65,
-      "community_name": "FramebufferMeta",
+      "community_name": ".capture_framebuffer",
       "file_type": "code",
       "norm_label": "statusresponse",
       "source_file": "crates/control_plane/src/service.rs",
@@ -47017,24 +46401,24 @@
       "source_location": "L7638"
     },
     {
-      "id": "crates_control_plane_src_framebuffer_encode_framebuffer_png",
-      "label": "encode_framebuffer_png()",
+      "id": "crates_agent_server_src_routes_health_lasterrorresponse",
+      "label": "LastErrorResponse",
       "_origin": "ast",
       "community": 75,
       "community_name": "service.rs",
       "file_type": "code",
-      "norm_label": "encode_framebuffer_png()",
-      "source_file": "crates/control_plane/src/framebuffer.rs",
-      "source_location": "L67"
+      "norm_label": "lasterrorresponse",
+      "source_file": "crates/agent_server/src/routes/health.rs",
+      "source_location": "L27"
     },
     {
-      "id": "crates_control_plane_src_framebuffer_rs_vec",
-      "label": "Vec",
+      "id": "crates_agent_server_src_routes_health_rs_option",
+      "label": "Option",
       "_origin": "ast",
       "community": 75,
       "community_name": "service.rs",
       "file_type": "code",
-      "norm_label": "vec",
+      "norm_label": "option",
       "source_file": "",
       "source_location": ""
     },
@@ -47048,6 +46432,17 @@
       "norm_label": "service.rs",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1"
+    },
+    {
+      "id": "crates_control_plane_src_service_apply_prefs_to_session",
+      "label": "apply_prefs_to_session()",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": "apply_prefs_to_session()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L1225"
     },
     {
       "id": "crates_control_plane_src_service_capture_framebuffer_border_override_restores",
@@ -47083,26 +46478,15 @@
       "source_location": "L1496"
     },
     {
-      "id": "crates_control_plane_src_service_controlplane_capture_framebuffer",
-      "label": ".capture_framebuffer()",
+      "id": "crates_control_plane_src_service_controlplane_from_shared",
+      "label": ".from_shared()",
       "_origin": "ast",
       "community": 75,
       "community_name": "service.rs",
       "file_type": "code",
-      "norm_label": ".capture_framebuffer()",
+      "norm_label": ".from_shared()",
       "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L633"
-    },
-    {
-      "id": "crates_control_plane_src_service_controlplane_inspect_json",
-      "label": ".inspect_json()",
-      "_origin": "ast",
-      "community": 75,
-      "community_name": "service.rs",
-      "file_type": "code",
-      "norm_label": ".inspect_json()",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L390"
+      "source_location": "L192"
     },
     {
       "id": "crates_control_plane_src_service_controlplane_last_error",
@@ -47149,6 +46533,17 @@
       "source_location": "L182"
     },
     {
+      "id": "crates_control_plane_src_service_controlplane_patch_prefs",
+      "label": ".patch_prefs()",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": ".patch_prefs()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L563"
+    },
+    {
       "id": "crates_control_plane_src_service_controlplane_record_error",
       "label": ".record_error()",
       "_origin": "ast",
@@ -47160,15 +46555,15 @@
       "source_location": "L309"
     },
     {
-      "id": "crates_control_plane_src_service_controlplane_run_frames",
-      "label": ".run_frames()",
+      "id": "crates_control_plane_src_service_controlplane_with_session",
+      "label": ".with_session()",
       "_origin": "ast",
       "community": 75,
       "community_name": "service.rs",
       "file_type": "code",
-      "norm_label": ".run_frames()",
+      "norm_label": ".with_session()",
       "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L736"
+      "source_location": "L186"
     },
     {
       "id": "crates_control_plane_src_service_health_and_inspect_after_rom_load",
@@ -47204,28 +46599,6 @@
       "source_location": "L87"
     },
     {
-      "id": "crates_control_plane_src_service_memorymapresponse",
-      "label": "MemoryMapResponse",
-      "_origin": "ast",
-      "community": 75,
-      "community_name": "service.rs",
-      "file_type": "code",
-      "norm_label": "memorymapresponse",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L1152"
-    },
-    {
-      "id": "crates_control_plane_src_service_memoryregion",
-      "label": "MemoryRegion",
-      "_origin": "ast",
-      "community": 75,
-      "community_name": "service.rs",
-      "file_type": "code",
-      "norm_label": "memoryregion",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L1131"
-    },
-    {
       "id": "crates_control_plane_src_service_mouse_requires_kempston_pref_then_accepts_input",
       "label": "mouse_requires_kempston_pref_then_accepts_input()",
       "_origin": "ast",
@@ -47235,17 +46608,6 @@
       "norm_label": "mouse_requires_kempston_pref_then_accepts_input()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1533"
-    },
-    {
-      "id": "crates_control_plane_src_service_pagingsnapshot",
-      "label": "PagingSnapshot",
-      "_origin": "ast",
-      "community": 75,
-      "community_name": "service.rs",
-      "file_type": "code",
-      "norm_label": "pagingsnapshot",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L1141"
     },
     {
       "id": "crates_control_plane_src_service_parse_model_slug_accepts_canonical_timex_aliases",
@@ -47303,6 +46665,28 @@
       "source_location": "L1505"
     },
     {
+      "id": "crates_control_plane_src_service_prefs_patch_round_trip",
+      "label": "prefs_patch_round_trip()",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": "prefs_patch_round_trip()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L1474"
+    },
+    {
+      "id": "crates_control_plane_src_service_prefspatch",
+      "label": "PrefsPatch",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": "prefspatch",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L170"
+    },
+    {
       "id": "crates_control_plane_src_service_rom48",
       "label": "rom48()",
       "_origin": "ast",
@@ -47312,6 +46696,17 @@
       "norm_label": "rom48()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1280"
+    },
+    {
+      "id": "crates_control_plane_src_service_rs_default",
+      "label": "Default",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": "default",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "crates_control_plane_src_service_rs_mutexguard",
@@ -47325,6 +46720,17 @@
       "source_location": ""
     },
     {
+      "id": "crates_control_plane_src_service_rs_self",
+      "label": "Self",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": "self",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_control_plane_src_service_run_frames_and_framebuffer_dims",
       "label": "run_frames_and_framebuffer_dims()",
       "_origin": "ast",
@@ -47334,17 +46740,6 @@
       "norm_label": "run_frames_and_framebuffer_dims()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1302"
-    },
-    {
-      "id": "crates_control_plane_src_service_runresponse",
-      "label": "RunResponse",
-      "_origin": "ast",
-      "community": 75,
-      "community_name": "service.rs",
-      "file_type": "code",
-      "norm_label": "runresponse",
-      "source_file": "crates/control_plane/src/service.rs",
-      "source_location": "L1159"
     },
     {
       "id": "crates_control_plane_src_service_server_config_rejects_public_bind",
@@ -47367,6 +46762,50 @@
       "norm_label": "server_config_requires_token_or_insecure()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1369"
+    },
+    {
+      "id": "crates_control_plane_src_service_sessionprefs",
+      "label": "SessionPrefs",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": "sessionprefs",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L121"
+    },
+    {
+      "id": "crates_control_plane_src_service_sessionprefs_default",
+      "label": ".default()",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": ".default()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L132"
+    },
+    {
+      "id": "crates_control_plane_src_service_sessionprefs_sanitized",
+      "label": ".sanitized()",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": ".sanitized()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L146"
+    },
+    {
+      "id": "crates_control_plane_src_service_sessionprefs_tape_load_options",
+      "label": ".tape_load_options()",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": ".tape_load_options()",
+      "source_file": "crates/control_plane/src/service.rs",
+      "source_location": "L159"
     },
     {
       "id": "crates_control_plane_src_service_set_joystick_requires_machine",
@@ -47411,6 +46850,17 @@
       "norm_label": "set_key_requires_machine()",
       "source_file": "crates/control_plane/src/service.rs",
       "source_location": "L1401"
+    },
+    {
+      "id": "crates_host_api_src_prefs_prefjoystick",
+      "label": "PrefJoystick",
+      "_origin": "ast",
+      "community": 75,
+      "community_name": "service.rs",
+      "file_type": "code",
+      "norm_label": "prefjoystick",
+      "source_file": "crates/host_api/src/prefs.rs",
+      "source_location": "L439"
     },
     {
       "id": "crates_machine_src_joystick",
@@ -48315,6 +47765,116 @@
       "source_location": ""
     },
     {
+      "id": "crates_machine_tests_deathchase_probe",
+      "label": "deathchase_probe.rs",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "deathchase_probe.rs",
+      "source_file": "crates/machine/tests/deathchase_probe.rs",
+      "source_location": "L1"
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_game_running",
+      "label": "game_running()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "game_running()",
+      "source_file": "crates/machine/tests/deathchase_probe.rs",
+      "source_location": "L20"
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_load_deathchase",
+      "label": "load_deathchase()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "load_deathchase()",
+      "source_file": "crates/machine/tests/deathchase_probe.rs",
+      "source_location": "L14"
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_plus2a_48basic_instant_still_runs_deathchase",
+      "label": "plus2a_48basic_instant_still_runs_deathchase()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "plus2a_48basic_instant_still_runs_deathchase()",
+      "source_file": "crates/machine/tests/deathchase_probe.rs",
+      "source_location": "L61"
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_plus2a_menu_loader_ear_runs_deathchase",
+      "label": "plus2a_menu_loader_ear_runs_deathchase()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "plus2a_menu_loader_ear_runs_deathchase()",
+      "source_file": "crates/machine/tests/deathchase_probe.rs",
+      "source_location": "L95"
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_plus2a_menu_loader_instant_runs_deathchase",
+      "label": "plus2a_menu_loader_instant_runs_deathchase()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "plus2a_menu_loader_instant_runs_deathchase()",
+      "source_file": "crates/machine/tests/deathchase_probe.rs",
+      "source_location": "L25"
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_rom_plus2a",
+      "label": "rom_plus2a()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "rom_plus2a()",
+      "source_file": "crates/machine/tests/deathchase_probe.rs",
+      "source_location": "L9"
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_rs_machine",
+      "label": "Machine",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "machine",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_rs_option",
+      "label": "Option",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "option",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_machine_tests_deathchase_probe_rs_vec",
+      "label": "Vec",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "vec",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_tape_src_lib",
       "label": "tape/src/lib.rs",
       "_origin": "ast",
@@ -48335,6 +47895,17 @@
       "norm_label": "advance_does_not_consume_while_paused()",
       "source_file": "crates/tape/src/lib.rs",
       "source_location": "L847"
+    },
+    {
+      "id": "crates_tape_src_lib_advances_to_next_block_after_pause",
+      "label": "advances_to_next_block_after_pause()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "advances_to_next_block_after_pause()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L720"
     },
     {
       "id": "crates_tape_src_lib_data_pilot_pulse_count_matches_rom",
@@ -48379,6 +47950,39 @@
       "norm_label": "evaluate_ld_bytes_trap_accepts_relocated_pc()",
       "source_file": "crates/tape/src/lib.rs",
       "source_location": "L940"
+    },
+    {
+      "id": "crates_tape_src_lib_experience_cosmetic_pilot_counts_are_abbreviated_and_odd",
+      "label": "experience_cosmetic_pilot_counts_are_abbreviated_and_odd()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "experience_cosmetic_pilot_counts_are_abbreviated_and_odd()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L594"
+    },
+    {
+      "id": "crates_tape_src_lib_experience_pause_is_shorter_than_rom",
+      "label": "experience_pause_is_shorter_than_rom()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "experience_pause_is_shorter_than_rom()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L580"
+    },
+    {
+      "id": "crates_tape_src_lib_experiencependingflash",
+      "label": "ExperiencePendingFlash",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "experiencependingflash",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L125"
     },
     {
       "id": "crates_tape_src_lib_fixture_tap",
@@ -48491,6 +48095,72 @@
       "source_location": "L742"
     },
     {
+      "id": "crates_tape_src_lib_parse_empty",
+      "label": "parse_empty()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "parse_empty()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L543"
+    },
+    {
+      "id": "crates_tape_src_lib_parse_one_block",
+      "label": "parse_one_block()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "parse_one_block()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L549"
+    },
+    {
+      "id": "crates_tape_src_lib_push_pulse",
+      "label": "push_pulse()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "push_pulse()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L139"
+    },
+    {
+      "id": "crates_tape_src_lib_rs_error",
+      "label": "Error",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "error",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_tape_src_lib_rs_option",
+      "label": "Option",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "option",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_tape_src_lib_rs_path",
+      "label": "Path",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "path",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_tape_src_lib_rs_pathbuf",
       "label": "PathBuf",
       "_origin": "ast",
@@ -48500,6 +48170,83 @@
       "norm_label": "pathbuf",
       "source_file": "",
       "source_location": ""
+    },
+    {
+      "id": "crates_tape_src_lib_rs_result",
+      "label": "Result",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "result",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_tape_src_lib_rs_self",
+      "label": "Self",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "self",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_tape_src_lib_rs_string",
+      "label": "String",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "string",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_tape_src_lib_rs_vec",
+      "label": "Vec",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "vec",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_tape_src_lib_set_experience_mid_block_keeps_pulse_position",
+      "label": "set_experience_mid_block_keeps_pulse_position()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "set_experience_mid_block_keeps_pulse_position()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L615"
+    },
+    {
+      "id": "crates_tape_src_lib_set_speed_does_not_rebuild_or_shorten_schedule",
+      "label": "set_speed_does_not_rebuild_or_shorten_schedule()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "set_speed_does_not_rebuild_or_shorten_schedule()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L679"
+    },
+    {
+      "id": "crates_tape_src_lib_set_speed_mid_block_keeps_pulse_position",
+      "label": "set_speed_mid_block_keeps_pulse_position()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "set_speed_mid_block_keeps_pulse_position()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L699"
     },
     {
       "id": "crates_tape_src_lib_tap_checksum",
@@ -48524,6 +48271,17 @@
       "source_location": "L658"
     },
     {
+      "id": "crates_tape_src_lib_tapeerror",
+      "label": "TapeError",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "tapeerror",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L20"
+    },
+    {
       "id": "crates_tape_src_lib_tapetrapresult",
       "label": "TapeTrapResult",
       "_origin": "ast",
@@ -48533,6 +48291,83 @@
       "norm_label": "tapetrapresult",
       "source_file": "crates/tape/src/lib.rs",
       "source_location": "L403"
+    },
+    {
+      "id": "crates_tape_src_lib_tapimage",
+      "label": "TapImage",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "tapimage",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L12"
+    },
+    {
+      "id": "crates_tape_src_lib_tapimage_load",
+      "label": ".load()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".load()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L28"
+    },
+    {
+      "id": "crates_tape_src_lib_tapimage_parse",
+      "label": ".parse()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".parse()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L33"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer",
+      "label": "TapPlayer",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": "tapplayer",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L146"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_advance",
+      "label": ".advance()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".advance()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L346"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_consume_block",
+      "label": ".consume_block()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".consume_block()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L278"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_current_block_bytes",
+      "label": ".current_block_bytes()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".current_block_bytes()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L292"
     },
     {
       "id": "crates_tape_src_lib_tapplayer_ear_level",
@@ -48546,6 +48381,28 @@
       "source_location": "L268"
     },
     {
+      "id": "crates_tape_src_lib_tapplayer_experience",
+      "label": ".experience()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".experience()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L214"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_finished",
+      "label": ".finished()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".finished()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L273"
+    },
+    {
       "id": "crates_tape_src_lib_tapplayer_new",
       "label": ".new()",
       "_origin": "ast",
@@ -48557,6 +48414,83 @@
       "source_location": "L169"
     },
     {
+      "id": "crates_tape_src_lib_tapplayer_pulse_index",
+      "label": ".pulse_index()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".pulse_index()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L263"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_queue_block",
+      "label": ".queue_block()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".queue_block()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L296"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_rewind",
+      "label": ".rewind()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".rewind()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L249"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_rewind_to_block",
+      "label": ".rewind_to_block()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".rewind_to_block()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L286"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_scheduled_pulses",
+      "label": ".scheduled_pulses()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".scheduled_pulses()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L257"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_set_block_pauses",
+      "label": ".set_block_pauses()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".set_block_pauses()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L189"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_set_experience",
+      "label": ".set_experience()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".set_experience()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L218"
+    },
+    {
       "id": "crates_tape_src_lib_tapplayer_set_playing",
       "label": ".set_playing()",
       "_origin": "ast",
@@ -48566,6 +48500,28 @@
       "norm_label": ".set_playing()",
       "source_file": "crates/tape/src/lib.rs",
       "source_location": "L194"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_set_speed",
+      "label": ".set_speed()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".set_speed()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L204"
+    },
+    {
+      "id": "crates_tape_src_lib_tapplayer_speed",
+      "label": ".speed()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "tape/src/lib.rs",
+      "file_type": "code",
+      "norm_label": ".speed()",
+      "source_file": "crates/tape/src/lib.rs",
+      "source_location": "L209"
     },
     {
       "id": "crates_living_room_src_headless",
@@ -50150,6 +50106,50 @@
       "norm_label": "upload_external_framebuffer()",
       "source_file": "crates/living_room/src/external_fb.rs",
       "source_location": "L32"
+    },
+    {
+      "id": "crates_living_room_src_glow_frameglow",
+      "label": "FrameGlow",
+      "_origin": "ast",
+      "community": 87,
+      "community_name": "upload_external_framebuffer",
+      "file_type": "code",
+      "norm_label": "frameglow",
+      "source_file": "crates/living_room/src/glow.rs",
+      "source_location": "L9"
+    },
+    {
+      "id": "crates_living_room_src_glow_frameglow_update_from_rgba",
+      "label": ".update_from_rgba()",
+      "_origin": "ast",
+      "community": 87,
+      "community_name": "upload_external_framebuffer",
+      "file_type": "code",
+      "norm_label": ".update_from_rgba()",
+      "source_file": "crates/living_room/src/glow.rs",
+      "source_location": "L15"
+    },
+    {
+      "id": "crates_living_room_src_glow_red_border_dominates_glow",
+      "label": "red_border_dominates_glow()",
+      "_origin": "ast",
+      "community": 87,
+      "community_name": "upload_external_framebuffer",
+      "file_type": "code",
+      "norm_label": "red_border_dominates_glow()",
+      "source_file": "crates/living_room/src/glow.rs",
+      "source_location": "L210"
+    },
+    {
+      "id": "linearrgba",
+      "label": "LinearRgba",
+      "_origin": "ast",
+      "community": 87,
+      "community_name": "upload_external_framebuffer",
+      "file_type": "code",
+      "norm_label": "linearrgba",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "crates_bus_src_timex_dock_timexdockerror",
@@ -66122,7 +66122,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L801",
+      "source_location": "L803",
       "weight": 1.0
     },
     {
@@ -66134,7 +66134,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L802",
+      "source_location": "L804",
       "weight": 1.0
     },
     {
@@ -66146,36 +66146,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L803",
+      "source_location": "L805",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_automap_entry_and_exit_with_eeprom_is_delayed",
       "target": "crates_bus_src_divmmc_divmmc_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L783",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_automap_entry_and_exit_with_eeprom_is_delayed",
-      "target": "crates_bus_src_divmmc_divmmc_attach_eeprom",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L784",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_automap_entry_and_exit_with_eeprom_is_delayed",
-      "target": "crates_bus_src_divmmc_divmmc_notify_m1",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66187,6 +66163,30 @@
     },
     {
       "source": "crates_bus_src_divmmc_automap_entry_and_exit_with_eeprom_is_delayed",
+      "target": "crates_bus_src_divmmc_divmmc_attach_eeprom",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L786",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_automap_entry_and_exit_with_eeprom_is_delayed",
+      "target": "crates_bus_src_divmmc_divmmc_notify_m1",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L787",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_automap_entry_and_exit_with_eeprom_is_delayed",
       "target": "crates_bus_src_divmmc_divmmc_after_m1_refresh",
       "relation": "calls",
       "_origin": "ast",
@@ -66194,7 +66194,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L788",
+      "source_location": "L790",
       "weight": 1.0
     },
     {
@@ -66206,7 +66206,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L810",
+      "source_location": "L812",
       "weight": 1.0
     },
     {
@@ -66218,7 +66218,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L811",
+      "source_location": "L813",
       "weight": 1.0
     },
     {
@@ -66230,7 +66230,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L812",
+      "source_location": "L814",
       "weight": 1.0
     },
     {
@@ -66242,7 +66242,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L749",
+      "source_location": "L751",
       "weight": 1.0
     },
     {
@@ -66254,7 +66254,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L751",
+      "source_location": "L753",
       "weight": 1.0
     },
     {
@@ -66266,19 +66266,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L552",
+      "source_location": "L554",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_divmmc_attach_sd",
-      "target": "crates_bus_src_divmmc_divmmc_attach_sd_slot",
+      "target": "crates_bus_src_divmmc_sdspi_soft_reset_card",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L441",
+      "source_location": "L442",
       "weight": 1.0
     },
     {
@@ -66290,7 +66290,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L451",
+      "source_location": "L453",
       "weight": 1.0
     },
     {
@@ -66302,7 +66302,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L417",
+      "source_location": "L418",
       "weight": 1.0
     },
     {
@@ -66314,7 +66314,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L562",
+      "source_location": "L564",
       "weight": 1.0
     },
     {
@@ -66326,7 +66326,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L563",
+      "source_location": "L565",
       "weight": 1.0
     },
     {
@@ -66338,7 +66338,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L598",
+      "source_location": "L600",
       "weight": 1.0
     },
     {
@@ -66350,7 +66350,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L506",
+      "source_location": "L508",
       "weight": 1.0
     },
     {
@@ -66362,7 +66362,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L519",
+      "source_location": "L521",
       "weight": 1.0
     },
     {
@@ -66374,7 +66374,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L580",
+      "source_location": "L582",
       "weight": 1.0
     },
     {
@@ -66386,7 +66386,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L581",
+      "source_location": "L583",
       "weight": 1.0
     },
     {
@@ -66398,7 +66398,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L587",
+      "source_location": "L589",
       "weight": 1.0
     },
     {
@@ -66410,7 +66410,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L607",
+      "source_location": "L609",
       "weight": 1.0
     },
     {
@@ -66422,7 +66422,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L611",
+      "source_location": "L613",
       "weight": 1.0
     },
     {
@@ -66434,7 +66434,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L618",
+      "source_location": "L620",
       "weight": 1.0
     },
     {
@@ -66446,7 +66446,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L484",
+      "source_location": "L486",
       "weight": 1.0
     },
     {
@@ -66458,7 +66458,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L624",
+      "source_location": "L626",
       "weight": 1.0
     },
     {
@@ -66470,7 +66470,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L628",
+      "source_location": "L630",
       "weight": 1.0
     },
     {
@@ -66482,7 +66482,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L636",
+      "source_location": "L638",
       "weight": 1.0
     },
     {
@@ -66494,7 +66494,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1028",
+      "source_location": "L1030",
       "weight": 1.0
     },
     {
@@ -66506,7 +66506,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1029",
+      "source_location": "L1031",
       "weight": 1.0
     },
     {
@@ -66518,7 +66518,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1035",
+      "source_location": "L1040",
       "weight": 1.0
     },
     {
@@ -66530,7 +66530,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1036",
+      "source_location": "L1041",
       "weight": 1.0
     },
     {
@@ -66542,7 +66542,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1038",
+      "source_location": "L1043",
       "weight": 1.0
     },
     {
@@ -66554,7 +66554,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1042",
+      "source_location": "L1047",
       "weight": 1.0
     },
     {
@@ -66566,7 +66566,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1044",
+      "source_location": "L1049",
       "weight": 1.0
     },
     {
@@ -66578,7 +66578,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1051",
+      "source_location": "L1056",
       "weight": 1.0
     },
     {
@@ -66590,7 +66590,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L856",
+      "source_location": "L858",
       "weight": 1.0
     },
     {
@@ -66602,36 +66602,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L858",
+      "source_location": "L860",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
       "target": "crates_bus_src_divmmc_divmmc_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L957",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
-      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L958",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
-      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66643,7 +66619,19 @@
     },
     {
       "source": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
-      "target": "crates_bus_src_divmmc_spi_select",
+      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L960",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
+      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66655,6 +66643,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
+      "target": "crates_bus_src_divmmc_spi_select",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L963",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_fat_cmd18_reads_two_sectors_then_cmd12_stops",
       "target": "crates_bus_src_divmmc_spi_skip_sector_rest",
       "relation": "calls",
       "_origin": "ast",
@@ -66662,7 +66662,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L965",
+      "source_location": "L967",
       "weight": 1.0
     },
     {
@@ -66674,7 +66674,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L973",
+      "source_location": "L975",
       "weight": 1.0
     },
     {
@@ -66686,7 +66686,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L974",
+      "source_location": "L976",
       "weight": 1.0
     },
     {
@@ -66698,7 +66698,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1002",
+      "source_location": "L1004",
       "weight": 1.0
     },
     {
@@ -66710,36 +66710,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1015",
+      "source_location": "L1017",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
       "target": "crates_bus_src_divmmc_divmmc_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L987",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
-      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L988",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
-      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66751,7 +66727,19 @@
     },
     {
       "source": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
-      "target": "crates_bus_src_divmmc_spi_select",
+      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L990",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
+      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66763,6 +66751,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
+      "target": "crates_bus_src_divmmc_spi_select",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L993",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_fat_cmd25_writes_two_sectors_then_stop_tran",
       "target": "crates_bus_src_divmmc_spi_tx",
       "relation": "calls",
       "_origin": "ast",
@@ -66770,7 +66770,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L994",
+      "source_location": "L996",
       "weight": 1.0
     },
     {
@@ -66782,7 +66782,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L769",
+      "source_location": "L771",
       "weight": 1.0
     },
     {
@@ -66794,7 +66794,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L770",
+      "source_location": "L772",
       "weight": 1.0
     },
     {
@@ -66806,7 +66806,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L775",
+      "source_location": "L777",
       "weight": 1.0
     },
     {
@@ -66818,7 +66818,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L761",
+      "source_location": "L763",
       "weight": 1.0
     },
     {
@@ -66830,36 +66830,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L763",
+      "source_location": "L765",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
       "target": "crates_bus_src_divmmc_divmmc_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L930",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
-      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L931",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
-      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66871,7 +66847,19 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
-      "target": "crates_bus_src_divmmc_spi_select",
+      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L933",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
+      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66883,19 +66871,19 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
-      "target": "crates_bus_src_divmmc_spi_tx",
+      "target": "crates_bus_src_divmmc_spi_select",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L935",
+      "source_location": "L936",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
-      "target": "crates_bus_src_divmmc_spi_deselect",
+      "target": "crates_bus_src_divmmc_spi_tx",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66907,6 +66895,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
+      "target": "crates_bus_src_divmmc_spi_deselect",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L939",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_ready_card_cs_deselect_aborts_spi_command",
       "target": "crates_bus_src_divmmc_spi_rx",
       "relation": "calls",
       "_origin": "ast",
@@ -66914,36 +66914,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L945",
+      "source_location": "L947",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
       "target": "crates_bus_src_divmmc_divmmc_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L881",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
-      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L882",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
-      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66955,7 +66931,19 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
-      "target": "crates_bus_src_divmmc_spi_select",
+      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L884",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
+      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66967,7 +66955,7 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
-      "target": "crates_bus_src_divmmc_spi_rx",
+      "target": "crates_bus_src_divmmc_spi_select",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -66979,6 +66967,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
+      "target": "crates_bus_src_divmmc_spi_rx",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L889",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_ready_card_sdhc_cmd58_reports_ccs_and_block_lba",
       "target": "crates_bus_src_divmmc_spi_deselect",
       "relation": "calls",
       "_origin": "ast",
@@ -66986,36 +66986,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L892",
+      "source_location": "L894",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
       "target": "crates_bus_src_divmmc_divmmc_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L906",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
-      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L907",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
-      "target": "crates_bus_src_divmmc_spi_init_sdsc",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -67027,7 +67003,19 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
-      "target": "crates_bus_src_divmmc_spi_select",
+      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L909",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
+      "target": "crates_bus_src_divmmc_spi_init_sdsc",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -67039,7 +67027,7 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
-      "target": "crates_bus_src_divmmc_spi_rx",
+      "target": "crates_bus_src_divmmc_spi_select",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -67051,6 +67039,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
+      "target": "crates_bus_src_divmmc_spi_rx",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L914",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_ready_card_sdsc_uses_byte_addressing",
       "target": "crates_bus_src_divmmc_spi_deselect",
       "relation": "calls",
       "_origin": "ast",
@@ -67058,7 +67058,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L917",
+      "source_location": "L919",
       "weight": 1.0
     },
     {
@@ -67070,7 +67070,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L866",
+      "source_location": "L868",
       "weight": 1.0
     },
     {
@@ -67082,36 +67082,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L871",
+      "source_location": "L873",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_sd_spi_cmd17_reads_sector",
       "target": "crates_bus_src_divmmc_divmmc_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L822",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_sd_spi_cmd17_reads_sector",
-      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L823",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_sd_spi_cmd17_reads_sector",
-      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -67123,7 +67099,19 @@
     },
     {
       "source": "crates_bus_src_divmmc_sd_spi_cmd17_reads_sector",
-      "target": "crates_bus_src_divmmc_spi_select",
+      "target": "crates_bus_src_divmmc_divmmc_attach_sd",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L825",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_sd_spi_cmd17_reads_sector",
+      "target": "crates_bus_src_divmmc_spi_init_ready",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -67135,6 +67123,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_sd_spi_cmd17_reads_sector",
+      "target": "crates_bus_src_divmmc_spi_select",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L828",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_sd_spi_cmd17_reads_sector",
       "target": "crates_bus_src_divmmc_spi_deselect",
       "relation": "calls",
       "_origin": "ast",
@@ -67142,7 +67142,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L830",
+      "source_location": "L832",
       "weight": 1.0
     },
     {
@@ -67154,7 +67154,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L835",
+      "source_location": "L837",
       "weight": 1.0
     },
     {
@@ -67166,7 +67166,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L836",
+      "source_location": "L838",
       "weight": 1.0
     },
     {
@@ -67178,24 +67178,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L837",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_sd_spi_cmd24_writes_sector",
-      "target": "crates_bus_src_divmmc_spi_select",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
       "source_location": "L839",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_sd_spi_cmd24_writes_sector",
-      "target": "crates_bus_src_divmmc_spi_tx",
+      "target": "crates_bus_src_divmmc_spi_select",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -67207,6 +67195,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_sd_spi_cmd24_writes_sector",
+      "target": "crates_bus_src_divmmc_spi_tx",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L843",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_sd_spi_cmd24_writes_sector",
       "target": "crates_bus_src_divmmc_spi_rx",
       "relation": "calls",
       "_origin": "ast",
@@ -67214,7 +67214,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L848",
+      "source_location": "L850",
       "weight": 1.0
     },
     {
@@ -67226,7 +67226,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L850",
+      "source_location": "L852",
       "weight": 1.0
     },
     {
@@ -67238,7 +67238,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L291",
+      "source_location": "L292",
       "weight": 1.0
     },
     {
@@ -67250,7 +67250,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L321",
+      "source_location": "L322",
       "weight": 1.0
     },
     {
@@ -67262,7 +67262,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L151",
+      "source_location": "L152",
       "weight": 1.0
     },
     {
@@ -67274,7 +67274,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L193",
+      "source_location": "L194",
       "weight": 1.0
     },
     {
@@ -67286,7 +67286,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L237",
+      "source_location": "L238",
       "weight": 1.0
     },
     {
@@ -67298,7 +67298,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L111",
+      "source_location": "L112",
       "weight": 1.0
     },
     {
@@ -67310,7 +67310,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L106",
+      "source_location": "L107",
       "weight": 1.0
     },
     {
@@ -67322,7 +67322,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L668",
+      "source_location": "L670",
       "weight": 1.0
     },
     {
@@ -67334,7 +67334,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L675",
+      "source_location": "L677",
       "weight": 1.0
     },
     {
@@ -67346,24 +67346,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L656",
+      "source_location": "L658",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_divmmc_spi_init_ready",
       "target": "crates_bus_src_divmmc_spi_select",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L681",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc_spi_init_ready",
-      "target": "crates_bus_src_divmmc_spi_deselect",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -67375,6 +67363,18 @@
     },
     {
       "source": "crates_bus_src_divmmc_spi_init_ready",
+      "target": "crates_bus_src_divmmc_spi_deselect",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L685",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_spi_init_ready",
       "target": "crates_bus_src_divmmc_spi_rx",
       "relation": "calls",
       "_origin": "ast",
@@ -67382,7 +67382,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L687",
+      "source_location": "L689",
       "weight": 1.0
     },
     {
@@ -67394,7 +67394,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L697",
+      "source_location": "L699",
       "weight": 1.0
     },
     {
@@ -67406,7 +67406,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L699",
+      "source_location": "L701",
       "weight": 1.0
     },
     {
@@ -67418,7 +67418,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L703",
+      "source_location": "L705",
       "weight": 1.0
     },
     {
@@ -67430,7 +67430,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L713",
+      "source_location": "L715",
       "weight": 1.0
     },
     {
@@ -67442,7 +67442,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L715",
+      "source_location": "L717",
       "weight": 1.0
     },
     {
@@ -67454,7 +67454,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L719",
+      "source_location": "L721",
       "weight": 1.0
     },
     {
@@ -67466,7 +67466,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L664",
+      "source_location": "L666",
       "weight": 1.0
     },
     {
@@ -67478,7 +67478,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L648",
+      "source_location": "L650",
       "weight": 1.0
     },
     {
@@ -67490,7 +67490,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L652",
+      "source_location": "L654",
       "weight": 1.0
     },
     {
@@ -67502,7 +67502,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L743",
+      "source_location": "L745",
       "weight": 1.0
     },
     {
@@ -67514,7 +67514,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L660",
+      "source_location": "L662",
       "weight": 1.0
     },
     {
@@ -67526,7 +67526,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L732",
+      "source_location": "L734",
       "weight": 1.0
     },
     {
@@ -106754,7 +106754,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L411",
+      "source_location": "L412",
       "weight": 1.0
     },
     {
@@ -106766,7 +106766,19 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L412",
+      "source_location": "L413",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc_sdsloterror",
+      "target": "crates_bus_src_divmmc_rs_vec",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "field",
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L50",
       "weight": 1.0
     },
     {
@@ -106778,7 +106790,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L79",
+      "source_location": "L80",
       "weight": 1.0
     },
     {
@@ -106790,7 +106802,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L74",
+      "source_location": "L75",
       "weight": 1.0
     },
     {
@@ -112022,7 +112034,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L465",
+      "source_location": "L467",
       "weight": 1.0
     },
     {
@@ -112034,7 +112046,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L447",
+      "source_location": "L449",
       "weight": 1.0
     },
     {
@@ -131402,7 +131414,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L439",
+      "source_location": "L440",
       "weight": 1.0
     },
     {
@@ -131414,7 +131426,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L447",
+      "source_location": "L449",
       "weight": 1.0
     },
     {
@@ -131426,7 +131438,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L667",
+      "source_location": "L669",
       "weight": 1.0
     },
     {
@@ -131438,7 +131450,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L655",
+      "source_location": "L657",
       "weight": 1.0
     },
     {
@@ -131450,7 +131462,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L679",
+      "source_location": "L681",
       "weight": 1.0
     },
     {
@@ -131462,7 +131474,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L696",
+      "source_location": "L698",
       "weight": 1.0
     },
     {
@@ -131474,7 +131486,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L712",
+      "source_location": "L714",
       "weight": 1.0
     },
     {
@@ -131486,7 +131498,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L663",
+      "source_location": "L665",
       "weight": 1.0
     },
     {
@@ -131498,7 +131510,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L647",
+      "source_location": "L649",
       "weight": 1.0
     },
     {
@@ -131510,7 +131522,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L651",
+      "source_location": "L653",
       "weight": 1.0
     },
     {
@@ -131522,7 +131534,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L740",
+      "source_location": "L742",
       "weight": 1.0
     },
     {
@@ -131534,7 +131546,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L659",
+      "source_location": "L661",
       "weight": 1.0
     },
     {
@@ -131546,7 +131558,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L729",
+      "source_location": "L731",
       "weight": 1.0
     },
     {
@@ -144059,7 +144071,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L551",
+      "source_location": "L553",
       "weight": 1.0
     },
     {
@@ -144071,7 +144083,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L465",
+      "source_location": "L467",
       "weight": 1.0
     },
     {
@@ -144083,7 +144095,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L447",
+      "source_location": "L449",
       "weight": 1.0
     },
     {
@@ -144095,7 +144107,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L416",
+      "source_location": "L417",
       "weight": 1.0
     },
     {
@@ -144107,7 +144119,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L594",
+      "source_location": "L596",
       "weight": 1.0
     },
     {
@@ -144119,7 +144131,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L423",
+      "source_location": "L424",
       "weight": 1.0
     },
     {
@@ -144131,7 +144143,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L606",
+      "source_location": "L608",
       "weight": 1.0
     },
     {
@@ -144143,7 +144155,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L278",
+      "source_location": "L279",
       "weight": 1.0
     },
     {
@@ -144155,7 +144167,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L90",
+      "source_location": "L91",
       "weight": 1.0
     },
     {
@@ -158714,7 +158726,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L1023",
+      "source_location": "L1025",
       "weight": 1.0
     },
     {
@@ -158725,7 +158737,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L396",
+      "source_location": "L397",
       "weight": 1.0
     },
     {
@@ -158747,7 +158759,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L56",
+      "source_location": "L57",
       "weight": 1.0
     },
     {
@@ -158758,7 +158770,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L647",
+      "source_location": "L649",
       "weight": 1.0
     },
     {
@@ -158769,7 +158781,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L651",
+      "source_location": "L653",
       "weight": 1.0
     },
     {
@@ -158780,7 +158792,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L655",
+      "source_location": "L657",
       "weight": 1.0
     },
     {
@@ -158791,7 +158803,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L659",
+      "source_location": "L661",
       "weight": 1.0
     },
     {
@@ -158802,7 +158814,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L663",
+      "source_location": "L665",
       "weight": 1.0
     },
     {
@@ -158813,7 +158825,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L667",
+      "source_location": "L669",
       "weight": 1.0
     },
     {
@@ -158824,7 +158836,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L679",
+      "source_location": "L681",
       "weight": 1.0
     },
     {
@@ -158835,7 +158847,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L696",
+      "source_location": "L698",
       "weight": 1.0
     },
     {
@@ -158846,7 +158858,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L712",
+      "source_location": "L714",
       "weight": 1.0
     },
     {
@@ -158857,7 +158869,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L729",
+      "source_location": "L731",
       "weight": 1.0
     },
     {
@@ -158868,7 +158880,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L740",
+      "source_location": "L742",
       "weight": 1.0
     },
     {
@@ -158879,7 +158891,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L748",
+      "source_location": "L750",
       "weight": 1.0
     },
     {
@@ -158890,7 +158902,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L760",
+      "source_location": "L762",
       "weight": 1.0
     },
     {
@@ -158901,18 +158913,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L768",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_divmmc",
-      "target": "crates_bus_src_divmmc_sdspi",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L78",
+      "source_location": "L770",
       "weight": 1.0
     },
     {
@@ -158923,7 +158924,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L782",
+      "source_location": "L784",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_divmmc",
+      "target": "crates_bus_src_divmmc_sdspi",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/bus/src/divmmc.rs",
+      "source_location": "L79",
       "weight": 1.0
     },
     {
@@ -158934,7 +158946,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L800",
+      "source_location": "L802",
       "weight": 1.0
     },
     {
@@ -158945,7 +158957,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L809",
+      "source_location": "L811",
       "weight": 1.0
     },
     {
@@ -158956,7 +158968,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L817",
+      "source_location": "L819",
       "weight": 1.0
     },
     {
@@ -158967,7 +158979,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L834",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -158978,7 +158990,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L855",
+      "source_location": "L857",
       "weight": 1.0
     },
     {
@@ -158989,7 +159001,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L865",
+      "source_location": "L867",
       "weight": 1.0
     },
     {
@@ -159000,7 +159012,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L878",
+      "source_location": "L880",
       "weight": 1.0
     },
     {
@@ -159011,7 +159023,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L903",
+      "source_location": "L905",
       "weight": 1.0
     },
     {
@@ -159022,7 +159034,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L929",
+      "source_location": "L931",
       "weight": 1.0
     },
     {
@@ -159033,7 +159045,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L952",
+      "source_location": "L954",
       "weight": 1.0
     },
     {
@@ -159044,7 +159056,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L986",
+      "source_location": "L988",
       "weight": 1.0
     },
     {
@@ -178327,7 +178339,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L415",
+      "source_location": "L416",
       "weight": 1.0
     },
     {
@@ -178338,7 +178350,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L89",
+      "source_location": "L90",
       "weight": 1.0
     },
     {
@@ -184619,7 +184631,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L416",
+      "source_location": "L417",
       "weight": 1.0
     },
     {
@@ -184630,7 +184642,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L423",
+      "source_location": "L424",
       "weight": 1.0
     },
     {
@@ -184641,7 +184653,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L439",
+      "source_location": "L440",
       "weight": 1.0
     },
     {
@@ -184652,7 +184664,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L447",
+      "source_location": "L449",
       "weight": 1.0
     },
     {
@@ -184663,7 +184675,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L465",
+      "source_location": "L467",
       "weight": 1.0
     },
     {
@@ -184674,7 +184686,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L479",
+      "source_location": "L481",
       "weight": 1.0
     },
     {
@@ -184685,7 +184697,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L489",
+      "source_location": "L491",
       "weight": 1.0
     },
     {
@@ -184696,7 +184708,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L494",
+      "source_location": "L496",
       "weight": 1.0
     },
     {
@@ -184707,7 +184719,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L499",
+      "source_location": "L501",
       "weight": 1.0
     },
     {
@@ -184718,7 +184730,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L505",
+      "source_location": "L507",
       "weight": 1.0
     },
     {
@@ -184729,7 +184741,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L518",
+      "source_location": "L520",
       "weight": 1.0
     },
     {
@@ -184740,7 +184752,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L536",
+      "source_location": "L538",
       "weight": 1.0
     },
     {
@@ -184751,7 +184763,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L541",
+      "source_location": "L543",
       "weight": 1.0
     },
     {
@@ -184762,7 +184774,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L551",
+      "source_location": "L553",
       "weight": 1.0
     },
     {
@@ -184773,7 +184785,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L561",
+      "source_location": "L563",
       "weight": 1.0
     },
     {
@@ -184784,7 +184796,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L569",
+      "source_location": "L571",
       "weight": 1.0
     },
     {
@@ -184795,7 +184807,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L594",
+      "source_location": "L596",
       "weight": 1.0
     },
     {
@@ -184806,7 +184818,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L606",
+      "source_location": "L608",
       "weight": 1.0
     },
     {
@@ -184817,7 +184829,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L623",
+      "source_location": "L625",
       "weight": 1.0
     },
     {
@@ -184828,7 +184840,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L101",
+      "source_location": "L102",
       "weight": 1.0
     },
     {
@@ -184839,7 +184851,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L105",
+      "source_location": "L106",
       "weight": 1.0
     },
     {
@@ -184850,7 +184862,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L109",
+      "source_location": "L110",
       "weight": 1.0
     },
     {
@@ -184861,7 +184873,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L114",
+      "source_location": "L115",
       "weight": 1.0
     },
     {
@@ -184872,7 +184884,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L278",
+      "source_location": "L279",
       "weight": 1.0
     },
     {
@@ -184883,7 +184895,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L367",
+      "source_location": "L368",
       "weight": 1.0
     },
     {
@@ -184894,7 +184906,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L375",
+      "source_location": "L376",
       "weight": 1.0
     },
     {
@@ -184905,7 +184917,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L382",
+      "source_location": "L383",
       "weight": 1.0
     },
     {
@@ -184916,7 +184928,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/divmmc.rs",
-      "source_location": "L90",
+      "source_location": "L91",
       "weight": 1.0
     },
     {
@@ -205476,5 +205488,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "554ccfea316e187b95e57b218ba1effb52fc1959"
+  "built_at_commit": "fe6e690e2007ea6b3ea2bf8e3af89dc067a3ff1b"
 }

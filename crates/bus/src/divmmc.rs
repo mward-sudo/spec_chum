@@ -43,10 +43,11 @@ const TOKEN_STOP_TRAN: u8 = 0xfd;
 const TOKEN_SINGLE: u8 = 0xfe;
 
 /// Invalid `DivMMC` SD slot index (only 0 and 1 exist on the CPLD).
-#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum SdSlotError {
+    /// `data` is returned so the caller can retry or free the image.
     #[error("DivMMC SD slot {slot} is invalid (only 0 and 1)")]
-    InvalidSlot { slot: u8 },
+    InvalidSlot { slot: u8, data: Vec<u8> },
 }
 
 /// DivIDE-compatible **delayed** automap entry points (apply after opcode M1).
@@ -437,13 +438,14 @@ impl DivMmc {
 
     /// Attach a flat SD image to slot 0 (CS bit0).
     pub fn attach_sd(&mut self, data: Vec<u8>) {
-        // Slot 0 is always valid.
-        let _ = self.attach_sd_slot(0, data);
+        self.sd = data;
+        self.spi[0].soft_reset_card();
     }
 
     /// Attach a flat SD image to slot `0` or `1` (`DivMMC` dual-card CS bits).
     ///
-    /// Returns [`SdSlotError::InvalidSlot`] for any other index (data is not consumed).
+    /// On [`SdSlotError::InvalidSlot`], the image is returned in the error so the
+    /// caller can retry or drop it deliberately.
     pub fn attach_sd_slot(&mut self, slot: u8, data: Vec<u8>) -> Result<(), SdSlotError> {
         match slot {
             0 => {
@@ -456,7 +458,7 @@ impl DivMmc {
                 self.spi[1].soft_reset_card();
                 Ok(())
             }
-            _ => Err(SdSlotError::InvalidSlot { slot }),
+            _ => Err(SdSlotError::InvalidSlot { slot, data }),
         }
     }
 
@@ -1030,7 +1032,10 @@ mod tests {
         d.attach_sd_slot(1, slot1).expect("slot 1");
         assert!(matches!(
             d.attach_sd_slot(2, vec![0u8; SD_SECTOR_SIZE]),
-            Err(SdSlotError::InvalidSlot { slot: 2 })
+            Err(SdSlotError::InvalidSlot {
+                slot: 2,
+                data
+            }) if data.len() == SD_SECTOR_SIZE
         ));
         spi_init_ready(&mut d);
         spi_init_ready_slot1(&mut d);
