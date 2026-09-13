@@ -83,10 +83,10 @@ struct Cli {
     tzx: Option<PathBuf>,
     #[arg(long)]
     snapshot: Option<PathBuf>,
-    /// Insert a `.trd` (attaches Beta / TR-DOS if needed). 48K/128K/Pentagon.
+    /// Insert a `.trd` (attaches Beta / TR-DOS if needed). 48K/128K/Pentagon/Scorpion.
     #[arg(long)]
     trd: Option<PathBuf>,
-    /// Load a 16 KiB TR-DOS ROM (attaches Beta on 48K/128K).
+    /// Load a 16 KiB TR-DOS ROM (attaches Beta on 48K/128K/Pentagon/Scorpion).
     #[arg(long)]
     trdos_rom: Option<PathBuf>,
     /// Comma-separated trace categories (tape,cpu,bus,ula,machine,ay,disk,mem,all)
