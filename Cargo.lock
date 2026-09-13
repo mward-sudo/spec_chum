@@ -8395,6 +8395,7 @@ dependencies = [
  "control_plane",
  "cpal 0.15.3",
  "host_api",
+ "machine",
  "parking_lot",
  "rfd",
  "windows 0.61.3",
