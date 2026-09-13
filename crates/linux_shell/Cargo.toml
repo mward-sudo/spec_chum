@@ -1,0 +1,45 @@
+[package]
+name = "linux_shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native GTK4 Spec Chum shell over host_api (#351)"
+publish = false
+default-run = "spec_chum_linux"
+
+[lib]
+name = "linux_shell"
+path = "src/lib.rs"
+
+[[bin]]
+name = "spec_chum_linux"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+cpal = { workspace = true }
+host_api = { workspace = true }
+parking_lot = { workspace = true }
+rfd = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+agent_server = { workspace = true }
+control_plane = { workspace = true }
+gtk4 = { version = "0.9", package = "gtk4" }
+gdk4 = { version = "0.9", package = "gdk4" }
+glib = "0.20"
+
+# GTK UI lives in `src/gtk_ui.rs` (safe gtk-rs bindings).
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+pedantic = { level = "allow", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unwrap_used = "warn"
+expect_used = "allow"

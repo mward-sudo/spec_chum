@@ -828,9 +828,9 @@
     "semantic_hash": ""
   },
   ".github/workflows/ci.yml": {
-    "mtime": 1789100182.8580248,
-    "seen": 1789101087.9395661,
-    "ast_hash": "eecf89f3202fe994da84ee022e4fe9a5",
+    "mtime": 1789338305.6391058,
+    "seen": 1789338842.4123058,
+    "ast_hash": "a8046f10a3015c1c6b7ec945aade8e80",
     "semantic_hash": ""
   },
   ".github/workflows/pr-bot-reviews.yml": {
@@ -846,9 +846,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1789278439.197373,
-    "seen": 1789336521.855382,
-    "ast_hash": "df91c4b5c68dc12e25a136cdbfc6e03e",
+    "mtime": 1789338314.886332,
+    "seen": 1789338842.412336,
+    "ast_hash": "de8c9d13992ba45898a666e161c2e030",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -858,9 +858,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1789100182.8604865,
-    "seen": 1789101087.9395719,
-    "ast_hash": "e2638d515c169955319e6062ada50808",
+    "mtime": 1789338839.0894861,
+    "seen": 1789338842.412349,
+    "ast_hash": "fa970342685d5da3722ba0a801d71ac4",
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
@@ -882,9 +882,9 @@
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
-    "mtime": 1789272971.7342076,
-    "seen": 1789273131.3260548,
-    "ast_hash": "effc0e5f26a0447d15b2a54c4584ee61",
+    "mtime": 1789338319.186429,
+    "seen": 1789338842.412392,
+    "ast_hash": "6d232f683c091eaae9427edde42e85db",
     "semantic_hash": ""
   },
   "docs/MULTIFACE.md": {
@@ -912,9 +912,9 @@
     "semantic_hash": "1f835e66063769d604364c5a96da7e8b"
   },
   "docs/UI_ARCHITECTURE.md": {
-    "mtime": 1789336452.1094062,
-    "seen": 1789336521.855526,
-    "ast_hash": "e122eae016968278d22bae86e14f1b1d",
+    "mtime": 1789338241.6075084,
+    "seen": 1789338842.412472,
+    "ast_hash": "3da39913baedec561d241db91c785981",
     "semantic_hash": ""
   },
   "tests/fixtures/fuse/README.md": {
@@ -1488,9 +1488,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1789336496.8850954,
-    "seen": 1789336521.8547242,
-    "ast_hash": "07a183590025617a4f7544c48ea076cf",
+    "mtime": 1789337286.9368796,
+    "seen": 1789338842.411566,
+    "ast_hash": "72a17218b7208d7aa29add60e560d976",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -1512,15 +1512,63 @@
     "semantic_hash": ""
   },
   "docs/WINDOWS_NATIVE.md": {
-    "mtime": 1789336390.4480493,
-    "seen": 1789336521.855527,
-    "ast_hash": "90f9c784d45fcdb1bd652826b649cdb9",
+    "mtime": 1789338349.5865653,
+    "seen": 1789338842.4124732,
+    "ast_hash": "03152cc28d4ca3dca87c9c33836c360e",
     "semantic_hash": ""
   },
   "crates/windows_shell/src/commands.rs": {
     "mtime": 1789336259.3629766,
     "seen": 1789336521.854709,
     "ast_hash": "84c3a219b00255280adacad445d7e9b2",
+    "semantic_hash": ""
+  },
+  "crates/linux_shell/Cargo.toml": {
+    "mtime": 1789338227.9846385,
+    "seen": 1789338842.4105961,
+    "ast_hash": "b89de6f82eb6c9780773ad6a268c4b09",
+    "semantic_hash": ""
+  },
+  "crates/linux_shell/src/audio.rs": {
+    "mtime": 1789337969.0269165,
+    "seen": 1789338842.4105978,
+    "ast_hash": "b4b4ac222398e0df825c471788e92989",
+    "semantic_hash": ""
+  },
+  "crates/linux_shell/src/gtk_ui.rs": {
+    "mtime": 1789338815.5004358,
+    "seen": 1789338842.410599,
+    "ast_hash": "fa503cb6c4c84cf76e3c3209745cf28d",
+    "semantic_hash": ""
+  },
+  "crates/linux_shell/src/keymap.rs": {
+    "mtime": 1789338815.181425,
+    "seen": 1789338842.4106,
+    "ast_hash": "e3ce0f9cf1bd01ab8fb5d0524f4484e1",
+    "semantic_hash": ""
+  },
+  "crates/linux_shell/src/lib.rs": {
+    "mtime": 1789337963.2261298,
+    "seen": 1789338842.4106,
+    "ast_hash": "450b52fcf19bd247b503dbac171cae89",
+    "semantic_hash": ""
+  },
+  "crates/linux_shell/src/main.rs": {
+    "mtime": 1789337968.8868692,
+    "seen": 1789338842.410601,
+    "ast_hash": "5fd36984d0092ccdceea12a34a1bd7dd",
+    "semantic_hash": ""
+  },
+  "scripts/run_linux_shell.sh": {
+    "mtime": 1789338211.2977917,
+    "seen": 1789338842.412191,
+    "ast_hash": "1f699a4f02d71358f41703dc640ed023",
+    "semantic_hash": ""
+  },
+  "docs/LINUX_NATIVE.md": {
+    "mtime": 1789338211.297792,
+    "seen": 1789338842.412377,
+    "ast_hash": "c36951004e726ffbc4edd24468aecf85",
     "semantic_hash": ""
   }
 }
