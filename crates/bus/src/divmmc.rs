@@ -1,7 +1,8 @@
 //! DivMMC-style control port + SRAM paging + SPI SD card.
 //!
 //! Port `0xE3` (control): bit7=CONMEM, bit6=MAPRAM (sticky), bits0–5=RAM page.
-//! Ports `0xE7` / `0xEB` are SPI CS (active-low bit0) / data.
+//! Ports `0xE7` / `0xEB` are SPI CS / data. CS is active-low: bit0 = slot 0,
+//! bit1 = slot 1 (original `DivMMC` CPLD `card(1:0)`).
 //!
 //! Memory overlay is active when CONMEM is set **or** DivIDE-compatible automap
 //! is latched. Delayed entry/exit points (`$0000`, `$0008`, …, `$1FF8–$1FFF`)
@@ -10,28 +11,44 @@
 //! 8 KiB image for ROM overlay; without it, only MAPRAM / CONMEM RAM paging and
 //! SPI SD I/O remain useful.
 //!
-//! SPI speaks a minimal MMC/SD/SDHC subset (CMD0/8/16/17/24/55/58 + ACMD41) over
-//! a flat sector image. ACMD41 HCS (bit 30) selects SDHC block addressing + OCR
-//! CCS; without HCS the card stays SDSC (byte-addressed CMD17/24) — matching
-//! `DivMMC` Ready / ESXDOS real-card init. Full ESXDOS boot needs a user-supplied
-//! EEPROM + FAT SD image (see `docs/ROMS.md`).
+//! SPI speaks a minimal MMC/SD/SDHC subset (CMD0/8/12/16/17/18/24/25/55/58 +
+//! ACMD41) over flat sector images. ACMD41 HCS (bit 30) selects SDHC block
+//! addressing + OCR CCS; without HCS the card stays SDSC (byte-addressed
+//! CMD17/18/24/25) — matching `DivMMC` Ready / ESXDOS real-card init. Multi-block
+//! CMD18/CMD25 (stop via CMD12 / `0xFD`) cover FAT cluster I/O. Full ESXDOS boot
+//! needs a user-supplied EEPROM + FAT SD image (see `docs/ROMS.md`).
 
 use crate::RomLoadError;
+use thiserror::Error;
 
 /// `DivMMC` control / paging register.
 pub const PORT_CONTROL: u16 = 0x00e3;
-/// SPI chip-select (active low bit0).
+/// SPI chip-select (active-low bit0 = slot 0, bit1 = slot 1).
 pub const PORT_SPI_CS: u16 = 0x00e7;
-/// SPI data (byte exchange against the SD card state machine).
+/// SPI data (byte exchange against the selected SD card state machine).
 pub const PORT_SPI_DATA: u16 = 0x00eb;
 
 const PAGE_SIZE: usize = 8192;
 /// `DivMMC` Ready-compatible SRAM: 64 × 8 KiB pages (512 KiB; control bits 0–5).
 pub const RAM_PAGES: usize = 64;
-/// SD / MMC block size used by CMD17 / CMD24.
+/// SD / MMC block size used by CMD17 / CMD18 / CMD24 / CMD25.
 pub const SD_SECTOR_SIZE: usize = 512;
 /// ACMD41 Host Capacity Support — request SDHC / block addressing.
 const ACMD41_HCS: u32 = 0x4000_0000;
+/// Multi-block write data token (SPI).
+const TOKEN_MULTI_WRITE: u8 = 0xfc;
+/// Multi-block write stop token (SPI).
+const TOKEN_STOP_TRAN: u8 = 0xfd;
+/// Single-block data token (read / CMD24 write).
+const TOKEN_SINGLE: u8 = 0xfe;
+
+/// Invalid `DivMMC` SD slot index (only 0 and 1 exist on the CPLD).
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum SdSlotError {
+    /// `data` is returned so the caller can retry or free the image.
+    #[error("DivMMC SD slot {slot} is invalid (only 0 and 1)")]
+    InvalidSlot { slot: u8, data: Vec<u8> },
+}
 
 /// DivIDE-compatible **delayed** automap entry points (apply after opcode M1).
 const AUTOMAP_ENTRIES_DELAYED: &[u16] = &[0x0000, 0x0008, 0x0038, 0x0066, 0x04c6, 0x0562];
@@ -46,16 +63,16 @@ enum SpiPhase {
     WaitR1 { cmd: u8, arg: u32, left: u8 },
     /// Extra bytes after R1 (CMD8 R7 / CMD58 R3).
     SendExtra { bytes: [u8; 4], idx: u8 },
-    /// Delay before data token on read.
-    WaitToken { lba: u32, left: u8 },
+    /// Delay before data token on read (`multi` = CMD18 stream).
+    WaitToken { lba: u32, left: u8, multi: bool },
     /// 512 data bytes + 2 CRC after `0xFE`.
-    ReadData { lba: u32, idx: u16 },
-    /// Expect host data token `0xFE` for CMD24.
-    WaitWriteToken { lba: u32 },
+    ReadData { lba: u32, idx: u16, multi: bool },
+    /// Expect host data token (`0xFE` / multi `0xFC`) or stop `0xFD`.
+    WaitWriteToken { lba: u32, multi: bool },
     /// Receive 512 data bytes (+ ignore 2 CRC).
-    WriteData { lba: u32, idx: u16 },
-    /// Data-response token then busy `0x00` then `0xFF`.
-    WriteResp { idx: u8 },
+    WriteData { lba: u32, idx: u16, multi: bool },
+    /// Data-response / CMD12 busy: `cont` is next multi-write LBA when set.
+    WriteResp { idx: u8, cont: Option<u32> },
 }
 
 #[derive(Clone, Debug)]
@@ -149,54 +166,107 @@ impl SdSpi {
                 }
                 v
             }
-            SpiPhase::WaitToken { lba, left } => {
+            SpiPhase::WaitToken { lba, left, multi } => {
+                // Between multi-block sectors the host may issue CMD12.
+                if mosi & 0xc0 == 0x40 {
+                    let cmd = mosi & 0x3f;
+                    self.phase = SpiPhase::Arg {
+                        cmd,
+                        got: 0,
+                        arg: 0,
+                    };
+                    return 0xff;
+                }
                 if left > 0 {
                     self.phase = SpiPhase::WaitToken {
                         lba,
                         left: left - 1,
+                        multi,
                     };
                     0xff
                 } else {
-                    self.phase = SpiPhase::ReadData { lba, idx: 0 };
-                    0xfe
+                    self.phase = SpiPhase::ReadData { lba, idx: 0, multi };
+                    TOKEN_SINGLE
                 }
             }
-            SpiPhase::ReadData { lba, idx } => {
+            SpiPhase::ReadData { lba, idx, multi } => {
                 if idx < 512 {
                     let v = Self::sector_byte(sd, lba, idx as usize);
-                    self.phase = SpiPhase::ReadData { lba, idx: idx + 1 };
+                    self.phase = SpiPhase::ReadData {
+                        lba,
+                        idx: idx + 1,
+                        multi,
+                    };
                     v
                 } else if idx < 514 {
-                    self.phase = SpiPhase::ReadData { lba, idx: idx + 1 };
+                    let next = idx + 1;
+                    if next >= 514 {
+                        // Last CRC byte: ready for CMD12 or the next multi token.
+                        if multi {
+                            self.phase = SpiPhase::WaitToken {
+                                lba: lba.saturating_add(1),
+                                left: 1,
+                                multi: true,
+                            };
+                        } else {
+                            self.phase = SpiPhase::Idle;
+                        }
+                    } else {
+                        self.phase = SpiPhase::ReadData {
+                            lba,
+                            idx: next,
+                            multi,
+                        };
+                    }
                     0xff
                 } else {
+                    // Defensive: should not be reached after CRC completion above.
                     self.phase = SpiPhase::Idle;
                     0xff
                 }
             }
-            SpiPhase::WaitWriteToken { lba } => {
-                if mosi == 0xfe {
-                    self.phase = SpiPhase::WriteData { lba, idx: 0 };
+            SpiPhase::WaitWriteToken { lba, multi } => {
+                if multi && mosi == TOKEN_STOP_TRAN {
+                    self.phase = SpiPhase::Idle;
+                } else if mosi == TOKEN_SINGLE || (multi && mosi == TOKEN_MULTI_WRITE) {
+                    self.phase = SpiPhase::WriteData { lba, idx: 0, multi };
                 }
                 0xff
             }
-            SpiPhase::WriteData { lba, idx } => {
+            SpiPhase::WriteData { lba, idx, multi } => {
                 if idx < 512 {
                     Self::write_sector_byte(sd, lba, idx as usize, mosi);
-                    self.phase = SpiPhase::WriteData { lba, idx: idx + 1 };
+                    self.phase = SpiPhase::WriteData {
+                        lba,
+                        idx: idx + 1,
+                        multi,
+                    };
                     0xff
                 } else if idx < 514 {
-                    self.phase = SpiPhase::WriteData { lba, idx: idx + 1 };
+                    self.phase = SpiPhase::WriteData {
+                        lba,
+                        idx: idx + 1,
+                        multi,
+                    };
                     0xff
                 } else {
                     // CRC complete — data response on this MISO byte.
-                    self.phase = SpiPhase::WriteResp { idx: 0 };
+                    let cont = multi.then_some(lba.saturating_add(1));
+                    self.phase = SpiPhase::WriteResp { idx: 0, cont };
                     0x05
                 }
             }
-            SpiPhase::WriteResp { idx } => {
+            SpiPhase::WriteResp { idx, cont } => {
                 if idx == 0 {
-                    self.phase = SpiPhase::WriteResp { idx: 1 };
+                    if let Some(next_lba) = cont {
+                        // Multi-block: one busy byte, then accept next `0xFC` / `0xFD`.
+                        self.phase = SpiPhase::WaitWriteToken {
+                            lba: next_lba,
+                            multi: true,
+                        };
+                    } else {
+                        self.phase = SpiPhase::WriteResp { idx: 1, cont: None };
+                    }
                     0x00 // busy
                 } else {
                     self.phase = SpiPhase::Idle;
@@ -233,8 +303,16 @@ impl SdSpi {
                     },
                 )
             }
+            12 => {
+                // STOP_TRANSMISSION — ends CMD18 multi-block read (R1b busy).
+                if self.idle {
+                    (0x01, SpiPhase::Idle)
+                } else {
+                    (0x00, SpiPhase::WriteResp { idx: 0, cont: None })
+                }
+            }
             16 => (if self.idle { 0x01 } else { 0x00 }, SpiPhase::Idle),
-            17 => {
+            17 | 18 => {
                 if self.idle {
                     (0x01, SpiPhase::Idle)
                 } else {
@@ -243,11 +321,12 @@ impl SdSpi {
                         SpiPhase::WaitToken {
                             lba: self.arg_to_lba(arg),
                             left: 1,
+                            multi: cmd == 18,
                         },
                     )
                 }
             }
-            24 => {
+            24 | 25 => {
                 if self.idle {
                     (0x01, SpiPhase::Idle)
                 } else {
@@ -255,6 +334,7 @@ impl SdSpi {
                         0x00,
                         SpiPhase::WaitWriteToken {
                             lba: self.arg_to_lba(arg),
+                            multi: cmd == 25,
                         },
                     )
                 }
@@ -326,9 +406,11 @@ pub struct DivMmc {
     pub eeprom_loaded: bool,
     /// Contiguous SRAM (`RAM_PAGES * 8K`).
     pub ram: Vec<u8>,
-    /// Flat SD/MMC image (byte addressable as LBA × 512).
+    /// Flat SD/MMC image for slot 0 (CS bit0; LBA × 512).
     pub sd: Vec<u8>,
-    spi: SdSpi,
+    /// Flat SD/MMC image for slot 1 (CS bit1).
+    pub sd1: Vec<u8>,
+    spi: [SdSpi; 2],
 }
 
 impl Default for DivMmc {
@@ -349,13 +431,35 @@ impl DivMmc {
             eeprom_loaded: false,
             ram: vec![0u8; RAM_PAGES * PAGE_SIZE],
             sd: Vec::new(),
-            spi: SdSpi::default(),
+            sd1: Vec::new(),
+            spi: [SdSpi::default(), SdSpi::default()],
         }
     }
 
+    /// Attach a flat SD image to slot 0 (CS bit0).
     pub fn attach_sd(&mut self, data: Vec<u8>) {
         self.sd = data;
-        self.spi.soft_reset_card();
+        self.spi[0].soft_reset_card();
+    }
+
+    /// Attach a flat SD image to slot `0` or `1` (`DivMMC` dual-card CS bits).
+    ///
+    /// On [`SdSlotError::InvalidSlot`], the image is returned in the error so the
+    /// caller can retry or drop it deliberately.
+    pub fn attach_sd_slot(&mut self, slot: u8, data: Vec<u8>) -> Result<(), SdSlotError> {
+        match slot {
+            0 => {
+                self.sd = data;
+                self.spi[0].soft_reset_card();
+                Ok(())
+            }
+            1 => {
+                self.sd1 = data;
+                self.spi[1].soft_reset_card();
+                Ok(())
+            }
+            _ => Err(SdSlotError::InvalidSlot { slot, data }),
+        }
     }
 
     /// Attach ESXDOS / `DivMMC` EEPROM. Accepts exactly 8 KiB, or a larger image
@@ -379,7 +483,8 @@ impl DivMmc {
         self.automap = false;
         self.automap_next = false;
         self.spi_cs = 0xff;
-        self.spi.reset_transaction();
+        self.spi[0].reset_transaction();
+        self.spi[1].reset_transaction();
     }
 
     #[must_use]
@@ -435,8 +540,32 @@ impl DivMmc {
     }
 
     #[must_use]
-    fn cs_active(&self) -> bool {
-        self.spi_cs & 1 == 0
+    fn slot_cs_active(cs: u8, slot: u8) -> bool {
+        match slot {
+            0 => cs & 1 == 0,
+            1 => cs & 2 == 0,
+            _ => false,
+        }
+    }
+
+    /// Active SPI slot when exactly one CS bit is asserted (active low).
+    #[must_use]
+    fn active_sd_slot(&self) -> Option<usize> {
+        let s0 = Self::slot_cs_active(self.spi_cs, 0);
+        let s1 = Self::slot_cs_active(self.spi_cs, 1);
+        match (s0, s1) {
+            (true, false) => Some(0),
+            (false, true) => Some(1),
+            _ => None,
+        }
+    }
+
+    fn exchange_active(&mut self, mosi: u8) -> u8 {
+        match self.active_sd_slot() {
+            Some(0) => self.spi[0].exchange(mosi, &mut self.sd),
+            Some(1) => self.spi[1].exchange(mosi, &mut self.sd1),
+            Some(_) | None => 0xff,
+        }
     }
 
     pub fn out_port(&mut self, port: u16, value: u8) -> bool {
@@ -447,17 +576,17 @@ impl DivMmc {
                 true
             }
             PORT_SPI_CS => {
-                let was_active = self.cs_active();
+                let prev = self.spi_cs;
                 self.spi_cs = value;
-                if was_active && !self.cs_active() {
-                    self.spi.reset_transaction();
+                for slot in 0..=1u8 {
+                    if Self::slot_cs_active(prev, slot) && !Self::slot_cs_active(value, slot) {
+                        self.spi[usize::from(slot)].reset_transaction();
+                    }
                 }
                 true
             }
             PORT_SPI_DATA => {
-                if self.cs_active() {
-                    let _ = self.spi.exchange(value, &mut self.sd);
-                }
+                let _ = self.exchange_active(value);
                 true
             }
             _ => false,
@@ -468,13 +597,7 @@ impl DivMmc {
         match port & 0xff {
             0xe3 => Some(self.control),
             PORT_SPI_CS => Some(self.spi_cs),
-            PORT_SPI_DATA => {
-                if self.cs_active() {
-                    Some(self.spi.exchange(0xff, &mut self.sd))
-                } else {
-                    Some(0xff)
-                }
-            }
+            PORT_SPI_DATA => Some(self.exchange_active(0xff)),
             _ => None,
         }
     }
@@ -524,7 +647,11 @@ mod tests {
     use super::*;
 
     fn spi_select(d: &mut DivMmc) {
-        d.out_port(PORT_SPI_CS, 0xfe);
+        d.out_port(PORT_SPI_CS, 0xfe); // bit0 low → slot 0
+    }
+
+    fn spi_select_slot1(d: &mut DivMmc) {
+        d.out_port(PORT_SPI_CS, 0xfd); // bit1 low → slot 1
     }
 
     fn spi_deselect(d: &mut DivMmc) {
@@ -568,6 +695,22 @@ mod tests {
         spi_deselect(d);
     }
 
+    fn spi_init_ready_slot1(d: &mut DivMmc) {
+        spi_select_slot1(d);
+        assert_eq!(spi_cmd(d, 0, 0, 0x95), 0x01);
+        spi_deselect(d);
+        spi_select_slot1(d);
+        assert_eq!(spi_cmd(d, 8, 0x1aa, 0x87), 0x01);
+        for _ in 0..4 {
+            let _ = spi_rx(d);
+        }
+        spi_deselect(d);
+        spi_select_slot1(d);
+        assert_eq!(spi_cmd(d, 55, 0, 0x65), 0x01);
+        assert_eq!(spi_cmd(d, 41, ACMD41_HCS, 0x77), 0x00);
+        spi_deselect(d);
+    }
+
     fn spi_init_sdsc(d: &mut DivMmc) {
         spi_select(d);
         assert_eq!(spi_cmd(d, 0, 0, 0x95), 0x01);
@@ -589,11 +732,18 @@ mod tests {
         let mut token = 0xff;
         for _ in 0..8 {
             token = spi_rx(d);
-            if token == 0xfe {
+            if token == TOKEN_SINGLE {
                 break;
             }
         }
         token
+    }
+
+    fn spi_skip_sector_rest(d: &mut DivMmc) {
+        // Remaining 511 payload bytes + 2 CRC after the first data byte was read.
+        for _ in 0..(511 + 2) {
+            let _ = spi_rx(d);
+        }
     }
 
     #[test]
@@ -796,6 +946,115 @@ mod tests {
         );
         let ocr0 = spi_rx(&mut d);
         assert_eq!(ocr0 & 0xc0, 0xc0);
+        spi_deselect(&mut d);
+    }
+
+    /// FAT-style multi-block read: CMD18 streams sectors until CMD12.
+    #[test]
+    fn fat_cmd18_reads_two_sectors_then_cmd12_stops() {
+        let mut img = vec![0u8; SD_SECTOR_SIZE * 3];
+        img[0] = 0x10;
+        img[SD_SECTOR_SIZE] = 0x20;
+        img[SD_SECTOR_SIZE * 2] = 0x30;
+        let mut d = DivMmc::new();
+        d.attach_sd(img);
+        spi_init_ready(&mut d);
+
+        spi_select(&mut d);
+        assert_eq!(spi_cmd(&mut d, 18, 0, 0xff), 0x00);
+        assert_eq!(spi_wait_token(&mut d), TOKEN_SINGLE);
+        assert_eq!(spi_rx(&mut d), 0x10);
+        spi_skip_sector_rest(&mut d);
+
+        assert_eq!(spi_wait_token(&mut d), TOKEN_SINGLE);
+        assert_eq!(spi_rx(&mut d), 0x20);
+        spi_skip_sector_rest(&mut d);
+
+        // Stop before the third sector streams.
+        assert_eq!(spi_cmd(&mut d, 12, 0, 0xff), 0x00);
+        let _busy = spi_rx(&mut d);
+        spi_deselect(&mut d);
+
+        // Single-block still works after stop.
+        spi_select(&mut d);
+        assert_eq!(spi_cmd(&mut d, 17, 2, 0xff), 0x00);
+        assert_eq!(spi_wait_token(&mut d), TOKEN_SINGLE);
+        assert_eq!(spi_rx(&mut d), 0x30);
+        spi_deselect(&mut d);
+    }
+
+    /// Multi-block write: CMD25 + `0xFC` tokens, stop with `0xFD`.
+    #[test]
+    fn fat_cmd25_writes_two_sectors_then_stop_tran() {
+        let mut d = DivMmc::new();
+        d.attach_sd(vec![0u8; SD_SECTOR_SIZE * 2]);
+        spi_init_ready(&mut d);
+
+        spi_select(&mut d);
+        assert_eq!(spi_cmd(&mut d, 25, 0, 0xff), 0x00);
+
+        spi_tx(&mut d, TOKEN_MULTI_WRITE);
+        spi_tx(&mut d, 0xa1);
+        for _ in 1..512 {
+            spi_tx(&mut d, 0x00);
+        }
+        spi_tx(&mut d, 0xff);
+        spi_tx(&mut d, 0xff);
+        assert_eq!(spi_rx(&mut d) & 0x1f, 0x05);
+        let _busy = spi_rx(&mut d);
+
+        spi_tx(&mut d, TOKEN_MULTI_WRITE);
+        spi_tx(&mut d, 0xb2);
+        for _ in 1..512 {
+            spi_tx(&mut d, 0x00);
+        }
+        spi_tx(&mut d, 0xff);
+        spi_tx(&mut d, 0xff);
+        assert_eq!(spi_rx(&mut d) & 0x1f, 0x05);
+        let _busy = spi_rx(&mut d);
+
+        spi_tx(&mut d, TOKEN_STOP_TRAN);
+        spi_deselect(&mut d);
+
+        assert_eq!(d.sd[0], 0xa1);
+        assert_eq!(d.sd[SD_SECTOR_SIZE], 0xb2);
+    }
+
+    /// Dual-slot CS: bit0 / bit1 select independent card images.
+    #[test]
+    fn dual_slot_cs_selects_independent_sd_images() {
+        let mut slot0 = vec![0u8; SD_SECTOR_SIZE];
+        slot0[0] = 0x50;
+        let mut slot1 = vec![0u8; SD_SECTOR_SIZE];
+        slot1[0] = 0x51;
+        let mut d = DivMmc::new();
+        d.attach_sd_slot(0, slot0).expect("slot 0");
+        d.attach_sd_slot(1, slot1).expect("slot 1");
+        assert!(matches!(
+            d.attach_sd_slot(2, vec![0u8; SD_SECTOR_SIZE]),
+            Err(SdSlotError::InvalidSlot {
+                slot: 2,
+                data
+            }) if data.len() == SD_SECTOR_SIZE
+        ));
+        spi_init_ready(&mut d);
+        spi_init_ready_slot1(&mut d);
+
+        spi_select(&mut d);
+        assert_eq!(spi_cmd(&mut d, 17, 0, 0xff), 0x00);
+        assert_eq!(spi_wait_token(&mut d), TOKEN_SINGLE);
+        assert_eq!(spi_rx(&mut d), 0x50);
+        spi_deselect(&mut d);
+
+        spi_select_slot1(&mut d);
+        assert_eq!(spi_cmd(&mut d, 17, 0, 0xff), 0x00);
+        assert_eq!(spi_wait_token(&mut d), TOKEN_SINGLE);
+        assert_eq!(spi_rx(&mut d), 0x51);
+        spi_deselect(&mut d);
+
+        // Both CS asserted → no card selected; MISO stays 0xFF.
+        d.out_port(PORT_SPI_CS, 0xfc);
+        assert_eq!(spi_rx(&mut d), 0xff);
         spi_deselect(&mut d);
     }
 }

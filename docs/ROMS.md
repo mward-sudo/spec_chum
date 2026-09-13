@@ -197,7 +197,7 @@ Obtain from [esxdos.org](http://www.esxdos.org/) (e.g. `esxdos089.zip`): flash/u
 
 Machine smoke `esxdos_eeprom_boots_prompt_when_fixtures_present` skips cleanly when either fixture is absent; with both present it boots to the ESXDOS banner/prompt.
 
-DivMMC Ready-oriented SPI/SRAM coverage (unit tests in `bus::divmmc`): 512 KiB paging, SDHC (ACMD41 HCS + OCR CCS + block LBA) vs SDSC byte addressing, and CS-deselect abort mid-command. Deeper FAT/multi-block / dual-slot edge cases remain open on [#138](https://github.com/mward-sudo/spec_chum/issues/138).
+DivMMC Ready-oriented SPI/SRAM coverage (unit tests in `bus::divmmc`): 512 KiB paging, SDHC (ACMD41 HCS + OCR CCS + block LBA) vs SDSC byte addressing, CS-deselect abort mid-command, multi-block CMD18/CMD12 + CMD25/`0xFD` (FAT cluster I/O), and dual-slot CS (port `0xE7` bit0/bit1). Host UI for attaching a second SD image remains open on [#138](https://github.com/mward-sudo/spec_chum/issues/138).
 
 ### Multiface 1 / 128 — user-provided paths (#168)
 
