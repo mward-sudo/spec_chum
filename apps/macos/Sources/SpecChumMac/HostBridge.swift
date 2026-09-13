@@ -43,10 +43,11 @@ final class HostBridge: ObservableObject {
         case timexTC2048 = 7
         case timexTS2068 = 8
         case spectrumPlus3e = 9
+        case scorpionZs256 = 10
 
         /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
         static let pickerOrder: [Model] = [
-            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e, .pentagon128, .timexTC2048, .timexTS2068,
+            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e, .pentagon128, .scorpionZs256, .timexTC2048, .timexTS2068,
         ]
 
         var id: UInt32 { rawValue }
@@ -61,6 +62,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus3e: "Spectrum +3e (enhanced)"
             case .spectrumPlus2A: "Spectrum +2A"
             case .pentagon128: "Pentagon 128"
+            case .scorpionZs256: "Scorpion ZS-256"
             case .timexTC2048: "Timex TC2048"
             case .timexTS2068: "Timex TS2068"
             }
@@ -77,6 +79,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus3e: "+3e"
             case .spectrumPlus2A: "+2A"
             case .pentagon128: "Pentagon"
+            case .scorpionZs256: "Scorpion"
             case .timexTC2048: "TC2048"
             case .timexTS2068: "TS2068"
             }
@@ -93,6 +96,7 @@ final class HostBridge: ObservableObject {
             case .spectrumPlus3: "spectrum_plus3"
             case .spectrumPlus3e: "spectrum_plus3e"
             case .pentagon128: "pentagon128"
+            case .scorpionZs256: "scorpion_zs256"
             case .timexTC2048: "timex_tc2048"
             case .timexTS2068: "timex_ts2068"
             }
@@ -109,7 +113,7 @@ final class HostBridge: ObservableObject {
 
         /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
         var supportsBeta: Bool {
-            self == .spectrum16K || self == .spectrum48 || self == .timexTC2048 || self == .timexTS2068 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128
+            self == .spectrum16K || self == .spectrum48 || self == .timexTC2048 || self == .timexTS2068 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128 || self == .scorpionZs256
         }
 
         /// Timex dock `.dck` cartridges (TS2068 / TC2068 horizontal MMU).

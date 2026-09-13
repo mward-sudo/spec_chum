@@ -39,6 +39,7 @@ pub fn model_slug(model: ModelId) -> String {
         ModelId::SpectrumPlus3 => "plus3".into(),
         ModelId::SpectrumPlus3e => "plus3e".into(),
         ModelId::Pentagon128 => "pentagon128".into(),
+        ModelId::ScorpionZs256 => "scorpion_zs256".into(),
         ModelId::TimexTC2048 => "timex_tc2048".into(),
         ModelId::TimexTS2068 => "timex_ts2068".into(),
     }
@@ -54,6 +55,7 @@ pub fn parse_model_slug(s: &str) -> ApiResult<ModelId> {
         "plus3" | "+3" => ModelId::SpectrumPlus3,
         "plus3e" | "+3e" | "spectrum_plus3e" => ModelId::SpectrumPlus3e,
         "pentagon" | "pentagon128" | "128p" => ModelId::Pentagon128,
+        "scorpion" | "scorpion_zs256" | "zs256" | "256s" => ModelId::ScorpionZs256,
         "timex" | "tc2048" | "timex2048" | "timex_tc2048" => ModelId::TimexTC2048,
         "ts2068" | "tc2068" | "timex2068" | "timex_ts2068" => ModelId::TimexTS2068,
         other => {

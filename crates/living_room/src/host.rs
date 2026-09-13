@@ -281,5 +281,9 @@ mod tests {
         assert_eq!(model_label(ModelId::SpectrumPlus2A), "+2A");
         assert_eq!(model_label(ModelId::SpectrumPlus3), "+3");
         assert_eq!(model_label(ModelId::SpectrumPlus3e), "+3e");
+        assert_eq!(model_label(ModelId::Pentagon128), "Pentagon");
+        assert_eq!(model_label(ModelId::ScorpionZs256), "Scorpion");
+        assert_eq!(model_label(ModelId::TimexTC2048), "TC2048");
+        assert_eq!(model_label(ModelId::TimexTS2068), "TS2068");
     }
 }

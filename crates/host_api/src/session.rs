@@ -30,6 +30,8 @@ pub enum ModelId {
     TimexTS2068 = 8,
     /// Spectrum +3e enhanced firmware (#194).
     SpectrumPlus3e = 9,
+    /// Scorpion ZS-256 clone (#193).
+    ScorpionZs256 = 10,
 }
 
 impl ModelId {
@@ -46,6 +48,7 @@ impl ModelId {
             7 => Some(Self::TimexTC2048),
             8 => Some(Self::TimexTS2068),
             9 => Some(Self::SpectrumPlus3e),
+            10 => Some(Self::ScorpionZs256),
             _ => None,
         }
     }
@@ -61,6 +64,7 @@ impl ModelId {
             Self::SpectrumPlus3e => Model::SpectrumPlus3e,
             Self::SpectrumPlus2A => Model::SpectrumPlus2A,
             Self::Pentagon128 => Model::Pentagon128,
+            Self::ScorpionZs256 => Model::ScorpionZs256,
             Self::TimexTC2048 => Model::TimexTC2048,
             Self::TimexTS2068 => Model::TimexTS2068,
         }
@@ -77,13 +81,14 @@ impl ModelId {
             Model::SpectrumPlus3e => Self::SpectrumPlus3e,
             Model::SpectrumPlus2A => Self::SpectrumPlus2A,
             Model::Pentagon128 => Self::Pentagon128,
+            Model::ScorpionZs256 => Self::ScorpionZs256,
             Model::TimexTC2048 => Self::TimexTC2048,
             Model::TimexTS2068 => Self::TimexTS2068,
         }
     }
 
     /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
@@ -92,6 +97,7 @@ impl ModelId {
         Self::SpectrumPlus3,
         Self::SpectrumPlus3e,
         Self::Pentagon128,
+        Self::ScorpionZs256,
         Self::TimexTC2048,
         Self::TimexTS2068,
     ];
@@ -763,6 +769,11 @@ impl HostSession {
             ModelId::SpectrumPlus3 => Machine::new_plus3(rom),
             ModelId::SpectrumPlus3e => Machine::new_plus3e(rom),
             ModelId::SpectrumPlus2A => Machine::new_plus2a(rom),
+            ModelId::ScorpionZs256 => {
+                let trdos = machine::read_trdos_rom_with_overrides(Model::ScorpionZs256, overrides)
+                    .map_err(|e| HostError::Message(e.to_string()))?;
+                Machine::new_scorpion_zs256(rom, &trdos)
+            }
             ModelId::Pentagon128 => {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
                     .map_err(|e| HostError::Message(e.to_string()))?;
@@ -970,7 +981,8 @@ impl HostSession {
         let label = match m.model() {
             machine::Model::Spectrum128
             | machine::Model::SpectrumPlus2
-            | machine::Model::Pentagon128 => "Multiface 128",
+            | machine::Model::Pentagon128
+            | machine::Model::ScorpionZs256 => "Multiface 128",
             _ => "Multiface 1",
         };
         self.status = format!("Attached {label} from {}", path.display());
@@ -1361,7 +1373,7 @@ impl HostSession {
                 | machine::Model::SpectrumPlus2A
                 | machine::Model::SpectrumPlus3
                 | machine::Model::SpectrumPlus3e => 70_908,
-                machine::Model::Pentagon128 => 71_680,
+                machine::Model::Pentagon128 | machine::Model::ScorpionZs256 => 71_680,
             };
             let (w, h) = m.framebuffer_dims(self.with_border);
             (audio, frame_t, w, h)
@@ -2623,12 +2635,14 @@ mod tests {
         assert_eq!(ModelId::from_u32(7), Some(ModelId::TimexTC2048));
         assert_eq!(ModelId::from_u32(8), Some(ModelId::TimexTS2068));
         assert_eq!(ModelId::from_u32(9), Some(ModelId::SpectrumPlus3e));
-        assert_eq!(ModelId::from_u32(10), None);
+        assert_eq!(ModelId::from_u32(10), Some(ModelId::ScorpionZs256));
+        assert_eq!(ModelId::from_u32(11), None);
         assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
         assert_eq!(ModelId::SpectrumPlus2.to_model(), Model::SpectrumPlus2);
         assert_eq!(ModelId::Spectrum16K.to_model(), Model::Spectrum16K);
         assert_eq!(ModelId::SpectrumPlus2A.to_model(), Model::SpectrumPlus2A);
         assert_eq!(ModelId::SpectrumPlus3e.to_model(), Model::SpectrumPlus3e);
+        assert_eq!(ModelId::ScorpionZs256.to_model(), Model::ScorpionZs256);
     }
 
     #[test]

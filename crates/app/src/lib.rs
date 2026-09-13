@@ -292,6 +292,11 @@ impl EmulatorSession {
                 let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)?;
                 Ok(Machine::new_pentagon128(data, &trdos)?)
             }
+            Model::ScorpionZs256 => {
+                let trdos =
+                    machine::read_trdos_rom_with_overrides(Model::ScorpionZs256, overrides)?;
+                Ok(Machine::new_scorpion_zs256(data, &trdos)?)
+            }
             Model::TimexTC2048 => Ok(Machine::new_timex_tc2048(data)?),
             Model::TimexTS2068 => {
                 let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)?;
@@ -638,7 +643,8 @@ impl EmulatorSession {
             | Model::SpectrumPlus2
             | Model::SpectrumPlus3
             | Model::SpectrumPlus3e
-            | Model::Pentagon128 => KeyScript::load_quotes_128_or_plus3(with_code),
+            | Model::Pentagon128
+            | Model::ScorpionZs256 => KeyScript::load_quotes_128_or_plus3(with_code),
         });
         if pending_play {
             return;
@@ -763,9 +769,10 @@ impl EmulatorSession {
                 let host = &mut *self.host_mut();
                 if let Some(m) = host.machine_mut() {
                     let label = match m.model() {
-                        Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 => {
-                            "Multiface 128"
-                        }
+                        Model::Spectrum128
+                        | Model::SpectrumPlus2
+                        | Model::Pentagon128
+                        | Model::ScorpionZs256 => "Multiface 128",
                         _ => "Multiface 1",
                     };
                     match m.attach_multiface(&data) {
@@ -1252,6 +1259,7 @@ impl SpecChumApp {
                         | Model::SpectrumPlus3
                         | Model::SpectrumPlus3e
                         | Model::Pentagon128
+                        | Model::ScorpionZs256
                         | Model::TimexTS2068
                 ) {
                     m.set_ay_stereo_mode(prefs.effective_ay_stereo());
@@ -1471,6 +1479,7 @@ impl SpecChumApp {
                         | Model::SpectrumPlus3
                         | Model::SpectrumPlus3e
                         | Model::Pentagon128
+                        | Model::ScorpionZs256
                         | Model::TimexTS2068
                 ) {
                     m.set_ay_stereo_mode(self.prefs.effective_ay_stereo());
@@ -2164,6 +2173,7 @@ impl SpecChumApp {
                                 | Model::SpectrumPlus3
                                 | Model::SpectrumPlus3e
                                 | Model::Pentagon128
+                                | Model::ScorpionZs256
                                 | Model::TimexTS2068
                         ) {
                             ui.separator();
@@ -2233,10 +2243,11 @@ impl SpecChumApp {
                                 | Model::Spectrum128
                                 | Model::SpectrumPlus2
                                 | Model::Pentagon128
+                                | Model::ScorpionZs256
                         ) {
                             let mf_label = if matches!(
                                 model,
-                                Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128
+                                Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 | Model::ScorpionZs256
                             ) {
                                 "Attach Multiface 128 ROM…"
                             } else {
@@ -2300,6 +2311,7 @@ impl SpecChumApp {
                                 | Model::Spectrum128
                                 | Model::SpectrumPlus2
                                 | Model::Pentagon128
+                                | Model::ScorpionZs256
                         ) {
                             if ui.button("Attach DivMMC").clicked() {
                                 self.session.attach_divmmc_stub();

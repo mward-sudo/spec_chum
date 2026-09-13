@@ -57,6 +57,7 @@ pub fn expected_rom_bytes(model: PrefModel) -> usize {
         | PrefModel::TimexTC2048
         | PrefModel::TimexTS2068 => 16 * 1024,
         PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 | PrefModel::Pentagon128 => 32 * 1024,
+        PrefModel::ScorpionZs256 => 48 * 1024,
         PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 | PrefModel::SpectrumPlus3e => {
             64 * 1024
         }
@@ -68,11 +69,20 @@ const ROM_BANK_BYTES: usize = 16 * 1024;
 /// Validate ROM size for `model` before booting.
 ///
 /// Accepts a full main-ROM image, or a single 16 KiB bank on multi-ROM models
-/// (DiagROM-style external ROM substitution at reset).
+/// that support DiagROM-style substitution (not Scorpion — service ROM must be
+/// present as a real 48 KiB dump).
 pub fn validate_main_rom(data: &[u8], model: PrefModel) -> Result<(), MachineConfigError> {
     let expected = expected_rom_bytes(model);
     if data.len() == expected {
         return Ok(());
+    }
+    // Scorpion needs ROM0+ROM1+service; do not expand a lone 16 KiB bank.
+    if model == PrefModel::ScorpionZs256 {
+        return Err(MachineConfigError::RomSize {
+            model: machine::model_title(model.to_model()).to_string(),
+            expected,
+            actual: data.len(),
+        });
     }
     if data.len() == ROM_BANK_BYTES && expected > ROM_BANK_BYTES {
         return Ok(());
@@ -94,7 +104,10 @@ fn expand_main_rom_image(
     if data.len() == expected {
         return Ok(data.to_vec());
     }
-    if data.len() != ROM_BANK_BYTES || expected <= ROM_BANK_BYTES {
+    if model == PrefModel::ScorpionZs256
+        || data.len() != ROM_BANK_BYTES
+        || expected <= ROM_BANK_BYTES
+    {
         return Err(MachineConfigError::RomSize {
             model: machine::model_title(model.to_model()).to_string(),
             expected,
@@ -150,6 +163,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
+                | Model::ScorpionZs256
         ),
         divmmc: matches!(
             m,
@@ -160,6 +174,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
+                | Model::ScorpionZs256
         ),
         interface1: matches!(
             m,
@@ -170,6 +185,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
+                | Model::ScorpionZs256
         ),
         beta: matches!(
             m,
@@ -180,6 +196,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::Spectrum128
                 | Model::SpectrumPlus2
                 | Model::Pentagon128
+                | Model::ScorpionZs256
         ),
         ay_stereo: matches!(
             m,
@@ -189,6 +206,7 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
                 | Model::SpectrumPlus3
                 | Model::SpectrumPlus3e
                 | Model::Pentagon128
+                | Model::ScorpionZs256
                 | Model::TimexTS2068
         ),
         kempston_mouse: true,
@@ -423,6 +441,11 @@ fn build_machine(
         Model::SpectrumPlus2A => Machine::new_plus2a(rom),
         Model::SpectrumPlus3 => Machine::new_plus3(rom),
         Model::SpectrumPlus3e => Machine::new_plus3e(rom),
+        Model::ScorpionZs256 => {
+            let trdos = machine::read_trdos_rom_with_overrides(Model::ScorpionZs256, overrides)
+                .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
+            Machine::new_scorpion_zs256(rom, &trdos)
+        }
         Model::Pentagon128 => {
             let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
                 .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
@@ -694,6 +717,16 @@ mod tests {
         assert!(validate_main_rom(&[0u8; 16384], PrefModel::Spectrum128).is_ok());
         assert!(validate_main_rom(&[0u8; 32768], PrefModel::Spectrum128).is_ok());
         assert!(validate_main_rom(&[0u8; 100], PrefModel::Spectrum128).is_err());
+    }
+
+    #[test]
+    fn validate_main_rom_scorpion_requires_exact_48k() {
+        assert!(validate_main_rom(&[0u8; 16 * 1024], PrefModel::ScorpionZs256).is_err());
+        assert!(validate_main_rom(&[0u8; 32 * 1024], PrefModel::ScorpionZs256).is_err());
+        assert!(validate_main_rom(&[0u8; 48 * 1024], PrefModel::ScorpionZs256).is_ok());
+        assert!(expand_main_rom_image(&[0u8; 16 * 1024], PrefModel::ScorpionZs256, &[]).is_err());
+        // 128K-class still allows DiagROM-style 16 KiB expansion.
+        assert!(validate_main_rom(&[0u8; 16 * 1024], PrefModel::Spectrum128).is_ok());
     }
 
     #[test]

@@ -136,6 +136,7 @@ pub fn pref_model_slug(model: PrefModel) -> &'static str {
         PrefModel::SpectrumPlus3 => "spectrum_plus3",
         PrefModel::SpectrumPlus3e => "spectrum_plus3e",
         PrefModel::Pentagon128 => "pentagon128",
+        PrefModel::ScorpionZs256 => "scorpion_zs256",
         PrefModel::TimexTC2048 => "timex_tc2048",
         PrefModel::TimexTS2068 => "timex_ts2068",
     }
@@ -350,13 +351,14 @@ pub enum PrefModel {
     SpectrumPlus3,
     SpectrumPlus3e,
     Pentagon128,
+    ScorpionZs256,
     TimexTC2048,
     TimexTS2068,
 }
 
 impl PrefModel {
     /// Canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
@@ -365,6 +367,7 @@ impl PrefModel {
         Self::SpectrumPlus3,
         Self::SpectrumPlus3e,
         Self::Pentagon128,
+        Self::ScorpionZs256,
         Self::TimexTC2048,
         Self::TimexTS2068,
     ];
@@ -380,6 +383,7 @@ impl PrefModel {
             Model::SpectrumPlus3 => Self::SpectrumPlus3,
             Model::SpectrumPlus3e => Self::SpectrumPlus3e,
             Model::Pentagon128 => Self::Pentagon128,
+            Model::ScorpionZs256 => Self::ScorpionZs256,
             Model::TimexTC2048 => Self::TimexTC2048,
             Model::TimexTS2068 => Self::TimexTS2068,
         }
@@ -401,6 +405,7 @@ impl PrefModel {
             Self::SpectrumPlus3 => Model::SpectrumPlus3,
             Self::SpectrumPlus3e => Model::SpectrumPlus3e,
             Self::Pentagon128 => Model::Pentagon128,
+            Self::ScorpionZs256 => Model::ScorpionZs256,
             Self::TimexTC2048 => Model::TimexTC2048,
             Self::TimexTS2068 => Model::TimexTS2068,
         }
@@ -417,6 +422,7 @@ impl PrefModel {
             Self::SpectrumPlus3 => ModelId::SpectrumPlus3,
             Self::SpectrumPlus3e => ModelId::SpectrumPlus3e,
             Self::Pentagon128 => ModelId::Pentagon128,
+            Self::ScorpionZs256 => ModelId::ScorpionZs256,
             Self::TimexTC2048 => ModelId::TimexTC2048,
             Self::TimexTS2068 => ModelId::TimexTS2068,
         }
@@ -782,6 +788,7 @@ mod tests {
             (PrefModel::SpectrumPlus2A, "spectrum_plus2_a"),
             (PrefModel::SpectrumPlus3e, "spectrum_plus3e"),
             (PrefModel::Pentagon128, "pentagon128"),
+            (PrefModel::ScorpionZs256, "scorpion_zs256"),
         ];
         for (model, want) in cases {
             assert_eq!(pref_model_slug(model), want);
