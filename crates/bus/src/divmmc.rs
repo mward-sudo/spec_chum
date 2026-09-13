@@ -19,6 +19,7 @@
 //! needs a user-supplied EEPROM + FAT SD image (see `docs/ROMS.md`).
 
 use crate::RomLoadError;
+use thiserror::Error;
 
 /// `DivMMC` control / paging register.
 pub const PORT_CONTROL: u16 = 0x00e3;
@@ -40,6 +41,13 @@ const TOKEN_MULTI_WRITE: u8 = 0xfc;
 const TOKEN_STOP_TRAN: u8 = 0xfd;
 /// Single-block data token (read / CMD24 write).
 const TOKEN_SINGLE: u8 = 0xfe;
+
+/// Invalid `DivMMC` SD slot index (only 0 and 1 exist on the CPLD).
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum SdSlotError {
+    #[error("DivMMC SD slot {slot} is invalid (only 0 and 1)")]
+    InvalidSlot { slot: u8 },
+}
 
 /// DivIDE-compatible **delayed** automap entry points (apply after opcode M1).
 const AUTOMAP_ENTRIES_DELAYED: &[u16] = &[0x0000, 0x0008, 0x0038, 0x0066, 0x04c6, 0x0562];
@@ -429,23 +437,26 @@ impl DivMmc {
 
     /// Attach a flat SD image to slot 0 (CS bit0).
     pub fn attach_sd(&mut self, data: Vec<u8>) {
-        self.attach_sd_slot(0, data);
+        // Slot 0 is always valid.
+        let _ = self.attach_sd_slot(0, data);
     }
 
     /// Attach a flat SD image to slot `0` or `1` (`DivMMC` dual-card CS bits).
     ///
-    /// Slots above 1 are ignored.
-    pub fn attach_sd_slot(&mut self, slot: u8, data: Vec<u8>) {
+    /// Returns [`SdSlotError::InvalidSlot`] for any other index (data is not consumed).
+    pub fn attach_sd_slot(&mut self, slot: u8, data: Vec<u8>) -> Result<(), SdSlotError> {
         match slot {
             0 => {
                 self.sd = data;
                 self.spi[0].soft_reset_card();
+                Ok(())
             }
             1 => {
                 self.sd1 = data;
                 self.spi[1].soft_reset_card();
+                Ok(())
             }
-            _ => {}
+            _ => Err(SdSlotError::InvalidSlot { slot }),
         }
     }
 
@@ -1015,8 +1026,12 @@ mod tests {
         let mut slot1 = vec![0u8; SD_SECTOR_SIZE];
         slot1[0] = 0x51;
         let mut d = DivMmc::new();
-        d.attach_sd_slot(0, slot0);
-        d.attach_sd_slot(1, slot1);
+        d.attach_sd_slot(0, slot0).expect("slot 0");
+        d.attach_sd_slot(1, slot1).expect("slot 1");
+        assert!(matches!(
+            d.attach_sd_slot(2, vec![0u8; SD_SECTOR_SIZE]),
+            Err(SdSlotError::InvalidSlot { slot: 2 })
+        ));
         spi_init_ready(&mut d);
         spi_init_ready_slot1(&mut d);
 

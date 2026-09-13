@@ -14,7 +14,7 @@ mod timex_dock;
 pub use ay::{Ay8912, StereoMode};
 pub use beta_disk::{BetaDisk, BetaDiskPatchError, TRDOS_ROM_SIZE};
 pub use divmmc::{
-    DivMmc, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
+    DivMmc, SdSlotError, PORT_CONTROL as DIVMMC_PORT_CONTROL, PORT_SPI_CS as DIVMMC_PORT_SPI_CS,
     PORT_SPI_DATA as DIVMMC_PORT_SPI_DATA,
 };
 pub use interface1::{Interface1, Interface1RomError, IF1_ROM_SIZE, MICRODRIVE_COUNT};

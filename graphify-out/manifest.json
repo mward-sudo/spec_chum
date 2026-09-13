@@ -192,9 +192,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/divmmc.rs": {
-    "mtime": 1789270446.1813753,
-    "seen": 1789270462.265135,
-    "ast_hash": "b55d0d926a768dd184c7833559273317",
+    "mtime": 1789271256.1486073,
+    "seen": 1789271278.57494,
+    "ast_hash": "f44b9565b06c88af00215c583fc9e626",
     "semantic_hash": ""
   },
   "crates/bus/src/interface1.rs": {
@@ -216,9 +216,9 @@
     "semantic_hash": "bcecf352bc883e60b41a725cb598f184"
   },
   "crates/bus/src/lib.rs": {
-    "mtime": 1789268937.2929387,
-    "seen": 1789269087.073963,
-    "ast_hash": "8441b86c19e4a8df40c975144145b791",
+    "mtime": 1789271256.2791014,
+    "seen": 1789271278.574987,
+    "ast_hash": "fc86f24858070a697c03be71e02dce4d",
     "semantic_hash": ""
   },
   "crates/bus/src/multiface.rs": {
