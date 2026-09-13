@@ -39,6 +39,11 @@ pub mod key {
 /// Map a GDK keyval + Shift to Spectrum matrix chords.
 #[must_use]
 pub fn chord_for_keyval(keyval: u32, shift: bool) -> Option<Chord> {
+    // Shifted digit Unicode (!@#…) must be Symbol+digit, not Caps+digit.
+    if let Some(ch) = shifted_digit_chord(keyval) {
+        return Some(ch);
+    }
+
     let kv = canonical_keyval(keyval);
     match kv {
         key::LEFT => return Some(Chord::with_caps(3, 4)),
@@ -53,6 +58,15 @@ pub fn chord_for_keyval(keyval: u32, shift: bool) -> Option<Chord> {
         return Some(ch);
     }
 
+    // Host Shift+digit → Symbol+digit (e.g. Shift+1 → !), not Caps+digit (EDIT).
+    if shift {
+        if let Some((row, bit)) = letter_digit(kv) {
+            if (0x030..=0x039).contains(&kv) {
+                return Some(Chord::with_sym(row, bit));
+            }
+        }
+    }
+
     letter_digit(kv).map(|(row, bit)| Chord::single(row, bit))
 }
 
@@ -63,9 +77,23 @@ pub fn modifier_keys(shift: bool, alt: bool, ctrl: bool, suppress_caps: bool) ->
 }
 
 /// True when this key owns Symbol/Caps itself (punctuation / arrows / Backspace).
+///
+/// Digits suppress Caps when `shift` is held so Shift+1 becomes Symbol+1, not Caps+1.
 #[must_use]
 pub fn suppresses_modifier_caps(keyval: u32) -> bool {
+    suppresses_modifier_caps_with_shift(keyval, false)
+}
+
+/// Like [`suppresses_modifier_caps`], but accounts for host Shift on digit keys.
+#[must_use]
+pub fn suppresses_modifier_caps_with_shift(keyval: u32, shift: bool) -> bool {
+    if shifted_digit_chord(keyval).is_some() {
+        return true;
+    }
     let kv = canonical_keyval(keyval);
+    if shift && (0x030..=0x039).contains(&kv) {
+        return true;
+    }
     matches!(
         kv,
         key::LEFT
@@ -116,20 +144,27 @@ pub fn apply_modifiers(
     }
 }
 
+fn shifted_digit_chord(keyval: u32) -> Option<Chord> {
+    // US Shift+digit punctuation → Spectrum Symbol layer (not Caps+digit).
+    Some(match keyval {
+        0x021 => Chord::with_sym(3, 0), // !
+        0x040 => Chord::with_sym(3, 1), // @
+        0x023 => Chord::with_sym(3, 2), // #
+        0x024 => Chord::with_sym(3, 3), // $
+        0x025 => Chord::with_sym(3, 4), // %
+        0x05e => Chord::with_sym(4, 4), // ^
+        0x026 => Chord::with_sym(4, 3), // &
+        0x02a => Chord::with_sym(4, 2), // *
+        0x028 => Chord::with_sym(4, 1), // (
+        0x029 => Chord::with_sym(4, 0), // )
+        _ => return None,
+    })
+}
+
 fn canonical_keyval(keyval: u32) -> u32 {
-    // GDK may deliver the shifted Unicode keyval (e.g. '!' for Shift+1). Map those
-    // back to the base US key so letter_digit / punct_chord stay consistent.
+    // GDK may deliver the shifted Unicode keyval for punctuation keys (", :, etc.).
+    // Digits' shifted forms are handled by [`shifted_digit_chord`] before this runs.
     let base = match keyval {
-        0x021 => 0x031,             // !
-        0x040 => 0x032,             // @
-        0x023 => 0x033,             // #
-        0x024 => 0x034,             // $
-        0x025 => 0x035,             // %
-        0x05e => 0x036,             // ^
-        0x026 => 0x037,             // &
-        0x02a => 0x038,             // *
-        0x028 => 0x039,             // (
-        0x029 => 0x030,             // )
         0x022 => key::APOSTROPHE,   // "
         0x03a => key::SEMICOLON,    // :
         0x03c => key::COMMA,        // <
@@ -287,9 +322,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shifted_exclam_maps_to_digit_one() {
+    fn shifted_exclam_is_symbol_one() {
         let ch = chord_for_keyval(0x021, true).expect("!");
-        assert_eq!(ch.keys, vec![(3, 0)]);
+        assert!(ch.keys.contains(&SYM));
+        assert!(ch.keys.contains(&(3, 0)));
+        assert!(!ch.keys.contains(&CAPS));
+    }
+
+    #[test]
+    fn shifted_exclam_suppresses_caps_modifier() {
+        assert!(suppresses_modifier_caps(0x021));
+        assert!(suppresses_modifier_caps_with_shift(0x021, true));
+    }
+
+    #[test]
+    fn host_shift_digit_one_is_symbol_not_caps() {
+        let ch = chord_for_keyval(0x031, true).expect("Shift+1");
+        assert!(ch.keys.contains(&SYM));
+        assert!(ch.keys.contains(&(3, 0)));
+        assert!(!ch.keys.contains(&CAPS));
+        assert!(suppresses_modifier_caps_with_shift(0x031, true));
     }
 
     #[test]

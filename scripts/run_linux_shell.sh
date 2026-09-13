@@ -9,4 +9,4 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   exit 1
 fi
 
-cargo run -p linux_shell --release "$@"
+cargo run -p linux_shell --release -- "$@"

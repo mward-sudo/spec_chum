@@ -21,7 +21,8 @@ use spec_chum_host::{
 
 use linux_shell::audio::{self, PcmRing};
 use linux_shell::keymap::{
-    apply_chord, apply_modifiers, chord_for_keyval, is_modifier_keyval, suppresses_modifier_caps,
+    apply_chord, apply_modifiers, chord_for_keyval, is_modifier_keyval,
+    suppresses_modifier_caps_with_shift,
 };
 
 const APP_ID: &str = "org.specchum.SpecChumLinux";
@@ -56,7 +57,6 @@ struct AppState {
     alt_l: bool,
     alt_r: bool,
     last_frame: Instant,
-    status: String,
 }
 
 impl AppState {
@@ -117,7 +117,6 @@ impl AppState {
             alt_l: false,
             alt_r: false,
             last_frame: Instant::now(),
-            status: "Ready".into(),
         })
     }
 
@@ -145,13 +144,13 @@ impl AppState {
 
     fn refresh_input(&mut self) {
         let _ = self.host.with_mut(HostSession::clear_keys);
+        let shift = self.shift();
         let mut suppress = false;
         for &kv in &self.held {
-            if suppresses_modifier_caps(kv) {
+            if suppresses_modifier_caps_with_shift(kv, shift) {
                 suppress = true;
             }
         }
-        let shift = self.shift();
         let alt = self.alt();
         let ctrl = self.ctrl();
         {
@@ -205,8 +204,7 @@ impl AppState {
     fn report_err(&mut self, title: &str, err: &HostError) {
         let msg = format!("{title}: {err}");
         eprintln!("spec-chum-linux: {msg}");
-        self.host.with_mut(|s| s.set_status(msg.clone()));
-        self.status = msg;
+        self.host.with_mut(|s| s.set_status(msg));
     }
 
     fn open_path(
@@ -268,7 +266,6 @@ impl AppState {
         });
 
         self.pcm.lock().push_frame(&pcm_snap);
-        self.status = status_text.clone();
         status_label.set_text(&status_text);
         window.set_title(Some(&window_title));
 
