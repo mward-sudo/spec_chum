@@ -94,6 +94,8 @@ struct AppState {
     debug_hwnd: Option<HWND>,
     debug_edit: Option<HWND>,
     main_hwnd: Option<HWND>,
+    /// Last time the debugger EDIT control was rewritten from `tick_frame`.
+    last_debug_refresh: Instant,
 }
 
 impl AppState {
@@ -157,6 +159,7 @@ impl AppState {
             debug_hwnd: None,
             debug_edit: None,
             main_hwnd: None,
+            last_debug_refresh: Instant::now(),
         })
     }
 
@@ -207,7 +210,7 @@ impl AppState {
         unsafe {
             let _ = InvalidateRect(Some(hwnd), None, false);
         }
-        self.refresh_debug_text();
+        self.maybe_refresh_debug_text();
     }
 
     fn sync_bgra(&mut self, rgba: &[u8], w: usize, h: usize) {
@@ -419,8 +422,10 @@ impl AppState {
 
     fn set_tape_instant(&mut self) {
         // Instant is session-only (never sticky in prefs — same as egui).
-        let mut opts = TapeLoadOptions::default();
-        opts.flash_load = true;
+        let opts = TapeLoadOptions {
+            flash_load: true,
+            ..TapeLoadOptions::default()
+        };
         if let Err(e) = self.host.with_mut(|s| s.set_tape_load_options(opts)) {
             self.report_err("Instant load", &e);
         }
@@ -493,6 +498,18 @@ impl AppState {
         }
     }
 
+    fn maybe_refresh_debug_text(&mut self) {
+        if self.debug_edit.is_none() {
+            return;
+        }
+        // Avoid rewriting the EDIT control every Spectrum frame.
+        const MIN_INTERVAL: Duration = Duration::from_millis(250);
+        if self.last_debug_refresh.elapsed() < MIN_INTERVAL {
+            return;
+        }
+        self.refresh_debug_text();
+    }
+
     fn refresh_debug_text(&mut self) {
         let Some(edit) = self.debug_edit else {
             return;
@@ -510,7 +527,10 @@ impl AppState {
             let paused = if s.paused() { "paused" } else { "running" };
             format!("{inspect}\n\n--- disasm ({paused}) ---\n{disasm}\n\nbreakpoints: {breaks}\n")
         });
+        // Win32 multiline EDIT expects CRLF line endings.
+        let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         set_window_title(edit, &text);
+        self.last_debug_refresh = Instant::now();
     }
 
     fn debug_pause(&mut self) {
