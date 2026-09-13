@@ -1,7 +1,8 @@
 //! Native Win32 Spec Chum shell (`spec_chum_windows`) — [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 //!
 //! Thin adapter over [`host_api::HostSession`]: classic Win32 window + menus,
-//! framebuffer blit, keyboard → matrix, cpal audio, optional Agent Debug HTTP.
+//! framebuffer blit, keyboard → matrix, cpal audio, optional Agent Debug HTTP,
+//! plus Machine / Hardware / Settings / Debug deepen (#351).
 
 #[cfg(windows)]
 mod win32;

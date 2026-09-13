@@ -846,9 +846,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1789100182.859197,
-    "seen": 1789101087.939571,
-    "ast_hash": "0d20faf9b6ef65a4f97cd1444ed3b2f6",
+    "mtime": 1789278439.197373,
+    "seen": 1789336521.855382,
+    "ast_hash": "df91c4b5c68dc12e25a136cdbfc6e03e",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -912,9 +912,9 @@
     "semantic_hash": "1f835e66063769d604364c5a96da7e8b"
   },
   "docs/UI_ARCHITECTURE.md": {
-    "mtime": 1789100182.8908217,
-    "seen": 1789101087.939581,
-    "ast_hash": "7ae2def9975ed37e27dc883161416a17",
+    "mtime": 1789336452.1094062,
+    "seen": 1789336521.855526,
+    "ast_hash": "e122eae016968278d22bae86e14f1b1d",
     "semantic_hash": ""
   },
   "tests/fixtures/fuse/README.md": {
@@ -1458,9 +1458,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/Cargo.toml": {
-    "mtime": 1789100182.8852508,
-    "seen": 1789101087.9394739,
-    "ast_hash": "d301481c77069ee53ec4e4731d3940ee",
+    "mtime": 1789336369.9437573,
+    "seen": 1789336521.8546932,
+    "ast_hash": "a9695b5cd9176ed19c1ffe8e151ac9fe",
     "semantic_hash": ""
   },
   "crates/windows_shell/src/audio.rs": {
@@ -1476,21 +1476,21 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/lib.rs": {
-    "mtime": 1789100182.8866782,
-    "seen": 1789101087.939479,
-    "ast_hash": "6b4b1580a27406f42e059b4792361157",
+    "mtime": 1789336368.421841,
+    "seen": 1789336521.854723,
+    "ast_hash": "88d062a7b8037969b274cbc539bb72b4",
     "semantic_hash": ""
   },
   "crates/windows_shell/src/main.rs": {
-    "mtime": 1789100182.886857,
-    "seen": 1789101087.939481,
-    "ast_hash": "f866579a353e3d553e0ccfdc6a3cade3",
+    "mtime": 1789336390.3622384,
+    "seen": 1789336521.8547242,
+    "ast_hash": "177539ecbfa40b43541905d1c5970bc7",
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1789100182.8870227,
-    "seen": 1789101087.939483,
-    "ast_hash": "7dbc97f575e7aa16903de8066e3481be",
+    "mtime": 1789336496.8850954,
+    "seen": 1789336521.8547242,
+    "ast_hash": "07a183590025617a4f7544c48ea076cf",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -1512,9 +1512,15 @@
     "semantic_hash": ""
   },
   "docs/WINDOWS_NATIVE.md": {
-    "mtime": 1789100182.8911133,
-    "seen": 1789101087.9395819,
-    "ast_hash": "7ebe16909fbc6d3819b0fcc6375920cd",
+    "mtime": 1789336390.4480493,
+    "seen": 1789336521.855527,
+    "ast_hash": "90f9c784d45fcdb1bd652826b649cdb9",
+    "semantic_hash": ""
+  },
+  "crates/windows_shell/src/commands.rs": {
+    "mtime": 1789336259.3629766,
+    "seen": 1789336521.854709,
+    "ast_hash": "84c3a219b00255280adacad445d7e9b2",
     "semantic_hash": ""
   }
 }

@@ -118,7 +118,7 @@ Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** 
 
 **Today:** Windows releases ship the **egui** portable `.zip` and Inno Setup installer — that is the supported Windows product UI.
 
-**Native vertical slice (in-tree):** classic **Win32** host `crates/windows_shell` (`spec_chum_windows`) over `host_api` — window, framebuffer blit, File/Tape menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP. Docs: [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md). Opt-in CI job `windows-shell`. egui remains the release primary until packaging deliberately switches.
+**Native vertical slice (in-tree):** classic **Win32** host `crates/windows_shell` (`spec_chum_windows`) over `host_api` — window, framebuffer blit, File/Tape/Machine/Hardware/Settings/Debug menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP, `UiPreferences` load/save. Docs: [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md). Opt-in CI job `windows-shell`. egui remains the release primary until packaging deliberately switches.
 
 **If/when a richer native Windows shell is justified**, keep the same thin-host architecture as SpecChumMac:
 
@@ -129,7 +129,7 @@ Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** 
 | **Not preferred** | Win32+webview / Electron-style hosts (extra IPC on the frame path) |
 | **Out of scope here** | Replacing egui in CI; living-room as the Windows default |
 
-Vertical slice checklist: native window, framebuffer present, tape/snapshot open, keyboard → matrix, audio path, Agent Debug HTTP embed. Builds must not break Linux/macOS gates (opt-in CI job is fine).
+Vertical slice + deepen checklist: native window, framebuffer present, tape/snapshot open, keyboard → matrix, audio path, Agent Debug HTTP embed, Hardware attach, Settings/prefs, Debug/inspect. Builds must not break Linux/macOS gates (opt-in CI job is fine). Release promotion over egui remains a separate packaging decision (#231 / #351).
 
 ### Relationship to packaging
 

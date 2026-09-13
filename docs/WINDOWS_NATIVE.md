@@ -19,7 +19,7 @@ Parity rule: [`.cursor/rules/gui-app-parity.mdc`](../.cursor/rules/gui-app-parit
 
 Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same action, platform modifier.
 
-## Vertical slice (this tree)
+## Capability matrix
 
 | Capability | Status |
 | --- | --- |
@@ -30,8 +30,12 @@ Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same actio
 | Keyboard → Spectrum matrix | yes (VK map in `windows_shell::keymap`) |
 | Audio (cpal from `HostSession` PCM) | yes |
 | Agent Debug HTTP (`SPEC_CHUM_AGENT=1`) | yes (same embed as egui) |
-| Hardware attach panels / prefs UI / Debug window | **deferred** — deepen under GUI-parity before promoting off egui as release primary |
-| Living-room / WinUI 3 | **out of scope** for this slice |
+| Machine model select + Reset | yes (all built-in models) |
+| Hardware attach (Multiface / DivMMC / IF1 / Beta / Timex dock) | yes (Win32 **Hardware** menu → `HostSession`) |
+| Settings / prefs (`UiPreferences` load/save) | yes (joystick, tape EAR/Experience/Instant, AY, mute, throttle, online titles) |
+| Debug / inspect (pause / step / continue / breakpoints + inspector window) | yes (Win32 **Debug** menu + multiline inspect HWND) |
+| Living-room / WinUI 3 | **out of scope** |
+| Release packaging promote over egui | **still open** under [#351](https://github.com/mward-sudo/spec_chum/issues/351) / [#231](https://github.com/mward-sudo/spec_chum/issues/231) |
 
 ## Requirements
 
@@ -54,7 +58,8 @@ cargo run -p windows_shell --release
 ```
 
 On macOS/Linux the `spec_chum_windows` binary is a stub that exits with a pointer
-to egui — the Win32 UI is `cfg(windows)` only. Keymap unit tests still run everywhere:
+to egui — the Win32 UI is `cfg(windows)` only. Keymap + menu-id unit tests still
+run everywhere:
 
 ```bash
 cargo test -p windows_shell
@@ -70,6 +75,8 @@ $env:SPEC_CHUM_AGENT_INSECURE = "1"   # or set SPEC_CHUM_AGENT_TOKEN
 cargo run -p windows_shell --release
 ```
 
+Prefs file: same `ui-prefs.json` as egui (`SPEC_CHUM_PREFS_PATH` override supported).
+
 ## CI
 
 Opt-in job `windows-shell` in `.github/workflows/ci.yml` builds the crate on
@@ -78,5 +85,5 @@ Opt-in job `windows-shell` in `.github/workflows/ci.yml` builds the crate on
 ## Non-goals (for now)
 
 - Replacing egui in Windows release packages ([#231](https://github.com/mward-sudo/spec_chum/issues/231))
-- WinUI 3 XAML chrome (provisional future; this slice is classic Win32)
-- Full Hardware / Settings / Debug panel parity with SpecChumMac — required before the shell becomes the Windows release primary, tracked under [#351](https://github.com/mward-sudo/spec_chum/issues/351)
+- WinUI 3 XAML chrome (provisional future; this shell is classic Win32)
+- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Linux native toolkit track remains open
