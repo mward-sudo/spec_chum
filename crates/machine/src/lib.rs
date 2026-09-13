@@ -521,6 +521,7 @@ impl Memory for MemIo48<'_> {
     }
 
     fn m1_refresh(&mut self, refresh_addr: u16, t: u64, m1_contended: bool) {
+        self.bus.divmmc_after_m1_refresh();
         let i = (refresh_addr >> 8) as u8;
         let r = (refresh_addr & 0x7f) as u8;
         let frame_t = self.ula_t(t);
@@ -661,7 +662,9 @@ impl Memory for MemIo128<'_> {
     }
 
     fn m1_refresh(&mut self, refresh_addr: u16, t: u64, m1_contended: bool) {
-        // Pentagon / Scorpion and Amstrad +2A/+3 paths omit this hook — no original-ULA snow.
+        // DivMMC delayed automap commits on every M1 refresh (before snow).
+        self.bus.divmmc_after_m1_refresh();
+        // Pentagon / Scorpion and Amstrad +2A/+3 paths omit snow — no original-ULA snow.
         if self.no_contend() {
             return;
         }
@@ -1661,6 +1664,13 @@ impl Machine {
     pub fn attach_divmmc_eeprom(&mut self, data: &[u8]) -> Result<(), DivMmcError> {
         let div = self.attach_divmmc()?;
         Ok(div.attach_eeprom(data)?)
+    }
+
+    /// Attach `DivMMC` (if needed) and load a flat SD/MMC sector image.
+    pub fn attach_divmmc_sd(&mut self, data: Vec<u8>) -> Result<(), DivMmcError> {
+        let div = self.attach_divmmc()?;
+        div.attach_sd(data);
+        Ok(())
     }
 
     pub fn divmmc_mut(&mut self) -> Option<&mut bus::DivMmc> {
@@ -4055,6 +4065,145 @@ mod tests {
             plus2a.attach_multiface(&[0u8; bus::MULTIFACE128_SIZE]),
             Err(MultifaceError::UnsupportedModel)
         ));
+    }
+
+    /// Resolve user-supplied ESXDOS EEPROM (≥8 KiB). Never committed — see `docs/ROMS.md`.
+    fn esxdos_eeprom_path() -> Option<PathBuf> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        [
+            "roms/divmmc/ESXMMC.BIN",
+            "roms/divmmc/esxmmc.bin",
+            "roms/esxdos.rom",
+            "roms/divmmc.rom",
+        ]
+        .into_iter()
+        .map(|rel| root.join(rel))
+        .find(|p| p.is_file())
+    }
+
+    /// Flat FAT SD image with `/SYS` (and usually `/BIN`). Optional companion to the EEPROM.
+    fn esxdos_sd_path() -> Option<PathBuf> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        ["roms/divmmc/esxdos.img", "roms/divmmc/sd.img"]
+            .into_iter()
+            .map(|rel| root.join(rel))
+            .find(|p| p.is_file())
+    }
+
+    fn bitmap_addr(col: u16, row: u16, scan: u16) -> u16 {
+        0x4000 + (row / 8) * 2048 + (row % 8) * 32 + scan * 256 + col
+    }
+
+    /// Decode screen using the 48K ROM charset (not via `DivMMC` overlay at `$3D00`).
+    fn screen_text_from_rom_font(m: &Machine, rom: &[u8]) -> String {
+        const FONT_OFF: usize = 0x3d00;
+        let mut out = String::with_capacity(24 * 33);
+        for row in 0..24u8 {
+            for col in 0..32u8 {
+                let mut glyph = [0u8; 8];
+                for scan in 0..8u16 {
+                    glyph[scan as usize] =
+                        m.read_mem(bitmap_addr(u16::from(col), u16::from(row), scan));
+                }
+                let ch = if glyph.iter().all(|&b| b == 0) {
+                    ' '
+                } else {
+                    (32u8..=127)
+                        .find(|&code| {
+                            let base = FONT_OFF + usize::from(code - 32) * 8;
+                            (0..8).all(|scan| {
+                                let font = rom[base + scan];
+                                glyph[scan] == font || glyph[scan] == !font
+                            })
+                        })
+                        .map_or('?', |c| if c == 127 { '©' } else { char::from(c) })
+                };
+                out.push(ch);
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Skip-clean when EEPROM missing. With EEPROM + flat FAT SD, boot until the
+    /// ESXDOS banner / prompt appears on the Spectrum screen.
+    ///
+    /// Refs [#138](https://github.com/mward-sudo/spec_chum/issues/138).
+    #[test]
+    fn esxdos_eeprom_boots_prompt_when_fixtures_present() {
+        let Some(sys) = rom48() else {
+            eprintln!("skip: roms/spec48.rom missing");
+            return;
+        };
+        let Some(eeprom_path) = esxdos_eeprom_path() else {
+            eprintln!(
+                "skip: ESXDOS EEPROM missing — place roms/divmmc/ESXMMC.BIN (see docs/ROMS.md / #138)"
+            );
+            return;
+        };
+        let Some(sd_path) = esxdos_sd_path() else {
+            eprintln!(
+                "skip: flat ESXDOS SD missing — place roms/divmmc/esxdos.img with /SYS (see docs/ROMS.md / #138)"
+            );
+            return;
+        };
+
+        let eeprom = std::fs::read(&eeprom_path).expect("read ESXDOS EEPROM");
+        assert!(
+            eeprom.len() >= 8192,
+            "EEPROM too small: {} bytes at {}",
+            eeprom.len(),
+            eeprom_path.display()
+        );
+        let sd = std::fs::read(&sd_path).expect("read ESXDOS SD image");
+        assert!(
+            sd.len() >= 512,
+            "SD image too small: {} bytes at {}",
+            sd.len(),
+            sd_path.display()
+        );
+
+        let mut m = Machine::new_48k(&sys).unwrap();
+        m.attach_divmmc_eeprom(&eeprom).expect("attach EEPROM");
+        m.attach_divmmc_sd(sd).expect("attach SD");
+        assert!(m.has_divmmc_eeprom());
+
+        // First opcode at reset is Spectrum DI; DivMMC then maps for operands.
+        let rom0 = sys[0];
+        assert_eq!(rom0, 0xf3, "48K ROM reset should be DI");
+        m.step_cpu_only();
+        assert!(
+            m.divmmc_mut().is_some_and(|d| d.automap),
+            "delayed automap should latch after reset M1"
+        );
+        // After the first instruction, PC should be in ESXDOS (LD SP / JP path).
+        let pc = m.cpu().regs.pc;
+        assert!(
+            pc != 0x11cb && pc < 0x4000,
+            "expected ESXDOS boot path after reset DI, pc={pc:#06x}"
+        );
+
+        let mut saw = String::new();
+        for _ in 0..2_000u32 {
+            let _ = m.run_frame();
+            saw = screen_text_from_rom_font(&m, &sys);
+            let lower = saw.to_ascii_lowercase();
+            if lower.contains("esxdos")
+                || lower.contains("v0.8")
+                || saw.contains("Mounting")
+                || saw.contains("Papaya")
+            {
+                break;
+            }
+        }
+        let lower = saw.to_ascii_lowercase();
+        assert!(
+            lower.contains("esxdos")
+                || lower.contains("v0.8")
+                || saw.contains("Mounting")
+                || saw.contains("Papaya"),
+            "expected ESXDOS boot banner/prompt on screen; got:\n{saw}"
+        );
     }
 
     #[test]

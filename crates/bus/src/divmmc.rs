@@ -4,13 +4,15 @@
 //! Ports `0xE7` / `0xEB` are SPI CS (active-low bit0) / data.
 //!
 //! Memory overlay is active when CONMEM is set **or** DivIDE-compatible automap
-//! latches after an M1 fetch at an entry point (`notify_m1`). ESXDOS EEPROM is
-//! optional — attach an 8 KiB image for ROM overlay; without it, only MAPRAM /
-//! CONMEM RAM paging and SPI SD I/O remain useful.
+//! is latched. Delayed entry/exit points (`$0000`, `$0008`, …, `$1FF8–$1FFF`)
+//! apply after the opcode M1 byte (via [`Self::after_m1_refresh`]); the
+//! `$3D00–$3DFF` trap maps instantly. ESXDOS EEPROM is optional — attach an
+//! 8 KiB image for ROM overlay; without it, only MAPRAM / CONMEM RAM paging and
+//! SPI SD I/O remain useful.
 //!
 //! SPI speaks a minimal MMC/SD subset (CMD0/8/16/17/24/55/58 + ACMD41) over a
 //! flat sector image so loaders can smoke-test sector read/write. Full ESXDOS
-//! boot still needs a real EEPROM binary (see `roms/` / docs).
+//! boot needs a user-supplied EEPROM + FAT SD image (see `docs/ROMS.md`).
 
 use crate::RomLoadError;
 
@@ -27,8 +29,8 @@ pub const RAM_PAGES: usize = 16;
 /// SD / MMC block size used by CMD17 / CMD24.
 pub const SD_SECTOR_SIZE: usize = 512;
 
-/// DivIDE-compatible automap entry points (opcode fetch / M1).
-const AUTOMAP_ENTRIES: &[u16] = &[0x0000, 0x0008, 0x0038, 0x0066, 0x04c6, 0x0562];
+/// DivIDE-compatible **delayed** automap entry points (apply after opcode M1).
+const AUTOMAP_ENTRIES_DELAYED: &[u16] = &[0x0000, 0x0008, 0x0038, 0x0066, 0x04c6, 0x0562];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SpiPhase {
@@ -279,8 +281,10 @@ impl SdSpi {
 pub struct DivMmc {
     pub control: u8,
     pub spi_cs: u8,
-    /// DivIDE-compatible automap latch (set/cleared by [`Self::notify_m1`]).
+    /// DivIDE-compatible automap latch (effective after delayed M1 refresh).
     pub automap: bool,
+    /// Pending automap value applied by [`Self::after_m1_refresh`].
+    automap_next: bool,
     /// Optional 8 KiB EEPROM (ESXDOS); zeroed until attached.
     pub eeprom: [u8; PAGE_SIZE],
     pub eeprom_loaded: bool,
@@ -304,6 +308,7 @@ impl DivMmc {
             control: 0,
             spi_cs: 0xff,
             automap: false,
+            automap_next: false,
             eeprom: [0; PAGE_SIZE],
             eeprom_loaded: false,
             ram: vec![0u8; RAM_PAGES * PAGE_SIZE],
@@ -336,6 +341,7 @@ impl DivMmc {
     pub fn reset_soft(&mut self) {
         self.control &= 0x40;
         self.automap = false;
+        self.automap_next = false;
         self.spi_cs = 0xff;
         self.spi.reset_transaction();
     }
@@ -363,17 +369,33 @@ impl DivMmc {
 
     /// M1 (opcode fetch) automap — `DivIDE` entry / exit points.
     ///
+    /// Delayed entries/exits only update [`Self::automap_next`]; call
+    /// [`Self::after_m1_refresh`] after the opcode byte so the first M1 byte
+    /// still comes from Spectrum ROM (or from `DivMMC` on exit). Instant map for
+    /// `$3D00–$3DFF` (TR-DOS trap) applies immediately.
+    ///
     /// No-op until EEPROM is attached or MAPRAM is set (hardware needs a ROM
     /// image or MAPRAM before automatic paging engages).
     pub fn notify_m1(&mut self, pc: u16) {
         if !self.eeprom_loaded && !self.mapram() {
             return;
         }
-        if AUTOMAP_ENTRIES.contains(&pc) {
+        // Instant map (TR-DOS compatibility page) — before opcode fetch.
+        if (0x3d00..=0x3dff).contains(&pc) {
             self.automap = true;
-        } else if (0x1ff8..=0x1fff).contains(&pc) {
-            self.automap = false;
+            self.automap_next = true;
+            return;
         }
+        if AUTOMAP_ENTRIES_DELAYED.contains(&pc) {
+            self.automap_next = true;
+        } else if (0x1ff8..=0x1fff).contains(&pc) {
+            self.automap_next = false;
+        }
+    }
+
+    /// Apply pending delayed automap after the opcode M1 byte (ULA refresh slot).
+    pub fn after_m1_refresh(&mut self) {
+        self.automap = self.automap_next;
     }
 
     #[must_use]
@@ -544,21 +566,37 @@ mod tests {
     }
 
     #[test]
-    fn automap_entry_and_exit_with_eeprom() {
+    fn automap_entry_and_exit_with_eeprom_is_delayed() {
         let mut d = DivMmc::new();
         d.attach_eeprom(&[0x55u8; PAGE_SIZE]).unwrap();
         d.notify_m1(0x0008);
+        assert!(!d.automap, "delayed entry must not map before opcode M1");
+        assert_eq!(d.read_overlay(0x0000), None);
+        d.after_m1_refresh();
         assert!(d.automap);
         assert_eq!(d.read_overlay(0x0000), Some(0x55));
         d.notify_m1(0x1ff8);
+        assert!(d.automap, "exit delay keeps map for the opcode byte");
+        assert_eq!(d.read_overlay(0x0000), Some(0x55));
+        d.after_m1_refresh();
         assert!(!d.automap);
         assert_eq!(d.read_overlay(0x0000), None);
+    }
+
+    #[test]
+    fn automap_3dxx_is_instant() {
+        let mut d = DivMmc::new();
+        d.attach_eeprom(&[0x55u8; PAGE_SIZE]).unwrap();
+        d.notify_m1(0x3d00);
+        assert!(d.automap, "TR-DOS trap maps before opcode fetch");
+        assert_eq!(d.read_overlay(0x0000), Some(0x55));
     }
 
     #[test]
     fn automap_ignored_without_eeprom_or_mapram() {
         let mut d = DivMmc::new();
         d.notify_m1(0x0000);
+        d.after_m1_refresh();
         assert!(!d.automap);
     }
 

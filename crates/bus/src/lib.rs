@@ -323,6 +323,13 @@ impl Bus48 {
         }
     }
 
+    /// Apply delayed `DivMMC` automap after the opcode M1 byte.
+    pub fn divmmc_after_m1_refresh(&mut self) {
+        if let Some(d) = self.divmmc.as_mut() {
+            d.after_m1_refresh();
+        }
+    }
+
     /// Attach Interface 1 (creates default peripheral if absent).
     pub fn attach_interface1(&mut self) -> &mut Interface1 {
         self.interface1.get_or_insert_with(Interface1::new)
@@ -727,6 +734,13 @@ impl Bus128 {
     pub fn notify_divmmc_m1(&mut self, pc: u16) {
         if let Some(d) = self.divmmc.as_mut() {
             d.notify_m1(pc);
+        }
+    }
+
+    /// Apply delayed `DivMMC` automap after the opcode M1 byte.
+    pub fn divmmc_after_m1_refresh(&mut self) {
+        if let Some(d) = self.divmmc.as_mut() {
+            d.after_m1_refresh();
         }
     }
 
@@ -1579,21 +1593,32 @@ mod tests {
     #[test]
     fn divmmc_eeprom_fixture_automaps_when_present() {
         // Optional local fixture — not committed. Place ≥8 KiB ESXDOS at
-        // `roms/esxdos.rom` or `roms/divmmc.rom` to exercise real-image automap.
+        // `roms/esxdos.rom`, `roms/divmmc.rom`, or `roms/divmmc/ESXMMC.BIN`.
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let path = ["roms/esxdos.rom", "roms/divmmc.rom"]
-            .into_iter()
-            .map(|rel| root.join(rel))
-            .find(|p| p.is_file());
+        let path = [
+            "roms/divmmc/ESXMMC.BIN",
+            "roms/esxdos.rom",
+            "roms/divmmc.rom",
+        ]
+        .into_iter()
+        .map(|rel| root.join(rel))
+        .find(|p| p.is_file());
         let Some(path) = path else {
-            eprintln!("skipping: no roms/esxdos.rom or roms/divmmc.rom");
+            eprintln!("skipping: no roms/divmmc/ESXMMC.BIN, roms/esxdos.rom, or roms/divmmc.rom");
             return;
         };
         let data = std::fs::read(path).expect("read eeprom fixture");
         let mut b = Bus48::new();
         let d = b.attach_divmmc();
         d.attach_eeprom(&data).expect("attach eeprom");
+        let rom0 = b.rom[0];
         b.notify_divmmc_m1(0x0000);
+        assert_eq!(
+            b.read(0x0000),
+            rom0,
+            "delayed automap: first opcode byte from Spectrum ROM"
+        );
+        b.divmmc_after_m1_refresh();
         assert!(b.divmmc.as_ref().unwrap().automap);
         assert_eq!(b.read(0x0000), data[0]);
     }
@@ -1606,6 +1631,8 @@ mod tests {
         let rom0 = b.rom[0];
         assert_eq!(b.read(0x0000), rom0);
         b.notify_divmmc_m1(0x0008);
+        assert_eq!(b.read(0x0000), rom0, "still Spectrum ROM until M1 refresh");
+        b.divmmc_after_m1_refresh();
         assert_eq!(b.read(0x0000), 0x5a);
     }
 
