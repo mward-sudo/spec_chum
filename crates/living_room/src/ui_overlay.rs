@@ -27,6 +27,7 @@ enum ChromeAction {
     ModelPlus3,
     ModelPlus3e,
     ModelPentagon,
+    ModelScorpion,
 }
 
 #[derive(Component, Debug)]
@@ -112,6 +113,7 @@ fn setup_ui(mut commands: Commands) {
                 chrome_button(bar, "+3", ChromeAction::ModelPlus3);
                 chrome_button(bar, "+3e", ChromeAction::ModelPlus3e);
                 chrome_button(bar, "Pent", ChromeAction::ModelPentagon);
+                chrome_button(bar, "Scor", ChromeAction::ModelScorpion);
             });
 
             // Middle: pure 3D (intro hint only when dollying).
@@ -263,6 +265,9 @@ fn chrome_buttons(
                     }
                     ChromeAction::ModelPentagon => {
                         select_model_if_rom(&mut host, ModelId::Pentagon128);
+                    }
+                    ChromeAction::ModelScorpion => {
+                        select_model_if_rom(&mut host, ModelId::ScorpionZs256);
                     }
                 }
             }

@@ -126,6 +126,17 @@ Timing: 71680 T-states/frame (320×224), no Sinclair memory contention. A synthe
 
 **Usual vs complete TR-DOS dumps:** many circulating **Ver 5.04** images (including a common `roms/pentagon/trdos.rom`) leave `0800h`–`0E71h` as FF padding, so `08D2h` and `0D6Bh` are not executable (post-match `19ECh` targets `08D2h`; `012Ah`→`1D97h` targets `0D6Bh`). Spec Chum’s harnessed `RUN`→`boot` path still asserts `0x8000==0xA5` on that dump. Prefer `trdos-5.04t.rom` / `trdos-complete.rom` when available: **5.04T** (VG93 stub at `08D2h`) matches via catalog + `19ECh` stand-in; a classic filled-hole image (non-stub `08D2h`) is eligible for the native file-load soft-gate. Do not commit ROM bytes.
 
+### Scorpion ZS-256 — user-provided paths (#193 Phase B2)
+
+Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
+
+| File | Size | Notes |
+| --- | --- | --- |
+| `roms/scorpion/scorpion.rom` | 48 KiB | Concatenated ROM0+ROM1+service (also accepts `256s.rom`) |
+| `roms/scorpion/trdos.rom` | 16 KiB | TR-DOS for Beta Disk — both files required before the model enables; Pentagon TR-DOS paths are also searched as a fallback |
+
+Banking: Spectrum 128 `#7FFD` plus Scorpion `#1FFD` (bit0 = RAM page 0 at `0000–3FFF`, bit1 = service ROM, bit4 = RAM pages 8–15 with `#7FFD` bits 0–2). Timing matches Pentagon (71680 T/frame, no Sinclair contention). Port decode follows Fuse’s +3-style `#1FFD`/`#7FFD` masks.
+
 ### Timex TC2048 / TS2068 — fetched paths (#192)
 
 After `./scripts/fetch_roms.sh`:

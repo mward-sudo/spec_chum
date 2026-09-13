@@ -411,6 +411,8 @@ pub enum Model {
     SpectrumPlus3e,
     /// Pentagon 128 clone (#188 Phase B / #193): user ROM + TR-DOS, distinct timing.
     Pentagon128,
+    /// Scorpion ZS-256 clone (#193 Phase B2): 256K + `#1FFD`, user ROM + TR-DOS.
+    ScorpionZs256,
     /// Timex TC2048 (#192 Phase 1): 48K-class + SCLD ports, distributable ROM.
     TimexTC2048,
     /// Timex TS2068 / TC2068 (#192 Phase 2a): home + EX-ROM, horizontal MMU, AY.
@@ -433,12 +435,12 @@ impl Model {
         matches!(self, Self::SpectrumPlus3 | Self::SpectrumPlus3e)
     }
 
-    /// 128K-class bus (Sinclair 128 / grey +2 / Pentagon banking).
+    /// 128K-class bus (Sinclair 128 / grey +2 / Pentagon / Scorpion banking).
     #[must_use]
     pub fn is_128k_class(self) -> bool {
         matches!(
             self,
-            Self::Spectrum128 | Self::SpectrumPlus2 | Self::Pentagon128
+            Self::Spectrum128 | Self::SpectrumPlus2 | Self::Pentagon128 | Self::ScorpionZs256
         )
     }
 
@@ -577,13 +579,14 @@ pub struct MemIo128<'a> {
     /// When set, the first `read` at this PC runs IF1 pre/post opcode-fetch paging.
     pub(crate) opcode_pc: Option<u16>,
     /// Pentagon 128: 71680 T/frame, no memory or I/O contention (no ULA snow).
+    /// Also true for Scorpion ZS-256 (same clone ULA class).
     pub(crate) pentagon: bool,
 }
 
 impl MemIo128<'_> {
     #[inline]
     fn frame_len(&self) -> u32 {
-        if self.pentagon {
+        if self.pentagon || self.bus.scorpion {
             FRAME_TSTATES_PENTAGON
         } else {
             FRAME_TSTATES_128
@@ -594,6 +597,11 @@ impl MemIo128<'_> {
     fn ula_t(&self, t: u64) -> u32 {
         let dt = t.wrapping_sub(self.t_step_start) as u32;
         (self.bus.frame_t.wrapping_add(dt)) % self.frame_len()
+    }
+
+    #[inline]
+    fn no_contend(&self) -> bool {
+        self.pentagon || self.bus.scorpion
     }
 }
 
@@ -611,7 +619,7 @@ impl Memory for MemIo128<'_> {
         let ft = self.ula_t(t);
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
-        let wait = if self.pentagon {
+        let wait = if self.no_contend() {
             0
         } else {
             self.bus.contend_at(addr)
@@ -636,7 +644,7 @@ impl Memory for MemIo128<'_> {
         let ft = self.ula_t(t);
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
-        let wait = if self.pentagon {
+        let wait = if self.no_contend() {
             0
         } else {
             self.bus.contend_at(addr)
@@ -653,8 +661,8 @@ impl Memory for MemIo128<'_> {
     }
 
     fn m1_refresh(&mut self, refresh_addr: u16, t: u64, m1_contended: bool) {
-        // Pentagon and Amstrad +2A/+3 paths omit this hook — no original-ULA snow.
-        if self.pentagon {
+        // Pentagon / Scorpion and Amstrad +2A/+3 paths omit this hook — no original-ULA snow.
+        if self.no_contend() {
             return;
         }
         let i = (refresh_addr >> 8) as u8;
@@ -691,7 +699,7 @@ impl Memory for MemIo128<'_> {
 impl Io for MemIo128<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
         let ft = self.ula_t(t);
-        let wait = if self.pentagon {
+        let wait = if self.no_contend() {
             0
         } else {
             ula::io_contention_extra_128(ft, port, self.bus.c000_contended())
@@ -709,7 +717,7 @@ impl Io for MemIo128<'_> {
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
         let ft = self.ula_t(t);
-        let wait = if self.pentagon {
+        let wait = if self.no_contend() {
             0
         } else {
             ula::io_contention_extra_128(ft, port, self.bus.c000_contended())
@@ -848,6 +856,8 @@ pub enum Machine {
         plus2_rom: bool,
         /// Pentagon 128 clone timing / no contention (#188 Phase B).
         pentagon: bool,
+        /// Scorpion ZS-256: 256K + #1FFD; Pentagon frame timing (#193).
+        scorpion: bool,
     },
     SpecPlus3 {
         cpu: Cpu,
@@ -969,6 +979,7 @@ impl Machine {
             debugger: Debugger::default(),
             plus2_rom: false,
             pentagon: false,
+            scorpion: false,
         })
     }
 
@@ -987,6 +998,7 @@ impl Machine {
             debugger: Debugger::default(),
             plus2_rom: true,
             pentagon: false,
+            scorpion: false,
         })
     }
 
@@ -1006,6 +1018,35 @@ impl Machine {
             debugger: Debugger::default(),
             plus2_rom: false,
             pentagon: true,
+            scorpion: false,
+        };
+        m.attach_beta()
+            .map_err(|e| MachineBuildError::Message(e.to_string()))?
+            .load_rom(trdos_rom)?;
+        Ok(m)
+    }
+
+    /// Scorpion ZS-256: 256K banking + `#1FFD`, user main ROM + TR-DOS (#193).
+    pub fn new_scorpion_zs256(
+        main_rom: &[u8],
+        trdos_rom: &[u8],
+    ) -> Result<Self, MachineBuildError> {
+        let mut bus = Bus128::new();
+        bus.scorpion = true;
+        bus.frame_tstates = FRAME_TSTATES_PENTAGON;
+        bus.load_rom_scorpion(main_rom)?;
+        trace::emit(trace::EventKind::MachineModel { model: 10 });
+        let mut m = Self::Spec128 {
+            cpu: Cpu::new(),
+            bus: Box::new(bus),
+            ula: Ula48::new(),
+            tape: None,
+            tape_opts: TapeLoadOptions::default(),
+            rzx: None,
+            debugger: Debugger::default(),
+            plus2_rom: false,
+            pentagon: false,
+            scorpion: true,
         };
         m.attach_beta()
             .map_err(|e| MachineBuildError::Message(e.to_string()))?
@@ -1068,6 +1109,7 @@ impl Machine {
                     Model::Spectrum48
                 }
             }
+            Self::Spec128 { scorpion: true, .. } => Model::ScorpionZs256,
             Self::Spec128 { pentagon: true, .. } => Model::Pentagon128,
             Self::Spec128 {
                 plus2_rom: true, ..
@@ -2150,7 +2192,7 @@ impl Machine {
                 pentagon,
                 ..
             } => {
-                let is_pentagon = *pentagon;
+                let is_pentagon = *pentagon || bus.scorpion;
                 let frame_len = if is_pentagon {
                     FRAME_TSTATES_PENTAGON
                 } else {
@@ -3196,7 +3238,7 @@ impl Machine {
                 pentagon,
                 ..
             } => {
-                let is_pentagon = *pentagon;
+                let is_pentagon = *pentagon || bus.scorpion;
                 let frame_len = if is_pentagon {
                     FRAME_TSTATES_PENTAGON
                 } else {
@@ -3510,7 +3552,7 @@ impl Machine {
                 pentagon,
                 ..
             } => {
-                let is_pentagon = *pentagon;
+                let is_pentagon = *pentagon || bus.scorpion;
                 let frame_len = if is_pentagon {
                     FRAME_TSTATES_PENTAGON
                 } else {
@@ -3851,7 +3893,7 @@ impl Machine {
             Model::SpectrumPlus2 => self.type_load_quotes_plus2(with_code),
             Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
             Model::SpectrumPlus3 | Model::SpectrumPlus3e => self.type_load_quotes_plus3(with_code),
-            Model::Pentagon128 => self.type_load_quotes_128k(with_code),
+            Model::Pentagon128 | Model::ScorpionZs256 => self.type_load_quotes_128k(with_code),
         }
     }
 
@@ -7725,6 +7767,44 @@ mod tests {
         );
     }
 
+    /// Scorpion ZS-256: synthetic ROMs exercise model id, 256K page, and `#1FFD` (#193).
+    #[test]
+    fn scorpion_zs256_model_and_upper_ram() {
+        let main = vec![0u8; 48 * 1024];
+        let trdos = [0u8; bus::TRDOS_ROM_SIZE];
+        let mut m = Machine::new_scorpion_zs256(&main, &trdos).unwrap();
+        assert_eq!(m.model(), Model::ScorpionZs256);
+        assert!(m.model().is_128k_class());
+        assert!(m.beta_mut().is_some());
+        {
+            let Machine::Spec128 {
+                bus,
+                scorpion: true,
+                pentagon: false,
+                ..
+            } = &mut m
+            else {
+                panic!("expected Spec128 scorpion");
+            };
+            assert!(bus.scorpion);
+            assert_eq!(bus.frame_tstates, FRAME_TSTATES_PENTAGON);
+            bus.banks[8][0] = 0xA5;
+            bus.out_port(0x1ffd, 0x10);
+            bus.out_port(0x7ffd, 0x00);
+            assert_eq!(bus.paged_bank(), 8);
+            assert_eq!(bus.read(0xc000), 0xA5);
+            bus.out_port(0x1ffd, 0x01);
+            bus.write(0x0000, 0x42);
+            assert_eq!(bus.banks[0][0], 0x42);
+        }
+        let snap = m.inspect();
+        assert_eq!(snap.model, Model::ScorpionZs256);
+        assert!(
+            snap.to_json().contains("\"model\":\"scorpion_zs256\""),
+            "inspect JSON must name scorpion"
+        );
+    }
+
     #[test]
     fn plus3_boots_and_1ffd_special_maps() {
         let Some(rom) = rom_plus3() else {
@@ -8952,6 +9032,11 @@ mod tests {
                             let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                             Machine::new_pentagon128(rom, &trdos).unwrap()
                         }
+                        Model::ScorpionZs256 => {
+                            let trdos =
+                                read_trdos_rom(Model::ScorpionZs256).expect("scorpion trdos");
+                            Machine::new_scorpion_zs256(rom, &trdos).unwrap()
+                        }
                         Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
                         Model::TimexTS2068 => {
                             let ex = read_exrom(Model::TimexTS2068).expect("ts2068 exrom");
@@ -9009,6 +9094,11 @@ mod tests {
                         Model::Pentagon128 => {
                             let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                             Machine::new_pentagon128(rom, &trdos).unwrap()
+                        }
+                        Model::ScorpionZs256 => {
+                            let trdos =
+                                read_trdos_rom(Model::ScorpionZs256).expect("scorpion trdos");
+                            Machine::new_scorpion_zs256(rom, &trdos).unwrap()
                         }
                         Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
                         Model::TimexTS2068 => {
@@ -9114,6 +9204,10 @@ mod tests {
                     Model::Pentagon128 => {
                         let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                         Machine::new_pentagon128(rom, &trdos).unwrap()
+                    }
+                    Model::ScorpionZs256 => {
+                        let trdos = read_trdos_rom(Model::ScorpionZs256).expect("scorpion trdos");
+                        Machine::new_scorpion_zs256(rom, &trdos).unwrap()
                     }
                     Model::TimexTC2048 => Machine::new_timex_tc2048(rom).unwrap(),
                     Model::TimexTS2068 => {
@@ -9284,6 +9378,10 @@ mod tests {
                     Model::Pentagon128 => {
                         let trdos = read_trdos_rom(Model::Pentagon128).expect("pentagon trdos");
                         Machine::new_pentagon128(&rom, &trdos).unwrap()
+                    }
+                    Model::ScorpionZs256 => {
+                        let trdos = read_trdos_rom(Model::ScorpionZs256).expect("scorpion trdos");
+                        Machine::new_scorpion_zs256(&rom, &trdos).unwrap()
                     }
                     Model::TimexTC2048 => Machine::new_timex_tc2048(&rom).unwrap(),
                     Model::TimexTS2068 => {

@@ -1336,6 +1336,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_model_slug_accepts_scorpion() {
+        assert_eq!(
+            parse_model_slug("scorpion").expect("scorpion"),
+            ModelId::ScorpionZs256
+        );
+        assert_eq!(
+            parse_model_slug("zs256").expect("zs256"),
+            ModelId::ScorpionZs256
+        );
+    }
+
+    #[test]
     fn parse_model_slug_accepts_canonical_timex_aliases() {
         assert_eq!(
             parse_model_slug("timex_ts2068").expect("ts2068"),

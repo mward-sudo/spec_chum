@@ -389,6 +389,7 @@ impl Inspect {
             Model::SpectrumPlus3 => "plus3",
             Model::SpectrumPlus3e => "plus3e",
             Model::Pentagon128 => "pentagon128",
+            Model::ScorpionZs256 => "scorpion_zs256",
             Model::TimexTC2048 => "timex_tc2048",
             Model::TimexTS2068 => "timex_ts2068",
         };

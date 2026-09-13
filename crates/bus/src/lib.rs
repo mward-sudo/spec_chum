@@ -637,9 +637,15 @@ impl Bus48 {
 /// 128K bus with 7FFD paging + AY ports.
 #[derive(Clone, Debug)]
 pub struct Bus128 {
-    pub rom: [[u8; 16384]; 2],
-    pub banks: [[u8; 16384]; 8],
+    /// ROM pages 0..1 for Sinclair 128 / Pentagon; page 2 is Scorpion service ROM.
+    pub rom: [[u8; 16384]; 3],
+    /// 8 banks (128K) or 16 banks when [`Self::scorpion`] (ZS-256).
+    pub banks: [[u8; 16384]; 16],
     pub page: u8,
+    /// Scorpion `#1FFD` latch (ignored unless [`Self::scorpion`]).
+    pub page_1ffd: u8,
+    /// Scorpion ZS-256: 256K RAM, `#1FFD` extend, service ROM (#193).
+    pub scorpion: bool,
     pub locked: bool,
     pub keyboard: Keyboard,
     pub ear: bool,
@@ -677,9 +683,11 @@ impl Bus128 {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            rom: [[0; 16384]; 2],
-            banks: [[0; 16384]; 8],
+            rom: [[0; 16384]; 3],
+            banks: [[0; 16384]; 16],
             page: 0,
+            page_1ffd: 0,
+            scorpion: false,
             locked: false,
             keyboard: Keyboard::new(),
             ear: false,
@@ -762,9 +770,28 @@ impl Bus128 {
         Ok(())
     }
 
+    /// Load Scorpion ZS-256 main ROM (3 × 16 KiB; TR-DOS is separate via Beta).
+    pub fn load_rom_scorpion(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
+        if data.len() != 49152 {
+            return Err(RomLoadError::WrongSize {
+                kind: "Scorpion ROM",
+                expected: 49152,
+                got: data.len(),
+            });
+        }
+        for i in 0..3 {
+            self.rom[i].copy_from_slice(&data[i * 16384..(i + 1) * 16384]);
+        }
+        Ok(())
+    }
+
     #[inline]
     fn rom_num(&self) -> usize {
-        usize::from(self.page & 0x10 != 0)
+        if self.scorpion && self.page_1ffd & 0x02 != 0 {
+            2
+        } else {
+            usize::from(self.page & 0x10 != 0)
+        }
     }
 
     #[inline]
@@ -776,9 +803,21 @@ impl Bus128 {
         }
     }
 
+    /// RAM page at `C000–FFFF` (0..7 Sinclair; 0..15 with Scorpion `#1FFD` bit 4).
     #[inline]
-    fn paged_bank(&self) -> usize {
-        usize::from(self.page & 7)
+    #[must_use]
+    pub fn paged_bank(&self) -> usize {
+        let lo = usize::from(self.page & 7);
+        if self.scorpion {
+            lo | (usize::from(self.page_1ffd & 0x10 != 0) << 3)
+        } else {
+            lo
+        }
+    }
+
+    #[inline]
+    fn ram0_at_0000(&self) -> bool {
+        self.scorpion && self.page_1ffd & 0x01 != 0
     }
 
     #[must_use]
@@ -805,7 +844,13 @@ impl Bus128 {
             }
         }
         match addr {
-            0x0000..=0x3fff => self.rom[self.rom_num()][addr as usize],
+            0x0000..=0x3fff => {
+                if self.ram0_at_0000() {
+                    self.banks[0][addr as usize]
+                } else {
+                    self.rom[self.rom_num()][addr as usize]
+                }
+            }
             0x4000..=0x7fff => self.banks[5][addr as usize - 0x4000],
             0x8000..=0xbfff => self.banks[2][addr as usize - 0x8000],
             0xc000..=0xffff => self.banks[self.paged_bank()][addr as usize - 0xc000],
@@ -824,7 +869,11 @@ impl Bus128 {
             }
         }
         match addr {
-            0x0000..=0x3fff => {}
+            0x0000..=0x3fff => {
+                if self.ram0_at_0000() {
+                    self.banks[0][addr as usize] = value;
+                }
+            }
             0x4000..=0x7fff => self.banks[5][addr as usize - 0x4000] = value,
             0x8000..=0xbfff => self.banks[2][addr as usize - 0x8000] = value,
             0xc000..=0xffff => self.banks[self.paged_bank()][addr as usize - 0xc000] = value,
@@ -843,16 +892,21 @@ impl Bus128 {
     }
 
     /// True when the RAM bank currently at `0xC000` is contended (1/3/5/7).
+    /// Scorpion upper pages 8–15 are uncontended (clone timing also skips waits).
     #[must_use]
     pub fn c000_contended(&self) -> bool {
-        Self::is_contended_bank(self.paged_bank())
+        let bank = self.paged_bank();
+        bank < 8 && Self::is_contended_bank(bank)
     }
 
     #[must_use]
     pub fn contend_at(&self, addr: u16) -> u32 {
         let contended = match addr {
             0x4000..=0x7fff => true,
-            0xc000..=0xffff => Self::is_contended_bank(self.paged_bank()),
+            0xc000..=0xffff => {
+                let bank = self.paged_bank();
+                bank < 8 && Self::is_contended_bank(bank)
+            }
             _ => false,
         };
         if contended {
@@ -880,6 +934,17 @@ impl Bus128 {
         }
         if trace::enabled(trace::Category::BUS) {
             trace::emit(trace::EventKind::BusPort7ffd { value });
+        }
+    }
+
+    /// Scorpion `#1FFD` (service ROM / RAM0 at 0000 / upper 128K). Locked with `#7FFD`.
+    pub fn out_1ffd(&mut self, value: u8) {
+        if !self.scorpion || self.locked {
+            return;
+        }
+        self.page_1ffd = value;
+        if trace::enabled(trace::Category::BUS) {
+            trace::emit(trace::EventKind::BusPort1ffd { value });
         }
     }
 
@@ -1010,8 +1075,19 @@ impl Bus128 {
             }
             return;
         }
-        // 7FFD: A15=0, A1=0
-        if port & 0x8002 == 0 {
+        // Scorpion uses +3-style `#1FFD` / `#7FFD` decode (Fuse `PLUS3_MEMORY`).
+        // Sinclair 128 / grey +2 / Pentagon keep the broader Toastrack `#7FFD` mask.
+        if self.scorpion {
+            if port & 0xf002 == 0x1000 {
+                self.out_1ffd(value);
+                return;
+            }
+            if port & 0xc002 == 0x4000 {
+                self.out_7ffd(value);
+                return;
+            }
+        } else if port & 0x8002 == 0 {
+            // 7FFD: A15=0, A1=0
             self.out_7ffd(value);
             return;
         }
@@ -1232,6 +1308,57 @@ mod tests {
         assert_eq!(b.page & 7, 0); // still locked at previous? lock after write
                                    // actually we locked with bank 0 from 0x20
         assert!(b.locked);
+    }
+
+    #[test]
+    fn scorpion_1ffd_pages_upper_ram_and_ram0() {
+        let mut b = Bus128::new();
+        b.scorpion = true;
+        b.banks[8][0] = 0xA5;
+        b.banks[0][0] = 0x5A;
+        b.rom[0][0] = 0x11;
+        b.rom[2][0] = 0x22;
+
+        // #1FFD bit4 + #7FFD bank 0 → page 8 at C000
+        b.out_port(0x1ffd, 0x10);
+        b.out_port(0x7ffd, 0x00);
+        assert_eq!(b.paged_bank(), 8);
+        assert_eq!(b.read(0xc000), 0xA5);
+
+        // #1FFD bit0 → RAM0 at 0000 (writable)
+        b.out_port(0x1ffd, 0x01);
+        assert_eq!(b.read(0x0000), 0x5A);
+        b.write(0x0000, 0x99);
+        assert_eq!(b.banks[0][0], 0x99);
+
+        // Service ROM via #1FFD bit1
+        b.out_port(0x1ffd, 0x02);
+        assert_eq!(b.read(0x0000), 0x22);
+        b.write(0x0000, 0x33);
+        assert_eq!(b.read(0x0000), 0x22, "service ROM not writable");
+    }
+
+    #[test]
+    fn scorpion_rom_load_requires_48k() {
+        let mut b = Bus128::new();
+        b.scorpion = true;
+        let err = b.load_rom_scorpion(&[0u8; 32]).expect_err("short");
+        assert!(matches!(
+            err,
+            RomLoadError::WrongSize {
+                kind: "Scorpion ROM",
+                expected: 49152,
+                got: 32
+            }
+        ));
+        let mut img = vec![0u8; 49152];
+        img[0] = 0xAA;
+        img[16384] = 0xBB;
+        img[32768] = 0xCC;
+        b.load_rom_scorpion(&img).expect("48K");
+        assert_eq!(b.rom[0][0], 0xAA);
+        assert_eq!(b.rom[1][0], 0xBB);
+        assert_eq!(b.rom[2][0], 0xCC);
     }
 
     #[test]

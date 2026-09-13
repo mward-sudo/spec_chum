@@ -197,10 +197,20 @@ pub fn resolve_trdos_rom_preferring_file_services(
 pub fn unavailable_reason(model: Model) -> &'static str {
     if requires_trdos_rom(model) {
         if !main_rom_available(model) {
-            return "Add roms/pentagon/pentagon.rom (user-provided; see Help → ROMs)";
+            return match model {
+                Model::ScorpionZs256 => {
+                    "Add roms/scorpion/scorpion.rom (48 KiB; user-provided; see Help → ROMs)"
+                }
+                _ => "Add roms/pentagon/pentagon.rom (user-provided; see Help → ROMs)",
+            };
         }
         if !trdos_rom_available(model) {
-            return "Add roms/pentagon/trdos.rom (16 KiB TR-DOS; user-provided)";
+            return match model {
+                Model::ScorpionZs256 => {
+                    "Add roms/scorpion/trdos.rom (16 KiB TR-DOS; user-provided)"
+                }
+                _ => "Add roms/pentagon/trdos.rom (16 KiB TR-DOS; user-provided)",
+            };
         }
     }
     if requires_exrom(model) {

@@ -72,7 +72,7 @@ where
                   Alias binary: `spec-chum-debug` (source builds; not shipped in release archives)."
 )]
 struct Cli {
-    /// 16k, 48k, 128k, plus2, plus2a, plus3, pentagon, timex/tc2048, ts2068/tc2068
+    /// 16k, 48k, 128k, plus2, plus2a, plus3, plus3e, pentagon, scorpion, timex/tc2048, ts2068/tc2068
     #[arg(long, default_value = "48k")]
     model: String,
     #[arg(long)]

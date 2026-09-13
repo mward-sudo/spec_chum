@@ -23,9 +23,23 @@ fn all_models_ui_order() {
             Model::SpectrumPlus3,
             Model::SpectrumPlus3e,
             Model::Pentagon128,
+            Model::ScorpionZs256,
             Model::TimexTC2048,
             Model::TimexTS2068,
         ]
+    );
+}
+
+#[test]
+fn scorpion_requires_user_48k_and_trdos() {
+    assert!(requires_user_rom(Model::ScorpionZs256));
+    assert!(requires_trdos_rom(Model::ScorpionZs256));
+    assert_eq!(expected_main_rom_bytes(Model::ScorpionZs256), 48 * 1024);
+    assert_eq!(model_label(Model::ScorpionZs256), "Scorpion");
+    assert!(model_title(Model::ScorpionZs256).contains("ZS-256"));
+    assert_eq!(
+        rom_candidates(Model::ScorpionZs256)[0],
+        "roms/scorpion/scorpion.rom"
     );
 }
 

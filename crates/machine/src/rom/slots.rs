@@ -10,7 +10,8 @@ use crate::Model;
 
 use super::catalog::{
     expected_main_rom_bytes, exrom_candidates, requires_exrom, requires_trdos_rom,
-    requires_user_rom, rom_candidates, trdos_rom_candidates, TRDOS_ROM_INSTALL_PATH,
+    requires_user_rom, rom_candidates, trdos_rom_candidates, SCORPION_TRDOS_ROM_INSTALL_PATH,
+    TRDOS_ROM_INSTALL_PATH,
 };
 use super::resolve::{
     resolve_first_in, resolve_trdos_rom_preferring_file_services, rom_path_status, search_roots,
@@ -31,11 +32,16 @@ pub fn rom_slot_descriptors(model: Model) -> Vec<RomSlotDescriptor> {
     };
     let mut slots = vec![main];
     if requires_trdos_rom(model) {
+        let install = if model == Model::ScorpionZs256 {
+            SCORPION_TRDOS_ROM_INSTALL_PATH
+        } else {
+            TRDOS_ROM_INSTALL_PATH
+        };
         slots.push(RomSlotDescriptor {
             kind: RomSlotKind::Trdos,
             id: "trdos",
             label: "TR-DOS ROM",
-            install_path: TRDOS_ROM_INSTALL_PATH,
+            install_path: install,
             search_paths: trdos_rom_candidates(model),
             expected_bytes: TRDOS_ROM_SIZE,
             user_provided: true,

@@ -387,6 +387,8 @@ extension HostBridge {
                 return ["roms/plus2a/plus2a.rom", "roms/plus3/plus3.rom"]
             case .pentagon128:
                 return ["roms/pentagon/pentagon.rom", "roms/pentagon/128p.rom"]
+            case .scorpionZs256:
+                return ["roms/scorpion/scorpion.rom", "roms/scorpion/256s.rom"]
             case .timexTC2048:
                 return ["roms/timex/tc2048.rom"]
             case .timexTS2068:

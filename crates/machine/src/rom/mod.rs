@@ -1,10 +1,11 @@
 //! ROM path catalog and availability for host pickers (#188).
 //!
 //! Phase A models use the UK primary paths under `roms/` (see `rom_candidates`).
-//! Phase B (Pentagon 128) requires user-provided main + TR-DOS ROMs — never fetched.
-//! Additional distributable images fetched by `./scripts/fetch_roms.sh` — Timex,
-//! `OpenSE`, +3e, Datel, `SpeccyBoot`, regional alternates — are documented in
-//! `docs/ROMS.md` (#190); wire `rom_candidates` when those models ship.
+//! Phase B (Pentagon 128 / Scorpion ZS-256) requires user-provided main + TR-DOS
+//! ROMs — never fetched. Additional distributable images fetched by
+//! `./scripts/fetch_roms.sh` — Timex, `OpenSE`, +3e, Datel, `SpeccyBoot`,
+//! regional alternates — are documented in `docs/ROMS.md` (#190); wire
+//! `rom_candidates` when those models ship.
 //!
 //! Layout (#411 cohesion split): [`types`], [`catalog`], [`trdos`], [`resolve`],
 //! [`slots`], [`read`]. Public API surface is unchanged.
