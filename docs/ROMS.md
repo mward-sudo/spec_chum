@@ -180,6 +180,23 @@ cat roms/.zx-roms-ref roms/.fuse-roms-ref
 User-provided firmware (Multiface, TR-DOS, etc.) may also live under `roms/` but is
 **not** part of the managed fetch count.
 
+### DivMMC / ESXDOS — user-provided paths (#138)
+
+ESXDOS firmware is **user-supplied** (Papaya Dezign; public download ≠ redistribution
+grant — see [#188](https://github.com/mward-sudo/spec_chum/issues/188#issuecomment-5465132775)).
+Do **not** commit EEPROM or SD image bytes. Do **not** extend `fetch_roms.sh`.
+
+Place your own dumps under `roms/divmmc/` (preferred) or the legacy aliases:
+
+| File | Size | Notes |
+| --- | --- | --- |
+| `roms/divmmc/ESXMMC.BIN` | 8 KiB | DivMMC EEPROM from the official esxDOS zip (`ESXMMC.BIN`). Also accepted: `roms/esxdos.rom`, `roms/divmmc.rom` |
+| `roms/divmmc/esxdos.img` | flat FAT | Sector image (LBA×512) with `/SYS` (and usually `/BIN`) from the same zip. Also accepted: `roms/divmmc/sd.img` |
+
+Obtain from [esxdos.org](http://www.esxdos.org/) (e.g. `esxdos089.zip`): flash/use `ESXMMC.BIN` as the EEPROM, and copy the zip’s `SYS` + `BIN` directories onto a FAT16/FAT32 card image for the flat SD attach. egui / SpecChumMac Hardware menus already expose DivMMC attach + EEPROM/SD open.
+
+Machine smoke `esxdos_eeprom_boots_prompt_when_fixtures_present` skips cleanly when either fixture is absent; with both present it boots to the ESXDOS banner/prompt. Ready-card / full compatibility remains open on [#138](https://github.com/mward-sudo/spec_chum/issues/138).
+
 ### Multiface 1 / 128 — user-provided paths (#168)
 
 Place your own dumps (never committed; not fetched by `fetch_roms.sh`):
