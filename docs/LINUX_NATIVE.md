@@ -50,6 +50,10 @@ Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same actio
 - Linux with GTK 4 development/runtime libraries (`libgtk-4-dev` / `libgtk-4-1`, plus the existing ALSA/udev deps used by egui)
 - Fetched ROMs: `./scripts/fetch_roms.sh` (or copy `roms/` next to the binary)
 
+`SPEC_CHUM_ROOT` (and optional `SPEC_CHUM_ROM_ROOT`) must point at the **repository root**
+(parent of `roms/`), not at `roms/` itself — same layout as
+[WINDOWS_NATIVE.md](WINDOWS_NATIVE.md#rom-search-roots).
+
 ## Build & run
 
 From the repository root **on Linux**:

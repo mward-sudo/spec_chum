@@ -67,9 +67,11 @@ impl AppState {
 
         let model = prefs.model.to_model_id();
         let mut session = HostSession::new(model, true);
-        session.set_model(model);
+        // `set_model` only switches the preferred model; `select_model` also
+        // searches `SPEC_CHUM_ROOT` / cwd / exe-dir for `roms/spec48.rom` etc.
+        let _ = session.select_model(model);
         if !session.has_machine() {
-            session.set_model(ModelId::Spectrum48);
+            let _ = session.select_model(ModelId::Spectrum48);
             prefs.select_builtin_model(PrefModel::Spectrum48);
         }
         if !session.has_machine() {

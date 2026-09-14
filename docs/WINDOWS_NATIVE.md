@@ -42,6 +42,31 @@ Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same actio
 - Windows 10/11 with a Rust MSVC toolchain (`x86_64-pc-windows-msvc`)
 - Fetched ROMs: `./scripts/fetch_roms.sh` (or copy `roms/` next to the binary)
 
+## ROM search roots
+
+`HostSession` uses `machine::search_roots()` for `roms/spec48.rom` (and other
+model images), in order:
+
+1. Process current directory
+2. `SPEC_CHUM_ROOT` — **repository root** (parent of `roms/`), not the `roms` folder itself
+3. `SPEC_CHUM_ROM_ROOT` — alternate root with the same `roms/…` layout
+4. Directory containing the executable (so a packaged `roms/` next to `spec_chum_windows.exe` works)
+5. Executable parent’s `share/spec-chum` (Linux FHS / AppImage layout; usually unused on Windows)
+6. Compile-time workspace root (dev builds)
+
+macOS `.app` `Contents/Resources` is also searched when the exe lives under
+`Contents/MacOS` (SpecChumMac); the Win32 shell does not use that layout.
+
+Trailing slash on drive roots is fine (`S:\`). Paths are case-insensitive on Windows.
+
+Parallels shared-folder example (repo mapped as `S:`):
+
+```powershell
+$env:SPEC_CHUM_ROOT = 'S:\'
+Set-Location S:\
+cargo run -p windows_shell --release
+```
+
 ## Build & run
 
 From the repository root **on Windows**:
@@ -54,6 +79,7 @@ From the repository root **on Windows**:
 Or:
 
 ```powershell
+$env:SPEC_CHUM_ROOT = (Get-Location).Path   # if cwd is already the repo root
 cargo run -p windows_shell --release
 ```
 
