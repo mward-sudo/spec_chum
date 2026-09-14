@@ -44,13 +44,18 @@ Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same actio
 
 ## ROM search roots
 
-`HostSession` looks for `roms/spec48.rom` (and other model images) under, in order:
+`HostSession` uses `machine::search_roots()` for `roms/spec48.rom` (and other
+model images), in order:
 
 1. Process current directory
 2. `SPEC_CHUM_ROOT` — **repository root** (parent of `roms/`), not the `roms` folder itself
 3. `SPEC_CHUM_ROM_ROOT` — alternate root with the same `roms/…` layout
 4. Directory containing the executable (so a packaged `roms/` next to `spec_chum_windows.exe` works)
-5. Compile-time workspace root (dev builds)
+5. Executable parent’s `share/spec-chum` (Linux FHS / AppImage layout; usually unused on Windows)
+6. Compile-time workspace root (dev builds)
+
+macOS `.app` `Contents/Resources` is also searched when the exe lives under
+`Contents/MacOS` (SpecChumMac); the Win32 shell does not use that layout.
 
 Trailing slash on drive roots is fine (`S:\`). Paths are case-insensitive on Windows.
 
