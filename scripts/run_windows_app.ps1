@@ -25,6 +25,20 @@ Install Git for Windows (includes bash), then re-run this script, or fetch ROMs 
     }
 }
 
+# Repo root is the parent of scripts/; ROM search joins roms/ under this.
+$env:SPEC_CHUM_ROOT = (Get-Location).Path
+
 & ./scripts/build_windows_app.ps1
 Write-Host "==> launching spec_chum_windows"
-& ./target/release/spec_chum_windows.exe @args
+$targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path (Get-Location) "target" }
+$exe = Join-Path $targetDir "release/spec_chum_windows.exe"
+if (-not (Test-Path $exe)) {
+    # Workspace with per-crate target subdir (e.g. CARGO_TARGET_DIR=C:\cargo-target\spec_chum).
+    $alt = Join-Path $targetDir "spec_chum/release/spec_chum_windows.exe"
+    if (Test-Path $alt) { $exe = $alt }
+}
+if (-not (Test-Path $exe)) {
+    Write-Error "spec_chum_windows.exe not found under $targetDir (set CARGO_TARGET_DIR if using a custom target)"
+    exit 1
+}
+& $exe @args

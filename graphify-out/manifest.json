@@ -1488,9 +1488,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1789337286.9368796,
-    "seen": 1789338842.411566,
-    "ast_hash": "72a17218b7208d7aa29add60e560d976",
+    "mtime": 1789345115.1109188,
+    "seen": 1789345269.456718,
+    "ast_hash": "44b2c0c084eb9621ae032bded816ea90",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -1506,15 +1506,15 @@
     "semantic_hash": ""
   },
   "scripts/run_windows_app.ps1": {
-    "mtime": 1789100183.131811,
-    "seen": 1789101087.939561,
-    "ast_hash": "561ac8a368086ac43bc26e21a3da50bc",
+    "mtime": 1789345134.0653791,
+    "seen": 1789345269.4595609,
+    "ast_hash": "aa1e77fd4047cef2ac7b4c05a49bb94e",
     "semantic_hash": ""
   },
   "docs/WINDOWS_NATIVE.md": {
-    "mtime": 1789338349.5865653,
-    "seen": 1789338842.4124732,
-    "ast_hash": "03152cc28d4ca3dca87c9c33836c360e",
+    "mtime": 1789345131.8034418,
+    "seen": 1789345269.4619431,
+    "ast_hash": "e36a22586cdc8696804f65b0ac4e6496",
     "semantic_hash": ""
   },
   "crates/windows_shell/src/commands.rs": {
@@ -1530,21 +1530,21 @@
     "semantic_hash": ""
   },
   "crates/linux_shell/src/audio.rs": {
-    "mtime": 1789337969.0269165,
-    "seen": 1789338842.4105978,
-    "ast_hash": "b4b4ac222398e0df825c471788e92989",
+    "mtime": 1789339366.8613708,
+    "seen": 1789345269.451256,
+    "ast_hash": "c62b01db9de5dcb1d757cb352c8b3d6b",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/gtk_ui.rs": {
-    "mtime": 1789338815.5004358,
-    "seen": 1789338842.410599,
-    "ast_hash": "fa503cb6c4c84cf76e3c3209745cf28d",
+    "mtime": 1789345115.110914,
+    "seen": 1789345269.4512599,
+    "ast_hash": "1edbcf8b794d078e870011e8e2ffd3d9",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/keymap.rs": {
-    "mtime": 1789338815.181425,
-    "seen": 1789338842.4106,
-    "ast_hash": "e3ce0f9cf1bd01ab8fb5d0524f4484e1",
+    "mtime": 1789341093.1113577,
+    "seen": 1789345269.451263,
+    "ast_hash": "763730867978f71426e4afc7130a59ed",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/lib.rs": {
@@ -1560,15 +1560,15 @@
     "semantic_hash": ""
   },
   "scripts/run_linux_shell.sh": {
-    "mtime": 1789338211.2977917,
-    "seen": 1789338842.412191,
-    "ast_hash": "1f699a4f02d71358f41703dc640ed023",
+    "mtime": 1789341027.4761312,
+    "seen": 1789345269.4593,
+    "ast_hash": "98d1b410ab8ffe8bd5234558a5924497",
     "semantic_hash": ""
   },
   "docs/LINUX_NATIVE.md": {
-    "mtime": 1789338211.297792,
-    "seen": 1789338842.412377,
-    "ast_hash": "c36951004e726ffbc4edd24468aecf85",
+    "mtime": 1789345141.806057,
+    "seen": 1789345269.4615989,
+    "ast_hash": "486c04211a745a773472dbe90eddb96c",
     "semantic_hash": ""
   }
 }
