@@ -15,8 +15,10 @@ download CTA, platforms/features — not a docs SPA.
 Markdown under `docs/*.md` remains the player/developer docs index on GitHub.
 Do not put LLM agent instructions on this marketing page.
 
-Asset URLs are **relative** (`./styles.css`, `./assets/…`) so the folder can move
-to a path prefix or another host without rewriting CSS/JS/image links.
+Asset URLs are **relative** (`./styles.css`, `./assets/…`, `./fonts/…`) so the
+folder can move to a path prefix or another host without rewriting CSS/JS/image
+links. Fonts are **self-hosted** woff2 under `fonts/` (Space Grotesk, IBM Plex
+Sans — SIL OFL); no Google Fonts / third-party font CDN at runtime.
 
 ## Palette
 
