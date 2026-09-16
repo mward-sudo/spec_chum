@@ -85,7 +85,7 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 | Avoid Tauri/Dioxus-web for the machine loop | Extra process/IPC is the wrong complexity for a Spectrum core |
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
 | Optional **Bevy living-room** | Experimental immersion host; SpecChumMac links staticlib, display opt-in; keep out of default CI; #146 |
-| **Linux native shell in progress** | egui is the **current** Linux release/CI host; GTK4 `linux_shell` vertical slice in-tree ([LINUX_NATIVE.md](LINUX_NATIVE.md)); deepen + promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
+| **Linux native shell in progress** | egui is the **current** Linux release/CI host; GTK4 `linux_shell` with Machine/Hardware/Settings/Debug deepen in-tree ([LINUX_NATIVE.md](LINUX_NATIVE.md)); release promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
 | **Windows native shell in progress** | Ship egui today; classic Win32 `windows_shell` vertical slice in-tree ([WINDOWS_NATIVE.md](WINDOWS_NATIVE.md)); deepen + promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
 
 ## Native shells (#351)
@@ -112,7 +112,7 @@ Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / i
 
 **Toolkit decision:** **GTK4 via gtk-rs** — thin Rust host over `host_api` / `control_plane`, HIG-friendly, no webview. Qt remains a rejected-for-now alternative (heavier tooling tax).
 
-**Native vertical slice (in-tree):** `crates/linux_shell` (`spec_chum_linux`) — window, framebuffer present, File/Tape menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP. Docs: [LINUX_NATIVE.md](LINUX_NATIVE.md). Opt-in CI job `linux-shell`. Machine/Hardware/Settings/Debug deepen and release promotion remain open under [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+**Native shell (in-tree):** `crates/linux_shell` (`spec_chum_linux`) — window, framebuffer present, File/Tape/Machine/Hardware/Settings/Debug menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP. Docs: [LINUX_NATIVE.md](LINUX_NATIVE.md). Opt-in CI job `linux-shell`. Release promotion remains open under [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 
 Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** concern (#231) whether the wrapped binary is egui or a future native shell.
 
