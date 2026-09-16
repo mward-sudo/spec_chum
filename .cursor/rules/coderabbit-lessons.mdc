@@ -1,81 +1,61 @@
 ---
-description: Recurring CodeRabbit findings — avoid repeating them in Spec Chum PRs
+description: Disposition triad + durable Spec Chum code habits from CR
 alwaysApply: true
 ---
 
 # CodeRabbit lessons (agent habits)
 
-Distilled from historical CodeRabbit reviews on mainline PRs (~66 PRs scanned; **29** had CR findings — e.g. [#26](https://github.com/mward-sudo/spec_chum/pull/26), [#79](https://github.com/mward-sudo/spec_chum/pull/79), [#83](https://github.com/mward-sudo/spec_chum/pull/83), [#98](https://github.com/mward-sudo/spec_chum/pull/98), [#111](https://github.com/mward-sudo/spec_chum/pull/111), [#143](https://github.com/mward-sudo/spec_chum/pull/143), [#151](https://github.com/mward-sudo/spec_chum/pull/151), [#153](https://github.com/mward-sudo/spec_chum/pull/153), [#157](https://github.com/mward-sudo/spec_chum/pull/157)). On-demand reviews mean many recent drafts have **no** CR history yet. **Merge-gate / draft→ready:** see [pr-review-merge.mdc](pr-review-merge.mdc) / [CONTRIBUTING.md](../../CONTRIBUTING.md). **Issue linking:** see [github-issues.mdc](github-issues.mdc).
+Merge-gate / quota / when-to-request → `pr-review-merge.mdc` + `CONTRIBUTING.md`. Issues → `github-issues.mdc`.
 
-## Quota and when to request review
+## Disposition triad (every actionable finding)
 
-- Plan allows **~10 reviews/hour**. Do **not** request CR on every push, on chore/docs-only draft PRs, or while still iterating.
-- **Local first:** Cursor plugin / `coderabbit review --agent` while iterating (required habit before merge-candidate when CLI available). Skip reviewing `graphify-out/` (YAML `path_filters`; optional `--dir crates` / `--dir apps`).
-- **GitHub when quota allows:** stay **draft** → undraft when merge-candidate → **one** `@coderabbitai full review` (human comment preferred) or label `coderabbit-review` → after fix commits use **`@coderabbitai review`** (incremental), not another full review. Undraft alone does **not** request a review. Skip requesting GitHub CR when already rate-limited.
-- **Prefer both; either-completed fallback:** run local CR **and** request GitHub when both available. Either **completed** review is enough if only one can finish. Gate 1 **soft-passes** GitHub rate-limit in CI when reset is **>10m** or **unparsable** (not “Review completed”; warning), and **HOLDs** when reset is reliably parsed as **≤10m** — merge still needs **clean local CR** or **dual** rate-limit (**both** sides **>10m** / long-unknown + one-line PR note). **Do not** file “Revisit CodeRabbit” issues. **Rate-limit wait:** if **either** side reports reset **≤10m** (or can review now) → wait/retry that side; dual soft-pass only when **both** are rate-limited **>10m** — do **not** sleep long dual resets; user may declare both >10m → merge immediately — see `pr-review-merge.mdc`.
-- **On-demand / label skip (never requested):** `Review skipped: excluded by label configuration`, `Review skipped: on demand`, etc. — gate 1 **hard-fails** (same as missing). Soft-pass ≠ skip-without-request. Agents must comment `@coderabbitai full review` or add the label before merge (lesson: [#278](https://github.com/mward-sudo/spec_chum/pull/278) / [#279](https://github.com/mward-sudo/spec_chum/pull/279) / [#281](https://github.com/mward-sudo/spec_chum/pull/281)).
+Never leave hanging (threads **and** outside-diff / summary nits):
 
-## Always disposition review comments
-
-Every actionable CodeRabbit (or similar bot) finding must be dispositioned — **never leave them hanging**. Outside-diff / summary findings count too (the merge-gate script only sees GraphQL threads).
-
-Disposition is one of:
-
-1. **Fix** in code (and resolve the thread if any), or
-2. **Wontfix** — short PR reply with reason, then **resolve**, or
-3. **Defer** — open a **follow-up GitHub issue**, link it from the PR reply, then resolve (user preference for deferred nits over silently ignoring or burning more review cycles). Example: synthetic DSK fixture dedupe → [#164](https://github.com/mward-sudo/spec_chum/issues/164) after PR #157.
-
-See also [pr-review-merge.mdc](pr-review-merge.mdc).
+1. **Fix** → resolve thread
+2. **Wontfix** → short PR reply + resolve
+3. **Defer** → open follow-up issue, link from PR reply, resolve
 
 ## `Refs` vs `Closes` / stubs
 
-- Placeholder, deepen-in-progress, or incomplete acceptance → **`Refs #N`**, never `Closes`.
-- Do not treat stubs / `assert!(… || true)` / “smoke only” as done (lesson [#17](https://github.com/mward-sudo/spec_chum/issues/17)).
+- Incomplete acceptance / deepen-in-progress → `Refs #N`, never `Closes`
+- Stubs / `assert!(… \|\| true)` / “smoke only” ≠ done
 
-## Cross-crate compile (especially `living_room`)
+## Durable code habits
 
-- Default `./scripts/check.sh` **excludes** `living_room` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1`. SpecChumMac still **links** the living_room staticlib.
-- When changing shared types / FFI / `host_api` / tape options: also run `./scripts/check_living_room.sh` (or the env-gated check), and grep **all** crates including `living_room` and `apps/macos`.
+**Cross-crate / living_room**
 
-## Struct / API field additions
+- `./scripts/check.sh` excludes `living_room` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1`
+- Shared FFI / `host_api` / tape options → also `./scripts/check_living_room.sh`; grep `living_room` + `apps/macos`
 
-- Adding a field to a public struct (e.g. `TapeLoadOptions`) breaks every struct-literal call site across crates. **Grep** `TapeLoadOptions {`, similar constructors, and FFI wrappers before finishing.
-- Keep egui / macOS / `host_api` / `living_room` constructors in sync when the host surface grows.
+**Struct / API fields**
 
-## Test quality (recurring)
+- New public struct fields break all struct-literal sites — grep constructors + FFI; keep egui / macOS / `host_api` / `living_room` in sync
 
-- Smoke / matrix tests must **assert real outcomes** — not `assert!(true)`, not state the test just forced by hand (#88, #98, #104).
-- Make precondition assertions meaningful (e.g. carry clear before SCF; Q/flag cases that actually exercise the claim) (#124).
-- ROM-dependent tests must **skip cleanly** when `roms/` is missing (#109, #131, #143).
-- Do not copy-paste synthetic media builders across crates (CR nit on #157: `synthetic_dsk` thrice). Prefer one shared `cfg(test)` / `test-util` helper, or file a follow-up (#164) if deferring.
+**Tests**
 
-## Tape / EAR / UI truthfulness
+- Assert real outcomes (not `assert!(true)` / hand-forced state)
+- Meaningful preconditions; ROM tests skip cleanly without `roms/`
+- No copy-pasted synthetic media builders across crates — share helper or defer with issue
 
-- One EAR-level / pulse convention across TZX producers; keep Instant/flash paths consistent with EAR semantics (#102, #104).
-- UI status and controls must match the active load path (don’t claim EAR while flash-load runs; don’t leave a disabled control implying an option that still applies) (#83).
-- Handle empty / pulse-free / trailing-empty tape decks in progress labels and completion (#79, #113).
+**Tape / EAR / UI**
 
-## Frame-boundary audio and counters
+- One EAR/pulse convention; UI must match active load path (flash vs EAR)
+- Empty / pulse-free decks: honest progress + completion
 
-- Carry speaker level, AY samples, and late frame edges into the next frame — do not drop cross-boundary state (#79, #113, #120).
-- Prefer saturating / guarded arithmetic for progress and catch-up caps; don’t print OK after a soft budget failure (#113, #151).
+**Frame / audio**
 
-## Host / ABI / input hygiene
+- Carry speaker/AY/late edges across frame boundary; saturating progress math; don’t print OK after soft budget fail
 
-- Avoid hand-copied duplicate C headers for the same ABI (`sc_room_*` / debugger FFI lived in two places — #98, #151). One source of truth.
-- Snapshot / model load: keep UI `model` and machine model aligned; reload when snapshot model differs (#143).
-- Do not leave guest input latched when a host toggle disables that input (mouse buttons, joystick vs matrix — #143). On macOS, release held keys when Command becomes active (#71).
-- Reset-as-model-reselection drops inserted media — preserve or re-insert intentionally (#151).
-- Living-room host: don’t block the UI thread on the room queue; a single map timeout must not permanently disable CPU readback; stall recovery must be generation-safe (#151, #153).
+**Host / ABI / input**
 
-## Errors, I/O, hot paths
+- One C-header source of truth; keep UI model ↔ machine model aligned on snapshot load
+- Don’t leave guest input latched when host disables it; reset-as-model-reselect must preserve/reinsert media intentionally
+- Living-room: don’t block UI on room queue; generation-safe stall recovery
 
-- Don’t discard `Result`s from play/start/write/init (`stream.play()`, append writers, `Gilrs::new()`, WAV delivery) (#102, #143, #151).
-- Don’t flush/reopen a file per trace event; buffer and handle write failures (#98, #102).
-- Downloads/assets: write atomically; don’t retain a failed download as a valid cache entry (#109, #151).
-- No hardcoded developer machine paths — use env vars / repo-relative paths (#83).
+**Errors / I/O**
 
-## CI / release (when touching workflows or packaging)
+- Don’t discard `Result` from play/start/write/init; buffer traces (no per-event reopen); atomic downloads; no hardcoded machine paths
 
-- Pin Actions to immutable SHAs; validate `workflow_dispatch` / PR-number inputs; disable `persist-credentials` where unneeded; concurrency groups on release (#111, #112).
-- Keep crate version, docs, and native macOS **numeric** bundle version in sync (#111, #126, #129).
+**CI / packaging (when touched)**
+
+- Pin Actions to SHAs; keep crate version + macOS numeric bundle version in sync

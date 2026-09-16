@@ -7,26 +7,25 @@ alwaysApply: true
 
 When a dedicated tool can do the job, use it instead of `Shell`.
 
-## Use these instead of the terminal
-
 | Task | Use |
 | --- | --- |
-| Read a file | `Read` (not `cat` / `head` / `tail`) |
-| Edit a file | `StrReplace` / `Write` (not `sed` / `awk`) |
-| Find files by name | `Glob` (not `find`) |
-| Search file contents | `Grep` (not `rg` / `grep` in the shell) |
-| Service/docs APIs | `GetMcpTools` then `CallMcpTool` (not `curl` / HTML scrape) |
+| Read a file | `Read` |
+| Edit a file | `StrReplace` / `Write` |
+| Find by name | `Glob` |
+| Search contents | `Grep` |
+| MCP / dynamic APIs | `GetDynamicTools` then `CallDynamicTool` |
 
-Do not inspect or edit the repo with `cat`, `sed`, `awk`, `head`, `tail`, `rg`, or `find` when the tools above can do it.
+Do not use `cat` / `sed` / `awk` / `head` / `tail` / shell `rg` / `find` for repo inspect/edit when the tools above work.
 
-## Shell is still correct for
+## Shell is correct for
 
-- `cargo`, `./scripts/check.sh`, and other project scripts
-- `git` (status/diff/log/commit/push/etc.; follow the commit protocol in user rules)
-- `gh` for GitHub (issues, PRs, checks) — required by user rules; do not replace with ad-hoc HTTP
-- running the emulator binary and tests
+- `cargo`, `./scripts/check.sh`, other project scripts
+- `graphify` CLI (`query` / `path` / `explain` / update scripts)
+- `git` (follow commit protocol in user rules)
+- `gh` (issues, PRs, checks)
+- Running the emulator binary and tests
 
 ## Do not contradict
 
-- Never edit plan files under `.cursor/plans/`
-- Keep `./scripts/check.sh` as the pre-done Rust gate (see `AGENTS.md`)
+- Never edit `.cursor/plans/`
+- Pre-done Rust gate: `./scripts/check.sh` (`AGENTS.md`)

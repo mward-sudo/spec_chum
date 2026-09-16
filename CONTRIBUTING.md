@@ -16,7 +16,7 @@
 - **`unsafe`**: denied workspace-wide. Only allow with a narrow `#[allow(unsafe_code)]` and a `SAFETY` comment.
 - **`#[allow]`**: every new allow needs a one-line rationale (prefer refactor); link an issue when temporary. See [docs/TESTING.md](docs/TESTING.md) and [#171](https://github.com/mward-sudo/spec_chum/issues/171).
 - **Errors**: `thiserror` in library crates; `anyhow` is fine in `app`.
-- **Formatting / Clippy**: `rustfmt.toml` and `clippy.toml` at the repo root. CI runs `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings`.
+- **Formatting / Clippy**: `rustfmt.toml` and `clippy.toml` at the repo root. CI / `./scripts/check.sh` run `cargo fmt --check` and `cargo clippy --workspace --all-targets --exclude living_room -- -D warnings`.
 - **API design**: prefer the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) for public surfaces.
 
 Local quality gate (same as CI intent):
@@ -45,9 +45,9 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 - Before coding, agents should consult open issues, so implementations do not drift from tracked acceptance criteria.
 - Agents should be **clippy-first**: iterate with `./scripts/check_crates.sh`, then run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
 - Keep PRs small and crate-scoped so parallel agents do not clobber each other.
-- **Agent debugging:** today use `spec-chum-debug` + [DEBUGGING.md](docs/DEBUGGING.md). **Planned:** unified localhost [Agent Debug API](docs/AGENT_DEBUG_API.md) ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — agents export the guest framebuffer as 1:1 PNG (not window capture); `spec-chum-debug` becomes an API client.
+- **Agent debugging:** [Agent Debug HTTP API](docs/AGENT_DEBUG_API.md) is **implemented** ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`; guest framebuffer as 1:1 PNG. Also see [DEBUGGING.md](docs/DEBUGGING.md) and `.cursor/skills/spec-chum-debugging/SKILL.md`.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
-- **Before merge / finish PR:** mark ready if still draft; **prefer both** — run local CR **and** request GitHub CodeRabbit (`@coderabbitai full review` or label) when merge-candidate if not rate-limited; **either completed** (local clean **or** GitHub `Review completed`) is enough if only one can finish; then run `./scripts/check_pr_reviews.sh`. **Hold** on pending/missing/error CodeRabbit, **on-demand / label skips** (review never requested), or unresolved **actionable** bot threads unless the user explicitly waives (`rmw` / `rmcw`). **Rate-limit soft-pass without a completed review** only when **both** local and GitHub are rate-limited **and** resets are **>10m** (or long/unknown on both); leave a **one-line PR comment** (do **not** open a “Revisit CodeRabbit” issue). If **either** side reports **≤10m** (or can review now), wait/retry that side. Soft-pass ≠ skip-without-request. See below.
+- **Before merge / finish PR:** agent checklist in `.cursor/rules/pr-review-merge.mdc`. **CI soft-pass ≠ merge-ready.** Prefer both local + GitHub CR; either-completed is enough; dual rate-limit only when **both** sides **>10m**. Detail below.
 
 ## CodeRabbit — in-editor review (Cursor plugin)
 
@@ -73,6 +73,8 @@ Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://
 If the YAML and CodeRabbit GitHub app UI disagree, keep **Automatic Reviews** off in the app so committed config wins. Undraft alone may not trigger a review — always comment or label.
 
 ## Review check before merge
+
+**Trap for agents:** CI gate-1 soft-pass (GitHub rate-limit >10m / unparsable) is **not** merge permission. Merge still needs **either-completed** (clean local CR **or** GitHub `Review completed`) **or** dual rate-limit (**both** sides **>10m** / long-unknown + one-line PR note). Soft-pass ≠ on-demand/label skip. Short checklist: `.cursor/rules/pr-review-merge.mdc`.
 
 Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. For **ready** PRs, **prefer both** a clean local CR **and** a completed GitHub review on HEAD when available; **either** alone is enough if only one can finish (after GitHub was requested, or rate-limited after a request). Always disposition unresolved actionable bot threads.
 

@@ -108,38 +108,19 @@ Tier matrix and gate inventory: [docs/TESTING.md](docs/TESTING.md) ([#171](https
 - Z80: Fuse `tests.in` / `tests.expected` before merging opcode groups.
 - Contention / floating bus: table-driven unit tests.
 - ROM-dependent integration tests must skip cleanly when `roms/` is missing.
-- z80test: `cargo test -p machine --features slow-tests --release z80doc_all_tests_passed` and `… z80full_all_tests_passed` (fixtures in `tests/fixtures/z80test/`). [#17](https://github.com/mward-sudo/spec_chum/issues/17) / [#122](https://github.com/mward-sudo/spec_chum/issues/122) — see `.cursor/rules/z80test-issue-17.mdc`. **Releases require** `./scripts/run_slow_tests.sh` (includes z80full).
+- z80test ([#17](https://github.com/mward-sudo/spec_chum/issues/17) done; [#122](https://github.com/mward-sudo/spec_chum/issues/122)): keep `z80doc` / `z80full` green under `--features slow-tests --release` (fixtures in `tests/fixtures/z80test/`; do not reopen #17 / treat as stub). CI filters to `z80doc` by name; **releases require** `./scripts/run_slow_tests.sh` (includes z80full).
 - System tests (not default CI): `./scripts/run_system_tests.sh` — third-party ULA/ROM TAPs cached in `.rom-cache/system-tests/` (not git; [#108](https://github.com/mward-sudo/spec_chum/issues/108)). Optional for routine PR work; **required before release** (included in `./scripts/run_slow_tests.sh`).
 
-## PR / stack
+## PR / stack / merge gate
 
-Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern). See `CONTRIBUTING.md` for `gh stack` commands.
+Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern). See `CONTRIBUTING.md` for `gh stack` and the full merge-gate SSOT.
 
-### Stay in sync with issues
+- Issues: `.cursor/rules/github-issues.mdc` (`gh issue list` before coding; `Closes` vs `Refs`).
+- Merge / CodeRabbit: **agent checklist** `.cursor/rules/pr-review-merge.mdc` — **CI soft-pass ≠ merge-ready**; either-completed or dual >10m; disposition every actionable bot finding.
+- Detail + human workflow: `CONTRIBUTING.md` → “CodeRabbit — review when ready” / “Review check before merge”.
+- Disposition habits: `.cursor/rules/coderabbit-lessons.mdc`.
 
-Before implementing: `gh issue list` / `gh issue view N` for related work. Prefer extending existing issues over duplicates. Link PRs with `Closes #N` / `Refs #N`. Do not close until acceptance criteria are truly met. When work discovers gaps, update or reopen the issue rather than silently diverging. Cursor rule: `.cursor/rules/github-issues.mdc`.
-
-### CodeRabbit — on-demand + merge gate
-
-For in-editor / local review before push, prefer the **CodeRabbit Cursor plugin** or `coderabbit review --agent` (`CONTRIBUTING.md` → “CodeRabbit — in-editor review”) — required habit before merge-candidate when CLI available. `.coderabbit.yaml` disables automatic reviews and excludes `graphify-out/**` from reviews (`path_filters`); local CLI may also use `--dir crates` / `--dir apps`. Iterate on **draft** PRs (GitHub CR completeness not required). When merge-candidate: mark ready → **must** `@coderabbitai full review` (or label) **if not rate-limited** → disposition → `./scripts/check_pr_reviews.sh`. Undraft alone does not request a review. After fix commits: **`@coderabbitai review`** (incremental). Prefer a **human** trigger — CodeRabbit may ignore other bots. Disposition outside-diff / summary nits too (gate only sees GraphQL threads). See `CONTRIBUTING.md` → “CodeRabbit — review when ready”.
-
-### Before merge — CodeRabbit + bot review threads (hard gate)
-
-Any task to **finish, land, or merge a PR** must include this gate. **Prefer both** local clean CR **and** GitHub `Review completed` when available; **either-completed** is enough if only one finishes. Rate-limit without a completed review needs **both** sides **>10m**. A **ready** PR is **not merge-ready** while **either**:
-
-- CodeRabbit on HEAD is **pending / in progress / missing / failed / on-demand skipped** (label-config or “on demand” — never requested) — hold and request `@coderabbitai full review` (or label); or
-- CodeRabbit (or similar bots) have unresolved **actionable** review threads,
-
-unless the user **explicitly** waives (`rmw` / `rmcw`). **Rate-limited after a request** (including green `Review rate limited`) is **not** “Review completed”. Gate 1 soft-passes CI when GitHub rate-limit reset is **>10m** or **unparsable** (warning; CI cannot see local CR), and **HOLDs** when reset is reliably parsed as **≤10m**; **merge** still needs **either-completed** (clean local CR) **or** **dual** rate-limit (**both** sides **>10m** / long-unknown + one-line PR note). Soft-pass ≠ skip-without-request. **Do not** open “Revisit CodeRabbit” issues. **Wait rule:** if **either** side reports reset **≤10m** (or can review now) → wait/retry that side; dual soft-pass only when **both** are rate-limited **>10m** (PR note only) — do **not** sleep long dual resets; do **not** merge on unilateral GitHub rate-limit while local is available soon. User may declare both >10m → merge immediately. **Drafts** may skip CR completeness in the script but still fail on unresolved bot threads; do not merge drafts. User shorthand: `rm` / `rmc` = merge for either-completed or dual >10m (no extra waiver); `rmw` / `rmcw` = one-shot waiver for other holds; `all rmc` = rmc every open draft in a loop until none remain from that pass.
-
-1. Run `./scripts/check_pr_reviews.sh` (current PR) or `./scripts/check_pr_reviews.sh <n>` — ready PRs: hard-fail pending/missing/error/on-demand-skip and rate-limit with parsed reset ≤10m; soft-pass GitHub rate-limited when reset >10m or unparsable (CI warning — confirm either-completed or dual >10m); hard-fail unresolved bot threads.
-2. If missing/pending/on-demand-skip: first pass → `@coderabbitai full review` (or label); after prior full review + fixes → `@coderabbitai review`. Prefer both sides when available. If rate-limited after a request: do not burn quota; prefer either-completed (local clean **or** GitHub `Review completed`). If **either** side resets in **≤10m**, wait/retry; dual soft-pass merge only when **both** are rate-limited **>10m** / long-unknown (one-line PR note; **no** revisit issue).
-3. Disposition each finding (threads **and** actionable outside-diff / summary nits): fix, wontfix+resolve, or open a follow-up issue then resolve — never leave actionable comments hanging; re-run the script (and the **Bot review threads** CI check if red).
-4. User-explicit waiver (`rmw` / `rmcw`, `--waive`, `SPEC_CHUM_REVIEW_WAIVER`, or label `waive-bot-reviews`) for holds beyond normal soft-pass (including unresolved bot threads) — document on the PR. Either-completed and dual (both sides >10m) standing policy do not require that waiver; unilateral GitHub rate-limit with local ≤10m does not qualify; on-demand skip does not soft-pass.
-
-CI: `.github/workflows/pr-bot-reviews.yml` (default `GITHUB_TOKEN`; also re-runs on CodeRabbit commit-status updates). Local/script remains mandatory for agents. See `.cursor/rules/pr-review-merge.mdc` (lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83); on-demand skip hole closed after [#278](https://github.com/mward-sudo/spec_chum/pull/278)/[#279](https://github.com/mward-sudo/spec_chum/pull/279)).
-
-Recently closed accuracy/feature issues: [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
+Closed accuracy/feature baselines (historical): [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
 
 ## Cursor Cloud specific instructions
 

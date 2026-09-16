@@ -1,17 +1,47 @@
 ---
-description: Spec Chum project constraints and agent workflow
+description: Spec Chum rules map, hard constraints, agent checklist
 alwaysApply: true
 ---
 
-# Spec Chum — project rules
+# Spec Chum — agent rules map
 
-- Emulator workspace: `z80`, `bus`, `ula`, `tape`, `formats`, `machine`, `app`.
-- Prefer additive changes inside the owning crate; avoid drive-by refactors across crates.
-- Never edit plan files under `.cursor/plans/` (or similar).
-- Never commit ROM binaries; fetch with `./scripts/fetch_roms.sh`.
-- Before finishing Rust work: while iterating prefer `./scripts/check_crates.sh` (debug, scoped crates); before merge run `./scripts/check.sh` (fmt + clippy `-D warnings` + tests). Living room uses `./scripts/check_living_room.sh` (**release** by default — avoid Bevy debug).
-- Before tagging a `vX.Y.Z` release: run `./scripts/run_slow_tests.sh` (z80doc + system-tests + z80full) — see `docs/RELEASE.md`. Default CI is not enough.
-- Follow `AGENTS.md` and `CONTRIBUTING.md` for TDD and PR expectations.
-- Before implementing, check GitHub Issues (`gh issue list` / related `gh issue view`); see `github-issues.mdc`.
-- **GUI parity:** egui (`crates/app`) and SpecChumMac (`apps/macos`) stay feature-aligned unless truly platform-specific. This is a **same-PR** requirement, never a follow-up todo — see `gui-app-parity.mdc`.
-- Before finish/merge of a PR: undraft if needed, **prefer both** local CR and GitHub CodeRabbit when available (first pass `@coderabbitai full review` or label; after fix commits `@coderabbitai review` incremental); **either-completed** alone is enough if only one finishes; run `./scripts/check_pr_reviews.sh`. Drafts skip CR completeness; ready PRs hard-fail on pending/missing/error CR, **on-demand / label skips**, rate-limit with parsed reset **≤10m**, or unresolved bot threads; GitHub rate-limit soft-passes CI when reset **>10m** or unparsable — merge needs either-completed **or** dual rate-limit (**both** sides **>10m**; wait if either **≤10m**) — see `pr-review-merge.mdc` (lesson #83).
+## Precedence
+
+1. User message / explicit waiver (`rmw`, `rmcw`)
+2. This map + always-apply `.cursor/rules/*.mdc`
+3. `AGENTS.md` (project map + hard constraints)
+4. `CONTRIBUTING.md` (human + detailed merge-gate SSOT)
+5. `docs/*` for deep topic detail
+
+## Hard constraints (never violate)
+
+- No plan edits under `.cursor/plans/`
+- No ROM binaries in git (`./scripts/fetch_roms.sh`)
+- No macOS **system** speaker volume changes
+- Prefer additive, owning-crate changes; no drive-by cross-crate refactors
+- Release tag `vX.Y.Z` requires `./scripts/run_slow_tests.sh` (default CI ≠ enough)
+
+## Rules index (open for detail)
+
+| Concern | Open |
+| --- | --- |
+| Merge / CodeRabbit gate | `pr-review-merge.mdc` → detail in `CONTRIBUTING.md` |
+| Bot finding disposition + code habits | `coderabbit-lessons.mdc` |
+| GUI host parity (4 hosts, same PR) | `gui-app-parity.mdc` |
+| graphify before code explore | `graphify.mdc` |
+| GitHub Issues sync | `github-issues.mdc` |
+| Tools vs Shell | `prefer-tools-over-cli.mdc` |
+| Rust idioms (glob `*.rs`) | `rust.mdc` |
+| Crate map / workflow / cloud | `AGENTS.md` |
+
+## Always-on checklist
+
+1. `gh issue list` / `gh issue view` before coding → `github-issues.mdc`
+2. `graphify query/path/explain` before Grep/Glob/Bash code explore → `graphify.mdc`
+3. GUI change? Update **all** first-party hosts in **same PR** → `gui-app-parity.mdc`
+4. Iterate: `./scripts/check_crates.sh` · Done/merge: `./scripts/check.sh` · Living room: `./scripts/check_living_room.sh` (release)
+5. Finish/merge PR? Follow `pr-review-merge.mdc` (**CI soft-pass ≠ merge-ready**)
+
+## Emulator crates (core)
+
+`z80`, `bus`, `ula`, `tape`, `formats`, `machine`, `app` (+ hosts: SpecChumMac, `windows_shell`, `linux_shell`).
