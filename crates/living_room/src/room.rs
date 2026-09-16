@@ -284,6 +284,8 @@ fn spawn_polyhaven_wall_sconces(commands: &mut Commands, asset_server: &AssetSer
                     ..default()
                 },
                 Transform::from_translation(bulb_world),
+                // Temporary #149: New scene dims sconces as lightmap stub.
+                crate::scene_variant::DynamicRoomFillLight,
                 // Layer 0 = live TV; layer 1 = room bake plate.
                 bevy::camera::visibility::RenderLayers::layer(0).with(1),
                 Name::new(format!("{name}_bulb")),

@@ -186,6 +186,34 @@ pub extern "C" fn sc_room_zoom_preset(handle: *mut c_void) -> c_uint {
     catch_uint(|| room_mut(handle).map_or(0, |h| u32::from(h.room.zoom_preset())))
 }
 
+/// Temporary #149 A/B: set scene variant (`0` = Current baseline, `1` = New lightmap WIP).
+///
+/// SpecChumMac living-room toolbar only. Remove with the harness when #149 closes.
+#[no_mangle]
+pub extern "C" fn sc_room_set_scene_variant(handle: *mut c_void, variant: c_uint) -> c_int {
+    catch_int(|| {
+        clear_last_error();
+        let Some(h) = room_mut(handle) else {
+            set_last_error("null handle");
+            return -1;
+        };
+        let Some(v) = crate::scene_variant::SceneVariant::from_u32(variant) else {
+            set_last_error(format!(
+                "invalid scene variant {variant} (want 0=current, 1=new)"
+            ));
+            return -1;
+        };
+        h.room.set_scene_variant(v);
+        0
+    })
+}
+
+/// Temporary #149 A/B: `0` = Current, `1` = New. Remove when lightmaps ship.
+#[no_mangle]
+pub extern "C" fn sc_room_scene_variant(handle: *mut c_void) -> c_uint {
+    catch_uint(|| room_mut(handle).map_or(0, |h| h.room.scene_variant().as_u32()))
+}
+
 /// Set Bevy frame delta before [`sc_room_tick`] (display-link paced embed).
 #[no_mangle]
 pub extern "C" fn sc_room_set_frame_delta_seconds(handle: *mut c_void, dt: f32) {

@@ -203,6 +203,19 @@ final class HostBridge: ObservableObject {
             }
         }
     }
+    /// Temporary #149 A/B: New = lightmap WIP stub vs Current baseline.
+    /// SpecChumMac living-room only — remove with the harness when #149 closes.
+    @Published var livingRoomSceneNew: Bool = ProcessInfo.processInfo.environment["SPEC_CHUM_ROOM_SCENE"]
+        .map {
+            ["new", "1", "wip", "lightmap"].contains(
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            )
+        } ?? false
+    {
+        didSet {
+            applyLivingRoomSceneVariant()
+        }
+    }
     /// Weak flat-mode present view — refreshed directly from `runFrame` (no @Published churn).
     weak var spectrumPresentView: SpectrumNSView?
     /// Bevy/room FFI handle — only touched on `livingRoomQueue` (see header thread affinity).

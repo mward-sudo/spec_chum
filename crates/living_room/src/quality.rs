@@ -62,6 +62,22 @@ pub fn hybrid_enabled() -> bool {
     env_truthy("SPEC_CHUM_ROOM_HYBRID").unwrap_or(false)
 }
 
+/// Temporary #149 A/B: `SPEC_CHUM_ROOM_SCENE=current|new` (default **current**).
+///
+/// Prefer the SpecChumMac toolbar toggle when verifying visually. Env is for automation.
+/// Remove with the A/B harness once lightmaps ship.
+pub fn scene_variant() -> crate::scene_variant::SceneVariant {
+    match std::env::var("SPEC_CHUM_ROOM_SCENE")
+        .unwrap_or_else(|_| "current".into())
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "new" | "1" | "wip" | "lightmap" => crate::scene_variant::SceneVariant::New,
+        _ => crate::scene_variant::SceneVariant::Current,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LightPreset {
     /// CRT fill + wall bounce + 3 TV-wall sconces (side fixtures mesh-only).
@@ -86,7 +102,8 @@ pub fn light_preset() -> LightPreset {
 /// One-line label for perf logs.
 pub fn preset_label() -> String {
     format!(
-        "hybrid={} bloom={} mips={} msaa={:?} fxaa={} lights={:?}",
+        "scene={} hybrid={} bloom={} mips={} msaa={:?} fxaa={} lights={:?}",
+        scene_variant().label(),
         hybrid_enabled(),
         bloom_enabled(),
         bloom_max_mip_dimension(),
