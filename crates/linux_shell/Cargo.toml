@@ -19,6 +19,7 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 cpal = { workspace = true }
 host_api = { workspace = true }
+machine = { workspace = true }
 parking_lot = { workspace = true }
 rfd = { workspace = true }
 

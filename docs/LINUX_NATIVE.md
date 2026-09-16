@@ -27,7 +27,7 @@ Parity rule: [`.cursor/rules/gui-app-parity.mdc`](../.cursor/rules/gui-app-parit
 
 Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same action, platform modifier.
 
-## Capability matrix (vertical slice)
+## Capability matrix
 
 | Capability | Status |
 | --- | --- |
@@ -38,10 +38,10 @@ Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same actio
 | Keyboard → Spectrum matrix | yes (GDK keyval map in `linux_shell::keymap`) |
 | Audio (cpal from `HostSession` PCM) | yes |
 | Agent Debug HTTP (`SPEC_CHUM_AGENT=1`) | yes (same embed as egui / Windows) |
-| Machine model select + Reset | **deferred** (next deepen) |
-| Hardware attach (Multiface / DivMMC / IF1 / Beta / Timex dock) | **deferred** |
-| Settings / prefs UI (`UiPreferences` load/save beyond startup) | **partial** — prefs load at startup; Settings menu deferred |
-| Debug / inspect panel | **deferred** |
+| Machine model select + Reset | yes (all built-in models) |
+| Hardware attach (Multiface / DivMMC / IF1 / Beta / Timex dock) | yes (GTK **Hardware** menu → `HostSession`) |
+| Settings / prefs (`UiPreferences` load/save) | yes (joystick, tape EAR/Experience/Instant, AY, mute, throttle, online titles) |
+| Debug / inspect (pause / step / continue / breakpoints + inspector window) | yes (GTK **Debug** menu + TextView inspector) |
 | Living-room display | **out of scope** for this shell |
 | Release packaging promote over egui | **still open** under [#351](https://github.com/mward-sudo/spec_chum/issues/351) / [#231](https://github.com/mward-sudo/spec_chum/issues/231) |
 
@@ -76,6 +76,8 @@ run everywhere:
 cargo test -p linux_shell
 ```
 
+Keymap + menu-id unit tests (`linux_shell::commands`) run on all hosts.
+
 ### Agent Debug HTTP
 
 Same as egui / SpecChumMac / Windows:
@@ -95,5 +97,5 @@ GTK4 so workspace clippy stays green. Does not change Linux release packaging.
 ## Non-goals (for now)
 
 - Replacing egui in Linux release packages ([#231](https://github.com/mward-sudo/spec_chum/issues/231))
-- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Windows release-primary promotion and Linux deepen remain open
+- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Windows/Linux release-primary promotion remains open
 - Qt / webview / Electron hosts
