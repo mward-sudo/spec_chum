@@ -98,17 +98,17 @@ impl Plugin for SceneVariantPlugin {
 
 /// Build a 1×1×6 stub cubemap via Bevy's hemispherical helper (no HDR asset yet).
 fn prepare_new_environment_map(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    // Cyan-teal upper hemisphere vs cream horizon — obvious in CRT glass / chrome
-    // reflections and as cool ambient fill on upper walls when toggling to New.
+    // Cyan-teal upper hemisphere vs cream horizon — reads on chrome / glass without
+    // washing the room (2400 blew Exposure ~8.2 + #435 ambient into high-key).
     let mut light = EnvironmentMapLight::hemispherical_gradient(
         &mut images,
-        Color::srgb(0.22, 0.72, 0.98), // sky / upper fill
-        Color::srgb(0.95, 0.84, 0.64), // cream horizon (keeps #435 warmth)
-        Color::srgb(0.42, 0.30, 0.16), // warm floor bounce
+        Color::srgb(0.16, 0.48, 0.68), // sky / upper fill (muted vs prior cyan)
+        Color::srgb(0.82, 0.70, 0.52), // cream horizon (keeps #435 warmth)
+        Color::srgb(0.36, 0.26, 0.14), // warm floor bounce
     );
-    // Indoor Exposure ~8.2: strong enough that IBL reads at sofa eye-height without
-    // needing real Poly Haven HDR yet.
-    light.intensity = 2_400.0;
+    // Indoor Exposure ~8.2: subtle IBL fill — chrome marker still obvious; walls stay
+    // cream-warm from ambient + sconces rather than env-map overexposure.
+    light.intensity = 720.0;
     commands.insert_resource(NewVariantEnvironmentMap(light));
 }
 
@@ -174,6 +174,17 @@ fn spawn_new_env_reflection_marker(
     ));
 }
 
+/// Baseline CRT glass PBR (Current) vs New stub-IBL-safe values.
+///
+/// Mirror-like glass (`reflectance` 1.0 / roughness 0.04) turns stub IBL + bloom into a
+/// white center blob and washes the phosphor face — dial only on New.
+const CRT_GLASS_REFLECTANCE_CURRENT: f32 = 1.0;
+const CRT_GLASS_ROUGHNESS_CURRENT: f32 = 0.04;
+const CRT_GLASS_REFLECTANCE_NEW: f32 = 0.22;
+const CRT_GLASS_ROUGHNESS_NEW: f32 = 0.22;
+
+// Bevy Queries + resources for Current/New lighting + CRT glass IBL dial (#149).
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn apply_scene_variant(
     mut commands: Commands,
     variant: Res<SceneVariant>,
@@ -186,62 +197,84 @@ fn apply_scene_variant(
         &mut PointLight,
         (With<DynamicRoomFillLight>, Without<crate::glow::GlowDriven>),
     >,
+    glass: Query<&MeshMaterial3d<StandardMaterial>, With<crate::crt::CrtGlass>>,
+    mut std_mats: ResMut<Assets<StandardMaterial>>,
     mut fill_intensity: Local<Vec<f32>>,
+    mut glass_synced_for: Local<Option<SceneVariant>>,
 ) {
-    if !variant.is_changed() && !fill_intensity.is_empty() {
+    // CRT glass may spawn a frame after the first variant apply — retry until tuned.
+    let need_room = variant.is_changed() || fill_intensity.is_empty();
+    let need_glass = glass_synced_for.as_ref() != Some(&*variant) && !glass.is_empty();
+    if !need_room && !need_glass {
         return;
     }
 
-    if fill_intensity.is_empty() {
-        fill_intensity.extend(fill_lights.iter().map(|l| l.intensity));
-    }
+    if need_room {
+        if fill_intensity.is_empty() {
+            fill_intensity.extend(fill_lights.iter().map(|l| l.intensity));
+        }
 
-    match *variant {
-        SceneVariant::Current => {
-            // Match glow.rs ambient — preserve SPEC_CHUM_ROOM_BRIGHT_DEBUG.
-            let bright = crate::crt::bright_debug_enabled();
-            ambient.color = if bright {
-                Color::srgb(0.55, 0.55, 0.58)
-            } else {
-                Color::srgb(0.26, 0.20, 0.13)
-            };
-            ambient.brightness = 76.5 * if bright { 14.0 } else { 1.0 };
-            for (i, mut light) in fill_lights.iter_mut().enumerate() {
-                if let Some(&base) = fill_intensity.get(i) {
-                    light.intensity = base;
+        match *variant {
+            SceneVariant::Current => {
+                // Match glow.rs ambient — preserve SPEC_CHUM_ROOM_BRIGHT_DEBUG.
+                let bright = crate::crt::bright_debug_enabled();
+                ambient.color = if bright {
+                    Color::srgb(0.55, 0.55, 0.58)
+                } else {
+                    Color::srgb(0.26, 0.20, 0.13)
+                };
+                ambient.brightness = 76.5 * if bright { 14.0 } else { 1.0 };
+                for (i, mut light) in fill_lights.iter_mut().enumerate() {
+                    if let Some(&base) = fill_intensity.get(i) {
+                        light.intensity = base;
+                    }
+                }
+                for entity in &cams {
+                    commands.entity(entity).remove::<EnvironmentMapLight>();
                 }
             }
-            for entity in &cams {
-                commands.entity(entity).remove::<EnvironmentMapLight>();
-            }
-        }
-        SceneVariant::New => {
-            // Keep #435 cream-warm ambient + lit sconces; add stub EnvironmentMapLight.
-            let bright = crate::crt::bright_debug_enabled();
-            ambient.color = if bright {
-                Color::srgb(0.58, 0.54, 0.48)
-            } else {
-                // Cream-warm vs Current tungsten (0.26, 0.20, 0.13).
-                Color::srgb(0.36, 0.28, 0.18)
-            };
-            ambient.brightness = 118.0 * if bright { 14.0 } else { 1.0 };
-            for (i, mut light) in fill_lights.iter_mut().enumerate() {
-                if let Some(&base) = fill_intensity.get(i) {
-                    light.intensity = base;
+            SceneVariant::New => {
+                // Keep #435 cream-warm ambient + lit sconces; add stub EnvironmentMapLight.
+                let bright = crate::crt::bright_debug_enabled();
+                ambient.color = if bright {
+                    Color::srgb(0.58, 0.54, 0.48)
+                } else {
+                    // Cream-warm vs Current tungsten (0.26, 0.20, 0.13).
+                    Color::srgb(0.36, 0.28, 0.18)
+                };
+                ambient.brightness = 118.0 * if bright { 14.0 } else { 1.0 };
+                for (i, mut light) in fill_lights.iter_mut().enumerate() {
+                    if let Some(&base) = fill_intensity.get(i) {
+                        light.intensity = base;
+                    }
+                }
+                for entity in &cams {
+                    commands.entity(entity).insert(env_map.0.clone());
                 }
             }
-            for entity in &cams {
-                commands.entity(entity).insert(env_map.0.clone());
-            }
+        }
+
+        for (only_var, mut vis) in &mut only {
+            *vis = if only_var.0 == *variant {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
         }
     }
 
-    for (only_var, mut vis) in &mut only {
-        *vis = if only_var.0 == *variant {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
+    if need_glass || (need_room && !glass.is_empty()) {
+        let (reflectance, roughness) = match *variant {
+            SceneVariant::Current => (CRT_GLASS_REFLECTANCE_CURRENT, CRT_GLASS_ROUGHNESS_CURRENT),
+            SceneVariant::New => (CRT_GLASS_REFLECTANCE_NEW, CRT_GLASS_ROUGHNESS_NEW),
         };
+        for handle in &glass {
+            if let Some(mut mat) = std_mats.get_mut(&handle.0) {
+                mat.reflectance = reflectance;
+                mat.perceptual_roughness = roughness;
+            }
+        }
+        *glass_synced_for = Some(*variant);
     }
 }
 
