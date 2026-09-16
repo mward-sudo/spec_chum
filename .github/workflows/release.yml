@@ -167,10 +167,19 @@ jobs:
         shell: bash
         run: ./scripts/fetch_living_room_assets.sh
 
-      - name: Build egui host (Windows / Linux)
-        if: runner.os != 'macOS'
+      - name: Build Win32 shell (Windows)
+        if: runner.os == 'Windows'
         shell: bash
-        # Primary non-macOS deliverable is egui `spec_chum` (#231). Headless
+        # Windows release primary is classic Win32 `windows_shell` (#351 promote).
+        # Staged as `spec_chum.exe` for Inno / portable zip continuity (#231).
+        # Agent Debug HTTP: SPEC_CHUM_AGENT=1 embed (same as SpecChumMac).
+        # Headless `--serve` / `debug …` remain on egui (`cargo run -p app`).
+        run: cargo build --release -p windows_shell --target ${{ matrix.target }}
+
+      - name: Build egui host (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        # Linux release primary remains egui until #351 promote. Headless
         # debug/agent lives on the same binary (`--serve` / `debug …`).
         run: cargo build --release -p app --target ${{ matrix.target }}
 
@@ -199,7 +208,8 @@ jobs:
           BIN_DIR="target/${TARGET}/release"
           chmod +x .trusted-ci/scripts/ci/bundle-release-roms.sh
           if [[ "$TARGET" == *windows* ]]; then
-            cp "$BIN_DIR/spec_chum.exe" "dist/$OUT/"
+            # Cargo binary is `spec_chum_windows.exe`; ship as `spec_chum.exe`.
+            cp "$BIN_DIR/spec_chum_windows.exe" "dist/$OUT/spec_chum.exe"
             .trusted-ci/scripts/ci/bundle-release-roms.sh "$PWD" "dist/$OUT"
           elif [[ "$TARGET" == *apple-darwin* ]]; then
             # SpecChumMac .app from trusted packaging scripts (CWE-829).
@@ -252,8 +262,12 @@ jobs:
               echo "and stapled before it is zipped for GitHub Releases."
               echo ""
             elif [[ "$TARGET" == *windows* ]]; then
-              echo "Contents: spec_chum.exe + roms/ (portable zip) or Start Menu install via *-setup.exe"
-              echo "Headless: spec_chum.exe --serve …   or   spec_chum.exe debug …"
+              echo "Contents: spec_chum.exe (Win32 native shell) + roms/"
+              echo "  Portable zip or Start Menu install via *-setup.exe"
+              echo "Agent Debug HTTP (embedded; loopback only):"
+              echo "  SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN=… .\\spec_chum.exe"
+              echo "  SPEC_CHUM_AGENT_INSECURE=1 is trusted-dev-only (disables bearer auth)."
+              echo "Headless --serve / debug: cargo run -p app --release (egui; not in this archive)."
               echo ""
             else
               echo "Contents: spec_chum + roms/ (also shipped as AppImage and .deb)"
@@ -552,14 +566,16 @@ jobs:
           body: |
             **macOS** ships the native **SpecChumMac** SwiftUI app as a **`.dmg.zip`**
             (unzip → open the `.dmg`; notarised/stapled when Apple secrets are set).
-            **Windows / Linux** ship the cross-platform **egui** host (`spec_chum`) with
+            **Windows** ships the native Win32 **`windows_shell`** as `spec_chum.exe`
+            (Agent HTTP via `SPEC_CHUM_AGENT=1`; headless `--serve` / `debug` remain on
+            egui from source). **Linux** ships the cross-platform **egui** host with
             headless debugger / agent HTTP on the same binary (`--serve` / `debug …`).
 
             | Platform | Archive contents |
             | --- | --- |
             | **macOS** | **`.dmg.zip`**: SpecChumMac `.dmg` (app + Applications shortcut + bundled ROMs; notary when secrets set) |
-            | **Windows** | Portable `.zip` (`spec_chum.exe` + `roms/`) **and** Inno Setup `*-setup.exe` |
-            | **Linux** | `.tar.gz` / AppImage / `.deb` (`spec_chum` + redistributable `roms/`) |
+            | **Windows** | Portable `.zip` (Win32 `spec_chum.exe` + `roms/`) **and** Inno Setup `*-setup.exe` |
+            | **Linux** | `.tar.gz` / AppImage / `.deb` (egui `spec_chum` + redistributable `roms/`) |
 
             Redistributable Spectrum ROMs are **bundled inside** each app package
             (Amstrad Lawson 1999 grant + grants in docs/ROMS.md). User-provided-only

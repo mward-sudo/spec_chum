@@ -8797,6 +8797,7 @@ dependencies = [
  "parking_lot",
  "rfd",
  "windows 0.61.3",
+ "winres",
 ]
 
 [[package]]

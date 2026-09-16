@@ -98,6 +98,6 @@ GTK4 so workspace clippy stays green. Does not change Linux release packaging.
 
 ## Non-goals (for now)
 
-- Replacing egui in Linux release packages ([#231](https://github.com/mward-sudo/spec_chum/issues/231))
-- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Windows/Linux release-primary promotion remains open
+- Replacing egui in Linux release packages ([#231](https://github.com/mward-sudo/spec_chum/issues/231) / [#351](https://github.com/mward-sudo/spec_chum/issues/351))
+- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Linux release-primary promotion remains open (Windows Win32 promote is separate)
 - Qt / webview / Electron hosts

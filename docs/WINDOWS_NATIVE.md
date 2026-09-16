@@ -1,9 +1,11 @@
 # Native Windows shell (Win32 + Rust host_api)
 
-Optional product UI for Spec Chum on Windows — classic **Win32** window and menus
-driven by the shared Rust [`host_api`](../crates/host_api) session (same thin-host
-pattern as SpecChumMac). Cross-platform **egui** (`cargo run -p app`) remains the
-shipped Windows product UI in GitHub Releases until this shell is promoted.
+**Release-primary** product UI for Spec Chum on Windows — classic **Win32** window
+and menus driven by the shared Rust [`host_api`](../crates/host_api) session (same
+thin-host pattern as SpecChumMac). GitHub Releases ship this shell as
+`spec_chum.exe` (portable `.zip` + Inno Setup). Cross-platform **egui**
+(`cargo run -p app`) remains the CI baseline and the headless `--serve` /
+`debug …` host on Windows (source builds).
 
 Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Strategy:
 [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351).
@@ -31,13 +33,13 @@ Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same actio
 | Tape Play / Pause / Rewind | yes |
 | Keyboard → Spectrum matrix | yes (VK map in `windows_shell::keymap`) |
 | Audio (cpal from `HostSession` PCM) | yes |
-| Agent Debug HTTP (`SPEC_CHUM_AGENT=1`) | yes (same embed as egui) |
+| Agent Debug HTTP (`SPEC_CHUM_AGENT=1`) | yes (same embed as egui / SpecChumMac) |
 | Machine model select + Reset | yes (all built-in models) |
 | Hardware attach (Multiface / DivMMC / IF1 / Beta / Timex dock) | yes (Win32 **Hardware** menu → `HostSession`) |
 | Settings / prefs (`UiPreferences` load/save) | yes (joystick, tape EAR/Experience/Instant, AY, mute, throttle, online titles) |
 | Debug / inspect (pause / step / continue / breakpoints + inspector window) | yes (Win32 **Debug** menu + multiline inspect HWND) |
 | Living-room / WinUI 3 | **out of scope** |
-| Release packaging promote over egui | **still open** under [#351](https://github.com/mward-sudo/spec_chum/issues/351) / [#231](https://github.com/mward-sudo/spec_chum/issues/231) |
+| Release packaging primary over egui | **yes** (staged as `spec_chum.exe`; [#351](https://github.com/mward-sudo/spec_chum/issues/351)) |
 
 ## Requirements
 
@@ -52,7 +54,7 @@ model images), in order:
 1. Process current directory
 2. `SPEC_CHUM_ROOT` — **repository root** (parent of `roms/`), not the `roms` folder itself
 3. `SPEC_CHUM_ROM_ROOT` — alternate root with the same `roms/…` layout
-4. Directory containing the executable (so a packaged `roms/` next to `spec_chum_windows.exe` works)
+4. Directory containing the executable (so a packaged `roms/` next to `spec_chum.exe` works)
 5. Executable parent’s `share/spec-chum` (Linux FHS / AppImage layout; usually unused on Windows)
 6. Compile-time workspace root (dev builds)
 
@@ -85,6 +87,9 @@ $env:SPEC_CHUM_ROOT = (Get-Location).Path   # if cwd is already the repo root
 cargo run -p windows_shell --release
 ```
 
+Release CI builds `spec_chum_windows.exe` and stages it as **`spec_chum.exe`** in
+the portable zip / Inno installer (same install name as before the promote).
+
 On macOS/Linux the `spec_chum_windows` binary is a stub that exits with a pointer
 to egui — the Win32 UI is `cfg(windows)` only. Keymap + menu-id unit tests still
 run everywhere:
@@ -95,7 +100,7 @@ cargo test -p windows_shell
 
 ### Agent Debug HTTP
 
-Same as egui / SpecChumMac:
+Same as SpecChumMac / egui embed:
 
 ```powershell
 $env:SPEC_CHUM_AGENT = "1"
@@ -103,15 +108,20 @@ $env:SPEC_CHUM_AGENT_INSECURE = "1"   # or set SPEC_CHUM_AGENT_TOKEN
 cargo run -p windows_shell --release
 ```
 
+Headless `--serve` / `debug …` CLI remain on the egui binary (`cargo run -p app`),
+not on the Win32 release exe (mirror of SpecChumMac vs egui on macOS).
+
 Prefs file: same `ui-prefs.json` as egui (`SPEC_CHUM_PREFS_PATH` override supported).
 
 ## CI
 
 Opt-in job `windows-shell` in `.github/workflows/ci.yml` builds the crate on
-`windows-latest` and does not block the Linux fmt/clippy/test gate.
+`windows-latest` and does not block the Linux fmt/clippy/test gate. Release
+workflow builds this crate for Windows archives ([RELEASE.md](RELEASE.md)).
 
 ## Non-goals (for now)
 
-- Replacing egui in Windows release packages ([#231](https://github.com/mward-sudo/spec_chum/issues/231))
 - WinUI 3 XAML chrome (provisional future; this shell is classic Win32)
-- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Linux GTK4 deepen + release promotion remain open (see [LINUX_NATIVE.md](LINUX_NATIVE.md))
+- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Linux
+  release promotion remains open (see [LINUX_NATIVE.md](LINUX_NATIVE.md))
+- Replacing egui as the **CI** / cross-platform fallback host
