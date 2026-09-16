@@ -1,5 +1,10 @@
 # Contributing
 
+> Human contributor guide. LLM assistant policy is isolated in the
+> [AI / agent-assisted work](#ai--agent-assisted-work) section below, plus
+> [`AGENTS.md`](AGENTS.md) and [`.cursor/`](.cursor/). Product docs:
+> [`docs/README.md`](docs/README.md).
+
 ## Workflow
 
 - Track work in GitHub Issues (milestones M0–M4).
@@ -39,13 +44,16 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 
 ## AI / agent-assisted work
 
+> **Audience:** LLM coding assistants and humans using them. Human-only contributors
+> can skip this section. Product how-tos live under [`docs/`](docs/README.md).
+
 - Read `AGENTS.md` for crate boundaries and hard constraints.
 - **graphify:** after Rust changes run `./scripts/graphify_update.sh` and commit `graphify-out/` when the graph changes; optional `./scripts/graphify_install_hooks.sh` for post-commit refresh. See `AGENTS.md` → “graphify knowledge graph”.
 - Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync and `pr-review-merge.mdc` for bot review gates.
-- Before coding, agents should consult open issues, so implementations do not drift from tracked acceptance criteria.
-- Agents should be **clippy-first**: iterate with `./scripts/check_crates.sh`, then run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
-- Keep PRs small and crate-scoped so parallel agents do not clobber each other.
-- **Agent debugging:** [Agent Debug HTTP API](docs/AGENT_DEBUG_API.md) is **implemented** ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`; guest framebuffer as 1:1 PNG. Also see [DEBUGGING.md](docs/DEBUGGING.md) and `.cursor/skills/spec-chum-debugging/SKILL.md`.
+- Before coding, assistants should consult open issues, so implementations do not drift from tracked acceptance criteria.
+- Assistants should be **clippy-first**: iterate with `./scripts/check_crates.sh`, then run `./scripts/check.sh` before claiming done; do not “promise” clean code without running the gate.
+- Keep PRs small and crate-scoped so parallel assistants do not clobber each other.
+- **Emulator debugging automation:** [Agent Debug HTTP API](docs/AGENT_DEBUG_API.md) is **implemented** ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`; guest framebuffer as 1:1 PNG. Also see [DEBUGGING.md](docs/DEBUGGING.md) and `.cursor/skills/spec-chum-debugging/SKILL.md`.
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
 - **Before merge / finish PR:** agent checklist in `.cursor/rules/pr-review-merge.mdc`. **CI soft-pass ≠ merge-ready.** Prefer both local + GitHub CR; either-completed is enough; dual rate-limit only when **both** sides **>10m**. Detail below.
 

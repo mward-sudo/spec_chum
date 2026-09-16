@@ -96,7 +96,7 @@ Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / i
 
 - Accuracy stays in Rust (`machine` / `ula` / `z80` / …). Native shells are **thin adapters** over `host_api` / `control_plane` — same pattern as SpecChumMac.
 - Cross-platform **egui** (`crates/app`) remains the CI baseline and the fallback host everywhere a native shell is absent or incomplete.
-- **Feature parity (mandatory):** Agent Debug HTTP, inspect/status, media, hardware attach, and prefs **semantics** must match across egui and each native shell (see `.cursor/rules/gui-app-parity.mdc`). Do not ship “egui-only” agent routes or invent host-only product features.
+- **Feature parity (mandatory):** Agent Debug HTTP, inspect/status, media, hardware attach, and prefs **semantics** must match across egui and each native shell. Do not ship “egui-only” automation routes or invent host-only product features. (Contributor checklist: GUI hosts stay feature-aligned — see [CONTRIBUTING.md](../CONTRIBUTING.md) and [docs/README.md](README.md).)
 - **Chrome may follow platform HIG:** SwiftUI/AppKit on macOS, classic Win32 / Fluent on Windows, native Linux toolkit conventions when that shell exists (egui conventions until then) — menus, spacing, window chrome, and shortcut modifiers (⌘ vs Ctrl) may differ. Make product capabilities as similar as possible; do not force one OS’s look onto another.
 - Living-room display mode stays opt-in where Metal/wgpu allow; SpecChumMac already links the living_room staticlib (display defaults off).
 

@@ -1,41 +1,27 @@
-# Agent debug control plane
+# Agent Debug HTTP API
 
-> **Status:** **Implemented** — loopback HTTP API on `127.0.0.1:17384` (default).
-> Phases A–H + SpecChumMac/egui live embed + port watches + `GET /v1/memory/regions`
-> are on `main`. Optional later: WebSocket push / OpenAPI schema
-> ([#236](https://github.com/mward-sudo/spec_chum/issues/236)). Release single-binary
-> packaging is [#231](https://github.com/mward-sudo/spec_chum/issues/231) (not API).
+> **Audience:** developers and automation (scripted control / inspect).
+> “Agent” here means this HTTP surface and `SPEC_CHUM_AGENT*` env vars — not LLM coding assistants.
 >
-> Skill: [`.cursor/skills/spec-chum-debugging/SKILL.md`](../.cursor/skills/spec-chum-debugging/SKILL.md).
->
-> **Phase G ([#219](https://github.com/mward-sudo/spec_chum/issues/219)):** done —
-> `GET`/`PATCH /v1/prefs`, `POST /v1/mouse`, `POST /v1/tape/eject`, `POST /v1/continue`.
-> Living-room display toggle deferred (not in `UiPreferences`).
->
-> **Phase H ([#220](https://github.com/mward-sudo/spec_chum/issues/220)):** done —
-> `/v1/hardware/*` Multiface / DivMMC / IF1 / MDR / TR-DOS ROM attach.
+> **Status:** **Implemented** on `main` — loopback HTTP on `127.0.0.1:17384` (default),
+> SpecChumMac/egui live embed, port watches, prefs/hardware routes, and
+> `GET /v1/memory/regions`. Optional later: WebSocket push / OpenAPI schema
+> ([#236](https://github.com/mward-sudo/spec_chum/issues/236)).
 
-## Motivation
+## Purpose
 
-Cursor agents debugging Spec Chum today hit friction that has nothing to do with
-emulator accuracy:
+Scripted debugging without driving the GUI:
 
-- **GUI automation is flaky** — file pickers, ROM dialogs, multi-monitor layouts,
-  and host window `screencapture` / `osascript` are unreliable for scripted QA.
-- **Parallel surfaces diverge** — `spec-chum-debug` (fresh process per invocation),
-  egui **Debug**, SpecChumMac inspector, and raw `host_api` `sc_*` calls duplicate
-  semantics with different lifetimes and capabilities.
-- **Visual QA needs guest pixels** — Timex hi-res (Techdraw, Death Chase), border
-  colour, and SCLD mode checks need the **emulator framebuffer at 1:1**, not a
-  scaled CRT or living-room render.
+- **Stable control / inspect** — one localhost API over a shared Rust service layer
+  (`control_plane`), instead of divergent one-shot CLI vs egui Debug vs FFI paths.
+- **Guest pixels at 1:1** — Timex hi-res, border colour, and SCLD checks need the
+  **emulator framebuffer**, not a scaled CRT or OS window grab.
+- **Same semantics for humans and scripts** — GUI Debug, `spec-chum-debug`, and HTTP
+  clients share the same backend behaviour.
 
-**End-state goal:** agents (and humans via CLI/GUI) **control, inspect, and debug
-all emulator aspects** through one localhost API backed by a single Rust service
-layer — **no GUI automation required**.
+## Architecture
 
-## Architectural principle: single source of truth
-
-All debugging / control / inspect paths **converge** on one backend:
+All debugging / control / inspect paths converge on one backend:
 
 ```text
                     ┌─────────────────────────────────────┐
@@ -49,48 +35,37 @@ All debugging / control / inspect paths **converge** on one backend:
    HTTP server              in-process              HTTP client
    (loopback)               direct call             (debug_cli)
          │                         │                         │
-    Cursor agents            egui / macOS              spec-chum-debug
-    curl / fetch             (Phase B)                 (Phase B)
+    curl / scripts           egui / SpecChumMac      spec-chum-debug
+    automation clients       Debug UI                (local or --agent-url)
 ```
 
 - The **HTTP server is a thin transport** over the shared crate (or an embedded
   call into the same types when the host runs in-process).
-- **`spec-chum-debug` becomes a client** of that API (or a thin wrapper over the
-  same service crate) — not a parallel code path forever.
-- **egui Debug** and **SpecChumMac Debug** eventually call the same backend
-  (in-process handle or loopback HTTP to the embedded server).
-- **Agents prefer HTTP**; humans use GUI/CLI with **identical semantics**.
+- **`spec-chum-debug`** uses `HostSession` locally, or HTTP when `SPEC_CHUM_AGENT_URL`
+  / `--agent-url` is set.
+- **egui Debug** and **SpecChumMac Debug** use the same live session as an optional
+  embedded HTTP server (`SPEC_CHUM_AGENT=1`).
 
-### Migration phases
+### What ships today
 
-| Phase | Deliverable |
+| Piece | Notes |
 | --- | --- |
-| **A — API + parallel surfaces** | Shared `control_plane` crate; localhost HTTP server (`spec-chum-agentd` or embedded in a long-lived host); MVP+ endpoints; existing CLI/GUI unchanged |
-| **B — clients adapt** | `spec-chum-debug` talks HTTP when `SPEC_CHUM_AGENT_URL` set; egui Debug on shared `HostSession`; `SPEC_CHUM_AGENT=1` embeds HTTP on that same plane; integration tests hit HTTP |
-| **C — dedupe** | Deprecate duplicate direct `host_api` debug/control paths where safe; document remaining C ABI as FFI-only for non-Rust shells |
+| Standalone server | `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve` |
+| `spec-chum-debug` HTTP client | `SPEC_CHUM_AGENT_URL` / `--agent-url` |
+| egui embed | `SPEC_CHUM_AGENT=1` over the GUI `ControlPlane` / `HostSession` |
+| SpecChumMac embed | `SPEC_CHUM_AGENT=1` + `sc_agent_embed_start` on the live `sc_*` session |
+| Prefs / mouse / tape eject / continue | `GET`/`PATCH /v1/prefs`, `POST /v1/mouse`, `POST /v1/tape/eject`, `POST /v1/continue` |
+| Hardware attach | `/v1/hardware/*` (Multiface / DivMMC / IF1 / MDR / TR-DOS ROM) |
 
-**Phase B (done — [#221](https://github.com/mward-sudo/spec_chum/issues/221) closed; SpecChumMac in-process embed landed):**
-
-| Piece | Status |
-| --- | --- |
-| `spec-chum-debug` HTTP client (`SPEC_CHUM_AGENT_URL` / `--agent-url`) | Done ([#213](https://github.com/mward-sudo/spec_chum/pull/213) / [#214](https://github.com/mward-sudo/spec_chum/pull/214)) |
-| Mem watches over HTTP | Done |
-| SpecChumMac agent workflow docs | Done ([#225](https://github.com/mward-sudo/spec_chum/pull/225) / `MACOS_NATIVE.md`) |
-| egui `SPEC_CHUM_AGENT=1` embed | **Done** — thin transport over the GUI `Arc<ControlPlane>` / shared `HostSession` (same live machine as Debug) ([#229](https://github.com/mward-sudo/spec_chum/pull/229)) |
-| egui Debug panel live session | **Done** — Debug routes through shared [`HostSession`](../crates/host_api/src/session.rs) behind `EmulatorSession` / `ControlPlane` ([#228](https://github.com/mward-sudo/spec_chum/pull/228)) |
-| SpecChumMac in-process embed | **Done** — `SPEC_CHUM_AGENT=1` + `sc_agent_embed_start` on live `sc_*` session (cycle-safe via `living_room` → `control_plane`) |
-
-**Phase C (docs complete — [#222](https://github.com/mward-sudo/spec_chum/issues/222)):**
 `spec-chum-debug` local commands route through
 [`HostSession`](../crates/host_api/src/session.rs) — the same type wrapped by
-`control_plane::ControlPlane` and the agent HTTP server. The one-shot CLI no longer
-constructs a parallel `machine::Machine` path.
+`control_plane::ControlPlane` and the HTTP server.
 
 **Primary surfaces (prefer these):**
 
 | Consumer | Surface |
 | --- | --- |
-| Agents / automation | Loopback HTTP (`control_plane` + `agent_server`) |
+| Automation / scripts | Loopback HTTP (`control_plane` + `agent_server`) |
 | Rust CLI | `spec-chum-debug` → `HostSession` locally, or HTTP client when `SPEC_CHUM_AGENT_URL` set |
 | Rust library hosts | `control_plane::ControlPlane` / `HostSession` (no C ABI) |
 
@@ -98,35 +73,26 @@ constructs a parallel `machine::Machine` path.
 `sc_step`, `sc_add_breakpoint`, `sc_run_until_break`, and related entry points in
 [`spec_chum_host.h`](../crates/host_api/include/spec_chum_host.h) remain **thin
 wrappers** over `HostSession` + the global `trace` ring for **non-Rust shells**
-(SpecChumMac Swift, future foreign-language hosts). They are **not** the agent
-primary API and must **not** gain a `host_api` → `control_plane` dependency
+(SpecChumMac Swift, future foreign-language hosts). They are **not** the primary automation API and must **not** gain a `host_api` → `control_plane` dependency
 (avoids a crate cycle).
 
-#### Remaining parallel-path inventory
+#### Surface inventory
 
-| Path | Disposition |
+| Path | Role today |
 | --- | --- |
-| C ABI `sc_debug_*` / inspect / step / breakpoints | **Keep as FFI-only** — SpecChumMac / non-Rust |
-| egui `EmulatorSession` Debug panel | **Uses shared `HostSession`** via `Arc` + `ControlPlane` (#221) |
-| egui `SPEC_CHUM_AGENT=1` embedded server | **Thin transport** over the GUI plane (same live session as Debug) |
-| SpecChumMac inspector / `sc_*` | **Keep as FFI** for menus; optional in-process agent via `SPEC_CHUM_AGENT=1` + `sc_agent_embed_start` (same live session) |
-| `spec-chum-debug` local (no agent URL) | **Keep** — already on `HostSession` (same type as `control_plane`) |
-| Direct `machine::Machine` in debug CLI | **Removed** (Phase C partial / [#215](https://github.com/mward-sudo/spec_chum/pull/215)) |
-
-Phase A–H HTTP rows continue on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
-egui in-process HTTP↔GUI share landed for #221 ([#228](https://github.com/mward-sudo/spec_chum/pull/228) / [#229](https://github.com/mward-sudo/spec_chum/pull/229)); SpecChumMac in-process embed landed via `living_room` agent FFI ([#234](https://github.com/mward-sudo/spec_chum/pull/234)).
-Field privatize follow-up: [#227](https://github.com/mward-sudo/spec_chum/issues/227).
-
-Phase A is mergeable without breaking current workflows.
+| C ABI `sc_debug_*` / inspect / step / breakpoints | **FFI-only** for SpecChumMac / non-Rust shells |
+| egui Debug panel | Shared `HostSession` via `ControlPlane` |
+| egui / SpecChumMac `SPEC_CHUM_AGENT=1` | Embedded HTTP on the live GUI session |
+| `spec-chum-debug` (no agent URL) | Local `HostSession` (same type as `control_plane`) |
 
 ## Technology choice: REST on loopback
 
 | Option | Verdict |
 | --- | --- |
-| **HTTP REST on `127.0.0.1`** | **Chosen.** Agents already speak HTTP; PNG bodies and JSON inspect fit naturally; easy `curl`/MCP fetch; optional OpenAPI; debuggable in a browser tab. |
-| Unix domain socket + JSON-RPC | Lower overhead, but poorer agent ergonomics and no standard file-download story for framebuffers. |
+| **HTTP REST on `127.0.0.1`** | **Chosen.** PNG bodies and JSON inspect fit naturally; easy `curl` / scripts; optional OpenAPI; debuggable in a browser tab. |
+| Unix domain socket + JSON-RPC | Lower overhead, but weaker tooling ergonomics and no standard file-download story for framebuffers. |
 | gRPC + protobuf | Heavy codegen/deps for a localhost-only tool; poor fit for “save this PNG”. |
-| **WebSocket (optional)** | **Later** — push trace events, breakpoint notifications, tape progress; not required for MVP. |
+| **WebSocket (optional)** | **Later** — push trace events, breakpoint notifications, tape progress ([#236](https://github.com/mward-sudo/spec_chum/issues/236)). |
 
 ### Security
 
@@ -150,9 +116,8 @@ Default port: **`17384`** (`SPEC_CHUM_AGENT_PORT`; `1` + phone-keypad *SPEC* `73
 > Guest **1:1** pixels live at `GET /v1/framebuffer`. Host presentation / OS window
 > shots are separate — see [Host view screenshots](#host-view-screenshots-239) below.
 
-Agents must **not** use unconstrained `screencapture` / multi-monitor grabs for
-emulator visual QA. Prefer these API endpoints (guest buffer or carefully scoped
-own-window capture).
+Prefer these API endpoints over unconstrained `screencapture` / multi-monitor grabs
+for emulator visual QA (guest buffer or carefully scoped own-window capture).
 
 The guest export is the same RGBA buffer hosts already expose via
 `sc_framebuffer_ptr` / `HostSession::framebuffer()`:
@@ -161,7 +126,7 @@ The guest export is the same RGBA buffer hosts already expose via
 | --- | --- |
 | `border=false` | **Paper only** — active display file at native resolution |
 | `border=true` | Paper + ULA border (Spec Chum layout; bottom border taller) |
-| `format=png` | `image/png` body (default for agents) |
+| `format=png` | `image/png` body (default for automation clients) |
 | `format=rgba` | Raw RGBA8 row-major (`width × height × 4` bytes) |
 
 **1:1 native dimensions** (from `ula::framebuffer_dims`, no host scaling, no CRT
@@ -173,7 +138,7 @@ filter, no living-room post-process):
 | Timex SCLD hi-res (modes 4–7) | **512×192** | **640×296** |
 
 Response headers / JSON metadata include `width`, `height`, `border`, `hires`,
-`scld_mode` (when Timex), and `model` so agents validate size before visual diff.
+`scld_mode` (when Timex), and `model` so clients can validate size before visual diff.
 
 **Not `/v1/framebuffer`:**
 
@@ -187,7 +152,7 @@ Example:
 curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
   'http://127.0.0.1:17384/v1/framebuffer?border=false&format=png' \
   -o /tmp/spec_paper.png
-# Agent: Read /tmp/spec_paper.png for Techdraw hi-res QA
+# Inspect /tmp/spec_paper.png for Techdraw hi-res QA
 ```
 
 ## Host view screenshots (#239)
@@ -200,7 +165,7 @@ curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
 **Hard rules for `/v1/host/window`:** never frontmost/desktop/focused-window APIs; never bring the window forward to capture; fail closed on missing/stale/wrong-PID id. egui and SpecChumMac expose the **same** `/v1/host/*` surface (not platform-divergent feature sets).
 
 ```bash
-# Presented display (works on standalone agent too)
+# Presented display (works on standalone server too)
 curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
   'http://127.0.0.1:17384/v1/host/display?scale=2&format=png' \
   -o /tmp/spec_display.png
@@ -211,9 +176,9 @@ curl -sS -H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN" \
   -o /tmp/spec_window.png
 ```
 
-## API surface (full end-state)
+## API surface
 
-Phased delivery below; **acceptance** requires every row before the issue closes.
+Routes available on the loopback server today (plus notes where behaviour is deferred).
 
 ### Control
 
@@ -252,9 +217,9 @@ Phased delivery below; **acceptance** requires every row before the issue closes
 | Run control | `POST /v1/run-until` — PC, mem write, port, halt, insn budget |
 | Step semantics | `step` = one instruction; `step-over` deferred until call-stack support exists — document as optional |
 
-### MVP slice (Phase A first merge)
+### Core routes (minimum useful surface)
 
-Smallest useful agent surface:
+Smallest useful automation surface:
 
 1. `GET /v1/health`
 2. `GET /v1/inspect`
@@ -264,7 +229,6 @@ Smallest useful agent surface:
 6. `GET /v1/peek`, `GET /v1/disasm`
 7. `GET /v1/trace/categories`, `PUT /v1/trace/categories`, `GET /v1/trace`
 
-Remaining control/inspect/debug rows land in later phases on [#210](https://github.com/mward-sudo/spec_chum/issues/210).
 
 ### Phase G — prefs / mouse / eject / continue
 
@@ -331,29 +295,28 @@ finite, positive); otherwise the server returns **`400`**.
 client opts in. When the budget is hit first, the response includes `frames_run` /
 `instructions_run` and the current `inspect` snapshot.
 
-## Implementation sketch
+## Crates
 
-Suggested crates (names tentative):
 
 | Crate | Role |
 | --- | --- |
 | `control_plane` | `ControlService` trait + `HostSession` wiring; all ops return `Result` + structured errors |
 | `agent_server` | `axum` (or `tiny_http`) loopback server; maps routes → `ControlService` |
-| `debug_cli` | HTTP client + human-readable output; `--local` escape hatch for offline tests only until Phase C |
+| `debug_cli` | HTTP client + human-readable output; local `HostSession` when no agent URL |
 
-Long-lived session (contrast with today’s one-shot CLI) unlocks tape mid-load,
-breakpoint debugging, and framebuffer grab **after** N frames without respawn.
+A long-lived session unlocks tape mid-load, breakpoint debugging, and framebuffer
+grab **after** N frames without respawning the process.
 
 Hosts:
 
 - **Standalone:** `cargo run -p agent_server -- --model 48k` (`spec-chum-agent` binary).
-- Embedded CLI: `spec_chum --serve --model 48k` (preferred; same HTTP surface).
+- **Embedded CLI:** `spec_chum --serve --model 48k` (preferred; same HTTP surface).
   Source-build aliases: `spec-chum-debug --serve` / `spec-chum-agent`.
-- **HTTP client (Phase B):** `SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384 spec-chum-debug …`
+- **HTTP client:** `SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384 spec-chum-debug …`
   or `--agent-url …` on supported subcommands. One-shot media flags include
   `--tap`/`--tzx`, `--snapshot`, and `--trd` / `--trdos-rom` ([#262](https://github.com/mward-sudo/spec_chum/issues/262))
   (maps to `POST /v1/trd` and `POST /v1/hardware/trdos/rom`).
-- **Embedded GUI (Phase B):** egui Debug and optional `SPEC_CHUM_AGENT=1` HTTP share
+- **Embedded GUI:** egui Debug and optional `SPEC_CHUM_AGENT=1` HTTP share
   one `Arc<ControlPlane>` / `HostSession` (same live PC). Requires
   `SPEC_CHUM_AGENT_TOKEN` or `SPEC_CHUM_AGENT_INSECURE=1`. SpecChumMac: same via
   `SPEC_CHUM_AGENT=1` + embedded server on the live `sc_*` session (see `MACOS_NATIVE.md`).
@@ -378,7 +341,7 @@ file /tmp/spec_paper.png   # PNG image data, 256 x 192
 Optional bearer token: set `SPEC_CHUM_AGENT_TOKEN` on server and pass
 `-H "Authorization: Bearer $SPEC_CHUM_AGENT_TOKEN"` on requests.
 
-## Agent workflow (target)
+## Typical automation workflow
 
 ```text
 1. ./scripts/fetch_roms.sh
@@ -390,16 +353,17 @@ Optional bearer token: set `SPEC_CHUM_AGENT_TOKEN` on server and pass
 7. GET /v1/trace — tape.flash.* events on failure
 ```
 
-Prefer this over `screencapture`, osascript, or computer-use GUI driving.
+Prefer this over unconstrained OS screenshots or GUI automation.
 
 ## Related docs & code
 
 - [DEBUGGING.md](DEBUGGING.md) — trace categories, `spec-chum-debug` today, Inspect fields
 - [TIMEX.md](TIMEX.md) — SCLD modes, hi-res 512×192, dock cartridges (#192)
-- `crates/host_api/include/spec_chum_host.h` — today's C ABI (Phase C dedupe target)
+- `crates/host_api/include/spec_chum_host.h` — C ABI for native shells (FFI-only debug entry points)
 - `crates/machine/src/inspect.rs`, `debugger.rs`
 - `crates/ula/src/lib.rs` — `framebuffer_dims`
 - Closed epic [#90](https://github.com/mward-sudo/spec_chum/issues/90) — debugger foundations
+- LLM debugging skill (assistants only): [`.cursor/skills/spec-chum-debugging/SKILL.md`](../.cursor/skills/spec-chum-debugging/SKILL.md)
 
 ## Alternatives considered
 
@@ -407,28 +371,28 @@ Prefer this over `screencapture`, osascript, or computer-use GUI driving.
 
 - **Extend `spec-chum-debug` only** — keeps one-shot process model; poor fit for
   framebuffer-after-N-frames, breakpoints, and GUI parity.
-- **Stdin/stdout JSON lines** — simple but weak for binary PNG payloads and concurrent agents.
-- **Expose raw `sc_*` over FFI from agents** — ties agents to in-process linking;
+- **Stdin/stdout JSON lines** — simple but weak for binary PNG payloads and concurrent clients.
+- **Expose raw `sc_*` over FFI to remote tooling** — ties clients to in-process linking;
   HTTP keeps language-agnostic tooling.
-- **Unix domain socket + JSON-RPC** — lower overhead, but poorer agent ergonomics and
+- **Unix domain socket + JSON-RPC** — lower overhead, but weaker tooling ergonomics and
   no standard file-download story for framebuffers.
 - **gRPC + protobuf** — heavy codegen/deps for localhost-only tooling.
 
 ### External emulator protocols (surveyed — not adopted wholesale)
 
-| Protocol | Transport | Fit for Spec Chum agent QA |
+| Protocol | Transport | Fit for Spec Chum automation QA |
 | --- | --- | --- |
 | **Fuse remote** | None shipped; [feature #100](https://sourceforge.net/p/fuse-emulator/feature-requests/100/) telnet mock-up stalled. GDB only via Spectranet *guest* stub + fork, not an emulator API. | Poor — no stable remote surface; nothing to wrap. |
-| **ZEsarUX ZRCP** | Telnet-like TCP (default port 10000); huge text command set (`cpu-step`, `disassemble`, snapshots, memory breakpoints). Used by [DeZog](https://github.com/maziac/DeZog) / VS Code plugins. | Partial for step/peek/disasm; **no** 1:1 PNG framebuffer, **no** `Inspect`-shaped JSON, **no** tape/type-load / Timex dock / SCLD metadata; text parsing is brittle for agents. |
+| **ZEsarUX ZRCP** | Telnet-like TCP (default port 10000); huge text command set (`cpu-step`, `disassemble`, snapshots, memory breakpoints). Used by [DeZog](https://github.com/maziac/DeZog) / VS Code plugins. | Partial for step/peek/disasm; **no** 1:1 PNG framebuffer, **no** `Inspect`-shaped JSON, **no** tape/type-load / Timex dock / SCLD metadata; text parsing is brittle for scripts. |
 | **CSpect DZRP** | Binary request/response over socket (DeZogPlugin, port 11000). Toolkit protocol — remotes implement subsets; Next/TBBLUE/sprite oriented. | Good for IDE source-debug with DeZog; **no** framebuffer export, **no** tape automation, Timex/SCLD not covered; requires external plugin DLL. |
 | **MAME** | GDB Remote Serial Protocol (`debuggdbstub`, plugin `gdbstub`); Lua `-autoboot_script` for one-shot automation. [mame-mcp](https://github.com/astrobleem/mame-mcp) wraps live sessions in MCP JSON — external bridge, not MAME core. | GDB is CPU/step centric; no Spectrum-specific inspect, tape paths, or guest framebuffer with border/hi-res modes. |
 | **RetroArch NCI** | UDP commands (port 55355): `READ_CORE_MEMORY`, `FRAMEADVANCE`, `SCREENSHOT` (writes host screenshot dir). | `SCREENSHOT` is RetroArch-processed output, not guest 1:1 paper/border buffer; UDP hotkeys are flaky under load; core-dependent memory map. |
 | **GDB / Z80 RSP** | Serial/TCP GDB stub (`gdb/stubs/z80-stub.c`, [mini-gdbstub](https://github.com/RinHizakura/mini-gdbstub)). | Source-level debug for compiled Z80 targets; no model select, tape load, type-load, trace ring, or framebuffer QA. |
 | **Rust emulator patterns** | Ad hoc: JSON-RPC over stdio (plugin hosts), custom HTTP per project (e.g. wasm debugger services). No shared Spectrum/emulator standard. | Patterns confirm **custom localhost API** is normal; nothing to reuse. |
 
-**Conclusion:** existing protocols optimise for **human IDE debugging** (DeZog ↔ ZEsarUX/CSpect) or **generic CPU GDB**, not **agent automation** (long-lived session, rich `Inspect` JSON, tape/type-load, Timex hi-res framebuffer at native dims). None is a drop-in substitute for the planned REST surface.
+**Conclusion:** existing protocols optimise for **human IDE debugging** (DeZog ↔ ZEsarUX/CSpect) or **generic CPU GDB**, not **Spectrum automation** (long-lived session, rich `Inspect` JSON, tape/type-load, Timex hi-res framebuffer at native dims). None replaces this localhost REST surface.
 
-### Hybrid / compatibility (optional later, not MVP)
+### Hybrid / compatibility (optional later)
 
 - **REST facade over `control_plane`** remains the architecture — HTTP is transport only.
 - **ZRCP or DZRP adapter** on the same backend could help DeZog users, but doubles protocol maintenance; defer unless a concrete consumer appears.

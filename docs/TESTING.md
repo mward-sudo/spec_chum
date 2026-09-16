@@ -1,5 +1,7 @@
 # Testing and quality gates
 
+> **Audience:** developers / contributors.
+
 Provable-correctness tiers and where each check runs. Tracked under
 [#171](https://github.com/mward-sudo/spec_chum/issues/171). Release tagging
 requirements remain in [RELEASE.md](RELEASE.md).
@@ -8,7 +10,7 @@ requirements remain in [RELEASE.md](RELEASE.md).
 
 | Tier | When | Commands / CI | What it proves |
 | --- | --- | --- | --- |
-| **Fast (PR / agent default)** | Every PR; before claiming done | `./scripts/check_crates.sh` while iterating; `./scripts/check.sh` before merge. CI: **`fmt + clippy + test`** (+ **`z80doc`** by name) | Workspace builds with `-D warnings` (excl. `living_room`); Fuse / unit / table tests; ROM-dependent tests skip cleanly when `roms/` is missing; GUI smoke without xvfb |
+| **Fast (PR default)** | Every PR; before claiming done | `./scripts/check_crates.sh` while iterating; `./scripts/check.sh` before merge. CI: **`fmt + clippy + test`** (+ **`z80doc`** by name) | Workspace builds with `-D warnings` (excl. `living_room`); Fuse / unit / table tests; ROM-dependent tests skip cleanly when `roms/` is missing; GUI smoke without xvfb |
 | **Living room / SpecChumMac** | When touching Bevy host, `host_api` FFI used by macOS, or living-room display | `./scripts/check_living_room.sh` (**release** by default). CI: **`living_room`**, **`macos-shell`** | Bevy room + staticlib / Swift shell compile; set `SPEC_CHUM_CHECK_LIVING_ROOM=1` to fold living-room into `./scripts/check.sh` |
 | **Slow (pre-release)** | Before tagging `vX.Y.Z` | `./scripts/run_slow_tests.sh` | z80doc + z80ccf + z80memptr + system-tests + **z80full** — real CPU/ULA accuracy; no stubs ([#17](https://github.com/mward-sudo/spec_chum/issues/17), [#122](https://github.com/mward-sudo/spec_chum/issues/122)) |
 | **Opt-in day-to-day** | Accuracy investigations | `./scripts/run_system_tests.sh`; individual `cargo test -p machine --features slow-tests --release …` | Third-party ULA/ROM TAPs ([#108](https://github.com/mward-sudo/spec_chum/issues/108)); full CPU suites outside release |
@@ -24,7 +26,7 @@ Default PR CI is **not** enough for a release. See [RELEASE.md](RELEASE.md).
 
 ### Hardware-faithful vs convenience
 
-Flash-load, turbo tape, and similar UI helpers may diverge from real EAR timing but must still **load correctly**. Do not weaken hardware-path assertions to accommodate them; keep convenience-path tests clearly labelled ([AGENTS.md](../AGENTS.md)).
+Flash-load, turbo tape, and similar UI helpers may diverge from real EAR timing but must still **load correctly**. Do not weaken hardware-path assertions to accommodate them; keep convenience-path tests clearly labelled.
 
 ## Media capability tier (vs accuracy tiers)
 
@@ -69,13 +71,13 @@ Optional local Speedlock / commercial TZXs skip cleanly when absent (`~/Download
 | `cargo fmt --all -- --check` | `./scripts/check.sh`, CI `fmt + clippy + test` | `rustfmt.toml` |
 | `cargo clippy --workspace --all-targets --exclude living_room -- -D warnings` | `./scripts/check.sh`, CI | Workspace lints in root `Cargo.toml`; `clippy.toml` |
 | `cargo test --workspace --exclude living_room` | `./scripts/check.sh`, CI | Debug by default in the script |
-| `./scripts/check_crates.sh` | Local / agents only | Debug clippy+test for crates touched vs `origin/main` |
+| `./scripts/check_crates.sh` | Local iteration | Debug clippy+test for crates touched vs `origin/main` |
 | `./scripts/check_living_room.sh` | Opt-in / when living-room touched; CI `living_room` | **Release** Bevy by default |
 | `./scripts/build_macos_app.sh` | CI `macos-shell` | SpecChumMac + living_room staticlib |
 | z80doc (named filter) | CI slow-tests job | Bounded; full `z80full` is release-only |
 | `./scripts/run_system_tests.sh` | Opt-in; inside `run_slow_tests.sh` | Needs network once for TAP cache |
 | `./scripts/run_slow_tests.sh` | **Required before `vX.Y.Z`** | See [RELEASE.md](RELEASE.md) |
-| `./scripts/check_pr_reviews.sh` | Local agents; CI **Bot review threads** | CodeRabbit HEAD + unresolved bot threads |
+| `./scripts/check_pr_reviews.sh` | Local / CI **Bot review threads** | CodeRabbit HEAD + unresolved bot threads |
 | `./scripts/check_deny.sh` / `cargo deny check` | Opt-in local; CI **cargo-deny** | `deny.toml` — licenses / advisories / bans / sources. Egui 0.31 transitive RustSec IDs ignored-with-reason (#171); revisit on `eframe`/`egui` bump. Not part of `./scripts/check.sh` |
 
 ### Workspace lint posture
@@ -120,7 +122,8 @@ Deepen PRs must add or extend ROM/fixture-gated smokes (never weaken hardware pa
 
 ## Related docs
 
-- [AGENTS.md](../AGENTS.md) — crate map, clippy-first workflow, accuracy vs convenience.
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — PR / CodeRabbit / TDD expectations.
 - [RELEASE.md](RELEASE.md) — tag checklist and slow suite.
+- [README.md](README.md) — docs index (players vs developers).
+- [AGENTS.md](../AGENTS.md) — LLM assistant crate map / workflow (not required for human contributors).
 - `tests/fixtures/z80test/README.md`, `tests/fixtures/system/README.md` — fixture details.

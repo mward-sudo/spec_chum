@@ -7,13 +7,15 @@ shipped Windows product UI in GitHub Releases until this shell is promoted.
 
 Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Strategy:
 [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351).
-Parity rule: [`.cursor/rules/gui-app-parity.mdc`](../.cursor/rules/gui-app-parity.mdc).
+Parity: product features match egui / SpecChumMac / `linux_shell` unless
+genuinely unavailable on Windows; chrome may follow Win32 / Fluent HIG. See
+[UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351).
 
 ## Feature parity vs platform HIG
 
 | Layer | Rule |
 | --- | --- |
-| **Product features** | Match egui / SpecChumMac (media types, tape transport, agent HTTP, …) unless a capability is genuinely unavailable on Windows |
+| **Product features** | Match egui / SpecChumMac / `linux_shell` (media types, tape transport, Agent Debug HTTP, …) unless a capability is genuinely unavailable on Windows |
 | **Chrome / UX** | Follow Windows conventions (Win32 menus, Ctrl shortcuts, Fluent/WinUI later) — do not mimic macOS chrome |
 | **Shared core** | Behaviour in `host_api` / `control_plane`; this crate stays a thin adapter |
 

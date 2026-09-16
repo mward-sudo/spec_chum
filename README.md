@@ -2,26 +2,23 @@
 
 [![CI](https://github.com/mward-sudo/spec_chum/actions/workflows/ci.yml/badge.svg)](https://github.com/mward-sudo/spec_chum/actions/workflows/ci.yml)
 
-A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust with an egui frontend (plus an optional native macOS SwiftUI shell).
+A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust.
 
-UI stack rationale (egui vs iced / Slint / Tauri / native shells / optional libretro): [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md). Native-shell strategy (macOS SpecChumMac; Linux egui release + optional GTK4 `linux_shell`; Windows egui release + optional Win32 `windows_shell`): [Native shells (#351)](docs/UI_ARCHITECTURE.md#native-shells-351).
+**Docs index (players vs developers):** [docs/README.md](docs/README.md).
 
-Native macOS (liquid glass): [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md) — `./scripts/run_macos_app.sh`.
+## Quick start
 
-Optional native Windows Win32 shell: [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) — `./scripts/run_windows_app.ps1` (#351).
-Optional native Linux GTK4 shell: [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) — `./scripts/run_linux_shell.sh` (#351); egui remains Linux release primary.
+### Play a release build
 
-Experimental Bevy 3D living-room CRT host: [docs/LIVING_ROOM.md](docs/LIVING_ROOM.md) — `cargo run -p living_room --release` ([#146](https://github.com/mward-sudo/spec_chum/issues/146)).
+Download a package from [GitHub Releases](https://github.com/mward-sudo/spec_chum/releases):
 
-## Goals
+- **macOS** — `.dmg.zip` → unzip → open the `.dmg` → drag **Spec Chum.app** to Applications
+- **Windows** — `*-setup.exe` (installer) or portable `.zip`
+- **Linux** — `.deb`, AppImage, or `.tar.gz`
 
-- Cycle-accurate Z80 (own implementation)
-- Accurate ULA timing (contention, floating bus, border)
-- 48K first, then 128K / grey +2
-- TDD against Fuse vectors and z80test
-- System ROMs fetched separately (not redistributed)
+Redistributable Spectrum ROMs are bundled in release packages. See [docs/ROMS.md](docs/ROMS.md).
 
-## Build
+### Build from source
 
 ```bash
 cargo build --release
@@ -29,9 +26,7 @@ cargo build --release
 cargo run -p app --release
 ```
 
-### Native macOS shell (optional)
-
-Requires full Xcode. Builds Rust `host_api` + SwiftUI:
+Native macOS shell (full Xcode):
 
 ```bash
 ./scripts/fetch_roms.sh
@@ -40,59 +35,63 @@ Requires full Xcode. Builds Rust `host_api` + SwiftUI:
 
 See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
-## Releases
+## What it aims for
 
-Push a `vX.Y.Z` tag to build release archives: macOS `.dmg.zip` (unzip →
-SpecChumMac `.dmg` with `Spec Chum.app` + Applications shortcut; notarised
-when Apple secrets are set),
-Windows portable `.zip` and Inno `*-setup.exe`, Linux `.tar.gz` + AppImage +
-`.deb`. Redistributable Spectrum ROMs are bundled inside each package (not
-committed to git). See [docs/RELEASE.md](docs/RELEASE.md) and
+- Cycle-accurate Z80 (own implementation)
+- Accurate ULA timing (contention, floating bus, border)
+- 48K, 128K, grey +2, +2A, +3 / +3e, Timex TC2048 / TS2068
+- TDD against Fuse vectors and z80test
+- System ROMs fetched separately (not committed to git)
+
+## Hosts & platforms
+
+| Host | Role |
+| --- | --- |
+| **egui** (`crates/app`) | Cross-platform UI; Windows/Linux release primary |
+| **SpecChumMac** (`apps/macos`) | Native macOS SwiftUI product shell (release `.dmg`) |
+| **windows_shell** | Optional Win32 shell — [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) (#351) |
+| **linux_shell** | Optional GTK4 shell — [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) (#351) |
+| **living_room** | Experimental Bevy 3D CRT — [docs/LIVING_ROOM.md](docs/LIVING_ROOM.md) (#146) |
+
+UI stack rationale and native-shell strategy: [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md).
+
+## Releases & ROMs
+
+Push a `vX.Y.Z` tag to build release archives (see [docs/RELEASE.md](docs/RELEASE.md)).
+ROM **bytes are not** in git. Source checkouts fetch the managed redistributable
+set with `./scripts/fetch_roms.sh`; release packages embed that set. Multiface,
+TR-DOS, IF1, and similar firmware stay user-provided only — details in
 [docs/ROMS.md](docs/ROMS.md).
-
-## ROMs
-
-System ROM **bytes are not** in this repository. Dev checkouts fetch official
-Spectrum images with:
-
-```bash
-./scripts/fetch_roms.sh
-```
-
-Release builds run the same fetch and embed the managed redistributable set
-inside app packages. Source:
-[spectrumforeveryone/zx-roms](https://github.com/spectrumforeveryone/zx-roms) and
-[Fuse `roms/`](https://github.com/fuse-emulator/fuse/tree/master/roms) for
-non-Amstrad sets (Timex, OpenSE, +3e, Datel, SpeccyBoot) — pinned commits in the
-script. Grants and the user-provided-only list: [docs/ROMS.md](docs/ROMS.md).
 
 **Amstrad / Sinclair:** Amstrad have kindly given their permission for the
 redistribution of their copyrighted material but retain that copyright. Do not
-alter the copyright messages inside ROM images. Details, clone/peripheral
-firmware, and other grants: [docs/ROMS.md](docs/ROMS.md).
+alter the copyright messages inside ROM images.
+
+## Current capabilities (summary)
+
+Present-tense status — not a development diary. Detail and open gaps live in the linked docs / issues.
+
+- **CPU / ULA** — Fuse vectors; z80test `z80doc` / `z80full` under `--features slow-tests` ([#17](https://github.com/mward-sudo/spec_chum/issues/17), [#122](https://github.com/mward-sudo/spec_chum/issues/122)). System TAP suite: [docs/TESTING.md](docs/TESTING.md) / [#108](https://github.com/mward-sudo/spec_chum/issues/108). Releases require `./scripts/run_slow_tests.sh`.
+- **Tape** — flash-load, turbo EAR speeds, Experience abbreviated-pause load; TAP/TZX paths in egui and SpecChumMac ([#82](https://github.com/mward-sudo/spec_chum/issues/82)).
+- **Peripherals** — Kempston / Sinclair / Cursor joysticks, Kempston mouse, Multiface 1 ([docs/MULTIFACE.md](docs/MULTIFACE.md)), DivMMC SPI + automap, Interface 1 Microdrive hooks, Beta Disk / TR-DOS (optional `roms/trdos.rom`), +3 µPD765 SEEK/READ/WRITE and Loader smokes. Still incomplete vs real hardware for full ESXDOS boot, full IF1 BASIC accuracy, TR-DOS `RUN` with a real TR-DOS ROM, and some VG93 format paths ([#138](https://github.com/mward-sudo/spec_chum/issues/138)–[#140](https://github.com/mward-sudo/spec_chum/issues/140)).
+- **+3DOS** — command/result path and synthetic Loader / `LOAD "DISK"` smokes ([tests/fixtures/plus3/README.md](tests/fixtures/plus3/README.md)); copy-protected / weird DSK geometry and CP/M SYSTEM boot remain out of scope.
+- **Timex** — TC2048 / TS2068 (MMU, AY, Warajevo `.dck`, SCLD hi-colour / hi-res) — [docs/TIMEX.md](docs/TIMEX.md) ([#192](https://github.com/mward-sudo/spec_chum/issues/192)).
+- **Debug / automation** — localhost Agent Debug HTTP API (`spec_chum --serve` / `SPEC_CHUM_AGENT=1`) for scripted control and 1:1 framebuffer PNG — [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md).
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for Rust practices, TDD expectations, and the `gh stack` workflow. Agent-oriented notes live in [AGENTS.md](AGENTS.md).
+Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md).
+Full docs map: [docs/README.md](docs/README.md).
 
 ```bash
-./scripts/check.sh   # fmt + clippy -D warnings + tests
-./scripts/run_system_tests.sh   # optional day-to-day: third-party ULA/ROM TAP suite (slow)
-./scripts/run_slow_tests.sh     # required before vX.Y.Z: z80doc + system-tests + z80full
+./scripts/check.sh              # fmt + clippy -D warnings + tests
+./scripts/run_system_tests.sh   # optional: third-party ULA/ROM TAP suite (slow)
+./scripts/run_slow_tests.sh     # required before vX.Y.Z
 ```
 
-Engineering quality backlog (warnings, lints, provable test tiers): [#171](https://github.com/mward-sudo/spec_chum/issues/171).
+Engineering quality backlog: [#171](https://github.com/mward-sudo/spec_chum/issues/171).
 
-## Known limitations / follow-ups
-
-- **z80test** — `z80doc` and `z80full` run under `--features slow-tests` ([#17](https://github.com/mward-sudo/spec_chum/issues/17) closed; [#122](https://github.com/mward-sudo/spec_chum/issues/122)). CI selects `z80doc` by name; run `z80full_all_tests_passed` for the full suite. **Releases require** `./scripts/run_slow_tests.sh`.
-- **System tests** — third-party ULA/ROM TAP suite ([#108](https://github.com/mward-sudo/spec_chum/issues/108)): `./scripts/run_system_tests.sh`. Not part of default CI; **required before release**.
-- **M5 peripherals (in progress)** — joystick modes (Kempston / Sinclair / Cursor), Kempston mouse, Multiface 1 paging ([MULTIFACE.md](docs/MULTIFACE.md)), DivMMC SPI sector I/O + automap on Bus48/Bus128, Interface 1 Microdrive command/status + MDR sector stream and ROM paging hooks, Beta Disk VG93 (restore/seek/read/write sector + TR-DOS M1 paging + `/RES` on `FF` D2; optional `roms/trdos.rom`) with a synthetic TR-DOS `boot` BASIC disk (directory + VG93/CPU sector read of `10 POKE 32768,165`; see [`tests/fixtures/trdos/README.md`](tests/fixtures/trdos/README.md)) and the same attach / Open TRD / Load TR-DOS ROM workflow on egui and SpecChumMac, +3 µPD765 command/result on ports `3FFD`/`2FFD` (SEEK/READ/WRITE; see +3DOS below), AY stereo ACB/ABC/Mono UI. Still incomplete vs real hardware: full ESXDOS boot (needs EEPROM fixture), full IF1 BASIC/cartridge accuracy, TR-DOS `RUN` with a real `trdos.rom`, VG93 WRITE TRACK / FORMAT for `NEW` ([#138](https://github.com/mward-sudo/spec_chum/issues/138)–[#140](https://github.com/mward-sudo/spec_chum/issues/140)).
-- **+3DOS** — µPD765 command → execution → result (SPECIFY, SDS, SIS, RECALIBRATE, SEEK, READ ID, READ/WRITE DATA, FORMAT TRACK, write-protect). Menu **Loader** smokes: FDC talk on empty DATA, `DOS_BOOT` titled bootstrap (checksum 3 → border/poke marker), and `LOAD "DISK"` BASIC RUN on a synthetic +3DOS file ([#166](https://github.com/mward-sudo/spec_chum/issues/166); list in [`tests/fixtures/plus3/README.md`](tests/fixtures/plus3/README.md)). [#141](https://github.com/mward-sudo/spec_chum/issues/141) / [#165](https://github.com/mward-sudo/spec_chum/issues/165) closed — SCAN EQUAL/LOW/HIGH and READ TRACK stay **invalid** (`ST0=0x80`; no +3DOS need). Still out of scope: copy-protected / weird DSK geometry, CP/M SYSTEM boot. +2A/+3 FDC ports are gate-array (not Sinclair ULA-contended); I/O wait is 0.
-- **macOS native shell** — audio, keymap, GCController, Open Snapshot/RZX/DSK, Type LOAD, and optional `macos-shell` CI job shipped on this branch ([#67](https://github.com/mward-sudo/spec_chum/issues/67), [#68](https://github.com/mward-sudo/spec_chum/issues/68)); App bundle / signing polish can follow.
-- **Tape** — flash-load, turbo EAR speeds, and **Experience (~20s)** abbreviated-pause load ([#82](https://github.com/mward-sudo/spec_chum/issues/82)) in egui and macOS.
-- **Timex TC2048 / TS2068** — TC2048 Phase 1 + TS2068 smoke-boot (home/EX-ROM, horizontal MMU, AY on F5/F6) + Warajevo `.dck` dock + SCLD **alt file / hi-colour / 512×192 hi-res** ([#192](https://github.com/mward-sudo/spec_chum/issues/192)). ROM: `./scripts/fetch_roms.sh` → [docs/TIMEX.md](docs/TIMEX.md).
-
+LLM-assisted coding notes (crate map, hard constraints): [AGENTS.md](AGENTS.md) — not required for human contributors.
 
 ## License
 
@@ -100,5 +99,4 @@ MIT — see [LICENSE](LICENSE) (Spec Chum source only).
 
 Amstrad have kindly given their permission for the redistribution of their
 copyrighted Spectrum ROM material but retain that copyright. This project does
-not commit or Release-attach ROM binaries; fetch them yourself (see
-[docs/ROMS.md](docs/ROMS.md)).
+not commit ROM binaries; fetch them yourself (see [docs/ROMS.md](docs/ROMS.md)).

@@ -7,7 +7,9 @@ remains the shipped Linux product UI in GitHub Releases until this shell is prom
 
 Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Strategy:
 [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351).
-Parity rule: [`.cursor/rules/gui-app-parity.mdc`](../.cursor/rules/gui-app-parity.mdc).
+Parity: product features match egui / SpecChumMac / `windows_shell` unless
+genuinely unavailable on Linux; chrome may follow GTK HIG. See
+[UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351).
 
 ## Toolkit choice
 
@@ -21,7 +23,7 @@ Parity rule: [`.cursor/rules/gui-app-parity.mdc`](../.cursor/rules/gui-app-parit
 
 | Layer | Rule |
 | --- | --- |
-| **Product features** | Match egui / SpecChumMac / `windows_shell` (media types, tape transport, agent HTTP, …) unless a capability is genuinely unavailable on Linux |
+| **Product features** | Match egui / SpecChumMac / `windows_shell` (media types, tape transport, Agent Debug HTTP, …) unless a capability is genuinely unavailable on Linux |
 | **Chrome / UX** | Follow GTK / desktop conventions (menubar, Ctrl shortcuts) — do not mimic macOS chrome |
 | **Shared core** | Behaviour in `host_api` / `control_plane`; this crate stays a thin adapter |
 

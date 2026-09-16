@@ -1,15 +1,16 @@
 # Cutting a Spec Chum release
 
+> **Audience:** maintainers / release operators.
+
 GitHub Actions builds **macOS**, **Linux**, and **Windows** archives and attaches
 them to a GitHub Release when a version tag is pushed.
 
 **macOS** ships the native **SpecChumMac** SwiftUI app (`apps/macos`) as a
 **`.dmg.zip`** (a zip containing the `.dmg`, which is notarised/stapled when
 Apple secrets are set). **Windows / Linux** ship the cross-platform **egui**
-host `spec_chum`. Headless debugger
-and agent HTTP live on the egui binary (`spec_chum --serve`, `spec_chum debug …`);
-on macOS, agents use the embedded loopback server (`SPEC_CHUM_AGENT=1` on
-SpecChumMac — see [MACOS_NATIVE.md](MACOS_NATIVE.md) /
+host `spec_chum`. Headless debugger and Agent Debug HTTP live on the egui binary
+(`spec_chum --serve`, `spec_chum debug …`); on macOS, use the embedded loopback
+server (`SPEC_CHUM_AGENT=1` on SpecChumMac — see [MACOS_NATIVE.md](MACOS_NATIVE.md) /
 [AGENT_DEBUG_API.md](AGENT_DEBUG_API.md)).
 
 Redistributable Spectrum ROMs (Amstrad Lawson 1999 grant and other grants in
@@ -116,8 +117,8 @@ Workspace crates and GitHub Release tags ship together as `vX.Y.Z` (root
 
 | Bump | When |
 | --- | --- |
-| **Patch** | Bug fixes, accuracy corrections, refactors, tuning that does **not** add new user- or agent-visible capability. |
-| **Minor** | New user-facing or agent-visible capability since the last **published** tag — Agent Debug HTTP routes, host screenshot capture, new machine models, major living-room work, new tape/disk surfaces, etc. |
+| **Patch** | Bug fixes, accuracy corrections, refactors, tuning that does **not** add new user- or automation-visible capability. |
+| **Minor** | New user-facing or automation-visible capability since the last **published** tag — Agent Debug HTTP routes, host screenshot capture, new machine models, major living-room work, new tape/disk surfaces, etc. |
 | **Major** | Breaking changes to supported platforms, default behaviour, or the Agent Debug API contract. |
 
 Before tagging, compare against the previous **published** release (not an
@@ -149,7 +150,7 @@ git push origin v0.2.0
 5. The [Release](../.github/workflows/release.yml) workflow runs on `v*.*.*`
    tags. It also supports **Actions → Release → Run workflow** with an existing
    tag if you need to rebuild assets. The workflow builds and publishes
-   binaries; it does **not** re-run the slow suite — maintainers/agents must
+   binaries; it does **not** re-run the slow suite — maintainers must
    have already passed `./scripts/run_slow_tests.sh` before tagging.
 
 ### Artifact layout
@@ -179,13 +180,14 @@ spec_chum debug dump-state
 spec_chum debug --tap path/to/game.tap type-load --code
 ```
 
-macOS agent HTTP (SpecChumMac embed; loopback only):
+macOS Agent Debug HTTP (SpecChumMac embed; loopback only):
 
 ```bash
-# Preferred: token auth
-SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" open -a "Spec Chum"
-# Dev-only on a trusted machine (disables bearer auth — any local process can call the agent):
-# SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 open -a "Spec Chum"
+# Preferred: token auth (run the binary directly — `open -a` does not forward env)
+SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" \
+  apps/macos/.build/release/SpecChumMac
+# Dev-only on a trusted machine (disables bearer auth — any local process can call the API):
+# SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 apps/macos/.build/release/SpecChumMac
 ```
 
 (`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is

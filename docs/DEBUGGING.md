@@ -1,13 +1,15 @@
 # Debugging & observability
 
+> **Audience:** developers (tracing, CLI debug, automation HTTP).
+
 Structured emulator tracing lives in the `trace` crate: a category-gated ring
 buffer with dump APIs for tests, the egui app, and the native macOS shell.
 
 The localhost [Agent Debug HTTP API](AGENT_DEBUG_API.md) ([#210](https://github.com/mward-sudo/spec_chum/issues/210))
-unifies control, inspect, and debug for agents (including **1:1 framebuffer PNG
-export** — guest pixels only, not OS window capture). Prefer `spec_chum --serve`
-or an embedded GUI host with `SPEC_CHUM_AGENT=1`; one-shot headless commands use
-`spec_chum debug …` (see below).
+unifies control, inspect, and debug for scripts and tools (including **1:1
+framebuffer PNG export** — guest pixels only, not OS window capture). Prefer
+`spec_chum --serve` or an embedded GUI host with `SPEC_CHUM_AGENT=1`; one-shot
+headless commands use `spec_chum debug …` (see below).
 
 When tracing is **off**, each emit site is a single `AtomicU64` load (`Relaxed`)
 and an early return — no allocation and no lock on the hot path.
@@ -154,7 +156,7 @@ breakpoint is not re-taken immediately.
 - Menu **Debug**: Enable default trace, dump to file / Desktop, clear ring.
 - No full Pause/Step inspector yet — use `spec_chum debug` or the egui window.
 - C hooks: `sc_debug_*` in `spec_chum_host.h` — **FFI-only** for the native shell
-  (not the agent primary API). Prefer
+  (not the primary automation API). Prefer
   [`docs/AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) HTTP / `spec_chum --serve` /
   `SPEC_CHUM_AGENT=1` embed for scripted control and 1:1 framebuffers.
 
@@ -263,4 +265,4 @@ See also `tests/fixtures/tape/README.md`.
 - Enabled: lock ring, push `Copy` event (no per-instruction heap).
 - Prefer `SPEC_CHUM_TRACE=tape` (or `default`) while debugging loads; only add
   `cpu` for short windows (`SPEC_CHUM_TRACE_CPU_EVERY` helps).
-  `SPEC_CHUM_TRACE_APPEND=1` is for long agent runs, not the default hot path.
+  `SPEC_CHUM_TRACE_APPEND=1` is for long scripted runs, not the default hot path.

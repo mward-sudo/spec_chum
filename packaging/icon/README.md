@@ -18,4 +18,4 @@ python3 scripts/generate_app_icons.py
 ```
 
 Design: dark CRT bezel, green BASIC block cursor, classic Spectrum rainbow stripe.
-Do not replace with generic gradient / “AI purple” art.
+Keep the mark concrete and Spectrum-flavoured — avoid generic abstract gradients.

@@ -62,12 +62,12 @@ SPEC_CHUM_AUDIO_DEBUG=1 apps/macos/.build/release/SpecChumMac
 
 (ROMs: run from repo root or set `SPEC_CHUM_ROOT` to the checkout.)
 
-## Agent / scripted debugging (HTTP)
+## Scripted debugging (HTTP)
 
 SpecChumMac uses the C ABI (`sc_debug_*`, `sc_inspect_json`, …) for in-app Debug
 menus — those entry points are **FFI-only** (see
-[`AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md) Phase C). For agents and headless
-automation, prefer the **embedded** loopback server on the live GUI session:
+[`AGENT_DEBUG_API.md`](AGENT_DEBUG_API.md)). For automation and headless
+clients, prefer the **embedded** loopback server on the live GUI session:
 
 ```bash
 ./scripts/fetch_roms.sh
@@ -86,7 +86,7 @@ apps/macos/.build/release/SpecChumMac
 ```
 
 `HostBridge` calls `sc_agent_embed_start` when `SPEC_CHUM_AGENT=1` is set at launch
-(same auth env vars as `spec-chum-agent` / egui). Agents see the **same** running
+(same auth env vars as `spec-chum-agent` / egui). HTTP clients see the **same** running
 machine as the SwiftUI shell — no separate process. Host screenshots match egui:
 `GET /v1/framebuffer`, `GET /v1/host/display`, and `GET /v1/host/window` (own
 window id only; no focus / z-order change) — see [#239](https://github.com/mward-sudo/spec_chum/issues/239).
