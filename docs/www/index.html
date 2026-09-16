@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spec Chum — ZX Spectrum emulator</title>
+    <meta
+      name="description"
+      content="Spec Chum is a from-scratch, hardware-accurate ZX Spectrum emulator for macOS, Windows, and Linux."
+    />
+    <link rel="icon" href="./assets/icon-256.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="hero">
+      <div class="wrap hero-inner">
+        <div class="hero-copy">
+          <p class="brand">Spec <span>Chum</span></p>
+          <h1 class="headline">A hardware-accurate ZX Spectrum emulator.</h1>
+          <p class="lede">
+            Built from scratch in Rust — cycle-accurate Z80 and ULA timing, with
+            release builds for macOS, Windows, and Linux.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-primary"
+              href="https://github.com/mward-sudo/spec_chum/releases"
+              >Download</a
+            >
+            <a
+              class="btn btn-secondary"
+              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/README.md"
+              >Docs</a
+            >
+            <a
+              class="btn btn-secondary"
+              href="https://github.com/mward-sudo/spec_chum"
+              >GitHub</a
+            >
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <img
+            src="./assets/icon-512.png"
+            width="512"
+            height="512"
+            alt=""
+            decoding="async"
+          />
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section id="features" aria-labelledby="features-heading">
+        <div class="wrap">
+          <h2 id="features-heading">What you get</h2>
+          <p class="section-lede">
+            Present capabilities for players — detail lives in the docs.
+          </p>
+          <ul class="feature-list">
+            <li>
+              <strong>Accurate core</strong>
+              <span
+                >Cycle-accurate Z80 and ULA (contention, floating bus,
+                border).</span
+              >
+            </li>
+            <li>
+              <strong>Many models</strong>
+              <span
+                >48K, 128K, +2 / +2A, +3, Timex TC2048 / TS2068, and more.</span
+              >
+            </li>
+            <li>
+              <strong>Tape &amp; media</strong>
+              <span
+                >TAP/TZX paths with flash-load and turbo EAR options that still
+                load correctly.</span
+              >
+            </li>
+            <li>
+              <strong>Release packages</strong>
+              <span
+                >Redistributable Spectrum ROMs bundled in GitHub Release
+                archives.</span
+              >
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="platforms" aria-labelledby="platforms-heading">
+        <div class="wrap">
+          <h2 id="platforms-heading">Platforms</h2>
+          <p class="section-lede">
+            Pick a release artifact for your machine, or build from source.
+          </p>
+          <ul class="platform-list">
+            <li>
+              <strong>macOS — SpecChumMac</strong>
+              <span
+                >Native SwiftUI app in the release <code>.dmg.zip</code> (unzip,
+                open the disk image, drag to Applications).</span
+              >
+            </li>
+            <li>
+              <strong>Windows</strong>
+              <span
+                >Installer (<code>*-setup.exe</code>) or portable
+                <code>.zip</code>; egui is the release UI.</span
+              >
+            </li>
+            <li>
+              <strong>Linux</strong>
+              <span
+                ><code>.deb</code>, AppImage, or <code>.tar.gz</code>; egui is
+                the release primary (optional GTK shell available from
+                source).</span
+              >
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="docs" aria-labelledby="docs-heading">
+        <div class="wrap">
+          <h2 id="docs-heading">Learn more</h2>
+          <p class="section-lede">
+            Player and developer guides stay in the repo docs index.
+          </p>
+          <div class="links-row">
+            <a href="https://github.com/mward-sudo/spec_chum/blob/main/docs/README.md"
+              >Docs index</a
+            >
+            <a href="https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md"
+              >ROMs</a
+            >
+            <a
+              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/MACOS_NATIVE.md"
+              >macOS app</a
+            >
+            <a
+              href="https://github.com/mward-sudo/spec_chum/blob/main/README.md"
+              >README</a
+            >
+            <a href="https://github.com/mward-sudo/spec_chum/releases"
+              >All releases</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p>
+          Spec Chum is an independent ZX Spectrum emulator — not affiliated with
+          Sinclair Research or Amstrad.
+        </p>
+        <p>
+          <a href="https://github.com/mward-sudo/spec_chum">Source on GitHub</a>
+          · MIT licensed (emulator source). Spectrum ROM copyright remains with
+          the rights holders.
+        </p>
+      </div>
+    </footer>
+
+    <script src="./site.js" defer></script>
+  </body>
+</html>
