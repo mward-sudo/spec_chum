@@ -10,7 +10,8 @@ download CTA, platforms/features — not a docs SPA.
 | [`styles.css`](styles.css) | OKLCH palette + layout |
 | [`site.js`](site.js) | Light motion helpers |
 | [`assets/`](assets/) | App icon PNGs |
-| [`../index.html`](../index.html) | Redirect → `./www/` when Pages serves `/docs` |
+| [`fonts/`](fonts/) | Self-hosted woff2 (SIL OFL) |
+| [`.nojekyll`](.nojekyll) | Disable Jekyll processing if served from a branch |
 
 Markdown under `docs/*.md` remains the player/developer docs index on GitHub.
 Do not put LLM agent instructions on this marketing page.
@@ -26,25 +27,46 @@ See the header comment in `styles.css`. Tokens use **OKLCH**, inspired by the ZX
 Spectrum ULA attribute set (`ula::palette_rgb`) — hardware colour language only.
 No Sinclair/Amstrad logos or trademarked rainbow wordmark.
 
-## Enable GitHub Pages
+## When the live site updates
+
+The public site is **not** redeployed on every push to `main`.
+
+The **contents** of this folder are deployed as the Pages **site root** when:
+
+1. A **GitHub Release is cut** (normal path: push a `vX.Y.Z` tag →
+   [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
+   packages apps, publishes the release, then its **`pages` job** uploads
+   `docs/www` via `deploy-pages`), or
+2. Someone runs **Actions → GitHub Pages → Run workflow**
+   ([`pages.yml`](../../.github/workflows/pages.yml) `workflow_dispatch`) for a
+   manual smoke deploy without tagging.
+
+(`release: published` is **not** used for the tag path: a Release created with
+the default `GITHUB_TOKEN` does not start other workflows.)
+
+Live URL shape:
+`https://<owner>.github.io/spec_chum/` (marketing `index.html` at the root).
+
+See also [docs/RELEASE.md](../RELEASE.md) (release checklist includes the site).
+
+## Enable GitHub Pages (GitHub Actions)
+
+One-time repo setup (maintainers):
 
 1. Repo **Settings → Pages**.
-2. **Source:** Deploy from a branch.
-3. **Branch:** `main`, folder **`/docs`**.
-4. Save. Default URL shape:
-   `https://<owner>.github.io/spec_chum/` → redirects to `/www/`.
-   Canonical page: `https://<owner>.github.io/spec_chum/www/`.
+2. **Source:** **GitHub Actions** (not “Deploy from a branch”).
+3. Save. First content appears after the next successful Pages workflow run
+   (publish a release, or `workflow_dispatch`).
 
-`docs/.nojekyll` disables Jekyll so files are served as-is.
-
-Optional CLI (needs Pages write permission):
+Optional CLI (needs admin / Pages write):
 
 ```bash
-gh api repos/<owner>/spec_chum/pages -X POST \
-  -f build_type=legacy \
-  -f source[branch]=main \
-  -f source[path]=/docs
+gh api repos/<owner>/spec_chum/pages -X PUT -f build_type=workflow
 ```
+
+If the `github-pages` environment restricts deployment branches, allow the
+refs you deploy from (at least `main`, and tags matching `v*` for release
+publishes), or disable custom branch policies for that environment.
 
 ## Custom domain later (scripthungry.com — document only)
 
@@ -60,8 +82,8 @@ Two common options:
 3. GitHub may add a `CNAME` file under the Pages publish root — review that
    change when you enable it; still keep this `www/` tree portable.
 
-The site then loads at the subdomain root (serve/copy `docs/www/` contents, or
-keep `/docs` publish and use the `/www/` path / redirect as today).
+The site then loads at the subdomain root (same artifact: contents of
+`docs/www/`).
 
 ### Folder / path (e.g. `scripthungry.com/spec-chum/`)
 
@@ -77,11 +99,7 @@ fits when Spec Chum is one section of an existing site.
 ## Local preview
 
 ```bash
-# from repo root — open the portable folder directly
+# from repo root
 python3 -m http.server 8765 --directory docs/www
 # http://127.0.0.1:8765/
-
-# or full /docs tree (redirect + www)
-python3 -m http.server 8765 --directory docs
-# http://127.0.0.1:8765/www/
 ```

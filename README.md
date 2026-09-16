@@ -6,7 +6,7 @@ A from-scratch, hardware-accurate ZX Spectrum emulator written in Rust.
 
 **Docs index (players vs developers):** [docs/README.md](docs/README.md).
 
-**Public site (GitHub Pages):** [docs/www/](docs/www/) — simple static landing; see [docs/www/README.md](docs/www/README.md) to enable Pages or attach a custom domain later.
+**Public site (GitHub Pages):** [docs/www/](docs/www/) — simple static landing; updates when a `v*` release is cut (see [docs/www/README.md](docs/www/README.md)).
 
 ## Quick start
 
