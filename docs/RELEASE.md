@@ -7,11 +7,13 @@ them to a GitHub Release when a version tag is pushed.
 
 **macOS** ships the native **SpecChumMac** SwiftUI app (`apps/macos`) as a
 **`.dmg.zip`** (a zip containing the `.dmg`, which is notarised/stapled when
-Apple secrets are set). **Windows / Linux** ship the cross-platform **egui**
-host `spec_chum`. Headless debugger and Agent Debug HTTP live on the egui binary
-(`spec_chum --serve`, `spec_chum debug …`); on macOS, use the embedded loopback
-server (`SPEC_CHUM_AGENT=1` on SpecChumMac — see [MACOS_NATIVE.md](MACOS_NATIVE.md) /
-[AGENT_DEBUG_API.md](AGENT_DEBUG_API.md)).
+Apple secrets are set). **Windows** ships the native Win32 **`windows_shell`**
+as `spec_chum.exe` (portable `.zip` + Inno Setup). **Linux** ships the
+cross-platform **egui** host `spec_chum`. On Windows and macOS, Agent Debug HTTP
+uses the embedded loopback server (`SPEC_CHUM_AGENT=1` — see
+[WINDOWS_NATIVE.md](WINDOWS_NATIVE.md) / [MACOS_NATIVE.md](MACOS_NATIVE.md) /
+[AGENT_DEBUG_API.md](AGENT_DEBUG_API.md)). Headless `--serve` / `debug …` remain
+on the egui binary (Linux release archives, or `cargo run -p app` on any OS).
 
 Redistributable Spectrum ROMs (Amstrad Lawson 1999 grant and other grants in
 [ROMS.md](ROMS.md)) are **fetched at packaging time** and **bundled inside** each
@@ -24,17 +26,19 @@ a **`.dmg`** with an **Applications** folder shortcut, then publishes a
 **`.dmg.zip`** of that DMG ([#403](https://github.com/mward-sudo/spec_chum/issues/403);
 not the old secondary `.app` zip dropped in [#361](https://github.com/mward-sudo/spec_chum/issues/361)).
 This is the release-artifact switch from egui-on-macOS
-([#363](https://github.com/mward-sudo/spec_chum/issues/363)); Windows/Linux keep
-shipping egui (strategy: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351),
-[#351](https://github.com/mward-sudo/spec_chum/issues/351)).
+([#363](https://github.com/mward-sudo/spec_chum/issues/363)); Windows release
+primary is Win32 `windows_shell` ([#351](https://github.com/mward-sudo/spec_chum/issues/351));
+Linux still ships egui until `linux_shell` promote
+(strategy: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351)).
 When Apple notary secrets are set, CI notarises and staples the **inner** `.dmg`
 before zipping — see signing table below
 ([#354](https://github.com/mward-sudo/spec_chum/issues/354),
 Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows ships a
-**portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall).
-Linux ships **`.tar.gz`**, **AppImage**, and **`.deb`** of the egui binary plus
-bundled `roms/`. A shared Spectrum rainbow app icon is wired into macOS `.icns`,
-Windows `.ico` / PE resources, Linux desktop PNG, and the egui window
+**portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall)
+of the Win32 shell staged as `spec_chum.exe`. Linux ships **`.tar.gz`**,
+**AppImage**, and **`.deb`** of the egui binary plus bundled `roms/`. A shared
+Spectrum rainbow app icon is wired into macOS `.icns`, Windows `.ico` / PE
+resources (`windows_shell` + egui), Linux desktop PNG, and the egui window
 ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
 
 ## Before tagging (required)
@@ -165,8 +169,8 @@ git push origin v0.2.0
 | Linux (tarball) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.tar.gz` | `spec_chum`, `roms/`, `LICENSE`, `README.txt`, `ROMS-NOTICE.txt` |
 | Linux (AppImage) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.AppImage` | Same binary + bundled roms under `usr/share/spec-chum` |
 | Linux (deb) | `spec-chum-<ver>-x86_64-unknown-linux-gnu.deb` | `/usr/bin/spec_chum` + `/usr/share/spec-chum/roms` + `.desktop` + icon |
-| Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | `spec_chum.exe` + `roms/` + `LICENSE`/`README.txt`/`ROMS-NOTICE.txt` |
-| Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs exe + `roms/` |
+| Windows (portable) | `spec-chum-<ver>-x86_64-pc-windows-msvc.zip` | Win32 `spec_chum.exe` (`windows_shell`) + `roms/` + `LICENSE`/`README.txt`/`ROMS-NOTICE.txt` |
+| Windows (installer) | `spec-chum-<ver>-x86_64-pc-windows-msvc-setup.exe` | Inno Setup: Start Menu + uninstall; installs Win32 exe + `roms/` |
 | macOS (Apple silicon) | `spec-chum-<ver>-aarch64-apple-darwin.dmg.zip` | Zip of SpecChumMac `.dmg` (`Spec Chum.app/` + Applications shortcut + bundled roms; notary when secrets set) |
 | macOS (Intel) | same `.dmg.zip` with `x86_64-apple-darwin` | same layout |
 
@@ -177,7 +181,7 @@ On Windows, prefer the **`*-setup.exe`** for Start Menu / uninstall, or the port
 `.zip` for unzip-and-run. On Linux, prefer the **`.deb`** on Debian/Ubuntu, the
 **AppImage** for distro-agnostic double-click, or the **`.tar.gz`** for unpack-and-run.
 
-Headless (egui / Windows / Linux):
+Headless (egui — Linux release archives, or `cargo run -p app` on any OS):
 
 ```bash
 spec_chum --serve --model 48k
@@ -185,14 +189,21 @@ spec_chum debug dump-state
 spec_chum debug --tap path/to/game.tap type-load --code
 ```
 
-macOS Agent Debug HTTP (SpecChumMac embed; loopback only):
+Windows / macOS Agent Debug HTTP (native-shell embed; loopback only):
+
+```powershell
+# Windows (Win32 release primary)
+$env:SPEC_CHUM_AGENT = "1"
+$env:SPEC_CHUM_AGENT_TOKEN = "<random-token>"   # e.g. openssl rand -hex 16
+.\spec_chum.exe
+```
 
 ```bash
-# Preferred: token auth (run the binary directly — `open -a` does not forward env)
+# macOS (SpecChumMac — run the binary directly; `open -a` does not forward env)
 SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" \
   apps/macos/.build/release/SpecChumMac
 # Dev-only on a trusted machine (disables bearer auth — any local process can call the API):
-# SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 apps/macos/.build/release/SpecChumMac
+# SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_INSECURE=1 …
 ```
 
 (`spec-chum-debug` remains a source-build alias via `cargo run -p debug_cli`; it is

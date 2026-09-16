@@ -3,7 +3,7 @@ name = "windows_shell"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Native Win32 Spec Chum shell over host_api (#351)"
+description = "Native Win32 Spec Chum shell over host_api (Windows release primary; #351)"
 publish = false
 default-run = "spec_chum_windows"
 
@@ -22,6 +22,9 @@ host_api = { workspace = true }
 machine = { workspace = true }
 parking_lot = { workspace = true }
 rfd = { workspace = true }
+
+[build-dependencies]
+winres = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 agent_server = { workspace = true }

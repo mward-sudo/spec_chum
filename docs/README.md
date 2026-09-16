@@ -14,7 +14,7 @@ Start here if you want to run Spec Chum and play Spectrum software.
 | [../README.md](../README.md) | Product overview, quick start, releases |
 | [ROMS.md](ROMS.md) | Where ROMs come from; what is / isn’t redistributed |
 | [MACOS_NATIVE.md](MACOS_NATIVE.md) | Native macOS SpecChumMac app (build & use) |
-| [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md) | Optional Win32 shell (`windows_shell`) |
+| [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md) | Win32 shell (`windows_shell`); Windows release primary |
 | [LINUX_NATIVE.md](LINUX_NATIVE.md) | Optional GTK4 shell (`linux_shell`); egui is Linux release primary |
 | [LIVING_ROOM.md](LIVING_ROOM.md) | Experimental Bevy 3D CRT living-room mode |
 | [MULTIFACE.md](MULTIFACE.md) | Multiface 1 attach / firmware notes |

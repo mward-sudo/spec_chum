@@ -8,7 +8,7 @@ How Spec Chum should present the emulator to users, and why we keep the current 
 
 Spec Chum’s scarce resource is **hardware accuracy** (Z80, ULA, tape), not UI novelty. egui already ships framebuffer blit, menus, file dialogs (`rfd`), and headless `Context::run` tests.
 
-**Optional on macOS:** a native SwiftUI shell with real liquid glass / materials, driven by the `host_api` C ABI — see [MACOS_NATIVE.md](MACOS_NATIVE.md) and [#66](https://github.com/mward-sudo/spec_chum/issues/66). This does **not** replace egui on Linux/Windows/CI.
+**Optional on macOS:** a native SwiftUI shell with real liquid glass / materials, driven by the `host_api` C ABI — see [MACOS_NATIVE.md](MACOS_NATIVE.md) and [#66](https://github.com/mward-sudo/spec_chum/issues/66). This does **not** replace egui on Linux/CI (Windows release primary is Win32 `windows_shell`; egui remains the Windows headless/CI fallback).
 
 **Optional later:** a thin **libretro / RetroArch** core once the machine host API is stable (`run_frame`, framebuffer, audio batch, input inject, optional serialize). Tracked in [#64](https://github.com/mward-sudo/spec_chum/issues/64). The same `crates/host_api` surface is a useful stepping stone.
 
@@ -86,7 +86,7 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
 | Optional **Bevy living-room** | Experimental immersion host; SpecChumMac links staticlib, display opt-in; keep out of default CI; #146 |
 | **Linux native shell in progress** | egui is the **current** Linux release/CI host; GTK4 `linux_shell` with Machine/Hardware/Settings/Debug deepen in-tree ([LINUX_NATIVE.md](LINUX_NATIVE.md)); release promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
-| **Windows native shell in progress** | Ship egui today; classic Win32 `windows_shell` vertical slice in-tree ([WINDOWS_NATIVE.md](WINDOWS_NATIVE.md)); deepen + promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
+| **Windows native shell (release primary)** | Classic Win32 `windows_shell` is the GitHub Release primary ([WINDOWS_NATIVE.md](WINDOWS_NATIVE.md)); egui remains CI / headless fallback ([#351](https://github.com/mward-sudo/spec_chum/issues/351)) |
 
 ## Native shells (#351)
 
@@ -104,7 +104,7 @@ Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / i
 
 - **SpecChumMac** (`apps/macos`) is the primary macOS product shell and the GitHub Release `.dmg` app.
 - Driven by the `host_api` C ABI; docs and build path: [MACOS_NATIVE.md](MACOS_NATIVE.md).
-- egui remains available for source builds and as the Windows/Linux (and CI) host.
+- egui remains available for source builds, CI, Linux releases, and Windows headless (`--serve` / `debug …`).
 
 ### Linux — egui today; GTK4 native shell vertical slice (#351)
 
@@ -116,26 +116,24 @@ Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / i
 
 Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** concern (#231) whether the wrapped binary is egui or a future native shell.
 
-### Windows — decision: ship egui; provisional native stack
+### Windows — first-class native shell (release primary)
 
-**Today:** Windows releases ship the **egui** portable `.zip` and Inno Setup installer — that is the supported Windows product UI.
+**Today:** Windows releases ship classic **Win32** `crates/windows_shell` as `spec_chum.exe` (portable `.zip` + Inno Setup) — same thin-host pattern as SpecChumMac. Docs: [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md). Opt-in CI job `windows-shell`. egui remains the CI baseline and the Windows headless `--serve` / `debug …` host from source.
 
-**Native vertical slice (in-tree):** classic **Win32** host `crates/windows_shell` (`spec_chum_windows`) over `host_api` — window, framebuffer blit, File/Tape/Machine/Hardware/Settings/Debug menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP, `UiPreferences` load/save. Docs: [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md). Opt-in CI job `windows-shell`. egui remains the release primary until packaging deliberately switches.
-
-**If/when a richer native Windows shell is justified**, keep the same thin-host architecture as SpecChumMac:
+**Stack:**
 
 | Choice | Notes |
 | --- | --- |
-| **Current spike** | **Classic Win32** Rust host (`windows` crate) + `host_api` — no webview, no Tauri |
+| **Shipped** | **Classic Win32** Rust host (`windows` crate) + `host_api` — no webview, no Tauri |
 | **Provisional later** | **WinUI 3** chrome if menus/a11y need XAML; still call `host_api` / shared session |
 | **Not preferred** | Win32+webview / Electron-style hosts (extra IPC on the frame path) |
 | **Out of scope here** | Replacing egui in CI; living-room as the Windows default |
 
-Vertical slice + deepen checklist: native window, framebuffer present, tape/snapshot open, keyboard → matrix, audio path, Agent Debug HTTP embed, Hardware attach, Settings/prefs, Debug/inspect. Builds must not break Linux/macOS gates (opt-in CI job is fine). Release promotion over egui remains a separate packaging decision (#231 / #351).
+Vertical slice + deepen checklist is complete: native window, framebuffer present, tape/snapshot open, keyboard → matrix, audio path, Agent Debug HTTP embed, Hardware attach, Settings/prefs, Debug/inspect. Builds must not break Linux/macOS gates (opt-in CI job is fine).
 
 ### Relationship to packaging
 
-Native shells, when ready, are what release packaging wraps. Packaging does **not** wait on Windows/Linux native shells: egui is already the wrapped primary on those OSes until a shell is promoted. See [RELEASE.md](RELEASE.md). Linux native preference: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+Native shells, when ready, are what release packaging wraps. **macOS** and **Windows** already wrap native shells; **Linux** still wraps egui until `linux_shell` is promoted. See [RELEASE.md](RELEASE.md). Linux native preference: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 
 ## Practical chrome rules (current shell)
 
