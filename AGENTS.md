@@ -83,6 +83,7 @@ Or equivalently: `cargo fmt --all`, `cargo clippy --workspace --all-targets --ex
 ./scripts/check_living_room.sh            # clippy+test --release + room_perf
 # SPEC_CHUM_ROOM_DEBUG=1 ./scripts/check_living_room.sh   # opt-in disk-heavy debug
 ./scripts/build_macos_app.sh              # always release staticlib
+# Optional: source scripts/dev_env.sh to offload Cargo/Swift caches to External SSD
 ```
 
 Do not run `cargo check -p living_room` (debug) unless you intentionally need Bevy debug symbols — prefer `--release` or `check_living_room.sh`. Set `SPEC_CHUM_CHECK_LIVING_ROOM=1` only when `./scripts/check.sh` should also run the living-room release gate.
