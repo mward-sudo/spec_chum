@@ -117,7 +117,7 @@ fn spawn_fill_lights(mut commands: Commands) {
                 GlowDriven {
                     intensity_scale: 0.45,
                 },
-                // Temporary #149: New scene dims this as lightmap stub.
+                // Temporary #149: New suppresses wall-bounce only (sconces stay lit).
                 crate::scene_variant::DynamicRoomFillLight,
                 bevy::camera::visibility::RenderLayers::layer(0).with(1),
                 Name::new("crt_wall_bounce"),
@@ -202,11 +202,11 @@ fn sync_glow_tints(
 ) {
     let tint = Color::from(glow.color);
     let base = glow.intensity;
-    let suppress_dynamic = matches!(*variant, crate::scene_variant::SceneVariant::New);
+    // Temporary #149: New keeps CRT spill + sconces; zeros GlowDriven wall-bounce only.
+    let suppress_wall_bounce = matches!(*variant, crate::scene_variant::SceneVariant::New);
 
     for (driven, mut light, dynamic) in &mut points {
-        // Temporary #149: New (lightmap WIP) keeps CRT spill but zeros DynamicRoomFillLight.
-        if suppress_dynamic && dynamic.is_some() {
+        if suppress_wall_bounce && dynamic.is_some() {
             light.intensity = 0.0;
             continue;
         }
@@ -214,7 +214,7 @@ fn sync_glow_tints(
         light.intensity = base * driven.intensity_scale;
     }
     for (driven, mut light, dynamic) in &mut spots {
-        if suppress_dynamic && dynamic.is_some() {
+        if suppress_wall_bounce && dynamic.is_some() {
             light.intensity = 0.0;
             continue;
         }

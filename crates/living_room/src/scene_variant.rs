@@ -13,7 +13,8 @@ use crate::quality;
 /// Which living-room lighting/scene path is active.
 ///
 /// - [`Current`](Self::Current) — pre-#149 baseline (dynamic PBR fill + sconces).
-/// - [`New`](Self::New) — lightmap WIP stub (clearly different look for A/B checks).
+/// - [`New`](Self::New) — lightmap WIP stub (brighter warm ambient + lit sconces +
+///   cyan marker; wall-bounce still suppressed as the lightmap stand-in).
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SceneVariant {
     #[default]
@@ -46,7 +47,11 @@ impl SceneVariant {
 #[derive(Component, Debug, Clone, Copy)]
 pub struct SceneVariantOnly(pub SceneVariant);
 
-/// Dynamic room fill that the New (lightmap WIP) path suppresses — CRT spill stays.
+/// Dynamic room fill tagged for the #149 A/B harness.
+///
+/// - Sconce bulbs (no [`crate::glow::GlowDriven`]): stay lit on both Current and New.
+/// - CRT wall-bounce ([`crate::glow::GlowDriven`]): still suppressed on New as the
+///   lightmap stub until baked fill lands.
 ///
 /// Temporary until baked lightmaps replace these lights (#149).
 #[derive(Component, Debug, Clone, Copy)]
@@ -135,17 +140,21 @@ fn apply_scene_variant(
             }
         }
         SceneVariant::New => {
-            // Cooler IBL-ish ambient stub — stand-in for EnvironmentMapLight (#149).
+            // Warmer, brighter ambient stub — stand-in for EnvironmentMapLight (#149).
+            // Distinct from Current (creamier tint + higher brightness) but not
+            // cool/muddy; sconces stay lit (visual feedback on the A/B harness).
             let bright = crate::crt::bright_debug_enabled();
             ambient.color = if bright {
-                Color::srgb(0.55, 0.62, 0.72)
+                Color::srgb(0.58, 0.54, 0.48)
             } else {
-                Color::srgb(0.42, 0.55, 0.68)
+                // Cream-warm vs Current tungsten (0.26, 0.20, 0.13).
+                Color::srgb(0.36, 0.28, 0.18)
             };
-            ambient.brightness = 110.0 * if bright { 14.0 } else { 1.0 };
-            // Suppress dynamic sconces as if lightmaps took over.
-            for mut light in &mut fill_lights {
-                light.intensity = 0.0;
+            ambient.brightness = 118.0 * if bright { 14.0 } else { 1.0 };
+            for (i, mut light) in fill_lights.iter_mut().enumerate() {
+                if let Some(&base) = fill_intensity.get(i) {
+                    light.intensity = base;
+                }
             }
         }
     }
