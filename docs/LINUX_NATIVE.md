@@ -23,7 +23,7 @@ genuinely unavailable on Linux; chrome may follow GTK HIG. See
 
 | Layer | Rule |
 | --- | --- |
-| **Product features** | Match egui / SpecChumMac / `windows_shell` (media types, tape transport, agent HTTP, …) unless a capability is genuinely unavailable on Linux |
+| **Product features** | Match egui / SpecChumMac / `windows_shell` (media types, tape transport, Agent Debug HTTP, …) unless a capability is genuinely unavailable on Linux |
 | **Chrome / UX** | Follow GTK / desktop conventions (menubar, Ctrl shortcuts) — do not mimic macOS chrome |
 | **Shared core** | Behaviour in `host_api` / `control_plane`; this crate stays a thin adapter |
 
