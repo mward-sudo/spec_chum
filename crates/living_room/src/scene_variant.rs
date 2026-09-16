@@ -98,17 +98,17 @@ impl Plugin for SceneVariantPlugin {
 
 /// Build a 1×1×6 stub cubemap via Bevy's hemispherical helper (no HDR asset yet).
 fn prepare_new_environment_map(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    // Cyan-teal upper hemisphere vs cream horizon — reads on chrome / glass without
+    // Cyan-teal upper hemisphere vs cream horizon — reads on chrome without
     // washing the room (2400 blew Exposure ~8.2 + #435 ambient into high-key).
     let mut light = EnvironmentMapLight::hemispherical_gradient(
         &mut images,
-        Color::srgb(0.16, 0.48, 0.68), // sky / upper fill (muted vs prior cyan)
-        Color::srgb(0.82, 0.70, 0.52), // cream horizon (keeps #435 warmth)
-        Color::srgb(0.36, 0.26, 0.14), // warm floor bounce
+        Color::srgb(0.12, 0.40, 0.58), // sky / upper fill (muted; avoids cool wash)
+        Color::srgb(0.78, 0.66, 0.48), // cream horizon (keeps #435 warmth)
+        Color::srgb(0.30, 0.22, 0.12), // warm floor bounce
     );
-    // Indoor Exposure ~8.2: subtle IBL fill — chrome marker still obvious; walls stay
+    // Indoor Exposure ~8.2: subtle IBL — chrome marker still obvious; walls stay
     // cream-warm from ambient + sconces rather than env-map overexposure.
-    light.intensity = 720.0;
+    light.intensity = 420.0;
     commands.insert_resource(NewVariantEnvironmentMap(light));
 }
 
@@ -180,8 +180,8 @@ fn spawn_new_env_reflection_marker(
 /// white center blob and washes the phosphor face — dial only on New.
 const CRT_GLASS_REFLECTANCE_CURRENT: f32 = 1.0;
 const CRT_GLASS_ROUGHNESS_CURRENT: f32 = 0.04;
-const CRT_GLASS_REFLECTANCE_NEW: f32 = 0.22;
-const CRT_GLASS_ROUGHNESS_NEW: f32 = 0.22;
+const CRT_GLASS_REFLECTANCE_NEW: f32 = 0.08;
+const CRT_GLASS_ROUGHNESS_NEW: f32 = 0.42;
 
 // Bevy Queries + resources for Current/New lighting + CRT glass IBL dial (#149).
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -234,15 +234,16 @@ fn apply_scene_variant(
                 }
             }
             SceneVariant::New => {
-                // Keep #435 cream-warm ambient + lit sconces; add stub EnvironmentMapLight.
+                // Keep #435 cream warmth + lit sconces; stub IBL adds fill so ambient
+                // sits below the #435-only 118 brightness (avoids high-key wash).
                 let bright = crate::crt::bright_debug_enabled();
                 ambient.color = if bright {
                     Color::srgb(0.58, 0.54, 0.48)
                 } else {
                     // Cream-warm vs Current tungsten (0.26, 0.20, 0.13).
-                    Color::srgb(0.36, 0.28, 0.18)
+                    Color::srgb(0.34, 0.27, 0.17)
                 };
-                ambient.brightness = 118.0 * if bright { 14.0 } else { 1.0 };
+                ambient.brightness = 96.0 * if bright { 14.0 } else { 1.0 };
                 for (i, mut light) in fill_lights.iter_mut().enumerate() {
                     if let Some(&base) = fill_intensity.get(i) {
                         light.intensity = base;

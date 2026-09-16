@@ -58,6 +58,10 @@ fi
 if [[ -n "${SPEC_CHUM_ROOM_BRIGHT_DEBUG:-}" ]]; then
   printf 'export SPEC_CHUM_ROOM_BRIGHT_DEBUG=%q\n' "$SPEC_CHUM_ROOM_BRIGHT_DEBUG" >> "$MACOS_DIR/SpecChumMac"
 fi
+if [[ -n "${SPEC_CHUM_ROOM_SCENE:-}" ]]; then
+  # Temporary #149 A/B — Current/New at boot (toolbar still toggles live).
+  printf 'export SPEC_CHUM_ROOM_SCENE=%q\n' "$SPEC_CHUM_ROOM_SCENE" >> "$MACOS_DIR/SpecChumMac"
+fi
 if [[ -n "${SPEC_CHUM_AUDIO_DEBUG:-}" ]]; then
   printf 'export SPEC_CHUM_AUDIO_DEBUG=%q\n' "$SPEC_CHUM_AUDIO_DEBUG" >> "$MACOS_DIR/SpecChumMac"
 fi
