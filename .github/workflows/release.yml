@@ -265,7 +265,7 @@ jobs:
               echo "Contents: spec_chum.exe (Win32 native shell) + roms/"
               echo "  Portable zip or Start Menu install via *-setup.exe"
               echo "Agent Debug HTTP (embedded; loopback only):"
-              echo "  SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN=… .\\spec_chum.exe"
+              echo "  \$env:SPEC_CHUM_AGENT='1'; \$env:SPEC_CHUM_AGENT_TOKEN='<random-token>'; .\\spec_chum.exe"
               echo "  SPEC_CHUM_AGENT_INSECURE=1 is trusted-dev-only (disables bearer auth)."
               echo "Headless --serve / debug: cargo run -p app --release (egui; not in this archive)."
               echo ""

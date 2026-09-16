@@ -191,10 +191,14 @@ spec_chum debug --tap path/to/game.tap type-load --code
 
 Windows / macOS Agent Debug HTTP (native-shell embed; loopback only):
 
-```bash
+```powershell
 # Windows (Win32 release primary)
-SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" ./spec_chum.exe
+$env:SPEC_CHUM_AGENT = "1"
+$env:SPEC_CHUM_AGENT_TOKEN = "<random-token>"   # e.g. openssl rand -hex 16
+.\spec_chum.exe
+```
 
+```bash
 # macOS (SpecChumMac — run the binary directly; `open -a` does not forward env)
 SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" \
   apps/macos/.build/release/SpecChumMac
