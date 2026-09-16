@@ -36,8 +36,9 @@ cargo run -p living_room --release
 ```
 
 Binary name: `spec-chum-room` (requires the default `standalone` feature).
-Launch from a normal Terminal with WindowServer — headless agent shells often die in ~5s
-(monitor scale factor 0 / no display attachment).
+Launch from a normal Terminal with WindowServer — headless SSH sessions or
+machines without a display often die in ~5s (monitor scale factor 0 / no display
+attachment).
 
 ## macOS SwiftUI embed
 

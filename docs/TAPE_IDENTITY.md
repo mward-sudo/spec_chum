@@ -78,7 +78,7 @@ Cache stores metadata only (`sha512 → { title, entry_id? }`).
 | Surface | Behaviour |
 | --- | --- |
 | **Shared** | `HostSession::media_title` / `media_sha512` set on tape open; cleared on eject; online hits apply asynchronously |
-| **Agent** | `GET /v1/status` includes optional `media_title` and `media_sha512` |
+| **Agent Debug HTTP** | `GET /v1/status` includes optional `media_title` and `media_sha512` |
 | **FFI** | `sc_media_title` / `sc_media_sha512`; `sc_set_online_tape_titles` / `sc_online_tape_titles` |
 | **egui** | Status text + top-bar tape label; Tape menu opt-in toggle |
 | **SpecChumMac** | Status footer / window media; Settings toggle; title refreshed after background hit |
