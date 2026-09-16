@@ -12,8 +12,8 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1789534327.2635467,
-    "seen": 1789534780.9709,
+    "mtime": 1789534874.5699766,
+    "seen": 1789536186.541095,
     "ast_hash": "f2fb4751469477bd45b13a9947d6b6dd",
     "semantic_hash": ""
   },
@@ -30,8 +30,8 @@
     "semantic_hash": "399e2949d9fb95371b20370ba2053f20"
   },
   "apps/macos/Sources/SpecChumMac/ContentView.swift": {
-    "mtime": 1789534705.253026,
-    "seen": 1789534780.970925,
+    "mtime": 1789535993.6667786,
+    "seen": 1789536186.541149,
     "ast_hash": "6418c4367fd0ad3e0b4d4c0e0a5794d0",
     "semantic_hash": ""
   },
@@ -456,8 +456,8 @@
     "semantic_hash": "8cd78449039d538bba10b185dc3ea2f4"
   },
   "crates/living_room/src/glow.rs": {
-    "mtime": 1789534697.3764875,
-    "seen": 1789534780.972811,
+    "mtime": 1789535993.6670523,
+    "seen": 1789536186.543126,
     "ast_hash": "bf1265624b67538f0f62a140a8b708ab",
     "semantic_hash": ""
   },
@@ -528,8 +528,8 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/room.rs": {
-    "mtime": 1789534690.7186482,
-    "seen": 1789534780.972932,
+    "mtime": 1789535993.6672988,
+    "seen": 1789536186.5432918,
     "ast_hash": "6bb33f4084ea05bdf60e20e8eaab7af1",
     "semantic_hash": ""
   },
@@ -876,9 +876,9 @@
     "semantic_hash": ""
   },
   "docs/LIVING_ROOM.md": {
-    "mtime": 1789534690.7182498,
-    "seen": 1789534780.9743931,
-    "ast_hash": "86aa34b883aae934e71f69f214b5bbde",
+    "mtime": 1789536076.181447,
+    "seen": 1789536186.544703,
+    "ast_hash": "770f091a95cdb5726263b81341aeba3e",
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
@@ -1626,9 +1626,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/scene_variant.rs": {
-    "mtime": 1789534690.0611408,
-    "seen": 1789534780.972933,
-    "ast_hash": "42e3d295467e870d1bca800652495d55",
+    "mtime": 1789536069.688496,
+    "seen": 1789536186.5432918,
+    "ast_hash": "8d10f25ad7886b3fe499c69c5d1ab24a",
     "semantic_hash": ""
   }
 }

@@ -3,18 +3,19 @@
 //! SpecChumMac exposes a toolbar toggle that calls [`crate::ffi::sc_room_set_scene_variant`].
 //! **Mac living-room path only** — not egui / Windows / Linux shells.
 //!
-//! Remove this module, the FFI, the SpecChumMac button, and the New WIP marker once
+//! Remove this module, the FFI, the SpecChumMac button, and the New WIP markers once
 //! Blender lightmaps + Bevy `Lightmap` / `EnvironmentMapLight` land and #149 closes.
 
 use bevy::prelude::*;
 
+use crate::camera::LivingRoomCamera;
 use crate::quality;
 
 /// Which living-room lighting/scene path is active.
 ///
 /// - [`Current`](Self::Current) — pre-#149 baseline (dynamic PBR fill + sconces).
-/// - [`New`](Self::New) — lightmap WIP stub (brighter warm ambient + lit sconces +
-///   cyan marker; wall-bounce still suppressed as the lightmap stand-in).
+/// - [`New`](Self::New) — lightmap WIP: cream ambient + sconces + stub
+///   [`EnvironmentMapLight`] + cyan strip; wall-bounce still suppressed.
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SceneVariant {
     #[default]
@@ -57,6 +58,18 @@ pub struct SceneVariantOnly(pub SceneVariant);
 #[derive(Component, Debug, Clone, Copy)]
 pub struct DynamicRoomFillLight;
 
+/// Procedural stub cubemap for New — real HDR bake comes later (#149).
+#[derive(Resource, Clone)]
+struct NewVariantEnvironmentMap(EnvironmentMapLight);
+
+impl std::fmt::Debug for NewVariantEnvironmentMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NewVariantEnvironmentMap")
+            .field("intensity", &self.0.intensity)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SceneVariantPlugin;
 
@@ -68,9 +81,35 @@ impl Plugin for SceneVariantPlugin {
             initial.label()
         );
         app.insert_resource(initial)
-            .add_systems(Startup, spawn_new_variant_wip_marker)
-            .add_systems(Update, apply_scene_variant);
+            .add_systems(
+                Startup,
+                (
+                    prepare_new_environment_map,
+                    spawn_new_variant_wip_marker,
+                    spawn_new_env_reflection_marker,
+                ),
+            )
+            .add_systems(
+                Update,
+                apply_scene_variant.run_if(resource_exists::<NewVariantEnvironmentMap>),
+            );
     }
+}
+
+/// Build a 1×1×6 stub cubemap via Bevy's hemispherical helper (no HDR asset yet).
+fn prepare_new_environment_map(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    // Cyan-teal upper hemisphere vs cream horizon — obvious in CRT glass / chrome
+    // reflections and as cool ambient fill on upper walls when toggling to New.
+    let mut light = EnvironmentMapLight::hemispherical_gradient(
+        &mut images,
+        Color::srgb(0.22, 0.72, 0.98), // sky / upper fill
+        Color::srgb(0.95, 0.84, 0.64), // cream horizon (keeps #435 warmth)
+        Color::srgb(0.42, 0.30, 0.16), // warm floor bounce
+    );
+    // Indoor Exposure ~8.2: strong enough that IBL reads at sofa eye-height without
+    // needing real Poly Haven HDR yet.
+    light.intensity = 2_400.0;
+    commands.insert_resource(NewVariantEnvironmentMap(light));
 }
 
 /// Cyan emissive strip on the TV wall — only visible in New so the toggle is obvious.
@@ -104,10 +143,44 @@ fn spawn_new_variant_wip_marker(
     ));
 }
 
-fn apply_scene_variant(
+/// Small chrome sphere — New only — so env-map specular reads at a glance.
+fn spawn_new_env_reflection_marker(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     variant: Res<SceneVariant>,
+) {
+    let mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.92, 0.92, 0.95),
+        perceptual_roughness: 0.08,
+        metallic: 1.0,
+        reflectance: 1.0,
+        ..default()
+    });
+    let visible = matches!(*variant, SceneVariant::New);
+    commands.spawn((
+        Mesh3d(meshes.add(Sphere::new(0.09).mesh().uv(32, 18))),
+        MeshMaterial3d(mat),
+        // Right of TV, mid-height — catches cyan sky + cream horizon from the stub IBL.
+        Transform::from_xyz(0.85, 1.35, -crate::room::ROOM_D * 0.5 + 0.35),
+        if visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        },
+        SceneVariantOnly(SceneVariant::New),
+        crate::hybrid::RoomStatic,
+        Name::new("scene_new_envmap_reflection_marker"),
+    ));
+}
+
+fn apply_scene_variant(
+    mut commands: Commands,
+    variant: Res<SceneVariant>,
+    env_map: Res<NewVariantEnvironmentMap>,
     mut ambient: ResMut<GlobalAmbientLight>,
     mut only: Query<(&SceneVariantOnly, &mut Visibility)>,
+    cams: Query<Entity, With<LivingRoomCamera>>,
     // Sconce bulbs (no GlowDriven). CRT wall-bounce is handled in glow::sync_glow_tints.
     mut fill_lights: Query<
         &mut PointLight,
@@ -138,11 +211,12 @@ fn apply_scene_variant(
                     light.intensity = base;
                 }
             }
+            for entity in &cams {
+                commands.entity(entity).remove::<EnvironmentMapLight>();
+            }
         }
         SceneVariant::New => {
-            // Warmer, brighter ambient stub — stand-in for EnvironmentMapLight (#149).
-            // Distinct from Current (creamier tint + higher brightness) but not
-            // cool/muddy; sconces stay lit (visual feedback on the A/B harness).
+            // Keep #435 cream-warm ambient + lit sconces; add stub EnvironmentMapLight.
             let bright = crate::crt::bright_debug_enabled();
             ambient.color = if bright {
                 Color::srgb(0.58, 0.54, 0.48)
@@ -155,6 +229,9 @@ fn apply_scene_variant(
                 if let Some(&base) = fill_intensity.get(i) {
                     light.intensity = base;
                 }
+            }
+            for entity in &cams {
+                commands.entity(entity).insert(env_map.0.clone());
             }
         }
     }
