@@ -265,7 +265,8 @@ impl AppState {
     }
 
     fn select_model(&mut self, model: ModelId) {
-        let mut next = self.prefs.clone();
+        let previous = self.prefs.clone();
+        let mut next = previous.clone();
         next.select_builtin_model(PrefModel::from_model_id(model));
         sync_model_rom_paths(next.model_rom_paths.clone());
         let result = self.host.with_mut(|s| {
@@ -278,7 +279,16 @@ impl AppState {
                 self.prefs = next;
                 self.persist_prefs();
             }
-            Err(e) => self.report_err("Select model", &e),
+            Err(e) => {
+                // `select_model` may leave the host with no machine; restore prior.
+                sync_model_rom_paths(previous.model_rom_paths.clone());
+                let restore = previous.model.to_model_id();
+                let _ = self.host.with_mut(|s| {
+                    s.select_model(restore)?;
+                    apply_session_prefs(s, &previous)
+                });
+                self.report_err("Select model", &e);
+            }
         }
     }
 
@@ -366,7 +376,7 @@ impl AppState {
         self.persist_prefs();
     }
 
-    fn toggle_debug_window(&mut self, parent: &ApplicationWindow) {
+    fn toggle_debug_window(&mut self, parent: &ApplicationWindow, state: &Rc<RefCell<AppState>>) {
         if let Some(win) = self.debug_window.take() {
             self.debug_buffer = None;
             if win.is_visible() {
@@ -391,7 +401,16 @@ impl AppState {
             .default_height(520)
             .child(&scroll)
             .build();
-        // Closing via window chrome leaves Option set; next toggle destroys if still mapped.
+        win.connect_close_request(clone!(
+            #[strong]
+            state,
+            move |_| {
+                let mut s = state.borrow_mut();
+                s.debug_window = None;
+                s.debug_buffer = None;
+                glib::Propagation::Proceed
+            }
+        ));
         win.present();
         self.debug_buffer = Some(buffer);
         self.debug_window = Some(win);
@@ -905,7 +924,8 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
         let window = window.clone();
         let action = gio::SimpleAction::new("dbg_toggle", None);
         action.connect_activate(move |_, _| {
-            state.borrow_mut().toggle_debug_window(&window);
+            let state2 = Rc::clone(&state);
+            state.borrow_mut().toggle_debug_window(&window, &state2);
         });
         app.add_action(&action);
     }
