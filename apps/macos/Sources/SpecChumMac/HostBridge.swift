@@ -206,7 +206,11 @@ final class HostBridge: ObservableObject {
     /// Temporary #149 A/B: New = lightmap WIP stub vs Current baseline.
     /// SpecChumMac living-room only — remove with the harness when #149 closes.
     @Published var livingRoomSceneNew: Bool = ProcessInfo.processInfo.environment["SPEC_CHUM_ROOM_SCENE"]
-        .map { ["new", "1", "wip", "lightmap"].contains($0.lowercased()) } ?? false
+        .map {
+            ["new", "1", "wip", "lightmap"].contains(
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            )
+        } ?? false
     {
         didSet {
             applyLivingRoomSceneVariant()

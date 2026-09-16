@@ -120,9 +120,14 @@ fn apply_scene_variant(
 
     match *variant {
         SceneVariant::Current => {
-            // Warm tungsten ambient — matches glow.rs baseline (non–bright-debug).
-            ambient.color = Color::srgb(0.26, 0.20, 0.13);
-            ambient.brightness = 76.5;
+            // Match glow.rs ambient — preserve SPEC_CHUM_ROOM_BRIGHT_DEBUG.
+            let bright = crate::crt::bright_debug_enabled();
+            ambient.color = if bright {
+                Color::srgb(0.55, 0.55, 0.58)
+            } else {
+                Color::srgb(0.26, 0.20, 0.13)
+            };
+            ambient.brightness = 76.5 * if bright { 14.0 } else { 1.0 };
             for (i, mut light) in fill_lights.iter_mut().enumerate() {
                 if let Some(&base) = fill_intensity.get(i) {
                     light.intensity = base;
@@ -131,8 +136,13 @@ fn apply_scene_variant(
         }
         SceneVariant::New => {
             // Cooler IBL-ish ambient stub — stand-in for EnvironmentMapLight (#149).
-            ambient.color = Color::srgb(0.42, 0.55, 0.68);
-            ambient.brightness = 110.0;
+            let bright = crate::crt::bright_debug_enabled();
+            ambient.color = if bright {
+                Color::srgb(0.55, 0.62, 0.72)
+            } else {
+                Color::srgb(0.42, 0.55, 0.68)
+            };
+            ambient.brightness = 110.0 * if bright { 14.0 } else { 1.0 };
             // Suppress dynamic sconces as if lightmaps took over.
             for mut light in &mut fill_lights {
                 light.intensity = 0.0;
