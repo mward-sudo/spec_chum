@@ -152,6 +152,11 @@ git push origin v0.2.0
    tag if you need to rebuild assets. The workflow builds and publishes
    binaries; it does **not** re-run the slow suite — maintainers must
    have already passed `./scripts/run_slow_tests.sh` before tagging.
+6. When that GitHub Release is **published**, [GitHub Pages](../.github/workflows/pages.yml)
+   deploys `docs/www/` as the public marketing site root
+   (`https://<owner>.github.io/spec_chum/`). The live site updates on release
+   publish (or optional **Actions → GitHub Pages → Run workflow**), not on
+   every push to `main`. Setup notes: [www/README.md](www/README.md).
 
 ### Artifact layout
 

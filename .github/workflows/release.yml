@@ -3,6 +3,10 @@ name: Release
 # Publishes binaries for v*.*.* tags. Maintainers must pass the full slow suite
 # (./scripts/run_slow_tests.sh — z80doc + system-tests + z80full) before tagging;
 # this workflow does not re-run those tests. See docs/RELEASE.md.
+#
+# Marketing site: when this workflow publishes a GitHub Release, a separate
+# workflow (.github/workflows/pages.yml) deploys docs/www to GitHub Pages on
+# release: published. Packaging jobs here must stay independent of Pages.
 
 on:
   push:

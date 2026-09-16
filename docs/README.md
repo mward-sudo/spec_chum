@@ -3,7 +3,7 @@
 Guides for **using**, **building**, and **contributing** to Spec Chum today.
 LLM assistant policy lives elsewhere (`AGENTS.md`, `.cursor/rules/`, `.cursor/skills/`) — not in these product docs.
 
-**Public marketing site (GitHub Pages):** [www/](www/) — static landing (download / platforms). Setup and optional custom-domain notes: [www/README.md](www/README.md).
+**Public marketing site (GitHub Pages):** [www/](www/) — static landing (download / platforms). Deploys on **release publish** (not every `main` push). Setup / custom domain: [www/README.md](www/README.md).
 
 ## Players / end users
 
