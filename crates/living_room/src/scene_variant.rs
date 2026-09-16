@@ -102,13 +102,13 @@ fn prepare_new_environment_map(mut commands: Commands, mut images: ResMut<Assets
     // washing the room (2400 blew Exposure ~8.2 + #435 ambient into high-key).
     let mut light = EnvironmentMapLight::hemispherical_gradient(
         &mut images,
-        Color::srgb(0.12, 0.40, 0.58), // sky / upper fill (muted; avoids cool wash)
-        Color::srgb(0.78, 0.66, 0.48), // cream horizon (keeps #435 warmth)
-        Color::srgb(0.30, 0.22, 0.12), // warm floor bounce
+        Color::srgb(0.10, 0.34, 0.50), // sky / upper fill (muted; avoids cool wash)
+        Color::srgb(0.70, 0.58, 0.42), // cream horizon (keeps #435 warmth)
+        Color::srgb(0.24, 0.18, 0.10), // warm floor bounce
     );
-    // Indoor Exposure ~8.2: subtle IBL — chrome marker still obvious; walls stay
-    // cream-warm from ambient + sconces rather than env-map overexposure.
-    light.intensity = 420.0;
+    // Indoor Exposure ~8.2: chrome marker still shows IBL; walls stay cream-warm
+    // from ambient + sconces (420 still washed the zoomed-out CRT face).
+    light.intensity = 180.0;
     commands.insert_resource(NewVariantEnvironmentMap(light));
 }
 
@@ -177,11 +177,13 @@ fn spawn_new_env_reflection_marker(
 /// Baseline CRT glass PBR (Current) vs New stub-IBL-safe values.
 ///
 /// Mirror-like glass (`reflectance` 1.0 / roughness 0.04) turns stub IBL + bloom into a
-/// white center blob and washes the phosphor face — dial only on New.
+/// white center blob and washes the phosphor face — dial only on New. Bevy maps
+/// reflectance 0 → no specular; keep New glass fully rough so the env map cannot
+/// mirror a hot highlight onto the bulging CRT face when zoomed out.
 const CRT_GLASS_REFLECTANCE_CURRENT: f32 = 1.0;
 const CRT_GLASS_ROUGHNESS_CURRENT: f32 = 0.04;
-const CRT_GLASS_REFLECTANCE_NEW: f32 = 0.08;
-const CRT_GLASS_ROUGHNESS_NEW: f32 = 0.42;
+const CRT_GLASS_REFLECTANCE_NEW: f32 = 0.0;
+const CRT_GLASS_ROUGHNESS_NEW: f32 = 1.0;
 
 // Bevy Queries + resources for Current/New lighting + CRT glass IBL dial (#149).
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -243,7 +245,7 @@ fn apply_scene_variant(
                     // Cream-warm vs Current tungsten (0.26, 0.20, 0.13).
                     Color::srgb(0.34, 0.27, 0.17)
                 };
-                ambient.brightness = 96.0 * if bright { 14.0 } else { 1.0 };
+                ambient.brightness = 88.0 * if bright { 14.0 } else { 1.0 };
                 for (i, mut light) in fill_lights.iter_mut().enumerate() {
                     if let Some(&base) = fill_intensity.get(i) {
                         light.intensity = base;
