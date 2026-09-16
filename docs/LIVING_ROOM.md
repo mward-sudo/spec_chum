@@ -412,7 +412,7 @@ Windows, or Linux shells.
 | Variant | Look |
 | --- | --- |
 | **Current** | Pre-#149 baseline (warm ambient + dynamic sconces / wall bounce). |
-| **New** | Lightmap WIP stub: cooler ambient, dynamic room fill off, cyan emissive strip on the TV wall. |
+| **New** | Lightmap WIP stub: brighter cream-warm ambient, lit sconces, CRT wall-bounce off, cyan emissive strip on the TV wall. |
 
 Toggle switches the live Bevy scene (not a label-only flag). Env alternate:
 `SPEC_CHUM_ROOM_SCENE=new`. **Remove** the toolbar control, `sc_room_set_scene_variant` /

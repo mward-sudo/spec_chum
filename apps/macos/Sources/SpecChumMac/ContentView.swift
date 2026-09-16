@@ -173,7 +173,7 @@ struct ContentView: View {
                 }
                 .toggleStyle(.button)
                 .help(
-                    "Temporary #149 verification: Current = pre-lightmap baseline; New = lightmap WIP stub (cool ambient, sconces off, cyan strip). Mac living-room only — remove when #149 done."
+                    "Temporary #149 verification: Current = pre-lightmap baseline; New = brighter cream-warm ambient, lit sconces, wall-bounce off, cyan strip. Mac living-room only — remove when #149 done."
                 )
                 .accessibilityLabel(
                     host.livingRoomSceneNew ? "Scene variant New" : "Scene variant Current"
