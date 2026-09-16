@@ -27,6 +27,8 @@ pub mod present;
 pub mod present_metal;
 pub mod quality;
 pub mod room;
+/// Temporary #149 Current/New A/B — remove when lightmaps ship.
+pub mod scene_variant;
 #[cfg(feature = "standalone")]
 pub mod ui_overlay;
 
@@ -75,6 +77,7 @@ mod standalone_app {
     use crate::host::HostPlugin;
     use crate::hybrid::HybridPlugin;
     use crate::room::RoomPlugin;
+    use crate::scene_variant::SceneVariantPlugin;
     use crate::ui_overlay::UiOverlayPlugin;
 
     /// Standalone winit living-room app (Bevy chrome / cpal / HostSession).
@@ -103,6 +106,7 @@ mod standalone_app {
             CameraPlugin,
             GlowPlugin,
             HybridPlugin,
+            SceneVariantPlugin,
             FileDialogPlugin,
             UiOverlayPlugin,
         ));

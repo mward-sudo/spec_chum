@@ -162,6 +162,25 @@ struct ContentView: View {
             .accessibilityLabel("Living Room display")
         }
 
+        // Temporary #149 A/B harness (Mac living-room only). Remove when lightmaps ship.
+        if host.livingRoomMode {
+            ToolbarItem(placement: .status) {
+                Toggle(isOn: $host.livingRoomSceneNew) {
+                    Label(
+                        host.livingRoomSceneNew ? "Scene: New" : "Scene: Current",
+                        systemImage: "square.split.2x1"
+                    )
+                }
+                .toggleStyle(.button)
+                .help(
+                    "Temporary #149 verification: Current = pre-lightmap baseline; New = lightmap WIP stub (cool ambient, sconces off, cyan strip). Mac living-room only — remove when #149 done."
+                )
+                .accessibilityLabel(
+                    host.livingRoomSceneNew ? "Scene variant New" : "Scene variant Current"
+                )
+            }
+        }
+
         ToolbarItem(placement: .status) {
             HStack(spacing: 6) {
                 Button {

@@ -6,6 +6,23 @@ import UniformTypeIdentifiers
 import CSpecChumHost
 
 extension HostBridge {
+    /// Temporary #149 A/B: push Current/New into the Bevy room (room queue).
+    /// Remove with the SpecChumMac toolbar toggle when lightmaps ship.
+    func applyLivingRoomSceneVariant() {
+        guard livingRoomReady else { return }
+        let variant: UInt32 = livingRoomSceneNew ? 1 : 0
+        livingRoomQueue.async { [weak self] in
+            guard let self, let room = self.livingRoomHandle else { return }
+            let rc = sc_room_set_scene_variant(room, variant)
+            DispatchQueue.main.async {
+                if rc != 0 {
+                    self.status = HostBridge.takeRoomLastError()
+                        ?? "Living room scene variant failed"
+                }
+            }
+        }
+    }
+
     func attachLivingRoomPresentView(_ view: LivingRoomNSView) {
         livingRoomPresentView = view
     }
@@ -200,6 +217,8 @@ extension HostBridge {
                 }
                 // First bind may have been skipped while create was in flight.
                 self.livingRoomPresentView?.syncPresentTargetIfNeeded()
+                // Temporary #149: push A/B selection after create (env / toolbar).
+                self.applyLivingRoomSceneVariant()
             }
         }
     }
@@ -232,6 +251,7 @@ extension HostBridge {
                     self.livingRoomReady = false
                 } else if self.livingRoomMode {
                     self.livingRoomPresentView?.syncPresentTargetIfNeeded()
+                    self.applyLivingRoomSceneVariant()
                 }
             }
         }

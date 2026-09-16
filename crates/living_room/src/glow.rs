@@ -117,6 +117,8 @@ fn spawn_fill_lights(mut commands: Commands) {
                 GlowDriven {
                     intensity_scale: 0.45,
                 },
+                // Temporary #149: New scene dims this as lightmap stub.
+                crate::scene_variant::DynamicRoomFillLight,
                 bevy::camera::visibility::RenderLayers::layer(0).with(1),
                 Name::new("crt_wall_bounce"),
             ));
@@ -186,17 +188,36 @@ fn sync_fill_origin(
 
 fn sync_glow_tints(
     glow: Res<FrameGlow>,
-    mut points: Query<(&GlowDriven, &mut PointLight)>,
-    mut spots: Query<(&GlowDriven, &mut SpotLight)>,
+    variant: Res<crate::scene_variant::SceneVariant>,
+    mut points: Query<(
+        &GlowDriven,
+        &mut PointLight,
+        Option<&crate::scene_variant::DynamicRoomFillLight>,
+    )>,
+    mut spots: Query<(
+        &GlowDriven,
+        &mut SpotLight,
+        Option<&crate::scene_variant::DynamicRoomFillLight>,
+    )>,
 ) {
     let tint = Color::from(glow.color);
     let base = glow.intensity;
+    let suppress_dynamic = matches!(*variant, crate::scene_variant::SceneVariant::New);
 
-    for (driven, mut light) in &mut points {
+    for (driven, mut light, dynamic) in &mut points {
+        // Temporary #149: New (lightmap WIP) keeps CRT spill but zeros DynamicRoomFillLight.
+        if suppress_dynamic && dynamic.is_some() {
+            light.intensity = 0.0;
+            continue;
+        }
         light.color = tint;
         light.intensity = base * driven.intensity_scale;
     }
-    for (driven, mut light) in &mut spots {
+    for (driven, mut light, dynamic) in &mut spots {
+        if suppress_dynamic && dynamic.is_some() {
+            light.intensity = 0.0;
+            continue;
+        }
         light.color = tint;
         light.intensity = base * driven.intensity_scale;
     }

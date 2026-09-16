@@ -32,6 +32,7 @@ use crate::image_copy::{spawn_image_copier, ImageCopyPlugin, LatestRoomFrame};
 use crate::perf::RoomPerf;
 use crate::present::{PresentBlitPlugin, PresentTarget};
 use crate::room::RoomPlugin;
+use crate::scene_variant::{SceneVariant, SceneVariantPlugin};
 
 /// Default offscreen size for SpecChumMac embed (scaled by CALayer).
 /// 1920 long-edge: 60 Hz budget on the real present path; the CRT undersamples below this.
@@ -116,6 +117,7 @@ impl HeadlessRoom {
             CameraPlugin,
             GlowPlugin,
             HybridPlugin,
+            SceneVariantPlugin,
             ImageCopyPlugin,
             PresentBlitPlugin,
         ))
@@ -242,6 +244,16 @@ impl HeadlessRoom {
             .world()
             .resource::<crate::camera::CameraZoom>()
             .target
+    }
+
+    /// Temporary #149 A/B: switch Current (baseline) ↔ New (lightmap WIP).
+    pub fn set_scene_variant(&mut self, variant: SceneVariant) {
+        *self.apps.main.world_mut().resource_mut::<SceneVariant>() = variant;
+    }
+
+    /// Temporary #149 A/B harness — see [`SceneVariant`].
+    pub fn scene_variant(&self) -> SceneVariant {
+        *self.apps.main.world().resource::<SceneVariant>()
     }
 
     /// Drive Bevy `Time` from display-link delta (not Spectrum 50 Hz).

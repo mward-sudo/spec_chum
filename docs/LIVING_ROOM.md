@@ -374,6 +374,7 @@ Runtime A/B via `SPEC_CHUM_ROOM_*` (implemented in `crates/living_room/src/quali
 | `SPEC_CHUM_ROOM_FXAA` | on | Post FXAA on bezel edges. `=0` disables. |
 | `SPEC_CHUM_ROOM_LIGHTS` | `full` | `full` or `min` (fewer sconces). |
 | `SPEC_CHUM_ROOM_HYBRID` | **off** | Camera-space bake plates + live TV (experimental). |
+| `SPEC_CHUM_ROOM_SCENE` | `current` | Temporary #149 A/B: `current` (baseline) or `new` (lightmap WIP). Prefer SpecChumMac toolbar toggle. **Remove when #149 done.** |
 | `SPEC_CHUM_ROOM_PERF` | off | Rolling tick µs to stderr + Swift HUD fields. |
 | `SPEC_CHUM_ROOM_PERF_SOFT` | off | `room_perf`: warn instead of fail on budget exceed. |
 | `SPEC_CHUM_ROOM_PIPELINE` | n/a | **Not implemented** — planned spike to re-enable `PipelinedRenderingPlugin` (always disabled today). |
@@ -401,6 +402,21 @@ updates every frame. Goal was ~60 Hz when full-room PBR looked costly on the
 - Full 3D at default quality already meets the 60 Hz budget on M4-class hardware.
 
 Prefer **Blender lightmaps + `EnvironmentMapLight`** (tier 2) over extending hybrid plates.
+
+## Temporary #149 scene A/B (SpecChumMac only)
+
+While Blender lightmaps land, SpecChumMac living-room mode shows a **Scene: Current / Scene: New**
+toolbar toggle (next to Living Room). This is a **Mac-only verification harness** — not on egui,
+Windows, or Linux shells.
+
+| Variant | Look |
+| --- | --- |
+| **Current** | Pre-#149 baseline (warm ambient + dynamic sconces / wall bounce). |
+| **New** | Lightmap WIP stub: cooler ambient, dynamic room fill off, cyan emissive strip on the TV wall. |
+
+Toggle switches the live Bevy scene (not a label-only flag). Env alternate:
+`SPEC_CHUM_ROOM_SCENE=new`. **Remove** the toolbar control, `sc_room_set_scene_variant` /
+`sc_room_scene_variant`, and `scene_variant.rs` once #149 acceptance criteria are met.
 
 ## Framework choice
 
@@ -431,7 +447,7 @@ if a GPU trace shows Bevy overhead **after** lightmaps and tier-2 wins land.
 | --- | --- |
 | **MetalFX spatial upscaling** | Render below backing scale, upscale in `present_metal.rs` — future win on Retina. |
 | **Pipelined rendering spike** | Planned only — no `SPEC_CHUM_ROOM_PIPELINE` reader yet; soak before ship. |
-| **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. |
+| **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. SpecChumMac temporary Current/New A/B toggle documents verification until this lands. |
 | **Halation in CRT material** | Move main glow from separate bloom pass into phosphor shader (tier-2 structural). |
 
 Solari / TAA / DLSS are **not viable** on this stack.

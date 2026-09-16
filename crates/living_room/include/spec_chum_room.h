@@ -27,6 +27,13 @@ int sc_room_skip_intro(void *handle);
 int sc_room_nudge_zoom(void *handle, int steps);
 uint32_t sc_room_zoom_preset(void *handle);
 /**
+ * Temporary #149 A/B scene harness (SpecChumMac living-room only).
+ * `variant`: 0 = Current (pre-#149 baseline), 1 = New (lightmap WIP stub).
+ * Remove these two entry points + the Mac toolbar toggle when #149 closes.
+ */
+int sc_room_set_scene_variant(void *handle, uint32_t variant);
+uint32_t sc_room_scene_variant(void *handle);
+/**
  * Set Bevy `Time` step for the next `sc_room_tick` (display delta seconds).
  * Clamped to a sane range. Call before each display-paced tick.
  */
