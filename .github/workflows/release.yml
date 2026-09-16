@@ -4,9 +4,11 @@ name: Release
 # (./scripts/run_slow_tests.sh — z80doc + system-tests + z80full) before tagging;
 # this workflow does not re-run those tests. See docs/RELEASE.md.
 #
-# Marketing site: when this workflow publishes a GitHub Release, a separate
-# workflow (.github/workflows/pages.yml) deploys docs/www to GitHub Pages on
-# release: published. Packaging jobs here must stay independent of Pages.
+# Marketing site: after a real GitHub Release publish (tag or tagged
+# workflow_dispatch), the `pages` job below deploys docs/www as the Pages
+# root. Do not rely on release: published from GITHUB_TOKEN — that event does
+# not start other workflows. Optional smoke: Actions → GitHub Pages
+# (pages.yml workflow_dispatch).
 
 on:
   push:
@@ -569,3 +571,37 @@ jobs:
             Linux runtime: GTK 3, ALSA, and udev (`libgtk-3-0`, `libasound2`/`libasound2t64`, `libudev1`).
             Shared Spectrum app icon on all packaged hosts. Notarisation secrets: issue #354.
             Native UI epic (other platforms): issue #351.
+
+  # Deploy after publish so a failed package/release never updates the site.
+  # Same GITHUB_TOKEN that created the Release cannot wake release:published
+  # workflows — keep this job here rather than a separate release trigger.
+  pages:
+    name: Deploy marketing site (GitHub Pages)
+    needs: [resolve, publish]
+    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+          persist-credentials: false
+
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload docs/www as Pages root
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/www
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -1,15 +1,13 @@
 name: GitHub Pages
 
-# Deploys docs/www as the Pages site root when a GitHub Release is published
-# (release.yml softprops publish → release published). Optional workflow_dispatch
-# for manual smoke deploys without cutting a release. Does not touch app packaging.
+# Manual smoke deploy of docs/www as the Pages site root.
+# Production deploys run from .github/workflows/release.yml (`pages` job) after
+# a real GitHub Release is published — GITHUB_TOKEN release events do not start
+# other workflows, so do not use release: published here for the tag path.
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
 
-# Separate from release.yml concurrency so a Pages deploy never cancels packaging.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -27,10 +25,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout release tag or selected ref
+      - name: Checkout selected ref
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          ref: ${{ github.event.release.tag_name || github.sha }}
           persist-credentials: false
 
       - name: Configure Pages

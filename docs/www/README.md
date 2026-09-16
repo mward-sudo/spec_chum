@@ -31,15 +31,18 @@ No Sinclair/Amstrad logos or trademarked rainbow wordmark.
 
 The public site is **not** redeployed on every push to `main`.
 
-GitHub Actions workflow [`.github/workflows/pages.yml`](../../.github/workflows/pages.yml)
-deploys the **contents** of this folder as the Pages **site root** when:
+The **contents** of this folder are deployed as the Pages **site root** when:
 
-1. A **GitHub Release is published** (normal path: push a `vX.Y.Z` tag →
+1. A **GitHub Release is cut** (normal path: push a `vX.Y.Z` tag →
    [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
-   packages apps and publishes the release → Pages workflow runs on
-   `release: published`), or
+   packages apps, publishes the release, then its **`pages` job** uploads
+   `docs/www` via `deploy-pages`), or
 2. Someone runs **Actions → GitHub Pages → Run workflow**
-   (`workflow_dispatch`) for a manual smoke deploy.
+   ([`pages.yml`](../../.github/workflows/pages.yml) `workflow_dispatch`) for a
+   manual smoke deploy without tagging.
+
+(`release: published` is **not** used for the tag path: a Release created with
+the default `GITHUB_TOKEN` does not start other workflows.)
 
 Live URL shape:
 `https://<owner>.github.io/spec_chum/` (marketing `index.html` at the root).
