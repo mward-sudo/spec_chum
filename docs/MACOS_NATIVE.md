@@ -290,7 +290,7 @@ Pause / Play hold at LD-BYTES works in Experience mode.
 ## Not in this slice (still egui-only or follow-ups)
 
 - Beta UI polish beyond current Hardware menu parity
-- Windows / Linux native-shell strategy and decisions: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351) ([#351](https://github.com/mward-sudo/spec_chum/issues/351)). Linux ships egui as the product UI and has an optional GTK4 shell — [LINUX_NATIVE.md](LINUX_NATIVE.md); Windows ships Win32 `windows_shell` as the release primary — [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md).
+- Windows / Linux native-shell strategy and decisions: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351) ([#351](https://github.com/mward-sudo/spec_chum/issues/351)). Linux ships GTK4 `linux_shell` as the release primary — [LINUX_NATIVE.md](LINUX_NATIVE.md); Windows ships Win32 `windows_shell` as the release primary — [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md). egui remains CI / headless fallback.
 
 ## CI (`macos-shell` / `living-room` — [#68](https://github.com/mward-sudo/spec_chum/issues/68) / [#146](https://github.com/mward-sudo/spec_chum/issues/146))
 
@@ -316,9 +316,9 @@ GitHub Releases ship **SpecChumMac** as a macOS **`.dmg.zip`**
 [#363](https://github.com/mward-sudo/spec_chum/issues/363)): unzip, open the
 `.dmg` (notarised/stapled when Apple secrets are set), then drag
 `Spec Chum.app` to Applications. Redistributable
-ROMs live under `Contents/Resources/roms`. Windows release primary is Win32
-`windows_shell`; egui remains the Linux release / CI / headless host. Broader
-native-shell product work is [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+ROMs live under `Contents/Resources/roms`. Windows / Linux release primaries are
+Win32 `windows_shell` and GTK4 `linux_shell`; egui remains the CI / headless host.
+Broader native-shell product work is [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 
 ## Layout
 

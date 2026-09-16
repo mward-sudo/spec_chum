@@ -49,10 +49,10 @@ See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 | Host | Role |
 | --- | --- |
-| **egui** (`crates/app`) | Cross-platform UI; Linux release primary; CI / headless fallback |
+| **egui** (`crates/app`) | Cross-platform UI; CI / headless fallback |
 | **SpecChumMac** (`apps/macos`) | Native macOS SwiftUI product shell (release `.dmg`) |
 | **windows_shell** | Native Win32 shell — Windows release primary — [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) (#351) |
-| **linux_shell** | Optional GTK4 shell — [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) (#351) |
+| **linux_shell** | Native GTK4 shell — Linux release primary — [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) (#351) |
 | **living_room** | Experimental Bevy 3D CRT — [docs/LIVING_ROOM.md](docs/LIVING_ROOM.md) (#146) |
 
 UI stack rationale and native-shell strategy: [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md).

@@ -840,15 +840,15 @@
     "semantic_hash": ""
   },
   ".github/workflows/release.yml": {
-    "mtime": 1789528912.5625908,
-    "seen": 1789529184.1628659,
-    "ast_hash": "23ef00c75e834883f94cb2a7fe8e7ac6",
+    "mtime": 1789530314.7674248,
+    "seen": 1789530446.264044,
+    "ast_hash": "714aedbe06e8ff4a19f9d0076e98bc9a",
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1789529012.3827968,
-    "seen": 1789529184.1628668,
-    "ast_hash": "b8c4ea72228938c94a3a96f0ac3ff919",
+    "mtime": 1789530408.6076896,
+    "seen": 1789530446.264044,
+    "ast_hash": "322b232d5faa17e0aaa6754eb486eed4",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -858,9 +858,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1789529020.8145752,
-    "seen": 1789529184.162879,
-    "ast_hash": "182cfbeecd9aa32a24b8399340a67b0e",
+    "mtime": 1789530428.1813273,
+    "seen": 1789530446.264056,
+    "ast_hash": "428c533ee0183850e4a04ecd9071be39",
     "semantic_hash": ""
   },
   "docs/AGENT_DEBUG_API.md": {
@@ -882,9 +882,9 @@
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
-    "mtime": 1789529030.974036,
-    "seen": 1789529184.1629171,
-    "ast_hash": "94deca2929803b5b8580b34203e62c23",
+    "mtime": 1789530436.716425,
+    "seen": 1789530446.264102,
+    "ast_hash": "f2c955f23be77b767f2b11b77be2964c",
     "semantic_hash": ""
   },
   "docs/MULTIFACE.md": {
@@ -894,9 +894,9 @@
     "semantic_hash": ""
   },
   "docs/RELEASE.md": {
-    "mtime": 1789528988.8731923,
-    "seen": 1789529184.16293,
-    "ast_hash": "c4eb61a367951f1d0a044fb8f13e9aa5",
+    "mtime": 1789530367.922747,
+    "seen": 1789530446.264116,
+    "ast_hash": "858db8705eda6b83f24f5eb299e2a385",
     "semantic_hash": ""
   },
   "docs/ROMS.md": {
@@ -912,9 +912,9 @@
     "semantic_hash": "1f835e66063769d604364c5a96da7e8b"
   },
   "docs/UI_ARCHITECTURE.md": {
-    "mtime": 1789529015.0034878,
-    "seen": 1789529184.1629791,
-    "ast_hash": "2ec5136dc3145994ffd05c5250ec699b",
+    "mtime": 1789530398.838786,
+    "seen": 1789530446.2641659,
+    "ast_hash": "9223c5accd83379d2494a4ab1b4d1ef6",
     "semantic_hash": ""
   },
   "tests/fixtures/fuse/README.md": {
@@ -1134,15 +1134,15 @@
     "semantic_hash": ""
   },
   "scripts/ci/build-linux-appimage.sh": {
-    "mtime": 1789520914.8093615,
-    "seen": 1789526240.530779,
-    "ast_hash": "1f5887a7982db59e55447de4987ce937",
+    "mtime": 1789530315.7543585,
+    "seen": 1789530446.2636318,
+    "ast_hash": "3ddfcaa5d23ad349e0fcde5fa2458c31",
     "semantic_hash": ""
   },
   "scripts/ci/build-linux-deb.sh": {
-    "mtime": 1789520914.8094165,
-    "seen": 1789526240.5307798,
-    "ast_hash": "eb76e49a0877d66315e9db6e05964235",
+    "mtime": 1789530335.5365844,
+    "seen": 1789530446.263633,
+    "ast_hash": "2954bbd813c916f2e894dc8170e688c8",
     "semantic_hash": ""
   },
   "scripts/ci/build-windows-installer.ps1": {
@@ -1188,9 +1188,9 @@
     "semantic_hash": ""
   },
   "packaging/icon/README.md": {
-    "mtime": 1789529003.249724,
-    "seen": 1789529184.163006,
-    "ast_hash": "90bee072b028a9583c9e72af37596f95",
+    "mtime": 1789530409.6748152,
+    "seen": 1789530446.264193,
+    "ast_hash": "4e648b386e727ba975f39ddf914ea6b6",
     "semantic_hash": ""
   },
   "crates/app/assets/icon.png": {
@@ -1458,8 +1458,8 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/Cargo.toml": {
-    "mtime": 1789528996.3089895,
-    "seen": 1789529184.1621041,
+    "mtime": 1789530228.3969588,
+    "seen": 1789530446.263285,
     "ast_hash": "7483b4c30aa8ada3496c608d0d63f353",
     "semantic_hash": ""
   },
@@ -1494,8 +1494,8 @@
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
-    "mtime": 1789529033.6184285,
-    "seen": 1789529184.162359,
+    "mtime": 1789530228.4104195,
+    "seen": 1789530446.263547,
     "ast_hash": "d3211206fea591afb6252414b242784e",
     "semantic_hash": ""
   },
@@ -1512,8 +1512,8 @@
     "semantic_hash": ""
   },
   "docs/WINDOWS_NATIVE.md": {
-    "mtime": 1789528947.8349392,
-    "seen": 1789529184.1629791,
+    "mtime": 1789530228.398574,
+    "seen": 1789530446.2641659,
     "ast_hash": "2a3c794a3d973588ad4a3193fc74f54b",
     "semantic_hash": ""
   },
@@ -1566,9 +1566,9 @@
     "semantic_hash": ""
   },
   "docs/LINUX_NATIVE.md": {
-    "mtime": 1789529033.4765975,
-    "seen": 1789529184.162904,
-    "ast_hash": "21484f9f82be90146c9ee55b51e30e0c",
+    "mtime": 1789530335.6098745,
+    "seen": 1789530446.264082,
+    "ast_hash": "4b112040a6d750a2d61a0ff595692a78",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/commands.rs": {
@@ -1584,9 +1584,9 @@
     "semantic_hash": ""
   },
   "docs/README.md": {
-    "mtime": 1789528990.7129612,
-    "seen": 1789529184.16293,
-    "ast_hash": "2b13796699a8067cbcbed04e77d641ed",
+    "mtime": 1789530409.6805134,
+    "seen": 1789530446.264116,
+    "ast_hash": "03e220a5a1549d04b7a4fe21a1b13a99",
     "semantic_hash": ""
   },
   "docs/www/README.md": {
@@ -1614,8 +1614,8 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/build.rs": {
-    "mtime": 1789528895.9559622,
-    "seen": 1789529184.162105,
+    "mtime": 1789530228.3971424,
+    "seen": 1789530446.263286,
     "ast_hash": "dd2922e57a6cfc25b903d329bd60ee44",
     "semantic_hash": ""
   },

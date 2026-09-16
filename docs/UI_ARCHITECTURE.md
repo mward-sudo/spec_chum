@@ -8,7 +8,7 @@ How Spec Chum should present the emulator to users, and why we keep the current 
 
 Spec Chum’s scarce resource is **hardware accuracy** (Z80, ULA, tape), not UI novelty. egui already ships framebuffer blit, menus, file dialogs (`rfd`), and headless `Context::run` tests.
 
-**Optional on macOS:** a native SwiftUI shell with real liquid glass / materials, driven by the `host_api` C ABI — see [MACOS_NATIVE.md](MACOS_NATIVE.md) and [#66](https://github.com/mward-sudo/spec_chum/issues/66). This does **not** replace egui on Linux/CI (Windows release primary is Win32 `windows_shell`; egui remains the Windows headless/CI fallback).
+**Optional on macOS:** a native SwiftUI shell with real liquid glass / materials, driven by the `host_api` C ABI — see [MACOS_NATIVE.md](MACOS_NATIVE.md) and [#66](https://github.com/mward-sudo/spec_chum/issues/66). This does **not** replace egui on CI (Windows/Linux release primaries are native shells; egui remains the headless/CI fallback).
 
 **Optional later:** a thin **libretro / RetroArch** core once the machine host API is stable (`run_frame`, framebuffer, audio batch, input inject, optional serialize). Tracked in [#64](https://github.com/mward-sudo/spec_chum/issues/64). The same `crates/host_api` surface is a useful stepping stone.
 
@@ -85,7 +85,7 @@ Rust can wrap the ABI with crates such as [`libretro-core`](https://docs.rs/libr
 | Avoid Tauri/Dioxus-web for the machine loop | Extra process/IPC is the wrong complexity for a Spectrum core |
 | **libretro later, not now** | RA ecosystem is attractive; defer until host API is stable; track in #64 |
 | Optional **Bevy living-room** | Experimental immersion host; SpecChumMac links staticlib, display opt-in; keep out of default CI; #146 |
-| **Linux native shell in progress** | egui is the **current** Linux release/CI host; GTK4 `linux_shell` with Machine/Hardware/Settings/Debug deepen in-tree ([LINUX_NATIVE.md](LINUX_NATIVE.md)); release promote under [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
+| **Linux native shell (release primary)** | GTK4 `linux_shell` is the GitHub Release primary ([LINUX_NATIVE.md](LINUX_NATIVE.md)); egui remains CI / headless fallback ([#351](https://github.com/mward-sudo/spec_chum/issues/351)) |
 | **Windows native shell (release primary)** | Classic Win32 `windows_shell` is the GitHub Release primary ([WINDOWS_NATIVE.md](WINDOWS_NATIVE.md)); egui remains CI / headless fallback ([#351](https://github.com/mward-sudo/spec_chum/issues/351)) |
 
 ## Native shells (#351)
@@ -97,24 +97,24 @@ Track: [#351](https://github.com/mward-sudo/spec_chum/issues/351). Packaging / i
 - Accuracy stays in Rust (`machine` / `ula` / `z80` / …). Native shells are **thin adapters** over `host_api` / `control_plane` — same pattern as SpecChumMac.
 - Cross-platform **egui** (`crates/app`) remains the CI baseline and the fallback host everywhere a native shell is absent or incomplete.
 - **Feature parity (mandatory):** Agent Debug HTTP, inspect/status, media, hardware attach, and prefs **semantics** must match across egui and each native shell. Do not ship “egui-only” automation routes or invent host-only product features. (Contributor checklist: GUI hosts stay feature-aligned — see [CONTRIBUTING.md](../CONTRIBUTING.md) and [docs/README.md](README.md).)
-- **Chrome may follow platform HIG:** SwiftUI/AppKit on macOS, classic Win32 / Fluent on Windows, native Linux toolkit conventions when that shell exists (egui conventions until then) — menus, spacing, window chrome, and shortcut modifiers (⌘ vs Ctrl) may differ. Make product capabilities as similar as possible; do not force one OS’s look onto another.
+- **Chrome may follow platform HIG:** SwiftUI/AppKit on macOS, classic Win32 / Fluent on Windows, GTK on Linux — menus, spacing, window chrome, and shortcut modifiers (⌘ vs Ctrl) may differ. Make product capabilities as similar as possible; do not force one OS’s look onto another.
 - Living-room display mode stays opt-in where Metal/wgpu allow; SpecChumMac already links the living_room staticlib (display defaults off).
 
 ### macOS — first-class native shell (done)
 
 - **SpecChumMac** (`apps/macos`) is the primary macOS product shell and the GitHub Release `.dmg` app.
 - Driven by the `host_api` C ABI; docs and build path: [MACOS_NATIVE.md](MACOS_NATIVE.md).
-- egui remains available for source builds, CI, Linux releases, and Windows headless (`--serve` / `debug …`).
+- egui remains available for source builds, CI, and headless (`--serve` / `debug …`) on every OS.
 
-### Linux — egui today; GTK4 native shell vertical slice (#351)
+### Linux — first-class native shell (release primary)
 
-**Today:** Linux releases ship the **egui** binary (`.tar.gz`, AppImage, `.deb`) with `.desktop` + icon under `packaging/linux/` ([#231](https://github.com/mward-sudo/spec_chum/issues/231)). egui remains the CI baseline and interim product UI.
+**Today:** Linux releases ship GTK4 **`crates/linux_shell`** as `spec_chum` (`.tar.gz`, AppImage, `.deb`) with `.desktop` + icon under `packaging/linux/` ([#231](https://github.com/mward-sudo/spec_chum/issues/231)). egui remains the CI baseline and the Linux headless `--serve` / `debug …` host from source.
 
 **Toolkit decision:** **GTK4 via gtk-rs** — thin Rust host over `host_api` / `control_plane`, HIG-friendly, no webview. Qt remains a rejected-for-now alternative (heavier tooling tax).
 
-**Native shell (in-tree):** `crates/linux_shell` (`spec_chum_linux`) — window, framebuffer present, File/Tape/Machine/Hardware/Settings/Debug menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP. Docs: [LINUX_NATIVE.md](LINUX_NATIVE.md). Opt-in CI job `linux-shell`. Release promotion remains open under [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+**Native shell:** `crates/linux_shell` (`spec_chum_linux` staged as `spec_chum`) — window, framebuffer present, File/Tape/Machine/Hardware/Settings/Debug menus, keyboard → matrix, cpal audio, optional Agent Debug HTTP. Docs: [LINUX_NATIVE.md](LINUX_NATIVE.md). Opt-in CI job `linux-shell`.
 
-Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** concern (#231) whether the wrapped binary is egui or a future native shell.
+Desktop integration (icon, `.desktop`, MIME where useful) stays a **packaging** concern (#231).
 
 ### Windows — first-class native shell (release primary)
 
@@ -133,7 +133,7 @@ Vertical slice + deepen checklist is complete: native window, framebuffer presen
 
 ### Relationship to packaging
 
-Native shells, when ready, are what release packaging wraps. **macOS** and **Windows** already wrap native shells; **Linux** still wraps egui until `linux_shell` is promoted. See [RELEASE.md](RELEASE.md). Linux native preference: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
+Native shells are what release packaging wraps on **macOS**, **Windows**, and **Linux**. See [RELEASE.md](RELEASE.md). Epic: [#351](https://github.com/mward-sudo/spec_chum/issues/351).
 
 ## Practical chrome rules (current shell)
 

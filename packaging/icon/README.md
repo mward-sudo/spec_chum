@@ -5,7 +5,7 @@ Shared mark for packaged hosts ([#231](https://github.com/mward-sudo/spec_chum/i
 | Asset | Used by |
 | --- | --- |
 | `spec-chum-1024.png` (and 256/512) | Source masters |
-| `../linux/spec-chum.png` | AppImage, `.deb`, `.desktop` |
+| `../linux/spec-chum.png` | AppImage, `.deb`, `.desktop` (`linux_shell` release primary) |
 | `../macos/AppIcon.icns` | egui `Spec Chum.app` / DMG |
 | `../windows/spec-chum.ico` | Inno Setup wizard + Start Menu; `windows_shell` PE (`winres`; release primary) |
 | `../../crates/app/assets/icon.png` | egui window icon |

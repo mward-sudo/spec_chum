@@ -10,7 +10,7 @@
 #
 # Installs to /usr/bin/spec_chum with redistributable ROMs under
 # /usr/share/spec-chum/roms, a .desktop entry, and hicolor icon.
-# Declares runtime Depends matching the release README (GTK 3, ALSA, udev).
+# Declares runtime Depends matching the release README (GTK 4, ALSA, udev).
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
@@ -104,14 +104,15 @@ Section: games
 Priority: optional
 Architecture: amd64
 Installed-Size: ${INSTALLED_SIZE}
-Depends: libgtk-3-0, libasound2t64 | libasound2, libudev1, libc6
+Depends: libgtk-4-1, libasound2t64 | libasound2, libudev1, libc6
 Maintainer: Spec Chum <https://github.com/mward-sudo/spec_chum/issues>
 Homepage: https://github.com/mward-sudo/spec_chum
 Description: Hardware-accurate ZX Spectrum emulator
- Spec Chum is a from-scratch ZX Spectrum emulator (egui host). Headless
- debugger and agent HTTP live on the same binary (spec_chum --serve /
- spec_chum debug …). Redistributable Spectrum ROMs are installed under
- /usr/share/spec-chum/roms (see ROMS-NOTICE.txt / docs/ROMS.md).
+ Spec Chum is a from-scratch ZX Spectrum emulator (GTK4 linux_shell host).
+ Agent Debug HTTP embeds with SPEC_CHUM_AGENT=1. Headless --serve / debug
+ remain on the egui binary from source (cargo run -p app). Redistributable
+ Spectrum ROMs are installed under /usr/share/spec-chum/roms (see
+ ROMS-NOTICE.txt / docs/ROMS.md).
 EOF
 
 mkdir -p "$(dirname "$OUT_DEB")"

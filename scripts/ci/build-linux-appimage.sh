@@ -9,7 +9,7 @@
 # Desktop entry + icon come from packaging/linux/ beside this scripts/ci tree
 # (release CI invokes this from the trusted default-branch checkout — CWE-829).
 #
-# Runtime still needs GTK 3 + ALSA + udev on the host (same as the .tar.gz);
+# Runtime still needs GTK 4 + ALSA + udev on the host (same as the .tar.gz);
 # this wraps the primary binary + bundled roms/ for double-click / PATH-free use.
 set -euo pipefail
 
