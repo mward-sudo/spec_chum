@@ -466,14 +466,12 @@ pub(crate) fn apply_zoom_camera(
     >,
     mut glass: Query<&mut MeshMaterial3d<StandardMaterial>, With<crate::crt::CrtGlass>>,
     mut std_mats: ResMut<Assets<StandardMaterial>>,
-    scene: Option<Res<crate::scene_variant::SceneVariant>>,
 ) {
     if locked.is_none() {
         return;
     }
     zoom.tick_animation();
 
-    let new_scene = scene.is_some_and(|s| matches!(*s, crate::scene_variant::SceneVariant::New));
     let look = phosphor
         .iter()
         .next()
@@ -485,13 +483,7 @@ pub(crate) fn apply_zoom_camera(
         *tf = pose_at_zoom(zoom.display, look);
         if let Some(mut bloom) = bloom {
             // Mild pull-back halation — strong bloom washes the CRT face (#233).
-            // New + stub IBL: keep bloom lower so pullback cannot re-inflate the
-            // glass/env specular blob the glass dial is trying to kill (#149).
-            bloom.intensity = if new_scene {
-                0.02 + t * 0.03
-            } else {
-                0.04 + t * 0.06
-            };
+            bloom.intensity = 0.04 + t * 0.06;
         }
     }
     // Slightly flatten the tube when CRT-fill (readable glyphs); full soft dome
@@ -503,16 +495,11 @@ pub(crate) fn apply_zoom_camera(
     for mut gtf in &mut glass_tf {
         gtf.scale = Vec3::new(1.0, 1.0, z_scale);
     }
-    // Fade glass with zoom instead of popping Visibility. New caps alpha harder —
-    // zoomed-out glass + IBL was the white CRT-center blob (#149).
-    let glass_a = (t - 0.12).clamp(0.0, 1.0) * if new_scene { 0.03 } else { 0.10 };
+    // Fade glass with zoom instead of popping Visibility.
+    let glass_a = (t - 0.12).clamp(0.0, 1.0) * 0.10;
     for handle in &mut glass {
         if let Some(mut mat) = std_mats.get_mut(&handle.0) {
             mat.base_color = Color::srgba(0.55, 0.65, 0.75, glass_a);
-            if new_scene {
-                mat.reflectance = 0.0;
-                mat.perceptual_roughness = 1.0;
-            }
         }
     }
 }
