@@ -6,7 +6,7 @@
     <title>Spec Chum — ZX Spectrum emulator</title>
     <meta
       name="description"
-      content="Spec Chum is a from-scratch, hardware-accurate ZX Spectrum emulator for macOS, Windows, and Linux."
+      content="Spec Chum is a ZX Spectrum emulator for macOS, Windows, and Linux. Download a release and play classic Spectrum software."
     />
     <link rel="icon" href="./assets/icon-256.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -24,10 +24,10 @@
       <div class="wrap hero-inner">
         <div class="hero-copy">
           <p class="brand">Spec <span>Chum</span></p>
-          <h1 class="headline">A hardware-accurate ZX Spectrum emulator.</h1>
+          <h1 class="headline">Play ZX Spectrum software on a modern computer.</h1>
           <p class="lede">
-            Built from scratch in Rust — cycle-accurate Z80 and ULA timing, with
-            release builds for macOS, Windows, and Linux.
+            A faithful Spectrum emulator for macOS, Windows, and Linux — download
+            a release and load the games and programs you remember.
           </p>
           <div class="cta-row">
             <a
@@ -37,13 +37,8 @@
             >
             <a
               class="btn btn-secondary"
-              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/README.md"
-              >Docs</a
-            >
-            <a
-              class="btn btn-secondary"
-              href="https://github.com/mward-sudo/spec_chum"
-              >GitHub</a
+              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/README.md#players--end-users"
+              >How to use</a
             >
           </div>
         </div>
@@ -62,36 +57,38 @@
     <main id="main">
       <section id="features" aria-labelledby="features-heading">
         <div class="wrap">
-          <h2 id="features-heading">What you get</h2>
+          <h2 id="features-heading">Made for playing</h2>
           <p class="section-lede">
-            Present capabilities for players — detail lives in the docs.
+            Load software, pick a Spectrum model, and play on the computer you
+            already use.
           </p>
           <ul class="feature-list">
             <li>
-              <strong>Accurate core</strong>
+              <strong>Games and programs</strong>
               <span
-                >Cycle-accurate Z80 and ULA (contention, floating bus,
-                border).</span
+                >Run classic ZX Spectrum software from downloads and archives you
+                already have.</span
               >
             </li>
             <li>
-              <strong>Many models</strong>
+              <strong>Tapes that load</strong>
               <span
-                >48K, 128K, +2 / +2A, +3, Timex TC2048 / TS2068, and more.</span
+                >Open TAP and TZX files; speed up loading when you want, or keep
+                the authentic tape feel.</span
               >
             </li>
             <li>
-              <strong>Tape &amp; media</strong>
+              <strong>The machines you remember</strong>
               <span
-                >TAP/TZX paths with flash-load and turbo EAR options that still
-                load correctly.</span
+                >48K, 128K, +2 / +2A, +3, and Timex models in one
+                emulator.</span
               >
             </li>
             <li>
-              <strong>Release packages</strong>
+              <strong>macOS, Windows, and Linux</strong>
               <span
-                >Redistributable Spectrum ROMs bundled in GitHub Release
-                archives.</span
+                >Release packages include the redistributable Spectrum ROMs — open
+                the download and go.</span
               >
             </li>
           </ul>
@@ -100,61 +97,126 @@
 
       <section id="platforms" aria-labelledby="platforms-heading">
         <div class="wrap">
-          <h2 id="platforms-heading">Platforms</h2>
+          <h2 id="platforms-heading">Get it for your computer</h2>
           <p class="section-lede">
-            Pick a release artifact for your machine, or build from source.
+            Grab the latest release for your platform — installers and portable
+            archives are on GitHub.
           </p>
           <ul class="platform-list">
             <li>
-              <strong>macOS — SpecChumMac</strong>
+              <strong>macOS</strong>
               <span
-                >Native SwiftUI app in the release <code>.dmg.zip</code> (unzip,
-                open the disk image, drag to Applications).</span
+                >Native SpecChumMac app: unzip the <code>.dmg.zip</code>, open
+                the disk image, drag to Applications.</span
               >
             </li>
             <li>
               <strong>Windows</strong>
               <span
-                >Installer (<code>*-setup.exe</code>) or portable
-                <code>.zip</code>; egui is the release UI.</span
+                >Use the installer (<code>*-setup.exe</code>) or the portable
+                <code>.zip</code>.</span
               >
             </li>
             <li>
               <strong>Linux</strong>
               <span
-                ><code>.deb</code>, AppImage, or <code>.tar.gz</code>; egui is
-                the release primary (optional GTK shell available from
-                source).</span
+                ><code>.deb</code>, AppImage, or <code>.tar.gz</code> —
+                whichever fits how you install software.</span
               >
             </li>
           </ul>
         </div>
       </section>
 
+      <section id="choose" aria-labelledby="choose-heading">
+        <div class="wrap">
+          <h2 id="choose-heading">Choosing an emulator?</h2>
+          <p class="section-lede">
+            If you care how faithfully Spectrum software runs, Spec Chum aims for
+            careful timing — not just a quick window that boots.
+          </p>
+          <ul class="feature-list">
+            <li>
+              <strong>Faithful behaviour</strong>
+              <span
+                >Picky titles get careful Z80 and display timing so games behave
+                the way you expect.</span
+              >
+            </li>
+            <li>
+              <strong>Same product, several hosts</strong>
+              <span
+                >Native macOS app plus cross-platform builds — features stay
+                aligned across the computers you use.</span
+              >
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="developers" aria-labelledby="developers-heading">
+        <div class="wrap">
+          <h2 id="developers-heading">For curious developers</h2>
+          <p class="section-lede">
+            Optional detail if you like looking under the hood — player downloads
+            above are enough to start.
+          </p>
+          <ul class="feature-list">
+            <li>
+              <strong>Accuracy-minded core</strong>
+              <span
+                >From-scratch Z80 and ULA work with a serious timing focus; deep
+                notes live in the developer docs.</span
+              >
+            </li>
+            <li>
+              <strong>Cross-platform hosts</strong>
+              <span
+                >egui app, native macOS shell, and optional Windows / Linux native
+                shells over a shared host API.</span
+              >
+            </li>
+            <li>
+              <strong>Local debug HTTP API</strong>
+              <span
+                >Scripted control and framebuffer export on localhost for
+                automation and inspection — see the Agent Debug API docs.</span
+              >
+            </li>
+          </ul>
+          <div class="links-row links-row-follow">
+            <a
+              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/README.md#developers--contributors"
+              >Developer docs</a
+            >
+            <a
+              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/AGENT_DEBUG_API.md"
+              >Debug API</a
+            >
+            <a href="https://github.com/mward-sudo/spec_chum">Source on GitHub</a>
+          </div>
+        </div>
+      </section>
+
       <section id="docs" aria-labelledby="docs-heading">
         <div class="wrap">
-          <h2 id="docs-heading">Learn more</h2>
+          <h2 id="docs-heading">Guides</h2>
           <p class="section-lede">
-            Player and developer guides stay in the repo docs index.
+            Start with player help; builders have a separate section in the docs
+            index.
           </p>
           <div class="links-row">
-            <a href="https://github.com/mward-sudo/spec_chum/blob/main/docs/README.md"
-              >Docs index</a
+            <a
+              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/README.md#players--end-users"
+              >Player docs</a
             >
             <a href="https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md"
-              >ROMs</a
-            >
-            <a
-              href="https://github.com/mward-sudo/spec_chum/blob/main/docs/MACOS_NATIVE.md"
-              >macOS app</a
-            >
-            <a
-              href="https://github.com/mward-sudo/spec_chum/blob/main/README.md"
-              >README</a
+              >About ROMs</a
             >
             <a href="https://github.com/mward-sudo/spec_chum/releases"
               >All releases</a
             >
+            <a href="#developers">Developers</a>
           </div>
         </div>
       </section>
