@@ -49,10 +49,10 @@ See [docs/MACOS_NATIVE.md](docs/MACOS_NATIVE.md).
 
 | Host | Role |
 | --- | --- |
-| **egui** (`crates/app`) | Cross-platform UI; Linux release primary; CI / headless fallback |
+| **egui** (`crates/app`) | Cross-platform UI; CI / headless fallback |
 | **SpecChumMac** (`apps/macos`) | Native macOS SwiftUI product shell (release `.dmg`) |
 | **windows_shell** | Native Win32 shell — Windows release primary — [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) (#351) |
-| **linux_shell** | Optional GTK4 shell — [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) (#351) |
+| **linux_shell** | Native GTK4 shell — Linux release primary — [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) (#351) |
 | **living_room** | Experimental Bevy 3D CRT — [docs/LIVING_ROOM.md](docs/LIVING_ROOM.md) (#146) |
 
 UI stack rationale and native-shell strategy: [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md).
@@ -78,7 +78,7 @@ Present-tense status — not a development diary. Detail and open gaps live in t
 - **Peripherals** — Kempston / Sinclair / Cursor joysticks, Kempston mouse, Multiface 1 ([docs/MULTIFACE.md](docs/MULTIFACE.md)), DivMMC SPI + automap, Interface 1 Microdrive hooks, Beta Disk / TR-DOS (optional `roms/trdos.rom`), +3 µPD765 SEEK/READ/WRITE and Loader smokes. Still incomplete vs real hardware for full ESXDOS boot, full IF1 BASIC accuracy, TR-DOS `RUN` with a real TR-DOS ROM, and some VG93 format paths ([#138](https://github.com/mward-sudo/spec_chum/issues/138)–[#140](https://github.com/mward-sudo/spec_chum/issues/140)).
 - **+3DOS** — command/result path and synthetic Loader / `LOAD "DISK"` smokes ([tests/fixtures/plus3/README.md](tests/fixtures/plus3/README.md)); copy-protected / weird DSK geometry and CP/M SYSTEM boot remain out of scope.
 - **Timex** — TC2048 / TS2068 (MMU, AY, Warajevo `.dck`, SCLD hi-colour / hi-res) — [docs/TIMEX.md](docs/TIMEX.md) ([#192](https://github.com/mward-sudo/spec_chum/issues/192)).
-- **Debug / automation** — localhost Agent Debug HTTP API (`spec_chum --serve` / `SPEC_CHUM_AGENT=1`) for scripted control and 1:1 framebuffer PNG — [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md).
+- **Debug / automation** — localhost Agent Debug HTTP API: native shells embed with `SPEC_CHUM_AGENT=1`; headless `--serve` / `debug …` via egui (`cargo run -p app --release -- --serve …`) — [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md).
 
 ## Development
 

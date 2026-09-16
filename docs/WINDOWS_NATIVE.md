@@ -122,6 +122,4 @@ workflow builds this crate for Windows archives ([RELEASE.md](RELEASE.md)).
 ## Non-goals (for now)
 
 - WinUI 3 XAML chrome (provisional future; this shell is classic Win32)
-- Closing epic [#351](https://github.com/mward-sudo/spec_chum/issues/351) — Linux
-  release promotion remains open (see [LINUX_NATIVE.md](LINUX_NATIVE.md))
 - Replacing egui as the **CI** / cross-platform fallback host

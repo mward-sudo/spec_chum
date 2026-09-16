@@ -24,12 +24,12 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 | `control_plane` / `agent_server` | Localhost agent debug HTTP API ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`; see [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md) |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 | `windows_shell` | Native Win32 shell (`spec_chum_windows` → release `spec_chum.exe`) over `host_api` — [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) / [#351](https://github.com/mward-sudo/spec_chum/issues/351) |
-| `linux_shell` | Optional GTK4 native shell (`spec_chum_linux`) over `host_api` — [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) / [#351](https://github.com/mward-sudo/spec_chum/issues/351); egui remains Linux release primary |
+| `linux_shell` | Native GTK4 shell (`spec_chum_linux` → release `spec_chum`) over `host_api` — [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md) / [#351](https://github.com/mward-sudo/spec_chum/issues/351); egui remains Linux CI / headless fallback |
 | `living_room` | Experimental Bevy 3D CRT host (`spec-chum-room`); excluded from default `./scripts/check.sh` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1` — see `docs/LIVING_ROOM.md` / #146. SpecChumMac **always links** the living_room staticlib for `host_api`; living-room is opt-in only as a *display mode*. |
 
 Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`). Models include distinct **+2A** (tape Loader) and **+3** (disk Loader).
 
-**GUI parity:** egui (`crates/app`), SpecChumMac, the Windows Win32 shell (`crates/windows_shell`; release primary), and the optional Linux GTK4 shell (`crates/linux_shell`) must stay **feature-aligned** unless a capability is genuinely platform-specific. **Chrome may follow platform HIG** (⌘ vs Ctrl, native menus/materials). Shared logic in `control_plane` / `host_api`; hosts get the same agent HTTP surface. **Never leave another host as a silent follow-up** (vertical-slice deferrals must be explicit in docs). See `.cursor/rules/gui-app-parity.mdc`.
+**GUI parity:** egui (`crates/app`), SpecChumMac, the Windows Win32 shell (`crates/windows_shell`; release primary), and the Linux GTK4 shell (`crates/linux_shell`; release primary) must stay **feature-aligned** unless a capability is genuinely platform-specific. **Chrome may follow platform HIG** (⌘ vs Ctrl, native menus/materials). Shared logic in `control_plane` / `host_api`; hosts get the same agent HTTP surface. **Never leave another host as a silent follow-up** (vertical-slice deferrals must be explicit in docs). See `.cursor/rules/gui-app-parity.mdc`.
 
 ## Hard constraints
 
@@ -56,7 +56,7 @@ Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
 Linux PNG / egui window) lives under `packaging/` — regenerate with
 `python3 scripts/generate_app_icons.py`
 ([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
-Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351) — strategy in [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md#native-shells-351) (Windows: Win32 `windows_shell` release primary, see [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md); Linux: egui release + optional GTK4 `linux_shell`, see [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md)).
+Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351) — strategy in [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md#native-shells-351) (Windows: Win32 `windows_shell` release primary, see [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md); Linux: GTK4 `linux_shell` release primary, see [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md)).
 **Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
 (z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
 
