@@ -58,8 +58,10 @@ UI stack rationale and native-shell strategy: [docs/UI_ARCHITECTURE.md](docs/UI_
 ## Releases & ROMs
 
 Push a `vX.Y.Z` tag to build release archives (see [docs/RELEASE.md](docs/RELEASE.md)).
-ROM bytes are **not** in git — checkouts use `./scripts/fetch_roms.sh`. Grants and
-user-provided-only firmware: [docs/ROMS.md](docs/ROMS.md).
+ROM **bytes are not** in git. Source checkouts fetch the managed redistributable
+set with `./scripts/fetch_roms.sh`; release packages embed that set. Multiface,
+TR-DOS, IF1, and similar firmware stay user-provided only — details in
+[docs/ROMS.md](docs/ROMS.md).
 
 **Amstrad / Sinclair:** Amstrad have kindly given their permission for the
 redistribution of their copyrighted material but retain that copyright. Do not
