@@ -5,12 +5,25 @@
 #   SPEC_CHUM_MAC_TARGET  — Rust target triple (e.g. x86_64-apple-darwin).
 #                           When set and not host-native, builds with
 #                           `cargo --target` and `swift build --arch`.
+#   CARGO_TARGET_DIR       — Cargo artifact dir (see scripts/dev_env.sh / External SSD).
 #   SPEC_CHUM_HOST_LIB_DIR — override linker search dir for libspec_chum_room.a
-#                           (default: target/release or target/<triple>/release).
+#                           (default: $CARGO_TARGET_DIR/release or …/<triple>/release).
+#   SPEC_CHUM_SWIFT_SCRATCH — SwiftPM --scratch-path (default: apps/macos/.build).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+# Prefer already-set cache env; otherwise load SSD/local defaults from dev_env.sh.
+if [[ -z "${CARGO_TARGET_DIR:-}${SPEC_CHUM_HOST_LIB_DIR:-}${SPEC_CHUM_SWIFT_SCRATCH:-}" ]]; then
+  if [[ -f "$ROOT/scripts/dev_env.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$ROOT/scripts/dev_env.sh"
+  fi
+fi
+
+CARGO_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+SWIFT_SCRATCH="${SPEC_CHUM_SWIFT_SCRATCH:-$ROOT/apps/macos/.build}"
 
 # SwiftUI macros require a full Xcode toolchain (not Command Line Tools alone).
 if [[ -z "${DEVELOPER_DIR:-}" ]]; then
@@ -43,12 +56,12 @@ HOST_ARCH="$(uname -m)"
 TARGET_TRIPLE="${SPEC_CHUM_MAC_TARGET:-}"
 CARGO_TARGET_ARGS=()
 SWIFT_ARCH_ARGS=()
-LIB_DIR="$ROOT/target/release"
+LIB_DIR="$CARGO_DIR/release"
 
 if [[ -n "$TARGET_TRIPLE" ]]; then
   echo "==> SPEC_CHUM_MAC_TARGET=$TARGET_TRIPLE"
   CARGO_TARGET_ARGS=(--target "$TARGET_TRIPLE")
-  LIB_DIR="$ROOT/target/${TARGET_TRIPLE}/release"
+  LIB_DIR="$CARGO_DIR/${TARGET_TRIPLE}/release"
   case "$TARGET_TRIPLE" in
     aarch64-apple-darwin)
       SWIFT_ARCH_ARGS=(--arch arm64)
@@ -71,7 +84,13 @@ if [[ -n "$TARGET_TRIPLE" ]]; then
   fi
 fi
 
-export SPEC_CHUM_HOST_LIB_DIR="${SPEC_CHUM_HOST_LIB_DIR:-$LIB_DIR}"
+# Cross-target builds must use the triple-specific release dir even if
+# scripts/dev_env.sh exported the native …/release default.
+if [[ -n "$TARGET_TRIPLE" ]]; then
+  export SPEC_CHUM_HOST_LIB_DIR="$LIB_DIR"
+else
+  export SPEC_CHUM_HOST_LIB_DIR="${SPEC_CHUM_HOST_LIB_DIR:-$LIB_DIR}"
+fi
 
 echo "==> cargo build -p living_room --release --no-default-features ${CARGO_TARGET_ARGS[*]:-}"
 # strip=none is set in workspace profile for living_room (macOS 27 LINKEDIT).
@@ -104,30 +123,33 @@ else
 fi
 
 echo "==> swift build (SpecChumMac, force_load libspec_chum_room.a from $SPEC_CHUM_HOST_LIB_DIR)"
+echo "==> Swift scratch: $SWIFT_SCRATCH"
 export SPEC_CHUM_ROOT="$ROOT"
+mkdir -p "$SWIFT_SCRATCH"
 if ((${#SWIFT_ARCH_ARGS[@]})); then
-  xcrun swift build -c release --package-path apps/macos "${SWIFT_ARCH_ARGS[@]}"
+  xcrun swift build -c release --package-path apps/macos --scratch-path "$SWIFT_SCRATCH" \
+    "${SWIFT_ARCH_ARGS[@]}"
 else
-  xcrun swift build -c release --package-path apps/macos
+  xcrun swift build -c release --package-path apps/macos --scratch-path "$SWIFT_SCRATCH"
 fi
 
-BIN="$ROOT/apps/macos/.build/release/SpecChumMac"
-# Cross-arch SwiftPM may place the product under .build/<arch>-apple-macosx/release/.
+BIN="$SWIFT_SCRATCH/release/SpecChumMac"
+# Cross-arch SwiftPM may place the product under <scratch>/<arch>-apple-macosx/release/.
 if [[ ! -x "$BIN" ]]; then
   case "${TARGET_TRIPLE:-}" in
     aarch64-apple-darwin) build_arch="arm64" ;;
     x86_64-apple-darwin) build_arch="x86_64" ;;
     *) build_arch="$HOST_ARCH" ;;
   esac
-  BIN="$(find "$ROOT/apps/macos/.build" -type f \
+  BIN="$(find "$SWIFT_SCRATCH" -type f \
     -path "*/${build_arch}-apple-macosx/release/SpecChumMac" -print -quit || true)"
 fi
 if [[ -z "${BIN:-}" || ! -x "$BIN" ]]; then
   # Last resort: unique release product (native single-arch builds).
-  BIN="$(find "$ROOT/apps/macos/.build" -type f -name SpecChumMac -path '*/release/SpecChumMac' | head -n 1 || true)"
+  BIN="$(find "$SWIFT_SCRATCH" -type f -name SpecChumMac -path '*/release/SpecChumMac' | head -n 1 || true)"
 fi
 if [[ -z "${BIN:-}" || ! -x "$BIN" ]]; then
-  echo "error: SpecChumMac binary not found under apps/macos/.build" >&2
+  echo "error: SpecChumMac binary not found under $SWIFT_SCRATCH" >&2
   exit 1
 fi
 
@@ -148,7 +170,7 @@ echo "==> vtool LC_BUILD_VERSION macos ${MACOSX_DEPLOYMENT_TARGET} / sdk ${SDK_V
 xcrun vtool -set-build-version macos "$MACOSX_DEPLOYMENT_TARGET" "$SDK_VERSION" \
   -replace -output "$BIN" "$BIN"
 
-APP_STAGE="$ROOT/apps/macos/.build/SpecChumMac.app"
+APP_STAGE="$SWIFT_SCRATCH/SpecChumMac.app"
 RESOURCES="$APP_STAGE/Contents/Resources"
 mkdir -p "$RESOURCES"
 echo "==> ensure + copy living_room assets → SpecChumMac.app Resources"
@@ -160,4 +182,4 @@ echo "Built: $BIN"
 echo "Run with:"
 echo "  ./scripts/run_macos_app.sh"
 # Export path for release CI consumers.
-echo "$BIN" >"$ROOT/apps/macos/.build/specchummac-binary-path.txt"
+echo "$BIN" >"$SWIFT_SCRATCH/specchummac-binary-path.txt"

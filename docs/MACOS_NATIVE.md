@@ -27,6 +27,16 @@ From the repository root:
 
 `run_macos_app.sh` stages a minimal `SpecChumMac.app` and launches it with **`open`** (Launch Services) so SpecChum becomes the **key application**. Do **not** type into the Terminal that ran the script — click the Spec Chum window if needed; keys should drive 48K BASIC and must **not** echo in Terminal.
 
+### SSD caches (optional, local Mac)
+
+On a small internal drive, source `scripts/dev_env.sh` (or add the block in
+`AGENTS.md`) when `/Volumes/External SSD` is mounted. That sets
+`CARGO_TARGET_DIR`, `SPEC_CHUM_HOST_LIB_DIR`, and `SPEC_CHUM_SWIFT_SCRATCH` under
+`/Volumes/External SSD/DeveloperCaches/spec_chum/` and removes in-repo
+`target/` + `apps/macos/.build` (never `~/.cargo`, assets, `graphify-out`, or
+`.rom-cache`). Without the volume, builds use the normal in-repo paths.
+Manual purge: `./scripts/purge_local_build_artifacts.sh`.
+
 `build_macos_app.sh` will:
 
 1. `cargo build -p living_room --release --no-default-features` (staticlib embeds
@@ -40,6 +50,9 @@ From the repository root:
 
 Environment:
 
+- `CARGO_TARGET_DIR` / `SPEC_CHUM_HOST_LIB_DIR` / `SPEC_CHUM_SWIFT_SCRATCH` — optional
+  cache offload (see **SSD caches** below). `build_macos_app.sh` / `run_macos_app.sh`
+  source `scripts/dev_env.sh` when none of these are already set.
 - `SPEC_CHUM_ROOT` — repo root used to find `roms/` and (fallback) living-room assets
 - `SPEC_CHUM_LIVING_ROOM_ASSETS` — optional override for Bevy asset root (set by the staged launcher)
 - `SPEC_CHUM_LIVING_ROOM=1` — opt-in: start in living-room mode (`run_macos_app.sh` bakes into the

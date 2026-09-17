@@ -2,7 +2,8 @@
 # Optional gate for the Bevy living-room host (#146).
 #
 # Default profile is **release** — Bevy debug artifacts are multi‑GB and not
-# required for SpecChumMac (which always links `target/release/libspec_chum_room.a`).
+# required for SpecChumMac (links `$CARGO_TARGET_DIR/release/libspec_chum_room.a`,
+# default `target/release` — see scripts/dev_env.sh).
 # Set SPEC_CHUM_ROOM_DEBUG=1 to force debug clippy/test (disk-heavy; avoid unless
 # you need debug symbols for living_room specifically).
 set -euo pipefail
