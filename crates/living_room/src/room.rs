@@ -271,13 +271,20 @@ fn spawn_polyhaven_wall_sconces(commands: &mut Commands, asset_server: &AssetSer
         // after baking, but the live TV still needs the three TV-wall bulbs.
         let use_light = lit && (!min_lights || name == "wall_sconce_tv_centre");
         if use_light {
-            let bulb_local = Vec3::new(0.0, 0.05, 0.16);
+            // Default: bulb just in front of the fixture shade.
+            // Centre TV sconce: stay slightly above/into-room of the fixture so the
+            // glass gets a soft upper sheen, not the old on-axis white blob (#149).
+            let (bulb_local, intensity) = if name == "wall_sconce_tv_centre" {
+                (Vec3::new(0.0, 0.16, 0.32), 5_400.0)
+            } else {
+                (Vec3::new(0.0, 0.05, 0.16), 6_500.0)
+            };
             let bulb_world = pos + rot * bulb_local;
             commands.spawn((
                 PointLight {
                     color: Color::srgb(1.0, 0.72, 0.38),
                     // Room fill only — keep CRT exposure/spill at #238 (#233).
-                    intensity: 6_500.0,
+                    intensity,
                     range: 6.0,
                     radius: 0.08,
                     shadow_maps_enabled: false,

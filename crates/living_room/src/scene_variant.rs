@@ -96,14 +96,16 @@ impl Plugin for SceneVariantPlugin {
 fn prepare_new_environment_map(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     // Warm, muted hemispheres — subtle IBL fill for New without high-key wash.
     // (Earlier 2400 intensity + bright cyan sky blew Exposure ~8.2 into washout.)
+    // Soft upper lobe: enough for a gentle glass sheen with moderate CRT glass,
+    // not a mirrored sky disc (#149).
     let mut light = EnvironmentMapLight::hemispherical_gradient(
         &mut images,
-        Color::srgb(0.08, 0.22, 0.32), // dim cool upper (not a cyan flood)
-        Color::srgb(0.55, 0.44, 0.30), // warm horizon
-        Color::srgb(0.18, 0.12, 0.07), // dark warm floor bounce
+        Color::srgb(0.07, 0.16, 0.24), // muted cool upper
+        Color::srgb(0.50, 0.40, 0.28), // warm horizon
+        Color::srgb(0.16, 0.11, 0.06), // dark warm floor bounce
     );
     // Indoor Exposure ~8.2: soft room fill; sconces + cream ambient carry mood.
-    light.intensity = 140.0;
+    light.intensity = 125.0;
     commands.insert_resource(NewVariantEnvironmentMap(light));
 }
 

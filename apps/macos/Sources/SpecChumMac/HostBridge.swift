@@ -555,7 +555,10 @@ final class HostBridge: ObservableObject {
     func publishAgentHostView() {
         guard let handle else { return }
         guard ProcessInfo.processInfo.environment["SPEC_CHUM_AGENT"] == "1" else { return }
-        let present: NSView? = spectrumPresentView ?? livingRoomPresentView
+        let present: NSView? =
+            livingRoomMode
+            ? (livingRoomPresentView ?? spectrumPresentView)
+            : (spectrumPresentView ?? livingRoomPresentView)
         if let window = present?.window {
             // windowNumber == CGWindowID; capture path verifies owning PID == self.
             _ = sc_agent_set_host_window_id(handle, UInt32(window.windowNumber))

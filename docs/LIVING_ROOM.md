@@ -412,7 +412,7 @@ Windows, or Linux shells.
 | Variant | Look |
 | --- | --- |
 | **Current** | Pre-#149 baseline (warm ambient + dynamic sconces / wall bounce). No `EnvironmentMapLight`. |
-| **New** | Lightmap WIP: moodier cream-warm ambient (near Current brightness), lit sconces, **stub `EnvironmentMapLight`** (muted warm cubemap), CRT wall-bounce off, dim cyan strip cue. No chrome probe orb. |
+| **New** | Lightmap WIP: moodier cream-warm ambient (near Current brightness), lit sconces, **stub `EnvironmentMapLight`** (muted warm cubemap), CRT wall-bounce off, dim cyan strip cue. No chrome probe orb. CRT fill + centre TV sconce stay slightly off-axis for a soft glass sheen without a centre hotspot (#149). |
 
 Toggle switches the live Bevy scene (not a label-only flag). Env alternate:
 `SPEC_CHUM_ROOM_SCENE=new`. **Remove** the toolbar control, `sc_room_set_scene_variant` /

@@ -87,6 +87,8 @@ fn spawn_fill_lights(mut commands: Commands) {
     } else {
         let min = quality::light_preset() == LightPreset::Min;
         // Primary CRT spill — phosphor-driven colour via GlowDriven.
+        // Keep the emitter off the camera↔CRT axis so mirror glass does not pick up
+        // a dead-centre specular hotspot (#149); room spill still reads from the tube.
         commands.spawn((
             PointLight {
                 color: Color::srgb(0.4, 0.45, 0.35),
@@ -96,7 +98,7 @@ fn spawn_fill_lights(mut commands: Commands) {
                 shadow_maps_enabled: false,
                 ..default()
             },
-            Transform::from_xyz(0.0, 1.17, -1.15),
+            Transform::from_translation(crt_fill_offset(Vec3::new(0.0, 1.17, -1.15))),
             GlowDriven {
                 intensity_scale: 1.0,
             },
@@ -170,16 +172,22 @@ fn spawn_fill_lights(mut commands: Commands) {
     });
 }
 
+/// World offset of the CRT fill emitter relative to the phosphor centre.
+///
+/// Fully on-axis +Z whitened the aperture; a large off-axis bias killed glass read.
+/// Mild right/down/into-room offset keeps a soft edge sheen without a centre blob (#149).
+fn crt_fill_offset(phosphor: Vec3) -> Vec3 {
+    phosphor + Vec3::new(0.18, -0.08, 0.22)
+}
+
 fn sync_fill_origin(
     phosphor: Query<&GlobalTransform, With<CrtPhosphor>>,
     mut fill: Query<&mut Transform, With<CrtFillLight>>,
 ) {
-    let origin = phosphor
-        .iter()
-        .next()
-        .map_or(Vec3::new(0.0, 1.17, -1.15), |g| {
-            g.translation() + Vec3::new(0.0, 0.0, 0.12)
-        });
+    let origin = phosphor.iter().next().map_or_else(
+        || crt_fill_offset(Vec3::new(0.0, 1.17, -1.15)),
+        |g| crt_fill_offset(g.translation()),
+    );
 
     for mut tf in &mut fill {
         tf.translation = origin;
