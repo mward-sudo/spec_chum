@@ -16,7 +16,8 @@ const WALLPAPER_TILE_M: f32 = 0.55;
 pub const TV_STAND_POS: Vec3 = Vec3::new(0.0, 0.0, -1.35);
 
 /// Marker on the `television_02` scene root — phosphor is placed in this local space.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Debug, Clone, Copy, Default)]
+#[reflect(Component, Default)]
 pub struct TelevisionCabinet;
 
 #[derive(Debug, Default)]
@@ -33,10 +34,27 @@ fn setup_room(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
+    #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
+) {
+    #[cfg(feature = "skein")]
+    if let Some(mode) = skein_mode.as_deref() {
+        if crate::skein::spawn_skein_room_if_active(&mut commands, &asset_server, mode) {
+            return;
+        }
+    }
+
+    setup_procedural_room(&mut commands, &mut meshes, &mut materials, &asset_server);
+}
+
+fn setup_procedural_room(
+    commands: &mut Commands,
+    meshes: &mut ResMut<'_, Assets<Mesh>>,
+    materials: &mut ResMut<'_, Assets<StandardMaterial>>,
+    asset_server: &AssetServer,
 ) {
     let carpet = pbr_material(
-        &mut materials,
-        &asset_server,
+        materials,
+        asset_server,
         "polyhaven/textures/dirty_carpet/dirty_carpet",
         0.0,
         None,
@@ -44,8 +62,8 @@ fn setup_room(
     // Cuboid faces use 0–1 UVs, so tile in world metres via uv_transform.
     // Back/front faces are ROOM_W×ROOM_H; left/right are ROOM_D×ROOM_H.
     let wallpaper_back = pbr_material(
-        &mut materials,
-        &asset_server,
+        materials,
+        asset_server,
         "polyhaven/textures/floral_jacquard/floral_jacquard",
         0.0,
         Some(Vec2::new(
@@ -54,8 +72,8 @@ fn setup_room(
         )),
     );
     let wallpaper_side = pbr_material(
-        &mut materials,
-        &asset_server,
+        materials,
+        asset_server,
         "polyhaven/textures/floral_jacquard/floral_jacquard",
         0.0,
         Some(Vec2::new(
@@ -64,22 +82,22 @@ fn setup_room(
         )),
     );
     let plaster = pbr_material(
-        &mut materials,
-        &asset_server,
+        materials,
+        asset_server,
         "polyhaven/textures/beige_wall_001/beige_wall_001",
         0.0,
         None,
     );
     let walnut = pbr_material(
-        &mut materials,
-        &asset_server,
+        materials,
+        asset_server,
         "polyhaven/textures/american_walnut_veneer/american_walnut_veneer",
         0.05,
         None,
     );
     let curtain_mat = pbr_material(
-        &mut materials,
-        &asset_server,
+        materials,
+        asset_server,
         "polyhaven/textures/velour_velvet/velour_velvet",
         0.0,
         None,
@@ -209,9 +227,9 @@ fn setup_room(
         ));
     }
 
-    spawn_polyhaven_wall_sconces(&mut commands, &asset_server);
-    spawn_floor_toys(&mut commands, &asset_server);
-    spawn_spectrum_joystick(&mut commands, &mut meshes, &mut materials);
+    spawn_polyhaven_wall_sconces(commands, asset_server);
+    spawn_floor_toys(commands, asset_server);
+    spawn_spectrum_joystick(commands, meshes, materials);
 
     let _ = plaster;
 }
@@ -271,13 +289,20 @@ fn spawn_polyhaven_wall_sconces(commands: &mut Commands, asset_server: &AssetSer
         // after baking, but the live TV still needs the three TV-wall bulbs.
         let use_light = lit && (!min_lights || name == "wall_sconce_tv_centre");
         if use_light {
-            let bulb_local = Vec3::new(0.0, 0.05, 0.16);
+            // Default: bulb just in front of the fixture shade.
+            // Centre TV sconce: stay slightly above/into-room of the fixture so the
+            // glass gets a soft upper sheen, not the old on-axis white blob (#149).
+            let (bulb_local, intensity) = if name == "wall_sconce_tv_centre" {
+                (Vec3::new(0.0, 0.16, 0.32), 5_400.0)
+            } else {
+                (Vec3::new(0.0, 0.05, 0.16), 6_500.0)
+            };
             let bulb_world = pos + rot * bulb_local;
             commands.spawn((
                 PointLight {
                     color: Color::srgb(1.0, 0.72, 0.38),
                     // Room fill only — keep CRT exposure/spill at #238 (#233).
-                    intensity: 6_500.0,
+                    intensity,
                     range: 6.0,
                     radius: 0.08,
                     shadow_maps_enabled: false,

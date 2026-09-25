@@ -40,6 +40,133 @@ Launch from a normal Terminal with WindowServer — headless SSH sessions or
 machines without a display often die in ~5s (monitor scale factor 0 / no display
 attachment).
 
+## Scene editing with Skein (opt-in, standalone only)
+
+[Skein](https://bevyskein.dev/) is a **Bevy plugin + Blender extension** that stores
+reflected Bevy components in glTF extras (`BEVY_skein`). With `--features skein`, a
+configured export **is the living room** (procedural `room.rs` spawn is skipped).
+
+**Assumes the Skein Blender add-on is already installed.** SpecChumMac stays
+`--no-default-features` (no Skein / BRP). egui / Windows / Linux shells unchanged.
+
+### Bevy / crate versions
+
+| Piece | Version | Notes |
+| --- | --- | --- |
+| Spec Chum Bevy | **0.19** | Workspace pin. **No Bevy bump required** for Skein. |
+| `bevy_skein` | **0.6.0** | Matches Bevy 0.19 (`--features skein`). |
+| `bevy_skein` 0.7 | Bevy **0.20** | Deferred — [#438](https://github.com/mward-sudo/spec_chum/issues/438). |
+
+### When is the Skein scene the room?
+
+| Condition | Room source |
+| --- | --- |
+| Feature **off** (default SpecChumMac / CI without flag) | Procedural `room.rs` |
+| `--features skein` + export **missing** | Procedural `room.rs` |
+| `--features skein` + `SPEC_CHUM_ROOM_SKEIN_SCENE=off` | Procedural `room.rs` |
+| `--features skein` + export **present** (default path or env) | **Skein glTF is the room** |
+
+`SPEC_CHUM_ROOM_SKEIN_SCENE`:
+
+| Value | Effect |
+| --- | --- |
+| unset / empty | Use `skein/living_room_edit.gltf#Scene0` if that file exists |
+| `skein/foo.gltf` or `…#Scene0` | That asset (appends `#Scene0` if omitted) |
+| `off` / `0` / `false` / `no` | Force procedural |
+
+### Paths
+
+| Path | Role |
+| --- | --- |
+| `assets/polyhaven/models/*.gltf` | Import into Blender as mesh sources |
+| `assets/skein/` | Your full-room glTF / `.blend` (local; gitignored except README) |
+| `assets/skein/living_room_edit.blend` | Editable starter scene (generate locally) |
+| `assets/skein/living_room_edit.gltf` | Default room when present |
+| `*.blend` / `crates/living_room/blender/` | Keep local (gitignored) |
+
+### Generate a starter `.blend` (matches procedural layout)
+
+Do **not** rebuild the room by hand. From a checkout with Poly Haven assets fetched:
+
+```bash
+./scripts/fetch_living_room_assets.sh   # once
+./scripts/generate_living_room_blend.sh
+```
+
+Requires Blender on `PATH`, or macOS `/Applications/Blender.app`, or `BLENDER=/path/to/Blender`.
+
+Writes (gitignored):
+
+| Output | Role |
+| --- | --- |
+| `assets/skein/living_room_edit.blend` | Open this in Blender to edit |
+| `assets/skein/living_room_edit.gltf` (+ `.bin` / textures) | Room load for `--features skein` |
+
+The generator places Poly Haven props, room shell, and lights to match `room.rs` / `glow.rs`, then injects `BEVY_skein` tags (including **`TelevisionCabinet`** on the `television_02` empty) so the export is runnable without a first manual tag pass.
+
+### What stays in Rust (even when Skein owns the room)
+
+| Still code-driven | Why |
+| --- | --- |
+| CRT phosphor + glass (`crt.rs`) | Framebuffer upload / shader; attaches to Blender-tagged `TelevisionCabinet` |
+| Camera / intro zoom | Host look-at phosphor after attach |
+| Host / tape / audio / agent | Not scene content |
+| `GlowDriven` tint sync | Updates Blender-tagged spill lights from the Spectrum FB |
+| Soft `GlobalAmbientLight` | Fallback so a dark export is not pure black |
+
+**Required on the TV empty:** Bevy component **`TelevisionCabinet`** (and preferably `LiveTv`). Without it, phosphor never attaches. The generator + tagger already set this on `television_02`; after Fetch Registry, confirm/re-insert via the Skein panel so tags survive a Blender re-export.
+
+### Enable Rust side + BRP
+
+```bash
+./scripts/fetch_roms.sh
+./scripts/fetch_living_room_assets.sh   # once — Poly Haven sources for Blender import
+./scripts/generate_living_room_blend.sh # optional — starter .blend + tagged .gltf
+cargo run -p living_room --release --features skein
+```
+
+BRP: **`http://127.0.0.1:15702`**. Leave the process running while Fetching Registry.
+
+Registered markers:
+
+| Component | Use |
+| --- | --- |
+| `TelevisionCabinet` | **Required** — CRT phosphor parent |
+| `LiveTv` / `RoomStatic` | Hybrid / layer tagging |
+| `CrtFillLight` / `GlowDriven` | Framebuffer-driven spill |
+| `IncandescentLamp` | Warm fixture tag (reserved) |
+| `DynamicRoomFillLight` | Temporary #149 A/B |
+
+Presets: **CRT fill (soft)**, **Warm sconce** (`PointLight`).
+
+### Step-by-step — open → edit → export → run
+
+1. **Generate** (if needed): `./scripts/generate_living_room_blend.sh`
+2. **Open** `crates/living_room/assets/skein/living_room_edit.blend` in Blender.
+3. **Start** `cargo run -p living_room --release --features skein` (BRP on).
+4. **Blender → Fetch Bevy registry** → `127.0.0.1:15702`.
+5. **Edit** the scene (move furniture/lights; Skein panel on empties).  
+   One-time after Fetch: select empty **`television_02`** → insert **`TelevisionCabinet`** (+ `LiveTv`) if the panel does not already show them. Optional: apply presets / `GlowDriven` on CRT spill lights (`crt_fill_light`, `crt_wall_bounce`).
+6. **Export glTF** (enable extras / `BEVY_skein`) →  
+   `crates/living_room/assets/skein/living_room_edit.gltf`  
+   Or re-run `./scripts/generate_living_room_blend.sh` after large layout resets, then `python3 scripts/blender/tag_living_room_skein_gltf.py` if you only re-exported from Blender without the tagger.
+7. **Run again** with `--features skein`. Log should say *loading … as the room*.  
+   Procedural furniture / walls / glow fills are **not** spawned.
+8. Force procedural anytime: `SPEC_CHUM_ROOM_SKEIN_SCENE=off`.
+
+### SpecChumMac
+
+Mac embed: `--no-default-features` → always procedural room (no Skein). Promote a
+committed glTF load path later if the export becomes shipping art; until then,
+standalone is the editor.
+
+### Verify
+
+```bash
+./scripts/check_living_room.sh
+# includes --features skein clippy/test
+```
+
 ## macOS SwiftUI embed
 
 Build/run the native shell ([MACOS_NATIVE.md](MACOS_NATIVE.md)):
@@ -375,6 +502,7 @@ Runtime A/B via `SPEC_CHUM_ROOM_*` (implemented in `crates/living_room/src/quali
 | `SPEC_CHUM_ROOM_LIGHTS` | `full` | `full` or `min` (fewer sconces). |
 | `SPEC_CHUM_ROOM_HYBRID` | **off** | Camera-space bake plates + live TV (experimental). |
 | `SPEC_CHUM_ROOM_SCENE` | `current` | Temporary #149 A/B: `current` (baseline) or `new` (lightmap WIP). Prefer SpecChumMac toolbar toggle. **Remove when #149 done.** |
+| `SPEC_CHUM_ROOM_SKEIN_SCENE` | auto | Standalone `--features skein` only: Bevy asset path for the **room** glTF (default `skein/living_room_edit.gltf#Scene0` if file exists → replaces procedural `room.rs`). `off` forces procedural. |
 | `SPEC_CHUM_ROOM_PERF` | off | Rolling tick µs to stderr + Swift HUD fields. |
 | `SPEC_CHUM_ROOM_PERF_SOFT` | off | `room_perf`: warn instead of fail on budget exceed. |
 | `SPEC_CHUM_ROOM_PIPELINE` | n/a | **Not implemented** — planned spike to re-enable `PipelinedRenderingPlugin` (always disabled today). |
@@ -411,8 +539,8 @@ Windows, or Linux shells.
 
 | Variant | Look |
 | --- | --- |
-| **Current** | Pre-#149 baseline (warm ambient + dynamic sconces / wall bounce). |
-| **New** | Lightmap WIP stub: brighter cream-warm ambient, lit sconces, CRT wall-bounce off, cyan emissive strip on the TV wall. |
+| **Current** | Pre-#149 baseline (warm ambient + dynamic sconces / wall bounce). No `EnvironmentMapLight`. |
+| **New** | Lightmap WIP: moodier cream-warm ambient (near Current brightness), lit sconces, **stub `EnvironmentMapLight`** (muted warm cubemap), CRT wall-bounce off, dim cyan strip cue. No chrome probe orb. CRT fill + centre TV sconce stay slightly off-axis for a soft glass sheen without a centre hotspot (#149). |
 
 Toggle switches the live Bevy scene (not a label-only flag). Env alternate:
 `SPEC_CHUM_ROOM_SCENE=new`. **Remove** the toolbar control, `sc_room_set_scene_variant` /
@@ -447,7 +575,7 @@ if a GPU trace shows Bevy overhead **after** lightmaps and tier-2 wins land.
 | --- | --- |
 | **MetalFX spatial upscaling** | Render below backing scale, upscale in `present_metal.rs` — future win on Retina. |
 | **Pipelined rendering spike** | Planned only — no `SPEC_CHUM_ROOM_PIPELINE` reader yet; soak before ship. |
-| **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. SpecChumMac temporary Current/New A/B toggle documents verification until this lands. |
+| **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. SpecChumMac temporary Current/New A/B toggle documents verification until this lands. Opt-in **Skein** (`--features skein`) helps tag Bevy markers / lights from Blender while lightmaps land — see [Scene editing with Skein](#scene-editing-with-skein-opt-in-standalone-only). |
 | **Halation in CRT material** | Move main glow from separate bloom pass into phosphor shader (tier-2 structural). |
 
 Solari / TAA / DLSS are **not viable** on this stack.

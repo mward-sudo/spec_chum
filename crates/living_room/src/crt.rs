@@ -222,10 +222,13 @@ fn setup_crt_resources(
         48,
         36,
     ));
+    // Middle ground (#149): glossy enough to read CRT curvature at sofa pullback,
+    // not chrome (0.04 / 1.0 whitened the aperture) and not flat (0.18 / 0.55 hid
+    // the glass). Light placement still carries most of the hotspot avoidance.
     let glass_mat = std_mats.add(StandardMaterial {
         base_color: Color::srgba(0.55, 0.65, 0.75, 0.08),
-        perceptual_roughness: 0.04,
-        reflectance: 1.0,
+        perceptual_roughness: 0.10,
+        reflectance: 0.78,
         metallic: 0.0,
         alpha_mode: AlphaMode::Blend,
         ..default()

@@ -48,18 +48,44 @@ impl FrameGlow {
 }
 
 /// Tint + intensity scale driven by [`FrameGlow`].
-#[derive(Component, Debug)]
+///
+/// Default `intensity_scale` is `1.0` so Skein/Blender-inserted markers drive
+/// full phosphor spill until an explicit scale is authored.
+#[derive(Component, Reflect, Debug)]
+#[reflect(Component, Default)]
 pub struct GlowDriven {
     pub intensity_scale: f32,
 }
 
+impl Default for GlowDriven {
+    fn default() -> Self {
+        Self {
+            intensity_scale: 1.0,
+        }
+    }
+}
+
+/// Warm ambient brightness for procedural Current (matches historical glow baseline).
+#[must_use]
+pub fn procedural_ambient_brightness(bright_debug: bool) -> f32 {
+    76.5 * if bright_debug { 14.0 } else { 1.0 }
+}
+
+/// Softer fallback ambient when a Skein room owns lighting.
+#[must_use]
+pub fn skein_fallback_ambient_brightness(bright_debug: bool) -> f32 {
+    40.0 * if bright_debug { 14.0 } else { 1.0 }
+}
+
 /// Primary fill near the phosphor face (also tracks phosphor transform).
-#[derive(Component, Debug)]
+#[derive(Component, Reflect, Debug, Clone, Copy, Default)]
+#[reflect(Component, Default)]
 pub struct CrtFillLight;
 
 /// Constant warm room lamp — not CRT-tinted (stays tungsten).
 /// Reserved for future fixture tagging; wall sconces currently carry their own lights.
-#[derive(Component, Debug)]
+#[derive(Component, Reflect, Debug, Clone, Copy, Default)]
+#[reflect(Component, Default)]
 // Marker reserved for future sconce tagging (#171 / living-room polish).
 #[allow(dead_code)]
 pub struct IncandescentLamp;
@@ -75,18 +101,35 @@ impl Plugin for GlowPlugin {
     }
 }
 
-fn spawn_fill_lights(mut commands: Commands) {
+fn spawn_fill_lights(
+    mut commands: Commands,
+    #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
+) {
     let bright = crate::crt::bright_debug_enabled();
     let hide_crt = crate::crt::hide_crt_enabled();
     // Bright-debug multiplies ambient so bezels + punch edges read in screenshots
     // (aperture debug also skips CRT spill, which otherwise darkens the room).
     let ambient_mul = if bright { 14.0 } else { 1.0 };
 
-    if hide_crt {
+    #[cfg(feature = "skein")]
+    let skein_owns_lights = skein_mode
+        .as_deref()
+        .is_some_and(crate::skein::SkeinRoomMode::replaces_procedural);
+    #[cfg(not(feature = "skein"))]
+    let skein_owns_lights = false;
+
+    if skein_owns_lights {
+        bevy::log::info!(
+            "Skein room active: skipping procedural CRT fill / sconces (author lights in Blender; \
+             tag GlowDriven / CrtFillLight for framebuffer-driven spill)"
+        );
+    } else if hide_crt {
         bevy::log::info!("SPEC_CHUM_ROOM_HIDE_CRT: skipping CRT spill lights");
     } else {
         let min = quality::light_preset() == LightPreset::Min;
         // Primary CRT spill — phosphor-driven colour via GlowDriven.
+        // Keep the emitter off the camera↔CRT axis so mirror glass does not pick up
+        // a dead-centre specular hotspot (#149); room spill still reads from the tube.
         commands.spawn((
             PointLight {
                 color: Color::srgb(0.4, 0.45, 0.35),
@@ -96,7 +139,7 @@ fn spawn_fill_lights(mut commands: Commands) {
                 shadow_maps_enabled: false,
                 ..default()
             },
-            Transform::from_xyz(0.0, 1.17, -1.15),
+            Transform::from_translation(crt_fill_offset(Vec3::new(0.0, 1.17, -1.15))),
             GlowDriven {
                 intensity_scale: 1.0,
             },
@@ -123,7 +166,7 @@ fn spawn_fill_lights(mut commands: Commands) {
                 Name::new("crt_wall_bounce"),
             ));
         }
-    } // end !hide_crt CRT spill lights
+    } // end procedural CRT spill lights
 
     if bright {
         // Neutral key from the sofa / camera side so TV bezels and punch rim are visible.
@@ -156,8 +199,8 @@ fn spawn_fill_lights(mut commands: Commands) {
         );
     }
 
-    // Room tungsten now comes from visible 1980s wall sconces in `room.rs`.
-    // Keep only a tiny warm ambient here so furniture isn't pure black in CRT shadow.
+    // Room tungsten: procedural sconces in `room.rs`, or Blender lights in Skein room mode.
+    // Keep a tiny warm ambient so furniture isn't pure black in CRT shadow.
     commands.insert_resource(GlobalAmbientLight {
         color: if bright {
             Color::srgb(0.55, 0.55, 0.58)
@@ -165,21 +208,31 @@ fn spawn_fill_lights(mut commands: Commands) {
             // Warm tungsten fill — readable furniture without CRT glare (#233).
             Color::srgb(0.26, 0.20, 0.13)
         },
-        brightness: 76.5 * ambient_mul,
+        brightness: if skein_owns_lights {
+            skein_fallback_ambient_brightness(bright)
+        } else {
+            procedural_ambient_brightness(bright)
+        },
         ..default()
     });
+}
+
+/// World offset of the CRT fill emitter relative to the phosphor centre.
+///
+/// Fully on-axis +Z whitened the aperture; a large off-axis bias killed glass read.
+/// Mild right/down/into-room offset keeps a soft edge sheen without a centre blob (#149).
+fn crt_fill_offset(phosphor: Vec3) -> Vec3 {
+    phosphor + Vec3::new(0.18, -0.08, 0.22)
 }
 
 fn sync_fill_origin(
     phosphor: Query<&GlobalTransform, With<CrtPhosphor>>,
     mut fill: Query<&mut Transform, With<CrtFillLight>>,
 ) {
-    let origin = phosphor
-        .iter()
-        .next()
-        .map_or(Vec3::new(0.0, 1.17, -1.15), |g| {
-            g.translation() + Vec3::new(0.0, 0.0, 0.12)
-        });
+    let origin = phosphor.iter().next().map_or_else(
+        || crt_fill_offset(Vec3::new(0.0, 1.17, -1.15)),
+        |g| crt_fill_offset(g.translation()),
+    );
 
     for mut tf in &mut fill {
         tf.translation = origin;
@@ -226,6 +279,11 @@ fn sync_glow_tints(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn glow_driven_default_is_unit_scale() {
+        assert!((GlowDriven::default().intensity_scale - 1.0).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn red_border_dominates_glow() {

@@ -29,6 +29,9 @@ pub mod quality;
 pub mod room;
 /// Temporary #149 Current/New A/B — remove when lightmaps ship.
 pub mod scene_variant;
+/// Opt-in Blender ↔ Bevy Skein bridge (`--features skein`).
+#[cfg(feature = "skein")]
+pub mod skein;
 #[cfg(feature = "standalone")]
 pub mod ui_overlay;
 
@@ -97,8 +100,11 @@ mod standalone_app {
                     ..default()
                 })
                 .set(asset_plugin()),
-        )
-        .add_plugins((
+        );
+        // Before RoomPlugin Startup: inserts SkeinRoomMode + BRP (standalone editor only).
+        #[cfg(feature = "skein")]
+        crate::skein::add_skein_plugins(&mut app);
+        app.add_plugins((
             HostPlugin,
             AudioPlugin,
             CrtPlugin,
