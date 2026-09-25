@@ -223,16 +223,17 @@ def add_box(
     *,
     tags: list[str] | None = None,
 ) -> bpy.types.Object:
-    """size_bevy is full extents in Bevy axes (X,Y,Z); Blender cube default is 2m."""
+    """size_bevy is full extents in Bevy axes (X,Y,Z).
+
+    `primitive_cube_add(size=1.0)` creates a 1×1×1 cube, so scale equals the
+    requested Bevy extents (remapped to Blender axes).
+    """
     bpy.ops.mesh.primitive_cube_add(size=1.0)
     obj = bpy.context.active_object
     obj.name = name
-    # Bevy size (sx,sy,sz) → Blender scale on (X,Y,Z) = (sx, sz, sy) / 1.0 since cube=1? 
-    # Default cube is 2×2×2; with size=1.0 ops still create 2m cube in recent Blender.
-    # Use dimensions explicitly.
     sx, sy, sz = size_bevy
     # Blender axes: X=sx, Y=sz, Z=sy
-    obj.scale = (sx / 2.0, sz / 2.0, sy / 2.0)
+    obj.scale = (sx, sz, sy)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     obj.location = bevy_to_blender(*pos_bevy)
     if mat:
@@ -262,9 +263,8 @@ def add_plane(
     obj = bpy.context.active_object
     obj.name = name
     # Default plane is XY in Blender (Z up normal). We want floor: Blender XY with Z=up →
-    # Bevy XZ floor. bevy_to_blender maps Bevy XZ → Blender X(-Z wait):
-    # Floor in Bevy is XZ; in Blender XY. Scale: X=w, Y=d (Blender Y = -Bevy Z extent).
-    obj.scale = (w / 2.0, d / 2.0, 1.0)
+    # Bevy XZ floor. Scale equals requested Bevy extents (plane size=1 → 1×1).
+    obj.scale = (w, d, 1.0)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     if flip_y:
         # Ceiling: rotate 180 about X (matches room.rs Quat::from_rotation_x(PI))
@@ -356,11 +356,14 @@ def add_point_light(
     tags: list[str] | None = None,
 ) -> bpy.types.Object:
     light_data = bpy.data.lights.new(name=name, type="POINT")
-    # Rough Blender Power for viewport readability; intended Bevy lumens stored on object.
-    light_data.energy = max(bevy_intensity / 80.0, 5.0)
+    # Blender Standard glTF export: watts × 683 → Bevy lumens. Inverse for authoring.
+    light_data.energy = max(bevy_intensity / 683.0, 0.1)
     light_data.color = color
     light_data.shadow_soft_size = radius
     light_data.use_shadow = False
+    # Emit glTF light range (Bevy 0.19 defaults to 20 m without it).
+    light_data.use_custom_distance = True
+    light_data.cutoff_distance = bevy_range
     obj = bpy.data.objects.new(name, light_data)
     obj.location = bevy_to_blender(*pos_bevy)
     obj["bevy_intensity"] = bevy_intensity
@@ -407,7 +410,7 @@ def add_joystick(col: bpy.types.Collection) -> None:
     bpy.ops.mesh.primitive_cube_add(size=1.0)
     base = bpy.context.active_object
     base.name = "joy_base"
-    base.scale = (0.11 / 2, 0.11 / 2, 0.035 / 2)
+    base.scale = (0.11, 0.11, 0.035)
     bpy.ops.object.transform_apply(scale=True)
     base.data.materials.append(black)
     link_object(base, col)

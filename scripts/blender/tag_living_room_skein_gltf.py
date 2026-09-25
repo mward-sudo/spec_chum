@@ -81,9 +81,26 @@ def ensure_extensions_used(gltf: dict[str, Any]) -> None:
 
 
 def set_components(node: dict[str, Any], components: list[dict[str, Any]]) -> None:
+    """Merge starter tags into BEVY_skein without clobbering Blender-authored ones."""
     ext = node.setdefault("extensions", {})
     skein = ext.setdefault("BEVY_skein", {})
-    skein["components"] = components
+    existing = skein.get("components")
+    if not isinstance(existing, list):
+        existing = []
+    present: set[str] = set()
+    for item in existing:
+        if isinstance(item, dict):
+            present.update(item.keys())
+    merged = list(existing)
+    for item in components:
+        if not isinstance(item, dict) or not item:
+            continue
+        key = next(iter(item))
+        if key in present:
+            continue
+        merged.append(item)
+        present.add(key)
+    skein["components"] = merged
 
 
 def tag_gltf(path: Path) -> int:
