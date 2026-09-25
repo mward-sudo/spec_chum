@@ -7,9 +7,21 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BIN="$ROOT/apps/macos/.build/release/SpecChumMac"
-ROOM_A="$ROOT/target/release/libspec_chum_room.a"
-APP="$ROOT/apps/macos/.build/SpecChumMac.app"
+
+# Prefer already-set cache env; otherwise load SSD/local defaults from dev_env.sh.
+if [[ -z "${CARGO_TARGET_DIR:-}${SPEC_CHUM_HOST_LIB_DIR:-}${SPEC_CHUM_SWIFT_SCRATCH:-}" ]]; then
+  if [[ -f "$ROOT/scripts/dev_env.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$ROOT/scripts/dev_env.sh"
+  fi
+fi
+
+CARGO_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+SWIFT_SCRATCH="${SPEC_CHUM_SWIFT_SCRATCH:-$ROOT/apps/macos/.build}"
+HOST_LIB="${SPEC_CHUM_HOST_LIB_DIR:-$CARGO_DIR/release}"
+BIN="$SWIFT_SCRATCH/release/SpecChumMac"
+ROOM_A="$HOST_LIB/libspec_chum_room.a"
+APP="$SWIFT_SCRATCH/SpecChumMac.app"
 CONTENTS="$APP/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
 

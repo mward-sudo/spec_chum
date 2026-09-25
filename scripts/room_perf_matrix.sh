@@ -19,7 +19,7 @@ run_one() {
   shift
   echo "" | tee -a "$OUT"
   echo "=== $label ===" | tee -a "$OUT"
-  env "$@" ./target/release/examples/room_perf 960 540 2>&1 \
+  env "$@" "${CARGO_TARGET_DIR:-./target}/release/examples/room_perf" 960 540 2>&1 \
     | tee -a "$OUT" \
     | rg -e 'quality:|tick-only|FAIL:|WARN:|OK:' || true
 }
