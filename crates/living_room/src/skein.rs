@@ -98,6 +98,12 @@ pub fn add_skein_plugins(app: &mut App) {
 
 /// Resolve [`SkeinRoomMode`] from `SPEC_CHUM_ROOM_SKEIN_SCENE` + on-disk export.
 ///
+/// Presence of the glTF file selects Room mode immediately (Bevy then loads the
+/// asset). We intentionally do **not** wait for a successful scene load before
+/// skipping procedural spawn — that would require a dual-room fallback path and
+/// is out of scope for the editor opt-in. Missing/broken loads leave an empty
+/// room; use `SPEC_CHUM_ROOM_SKEIN_SCENE=off` to force procedural.
+///
 /// | Env | Behaviour |
 /// | --- | --- |
 /// | unset / empty | [`DEFAULT_SKEIN_SCENE`] if file exists → Room; else Procedural |

@@ -48,10 +48,33 @@ impl FrameGlow {
 }
 
 /// Tint + intensity scale driven by [`FrameGlow`].
-#[derive(Component, Reflect, Debug, Default)]
+///
+/// Default `intensity_scale` is `1.0` so Skein/Blender-inserted markers drive
+/// full phosphor spill until an explicit scale is authored.
+#[derive(Component, Reflect, Debug)]
 #[reflect(Component, Default)]
 pub struct GlowDriven {
     pub intensity_scale: f32,
+}
+
+impl Default for GlowDriven {
+    fn default() -> Self {
+        Self {
+            intensity_scale: 1.0,
+        }
+    }
+}
+
+/// Warm ambient brightness for procedural Current (matches historical glow baseline).
+#[must_use]
+pub fn procedural_ambient_brightness(bright_debug: bool) -> f32 {
+    76.5 * if bright_debug { 14.0 } else { 1.0 }
+}
+
+/// Softer fallback ambient when a Skein room owns lighting.
+#[must_use]
+pub fn skein_fallback_ambient_brightness(bright_debug: bool) -> f32 {
+    40.0 * if bright_debug { 14.0 } else { 1.0 }
 }
 
 /// Primary fill near the phosphor face (also tracks phosphor transform).
@@ -186,10 +209,9 @@ fn spawn_fill_lights(
             Color::srgb(0.26, 0.20, 0.13)
         },
         brightness: if skein_owns_lights {
-            // Skein scene usually brings its own lights — softer fallback ambient.
-            40.0 * ambient_mul
+            skein_fallback_ambient_brightness(bright)
         } else {
-            76.5 * ambient_mul
+            procedural_ambient_brightness(bright)
         },
         ..default()
     });
@@ -257,6 +279,11 @@ fn sync_glow_tints(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn glow_driven_default_is_unit_scale() {
+        assert!((GlowDriven::default().intensity_scale - 1.0).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn red_border_dominates_glow() {

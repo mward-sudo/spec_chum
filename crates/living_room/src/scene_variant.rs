@@ -157,6 +157,7 @@ fn apply_scene_variant(
         (With<DynamicRoomFillLight>, Without<crate::glow::GlowDriven>),
     >,
     mut fill_intensity: Local<Vec<f32>>,
+    #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
 ) {
     if !variant.is_changed() && !fill_intensity.is_empty() {
         return;
@@ -166,16 +167,28 @@ fn apply_scene_variant(
         fill_intensity.extend(fill_lights.iter().map(|l| l.intensity));
     }
 
+    #[cfg(feature = "skein")]
+    let skein_owns_lights = skein_mode
+        .as_deref()
+        .is_some_and(crate::skein::SkeinRoomMode::replaces_procedural);
+    #[cfg(not(feature = "skein"))]
+    let skein_owns_lights = false;
+
     match *variant {
         SceneVariant::Current => {
             // Match glow.rs ambient — preserve SPEC_CHUM_ROOM_BRIGHT_DEBUG.
+            // When Skein owns the room, keep the softer fallback (do not re-inflate).
             let bright = crate::crt::bright_debug_enabled();
             ambient.color = if bright {
                 Color::srgb(0.55, 0.55, 0.58)
             } else {
                 Color::srgb(0.26, 0.20, 0.13)
             };
-            ambient.brightness = 76.5 * if bright { 14.0 } else { 1.0 };
+            ambient.brightness = if skein_owns_lights {
+                crate::glow::skein_fallback_ambient_brightness(bright)
+            } else {
+                crate::glow::procedural_ambient_brightness(bright)
+            };
             for (i, mut light) in fill_lights.iter_mut().enumerate() {
                 if let Some(&base) = fill_intensity.get(i) {
                     light.intensity = base;
@@ -194,7 +207,11 @@ fn apply_scene_variant(
             } else {
                 Color::srgb(0.30, 0.24, 0.16)
             };
-            ambient.brightness = 74.0 * if bright { 14.0 } else { 1.0 };
+            ambient.brightness = if skein_owns_lights {
+                crate::glow::skein_fallback_ambient_brightness(bright)
+            } else {
+                74.0 * if bright { 14.0 } else { 1.0 }
+            };
             for (i, mut light) in fill_lights.iter_mut().enumerate() {
                 if let Some(&base) = fill_intensity.get(i) {
                     light.intensity = base;
