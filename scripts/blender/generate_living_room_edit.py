@@ -330,12 +330,13 @@ def place_imported(
     if tags:
         set_skein_hints(root, tags)
 
-    # Parent top-level imported objects under root, preserving world pose at import.
+    # Parent top-level imported objects under root. Identity parent-inverse keeps
+    # each object's imported *local* transform so the empty drives placement
+    # (inverting root.matrix_world would pin meshes in world space and ignore root).
     tops = [o for o in imported if o.parent is None]
     for o in tops:
         o.parent = root
-        # Keep current world matrix: clear parent inverse so child stays put relative to root
-        o.matrix_parent_inverse = root.matrix_world.inverted()
+        o.matrix_parent_inverse.identity()
 
     # Move imported objects into collection
     for o in imported:
