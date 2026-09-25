@@ -157,14 +157,18 @@ fn apply_scene_variant(
         (With<DynamicRoomFillLight>, Without<crate::glow::GlowDriven>),
     >,
     mut fill_intensity: Local<Vec<f32>>,
+    mut fill_bases_ready: Local<bool>,
     #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
 ) {
-    if !variant.is_changed() && !fill_intensity.is_empty() {
+    // With zero DynamicRoomFillLight entities (e.g. Skein room), fill_intensity stays
+    // empty — track init separately so we do not re-apply EnvMap every frame.
+    if !variant.is_changed() && *fill_bases_ready {
         return;
     }
 
-    if fill_intensity.is_empty() {
+    if !*fill_bases_ready {
         fill_intensity.extend(fill_lights.iter().map(|l| l.intensity));
+        *fill_bases_ready = true;
     }
 
     #[cfg(feature = "skein")]

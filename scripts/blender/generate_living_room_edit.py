@@ -303,9 +303,12 @@ def place_imported(
         raise FileNotFoundError(path)
 
     imported = import_gltf(path)
-    # Ensure the placement empty owns the canonical name (imports may reuse it).
-    if name in bpy.data.objects:
-        bpy.data.objects[name].name = f"{name}_imported"
+    # Only rename colliding objects from *this* import — do not rename a prior
+    # placement empty that already owns the canonical name.
+    for obj in imported:
+        if obj.name == name:
+            obj.name = f"{name}_imported"
+            break
     root = bpy.data.objects.new(name, None)
     root.empty_display_type = "PLAIN_AXES"
     root.empty_display_size = 0.15
