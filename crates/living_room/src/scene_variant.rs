@@ -55,7 +55,8 @@ pub struct SceneVariantOnly(pub SceneVariant);
 ///   lightmap stub until baked fill lands.
 ///
 /// Temporary until baked lightmaps replace these lights (#149).
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Debug, Clone, Copy, Default)]
+#[reflect(Component, Default)]
 pub struct DynamicRoomFillLight;
 
 /// Procedural stub cubemap for New — real HDR bake comes later (#149).

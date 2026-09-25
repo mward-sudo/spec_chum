@@ -30,8 +30,14 @@ cargo fmt -p living_room -- --check
 echo "==> living_room clippy (${PROFILE_LABEL})"
 cargo clippy -p living_room --all-targets "${PROFILE_ARGS[@]}" -- -D warnings
 
+echo "==> living_room clippy + skein feature (${PROFILE_LABEL})"
+cargo clippy -p living_room --all-targets "${PROFILE_ARGS[@]}" --features skein -- -D warnings
+
 echo "==> living_room test (${PROFILE_LABEL})"
 cargo test -p living_room "${PROFILE_ARGS[@]}"
+
+echo "==> living_room test + skein feature (${PROFILE_LABEL})"
+cargo test -p living_room "${PROFILE_ARGS[@]}" --features skein
 
 echo "==> living_room headless perf (release, 50 Hz budget)"
 cargo run -p living_room --example room_perf --release

@@ -33,11 +33,13 @@ const PLATE_DISTANCE: f32 = 8.0;
 const PLATE_FOV: f32 = 0.85;
 
 /// Static room content (hidden while a plate is shown).
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Debug, Clone, Copy, Default)]
+#[reflect(Component, Default)]
 pub struct RoomStatic;
 
 /// Live 3D TV stand + cabinet (phosphor is a child of the cabinet).
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Debug, Clone, Copy, Default)]
+#[reflect(Component, Default)]
 pub struct LiveTv;
 
 #[derive(Component, Debug)]
