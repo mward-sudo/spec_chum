@@ -51,17 +51,7 @@ pub const MAX_CUSTOM_CONFIGS: usize = 32;
 /// Expected main-ROM byte length for a base model.
 #[must_use]
 pub fn expected_rom_bytes(model: PrefModel) -> usize {
-    match model {
-        PrefModel::Spectrum16K
-        | PrefModel::Spectrum48
-        | PrefModel::TimexTC2048
-        | PrefModel::TimexTS2068 => 16 * 1024,
-        PrefModel::Spectrum128 | PrefModel::SpectrumPlus2 | PrefModel::Pentagon128 => 32 * 1024,
-        PrefModel::ScorpionZs256 => 48 * 1024,
-        PrefModel::SpectrumPlus2A | PrefModel::SpectrumPlus3 | PrefModel::SpectrumPlus3e => {
-            64 * 1024
-        }
-    }
+    machine::expected_main_rom_bytes(model.to_model())
 }
 
 const ROM_BANK_BYTES: usize = 16 * 1024;

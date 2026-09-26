@@ -7,6 +7,27 @@ import CSpecChumHost
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
+    private enum CatalogError: Error { case invalidModel }
+
+    private struct ModelDescriptor: Decodable {
+        let id: UInt32
+        let preferenceSlug: String
+        let label: String
+        let title: String
+
+        enum CodingKeys: String, CodingKey {
+            case id, label, title
+            case preferenceSlug = "preference_slug"
+        }
+    }
+
+    private static let modelCatalog: [ModelDescriptor] = {
+        guard let cstr = sc_model_catalog_json() else { return [] }
+        defer { sc_string_free(cstr) }
+        let data = Data(bytes: cstr, count: strlen(cstr))
+        return (try? JSONDecoder().decode([ModelDescriptor].self, from: data)) ?? []
+    }()
+
     /// EAR rate Instant falls back to on decks with no LD-BYTES trap (#390).
     /// Read from the core so chrome cannot drift from the loading policy.
     static let instantEarFallbackSpeed: UInt32 = sc_instant_ear_fallback_speed()
@@ -46,61 +67,22 @@ final class HostBridge: ObservableObject {
         case scorpionZs256 = 10
 
         /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
-        static let pickerOrder: [Model] = [
-            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e, .pentagon128, .scorpionZs256, .timexTC2048, .timexTS2068,
-        ]
+        static let pickerOrder: [Model] = (try? HostBridge.modelCatalog.map { descriptor in
+            guard let model = Model(rawValue: descriptor.id) else { throw CatalogError.invalidModel }
+            return model
+        }) ?? []
 
         var id: UInt32 { rawValue }
 
-        var title: String {
-            switch self {
-            case .spectrum16K: "Spectrum 16K"
-            case .spectrum48: "Spectrum 48K"
-            case .spectrum128: "Spectrum 128K"
-            case .spectrumPlus2: "Spectrum +2 (grey)"
-            case .spectrumPlus3: "Spectrum +3"
-            case .spectrumPlus3e: "Spectrum +3e (enhanced)"
-            case .spectrumPlus2A: "Spectrum +2A"
-            case .pentagon128: "Pentagon 128"
-            case .scorpionZs256: "Scorpion ZS-256"
-            case .timexTC2048: "Timex TC2048"
-            case .timexTS2068: "Timex TS2068"
-            }
-        }
+        var title: String { descriptor?.title ?? "Unknown model" }
 
         /// Short label for window titles.
-        var shortTitle: String {
-            switch self {
-            case .spectrum16K: "16K"
-            case .spectrum48: "48K"
-            case .spectrum128: "128K"
-            case .spectrumPlus2: "+2"
-            case .spectrumPlus3: "+3"
-            case .spectrumPlus3e: "+3e"
-            case .spectrumPlus2A: "+2A"
-            case .pentagon128: "Pentagon"
-            case .scorpionZs256: "Scorpion"
-            case .timexTC2048: "TC2048"
-            case .timexTS2068: "TS2068"
-            }
-        }
+        var shortTitle: String { descriptor?.label ?? "?" }
 
         /// Prefs key segment (`spectrum48`, `pentagon128`, …) — matches host_api JSON v2.
-        var prefSlug: String {
-            switch self {
-            case .spectrum16K: "spectrum16_k"
-            case .spectrum48: "spectrum48"
-            case .spectrum128: "spectrum128"
-            case .spectrumPlus2: "spectrum_plus2"
-            case .spectrumPlus2A: "spectrum_plus2_a"
-            case .spectrumPlus3: "spectrum_plus3"
-            case .spectrumPlus3e: "spectrum_plus3e"
-            case .pentagon128: "pentagon128"
-            case .scorpionZs256: "scorpion_zs256"
-            case .timexTC2048: "timex_tc2048"
-            case .timexTS2068: "timex_ts2068"
-            }
-        }
+        var prefSlug: String { descriptor?.preferenceSlug ?? "" }
+
+        private var descriptor: ModelDescriptor? { HostBridge.modelCatalog.first { $0.id == rawValue } }
 
         /// Default ROM from fetch script present (#188).
         var romAvailable: Bool { sc_model_rom_available(rawValue) != 0 }

@@ -84,19 +84,7 @@ pub fn menu_id_for_model(model: ModelId) -> usize {
 /// Human label for a built-in model (Win32 menu text).
 #[must_use]
 pub fn model_menu_label(model: ModelId) -> &'static str {
-    match model {
-        ModelId::Spectrum16K => "Spectrum 16K",
-        ModelId::Spectrum48 => "Spectrum 48K",
-        ModelId::Spectrum128 => "Spectrum 128K",
-        ModelId::SpectrumPlus2 => "Spectrum +2",
-        ModelId::SpectrumPlus2A => "Spectrum +2A",
-        ModelId::SpectrumPlus3 => "Spectrum +3",
-        ModelId::SpectrumPlus3e => "Spectrum +3e",
-        ModelId::Pentagon128 => "Pentagon 128",
-        ModelId::ScorpionZs256 => "Scorpion ZS-256",
-        ModelId::TimexTC2048 => "Timex TC2048",
-        ModelId::TimexTS2068 => "Timex TS2068",
-    }
+    machine::model_title(model.to_model())
 }
 
 /// EAR speed for a tape-speed menu id (`None` for Experience / Instant / unknown).
@@ -140,6 +128,7 @@ mod tests {
             let id = menu_id_for_model(m);
             assert_eq!(model_from_menu_id(id), Some(m));
             assert!(!model_menu_label(m).is_empty());
+            assert_eq!(model_menu_label(m), machine::model_title(m.to_model()));
         }
         assert_eq!(model_from_menu_id(IDM_MACHINE_RESET), None);
     }
