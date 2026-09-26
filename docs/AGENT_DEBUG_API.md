@@ -5,8 +5,38 @@
 >
 > **Status:** **Implemented** on `main` — loopback HTTP on `127.0.0.1:17384` (default),
 > SpecChumMac/egui live embed, port watches, prefs/hardware routes, and
-> `GET /v1/memory/regions`. Optional later: WebSocket push / OpenAPI schema
+> `GET /v1/memory/regions`. The REST surface publishes an OpenAPI 3.0 schema at
+> `GET /openapi.json`; WebSocket push remains optional follow-up work
 > ([#236](https://github.com/mward-sudo/spec_chum/issues/236)).
+
+## OpenAPI schema
+
+Retrieve the machine-readable OpenAPI 3.0.3 document from the running loopback
+server at `GET http://127.0.0.1:17384/openapi.json`. The schema endpoint is
+unauthenticated so tools can discover the API before configuring a bearer
+token. Every `/v1` endpoint inherits the documented HTTP bearer authentication;
+`--insecure` server configuration permits unauthenticated use for trusted local
+development.
+
+The server returns the checked-in
+[`crates/agent_server/openapi.json`](../crates/agent_server/openapi.json)
+directly; that file is the authoritative published document. No schema
+generator is currently used. To update it, edit the JSON when adding or changing
+a route or wire shape, then run the contract check below. This deterministic test
+compares paths and methods with Axum's registrations; checks query/path
+parameters and request DTOs against Rust fields, types, and requiredness; checks
+typed response components against Rust structs; and exercises representative
+health, error, and inspect responses. Inspect's flattened shape comes from
+`machine::Inspect::to_json` and is verified at runtime against its schema,
+including nullable values and exact keys for closed objects. Update the schema
+and contract test together whenever a deliberate wire-contract change requires
+new coverage.
+
+Run the contract check with:
+
+```bash
+cargo test -p agent_server --test openapi_contract
+```
 
 ## Purpose
 

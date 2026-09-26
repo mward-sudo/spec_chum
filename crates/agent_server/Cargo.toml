@@ -45,6 +45,7 @@ tokio = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }
 machine = { workspace = true }
+syn = { version = "2", features = ["full", "visit"] }
 
 # Crate-local lints (#171): pedantic warn with endemic cast/name allows.
 # Cannot mix `workspace = true` with overrides — keep in sync with root Cargo.toml.
