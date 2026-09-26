@@ -49,7 +49,7 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 > can skip this section. Product how-tos live under [`docs/`](docs/README.md).
 
 - Read `AGENTS.md` for crate boundaries, hard constraints, and the shared **Agentic coding loop** (scope, progress records, handoffs, and human decision points). Keep issue intent, PR implementation/review state, and active handoff notes aligned; avoid standalone progress files for short tasks.
-- **graphify:** after Rust changes run `./scripts/graphify_update.sh` and commit `graphify-out/` when the graph changes; optional `./scripts/graphify_install_hooks.sh` for post-commit refresh. See `AGENTS.md` → “graphify knowledge graph”.
+- **graphify:** after Rust changes run `./scripts/graphify_update.sh` and commit `graphify-out/` when the graph changes; optional `./scripts/graphify_install_hooks.sh` for post-commit refresh. Skip one automatic refresh with `GRAPHIFY_SKIP_HOOK=1 git commit …`, or uninstall the hook with `./scripts/graphify_install_hooks.sh uninstall`. See `AGENTS.md` → “graphify knowledge graph”.
 - Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync and `pr-review-merge.mdc` for bot review gates.
 - For substantive work, assistants should consult related issues so implementation follows tracked acceptance criteria. See `AGENTS.md` for the proportional task record and handoff approach.
 - Assistants should be **clippy-first**: iterate with `./scripts/check_crates.sh`; run `./scripts/check.sh` for merge-ready/full-workspace confidence or when project policy requires it. Match verification to the change and report exact checks/results; do not claim checks that were not run.

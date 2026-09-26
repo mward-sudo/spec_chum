@@ -144,6 +144,7 @@ Install the current CLI with `uv tool install graphifyy` (or `pipx install graph
 | Refresh after **code** edits | `./scripts/graphify_update.sh` (AST-only, no API cost) |
 | Refresh after **doc** edits | `./scripts/graphify_update.sh --full` (LLM; needs API key) |
 | Auto-refresh on commit | `./scripts/graphify_install_hooks.sh` (once per clone) |
+| Skip one automatic refresh | `GRAPHIFY_SKIP_HOOK=1 git commit …` |
 | After substantive code/architecture work | Optionally skim `GRAPH_REPORT.md` Suggested Questions; track a relevant follow-up only if it is actionable and worth doing — see `.cursor/rules/graphify.mdc` |
 
 Broad overview: `graphify-out/GRAPH_REPORT.md`. Wiki index (when present): `graphify-out/wiki/index.md`.

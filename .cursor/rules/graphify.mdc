@@ -28,7 +28,7 @@ Applies to you and any code-exploring subagent when the query is useful for the 
 | --- | --- |
 | Code | `./scripts/graphify_update.sh` (AST; commit `graphify-out/` when meaningful) |
 | Docs/images | `./scripts/graphify_update.sh --full` (needs API key) |
-| Optional | `./scripts/graphify_install_hooks.sh` (per-clone) |
+| Optional | `./scripts/graphify_install_hooks.sh` (per-clone; set `GRAPHIFY_SKIP_HOOK=1` for a commit that should not trigger the automatic refresh, or uninstall with `./scripts/graphify_install_hooks.sh uninstall`) |
 
 CodeRabbit skips `graphify-out/**` via `.coderabbit.yaml` `path_filters`.
 
