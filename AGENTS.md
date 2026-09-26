@@ -164,7 +164,7 @@ Tier matrix and gate inventory: [docs/TESTING.md](docs/TESTING.md) ([#171](https
 Track substantive planned work in GitHub Issues (milestones M0–M4); tiny self-contained fixes can remain untracked. Prefer focused PRs. See `CONTRIBUTING.md` for `gh stack` and the full merge-gate SSOT.
 
 - Issues: `.cursor/rules/github-issues.mdc` (check related work for substantive implementation; `Closes` vs `Refs`).
-- Merge / CodeRabbit: **agent checklist** `.cursor/rules/pr-review-merge.mdc` — **CI soft-pass ≠ merge-ready**; GitHub review completed or dual >10m; disposition every actionable bot finding.
+- Merge / CodeRabbit: **agent checklist** `.cursor/rules/pr-review-merge.mdc` — try one local or GitHub review; do not wait more than 10 minutes on a rate-limited surface. CI soft-pass is not a review; document the rate-limit and disposition every finding from any completed review.
 - Detail + human workflow: `CONTRIBUTING.md` → “CodeRabbit — review when ready” / “Review check before merge”.
 - Disposition habits: `.cursor/rules/coderabbit-lessons.mdc`.
 

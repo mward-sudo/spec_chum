@@ -28,11 +28,10 @@
 #   - parsed N ≤ 10  → HOLD (fail) so humans/agents wait/retry
 #   - parsed N > 10  → soft-pass CI (loud warning)
 #   - unparsable     → soft-pass CI (loud warning; do not invent brittle false reds)
-# CI cannot observe local CodeRabbit. Merge requires GitHub "Review completed"
-# on HEAD, except under the documented dual rate-limit exception: BOTH local CLI
-# and GitHub are rate-limited with resets >10 minutes (or long/unknown on both).
-# Record that exception in a one-line PR comment. If EITHER side reports reset
-# ≤10 minutes (or can review now), WAIT/retry that side — do not merge yet.
+# CI cannot observe local CodeRabbit. Agents should try either GitHub or local
+# review, but must not wait more than 10 minutes on either surface. If neither
+# review completes in that window, the main agent reviews the diff and records
+# the attempts / resets in a one-line PR comment before proceeding.
 # Gate 2 (unresolved bot threads) still hard-fails.
 #
 # Hard-fail (gate 1): pending / missing / error / unexpected / non-completed
@@ -288,16 +287,15 @@ else
 
   case "$CR_CLASSIFY_OUTCOME" in
     soft_pass)
-      # Loud warning: GitHub rate-limit alone is NOT enough to merge.
-      # CI cannot see local CR; agents must confirm GitHub completion or dual >10m.
+      # Loud warning: GitHub rate-limit is not a completed review. CI cannot see
+      # local CR; agents should use local review or main-agent review fallback.
       echo "==> PR #$PR: WARNING: CodeRabbit on HEAD ${HEAD_SHA:0:12} is ${CR_CLASSIFY_REASON}" >&2
       echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}" >&2
       echo "    GitHub CodeRabbit rate-limited — gate 1 soft-passes CI only (NOT Review completed)." >&2
       echo "    Soft-pass when reset is >10m (parsed) or unparsable; HOLD when parsed ≤10m." >&2
-      echo "    CI cannot verify local CodeRabbit. Merge needs GitHub Review completed" >&2
-      echo "    on HEAD, or the dual rate-limit exception: BOTH local and GitHub limited" >&2
-      echo "    >10m (or long/unknown on both), documented in a one-line PR comment." >&2
-      echo "    If either side can review now or resets in ≤10m, WAIT/retry that side." >&2
+      echo "    CI cannot verify local CodeRabbit. Try a local review; do not wait" >&2
+      echo "    more than 10m for either surface. If no review completes, do the" >&2
+      echo "    main-agent review and document attempts / resets in a one-line PR comment." >&2
       echo "    Unresolved bot threads still hard-fail (gate 2). Soft-pass ≠ on-demand skip." >&2
       ;;
     hold)
@@ -310,7 +308,7 @@ else
         "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label coderabbit-review); after fixes '@coderabbitai review'." \
         "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
         "  4. On-demand / label skips (\"excluded by label configuration\", \"on demand\") hard-fail — request a review; do not merge without one." \
-        "  5. If GitHub is rate-limited after a request: CI soft-passes when reset is >10m or unparsable; HOLD when parsed reset ≤10m. Merge needs GitHub Review completed OR dual rate-limit (both sides >10m / long-unknown) documented in a one-line PR comment; if either side ≤10m, wait/retry. Unresolved threads remain a hard fail." \
+        "  5. If GitHub is rate-limited after a request: CI soft-passes when reset is >10m or unparsable; HOLD when parsed reset ≤10m. Try local review, but do not wait more than 10m on either surface; if no review completes, use main-agent review and document attempts / resets in a one-line PR comment. Unresolved threads remain a hard fail." \
         "  6. Re-run: ./scripts/check_pr_reviews.sh $PR" \
         "     (or re-run the \"Bot review threads\" GitHub Actions check)"
       ;;

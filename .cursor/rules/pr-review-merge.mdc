@@ -11,7 +11,7 @@ Lesson [#83](https://github.com/mward-sudo/spec_chum/pull/83): do **not** merge 
 
 ## Trap
 
-**CI soft-pass ≠ merge-ready.** Gate 1 may soft-pass GitHub rate-limit (>10m / unparsable). Agents still need GitHub **Review completed** or the documented **dual >10m** exception. Soft-pass ≠ on-demand/label skip.
+**CI soft-pass ≠ a code review.** Try to get one CodeRabbit review from GitHub or the local CLI / IDE. Do not wait more than 10 minutes for either review surface: if one is rate-limited beyond that, use the other if it can review sooner. If neither can complete a review, the main agent still reviews the diff and records the rate-limit outcome in a one-line PR note. Soft-pass ≠ on-demand/label skip.
 
 ## Jev recommendation during implementation
 
@@ -27,19 +27,20 @@ This gate governs merging a ready PR, not implementation progress. If CodeRabbit
 | Ready + missing / pending / error / on-demand skip | **HOLD** — `@coderabbitai full review` (or label). Undraft alone does not request. |
 | Ready + after fix commits | `@coderabbitai review` (incremental) |
 | GitHub `Review completed` on current HEAD | Review gate satisfied; avoid redundant local review by default |
-| Either side can review now **or** reset **≤10m** | Keep implementation moving; retry review when useful, and do not merge yet |
-| Both sides rate-limited **>10m** (or long/unknown dual) | Dual soft-pass: one-line PR note, disposition threads, merge (no rmw; no revisit issue) |
-| Unilateral GitHub rate-limit; local available soon | Keep implementation moving; **not** merge-ready until GitHub completes or dual-limit exception applies |
+| Local CodeRabbit review completed on current diff | Review gate satisfied when GitHub is rate-limited beyond 10m; record the GitHub reset and local review in a one-line PR note |
+| A surface can review now or reports reset **≤10m** | Use that surface if it can complete within 10 minutes; otherwise stop waiting and try the other |
+| A surface reports reset **>10m** | That review is not required; try the other surface and proceed after main-agent review if neither can complete |
+| No CodeRabbit review completes within 10 minutes | Main-agent review is required; record the attempts and reset information in a one-line PR note, then proceed |
 | Unresolved actionable bot threads | **HOLD** unless user `rmw` / `rmcw` / `--waive` / label |
 
 ## Before merge (ordered)
 
 1. PR **ready** (not draft).
-2. Require GitHub PR CodeRabbit review on the current HEAD for a ready PR; local CR (`coderabbit review --agent` / Cursor plugin) is pre-PR feedback or a supplement and cannot satisfy the GitHub status gate.
+2. Try for one CodeRabbit review on the current diff using GitHub or local CLI / IDE. GitHub is preferred when it can complete within 10 minutes; a local review can be used when GitHub is rate-limited longer.
 3. `./scripts/check_pr_reviews.sh` (or with PR number).
 4. Disposition **every** actionable finding (threads + outside-diff/summary) — see `coderabbit-lessons.mdc`.
-5. Confirm GitHub Review completed **or** dual >10m; re-run script after fixes.
-6. User shorthand: `rm`/`rmc` = merge for GitHub completed or dual >10m; `rmw`/`rmcw` = waiver for other holds; `all rmc` = loop open drafts.
+5. If no CodeRabbit review can complete within 10 minutes, complete main-agent diff review and document the rate-limit / review attempt in a one-line PR note; re-run the script after fixes.
+6. User shorthand: `rm`/`rmc` = merge after the available review path and checks; `rmw`/`rmcw` = waiver for other holds; `all rmc` = loop open drafts.
 
 ## Layers (one-liner)
 

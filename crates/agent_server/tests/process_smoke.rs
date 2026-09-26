@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use agent_client::AgentClient;
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
+const NON_SERVER_CHILD_MARKER: &str = "SPEC_CHUM_PROCESS_HARNESS_NON_SERVER_CHILD";
 
 struct ServerProcess {
     child: Child,
@@ -132,6 +133,9 @@ fn wait_until_ready_with_timeout(
 #[test]
 #[ignore = "launched as an unresponsive subprocess by startup-timeout test"]
 fn process_harness_non_server_child() {
+    if std::env::var_os(NON_SERVER_CHILD_MARKER).is_none() {
+        return;
+    }
     loop {
         thread::sleep(Duration::from_secs(60));
     }
@@ -195,6 +199,7 @@ fn startup_timeout_reports_diagnostics_and_reaps_child() {
             "--ignored",
             "--nocapture",
         ])
+        .env(NON_SERVER_CHILD_MARKER, "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
