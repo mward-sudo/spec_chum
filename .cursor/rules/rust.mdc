@@ -23,9 +23,13 @@ pub enum LoadError {
 // ✅ app / binaries
 fn run() -> anyhow::Result<()> { /* ... */ Ok(()) }
 
-// ❌ non-test library / hot paths
+// ❌ non-test code (unwrap_used is a workspace Clippy warning promoted to an
+// error by CI/check scripts via -D warnings)
 let v = x.unwrap();
 ```
+
+- Do not use bare `unwrap` in non-test code. Prefer `?` or a typed error.
+- `expect` is allowed only when the code relies on a documented invariant that cannot fail there; its message must state that invariant. `expect_used` is allowed by lint configuration, so this remains a project rule.
 
 ## Safety & style
 

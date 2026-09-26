@@ -76,7 +76,9 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
-# Prefer Result / expect-with-reason over bare unwrap in non-test code.
+# Project rule: non-test code avoids bare unwrap; CI/check scripts promote this
+# warning to an error with -D warnings. expect_used stays allowed for documented
+# invariants whose expect message explains why failure is impossible.
 unwrap_used = "warn"
 expect_used = "allow"
 
