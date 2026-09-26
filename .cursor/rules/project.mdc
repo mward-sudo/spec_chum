@@ -27,7 +27,7 @@ alwaysApply: true
 | Merge / CodeRabbit gate | `pr-review-merge.mdc` → detail in `CONTRIBUTING.md` |
 | Bot finding disposition + code habits | `coderabbit-lessons.mdc` |
 | GUI host parity (4 hosts, same PR) | `gui-app-parity.mdc` |
-| graphify before code explore | `graphify.mdc` |
+| Architecture exploration / graphify | `graphify.mdc` |
 | GitHub Issues sync | `github-issues.mdc` |
 | Tools vs Shell | `prefer-tools-over-cli.mdc` |
 | Rust idioms (glob `*.rs`) | `rust.mdc` |
@@ -35,11 +35,13 @@ alwaysApply: true
 
 ## Always-on checklist
 
-1. `gh issue list` / `gh issue view` before coding → `github-issues.mdc`
-2. `graphify query/path/explain` before Grep/Glob/Bash code explore → `graphify.mdc`
-3. GUI change? Update **all** first-party hosts in **same PR** → `gui-app-parity.mdc`
-4. Iterate: `./scripts/check_crates.sh` · Done/merge: `./scripts/check.sh` · Living room: `./scripts/check_living_room.sh` (release)
-5. Finish/merge PR? Follow `pr-review-merge.mdc` (**CI soft-pass ≠ merge-ready**)
+1. Follow `AGENTS.md` → “Agentic coding loop” for scope, progress notes, handoffs, and human decision points.
+2. Check related issues for substantive implementation → `github-issues.mdc`
+3. Use graphify when architectural context or call paths are unclear → `graphify.mdc`
+4. GUI change? Update **all** first-party hosts in **same PR** → `gui-app-parity.mdc`
+5. Feature work? Prefer behavior-complete vertical slices; use horizontal work for layer-wide or accuracy-driven changes → `AGENTS.md`
+6. Match checks to scope; use `./scripts/check_crates.sh` while iterating and `./scripts/check.sh` for full-workspace/merge readiness · Living room: `./scripts/check_living_room.sh` (release)
+7. Finish/merge PR? Follow `pr-review-merge.mdc` (**CI soft-pass ≠ merge-ready**)
 
 ## Emulator crates (core)
 

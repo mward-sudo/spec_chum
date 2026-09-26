@@ -11,29 +11,35 @@ Lesson [#83](https://github.com/mward-sudo/spec_chum/pull/83): do **not** merge 
 
 ## Trap
 
-**CI soft-pass ≠ merge-ready.** Gate 1 may soft-pass GitHub rate-limit (>10m / unparsable). Agents still need **either-completed** or **dual >10m**. Soft-pass ≠ on-demand/label skip.
+**CI soft-pass ≠ merge-ready.** Gate 1 may soft-pass GitHub rate-limit (>10m / unparsable). Agents still need GitHub **Review completed** or the documented **dual >10m** exception. Soft-pass ≠ on-demand/label skip.
+
+## Jev recommendation during implementation
+
+Follow `AGENTS.md` → “Jev-guided workflow” at meaningful loop boundaries. Jev does not review code and cannot waive the ready-PR CodeRabbit gate below.
 
 ## Decision table (gate 1 — CodeRabbit on HEAD)
+
+This gate governs merging a ready PR, not implementation progress. If CodeRabbit is missing, pending, or rate-limited, continue coding, run checks, update the draft PR, and prepare the change. Only hold the merge action under the conditions below.
 
 | Situation | Action |
 | --- | --- |
 | Draft PR | CR completeness not required; still fail on unresolved bot threads. Do not merge drafts. |
 | Ready + missing / pending / error / on-demand skip | **HOLD** — `@coderabbitai full review` (or label). Undraft alone does not request. |
 | Ready + after fix commits | `@coderabbitai review` (incremental) |
-| Local clean **or** GitHub `Review completed` | **either-completed** → OK (prefer both when available) |
-| Either side can review now **or** reset **≤10m** | **WAIT/retry** that side |
-| Both sides rate-limited **>10m** (or long/unknown dual) | Dual soft-pass: one-line PR note, disposition threads, merge (no rmw; no “revisit CR” issue) |
-| Unilateral GitHub rate-limit; local available soon | **Not** merge-ready — wait/retry local |
+| GitHub `Review completed` on current HEAD | Review gate satisfied; avoid redundant local review by default |
+| Either side can review now **or** reset **≤10m** | Keep implementation moving; retry review when useful, and do not merge yet |
+| Both sides rate-limited **>10m** (or long/unknown dual) | Dual soft-pass: one-line PR note, disposition threads, merge (no rmw; no revisit issue) |
+| Unilateral GitHub rate-limit; local available soon | Keep implementation moving; **not** merge-ready until GitHub completes or dual-limit exception applies |
 | Unresolved actionable bot threads | **HOLD** unless user `rmw` / `rmcw` / `--waive` / label |
 
 ## Before merge (ordered)
 
 1. PR **ready** (not draft).
-2. Prefer both: local CR (`coderabbit review --agent` / Cursor plugin) **and** GitHub request (if not rate-limited).
+2. Require GitHub PR CodeRabbit review on the current HEAD for a ready PR; local CR (`coderabbit review --agent` / Cursor plugin) is pre-PR feedback or a supplement and cannot satisfy the GitHub status gate.
 3. `./scripts/check_pr_reviews.sh` (or with PR number).
 4. Disposition **every** actionable finding (threads + outside-diff/summary) — see `coderabbit-lessons.mdc`.
-5. Confirm either-completed **or** dual >10m; re-run script after fixes.
-6. User shorthand: `rm`/`rmc` = merge for either-completed or dual >10m; `rmw`/`rmcw` = waiver for other holds; `all rmc` = loop open drafts.
+5. Confirm GitHub Review completed **or** dual >10m; re-run script after fixes.
+6. User shorthand: `rm`/`rmc` = merge for GitHub completed or dual >10m; `rmw`/`rmcw` = waiver for other holds; `all rmc` = loop open drafts.
 
 ## Layers (one-liner)
 

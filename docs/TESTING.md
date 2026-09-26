@@ -70,6 +70,7 @@ Optional local Speedlock / commercial TZXs skip cleanly when absent (`~/Download
 | --- | --- | --- |
 | `cargo fmt --all -- --check` | `./scripts/check.sh`, CI `fmt + clippy + test` | `rustfmt.toml` |
 | `cargo clippy --workspace --all-targets --exclude living_room -- -D warnings` | `./scripts/check.sh`, CI | Workspace lints in root `Cargo.toml`; `clippy.toml` |
+| `cargo clippy -p windows_shell --all-targets -- -D warnings` | CI `windows-shell` job | Checks `cfg(windows)` implementation that Linux workspace Clippy cannot compile |
 | `cargo test --workspace --exclude living_room` | `./scripts/check.sh`, CI | Debug by default in the script |
 | `./scripts/check_crates.sh` | Local iteration | Debug clippy+test for crates touched vs `origin/main` |
 | `./scripts/check_living_room.sh` | Opt-in / when living-room touched; CI `living_room` | **Release** Bevy by default |

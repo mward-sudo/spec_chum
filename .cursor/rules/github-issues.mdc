@@ -5,11 +5,13 @@ alwaysApply: true
 
 # GitHub Issues
 
-## Before coding
+## Before substantive implementation
 
-1. `gh issue list` (+ `gh issue view N` for related)
-2. Prefer extending an existing issue over a duplicate
-3. Map task → acceptance criteria when an issue exists
+1. Check related issues (`gh issue list`; `gh issue view N` when relevant) for substantive, tracked work.
+2. Prefer extending an existing issue over creating a duplicate.
+3. Align implementation with issue acceptance criteria when an issue exists.
+
+Tiny, self-contained fixes and read-only tasks do not need issue-tracker ceremony. Follow explicit user requests and other project policies when they require an issue.
 
 ## PRs
 
