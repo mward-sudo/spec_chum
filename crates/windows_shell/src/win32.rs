@@ -23,15 +23,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
     LoadCursorW, MessageBoxW, PeekMessageW, PostQuitMessage, RegisterClassExW, SetWindowLongPtrW,
     SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW,
     CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW,
-    MB_ICONERROR, MB_OK, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WM_COMMAND, WM_CREATE,
-    WM_DESTROY, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WM_COMMAND,
+    WM_CREATE, WM_DESTROY, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SIZE, WM_SYSKEYDOWN,
+    WM_SYSKEYUP, WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
 use spec_chum_host::{
-    default_prefs_path, load_prefs, save_prefs, sync_model_rom_paths, HostError, HostSession,
-    ModelId, PrefAyStereo, PrefModel, UiPreferences,
+    default_prefs_path, install_model_rom, load_prefs, rom_setup_json, save_prefs,
+    sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel, UiPreferences,
 };
 
 use windows_shell::audio::{self, PcmRing};
@@ -58,6 +58,7 @@ const CLASS_NAME: &str = "SpecChumWindowsShell\0";
 const DEBUG_CLASS: &str = "SpecChumWindowsDebug\0";
 const WINDOW_TITLE: &str = "Spec Chum\0";
 const ID_DBG_EDIT: i32 = 2001;
+const IDM_MACHINE_ROM_SETUP: usize = 1289;
 
 /// Live host held either exclusively or shared with embedded Agent HTTP.
 #[derive(Debug)]
@@ -393,6 +394,44 @@ impl AppState {
         );
     }
 
+    /// Offer the shared per-slot ROM setup flow. Returns false when the user
+    /// cancels or a selected image fails validation.
+    fn setup_roms_for_model(&mut self, model: ModelId) -> bool {
+        let mut paths = self.prefs.model_rom_paths.clone();
+        let setup = rom_setup_json(model, &paths);
+        if setup.complete {
+            return true;
+        }
+        for slot in setup.slots.iter().filter(|slot| slot.status != "found") {
+            let prompt = format!(
+                "{} ROM Setup\n{} — {}\nExpected size: {} bytes\n{}\n\nSelect OK to choose an image, or Cancel to keep the current model.",
+                setup.model_title, slot.label, slot.status, slot.expected_bytes, slot.hint
+            );
+            if !message_box_confirm(self.main_hwnd, "ROM Setup", &prompt) {
+                return false;
+            }
+            let path = rfd::FileDialog::new()
+                .add_filter(&slot.label, &["rom", "bin"])
+                .set_title(format!("Choose {} ROM", slot.label))
+                .pick_file();
+            let Some(path) = path else { return false };
+            match install_model_rom(model, &slot.id, &path, &mut paths) {
+                Ok(_) => {
+                    self.prefs.model_rom_paths = paths.clone();
+                    self.persist_prefs();
+                }
+                Err(error) => {
+                    self.report_err("ROM Setup", &HostError::Message(error.to_string()));
+                    return false;
+                }
+            }
+        }
+        sync_model_rom_paths(paths.clone());
+        self.prefs.model_rom_paths = paths;
+        self.persist_prefs();
+        true
+    }
+
     fn select_model(&mut self, model: ModelId) {
         let mut next = self.prefs.clone();
         next.select_builtin_model(PrefModel::from_model_id(model));
@@ -407,7 +446,55 @@ impl AppState {
                 self.prefs = next;
                 self.persist_prefs();
             }
-            Err(e) => self.report_err("Select model", &e),
+            Err(e) => {
+                sync_model_rom_paths(self.prefs.model_rom_paths.clone());
+                let setup = rom_setup_json(model, &self.prefs.model_rom_paths);
+                let restore = self.prefs.model.to_model_id();
+                if let Err(restore_error) = self.host.with_mut(|s| {
+                    s.select_model(restore)?;
+                    self.prefs.apply_to_host_session(s)
+                }) {
+                    self.report_err(
+                        "Select model",
+                        &HostError::Message(format!(
+                            "selecting {model:?} failed ({e}); restoring {restore:?} also failed ({restore_error})"
+                        )),
+                    );
+                    return;
+                }
+                if !setup.complete && self.setup_roms_for_model(model) {
+                    let mut retry = self.prefs.clone();
+                    retry.select_builtin_model(PrefModel::from_model_id(model));
+                    sync_model_rom_paths(retry.model_rom_paths.clone());
+                    match self.host.with_mut(|s| {
+                        s.select_model(model)?;
+                        retry.apply_to_host_session(s)
+                    }) {
+                        Ok(()) => {
+                            self.prefs = retry;
+                            self.persist_prefs();
+                        }
+                        Err(retry_error) => self.report_err("Select model", &retry_error),
+                    }
+                } else {
+                    self.report_err("Select model", &e);
+                }
+            }
+        }
+    }
+
+    fn open_rom_setup(&mut self) {
+        let model = self.prefs.model.to_model_id();
+        let already_complete = rom_setup_json(model, &self.prefs.model_rom_paths).complete;
+        if !self.setup_roms_for_model(model) || already_complete {
+            return;
+        }
+        if let Err(e) = self.host.with_mut(|s| s.select_model(model)) {
+            self.report_err("ROM Setup", &e);
+            return;
+        }
+        if let Err(e) = self.apply_prefs_to_host() {
+            self.report_err("ROM Setup", &e);
         }
     }
 
@@ -636,6 +723,7 @@ impl AppState {
                     self.select_model(m);
                 }
             }
+            IDM_MACHINE_ROM_SETUP => self.open_rom_setup(),
             IDM_HW_ATTACH_MULTIFACE => self.open_path(
                 "Attach Multiface ROM",
                 "Multiface ROM",
@@ -773,6 +861,21 @@ fn message_box(owner: Option<HWND>, title: &str, body: &str) {
     }
 }
 
+fn message_box_confirm(owner: Option<HWND>, title: &str, body: &str) -> bool {
+    let title: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
+    let body: Vec<u16> = body.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: Both strings are NUL-terminated UTF-16, and owner is an optional
+    // HWND supplied by this process' window state.
+    unsafe {
+        MessageBoxW(
+            owner,
+            PCWSTR(body.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            MB_OKCANCEL,
+        ) == IDOK
+    }
+}
+
 fn append_menu(menu: HMENU, id: usize, text: &str) {
     use windows::Win32::UI::WindowsAndMessaging::{AppendMenuW, MF_STRING};
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
@@ -819,6 +922,8 @@ fn build_menu() -> Result<HMENU> {
         for m in ModelId::ALL {
             append_menu(machine, menu_id_for_model(m), model_menu_label(m));
         }
+        append_sep(machine);
+        append_menu(machine, IDM_MACHINE_ROM_SETUP, "ROM &Setup…");
         append_sep(machine);
         append_menu(machine, IDM_MACHINE_RESET, "&Reset");
         append_popup(menubar, machine, "&Machine");

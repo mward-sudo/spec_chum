@@ -19,8 +19,8 @@ use gtk4::{
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use spec_chum_host::{
-    default_prefs_path, load_prefs, save_prefs, sync_model_rom_paths, HostError, HostSession,
-    ModelId, PrefAyStereo, PrefModel, UiPreferences,
+    default_prefs_path, install_model_rom, load_prefs, rom_setup_json, save_prefs,
+    sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel, UiPreferences,
 };
 
 use linux_shell::audio::{self, PcmRing};
@@ -253,6 +253,60 @@ impl AppState {
         }
     }
 
+    /// Show shared slot requirements and install images for incomplete slots.
+    /// Cancellation retains any already-installed paths and leaves the active
+    /// model unchanged.
+    fn setup_roms_for_model(&mut self, model: ModelId) -> bool {
+        let mut paths = self.prefs.model_rom_paths.clone();
+        let setup = rom_setup_json(model, &paths);
+        if setup.complete {
+            return true;
+        }
+        let details = setup
+            .slots
+            .iter()
+            .map(|slot| {
+                format!(
+                    "{} — {} ({} bytes)\n{}",
+                    slot.label, slot.status, slot.expected_bytes, slot.hint
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        if rfd::MessageDialog::new()
+            .set_title(format!("{} ROM Setup", setup.model_title))
+            .set_description(format!(
+                "The selected model needs these ROM slots:\n\n{details}\n\nChoose OK to select files, or Cancel to leave the active model unchanged."
+            ))
+            .set_buttons(rfd::MessageButtons::OkCancel)
+            .show()
+            != rfd::MessageDialogResult::Ok
+        {
+            return false;
+        }
+        for slot in setup.slots.iter().filter(|slot| slot.status != "found") {
+            let path = rfd::FileDialog::new()
+                .add_filter(&slot.label, &["rom", "bin"])
+                .set_title(format!("Choose {} ROM", slot.label))
+                .pick_file();
+            let Some(path) = path else { return false };
+            match install_model_rom(model, &slot.id, &path, &mut paths) {
+                Ok(_) => {
+                    self.prefs.model_rom_paths = paths.clone();
+                    self.persist_prefs();
+                }
+                Err(error) => {
+                    self.report_err("ROM Setup", &HostError::Message(error.to_string()));
+                    return false;
+                }
+            }
+        }
+        sync_model_rom_paths(paths.clone());
+        self.prefs.model_rom_paths = paths;
+        self.persist_prefs();
+        true
+    }
+
     fn host_action(
         &mut self,
         title: &str,
@@ -291,9 +345,41 @@ impl AppState {
                     ));
                     self.report_err("Select model", &combined);
                 } else {
-                    self.report_err("Select model", &e);
+                    let setup = rom_setup_json(model, &previous.model_rom_paths);
+                    if !setup.complete && self.setup_roms_for_model(model) {
+                        let mut retry = self.prefs.clone();
+                        retry.select_builtin_model(PrefModel::from_model_id(model));
+                        sync_model_rom_paths(retry.model_rom_paths.clone());
+                        match self.host.with_mut(|s| {
+                            s.select_model(model)?;
+                            retry.apply_to_host_session(s)
+                        }) {
+                            Ok(()) => {
+                                self.prefs = retry;
+                                self.persist_prefs();
+                            }
+                            Err(retry_error) => self.report_err("Select model", &retry_error),
+                        }
+                    } else {
+                        self.report_err("Select model", &e);
+                    }
                 }
             }
+        }
+    }
+
+    fn open_rom_setup(&mut self) {
+        let model = self.prefs.model.to_model_id();
+        let was_complete = rom_setup_json(model, &self.prefs.model_rom_paths).complete;
+        if !self.setup_roms_for_model(model) || was_complete {
+            return;
+        }
+        if let Err(error) = self.host.with_mut(|session| session.select_model(model)) {
+            self.report_err("ROM Setup", &error);
+            return;
+        }
+        if let Err(error) = self.apply_prefs_to_host() {
+            self.report_err("ROM Setup", &error);
         }
     }
 
@@ -664,6 +750,7 @@ fn install_menubar(app: &Application) {
             Some(&format!("app.select_model_{i}")),
         );
     }
+    machine.append(Some("ROM Setup…"), Some("app.rom_setup"));
     machine.append(Some("Reset"), Some("app.machine_reset"));
     menubar.append_submenu(Some("_Machine"), &machine);
 
@@ -801,6 +888,9 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
     }
     add_action(app, "machine_reset", Rc::clone(&state), |s| {
         s.reset_machine();
+    });
+    add_action(app, "rom_setup", Rc::clone(&state), |s| {
+        s.open_rom_setup();
     });
 
     add_action(app, "hw_attach_multiface", Rc::clone(&state), |s| {
