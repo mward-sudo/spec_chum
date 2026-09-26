@@ -360,8 +360,8 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/prefs.rs": {
-    "mtime": 1790441682.709765,
-    "seen": 1790441729.824586,
+    "mtime": 1790443729.868403,
+    "seen": 1790443739.757886,
     "ast_hash": "3dee0bfd2eaa76b211ba4bd7c7b66628",
     "semantic_hash": ""
   },
@@ -1482,8 +1482,8 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1790441652.1632254,
-    "seen": 1790441729.82463,
+    "mtime": 1790443729.8690999,
+    "seen": 1790443739.759549,
     "ast_hash": "b0454483b9c3bc81d115fe4895e1ae5b",
     "semantic_hash": ""
   },
@@ -1530,8 +1530,8 @@
     "semantic_hash": ""
   },
   "crates/linux_shell/src/gtk_ui.rs": {
-    "mtime": 1790441652.1642017,
-    "seen": 1790441729.82459,
+    "mtime": 1790443729.8686826,
+    "seen": 1790443739.757992,
     "ast_hash": "91a3cc1bd2916144245b8dd7eb6cbe9a",
     "semantic_hash": ""
   },
@@ -1698,9 +1698,9 @@
     "semantic_hash": ""
   },
   "docs/MODULE_COHESION.md": {
-    "mtime": 1790441539.929885,
-    "seen": 1790441729.824676,
-    "ast_hash": "658af6140321283f7aa07ee6d1406941",
+    "mtime": 1790443729.839302,
+    "seen": 1790443739.760937,
+    "ast_hash": "7882bc038f56ed01d86231ec9dcdc5e9",
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/events.rs": {
