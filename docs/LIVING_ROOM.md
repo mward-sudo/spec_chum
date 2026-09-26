@@ -495,8 +495,9 @@ Runtime A/B via `SPEC_CHUM_ROOM_*` (implemented in `crates/living_room/src/quali
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `SPEC_CHUM_ROOM_BLOOM` | on | Bevy bloom (CRT halation). `=0` disables. |
-| `SPEC_CHUM_ROOM_BLOOM_MIPS` | **512** | Bloom mip cap (64–1024). |
+| `SPEC_CHUM_ROOM_HALATION` | `bloom` | `bloom` keeps the established camera Bloom baseline; `material` disables global Bloom and uses local phosphor scatter. |
+| `SPEC_CHUM_ROOM_BLOOM` | on | Enables/disables Bevy Bloom in `halation=bloom` mode. Material mode keeps global Bloom off. |
+| `SPEC_CHUM_ROOM_BLOOM_MIPS` | **512** | Bloom mip cap (64–1024); applies when camera Bloom is enabled. |
 | `SPEC_CHUM_ROOM_MSAA` | **4** | Room camera MSAA (`0`, `2`, `4`). **8× rejected** — Metal goes black. |
 | `SPEC_CHUM_ROOM_FXAA` | on | Post FXAA on bezel edges. `=0` disables. |
 | `SPEC_CHUM_ROOM_LIGHTS` | `full` | `full` or `min` (fewer sconces). |
@@ -515,6 +516,11 @@ SPEC_CHUM_ROOM_BLOOM=0 SPEC_CHUM_ROOM_MSAA=0 SPEC_CHUM_ROOM_LIGHTS=min \
 ```
 
 Room camera uses `ClusterConfig::Single` (few lights — skip tiled cluster allocation).
+
+For the #458 visual A/B, launch twice with `SPEC_CHUM_ROOM_SCENE=current`, once
+with `SPEC_CHUM_ROOM_HALATION=bloom` and once with `=material`. Keep the window
+size, camera preset, and exposure unchanged. The Bloom mode retains the legacy
+camera-wide glow; material mode replaces that role with phosphor-local scatter.
 
 ## Hybrid plates (experimental, default off)
 
@@ -627,8 +633,10 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
   aperture-grille triad (~0.30), soft-H / sharp-V sampling (`soft_mix` ≈ 0.40),
   gamma 2.2/2.2, brightness ≈ 2.4, black lift, vignette, PAL flicker ≤1%; tiny
   in-shader halation/diffusion only.
-- Bevy `Bloom` is the main room halation at pull-back zoom (intensity ramps with
-  `CrtLookBlend` in `camera.rs`).
+- Bevy `Bloom` is the main room halation at pull-back zoom in the `bloom` baseline
+  (intensity ramps with `CrtLookBlend` in `camera.rs`). The selectable `material`
+  halation mode disables camera Bloom and moves the primary CRT halo into the
+  phosphor shader; Bloom remains available as the baseline / comparison path.
 - Living-room camera uses **`Exposure` ev100 8.2** (between Bevy `INDOOR` 7.0
   and default `BLENDER` 9.7). Pure `BLENDER` crushed furniture; full `INDOOR` plus
   high spill/bloom washed the CRT when zoomed out ([#233](https://github.com/mward-sudo/spec_chum/issues/233)).

@@ -3,11 +3,12 @@
 // CRT phosphor pass — open crt-aperture / crt-easymode techniques approximating
 // Retro Virtual Machine's UK-TV look on a 3D tube mesh (RVM = visual reference only).
 // Curvature is mesh geometry; do not apply 2D barrel warp here.
-// Halation: light in-shader feed only; main glow is Bevy Bloom.
+// Halation: either the established camera Bloom path or selectable local material scatter.
 
 struct CrtPhosphorMaterial {
     params0: vec4<f32>, // time, scan_str, grille_str, brightness
-    params1: vec4<f32>, // gamma_in, gamma_out, soft_mix, black_lift
+    params1: vec4<f32>, // gamma_in, gamma_out, soft_mix, mesh_aspect
+    params2: vec4<f32>, // material_halation (0 = Bloom baseline, 1 = local halo)
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0)
@@ -77,6 +78,15 @@ fn sample_glow_h(uv: vec2<f32>) -> vec3<f32> {
     return acc;
 }
 
+// Broad horizontal phosphor scatter used only by the opt-in material-halation path.
+fn sample_halation_h(uv: vec2<f32>) -> vec3<f32> {
+    let dx = 5.0 / SRC_W;
+    var acc = sample_nearest(uv) * 0.50;
+    acc += sample_nearest(uv + vec2(dx, 0.0)) * 0.25;
+    acc += sample_nearest(uv - vec2(dx, 0.0)) * 0.25;
+    return acc;
+}
+
 // Luminance-adaptive scanline weight (crt-aperture beam min/max + shape).
 // Floor the weight so thin Spectrum text rows are never fully extinguished.
 fn scanline_weight(uv_y: f32, col: vec3<f32>, strength: f32) -> f32 {
@@ -119,6 +129,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let gamma_in = material.params1.x;
     let gamma_out = material.params1.y;
     let soft_mix = material.params1.z;
+    let material_halation = material.params2.x > 0.5;
     // params1.w = mesh aspect (W/H of phosphor quad).
     let mesh_aspect = max(material.params1.w, 0.01);
 
@@ -161,11 +172,19 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     color *= scan;
     color *= aperture_grille(uv.x, grille_str);
 
-    // Tiny in-shader halation / diffusion (crt-aperture GLOW_*); Bevy Bloom does the rest.
+    // Retain the historical feed for the selectable Bloom baseline. In material mode,
+    // broaden the source on the phosphor and put the primary halo into the CRT surface.
     let glow = to_linear(max(sample_glow_h(uv), vec3(BLACK_LIFT)), gamma_in);
     let halo = max(glow - color, vec3(0.0));
-    color += halo * halo * HALATION;
-    color += glow * DIFFUSION;
+    if material_halation {
+        let wide = to_linear(max(sample_halation_h(uv), vec3(BLACK_LIFT)), gamma_in);
+        color += halo * 0.28;
+        color += max(wide - color, vec3(0.0)) * 0.18;
+        color += glow * 0.035;
+    } else {
+        color += halo * halo * HALATION;
+        color += glow * DIFFUSION;
+    }
 
     // Subtle 50 Hz brightness flicker (PAL); amp ≤ ~1%.
     let flicker = 1.0 + FLICKER_AMP * sin(t * 50.0 * 2.0 * PI);
