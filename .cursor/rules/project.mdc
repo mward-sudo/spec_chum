@@ -7,11 +7,10 @@ alwaysApply: true
 
 ## Precedence
 
-1. User message / explicit waiver (`rmw`, `rmcw`)
-2. This map + always-apply `.cursor/rules/*.mdc`
-3. `AGENTS.md` (project map + hard constraints)
-4. `CONTRIBUTING.md` (human + detailed merge-gate SSOT)
-5. `docs/*` for deep topic detail
+1. User instructions
+2. Cross-tool project constraints in `AGENTS.md`
+3. This map and tool-specific `.cursor/rules/*.mdc` (workflow detail; cannot override 1 or 2)
+4. `CONTRIBUTING.md` and `docs/*` for contributor and topic detail
 
 ## Hard constraints (never violate)
 
