@@ -17,7 +17,7 @@ use machine::{AyStereoMode, JoystickMode, Model, TapeLoadOptions};
 use serde::{Deserialize, Serialize};
 
 use crate::machine_config::{UserMachineConfig, MAX_CUSTOM_CONFIGS};
-use crate::session::ModelId;
+use crate::session::{HostError, HostSession, ModelId};
 
 /// Bumped when the on-disk shape changes incompatibly.
 pub const PREFS_VERSION: u32 = 2;
@@ -280,6 +280,18 @@ impl UiPreferences {
         } else {
             TapeLoadOptions::default().with_speed(self.tape_ear_speed)
         }
+    }
+
+    /// Apply the guest-facing session settings shared by native hosts.
+    /// Host audio volume and mute remain owned by each shell's output stream.
+    pub fn apply_to_host_session(&self, session: &mut HostSession) -> Result<(), HostError> {
+        session.set_joystick_mode(self.joystick_mode.to_mode());
+        session.set_online_tape_titles(self.online_tape_titles);
+        session.set_tape_load_options(self.tape_load_options())?;
+        if let Some(machine) = session.machine_mut() {
+            machine.set_ay_stereo_mode(self.effective_ay_stereo());
+        }
+        Ok(())
     }
 
     /// Record a successfully opened media path (most-recent first).
@@ -697,6 +709,33 @@ mod tests {
         assert!(!opts.flash_load);
         assert!(!opts.experience_load);
         assert_eq!(opts.speed, 1);
+    }
+
+    #[test]
+    fn native_host_session_preferences_apply_guest_settings() {
+        let mut session = HostSession::new(ModelId::Spectrum128, true);
+        session
+            .load_rom_bytes(&vec![0; 0x8000])
+            .expect("synthetic 128K ROM");
+        let prefs = UiPreferences {
+            joystick_mode: PrefJoystick::Cursor,
+            online_tape_titles: true,
+            tape_ear_speed: 5,
+            ay_stereo: PrefAyStereo::Acb,
+            ..UiPreferences::default()
+        };
+
+        prefs
+            .apply_to_host_session(&mut session)
+            .expect("apply native host preferences");
+
+        assert_eq!(session.joystick_mode(), JoystickMode::Cursor);
+        assert!(session.online_tape_titles());
+        assert_eq!(session.tape_load_options(), Some(prefs.tape_load_options()));
+        assert_eq!(
+            session.machine().expect("loaded machine").ay_stereo_mode(),
+            prefs.effective_ay_stereo()
+        );
     }
 
     #[test]

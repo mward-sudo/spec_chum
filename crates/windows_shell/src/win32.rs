@@ -127,7 +127,9 @@ impl AppState {
             prefs.select_builtin_model(PrefModel::Spectrum48);
         }
 
-        apply_session_prefs(&mut session, &prefs).context("apply session prefs")?;
+        prefs
+            .apply_to_host_session(&mut session)
+            .context("apply session prefs")?;
 
         let pcm = Arc::new(Mutex::new(PcmRing::new()));
         {
@@ -182,7 +184,7 @@ impl AppState {
 
     fn apply_prefs_to_host(&mut self) -> Result<(), HostError> {
         let prefs = self.prefs.clone();
-        self.host.with_mut(|s| apply_session_prefs(s, &prefs))?;
+        self.host.with_mut(|s| prefs.apply_to_host_session(s))?;
         let mut ring = self.pcm.lock();
         ring.volume = prefs.volume;
         ring.muted = prefs.muted;
@@ -397,7 +399,7 @@ impl AppState {
         sync_model_rom_paths(next.model_rom_paths.clone());
         let result = self.host.with_mut(|s| {
             s.select_model(model)?;
-            apply_session_prefs(s, &next)?;
+            next.apply_to_host_session(s)?;
             Ok::<(), HostError>(())
         });
         match result {
@@ -714,16 +716,6 @@ impl AppState {
         }
         let _ = &self.plane;
     }
-}
-
-fn apply_session_prefs(session: &mut HostSession, prefs: &UiPreferences) -> Result<(), HostError> {
-    session.set_joystick_mode(prefs.joystick_mode.to_mode());
-    session.set_online_tape_titles(prefs.online_tape_titles);
-    session.set_tape_load_options(prefs.tape_load_options())?;
-    if let Some(m) = session.machine_mut() {
-        m.set_ay_stereo_mode(prefs.effective_ay_stereo());
-    }
-    Ok(())
 }
 
 /// Select the configured startup model, falling back to 48K after a failed
