@@ -36,7 +36,8 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 - Do **not** edit plan files under `.cursor/plans/` (or similar).
 - Do **not** commit ROM binaries (`roms/`, `*.rom`).
 - Do **not** change macOS **system** speaker volume (`osascript` `set volume` / `output volume`, CoreAudio device gain, etc.) or force-unmute the Mac. App-internal mute/volume (`specChum.outputVolume`) is the user’s preference — leave it alone unless the user explicitly asks.
-- Library crates: `thiserror` for public errors; no bare `unwrap` in non-test code.
+- Non-test code must not use bare `unwrap`; the workspace Clippy `unwrap_used = warn` lint is promoted to an error by CI/check scripts (`-D warnings`). Prefer `?` or return a typed error; use `expect` only for a documented invariant that cannot fail at that point, with a message stating the invariant. `expect_used` is allowed by Clippy, so this is a project rule rather than an enforced lint.
+- Library crates: `thiserror` for public errors.
 - Binary (`app`): `anyhow` is fine for top-level error context.
 - `unsafe` is denied workspace-wide; only introduce it with a documented `SAFETY` rationale and a narrowly scoped `#[allow(unsafe_code)]`.
 
