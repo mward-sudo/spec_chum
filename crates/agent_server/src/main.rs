@@ -26,6 +26,10 @@ struct Cli {
     /// Bearer token (overrides `SPEC_CHUM_AGENT_TOKEN`).
     #[arg(long)]
     token: Option<String>,
+    /// Load a ROM image from this path instead of resolving a system ROM.
+    /// Useful for deterministic headless integrations and development.
+    #[arg(long)]
+    rom: Option<std::path::PathBuf>,
     /// Allow unauthenticated mutations without a token (dev only).
     #[arg(long)]
     insecure: bool,
@@ -51,8 +55,14 @@ async fn main() -> anyhow::Result<()> {
     }
     let model = parse_model(&cli.model)?;
     let plane = Arc::new(ControlPlane::new(model, cli.border));
-    plane
-        .autoload_model(model)
-        .context("autoload ROM for selected model")?;
+    if let Some(path) = cli.rom {
+        let rom =
+            std::fs::read(&path).with_context(|| format!("read ROM image {}", path.display()))?;
+        plane.load_rom_bytes(&rom).context("load ROM image")?;
+    } else {
+        plane
+            .autoload_model(model)
+            .context("autoload ROM for selected model")?;
+    }
     serve(config, plane, None).await
 }

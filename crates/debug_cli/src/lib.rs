@@ -7,8 +7,6 @@
 //! ([#231](https://github.com/mward-sudo/spec_chum/issues/231)). The
 //! `spec-chum-debug` binary remains a thin source-build alias.
 
-mod agent_client;
-
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::Arc;

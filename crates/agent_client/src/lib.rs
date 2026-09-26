@@ -3,6 +3,7 @@
 //! Extra helpers beyond current CLI flags are intentional for agent scripts;
 //! keep one module allow rather than per-method noise (#171).
 #![allow(dead_code)]
+#![allow(clippy::format_push_string)]
 
 use std::time::Duration;
 
@@ -25,9 +26,14 @@ impl AgentClient {
     }
 
     pub fn new(base: &str, token: Option<String>) -> Self {
+        Self::with_timeout(base, token, Duration::from_secs(30))
+    }
+
+    /// Construct a client with a request timeout, for bounded polling callers.
+    pub fn with_timeout(base: &str, token: Option<String>, timeout: Duration) -> Self {
         let base = base.trim_end_matches('/').to_string();
         let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(30)))
+            .timeout_global(Some(timeout))
             .build()
             .new_agent();
         Self { base, token, agent }

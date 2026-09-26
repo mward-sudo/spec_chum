@@ -59,6 +59,9 @@ jobs:
       - name: test
         run: cargo test --workspace --exclude living_room
 
+      - name: Agent server process smoke (#463)
+        run: timeout 2m cargo test -p agent_server --features process-smoke --test process_smoke
+
   z80doc:
     name: z80doc (slow-tests, release)
     runs-on: ubuntu-latest

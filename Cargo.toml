@@ -11,6 +11,7 @@ members = [
     "crates/host_api",
     "crates/control_plane",
     "crates/agent_server",
+    "crates/agent_client",
     "crates/app",
     "crates/debug_cli",
     "crates/living_room",
@@ -44,6 +45,7 @@ clap = { version = "4", features = ["derive"] }
 host_api = { path = "crates/host_api" }
 control_plane = { path = "crates/control_plane" }
 agent_server = { path = "crates/agent_server" }
+agent_client = { path = "crates/agent_client" }
 debug_cli = { path = "crates/debug_cli" }
 axum = "0.8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
