@@ -230,7 +230,9 @@ impl AppState {
         if self.bgra.len() != need {
             self.bgra.resize(need, 0);
         }
-        for (dst, src) in self.bgra.chunks_exact_mut(4).zip(rgba.chunks_exact(4)) {
+        let (dst_pixels, _) = self.bgra.as_chunks_mut::<4>();
+        let (src_pixels, _) = rgba.as_chunks::<4>();
+        for (dst, src) in dst_pixels.iter_mut().zip(src_pixels) {
             dst[0] = src[2]; // B
             dst[1] = src[1]; // G
             dst[2] = src[0]; // R
@@ -752,55 +754,6 @@ fn select_startup_model<E>(
     }
 }
 
-#[cfg(test)]
-mod startup_tests {
-    use super::*;
-
-    #[test]
-    fn preferred_failure_uses_successful_48k_fallback() {
-        let result = select_startup_model(ModelId::Spectrum128, |model| {
-            if model == ModelId::Spectrum48 {
-                Ok(())
-            } else {
-                Err("preferred missing")
-            }
-        });
-        assert_eq!(result, Ok((ModelId::Spectrum48, Some("preferred missing"))));
-    }
-
-    #[test]
-    fn preferred_and_fallback_failures_are_both_returned() {
-        let result = select_startup_model(ModelId::Spectrum128, |model| {
-            if model == ModelId::Spectrum48 {
-                Err("fallback missing")
-            } else {
-                Err("preferred missing")
-            }
-        });
-        assert!(matches!(
-            result,
-            Err(StartupModelError::PreferredAndFallback(
-                "preferred missing",
-                "fallback missing"
-            ))
-        ));
-    }
-
-    #[test]
-    fn direct_48k_failure_is_returned_without_retry() {
-        let mut attempts = 0;
-        let result = select_startup_model(ModelId::Spectrum48, |_| {
-            attempts += 1;
-            Err::<(), _>("48K missing")
-        });
-        assert_eq!(attempts, 1);
-        assert!(matches!(
-            result,
-            Err(StartupModelError::RequiredModel("48K missing"))
-        ));
-    }
-}
-
 fn key_down(vk: u16) -> bool {
     // SAFETY: GetKeyState is a pure input query.
     unsafe { GetKeyState(i32::from(vk)) < 0 }
@@ -1087,7 +1040,7 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
         }
         WM_COMMAND => {
             if !state_ptr.is_null() {
-                let id = (wparam.0 as usize) & 0xffff;
+                let id = wparam.0 & 0xffff;
                 let state = unsafe { &mut *state_ptr };
                 state.queue_command(id);
             }
@@ -1205,4 +1158,53 @@ pub fn run() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[test]
+    fn preferred_failure_uses_successful_48k_fallback() {
+        let result = select_startup_model(ModelId::Spectrum128, |model| {
+            if model == ModelId::Spectrum48 {
+                Ok(())
+            } else {
+                Err("preferred missing")
+            }
+        });
+        assert_eq!(result, Ok((ModelId::Spectrum48, Some("preferred missing"))));
+    }
+
+    #[test]
+    fn preferred_and_fallback_failures_are_both_returned() {
+        let result = select_startup_model(ModelId::Spectrum128, |model| {
+            if model == ModelId::Spectrum48 {
+                Err("fallback missing")
+            } else {
+                Err("preferred missing")
+            }
+        });
+        assert!(matches!(
+            result,
+            Err(StartupModelError::PreferredAndFallback(
+                "preferred missing",
+                "fallback missing"
+            ))
+        ));
+    }
+
+    #[test]
+    fn direct_48k_failure_is_returned_without_retry() {
+        let mut attempts = 0;
+        let result = select_startup_model(ModelId::Spectrum48, |_| {
+            attempts += 1;
+            Err::<(), _>("48K missing")
+        });
+        assert_eq!(attempts, 1);
+        assert!(matches!(
+            result,
+            Err(StartupModelError::RequiredModel("48K missing"))
+        ));
+    }
 }

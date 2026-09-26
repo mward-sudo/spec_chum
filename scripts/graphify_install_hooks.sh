@@ -12,6 +12,8 @@
 # After install, every git commit that touches code files triggers `graphify update`
 # (AST-only, no LLM). Doc-only changes are skipped by the hook — run
 # ./scripts/graphify_update.sh --full manually when needed.
+# Skip the automatic refresh for one commit with `GRAPHIFY_SKIP_HOOK=1 git commit …`;
+# uninstall the hook with `./scripts/graphify_install_hooks.sh uninstall`.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

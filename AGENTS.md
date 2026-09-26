@@ -2,6 +2,38 @@
 
 Cross-tool project facts for LLM-assisted work. Cursor-specific rules live in `.cursor/rules/`.
 
+## Jev-guided workflow
+
+For software-engineering tasks, use configured Jev MCP `jev_decide` once at intake with `decision_kind="route"` and a short, redacted summary. Keep the call lightweight; if unavailable, continue with task evidence and ordinary judgment. Jev advises; deterministic checks establish facts. Do not send secrets, full transcripts, or large source excerpts.
+
+At a genuine loop boundary—after a coherent implementation and its checks, a failed attempt, or when next action/completion is uncertain—use Jev for a `loop` decision. Do not call it after each edit or check. If unavailable, continue on evidence. Treat `review_recommended` as low confidence, not code review or proof; it cannot override evidence, user direction, or project gates.
+
+For related Jev decisions in one task, reuse the same short, non-sensitive `task_id`. Jev records a provider session ID and a repository label automatically. After acting on a recommendation and learning the factual result, call `jev_log_update` with the returned `decision_id`, whether the recommendation was followed, overridden, or not applicable, and a concise outcome note. Do not guess outcomes or include secrets, full transcripts, or sensitive source details. Historical log entries are not to be backfilled from assumptions.
+
+Treat Jev's low-confidence signal as a reason for conservative main-agent review, but make independent review requirements from project policy and task risk. That flag alone does not justify spending CodeRabbit's limited PR or CLI review allowance. Required review still applies when project policy, the PR merge gate, broad impact, security sensitivity, or unresolved uncertainty calls for it. Every ready PR follows `.cursor/rules/pr-review-merge.mdc` and the required CodeRabbit merge gate; Jev cannot waive or replace that process. Never use Jev in place of compilation, tests, lint, diff inspection, CodeRabbit checks, or a human review required by project policy. Read its full probability distribution and `review_recommended`; if the top probability is below 0.70 or the top-two margin is below 0.20, have the main agent choose conservatively and review the result. These thresholds are operational heuristics, not calibrated guarantees.
+
+Use Jev's route to select the lowest sufficient reasoning lane (SMALL main session, MEDIUM Luna medium, HIGH Luna high, ESCALATE Sol high for security-sensitive work, architecture, migrations, broad impact, or repeated failures). Delegate one bounded implementation/diagnosis task at a time, with ownership and expected output; skip delegation when direct work is faster. The coordinating agent owns scope, acceptance criteria, integration, verification, and final review.
+
+## Agentic coding loop
+
+Use this loop for implementation work; scale the ceremony to the task. A one-file, obvious fix needs a short scope and a relevant check, not a project plan. A multi-step or cross-cutting task needs an explicit working record.
+
+1. **Frame the outcome.** Identify what “done” means, relevant constraints, and acceptance checks. Find the related issue when useful or required by task policy; do not create tracking ceremony for a tiny, self-contained fix. Ask only when missing intent/product judgment materially changes the answer. Continue independent work while awaiting a response.
+2. **Inspect the workspace.** Check branch/status and preserve unrelated edits. Read relevant instructions and source context; use graphify and issue lookup as the project policies require. Select tools or subagents only when they add value. Give delegated work a bounded question or ownership area and integrate its findings yourself.
+3. **Implement a useful slice.** For user-visible features, prefer vertical slices that deliver one observable behavior through every required layer (shared/core behavior, host/UI surface, and an end-to-end or integration check). Each slice should be independently usable or provide a clear, testable increment. Avoid broad horizontal scaffolding across layers that leaves no working path. Keep the slice small enough to review; split larger outcomes into ordered, behavior-complete increments and keep the acceptance criteria explicit. Use horizontal implementation when the problem is inherently layer-wide or accuracy-focused—such as a CPU instruction/timing correction, shared API/schema migration, mechanical refactor, or a single invariant that must change consistently across layers. In either shape, run the narrowest check that can falsify correctness, inspect failures, and revise the hypothesis before retrying. Add/update tests that capture intended behavior and preserve hardware-accuracy assertions.
+4. **Verify the slice and close.** Check the behavior across each layer included in the slice, including the user-facing path when practical; do not rely only on isolated unit tests when an integration test can establish the end-to-end outcome. Run task-appropriate required checks (crate iteration, workspace, or slow/release gates). Review the final diff for scope, accidental/generated files, and unresolved findings. Update graph artifacts after code edits when required. Meet the independent PR review/merge policy when applicable; a green build does not satisfy it.
+5. **Leave useful state.** Report the outcome, paths, checks and exact results, limitations, and deferred work. A same-thread continuation can use the conversation. For cross-session or cross-agent handoff, leave a durable concise note in the active issue/PR (or equivalent task record) with goal, branch/HEAD, changed paths, decisions, checks and exact outcomes, blockers, and next action. Avoid a separate progress file unless no existing record fits.
+
+### Working record and continuation
+
+Use the lightest record that makes the work resumable. Issues capture agreed intent and acceptance criteria, including intended behavior slices for substantive features; PRs capture the delivered slice, checks, review, and merge state; durable handoff notes capture cross-session execution state. Update the existing source of truth when scope, decisions, status, or follow-up changes. Do not mirror details or paste chat transcripts. Never mark work complete while required criteria/checks remain unmet. `continue` resumes active scope; shorthand ordering is in CONTRIBUTING.md.
+
+### Human decision points
+
+Default to autonomous progress on reversible local work. Human input is most valuable for product intent, ambiguous tradeoffs, acceptance of a known limitation, prioritization, and actions with external or hard-to-reverse effects (for example spend, publish, deploy, merge, delete, or change user preferences) when not already authorized. Honor authorization already given; do not ask again. When input is necessary, finish independent work first and ask one concrete, decision-shaped question with a recommended option and consequence. Do not stop for hypothetical risk or routine implementation choices.
+
+Use judgment about review depth: main-agent diff review is always expected; independent agent or tool review is most useful for security, architecture, broad changes, public API/format changes, concurrency/timing accuracy, and unresolved uncertainty. Do not spend scarce external review quota merely because a routing signal is uncertain. Project PR policy still defines mandatory review gates.
+
 ## What this is
 
 From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-accurate Z80 and ULA timing are first-class goals — prefer real accuracy fixes over weakening tests or leaving suites ignored. System ROMs are **not** in git — use `./scripts/fetch_roms.sh`.
@@ -61,7 +93,7 @@ Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351) —
 **Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
 (z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
 
-## Agent workflow (clippy-first)
+## Verification workflow (clippy-first)
 
 ### Continue shorthand
 
@@ -74,7 +106,7 @@ When a task is active, `continue` resumes that work with its existing scope; it 
 ./scripts/check_crates.sh control_plane agent_server host_api
 ```
 
-**Before claiming a task done / merge** — full workspace gate (debug, excludes `living_room`):
+**For full-workspace / merge readiness** — full workspace gate (debug, excludes `living_room`):
 
 ```bash
 ./scripts/check.sh
@@ -112,7 +144,8 @@ Install the current CLI with `uv tool install graphifyy` (or `pipx install graph
 | Refresh after **code** edits | `./scripts/graphify_update.sh` (AST-only, no API cost) |
 | Refresh after **doc** edits | `./scripts/graphify_update.sh --full` (LLM; needs API key) |
 | Auto-refresh on commit | `./scripts/graphify_install_hooks.sh` (once per clone) |
-| After task done | Skim `GRAPH_REPORT.md` Suggested Questions → **do now** (same task/PR if tiny) / **defer** (must file or link a GitHub issue) / **ignore** (short rationale) — see `.cursor/rules/graphify.mdc` |
+| Skip one automatic refresh | `GRAPHIFY_SKIP_HOOK=1 git commit …` |
+| After substantive code/architecture work | Optionally skim `GRAPH_REPORT.md` Suggested Questions; track a relevant follow-up only if it is actionable and worth doing — see `.cursor/rules/graphify.mdc` |
 
 Broad overview: `graphify-out/GRAPH_REPORT.md`. Wiki index (when present): `graphify-out/wiki/index.md`.
 
@@ -128,10 +161,10 @@ Tier matrix and gate inventory: [docs/TESTING.md](docs/TESTING.md) ([#171](https
 
 ## PR / stack / merge gate
 
-Track work in GitHub Issues (milestones M0–M4). Prefer small PRs (one concern). See `CONTRIBUTING.md` for `gh stack` and the full merge-gate SSOT.
+Track substantive planned work in GitHub Issues (milestones M0–M4); tiny self-contained fixes can remain untracked. Prefer focused PRs. See `CONTRIBUTING.md` for `gh stack` and the full merge-gate SSOT.
 
-- Issues: `.cursor/rules/github-issues.mdc` (`gh issue list` before coding; `Closes` vs `Refs`).
-- Merge / CodeRabbit: **agent checklist** `.cursor/rules/pr-review-merge.mdc` — **CI soft-pass ≠ merge-ready**; either-completed or dual >10m; disposition every actionable bot finding.
+- Issues: `.cursor/rules/github-issues.mdc` (check related work for substantive implementation; `Closes` vs `Refs`).
+- Merge / CodeRabbit: **agent checklist** `.cursor/rules/pr-review-merge.mdc` — **CI soft-pass ≠ merge-ready**; GitHub review completed or dual >10m; disposition every actionable bot finding.
 - Detail + human workflow: `CONTRIBUTING.md` → “CodeRabbit — review when ready” / “Review check before merge”.
 - Disposition habits: `.cursor/rules/coderabbit-lessons.mdc`.
 

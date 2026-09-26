@@ -1,11 +1,11 @@
 ---
-description: graphify knowledge graph — query before code explore
+description: Use graphify for useful architecture exploration
 alwaysApply: true
 ---
 
 # graphify
 
-Graph at `graphify-out/`. **Before** Read/Grep/Glob/Bash **code explore**: run graphify first.
+Graph at `graphify-out/`. Use it before source exploration when architecture, call paths, or unfamiliar subsystem relationships matter. A query is optional for localized, already-understood edits or simple bug fixes; it should reduce exploration, not add a mandatory step.
 
 ```bash
 graphify query "<question>"
@@ -13,11 +13,11 @@ graphify path "<A>" "<B>"
 graphify explain "<concept>"
 ```
 
-Applies to you **and** every code-exploring subagent (put this in their prompt). Do not skip because files are “already known.”
+Applies to you and any code-exploring subagent when the query is useful for the task.
 
 **If graphify is unavailable:** consult the checked-in graph artifacts when useful, then continue with normal source exploration and note that the query was unavailable. Do not block code work solely on a missing CLI. Graph queries remain the preferred architecture entry point when available. For installation and PATH checks, see `AGENTS.md` → “graphify knowledge graph”.
 
-**Skip a query when:** already oriented and editing specific lines, or `graphify-out/graph.json` is missing. Rule/doc-only Read/Write is fine after a quick query if helpful.
+**Skip a query when:** the task is documentation-only, the change is localized and its dependencies are already clear, or `graphify-out/graph.json` is missing. If unavailable, use the checked-in graph when useful and continue normally.
 
 - Prefer `graphify-out/wiki/index.md` when present
 - `GRAPH_REPORT.md` only for broad architecture when query/path/explain are insufficient
@@ -28,10 +28,10 @@ Applies to you **and** every code-exploring subagent (put this in their prompt).
 | --- | --- |
 | Code | `./scripts/graphify_update.sh` (AST; commit `graphify-out/` when meaningful) |
 | Docs/images | `./scripts/graphify_update.sh --full` (needs API key) |
-| Optional | `./scripts/graphify_install_hooks.sh` (per-clone) |
+| Optional | `./scripts/graphify_install_hooks.sh` (per-clone; set `GRAPHIFY_SKIP_HOOK=1` for a commit that should not trigger the automatic refresh, or uninstall with `./scripts/graphify_install_hooks.sh uninstall`) |
 
 CodeRabbit skips `graphify-out/**` via `.coderabbit.yaml` `path_filters`.
 
-## After task done
+## After substantive code or architecture work
 
-Skim `GRAPH_REPORT.md` Suggested Questions → **do now** / **defer** (must file/link issue) / **ignore** (short rationale). Don’t derail the active branch for speculative refactors.
+Optionally skim `GRAPH_REPORT.md` Suggested Questions when the task touched related architecture. Pursue only a relevant, actionable item; defer it to an issue when it merits independent work. Do not create tracking work for speculative suggestions.
