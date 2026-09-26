@@ -1626,15 +1626,15 @@
     "semantic_hash": ""
   },
   "crates/agent_client/Cargo.toml": {
-    "mtime": 1790437921.8727264,
-    "seen": 1790438198.547771,
-    "ast_hash": "57a9b8abe7b1f5fd9f223c53b385d760",
+    "mtime": 1790440857.9189632,
+    "seen": 1790440913.582231,
+    "ast_hash": "276748b0bf0f7f261ed7622823b80634",
     "semantic_hash": ""
   },
   "crates/agent_client/src/lib.rs": {
-    "mtime": 1790440470.3112876,
-    "seen": 1790440497.539101,
-    "ast_hash": "314e448aa7aa089facdda5e93375b25f",
+    "mtime": 1790440860.892323,
+    "seen": 1790440913.582232,
+    "ast_hash": "af262166184fde8ae0f0a7bfe4766ace",
     "semantic_hash": ""
   },
   "crates/agent_server/openapi.json": {
@@ -1704,9 +1704,9 @@
     "semantic_hash": ""
   },
   "crates/agent_server/src/routes/events.rs": {
-    "mtime": 1790440457.5720026,
-    "seen": 1790440497.539257,
-    "ast_hash": "04638672eb299646a841145867169a92",
+    "mtime": 1790440900.2754667,
+    "seen": 1790440913.582387,
+    "ast_hash": "91c0bcb8631ab9c7b5a02463c2c646ee",
     "semantic_hash": ""
   },
   "crates/agent_server/tests/websocket_events.rs": {

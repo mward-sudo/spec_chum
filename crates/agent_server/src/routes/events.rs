@@ -132,13 +132,7 @@ impl BreakpointEventHub {
                     return;
                 };
                 if hub.sender.receiver_count() == 0 {
-                    hub.monitor_started.store(false, Ordering::Release);
-                    // A connection may have arrived between the count and
-                    // clearing the flag; its subscribe saw a running monitor.
-                    if hub.sender.receiver_count() > 0 {
-                        hub.start_monitor();
-                    }
-                    return;
+                    continue;
                 }
                 if hub.observe_and_publish().is_err() {
                     if !hub.unavailable.swap(true, Ordering::AcqRel) {
@@ -317,7 +311,7 @@ mod tests {
     use spec_chum_host::ModelId;
 
     #[tokio::test]
-    async fn monitor_stops_when_last_subscriber_leaves() {
+    async fn monitor_skips_observation_when_no_subscribers_remain() {
         let plane = Arc::new(ControlPlane::new(ModelId::Spectrum48, false));
         plane
             .load_rom_bytes(&vec![0; 16 * 1024])
@@ -326,17 +320,9 @@ mod tests {
         let (receiver, _) = hub.subscribe().expect("subscribe");
         assert!(hub.monitor_started.load(Ordering::Acquire));
         drop(receiver);
-        tokio::time::timeout(Duration::from_secs(2), async {
-            while hub.monitor_started.load(Ordering::Acquire) {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .expect("monitor stops after final subscriber");
-
         plane.lock_host().set_model(ModelId::Spectrum128);
         tokio::time::sleep(WATCH_INTERVAL + Duration::from_millis(20)).await;
         assert!(!hub.unavailable.load(Ordering::Acquire));
-        assert!(!hub.monitor_started.load(Ordering::Acquire));
+        assert!(hub.monitor_started.load(Ordering::Acquire));
     }
 }

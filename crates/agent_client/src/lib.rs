@@ -128,9 +128,13 @@ impl AgentClient {
                 .context("invalid bearer token for WebSocket")?;
             request.headers_mut().insert(AUTHORIZATION, value);
         }
-        let (socket, _) = tokio_tungstenite::connect_async(request)
-            .await
-            .context("connect to /v1/events")?;
+        let (socket, _) = tokio::time::timeout(
+            Duration::from_secs(30),
+            tokio_tungstenite::connect_async(request),
+        )
+        .await
+        .context("timed out connecting to /v1/events after 30 seconds")?
+        .context("connect to /v1/events")?;
         Ok(BreakpointEvents { socket })
     }
 

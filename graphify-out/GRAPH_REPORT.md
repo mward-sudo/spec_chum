@@ -1,7 +1,7 @@
 # Graph Report - spec_chum-wt-issue-451  (2026-09-26)
 
 ## Corpus Check
-- 271 files · ~312,668 words
+- 271 files · ~312,636 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 45 file(s) not represented in the graph (top: .tap 10, .mdc 8, (none) 6)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a11a850b`
+- Built from commit: `66e0cdce`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -526,7 +526,7 @@ Nodes (28): beta_ports_when_trdos_paged_via_bus48(), beta_trdos_rom_overlays_whe
 
 ### Community 51 - "BreakpointEventHub"
 Cohesion: 0.19
-Nodes (16): BreakpointEvent, BreakpointEventHub, event_for(), EventState, HubMessage, monitor_stops_when_last_subscriber_leaves(), Arc, AtomicBool (+8 more)
+Nodes (16): BreakpointEvent, BreakpointEventHub, event_for(), EventState, HubMessage, monitor_skips_observation_when_no_subscribers_remain(), Arc, AtomicBool (+8 more)
 
 ### Community 52 - "ui_overlay.rs"
 Cohesion: 0.16
