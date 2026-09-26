@@ -13,21 +13,29 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
-    tungstenite::{client::IntoClientRequest, http::header::AUTHORIZATION, Message},
+    tungstenite::{
+        client::IntoClientRequest, http::header::AUTHORIZATION, protocol::frame::coding::CloseCode,
+        Message,
+    },
     MaybeTlsStream, WebSocketStream,
 };
 
 /// Versioned PC breakpoint event received from `/v1/events`.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BreakpointEvent {
+    /// Wire format version.
     pub version: u16,
     /// Monotonic within one server process; reconnect snapshots reuse the hit's sequence.
     pub sequence: u64,
+    /// Event discriminator (`breakpoint.hit` in version 1).
     pub event: String,
     /// Either `live` or `snapshot`.
     pub delivery: String,
+    /// Program counter at the breakpoint.
     pub pc: u16,
+    /// Human-readable stop reason, formatted as `pc:XXXX`.
     pub reason: String,
+    /// Whether execution remains paused at the stop.
     pub paused: bool,
 }
 
@@ -38,7 +46,8 @@ pub struct BreakpointEvents {
 }
 
 impl BreakpointEvents {
-    /// Receive the next breakpoint hit, or `None` after the server closes the socket.
+    /// Receive the next breakpoint hit, or `None` after a normal close.
+    /// A server error close (1011) is returned as an error so callers can reconnect.
     pub async fn recv(&mut self) -> Result<Option<BreakpointEvent>> {
         loop {
             match self.socket.next().await {
@@ -59,6 +68,12 @@ impl BreakpointEvents {
                         .send(Message::Pong(payload))
                         .await
                         .context("respond to breakpoint event ping")?;
+                }
+                Some(Ok(Message::Close(Some(frame)))) if frame.code == CloseCode::Error => {
+                    bail!(
+                        "breakpoint event stream closed by server (1011): {}",
+                        frame.reason
+                    );
                 }
                 Some(Ok(Message::Close(_))) | None => return Ok(None),
                 Some(Ok(_)) => {}

@@ -616,6 +616,14 @@ impl ControlPlane {
         })
     }
 
+    /// Read recent PC stops under the same lock as the live host session.
+    pub fn pc_breakpoint_observation(
+        &self,
+        since: u64,
+    ) -> ApiResult<spec_chum_host::session::PcBreakpointObservation> {
+        self.with_session_ref(|s| Ok(s.pc_breakpoint_observation(since)?))
+    }
+
     pub fn framebuffer_rgba(&self) -> ApiResult<Vec<u8>> {
         self.with_session_ref(|s| Ok(s.framebuffer().to_vec()))
     }

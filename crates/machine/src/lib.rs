@@ -13,7 +13,7 @@ mod inspect;
 mod joystick;
 mod rom;
 
-pub use debugger::{BreakReason, Debugger, Watch};
+pub use debugger::{BreakReason, Debugger, PcBreakpointHit, Watch};
 pub use inspect::{BetaInspect, Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
 pub use rom::{
@@ -1135,6 +1135,7 @@ impl Machine {
     }
 
     pub fn reset(&mut self) {
+        self.debugger_mut().reset_stop_state();
         match self {
             Self::Spec48 {
                 cpu,

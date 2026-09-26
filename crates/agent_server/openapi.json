@@ -5403,7 +5403,7 @@
       "get": {
         "operationId": "watchV1Events",
         "summary": "GET /v1/events (WebSocket upgrade)",
-        "description": "Upgrades to a WebSocket and streams version 1 PC breakpoint.hit messages. See the BreakpointEvent schema and API guide for lifecycle semantics.",
+        "description": "Upgrades to a WebSocket and streams version 1 PC breakpoint.hit messages. In tokenless insecure mode, browser Origin must match Host. See the BreakpointEvent schema and API guide for lifecycle semantics.",
         "tags": [
           "debug"
         ],
@@ -5428,6 +5428,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Cross-origin WebSocket request in tokenless insecure mode"
           }
         }
       }

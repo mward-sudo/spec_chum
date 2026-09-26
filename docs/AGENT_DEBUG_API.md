@@ -278,8 +278,13 @@ once; it does not replay events from the disconnected interval. Clients should
 keep the socket open for live delivery and may use REST to query or control the
 debugger. Memory/port watch stops, trace records, and tape progress are not sent
 on this first event path. The server uses one shared 100 ms state watcher per
-router, so event detection can lag a stop by up to roughly one polling interval;
-connected clients receive broadcasts and do not poll the session themselves.
+router while clients are connected. Each PC stop gets a distinct identity at the
+machine, so a rapid resume and repeat stop at the same PC still produces a new
+event even when both occur between watcher ticks. The machine keeps the most
+recent 128 PC stops for the watcher; more than 128 hits between ticks can drop
+older hits. Delivery can lag a stop by roughly one polling interval; connected
+clients receive broadcasts and do not poll the session themselves. The watcher
+stops after the final client disconnects and restarts on a new connection.
 
 Rust clients can consume the stream through `agent_client`:
 
@@ -295,10 +300,18 @@ while let Some(event) = events.recv().await? {
 ```
 
 Missing or invalid bearer credentials are rejected with HTTP 401 before upgrade.
-If the shared debugger state becomes unavailable after upgrade, the server
-closes the WebSocket with code 1011. Closing the client socket ends that
-connection; reconnecting receives a current-state snapshot when a PC breakpoint
-is still active.
+In tokenless insecure mode, browser WebSocket upgrades must have an `Origin`
+matching a loopback request host and port; cross-origin or non-loopback host
+requests receive HTTP 403.
+Native clients without an `Origin` header can connect. A token remains the
+recommended protection when other local software can reach the server.
+If the shared debugger state becomes unavailable, or a subscriber falls behind
+the event channel, the server closes the WebSocket with code 1011. A lagged
+subscriber should reconnect for a current-state snapshot; missed events are not
+replayed. `agent_client::BreakpointEvents::recv` returns an error for 1011 and
+`None` for a normal close. Closing the client socket ends that connection;
+reconnecting receives a current-state snapshot when a PC breakpoint is still
+active.
 
 ### Core routes (minimum useful surface)
 
