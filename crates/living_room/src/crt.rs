@@ -105,6 +105,9 @@ pub struct CrtPhosphorMaterial {
     pub params0: Vec4,
     #[uniform(0)]
     pub params1: Vec4,
+    /// params2.x selects stronger phosphor-local halation when global Bloom is off.
+    #[uniform(0)]
+    pub params2: Vec4,
     #[texture(2)]
     #[sampler(3)]
     pub screen: Handle<Image>,
@@ -213,6 +216,16 @@ fn setup_crt_resources(
         params0: Vec4::new(0.0, 0.18, 0.10, 1.85),
         // params1.w = mesh aspect (4:3 content fit); TEX_OVERSCAN is a shader constant.
         params1: Vec4::new(2.2, 2.2, 0.08, PHOSPHOR_W / PHOSPHOR_MESH_H),
+        params2: Vec4::new(
+            if crate::quality::material_halation_enabled() {
+                1.0
+            } else {
+                0.0
+            },
+            0.0,
+            0.0,
+            0.0,
+        ),
         screen: handle.clone(),
     });
     let glass_mesh = meshes.add(bulging_screen_mesh(

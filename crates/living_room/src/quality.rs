@@ -18,9 +18,40 @@ fn env_truthy(key: &str) -> Option<bool> {
     Some(true)
 }
 
-/// Bloom on by default (CRT halation). `SPEC_CHUM_ROOM_BLOOM=0` disables.
+/// Primary CRT halation path. Defaults to the established full-screen Bloom look.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HalationMode {
+    #[default]
+    Bloom,
+    Material,
+}
+
+/// `SPEC_CHUM_ROOM_HALATION=bloom|material` — default **bloom** until visual acceptance.
+/// For issue #458, capture both with `SPEC_CHUM_ROOM_SCENE=current`, unchanged window
+/// size/camera preset and exposure: once with `...HALATION=bloom`, then `...=material`.
+pub fn halation_mode() -> HalationMode {
+    halation_mode_from(std::env::var("SPEC_CHUM_ROOM_HALATION").ok().as_deref())
+}
+
+fn halation_mode_from(value: Option<&str>) -> HalationMode {
+    match value
+        .unwrap_or("bloom")
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "material" => HalationMode::Material,
+        _ => HalationMode::Bloom,
+    }
+}
+
+pub fn material_halation_enabled() -> bool {
+    halation_mode() == HalationMode::Material
+}
+
+/// Bloom stays on for the baseline; material mode replaces global Bloom.
 pub fn bloom_enabled() -> bool {
-    env_truthy("SPEC_CHUM_ROOM_BLOOM").unwrap_or(true)
+    !material_halation_enabled() && env_truthy("SPEC_CHUM_ROOM_BLOOM").unwrap_or(true)
 }
 
 /// Cap bloom mip dimension. Default **512** (full CRT halation).
@@ -102,13 +133,30 @@ pub fn light_preset() -> LightPreset {
 /// One-line label for perf logs.
 pub fn preset_label() -> String {
     format!(
-        "scene={} hybrid={} bloom={} mips={} msaa={:?} fxaa={} lights={:?}",
+        "scene={} hybrid={} halation={:?} bloom={} mips={} msaa={:?} fxaa={} lights={:?}",
         scene_variant().label(),
         hybrid_enabled(),
+        halation_mode(),
         bloom_enabled(),
         bloom_max_mip_dimension(),
         msaa_samples(),
         fxaa_enabled(),
         light_preset()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn halation_mode_defaults_to_bloom_and_accepts_material_case_insensitively() {
+        assert_eq!(halation_mode_from(None), HalationMode::Bloom);
+        assert_eq!(halation_mode_from(Some("BLOOM")), HalationMode::Bloom);
+        assert_eq!(
+            halation_mode_from(Some(" Material ")),
+            HalationMode::Material
+        );
+        assert_eq!(halation_mode_from(Some("other")), HalationMode::Bloom);
+    }
 }
