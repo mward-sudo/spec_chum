@@ -28,18 +28,19 @@ This gate governs merging a ready PR, not implementation progress. If CodeRabbit
 | Ready + after fix commits | `@coderabbitai review` (incremental) |
 | GitHub `Review completed` on current HEAD | Review gate satisfied; avoid redundant local review by default |
 | Local CodeRabbit review completed on current diff | Review gate satisfied when GitHub is rate-limited beyond 10m; record the GitHub reset and local review in a one-line PR note |
-| A surface can review now or reports reset **≤10m** | Use that surface if it can complete within 10 minutes; otherwise stop waiting and try the other |
+| A rate-limited surface reports reset **≤10m** | **HOLD** until the reset, then retry. If the request becomes pending, let it complete regardless of elapsed time |
 | A surface reports reset **>10m** | That review is not required; try the other surface and proceed after main-agent review if neither can complete |
-| No CodeRabbit review completes within 10 minutes | Main-agent review is required; record the attempts and reset information in a one-line PR note, then proceed |
+| Review is pending / in progress | **HOLD** until it completes; the 10-minute limit applies only to rate limiting |
+| All available review surfaces are rate-limited beyond 10m | Main-agent review is required; record the attempts and reset information in a one-line PR note, then proceed |
 | Unresolved actionable bot threads | **HOLD** unless user `rmw` / `rmcw` / `--waive` / label |
 
 ## Before merge (ordered)
 
 1. PR **ready** (not draft).
-2. Try for one CodeRabbit review on the current diff using GitHub or local CLI / IDE. GitHub is preferred when it can complete within 10 minutes; a local review can be used when GitHub is rate-limited longer.
+2. Try for one CodeRabbit review on the current diff using GitHub or local CLI / IDE. If a review is pending or in progress, wait for it to complete; the 10-minute limit applies only to a rate-limited surface.
 3. `./scripts/check_pr_reviews.sh` (or with PR number).
 4. Disposition **every** actionable finding (threads + outside-diff/summary) — see `coderabbit-lessons.mdc`.
-5. If no CodeRabbit review can complete within 10 minutes, complete main-agent diff review and document the rate-limit / review attempt in a one-line PR note; re-run the script after fixes.
+5. For a rate-limit reset of 10 minutes or less, wait for the reset and retry. If all available review surfaces are rate-limited beyond 10 minutes, complete main-agent diff review and document the attempts / resets in a one-line PR note; re-run the script after fixes. A pending review remains a hold until it completes, regardless of elapsed time.
 6. User shorthand: `rm`/`rmc` = merge after the available review path and checks; `rmw`/`rmcw` = waiver for other holds; `all rmc` = loop open drafts.
 
 ## Layers (one-liner)

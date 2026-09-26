@@ -293,9 +293,10 @@ else
       echo "    context=CodeRabbit state=${CR_STATE:-missing} description=${CR_DESC:-"(none)"}" >&2
       echo "    GitHub CodeRabbit rate-limited — gate 1 soft-passes CI only (NOT Review completed)." >&2
       echo "    Soft-pass when reset is >10m (parsed) or unparsable; HOLD when parsed ≤10m." >&2
-      echo "    CI cannot verify local CodeRabbit. Try a local review; do not wait" >&2
-      echo "    more than 10m for either surface. If no review completes, do the" >&2
-      echo "    main-agent review and document attempts / resets in a one-line PR comment." >&2
+      echo "    For a parsed reset ≤10m, wait/retry after that reset; this gate remains HOLD." >&2
+      echo "    The 10m limit applies only to rate limiting; let pending reviews complete." >&2
+      echo "    If all available surfaces stay rate-limited beyond 10m, use main-agent" >&2
+      echo "    review and document attempts / resets in a one-line PR comment." >&2
       echo "    Unresolved bot threads still hard-fail (gate 2). Soft-pass ≠ on-demand skip." >&2
       ;;
     hold)
@@ -308,7 +309,7 @@ else
         "  2. If reviews are on-demand: first pass '@coderabbitai full review' (or label coderabbit-review); after fixes '@coderabbitai review'." \
         "  3. Wait for a completed CodeRabbit review on the current HEAD (description like \"Review completed\")." \
         "  4. On-demand / label skips (\"excluded by label configuration\", \"on demand\") hard-fail — request a review; do not merge without one." \
-        "  5. If GitHub is rate-limited after a request: CI soft-passes when reset is >10m or unparsable; HOLD when parsed reset ≤10m. Try local review, but do not wait more than 10m on either surface; if no review completes, use main-agent review and document attempts / resets in a one-line PR comment. Unresolved threads remain a hard fail." \
+        "  5. If GitHub is rate-limited after a request: CI soft-passes when reset is >10m or unparsable; HOLD when parsed reset ≤10m. For ≤10m, wait/retry after the reset; the gate remains HOLD. The 10m limit applies only to rate limiting; let pending reviews complete regardless of elapsed time. If all available surfaces stay rate-limited beyond 10m, use main-agent review and document attempts / resets in a one-line PR comment. Unresolved threads remain a hard fail." \
         "  6. Re-run: ./scripts/check_pr_reviews.sh $PR" \
         "     (or re-run the \"Bot review threads\" GitHub Actions check)"
       ;;

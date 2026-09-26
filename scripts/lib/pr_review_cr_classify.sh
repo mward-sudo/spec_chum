@@ -11,8 +11,9 @@
 #   soft_pass — GitHub rate-limited / quota unavailable *after* a review was requested
 #               (NOT a completed review), when reset is >10 minutes OR the reset is
 #               not reliably parsable from the status description. CI cannot see local
-#               CR; agents should try local review, then use main-agent review if neither
-#               surface can complete within 10 minutes. Soft-passes for success and
+#               CR; agents should try local review, then use main-agent review if all
+#               available surfaces remain rate-limited beyond 10 minutes. Pending reviews
+#               can complete regardless of elapsed time. Soft-passes for success and
 #               failure states — CR may report rate-limit either way.
 #               Soft-pass ≠ on-demand skip.
 #   hold      — pending / missing / error / unexpected / non-completed success /
