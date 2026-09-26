@@ -63,6 +63,10 @@ Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351) —
 
 ## Agent workflow (clippy-first)
 
+### Continue shorthand
+
+When a task is active, `continue` resumes that work with its existing scope; it does not add a request for review or merge unless those were already requested. With no active task, `continue` means pick an appropriate open issue and implement it. The shorthand encodes order: `CRM` means continue implementation, then review, then merge; `RMC` means review and merge the current work, then continue; `RM` means review and merge the current work. Follow the repository's review and merge gates before merging.
+
 **While iterating** — debug-build only crates relevant to the task:
 
 ```bash
@@ -92,7 +96,15 @@ Do not run `cargo check -p living_room` (debug) unless you intentionally need Be
 
 ## graphify knowledge graph
 
-Checked-in outputs live under `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`, AST `cache/`). Cursor agents must query the graph before exploring — see `.cursor/rules/graphify.mdc`. CodeRabbit skips `graphify-out/**` via `.coderabbit.yaml` `path_filters` (review-only; keep the tree committed). Local CLI: rely on that YAML, or scope with `coderabbit review --agent --dir crates` / `--dir apps`.
+Checked-in graph outputs live under `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`, AST `cache/`). CodeRabbit skips `graphify-out/**` via `.coderabbit.yaml` `path_filters` (review-only; keep the tree committed). Local CLI: rely on that YAML, or scope with `coderabbit review --agent --dir crates` / `--dir apps`.
+
+### Instruction precedence
+
+User instructions take precedence, followed by this cross-tool `AGENTS.md`, then tool-specific instructions (such as `.cursor/rules/` or another agent's local rules). Tool-specific rules may add workflow details but must not override user instructions or project-wide constraints here. `CONTRIBUTING.md` and `docs/` provide contributor and topic detail; they do not override these instructions. Keep shared constraints and facts in this file, and tool-only workflow in the relevant tool configuration.
+
+### CLI setup and fallback
+
+Install the current CLI with `uv tool install graphifyy` (or `pipx install graphifyy`), then ensure the tool's bin directory is on `PATH`. Confirm setup with `command -v graphify` and `graphify --version`. If graphify is unavailable, use the checked-in `graphify-out/` artifacts when useful, then continue with normal source exploration; record that the graph query was unavailable. Graph queries remain the preferred architecture entry point when the CLI is available.
 
 | Task | Command |
 | --- | --- |

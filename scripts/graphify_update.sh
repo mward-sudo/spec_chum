@@ -17,7 +17,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if ! command -v graphify >/dev/null 2>&1; then
-  echo "error: graphify not found on PATH (install: pip install graphify or see graphify docs)" >&2
+  echo "error: graphify not found on PATH" >&2
+  echo "install the current CLI with: uv tool install graphifyy" >&2
+  echo "then ensure the uv tool bin directory is on PATH and verify with: command -v graphify && graphify --version" >&2
   exit 1
 fi
 

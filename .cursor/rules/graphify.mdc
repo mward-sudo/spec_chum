@@ -15,7 +15,9 @@ graphify explain "<concept>"
 
 Applies to you **and** every code-exploring subagent (put this in their prompt). Do not skip because files are “already known.”
 
-**Skip graphify only when:** already oriented and editing specific lines, or `graphify-out/graph.json` missing. Rule/doc-only Read/Write is fine after a quick query if helpful.
+**If graphify is unavailable:** consult the checked-in graph artifacts when useful, then continue with normal source exploration and note that the query was unavailable. Do not block code work solely on a missing CLI. Graph queries remain the preferred architecture entry point when available. For installation and PATH checks, see `AGENTS.md` → “graphify knowledge graph”.
+
+**Skip a query when:** already oriented and editing specific lines, or `graphify-out/graph.json` is missing. Rule/doc-only Read/Write is fine after a quick query if helpful.
 
 - Prefer `graphify-out/wiki/index.md` when present
 - `GRAPH_REPORT.md` only for broad architecture when query/path/explain are insufficient
