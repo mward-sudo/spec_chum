@@ -108,14 +108,23 @@ impl AppState {
         let mut session = HostSession::new(model, true);
         // `set_model` only switches the preferred model; `select_model` also
         // searches `SPEC_CHUM_ROOT` / cwd / exe-dir for `roms/spec48.rom` etc.
-        let _ = session.select_model(model);
-        if !session.has_machine() {
-            // Fall back to 48K if preferred model ROM is missing.
-            let _ = session.select_model(ModelId::Spectrum48);
+        let (selected_model, _preferred_error) =
+            select_startup_model(model, |candidate| session.select_model(candidate)).map_err(
+                |error| match error {
+                    StartupModelError::PreferredAndFallback(preferred_error, fallback_error) => {
+                        anyhow::anyhow!(
+                            "could not initialize preferred model {model:?} ({preferred_error}); \
+                     48K fallback also failed ({fallback_error}); run ./scripts/fetch_roms.sh"
+                        )
+                    }
+                    StartupModelError::RequiredModel(error) => anyhow::anyhow!(
+                "could not initialize required 48K model ({error}); run ./scripts/fetch_roms.sh"
+            ),
+                },
+            )?;
+        if selected_model != model {
+            // A missing preferred ROM is an expected fallback case.
             prefs.select_builtin_model(PrefModel::Spectrum48);
-        }
-        if !session.has_machine() {
-            anyhow::bail!("48K ROM not found — run ./scripts/fetch_roms.sh from the repo root");
         }
 
         apply_session_prefs(&mut session, &prefs).context("apply session prefs")?;
@@ -713,6 +722,83 @@ fn apply_session_prefs(session: &mut HostSession, prefs: &UiPreferences) -> Resu
         m.set_ay_stereo_mode(prefs.effective_ay_stereo());
     }
     Ok(())
+}
+
+/// Select the configured startup model, falling back to 48K after a failed
+/// preferred ROM load. The preferred error is retained for diagnostics if the
+/// required fallback fails too.
+#[derive(Debug, PartialEq, Eq)]
+enum StartupModelError<E> {
+    PreferredAndFallback(E, E),
+    RequiredModel(E),
+}
+
+fn select_startup_model<E>(
+    preferred: ModelId,
+    mut select: impl FnMut(ModelId) -> Result<(), E>,
+) -> Result<(ModelId, Option<E>), StartupModelError<E>> {
+    match select(preferred) {
+        Ok(()) => Ok((preferred, None)),
+        Err(error) if preferred == ModelId::Spectrum48 => {
+            Err(StartupModelError::RequiredModel(error))
+        }
+        Err(preferred_error) => match select(ModelId::Spectrum48) {
+            Ok(()) => Ok((ModelId::Spectrum48, Some(preferred_error))),
+            Err(fallback_error) => Err(StartupModelError::PreferredAndFallback(
+                preferred_error,
+                fallback_error,
+            )),
+        },
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[test]
+    fn preferred_failure_uses_successful_48k_fallback() {
+        let result = select_startup_model(ModelId::Spectrum128, |model| {
+            if model == ModelId::Spectrum48 {
+                Ok(())
+            } else {
+                Err("preferred missing")
+            }
+        });
+        assert_eq!(result, Ok((ModelId::Spectrum48, Some("preferred missing"))));
+    }
+
+    #[test]
+    fn preferred_and_fallback_failures_are_both_returned() {
+        let result = select_startup_model(ModelId::Spectrum128, |model| {
+            if model == ModelId::Spectrum48 {
+                Err("fallback missing")
+            } else {
+                Err("preferred missing")
+            }
+        });
+        assert!(matches!(
+            result,
+            Err(StartupModelError::PreferredAndFallback(
+                "preferred missing",
+                "fallback missing"
+            ))
+        ));
+    }
+
+    #[test]
+    fn direct_48k_failure_is_returned_without_retry() {
+        let mut attempts = 0;
+        let result = select_startup_model(ModelId::Spectrum48, |_| {
+            attempts += 1;
+            Err::<(), _>("48K missing")
+        });
+        assert_eq!(attempts, 1);
+        assert!(matches!(
+            result,
+            Err(StartupModelError::RequiredModel("48K missing"))
+        ));
+    }
 }
 
 fn key_down(vk: u16) -> bool {
