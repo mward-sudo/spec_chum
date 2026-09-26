@@ -5399,6 +5399,42 @@
         }
       }
     },
+    "/v1/events": {
+      "get": {
+        "operationId": "watchV1Events",
+        "summary": "GET /v1/events (WebSocket upgrade)",
+        "description": "Upgrades to a WebSocket and streams version 1 PC breakpoint.hit messages. In tokenless insecure mode, browser Origin must match Host. See the BreakpointEvent schema and API guide for lifecycle semantics.",
+        "tags": [
+          "debug"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-event-schema": {
+          "$ref": "#/components/schemas/BreakpointEvent"
+        },
+        "responses": {
+          "101": {
+            "description": "WebSocket connection established"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cross-origin WebSocket request in tokenless insecure mode"
+          }
+        }
+      }
+    },
     "/openapi.json": {
       "get": {
         "operationId": "getOpenapiJson",
@@ -6578,6 +6614,60 @@
         },
         "additionalProperties": false,
         "x-rust-type": "TraceQuery"
+      },
+      "BreakpointEvent": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic event sequence; reconnect snapshots reuse the event sequence."
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "breakpoint.hit"
+            ]
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "live",
+              "snapshot"
+            ]
+          },
+          "pc": {
+            "type": "integer",
+            "format": "uint16"
+          },
+          "reason": {
+            "type": "string",
+            "example": "pc:8000"
+          },
+          "paused": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "version",
+          "sequence",
+          "event",
+          "delivery",
+          "pc",
+          "reason",
+          "paused"
+        ],
+        "additionalProperties": false,
+        "x-rust-type": "BreakpointEvent"
       }
     }
   }

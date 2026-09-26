@@ -153,6 +153,14 @@ impl RegsPatch {
     }
 }
 
+/// Bounded PC-breakpoint history and the currently paused stop.
+#[derive(Clone, Debug)]
+pub struct PcBreakpointObservation {
+    pub recent: Vec<machine::PcBreakpointHit>,
+    pub active: Option<machine::PcBreakpointHit>,
+    pub latest_id: u64,
+}
+
 /// Host-owned emulator session: machine + RGBA framebuffer + status.
 ///
 /// Fields are private; in-process hosts (egui / `living_room`) use accessors
@@ -1345,6 +1353,22 @@ impl HostSession {
             return Err(HostError::NoMachine);
         };
         Ok(m.debugger().last_hit)
+    }
+
+    /// Recent PC stops and the current paused stop, read from one machine state.
+    pub fn pc_breakpoint_observation(
+        &self,
+        since: u64,
+    ) -> Result<PcBreakpointObservation, HostError> {
+        let Some(m) = self.machine.as_ref() else {
+            return Err(HostError::NoMachine);
+        };
+        let debugger = m.debugger();
+        Ok(PcBreakpointObservation {
+            recent: debugger.pc_hits_since(since),
+            active: debugger.current_pc_hit(),
+            latest_id: debugger.latest_pc_hit_id(),
+        })
     }
 
     /// Run one video frame into the RGBA framebuffer when `running`.

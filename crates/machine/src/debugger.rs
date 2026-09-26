@@ -1,6 +1,20 @@
 //! Instruction-level debugger: pause, PC breakpoints, mem/port watches.
 
 use std::cell::Cell;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Breakpoint identities stay unique when a host replaces its machine.
+static NEXT_PC_HIT_ID: AtomicU64 = AtomicU64::new(0);
+const PC_HIT_HISTORY: usize = 128;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PcBreakpointHit {
+    /// Process-wide monotonic stop identity.
+    pub id: u64,
+    /// Program counter where the breakpoint stopped execution.
+    pub pc: u16,
+}
 
 /// Access watch on a memory address or I/O port.
 ///
@@ -68,6 +82,7 @@ pub struct Debugger {
     pub last_hit: BreakReason,
     /// Skip one PC-break at this address after Continue/Step from that break.
     skip_pc_once: Option<u16>,
+    pc_hits: VecDeque<PcBreakpointHit>,
 }
 
 impl Default for Debugger {
@@ -79,6 +94,7 @@ impl Default for Debugger {
             port_watches: Vec::new(),
             last_hit: BreakReason::None,
             skip_pc_once: None,
+            pc_hits: VecDeque::new(),
         }
     }
 }
@@ -131,6 +147,42 @@ impl Debugger {
         self.last_hit = BreakReason::None;
     }
 
+    /// Recent PC stops, including stops that occurred between observer polls.
+    #[must_use]
+    /// Return retained PC stops newer than `id`, oldest first.
+    pub fn pc_hits_since(&self, id: u64) -> Vec<PcBreakpointHit> {
+        self.pc_hits
+            .iter()
+            .copied()
+            .filter(|hit| hit.id > id)
+            .collect()
+    }
+
+    #[must_use]
+    /// Return the newest recorded PC stop identity, or zero when there are none.
+    pub fn latest_pc_hit_id(&self) -> u64 {
+        self.pc_hits.back().map_or(0, |hit| hit.id)
+    }
+
+    #[must_use]
+    /// Return the active PC stop when execution is currently paused at one.
+    pub fn current_pc_hit(&self) -> Option<PcBreakpointHit> {
+        let BreakReason::Pc(pc) = self.last_hit else {
+            return None;
+        };
+        if !self.paused {
+            return None;
+        }
+        self.pc_hits.back().copied().filter(|hit| hit.pc == pc)
+    }
+
+    /// A machine reset preserves armed breakpoints but ends the previous stop.
+    pub fn reset_stop_state(&mut self) {
+        self.paused = false;
+        self.last_hit = BreakReason::None;
+        self.skip_pc_once = None;
+    }
+
     /// Continue from a PC breakpoint without immediately re-hitting it.
     pub fn continue_from_pc(&mut self, pc: u16) {
         self.paused = false;
@@ -147,6 +199,16 @@ impl Debugger {
         if self.pc_breaks.contains(&pc) {
             self.paused = true;
             self.last_hit = BreakReason::Pc(pc);
+            let id = NEXT_PC_HIT_ID
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
+                    old.checked_add(1)
+                })
+                .expect("PC breakpoint identity space is not exhausted")
+                + 1;
+            if self.pc_hits.len() == PC_HIT_HISTORY {
+                self.pc_hits.pop_front();
+            }
+            self.pc_hits.push_back(PcBreakpointHit { id, pc });
             return true;
         }
         false
@@ -209,6 +271,32 @@ impl WatchHook<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pc_hit_ids_advance_across_repeat_stops_and_new_debuggers() {
+        let mut debugger = Debugger::new();
+        debugger.add_pc_break(0x1234);
+        assert!(debugger.check_pc(0x1234));
+        let first = debugger.current_pc_hit().expect("first hit");
+        debugger.continue_from_pc(0x1234);
+        assert!(!debugger.check_pc(0x1234));
+        assert!(debugger.check_pc(0x1234));
+        let second = debugger.current_pc_hit().expect("repeat hit");
+        assert!(second.id > first.id);
+        assert_eq!(debugger.pc_hits_since(0), vec![first, second]);
+
+        debugger.reset_stop_state();
+        assert!(debugger.current_pc_hit().is_none());
+        assert_eq!(debugger.pc_hits_since(0), vec![first, second]);
+        assert!(debugger.check_pc(0x1234));
+        let after_reset = debugger.current_pc_hit().expect("post-reset hit");
+        assert!(after_reset.id > second.id);
+
+        let mut replacement = Debugger::new();
+        replacement.add_pc_break(0x1234);
+        assert!(replacement.check_pc(0x1234));
+        assert!(replacement.current_pc_hit().expect("new machine hit").id > after_reset.id);
+    }
 
     #[test]
     fn exact_mask_requires_full_port_match() {
