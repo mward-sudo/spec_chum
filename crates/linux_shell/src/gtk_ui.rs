@@ -77,13 +77,10 @@ impl AppState {
         let mut session = HostSession::new(model, true);
         // `set_model` only switches the preferred model; `select_model` also
         // searches `SPEC_CHUM_ROOT` / cwd / exe-dir for `roms/spec48.rom` etc.
-        let _ = session.select_model(model);
-        if !session.has_machine() {
-            let _ = session.select_model(ModelId::Spectrum48);
+        let selected = select_startup_model(model, |candidate| session.select_model(candidate))
+            .context("select startup model")?;
+        if selected != model {
             prefs.select_builtin_model(PrefModel::Spectrum48);
-        }
-        if !session.has_machine() {
-            anyhow::bail!("48K ROM not found — run ./scripts/fetch_roms.sh from the repo root");
         }
 
         apply_session_prefs(&mut session, &prefs).context("apply session prefs")?;
@@ -283,11 +280,17 @@ impl AppState {
                 // `select_model` may leave the host with no machine; restore prior.
                 sync_model_rom_paths(previous.model_rom_paths.clone());
                 let restore = previous.model.to_model_id();
-                let _ = self.host.with_mut(|s| {
+                if let Err(restore_error) = self.host.with_mut(|s| {
                     s.select_model(restore)?;
                     apply_session_prefs(s, &previous)
-                });
-                self.report_err("Select model", &e);
+                }) {
+                    let combined = HostError::Message(format!(
+                        "selecting {model:?} failed ({e}); restoring {restore:?} also failed ({restore_error})"
+                    ));
+                    self.report_err("Select model", &combined);
+                } else {
+                    self.report_err("Select model", &e);
+                }
             }
         }
     }
@@ -544,6 +547,25 @@ fn apply_session_prefs(session: &mut HostSession, prefs: &UiPreferences) -> Resu
         m.set_ay_stereo_mode(prefs.effective_ay_stereo());
     }
     Ok(())
+}
+
+/// Load the requested startup model, falling back to 48K only when another
+/// model's ROM is unavailable. Failure of the fallback retains both causes.
+fn select_startup_model(
+    preferred: ModelId,
+    mut select: impl FnMut(ModelId) -> Result<(), HostError>,
+) -> Result<ModelId, HostError> {
+    match select(preferred) {
+        Ok(()) => Ok(preferred),
+        Err(preferred_error) if preferred == ModelId::Spectrum48 => Err(preferred_error),
+        Err(preferred_error) => select(ModelId::Spectrum48)
+            .map(|()| ModelId::Spectrum48)
+            .map_err(|fallback_error| {
+                HostError::Message(format!(
+                    "could not load preferred model {preferred:?} ({preferred_error}); 48K fallback also failed ({fallback_error})"
+                ))
+            }),
+    }
 }
 
 /// Run the native GTK4 shell until the window closes.
@@ -1016,4 +1038,50 @@ fn install_keys(window: &ApplicationWindow, picture: &Picture, state: Rc<RefCell
         }
     ));
     picture.add_controller(pic_controller);
+}
+
+#[cfg(test)]
+mod startup_model_tests {
+    use super::*;
+
+    #[test]
+    fn falls_back_to_48k_when_preferred_model_fails() {
+        let mut attempted = Vec::new();
+        let selected = select_startup_model(ModelId::Spectrum128, |model| {
+            attempted.push(model);
+            if model == ModelId::Spectrum128 {
+                Err(HostError::Message("128K ROM missing".into()))
+            } else {
+                Ok(())
+            }
+        });
+
+        assert!(matches!(selected, Ok(ModelId::Spectrum48)));
+        assert_eq!(attempted, [ModelId::Spectrum128, ModelId::Spectrum48]);
+    }
+
+    #[test]
+    fn reports_both_preferred_and_fallback_failures() {
+        let selected = select_startup_model(ModelId::Spectrum128, |model| {
+            Err(HostError::Message(format!("{model:?} ROM missing")))
+        });
+
+        let Err(HostError::Message(message)) = selected else {
+            panic!("expected a combined startup model error");
+        };
+        assert!(message.contains("Spectrum128 ROM missing"));
+        assert!(message.contains("Spectrum48 ROM missing"));
+    }
+
+    #[test]
+    fn does_not_retry_48k_selection_after_failure() {
+        let mut attempts = 0;
+        let selected = select_startup_model(ModelId::Spectrum48, |_| {
+            attempts += 1;
+            Err(HostError::Message("48K ROM missing".into()))
+        });
+
+        assert!(selected.is_err());
+        assert_eq!(attempts, 1);
+    }
 }
