@@ -241,7 +241,7 @@ jobs:
             -f status=completed \
             -f conclusion="$conclusion" \
             -f 'output[title]='"$title" \
-            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip, rate-limit with parsed reset ≤10m, or unresolved bot threads. GitHub rate-limited soft-passes CI when reset >10m or unparsable (not Review completed); agents must confirm GitHub Review completed on HEAD OR dual rate-limit with both sides >10m. Soft-pass ≠ on-demand skip. Drafts skip CR completeness. Job name is bot-review-gate (not required); ruleset context is the published commit status (check-run is supplemental). See workflow run.'
+            -f 'output[summary]=Ready PRs: hard-fails pending/missing/error/on-demand-skip, rate-limit with parsed reset ≤10m, or unresolved bot threads. GitHub rate-limited soft-passes CI when reset >10m or unparsable (not Review completed); agents must confirm GitHub Review completed on HEAD OR dual rate-limit with both sides >10m (or long/unknown on both), documented in a one-line PR comment. Soft-pass ≠ on-demand skip. Drafts skip CR completeness. Job name is bot-review-gate (not required); ruleset context is the published commit status (check-run is supplemental). See workflow run.'
 
       # Job name is bot-review-gate (not ruleset-required). Still fail the job
       # for Actions UI after the required status has been published/updated.
