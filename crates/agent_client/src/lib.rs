@@ -8,7 +8,73 @@
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
+use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::net::TcpStream;
+use tokio_tungstenite::{
+    tungstenite::{client::IntoClientRequest, http::header::AUTHORIZATION, Message},
+    MaybeTlsStream, WebSocketStream,
+};
+
+/// Versioned PC breakpoint event received from `/v1/events`.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct BreakpointEvent {
+    pub version: u16,
+    /// Monotonic within one server process; reconnect snapshots reuse the hit's sequence.
+    pub sequence: u64,
+    pub event: String,
+    /// Either `live` or `snapshot`.
+    pub delivery: String,
+    pub pc: u16,
+    pub reason: String,
+    pub paused: bool,
+}
+
+/// Connected event stream. REST remains available through [`AgentClient`].
+#[derive(Debug)]
+pub struct BreakpointEvents {
+    socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
+}
+
+impl BreakpointEvents {
+    /// Receive the next breakpoint hit, or `None` after the server closes the socket.
+    pub async fn recv(&mut self) -> Result<Option<BreakpointEvent>> {
+        loop {
+            match self.socket.next().await {
+                Some(Ok(Message::Text(text))) => {
+                    let event: BreakpointEvent =
+                        serde_json::from_str(&text).context("decode breakpoint WebSocket event")?;
+                    if event.version != 1 || event.event != "breakpoint.hit" {
+                        bail!(
+                            "unsupported breakpoint event: v{} {}",
+                            event.version,
+                            event.event
+                        );
+                    }
+                    return Ok(Some(event));
+                }
+                Some(Ok(Message::Ping(payload))) => {
+                    self.socket
+                        .send(Message::Pong(payload))
+                        .await
+                        .context("respond to breakpoint event ping")?;
+                }
+                Some(Ok(Message::Close(_))) | None => return Ok(None),
+                Some(Ok(_)) => {}
+                Some(Err(error)) => return Err(error).context("read breakpoint WebSocket event"),
+            }
+        }
+    }
+
+    /// Close the event connection cleanly.
+    pub async fn close(&mut self) -> Result<()> {
+        self.socket
+            .send(Message::Close(None))
+            .await
+            .context("close breakpoint WebSocket")
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct AgentClient {
@@ -27,6 +93,30 @@ impl AgentClient {
 
     pub fn new(base: &str, token: Option<String>) -> Self {
         Self::with_timeout(base, token, Duration::from_secs(30))
+    }
+
+    /// Connect to the versioned PC breakpoint event stream.
+    pub async fn connect_breakpoint_events(&self) -> Result<BreakpointEvents> {
+        let websocket_base = if let Some(rest) = self.base.strip_prefix("http://") {
+            format!("ws://{rest}")
+        } else if let Some(rest) = self.base.strip_prefix("https://") {
+            format!("wss://{rest}")
+        } else {
+            self.base.clone()
+        };
+        let mut request = format!("{}/v1/events", websocket_base.trim_end_matches('/'))
+            .into_client_request()
+            .context("build breakpoint WebSocket request")?;
+        if let Some(token) = &self.token {
+            let value = format!("Bearer {token}")
+                .parse()
+                .context("invalid bearer token for WebSocket")?;
+            request.headers_mut().insert(AUTHORIZATION, value);
+        }
+        let (socket, _) = tokio_tungstenite::connect_async(request)
+            .await
+            .context("connect to /v1/events")?;
+        Ok(BreakpointEvents { socket })
     }
 
     /// Construct a client with a request timeout, for bounded polling callers.

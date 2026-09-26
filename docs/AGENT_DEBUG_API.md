@@ -6,8 +6,8 @@
 > **Status:** **Implemented** on `main` — loopback HTTP on `127.0.0.1:17384` (default),
 > SpecChumMac/egui live embed, port watches, prefs/hardware routes, and
 > `GET /v1/memory/regions`. The REST surface publishes an OpenAPI 3.0 schema at
-> `GET /openapi.json`; WebSocket push remains optional follow-up work
-> ([#236](https://github.com/mward-sudo/spec_chum/issues/236)).
+> `GET /openapi.json`; versioned PC-breakpoint WebSocket events are available at
+> `/v1/events` ([#451](https://github.com/mward-sudo/spec_chum/issues/451)).
 
 ## OpenAPI schema
 
@@ -122,7 +122,7 @@ wrappers** over `HostSession` + the global `trace` ring for **non-Rust shells**
 | **HTTP REST on `127.0.0.1`** | **Chosen.** PNG bodies and JSON inspect fit naturally; easy `curl` / scripts; optional OpenAPI; debuggable in a browser tab. |
 | Unix domain socket + JSON-RPC | Lower overhead, but weaker tooling ergonomics and no standard file-download story for framebuffers. |
 | gRPC + protobuf | Heavy codegen/deps for a localhost-only tool; poor fit for “save this PNG”. |
-| **WebSocket (optional)** | **Later** — push trace events, breakpoint notifications, tape progress ([#236](https://github.com/mward-sudo/spec_chum/issues/236)). |
+| **WebSocket** | Additive `/v1/events` transport; the first event family is PC breakpoint hits. Trace and tape events remain separate follow-ups ([#451](https://github.com/mward-sudo/spec_chum/issues/451), [#236](https://github.com/mward-sudo/spec_chum/issues/236)). |
 
 ### Security
 
@@ -246,6 +246,59 @@ Routes available on the loopback server today (plus notes where behaviour is def
 | Trace | `GET /v1/trace/categories` — list enabled categories; `PUT /v1/trace/categories` — enable/disable; `POST /v1/trace/clear`; `GET /v1/trace` — ring text/JSON/ndjson |
 | Run control | `POST /v1/run-until` — PC, mem write, port, halt, insn budget |
 | Step semantics | `step` = one instruction; `step-over` deferred until call-stack support exists — document as optional |
+
+### Breakpoint WebSocket events (#451)
+
+Connect to `ws://127.0.0.1:17384/v1/events` (or the configured loopback host and
+port). When a bearer token is configured, include
+`Authorization: Bearer <token>` in the WebSocket upgrade request. The endpoint
+publishes PC breakpoint hits from the shared live session, including hits during
+the host's normal frame loop. Existing REST endpoints, including
+`GET /v1/debug/last-break`, remain available.
+
+Each text message is JSON with this versioned shape:
+
+```json
+{
+  "version": 1,
+  "sequence": 1,
+  "event": "breakpoint.hit",
+  "delivery": "live",
+  "pc": 32768,
+  "reason": "pc:8000",
+  "paused": true
+}
+```
+
+`sequence` increases within the server process; a reconnect snapshot reuses the
+sequence of the hit it describes. `delivery` is `live` for a newly
+observed stop and `snapshot` when a connection opens while the machine is still
+paused at a PC breakpoint. A reconnect receives the current paused breakpoint
+once; it does not replay events from the disconnected interval. Clients should
+keep the socket open for live delivery and may use REST to query or control the
+debugger. Memory/port watch stops, trace records, and tape progress are not sent
+on this first event path. The server uses one shared 100 ms state watcher per
+router, so event detection can lag a stop by up to roughly one polling interval;
+connected clients receive broadcasts and do not poll the session themselves.
+
+Rust clients can consume the stream through `agent_client`:
+
+```rust,no_run
+let client = agent_client::AgentClient::new(
+    "http://127.0.0.1:17384",
+    std::env::var("SPEC_CHUM_AGENT_TOKEN").ok(),
+);
+let mut events = client.connect_breakpoint_events().await?;
+while let Some(event) = events.recv().await? {
+    println!("PC breakpoint at {:04X} ({})", event.pc, event.delivery);
+}
+```
+
+Missing or invalid bearer credentials are rejected with HTTP 401 before upgrade.
+If the shared debugger state becomes unavailable after upgrade, the server
+closes the WebSocket with code 1011. Closing the client socket ends that
+connection; reconnecting receives a current-state snapshot when a PC breakpoint
+is still active.
 
 ### Core routes (minimum useful surface)
 
@@ -427,5 +480,5 @@ Prefer this over unconstrained OS screenshots or GUI automation.
 - **REST facade over `control_plane`** remains the architecture — HTTP is transport only.
 - **ZRCP or DZRP adapter** on the same backend could help DeZog users, but doubles protocol maintenance; defer unless a concrete consumer appears.
 - **Fuse-compatible subset** — no published Fuse remote API to emulate; not worth inventing a faux-Fuse dialect.
-- **WebSocket push** (trace, breakpoints, tape progress) — complementary to REST; tracked in [#236](https://github.com/mward-sudo/spec_chum/issues/236) (optional).
+- **WebSocket push** — PC breakpoint events are implemented as the first slice ([#451](https://github.com/mward-sudo/spec_chum/issues/451)); trace and tape progress remain later event families under [#236](https://github.com/mward-sudo/spec_chum/issues/236).
 - **OpenAPI schema** — machine-readable route catalog; same [#236](https://github.com/mward-sudo/spec_chum/issues/236).

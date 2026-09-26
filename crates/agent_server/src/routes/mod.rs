@@ -1,6 +1,7 @@
 //! Loopback HTTP routes for the Spec Chum agent debug API.
 
 mod debug;
+mod events;
 mod hardware;
 mod health;
 mod input;
@@ -15,7 +16,7 @@ use axum::{
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
-    Json, Router,
+    Extension, Json, Router,
 };
 use control_plane::{ApiError, ErrorBody, ServerConfig};
 use serde::{Deserialize, Serialize};
@@ -49,6 +50,7 @@ pub(crate) fn default_one() -> u32 {
 }
 
 pub fn router(state: AppState) -> Router {
+    let events = events::BreakpointEventHub::new(state.plane.clone());
     Router::new()
         .route("/v1/health", get(health::health))
         .route("/v1/status", get(health::status))
@@ -93,6 +95,7 @@ pub fn router(state: AppState) -> Router {
             get(debug::list_breakpoints).post(debug::add_breakpoint),
         )
         .route("/v1/debug/last-break", get(debug::last_break))
+        .route("/v1/events", get(events::websocket))
         .route(
             "/v1/debug/breakpoints/{pc}",
             delete(debug::remove_breakpoint),
@@ -140,6 +143,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/hardware/trdos/rom", post(hardware::load_trdos_rom))
         .route("/openapi.json", get(openapi))
         .layer(TraceLayer::new_for_http())
+        .layer(Extension(events))
         .with_state(state)
 }
 
