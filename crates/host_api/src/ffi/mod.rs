@@ -23,6 +23,7 @@ mod debug;
 mod hardware;
 mod input;
 mod media;
+mod model_catalog;
 mod rom;
 mod session;
 mod status;
@@ -81,6 +82,7 @@ pub use debug::*;
 pub use hardware::*;
 pub use input::*;
 pub use media::*;
+pub use model_catalog::*;
 pub use rom::*;
 pub use session::*;
 pub use status::*;
@@ -95,6 +97,25 @@ mod tests {
 
     fn workspace_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+    }
+
+    #[test]
+    fn model_catalog_ffi_json_preserves_order_and_stable_identifiers() {
+        let raw = sc_model_catalog_json();
+        assert!(!raw.is_null());
+        // SAFETY: the FFI returns a NUL-terminated allocation owned by this test.
+        let json = unsafe { CString::from_raw(raw) };
+        let catalog: serde_json::Value =
+            serde_json::from_str(json.to_str().expect("catalog JSON is UTF-8"))
+                .expect("catalog JSON is valid");
+        assert_eq!(
+            catalog.as_array().map(Vec::len),
+            Some(machine::ALL_MODELS.len())
+        );
+        assert_eq!(catalog[0]["preference_slug"], "spectrum16_k");
+        assert_eq!(catalog[1]["id"], 0);
+        assert_eq!(catalog[0]["id"], 5);
+        assert_eq!(catalog[3]["title"], "Spectrum +2 (grey)");
     }
 
     #[test]

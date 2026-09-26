@@ -8,6 +8,7 @@ pub mod handle;
 pub mod keymap;
 pub mod machine_config;
 pub mod media_title_lookup;
+pub mod model_catalog;
 pub mod prefs;
 pub mod rom_setup;
 pub mod session;
@@ -19,6 +20,7 @@ pub use machine_config::{
 pub use media_title_lookup::{
     default_cache_path as default_zxinfo_cache_path, user_agent as zxinfo_user_agent,
 };
+pub use model_catalog::{host_model_catalog, HostModelDescriptor, HostRomSlotDescriptor};
 pub use prefs::{
     default_prefs_path, load_prefs, model_rom_path_key, pref_model_slug, save_prefs, update_prefs,
     PrefAyStereo, PrefJoystick, PrefModel, UiPreferences, MAX_RECENT_FILES, MIN_WINDOW_HEIGHT,

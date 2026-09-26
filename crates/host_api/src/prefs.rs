@@ -384,6 +384,12 @@ impl PrefModel {
         Self::TimexTS2068,
     ];
 
+    /// Stable persisted preference slug used by host configuration adapters.
+    #[must_use]
+    pub fn slug(self) -> &'static str {
+        pref_model_slug(self)
+    }
+
     #[must_use]
     pub fn from_model(m: Model) -> Self {
         match m {

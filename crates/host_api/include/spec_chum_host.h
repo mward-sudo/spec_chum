@@ -35,6 +35,8 @@ int sc_model_requires_user_rom(unsigned int model);
 int sc_model_rom_available(unsigned int model);
 /* Heap JSON — required ROM slots + status; free with sc_string_free. */
 char *sc_model_rom_setup_json(unsigned int model);
+/* Heap JSON array of models, IDs, labels, preference slugs, and ROM facts; free with sc_string_free. */
+char *sc_model_catalog_json(void);
 /* JSON object map `{model_slot: path}` — free with sc_string_free. */
 char *sc_model_rom_paths_json(void);
 /* Replace process-global ROM path map from JSON object; returns 0 ok, -1 error. */

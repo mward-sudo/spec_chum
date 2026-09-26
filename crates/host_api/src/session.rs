@@ -102,6 +102,12 @@ impl ModelId {
         Self::TimexTS2068,
     ];
 
+    /// Stable numeric ABI id. Do not derive this from [`Self::ALL`] order.
+    #[must_use]
+    pub const fn numeric_id(self) -> u32 {
+        self as u32
+    }
+
     #[must_use]
     pub fn rom_available(self) -> bool {
         crate::rom_setup::model_rom_available(self, &crate::rom_setup::model_rom_paths_snapshot())
