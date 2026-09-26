@@ -568,52 +568,6 @@ fn select_startup_model(
     }
 }
 
-#[cfg(test)]
-mod startup_model_tests {
-    use super::*;
-
-    #[test]
-    fn falls_back_to_48k_when_preferred_model_fails() {
-        let mut attempted = Vec::new();
-        let selected = select_startup_model(ModelId::Spectrum128, |model| {
-            attempted.push(model);
-            if model == ModelId::Spectrum128 {
-                Err(HostError::Message("128K ROM missing".into()))
-            } else {
-                Ok(())
-            }
-        });
-
-        assert!(matches!(selected, Ok(ModelId::Spectrum48)));
-        assert_eq!(attempted, [ModelId::Spectrum128, ModelId::Spectrum48]);
-    }
-
-    #[test]
-    fn reports_both_preferred_and_fallback_failures() {
-        let selected = select_startup_model(ModelId::Spectrum128, |model| {
-            Err(HostError::Message(format!("{model:?} ROM missing")))
-        });
-
-        let Err(HostError::Message(message)) = selected else {
-            panic!("expected a combined startup model error");
-        };
-        assert!(message.contains("Spectrum128 ROM missing"));
-        assert!(message.contains("Spectrum48 ROM missing"));
-    }
-
-    #[test]
-    fn does_not_retry_48k_selection_after_failure() {
-        let mut attempts = 0;
-        let selected = select_startup_model(ModelId::Spectrum48, |_| {
-            attempts += 1;
-            Err(HostError::Message("48K ROM missing".into()))
-        });
-
-        assert!(selected.is_err());
-        assert_eq!(attempts, 1);
-    }
-}
-
 /// Run the native GTK4 shell until the window closes.
 pub fn run() -> Result<()> {
     let state = Rc::new(RefCell::new(AppState::new().context("init host session")?));
@@ -1084,4 +1038,50 @@ fn install_keys(window: &ApplicationWindow, picture: &Picture, state: Rc<RefCell
         }
     ));
     picture.add_controller(pic_controller);
+}
+
+#[cfg(test)]
+mod startup_model_tests {
+    use super::*;
+
+    #[test]
+    fn falls_back_to_48k_when_preferred_model_fails() {
+        let mut attempted = Vec::new();
+        let selected = select_startup_model(ModelId::Spectrum128, |model| {
+            attempted.push(model);
+            if model == ModelId::Spectrum128 {
+                Err(HostError::Message("128K ROM missing".into()))
+            } else {
+                Ok(())
+            }
+        });
+
+        assert!(matches!(selected, Ok(ModelId::Spectrum48)));
+        assert_eq!(attempted, [ModelId::Spectrum128, ModelId::Spectrum48]);
+    }
+
+    #[test]
+    fn reports_both_preferred_and_fallback_failures() {
+        let selected = select_startup_model(ModelId::Spectrum128, |model| {
+            Err(HostError::Message(format!("{model:?} ROM missing")))
+        });
+
+        let Err(HostError::Message(message)) = selected else {
+            panic!("expected a combined startup model error");
+        };
+        assert!(message.contains("Spectrum128 ROM missing"));
+        assert!(message.contains("Spectrum48 ROM missing"));
+    }
+
+    #[test]
+    fn does_not_retry_48k_selection_after_failure() {
+        let mut attempts = 0;
+        let selected = select_startup_model(ModelId::Spectrum48, |_| {
+            attempts += 1;
+            Err(HostError::Message("48K ROM missing".into()))
+        });
+
+        assert!(selected.is_err());
+        assert_eq!(attempts, 1);
+    }
 }
