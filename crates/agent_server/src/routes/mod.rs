@@ -138,8 +138,17 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/hardware/beta", post(hardware::attach_beta))
         .route("/v1/hardware/trdos/rom", post(hardware::load_trdos_rom))
+        .route("/openapi.json", get(openapi))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+async fn openapi() -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/json")],
+        include_str!("../../openapi.json"),
+    )
+        .into_response()
 }
 
 /// Failures signaled on the embedded-server ready channel before listen succeeds.
