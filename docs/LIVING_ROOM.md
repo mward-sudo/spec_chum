@@ -219,6 +219,29 @@ Bevy’s supported embed pattern is **headless `SubApps`**: disable `WinitPlugin
 
 Poly Haven CC0 meshes/textures under `polyhaven/` are **gitignored**. Fresh clones / worktrees must run `./scripts/fetch_living_room_assets.sh` (or let `build_macos_app.sh` / `run_macos_app.sh` auto-fetch). Staging validates `polyhaven.manifest` and hard-fails on incomplete trees unless `SPEC_CHUM_ALLOW_EMPTY_LIVING_ROOM_ASSETS=1`. Enabling living-room mode with a missing tree surfaces an actionable status error instead of a black void (#368).
 
+### Blender-baked static lighting (#149)
+
+The `New` scene comparison uses a checked-in Blender lightmap package for static
+room geometry. The TV, cabinet, phosphor and framebuffer-driven CRT spill remain
+live. The package is generated from the room layout and fetched Poly Haven
+assets; after changing either, rebake before building the Mac app:
+
+```bash
+SPEC_CHUM_LIGHTMAP_THREADS=2 ./scripts/bake_living_room_lightmaps.sh
+```
+
+Blender 4.2 or newer is required. The script writes
+`crates/living_room/assets/lightmaps/room_static.gltf`, the UV1 lightmap atlas,
+referenced textures, and `room_static_bake.blend`. Keep the glTF, atlas, and
+textures together in version control; the `.blend` is the editable bake source.
+The app loads the baked room only for the `New` variant when both glTF and atlas
+are present. `Current` continues to use the procedural baseline, and a missing
+bake leaves `New` on its comparison fallback. Opening light levels animate the
+baked exposure and live lights together.
+
+Run `./scripts/check_living_room.sh` after rebaking or changing the Bevy binding.
+For visual review in SpecChumMac, enable Living Room and select **Scene: New**.
+
 ## Dual-clock embed plan
 
 **Status:** **implemented** for SpecChumMac (Phases 0–3). Not research-only.
@@ -502,7 +525,7 @@ Runtime A/B via `SPEC_CHUM_ROOM_*` (implemented in `crates/living_room/src/quali
 | `SPEC_CHUM_ROOM_FXAA` | on | Post FXAA on bezel edges. `=0` disables. |
 | `SPEC_CHUM_ROOM_LIGHTS` | `full` | `full` or `min` (fewer sconces). |
 | `SPEC_CHUM_ROOM_HYBRID` | **off** | Camera-space bake plates + live TV (experimental). |
-| `SPEC_CHUM_ROOM_SCENE` | `current` | Temporary #149 A/B: `current` (baseline) or `new` (lightmap WIP). Prefer SpecChumMac toolbar toggle. **Remove when #149 done.** |
+| `SPEC_CHUM_ROOM_SCENE` | `current` | Temporary #149 A/B: `current` (procedural baseline) or `new` (baked static room when the package is present). Prefer SpecChumMac toolbar toggle. **Remove when #149 is complete.** |
 | `SPEC_CHUM_ROOM_SKEIN_SCENE` | auto | Standalone `--features skein` only: Bevy asset path for the **room** glTF (default `skein/living_room_edit.gltf#Scene0` if file exists → replaces procedural `room.rs`). `off` forces procedural. |
 | `SPEC_CHUM_ROOM_PERF` | off | Rolling tick µs to stderr + Swift HUD fields. |
 | `SPEC_CHUM_ROOM_PERF_SOFT` | off | `room_perf`: warn instead of fail on budget exceed. |
@@ -537,20 +560,21 @@ updates every frame. Goal was ~60 Hz when full-room PBR looked costly on the
 
 Prefer **Blender lightmaps + `EnvironmentMapLight`** (tier 2) over extending hybrid plates.
 
-## Temporary #149 scene A/B (SpecChumMac only)
+## Temporary #149 scene comparison (SpecChumMac only)
 
-While Blender lightmaps land, SpecChumMac living-room mode shows a **Scene: Current / Scene: New**
-toolbar toggle (next to Living Room). This is a **Mac-only verification harness** — not on egui,
-Windows, or Linux shells.
+SpecChumMac living-room mode shows a **Scene: Current / Scene: New** toolbar
+toggle (next to Living Room). This is a **Mac-only verification harness** — not
+on egui, Windows, or Linux shells.
 
 | Variant | Look |
 | --- | --- |
 | **Current** | Pre-#149 baseline (warm ambient + dynamic sconces / wall bounce). No `EnvironmentMapLight`. |
-| **New** | Lightmap WIP: moodier cream-warm ambient (near Current brightness), lit sconces, **stub `EnvironmentMapLight`** (muted warm cubemap), CRT wall-bounce off, dim cyan strip cue. No chrome probe orb. CRT fill + centre TV sconce stay slightly off-axis for a soft glass sheen without a centre hotspot (#149). |
+| **New** | Blender-baked static room with UV1 lightmap, moodier cream-warm ambient, lit sconces, and a procedural hemispherical `EnvironmentMapLight`. Live TV and CRT spill remain dynamic; a dim cyan strip remains as a temporary comparison cue. |
 
-Toggle switches the live Bevy scene (not a label-only flag). Env alternate:
-`SPEC_CHUM_ROOM_SCENE=new`. **Remove** the toolbar control, `sc_room_set_scene_variant` /
-`sc_room_scene_variant`, and `scene_variant.rs` once #149 acceptance criteria are met.
+Toggle switches the live Bevy scene (not a label-only flag). Select the `New`
+variant with `SPEC_CHUM_ROOM_SCENE=new`. The toolbar control, scene-variant
+FFI, fallback lighting and cyan cue are temporary and should be removed when
+#149's remaining visual and workflow acceptance criteria are complete.
 
 ## Framework choice
 

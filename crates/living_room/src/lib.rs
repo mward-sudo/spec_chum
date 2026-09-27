@@ -6,6 +6,7 @@
 pub mod agent_embed;
 #[cfg(feature = "standalone")]
 pub mod audio;
+pub mod baked_room;
 pub mod camera;
 pub mod crt;
 pub mod external_fb;
@@ -73,6 +74,7 @@ mod standalone_app {
 
     use crate::asset_plugin;
     use crate::audio::AudioPlugin;
+    use crate::baked_room::BakedRoomPlugin;
     use crate::camera::CameraPlugin;
     use crate::crt::CrtPlugin;
     use crate::file_dialog::FileDialogPlugin;
@@ -109,6 +111,7 @@ mod standalone_app {
             AudioPlugin,
             CrtPlugin,
             RoomPlugin,
+            BakedRoomPlugin,
             CameraPlugin,
             GlowPlugin,
             HybridPlugin,

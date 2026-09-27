@@ -35,12 +35,13 @@ BLEND_OUT = OUT_DIR / "living_room_edit.blend"
 GLTF_OUT = OUT_DIR / "living_room_edit.gltf"
 
 # Match crates/living_room/src/room.rs
-ROOM_W = 3.2
-ROOM_D = 3.8
-ROOM_H = 2.4
-TV_STAND_POS = (0.0, 0.0, -1.35)
+ROOM_W = 4.2
+ROOM_D = 5.25
+ROOM_H = 2.5
+TV_STAND_POS = (0.0, 0.0, -ROOM_D * 0.5 + 0.55)
 TV_STAND_SCALE = 0.85
 TV_STAND_TOP = 0.68 * TV_STAND_SCALE
+CRT_SCREEN_OFFSET = (-0.0018, 0.95 + 0.2588, 0.05 + 0.1100 - 0.005)
 WALL_T = 0.06
 WALLPAPER_TILE_M = 0.55
 
@@ -380,7 +381,7 @@ def add_point_light(
 def add_joystick(col: bpy.types.Collection) -> None:
     """Competition Pro–style stick from room.rs spawn_spectrum_joystick."""
     root = bpy.data.objects.new("spectrum_joystick", None)
-    root.location = bevy_to_blender(0.55, 0.0, 0.65)
+    root.location = bevy_to_blender(0.55, 0.0, -0.08)
     root.rotation_mode = "QUATERNION"
     root.rotation_quaternion = bevy_yaw_to_blender_quat(0.35)
     link_object(root, col)
@@ -549,7 +550,7 @@ def build_room(assets: Path) -> None:
     ]:
         add_box(name, size, pos, mat, shell, tags=["RoomStatic"])
 
-    for x in (-1.25, 1.25):
+    for x in (-1.65, 1.65):
         add_box(
             "curtain",
             (0.4, 2.0, 0.06),
@@ -594,22 +595,100 @@ def build_room(assets: Path) -> None:
     place_imported(
         models / "sofa_03/sofa_03_1k.gltf",
         "sofa",
-        (0.0, 0.0, 1.05),
+        (0.0, 0.0, 0.50),
         furniture,
         yaw_bevy=math.pi,
-        scale=0.72,
+        scale=0.80,
         tags=["RoomStatic"],
     )
 
-    for x, yaw in [(-1.15, -0.55), (1.15, 0.55)]:
-        place_imported(
-            models / "ArmChair_01/ArmChair_01_1k.gltf",
-            "armchair",
-            (x, 0.0, 0.35),
+    # A compact walnut side table makes the potted plant feel placed and keeps
+    # the furniture tucked against the left wall clear of the TV sightline.
+    plant_table_pos = (-1.81, 0.0, -1.45)
+    for name, size, offset in [
+        ("plant_side_table_top", (0.54, 0.035, 0.44), (0.0, 0.4825, 0.0)),
+        ("plant_side_table_back_apron", (0.42, 0.09, 0.018), (0.0, 0.405, -0.17)),
+        ("plant_side_table_front_apron", (0.42, 0.09, 0.018), (0.0, 0.405, 0.17)),
+    ]:
+        add_box(
+            name,
+            size,
+            tuple(plant_table_pos[i] + offset[i] for i in range(3)),
+            walnut,
             furniture,
-            yaw_bevy=yaw,
             tags=["RoomStatic"],
         )
+    for x in (-0.225, 0.225):
+        for z in (-0.17, 0.17):
+            add_box(
+                "plant_side_table_leg",
+                (0.045, 0.46, 0.045),
+                (plant_table_pos[0] + x, 0.23, plant_table_pos[2] + z),
+                walnut,
+                furniture,
+                tags=["RoomStatic"],
+            )
+
+    place_imported(
+        models / "potted_plant_04/potted_plant_04_1k.gltf",
+        "living_room_plant",
+        (plant_table_pos[0], 0.50, plant_table_pos[2]),
+        furniture,
+        scale=0.85,
+        tags=["RoomStatic"],
+    )
+
+    # Detailed period VHS deck on the cabinet top, clear of its sliding doors.
+    def vhs_material(name, color, metallic=0.0, roughness=0.5, emission=None):
+        mat = bpy.data.materials.new(name)
+        mat.diffuse_color = (*color, 1.0)
+        mat.use_nodes = True
+        bsdf = next(node for node in mat.node_tree.nodes if node.type == "BSDF_PRINCIPLED")
+        bsdf.inputs["Base Color"].default_value = (*color, 1.0)
+        bsdf.inputs["Metallic"].default_value = metallic
+        bsdf.inputs["Roughness"].default_value = roughness
+        if emission is not None:
+            bsdf.inputs["Emission Color"].default_value = (*emission, 1.0)
+        return mat
+
+    vhs_mat = vhs_material("VHS deck charcoal", (0.075, 0.085, 0.095), 0.32, 0.48)
+    vhs_front = vhs_material("VHS brushed fascia", (0.20, 0.21, 0.22), 0.38, 0.36)
+    vhs_display = vhs_material("VHS green counter", (0.08, 0.14, 0.10), roughness=0.25, emission=(0.12, 0.34, 0.18))
+    vhs_trim = vhs_material("VHS satin controls", (0.42, 0.44, 0.43), 0.78, 0.28)
+    vhs_red = vhs_material("VHS record button", (0.64, 0.055, 0.035), 0.12, 0.3)
+    origin = Vector(TV_STAND_POS) + Vector((0.66, TV_STAND_TOP + 0.0475, 0.0))
+    def vhs_box(name, size, offset, mat):
+        pos = origin + Vector(offset)
+        return add_box(name, size, tuple(pos), mat, furniture, tags=["RoomStatic"])
+    def vhs_button(name, x, mat):
+        pos = origin + Vector((x, 0.0, 0.188))
+        bpy.ops.mesh.primitive_cylinder_add(vertices=20, radius=0.009, depth=0.009, location=bevy_to_blender(*pos))
+        obj = bpy.context.active_object
+        obj.name = name
+        obj.rotation_euler[0] = math.pi / 2.0
+        obj.data.materials.append(mat)
+        link_object(obj, furniture)
+        set_skein_hints(obj, ["RoomStatic"])
+    vhs_box("vhs_deck_body", (0.54, 0.095, 0.36), (0, 0, 0), vhs_mat)
+    vhs_box("vhs_brushed_front_fascia", (0.51, 0.060, 0.012), (0, 0, 0.178), vhs_front)
+    vhs_box("vhs_cassette_bay", (0.205, 0.030, 0.005), (-0.105, 0, 0.187), vhs_mat)
+    vhs_box("vhs_tape_door", (0.195, 0.022, 0.005), (-0.105, 0.002, 0.191), vhs_front)
+    vhs_box("vhs_eject_seam", (0.14, 0.003, 0.002), (-0.105, -0.004, 0.194), vhs_mat)
+    vhs_box("vhs_counter_bezel", (0.082, 0.027, 0.004), (0.155, 0.008, 0.188), vhs_mat)
+    vhs_box("vhs_green_clock_display", (0.072, 0.019, 0.003), (0.155, 0.008, 0.192), vhs_display)
+    for x, y, width, height in [
+        (0.137, 0.014, 0.010, 0.002), (0.137, 0.008, 0.010, 0.002),
+        (0.137, 0.002, 0.010, 0.002), (0.132, 0.011, 0.002, 0.004),
+        (0.142, 0.011, 0.002, 0.004), (0.132, 0.005, 0.002, 0.004),
+        (0.142, 0.005, 0.002, 0.004),
+    ]:
+        vhs_box("vhs_counter_segment", (width, height, 0.001), (x, y, 0.194), vhs_display)
+    for x, name, material in [
+        (-0.235, "vhs_rewind", vhs_trim), (-0.200, "vhs_play", vhs_trim),
+        (-0.165, "vhs_stop", vhs_trim), (0.225, "vhs_power", vhs_trim),
+        (0.258, "vhs_record", vhs_red),
+    ]:
+        vhs_button(name, x, material)
 
     # Sconces
     wall_z = -ROOM_D * 0.5 + 0.03
@@ -634,12 +713,10 @@ def build_room(assets: Path) -> None:
             tags=["RoomStatic"],
         )
         if lit:
-            if name == "wall_sconce_tv_centre":
-                bulb_local = Vector((0.0, 0.16, 0.32))
-                intensity = 5400.0
-            else:
-                bulb_local = Vector((0.0, 0.05, 0.16))
-                intensity = 6500.0
+            # Poly Haven's bulb glass is centred 10.7 cm above and 19.2 cm
+            # inward from the mount origin. Keep the bake source in that glass.
+            bulb_local = Vector((0.0, 0.107, 0.192))
+            intensity = 5400.0 if name == "wall_sconce_tv_centre" else 6500.0
             rotated = bevy_q @ bulb_local
             bulb_world = (
                 pos[0] + rotated.x,
@@ -657,35 +734,39 @@ def build_room(assets: Path) -> None:
                 tags=["DynamicRoomFillLight"],
             )
 
-    # Toys
+    # The model's bulb texture is diffuse only. Give its glass a warm self-lit
+    # surface so it reads as the source of the point-light pool in Blender and glTF.
+    for material in bpy.data.materials:
+        if not material.name.startswith("industrial_wall_sconce_bulb") or not material.use_nodes:
+            continue
+        principled = next(
+            (node for node in material.node_tree.nodes if node.type == "BSDF_PRINCIPLED"),
+            None,
+        )
+        if principled is None:
+            continue
+        emission = principled.inputs.get("Emission Color") or principled.inputs.get("Emission")
+        strength = principled.inputs.get("Emission Strength")
+        if emission is not None:
+            emission.default_value = (1.0, 0.58, 0.24, 1.0)
+        if strength is not None:
+            strength.default_value = 1.5
+
+    # A football and small duck form one deliberate play spot beside the sofa.
     toys = [
         (
             "dirty_football/dirty_football_1k.gltf",
-            (-0.7, 0.12, 0.55),
-            0.7,
-            1.15,
+            (1.38, 0.0, 0.08),
+            0.2,
+            0.70,
             "toy_football",
         ),
         (
             "rubber_duck_toy/rubber_duck_toy_1k.gltf",
-            (-0.35, 0.0, 0.45),
-            -0.9,
-            1.1,
+            (1.16, 0.0, 0.08),
+            -0.3,
+            0.55,
             "toy_rubber_duck",
-        ),
-        (
-            "gamepad/gamepad_1k.gltf",
-            (0.55, 0.0, 0.5),
-            2.4,
-            1.8,
-            "toy_gamepad",
-        ),
-        (
-            "portable_cassette_player/portable_cassette_player_1k.gltf",
-            (0.85, 0.055, 0.35),
-            -0.4,
-            1.35,
-            "toy_walkman",
         ),
     ]
     for rel, pos, yaw, sc, name in toys:
@@ -701,9 +782,9 @@ def build_room(assets: Path) -> None:
 
     add_joystick(props)
 
-    # CRT fill + wall bounce (glow.rs) — positions match procedural defaults
-    # crt_fill_offset(phosphor≈(0,1.17,-1.15)) = + (0.18,-0.08,0.22)
-    fill_pos = (0.18, 1.17 - 0.08, -1.15 + 0.22)
+    # Match Rust's live-TV local coordinates so CRT spill follows the TV along -Z.
+    phosphor = tuple(TV_STAND_POS[i] + CRT_SCREEN_OFFSET[i] for i in range(3))
+    fill_pos = (phosphor[0] + 0.18, phosphor[1] - 0.08, phosphor[2] + 0.22)
     add_point_light(
         "crt_fill_light",
         fill_pos,
@@ -716,7 +797,7 @@ def build_room(assets: Path) -> None:
     )
     add_point_light(
         "crt_wall_bounce",
-        (0.0, 1.55, -1.55),
+        (phosphor[0], phosphor[1] + 0.34, phosphor[2] - 0.36),
         color=(0.35, 0.38, 0.32),
         bevy_intensity=810.0,
         bevy_range=7.0,

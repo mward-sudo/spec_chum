@@ -130,6 +130,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let gamma_out = material.params1.y;
     let soft_mix = material.params1.z;
     let material_halation = material.params2.x > 0.5;
+    let power = clamp(material.params2.y, 0.0, 1.0);
     // params1.w = mesh aspect (W/H of phosphor quad).
     let mesh_aspect = max(material.params1.w, 0.01);
 
@@ -185,6 +186,19 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         color += halo * halo * HALATION;
         color += glow * DIFFUSION;
     }
+
+    // CRT power-up: let a broad central phosphor glow bloom over the raster.
+    // Keep startup lighting additive so a timing/material issue can never hide
+    // the Spectrum picture itself.
+    let powered = smoothstep(0.0, 1.0, power);
+    let radial = length((tube_uv - vec2(0.5)) * vec2(1.0, 0.75));
+    let glow_radius = mix(0.32, 0.90, powered);
+    let startup_glow = exp(-pow(radial / glow_radius, 2.0));
+    let central_warmth = smoothstep(0.0, 0.22, power) * (1.0 - powered) * startup_glow * 0.12;
+    let phosphor_settle = 1.0 + 0.025 * exp(-pow((powered - 0.86) / 0.13, 2.0));
+    color += vec3(1.0, 0.62, 0.34) * central_warmth;
+    color *= powered;
+    color *= phosphor_settle;
 
     // Subtle 50 Hz brightness flicker (PAL); amp ≤ ~1%.
     let flicker = 1.0 + FLICKER_AMP * sin(t * 50.0 * 2.0 * PI);

@@ -85,12 +85,10 @@ pub fn fxaa_enabled() -> bool {
     env_truthy("SPEC_CHUM_ROOM_FXAA").unwrap_or(true)
 }
 
-/// Bake room to camera-space plates; live TV/cabinet/CRT.
-///
-/// Default **off**: the plate is camera-parented, so the room does not parallax while
-/// zooming, and bake frames blank the background. `SPEC_CHUM_ROOM_HYBRID=1` for experiments.
+/// The old camera-space bake plates stay hard-off for #149. They do not parallax
+/// while zooming and can blank the background during a bake frame.
 pub fn hybrid_enabled() -> bool {
-    env_truthy("SPEC_CHUM_ROOM_HYBRID").unwrap_or(false)
+    false
 }
 
 /// Temporary #149 A/B: `SPEC_CHUM_ROOM_SCENE=current|new` (default **current**).

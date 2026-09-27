@@ -127,6 +127,7 @@ fn spawn_fill_lights(
         bevy::log::info!("SPEC_CHUM_ROOM_HIDE_CRT: skipping CRT spill lights");
     } else {
         let min = quality::light_preset() == LightPreset::Min;
+        let phosphor = crate::crt::crt_screen_world_center();
         // Primary CRT spill — phosphor-driven colour via GlowDriven.
         // Keep the emitter off the camera↔CRT axis so mirror glass does not pick up
         // a dead-centre specular hotspot (#149); room spill still reads from the tube.
@@ -139,7 +140,7 @@ fn spawn_fill_lights(
                 shadow_maps_enabled: false,
                 ..default()
             },
-            Transform::from_translation(crt_fill_offset(Vec3::new(0.0, 1.17, -1.15))),
+            Transform::from_translation(crt_fill_offset(phosphor)),
             GlowDriven {
                 intensity_scale: 1.0,
             },
@@ -156,11 +157,11 @@ fn spawn_fill_lights(
                     shadow_maps_enabled: false,
                     ..default()
                 },
-                Transform::from_xyz(0.0, 1.55, -1.55),
+                Transform::from_translation(phosphor + Vec3::new(0.0, 0.34, -0.36)),
                 GlowDriven {
                     intensity_scale: 0.45,
                 },
-                // Temporary #149: New suppresses wall-bounce only (sconces stay lit).
+                // Temporary #149: stub New suppresses this; baked New keeps it live.
                 crate::scene_variant::DynamicRoomFillLight,
                 bevy::camera::visibility::RenderLayers::layer(0).with(1),
                 Name::new("crt_wall_bounce"),
@@ -168,6 +169,7 @@ fn spawn_fill_lights(
         }
     } // end procedural CRT spill lights
 
+    let phosphor = crate::crt::crt_screen_world_center();
     if bright {
         // Neutral key from the sofa / camera side so TV bezels and punch rim are visible.
         commands.spawn((
@@ -180,7 +182,8 @@ fn spawn_fill_lights(
                 shadow_maps_enabled: false,
                 ..default()
             },
-            Transform::from_xyz(0.0, 1.65, 1.55).looking_at(Vec3::new(0.0, 1.22, -1.35), Vec3::Y),
+            Transform::from_translation(phosphor + Vec3::new(0.0, 0.44, 2.9))
+                .looking_at(phosphor + Vec3::new(0.0, 0.01, -0.16), Vec3::Y),
             Name::new("bright_debug_key"),
         ));
         commands.spawn((
@@ -191,7 +194,7 @@ fn spawn_fill_lights(
                 shadow_maps_enabled: false,
                 ..default()
             },
-            Transform::from_xyz(0.35, 1.9, -0.2),
+            Transform::from_translation(phosphor + Vec3::new(0.35, 0.69, 0.995)),
             Name::new("bright_debug_fill"),
         ));
         bevy::log::info!(
@@ -230,7 +233,7 @@ fn sync_fill_origin(
     mut fill: Query<&mut Transform, With<CrtFillLight>>,
 ) {
     let origin = phosphor.iter().next().map_or_else(
-        || crt_fill_offset(Vec3::new(0.0, 1.17, -1.15)),
+        || crt_fill_offset(crate::crt::crt_screen_world_center()),
         |g| crt_fill_offset(g.translation()),
     );
 
@@ -241,7 +244,9 @@ fn sync_fill_origin(
 
 fn sync_glow_tints(
     glow: Res<FrameGlow>,
+    opening: Res<crate::camera::OpeningSequence>,
     variant: Res<crate::scene_variant::SceneVariant>,
+    baked: Option<Res<crate::baked_room::BakedRoomEnabled>>,
     mut points: Query<(
         &GlowDriven,
         &mut PointLight,
@@ -255,8 +260,9 @@ fn sync_glow_tints(
 ) {
     let tint = Color::from(glow.color);
     let base = glow.intensity;
-    // Temporary #149: New keeps CRT spill + sconces; zeros GlowDriven wall-bounce only.
-    let suppress_wall_bounce = matches!(*variant, crate::scene_variant::SceneVariant::New);
+    // The framebuffer-driven wall bounce stays live beside the static bake.
+    let suppress_wall_bounce =
+        baked.is_none() && matches!(*variant, crate::scene_variant::SceneVariant::New);
 
     for (driven, mut light, dynamic) in &mut points {
         if suppress_wall_bounce && dynamic.is_some() {
@@ -264,7 +270,7 @@ fn sync_glow_tints(
             continue;
         }
         light.color = tint;
-        light.intensity = base * driven.intensity_scale;
+        light.intensity = base * driven.intensity_scale * opening.light_gain();
     }
     for (driven, mut light, dynamic) in &mut spots {
         if suppress_wall_bounce && dynamic.is_some() {
@@ -272,7 +278,7 @@ fn sync_glow_tints(
             continue;
         }
         light.color = tint;
-        light.intensity = base * driven.intensity_scale;
+        light.intensity = base * driven.intensity_scale * opening.light_gain();
     }
 }
 

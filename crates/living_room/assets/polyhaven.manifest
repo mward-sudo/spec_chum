@@ -38,6 +38,11 @@ models/portable_cassette_player/portable_cassette_player_1k.gltf
 models/portable_cassette_player/textures/portable_cassette_player_arm_1k.jpg
 models/portable_cassette_player/textures/portable_cassette_player_diff_1k.jpg
 models/portable_cassette_player/textures/portable_cassette_player_nor_gl_1k.jpg
+models/potted_plant_04/potted_plant_04.bin
+models/potted_plant_04/potted_plant_04_1k.gltf
+models/potted_plant_04/textures/potted_plant_04_arm_1k.jpg
+models/potted_plant_04/textures/potted_plant_04_diff_1k.jpg
+models/potted_plant_04/textures/potted_plant_04_nor_gl_1k.jpg
 models/rubber_duck_toy/rubber_duck_toy.bin
 models/rubber_duck_toy/rubber_duck_toy_1k.gltf
 models/rubber_duck_toy/textures/rubber_duck_toy_arm_1k.jpg

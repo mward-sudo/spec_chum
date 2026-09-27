@@ -108,6 +108,7 @@ extension HostBridge {
     @discardableResult
     func performLivingRoomPresentBind(surface: IOSurface, width: UInt32, height: UInt32) -> Bool {
         guard let room = livingRoomHandle else { return false }
+        let isInitialPresentBind = livingRoomBoundSurface == nil
         livingRoomBoundSurface = surface
         let ptr = Unmanaged.passUnretained(surface).toOpaque()
         var bindError: String?
@@ -115,7 +116,9 @@ extension HostBridge {
             if sc_room_resize(room, width, height) != 0 {
                 bindError = HostBridge.takeRoomLastError() ?? "Living room resize failed"
             } else {
-                _ = sc_room_skip_intro(room)
+                if !isInitialPresentBind {
+                    _ = sc_room_skip_intro(room)
+                }
                 roomQueuePresentWidth = width
                 roomQueuePresentHeight = height
             }
@@ -257,7 +260,7 @@ extension HostBridge {
         }
     }
 
-    /// Must run on `livingRoomQueue`. Creates handle, skips intro, optional warmup ticks.
+    /// Must run on `livingRoomQueue`. Creates Bevy and leaves its opening camera move active.
     func createLivingRoomOnQueue(warmupTicks: Int, width: UInt32, height: UInt32) -> String? {
         guard livingRoomHandle == nil else { return nil }
         livingRoomHandle = sc_room_create(width, height)
@@ -267,9 +270,6 @@ extension HostBridge {
         }
         roomQueuePresentWidth = width
         roomQueuePresentHeight = height
-        if sc_room_skip_intro(livingRoomHandle) != 0 {
-            return HostBridge.takeRoomLastError() ?? "Living room skip intro failed"
-        }
         roomFbLastUploadedGen = 0
         if warmupTicks > 0, let room = livingRoomHandle {
             for _ in 0..<warmupTicks {

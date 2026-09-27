@@ -21,6 +21,7 @@ use thiserror::Error;
 
 use crate::asset_plugin;
 
+use crate::baked_room::BakedRoomPlugin;
 use crate::camera::{
     setup_camera, CameraPlugin, IntroSkipRequest, LivingRoomCamera, PostIntroZoom,
 };
@@ -114,6 +115,7 @@ impl HeadlessRoom {
             ExternalFramebufferPlugin,
             CrtPlugin,
             RoomPlugin,
+            BakedRoomPlugin,
             CameraPlugin,
             GlowPlugin,
             HybridPlugin,

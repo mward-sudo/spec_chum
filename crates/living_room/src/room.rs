@@ -3,22 +3,34 @@
 use bevy::math::Affine2;
 use bevy::prelude::*;
 
-/// Room: ~3.2 × 3.8 × 2.4 m.
-pub const ROOM_W: f32 = 3.2;
-pub const ROOM_D: f32 = 3.8;
-pub const ROOM_H: f32 = 2.4;
+/// Period-inspired family living room: ~4.2 × 5.25 × 2.5 m (about 22 m²).
+pub const ROOM_W: f32 = 4.2;
+pub const ROOM_D: f32 = 5.25;
+pub const ROOM_H: f32 = 2.5;
 
 /// World-space wallpaper tile size (metres per texture repeat).
 const WALLPAPER_TILE_M: f32 = 0.55;
 
 /// World pose of the CRT cabinet / console (phosphor overlay uses the same constant).
 /// Against the back wall; locked cam frames CRT at ~50% vertical fill with room visible.
-pub const TV_STAND_POS: Vec3 = Vec3::new(0.0, 0.0, -1.35);
+pub const TV_STAND_POS: Vec3 = Vec3::new(0.0, 0.0, -ROOM_D * 0.5 + 0.55);
 
 /// Marker on the `television_02` scene root — phosphor is placed in this local space.
 #[derive(Component, Reflect, Debug, Clone, Copy, Default)]
 #[reflect(Component, Default)]
 pub struct TelevisionCabinet;
+
+/// Base output for a sconce, scaled by the scene-opening light fade.
+#[derive(Component, Debug, Clone, Copy)]
+pub(crate) struct OpeningSconceLight(pub f32);
+
+/// Center TV-wall sconce contributes the opening's early, localized TV accent.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub(crate) struct OpeningTvAccent;
+
+/// Emission for the visible bulb overlay, scaled with the sconce light.
+#[derive(Component, Debug, Clone, Copy)]
+pub(crate) struct OpeningSconceBulb(pub Vec3);
 
 #[derive(Debug, Default)]
 pub struct RoomPlugin;
@@ -157,7 +169,7 @@ fn setup_procedural_room(
     }
 
     // Drawn curtains flanking the TV wall.
-    for x in [-1.25f32, 1.25] {
+    for x in [-1.65f32, 1.65] {
         commands.spawn((
             Mesh3d(meshes.add(Cuboid::new(0.4, 2.0, 0.06))),
             MeshMaterial3d(curtain_mat.clone()),
@@ -170,7 +182,7 @@ fn setup_procedural_room(
     // Skirting board (walnut veneer).
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(ROOM_W - 0.12, 0.09, 0.03))),
-        MeshMaterial3d(walnut),
+        MeshMaterial3d(walnut.clone()),
         Transform::from_xyz(0.0, 0.045, -ROOM_D * 0.5 + 0.04),
         Name::new("skirting"),
         crate::hybrid::RoomStatic,
@@ -205,38 +217,207 @@ fn setup_procedural_room(
         crate::hybrid::LiveTv,
     ));
 
-    // Sofa facing the TV (scale down slightly for the small room).
+    // Sofa faces the TV, leaving a clear walkway along each side of the room.
     commands.spawn((
         WorldAssetRoot(asset_server.load("polyhaven/models/sofa_03/sofa_03_1k.gltf#Scene0")),
-        Transform::from_xyz(0.0, 0.0, 1.05)
+        Transform::from_xyz(0.0, 0.0, 0.50)
             .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
-            .with_scale(Vec3::splat(0.72)),
+            .with_scale(Vec3::splat(0.80)),
         Name::new("sofa"),
         crate::hybrid::RoomStatic,
     ));
 
-    // Armchairs flanking the sofa.
-    for (x, yaw) in [(-1.15f32, -0.55f32), (1.15, 0.55)] {
-        commands.spawn((
-            WorldAssetRoot(
-                asset_server.load("polyhaven/models/ArmChair_01/ArmChair_01_1k.gltf#Scene0"),
-            ),
-            Transform::from_xyz(x, 0.0, 0.35).with_rotation(Quat::from_rotation_y(yaw)),
-            Name::new("armchair"),
+    // A small walnut side table gives the plant a clear purpose and keeps it
+    // tucked against the left wall, outside the TV and sofa circulation paths.
+    let plant_table_pos = Vec3::new(-1.81, 0.0, -1.45);
+    let plant_table_root = commands
+        .spawn((
+            Transform::from_translation(plant_table_pos),
+            Visibility::default(),
+            Name::new("plant_side_table"),
             crate::hybrid::RoomStatic,
+        ))
+        .id();
+    commands.entity(plant_table_root).with_children(|table| {
+        table.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.54, 0.035, 0.44))),
+            MeshMaterial3d(walnut.clone()),
+            Transform::from_xyz(0.0, 0.4825, 0.0),
+            Name::new("plant_side_table_top"),
         ));
-    }
+        table.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.42, 0.09, 0.018))),
+            MeshMaterial3d(walnut.clone()),
+            Transform::from_xyz(0.0, 0.405, -0.17),
+            Name::new("plant_side_table_back_apron"),
+        ));
+        table.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.42, 0.09, 0.018))),
+            MeshMaterial3d(walnut.clone()),
+            Transform::from_xyz(0.0, 0.405, 0.17),
+            Name::new("plant_side_table_front_apron"),
+        ));
+        for x in [-0.225f32, 0.225] {
+            for z in [-0.17f32, 0.17] {
+                table.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.045, 0.46, 0.045))),
+                    MeshMaterial3d(walnut.clone()),
+                    Transform::from_xyz(x, 0.23, z),
+                    Name::new("plant_side_table_leg"),
+                ));
+            }
+        }
+        table.spawn((
+            WorldAssetRoot(
+                asset_server
+                    .load("polyhaven/models/potted_plant_04/potted_plant_04_1k.gltf#Scene0"),
+            ),
+            Transform::from_xyz(0.0, 0.50, 0.0).with_scale(Vec3::splat(0.85)),
+            Name::new("living_room_plant"),
+        ));
+    });
 
-    spawn_polyhaven_wall_sconces(commands, asset_server);
+    spawn_polyhaven_wall_sconces(commands, meshes, materials, asset_server);
+    spawn_video_cassette_deck(commands, meshes, materials);
     spawn_floor_toys(commands, asset_server);
     spawn_spectrum_joystick(commands, meshes, materials);
 
     let _ = plaster;
 }
 
+/// Detailed 1980s VHS deck on the cabinet top, clear of the sliding doors.
+fn spawn_video_cassette_deck(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+) {
+    let chassis = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.075, 0.085, 0.095),
+        metallic: 0.32,
+        perceptual_roughness: 0.48,
+        ..default()
+    });
+    let fascia = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.20, 0.21, 0.22),
+        metallic: 0.38,
+        perceptual_roughness: 0.36,
+        ..default()
+    });
+    let display = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.08, 0.14, 0.10),
+        emissive: LinearRgba::rgb(0.12, 0.34, 0.18),
+        perceptual_roughness: 0.25,
+        ..default()
+    });
+    let trim = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.42, 0.44, 0.43),
+        metallic: 0.78,
+        perceptual_roughness: 0.28,
+        ..default()
+    });
+    let red = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.64, 0.055, 0.035),
+        metallic: 0.12,
+        perceptual_roughness: 0.3,
+        ..default()
+    });
+    let tv_stand_top = 0.68 * 0.85;
+    let origin = TV_STAND_POS + Vec3::new(0.66, tv_stand_top + 0.0475, 0.0);
+    let root = commands
+        .spawn((
+            Transform::from_translation(origin),
+            Visibility::default(),
+            Name::new("vhs_video_cassette_recorder"),
+            crate::hybrid::RoomStatic,
+        ))
+        .id();
+    commands.entity(root).with_children(|c| {
+        c.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.54, 0.095, 0.36))),
+            MeshMaterial3d(chassis.clone()),
+            Transform::IDENTITY,
+            Name::new("vhs_deck_body"),
+        ));
+        c.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.51, 0.060, 0.012))),
+            MeshMaterial3d(fascia.clone()),
+            Transform::from_xyz(0.0, 0.0, 0.178),
+            Name::new("vhs_brushed_front_fascia"),
+        ));
+        c.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.205, 0.030, 0.005))),
+            MeshMaterial3d(chassis.clone()),
+            Transform::from_xyz(-0.105, 0.0, 0.187),
+            Name::new("vhs_cassette_bay"),
+        ));
+        c.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.195, 0.022, 0.005))),
+            MeshMaterial3d(fascia.clone()),
+            Transform::from_xyz(-0.105, 0.002, 0.191),
+            Name::new("vhs_tape_door"),
+        ));
+        c.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.14, 0.003, 0.002))),
+            MeshMaterial3d(chassis.clone()),
+            Transform::from_xyz(-0.105, -0.004, 0.194),
+            Name::new("vhs_eject_seam"),
+        ));
+        c.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.082, 0.027, 0.004))),
+            MeshMaterial3d(chassis.clone()),
+            Transform::from_xyz(0.155, 0.008, 0.188),
+            Name::new("vhs_counter_bezel"),
+        ));
+        c.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.072, 0.019, 0.003))),
+            MeshMaterial3d(display.clone()),
+            Transform::from_xyz(0.155, 0.008, 0.192),
+            Name::new("vhs_green_clock_display"),
+        ));
+        // Seven-segment counter detail, visible in the wide room preset.
+        for (x, y, w, h) in [
+            (0.137, 0.014, 0.010, 0.002),
+            (0.137, 0.008, 0.010, 0.002),
+            (0.137, 0.002, 0.010, 0.002),
+            (0.132, 0.011, 0.002, 0.004),
+            (0.142, 0.011, 0.002, 0.004),
+            (0.132, 0.005, 0.002, 0.004),
+            (0.142, 0.005, 0.002, 0.004),
+        ] {
+            c.spawn((
+                Mesh3d(meshes.add(Cuboid::new(w, h, 0.001))),
+                MeshMaterial3d(display.clone()),
+                Transform::from_xyz(x, y, 0.194),
+                Name::new("vhs_counter_segment"),
+            ));
+        }
+        let button_mesh = meshes.add(Cylinder::new(0.009, 0.009));
+        for (x, material, name) in [
+            (-0.235, trim.clone(), "vhs_rewind"),
+            (-0.200, trim.clone(), "vhs_play"),
+            (-0.165, trim.clone(), "vhs_stop"),
+            (0.225, trim.clone(), "vhs_power"),
+            (0.258, red.clone(), "vhs_record"),
+        ] {
+            c.spawn((
+                Mesh3d(button_mesh.clone()),
+                MeshMaterial3d(material),
+                Transform::from_xyz(x, 0.0, 0.188)
+                    .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                Name::new(name),
+            ));
+        }
+    });
+}
+
 /// Poly Haven [industrial_wall_sconce](https://polyhaven.com/a/industrial_wall_sconce) (CC0) —
 /// brass/copper vintage wall light (~0.3 m). Local +Z faces into the room.
-fn spawn_polyhaven_wall_sconces(commands: &mut Commands, asset_server: &AssetServer) {
+fn spawn_polyhaven_wall_sconces(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    asset_server: &AssetServer,
+) {
     let sconce = asset_server
         .load("polyhaven/models/industrial_wall_sconce/industrial_wall_sconce_1k.gltf#Scene0");
 
@@ -277,6 +458,21 @@ fn spawn_polyhaven_wall_sconces(commands: &mut Commands, asset_server: &AssetSer
     ];
 
     let min_lights = crate::quality::light_preset() == crate::quality::LightPreset::Min;
+    let bulb_mesh = meshes.add(Sphere::new(0.035).mesh().uv(16, 12));
+    // The source glTF bulb material is diffuse only, so its light source vanishes
+    // in the dark room. Add a small warm emitter over the model's bulb glass.
+    let bulb_emissive = Vec3::new(2.5, 1.05, 0.28);
+    let initial_light_gain = crate::camera::OPENING_DIM_FACTOR;
+    let bulb_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(1.0, 0.72, 0.38),
+        emissive: LinearRgba::rgb(
+            bulb_emissive.x * initial_light_gain,
+            bulb_emissive.y * initial_light_gain,
+            bulb_emissive.z * initial_light_gain,
+        ),
+        unlit: true,
+        ..default()
+    });
     for (pos, into_room, name, lit) in mounts {
         let rot = Quat::from_rotation_arc(Vec3::Z, into_room.normalize());
         commands.spawn((
@@ -289,68 +485,82 @@ fn spawn_polyhaven_wall_sconces(commands: &mut Commands, asset_server: &AssetSer
         // after baking, but the live TV still needs the three TV-wall bulbs.
         let use_light = lit && (!min_lights || name == "wall_sconce_tv_centre");
         if use_light {
-            // Default: bulb just in front of the fixture shade.
-            // Centre TV sconce: stay slightly above/into-room of the fixture so the
-            // glass gets a soft upper sheen, not the old on-axis white blob (#149).
-            let (bulb_local, intensity) = if name == "wall_sconce_tv_centre" {
-                (Vec3::new(0.0, 0.16, 0.32), 5_400.0)
+            // Matches the centre of the bulb material in the Poly Haven model.
+            // Using the same offset for all mounts keeps the point source inside
+            // the visible glass instead of floating above/in front of the fixture.
+            let bulb_local = Vec3::new(0.0, 0.107, 0.192);
+            let intensity = if name == "wall_sconce_tv_centre" {
+                5_400.0
             } else {
-                (Vec3::new(0.0, 0.05, 0.16), 6_500.0)
+                6_500.0
             };
             let bulb_world = pos + rot * bulb_local;
-            commands.spawn((
-                PointLight {
-                    color: Color::srgb(1.0, 0.72, 0.38),
-                    // Room fill only — keep CRT exposure/spill at #238 (#233).
-                    intensity,
-                    range: 6.0,
-                    radius: 0.08,
-                    shadow_maps_enabled: false,
-                    ..default()
-                },
+            let accent = name == "wall_sconce_tv_centre";
+            let bulb = (
+                Mesh3d(bulb_mesh.clone()),
+                MeshMaterial3d(bulb_material.clone()),
                 Transform::from_translation(bulb_world),
-                // Temporary #149: tagged for A/B; sconces stay lit on New (wall-bounce does not).
-                crate::scene_variant::DynamicRoomFillLight,
-                // Layer 0 = live TV; layer 1 = room bake plate.
-                bevy::camera::visibility::RenderLayers::layer(0).with(1),
-                Name::new(format!("{name}_bulb")),
-            ));
+                OpeningSconceBulb(bulb_emissive),
+            );
+            if accent {
+                commands.spawn((
+                    bulb,
+                    OpeningTvAccent,
+                    Name::new(format!("{name}_visible_bulb")),
+                ));
+            } else {
+                commands.spawn((bulb, Name::new(format!("{name}_visible_bulb"))));
+            }
+            let light = PointLight {
+                color: Color::srgb(1.0, 0.72, 0.38),
+                // Room fill only — keep CRT exposure/spill at #238 (#233).
+                intensity: intensity * initial_light_gain,
+                range: 6.0,
+                radius: 0.08,
+                shadow_maps_enabled: false,
+                ..default()
+            };
+            if accent {
+                commands.spawn((
+                    light,
+                    Transform::from_translation(bulb_world),
+                    OpeningSconceLight(intensity),
+                    OpeningTvAccent,
+                    crate::scene_variant::DynamicRoomFillLight,
+                    bevy::camera::visibility::RenderLayers::layer(0).with(1),
+                    Name::new(format!("{name}_bulb")),
+                ));
+            } else {
+                commands.spawn((
+                    light,
+                    Transform::from_translation(bulb_world),
+                    OpeningSconceLight(intensity),
+                    crate::scene_variant::DynamicRoomFillLight,
+                    bevy::camera::visibility::RenderLayers::layer(0).with(1),
+                    Name::new(format!("{name}_bulb")),
+                ));
+            }
         }
     }
 }
 
-/// Floor clutter — CC0 Poly Haven props that read as 80s kid living-room toys.
-/// Positions are in the open carpet between sofa and TV (camera-facing).
+/// A small pair of toys tucked beside the sofa reads as a deliberate play spot.
 fn spawn_floor_toys(commands: &mut Commands, asset_server: &AssetServer) {
     // y offsets lift meshes whose AABB dips below 0 so they sit on the carpet.
     let toys = [
         (
             "polyhaven/models/dirty_football/dirty_football_1k.gltf#Scene0",
-            Vec3::new(-0.7, 0.12, 0.55),
-            Quat::from_rotation_y(0.7),
-            Vec3::splat(1.15),
+            Vec3::new(1.38, 0.0, 0.08),
+            Quat::from_rotation_y(0.2),
+            Vec3::splat(0.70),
             "toy_football",
         ),
         (
             "polyhaven/models/rubber_duck_toy/rubber_duck_toy_1k.gltf#Scene0",
-            Vec3::new(-0.35, 0.0, 0.45),
-            Quat::from_rotation_y(-0.9),
-            Vec3::splat(1.1),
+            Vec3::new(1.16, 0.0, 0.08),
+            Quat::from_rotation_y(-0.3),
+            Vec3::splat(0.55),
             "toy_rubber_duck",
-        ),
-        (
-            "polyhaven/models/gamepad/gamepad_1k.gltf#Scene0",
-            Vec3::new(0.55, 0.0, 0.5),
-            Quat::from_rotation_y(2.4),
-            Vec3::splat(1.8),
-            "toy_gamepad",
-        ),
-        (
-            "polyhaven/models/portable_cassette_player/portable_cassette_player_1k.gltf#Scene0",
-            Vec3::new(0.85, 0.055, 0.35),
-            Quat::from_rotation_y(-0.4),
-            Vec3::splat(1.35),
-            "toy_walkman",
         ),
     ];
     for (path, pos, rot, scale, name) in toys {
@@ -391,7 +601,7 @@ fn spawn_spectrum_joystick(
 
     let root = commands
         .spawn((
-            Transform::from_xyz(0.55, 0.0, 0.65).with_rotation(Quat::from_rotation_y(0.35)),
+            Transform::from_xyz(0.55, 0.0, -0.08).with_rotation(Quat::from_rotation_y(0.35)),
             Visibility::default(),
             Name::new("spectrum_joystick"),
             crate::hybrid::RoomStatic,
