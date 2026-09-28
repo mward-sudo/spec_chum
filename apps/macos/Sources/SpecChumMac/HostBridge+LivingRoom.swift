@@ -108,7 +108,6 @@ extension HostBridge {
     @discardableResult
     func performLivingRoomPresentBind(surface: IOSurface, width: UInt32, height: UInt32) -> Bool {
         guard let room = livingRoomHandle else { return false }
-        let isInitialPresentBind = livingRoomBoundSurface == nil
         livingRoomBoundSurface = surface
         let ptr = Unmanaged.passUnretained(surface).toOpaque()
         var bindError: String?
@@ -116,9 +115,7 @@ extension HostBridge {
             if sc_room_resize(room, width, height) != 0 {
                 bindError = HostBridge.takeRoomLastError() ?? "Living room resize failed"
             } else {
-                if !isInitialPresentBind {
-                    _ = sc_room_skip_intro(room)
-                }
+                // Resizing the initial surface must not act like a user skip.
                 roomQueuePresentWidth = width
                 roomQueuePresentHeight = height
             }

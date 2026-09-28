@@ -236,8 +236,11 @@ referenced textures, and `room_static_bake.blend`. Keep the glTF, atlas, and
 textures together in version control; the `.blend` is the editable bake source.
 The app loads the baked room only for the `New` variant when both glTF and atlas
 are present. `Current` continues to use the procedural baseline, and a missing
-bake leaves `New` on its comparison fallback. Opening light levels animate the
-baked exposure and live lights together.
+bake leaves `New` on its comparison fallback. The procedural room stays visible
+until the baked glTF scene has spawned; a failed or empty scene load therefore
+keeps the fallback room visible. The opening waits for scene readiness for up to
+three seconds, then proceeds so a failed load cannot hold the room on black.
+Opening light levels animate the baked exposure and live lights together.
 
 Run `./scripts/check_living_room.sh` after rebaking or changing the Bevy binding.
 For visual review in SpecChumMac, enable Living Room and select **Scene: New**.

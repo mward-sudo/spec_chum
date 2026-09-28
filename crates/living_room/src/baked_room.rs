@@ -22,6 +22,17 @@ pub struct BakedRoomEnabled {
 }
 
 #[derive(Component, Debug)]
+struct PendingBakedRoom {
+    lightmap: Handle<Image>,
+}
+
+type ProceduralStaticRootFilter = (
+    With<RoomStatic>,
+    Without<SceneVariantOnly>,
+    Without<PendingBakedRoom>,
+);
+
+#[derive(Component, Debug)]
 struct BakedRoomSurface {
     material: Handle<StandardMaterial>,
     base_lightmap_exposure: f32,
@@ -34,7 +45,7 @@ pub struct BakedRoomPlugin;
 impl Plugin for BakedRoomPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_baked_room)
-            .add_systems(PreUpdate, mark_procedural_static_for_current)
+            .add_systems(PreUpdate, activate_baked_room_when_loaded)
             .add_systems(
                 Update,
                 (bind_baked_lightmap, animate_baked_lighting).chain(),
@@ -45,7 +56,6 @@ impl Plugin for BakedRoomPlugin {
 fn spawn_baked_room(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    variant: Res<SceneVariant>,
     #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
 ) {
     #[cfg(feature = "skein")]
@@ -64,36 +74,48 @@ fn spawn_baked_room(
         return;
     }
 
-    commands.insert_resource(BakedRoomEnabled {
-        lightmap: asset_server.load(IMAGE),
-    });
     commands.spawn((
         WorldAssetRoot(asset_server.load(SCENE)),
-        SceneVariantOnly(SceneVariant::New),
-        RoomStatic,
-        if *variant == SceneVariant::New {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
+        PendingBakedRoom {
+            lightmap: asset_server.load(IMAGE),
         },
+        RoomStatic,
+        Visibility::Hidden,
         Name::new("spec_chum_baked_static_room"),
     ));
-    bevy::log::info!("#149 Blender lightmap enabled for New room variant");
 }
 
-/// The procedural room's static roots are hidden only when a bake is available.
-fn mark_procedural_static_for_current(
+/// Activate the baked path only after its scene has spawned, leaving the
+/// procedural room visible while the glTF loads or if it fails to load.
+fn activate_baked_room_when_loaded(
     mut commands: Commands,
-    baked: Option<Res<BakedRoomEnabled>>,
-    static_roots: Query<Entity, (With<RoomStatic>, Without<SceneVariantOnly>)>,
+    variant: Res<SceneVariant>,
+    pending_roots: Query<(Entity, &Children, &PendingBakedRoom)>,
+    static_roots: Query<Entity, ProceduralStaticRootFilter>,
 ) {
-    if baked.is_none() {
-        return;
-    }
-    for entity in &static_roots {
-        commands
-            .entity(entity)
-            .insert(SceneVariantOnly(SceneVariant::Current));
+    for (entity, children, pending) in &pending_roots {
+        if children.is_empty() {
+            continue;
+        }
+
+        commands.entity(entity).insert((
+            SceneVariantOnly(SceneVariant::New),
+            if *variant == SceneVariant::New {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            },
+        ));
+        commands.entity(entity).remove::<PendingBakedRoom>();
+        commands.insert_resource(BakedRoomEnabled {
+            lightmap: pending.lightmap.clone(),
+        });
+        for static_root in &static_roots {
+            commands
+                .entity(static_root)
+                .insert(SceneVariantOnly(SceneVariant::Current));
+        }
+        bevy::log::info!("#149 Blender lightmap enabled after baked scene load");
     }
 }
 

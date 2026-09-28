@@ -17,6 +17,8 @@ const TV_SPOT_FADE_SECS: f32 = 0.40;
 const CAMERA_MOVE_DELAY_SECS: f32 = 0.0;
 const CAMERA_MOVE_SECS: f32 = 4.40;
 const INTRO_SECS: f32 = CAMERA_MOVE_DELAY_SECS + CAMERA_MOVE_SECS;
+// Keep a failed or empty WorldAssetRoot from leaving the opening on black forever.
+const SCENE_READY_TIMEOUT_SECS: f32 = 3.0;
 const PRACTICAL_LIGHT_RISE_DELAY_SECS: f32 = 1.15;
 const PRACTICAL_LIGHT_RISE_SECS: f32 = 2.00;
 const LIGHT_RISE_DELAY_SECS: f32 = 0.55;
@@ -132,6 +134,7 @@ pub struct CameraIntro {
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct OpeningSequence {
     elapsed_secs: f32,
+    scene_wait_secs: f32,
     scene_ready: bool,
 }
 
@@ -139,6 +142,7 @@ impl Default for OpeningSequence {
     fn default() -> Self {
         Self {
             elapsed_secs: 0.0,
+            scene_wait_secs: 0.0,
             scene_ready: false,
         }
     }
@@ -171,10 +175,15 @@ impl OpeningSequence {
 
     fn set_elapsed(&mut self, elapsed_secs: f32) {
         self.elapsed_secs = elapsed_secs;
+        self.scene_wait_secs = SCENE_READY_TIMEOUT_SECS;
         self.scene_ready = true;
     }
     fn advance(&mut self, delta_secs: f32, scene_ready: bool) {
-        self.scene_ready |= scene_ready;
+        if !self.scene_ready {
+            self.scene_wait_secs =
+                (self.scene_wait_secs + delta_secs).min(SCENE_READY_TIMEOUT_SECS);
+            self.scene_ready = scene_ready || self.scene_wait_secs >= SCENE_READY_TIMEOUT_SECS;
+        }
         if self.scene_ready {
             self.elapsed_secs = (self.elapsed_secs + delta_secs).min(INTRO_SECS);
         }
@@ -757,6 +766,20 @@ mod tests {
         let end = lerp_eye_pullback_rise(from, to, 1.0);
         assert!(start.distance(from) < 0.001);
         assert!(end.distance(to) < 0.001);
+    }
+
+    #[test]
+    fn opening_waits_for_scene_or_bounded_timeout() {
+        let mut opening = OpeningSequence::default();
+        opening.advance(1.0, false);
+        assert!(!opening.scene_ready);
+        assert_eq!(opening.elapsed(), 0.0);
+
+        opening.advance(1.0, false);
+        assert!(!opening.scene_ready);
+        opening.advance(1.0, false);
+        assert!(opening.scene_ready);
+        assert_eq!(opening.elapsed(), 1.0);
     }
 
     #[test]
