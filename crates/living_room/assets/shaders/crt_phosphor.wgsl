@@ -196,8 +196,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let startup_glow = exp(-pow(radial / glow_radius, 2.0));
     let central_warmth = smoothstep(0.0, 0.22, power) * (1.0 - powered) * startup_glow * 0.12;
     let phosphor_settle = 1.0 + 0.025 * exp(-pow((powered - 0.86) / 0.13, 2.0));
-    color += vec3(1.0, 0.62, 0.34) * central_warmth;
     color *= powered;
+    color += vec3(1.0, 0.62, 0.34) * central_warmth;
     color *= phosphor_settle;
 
     // Subtle 50 Hz brightness flicker (PAL); amp ≤ ~1%.
