@@ -100,6 +100,7 @@ impl Plugin for SceneVariantPlugin {
     }
 }
 
+// Bevy injects each system parameter separately; grouping these would obscure the lighting paths.
 #[allow(clippy::too_many_arguments)]
 fn animate_opening_lighting(
     opening: Res<OpeningSequence>,
