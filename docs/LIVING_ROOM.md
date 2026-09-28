@@ -232,8 +232,11 @@ SPEC_CHUM_LIGHTMAP_THREADS=2 ./scripts/bake_living_room_lightmaps.sh
 
 Blender 4.2 or newer is required. The script writes
 `crates/living_room/assets/lightmaps/room_static.gltf`, the UV1 lightmap atlas,
-referenced textures, and `room_static_bake.blend`. Keep the glTF, atlas, and
-textures together in version control; the `.blend` is the editable bake source.
+referenced textures, and a local `room_static_bake.blend` for inspection. Keep
+the glTF, atlas, and textures together in version control. The `.blend` is
+gitignored; the bake script and fetched Poly Haven source assets are the
+reproducible inputs. The saved local `.blend` packs its images so it can be
+opened independently for inspection.
 The app loads the baked room only for the `New` variant when both glTF and atlas
 are present. `Current` continues to use the procedural baseline, and a missing
 bake leaves `New` on its comparison fallback. The procedural room stays visible
@@ -527,7 +530,6 @@ Runtime A/B via `SPEC_CHUM_ROOM_*` (implemented in `crates/living_room/src/quali
 | `SPEC_CHUM_ROOM_MSAA` | **4** | Room camera MSAA (`0`, `2`, `4`). **8× rejected** — Metal goes black. |
 | `SPEC_CHUM_ROOM_FXAA` | on | Post FXAA on bezel edges. `=0` disables. |
 | `SPEC_CHUM_ROOM_LIGHTS` | `full` | `full` or `min` (fewer sconces). |
-| `SPEC_CHUM_ROOM_HYBRID` | **off** | Camera-space bake plates + live TV (experimental). |
 | `SPEC_CHUM_ROOM_SCENE` | `current` | Temporary #149 A/B: `current` (procedural baseline) or `new` (baked static room when the package is present). Prefer SpecChumMac toolbar toggle. **Remove when #149 is complete.** |
 | `SPEC_CHUM_ROOM_SKEIN_SCENE` | auto | Standalone `--features skein` only: Bevy asset path for the **room** glTF (default `skein/living_room_edit.gltf#Scene0` if file exists → replaces procedural `room.rs`). `off` forces procedural. |
 | `SPEC_CHUM_ROOM_PERF` | off | Rolling tick µs to stderr + Swift HUD fields. |
@@ -548,20 +550,15 @@ with `SPEC_CHUM_ROOM_HALATION=bloom` and once with `=material`. Keep the window
 size, camera preset, and exposure unchanged. The Bloom mode retains the legacy
 camera-wide glow; material mode replaces that role with phosphor-local scatter.
 
-## Hybrid plates (experimental, default off)
+## Hybrid plates (retired)
 
-`SPEC_CHUM_ROOM_HYBRID=1` enables camera-parented **bake plates**: static room
-geometry is rendered once per zoom stop to an unlit quad; only the TV/cabinet/CRT
-updates every frame. Goal was ~60 Hz when full-room PBR looked costly on the
-**old readback benchmark**.
+The old `SPEC_CHUM_ROOM_HYBRID` knob no longer enables camera-parented **bake
+plates**. The path is hard-disabled because static room geometry rendered to an
+unlit quad did not parallax correctly during zooms and could blank the
+background during preset transitions.
 
-**Default off** because:
-
-- The plate is **camera-parented** — walls/sofa do not parallax correctly while zooming.
-- Bake frames can **blank the background** during preset transitions.
-- Full 3D at default quality already meets the 60 Hz budget on M4-class hardware.
-
-Prefer **Blender lightmaps + `EnvironmentMapLight`** (tier 2) over extending hybrid plates.
+Full 3D at default quality already meets the 60 Hz budget on M4-class hardware.
+The current static-room path uses Blender lightmaps and `EnvironmentMapLight`.
 
 ## Temporary #149 scene comparison (SpecChumMac only)
 
@@ -572,7 +569,7 @@ on egui, Windows, or Linux shells.
 | Variant | Look |
 | --- | --- |
 | **Current** | Pre-#149 baseline (warm ambient + dynamic sconces / wall bounce). No `EnvironmentMapLight`. |
-| **New** | Blender-baked static room with UV1 lightmap, moodier cream-warm ambient, lit sconces, and a procedural hemispherical `EnvironmentMapLight`. Live TV and CRT spill remain dynamic; a dim cyan strip remains as a temporary comparison cue. |
+| **New** | Blender-baked static room with UV1 lightmap, moodier cream-warm ambient, lit sconces, and a procedural hemispherical `EnvironmentMapLight`. Live TV and CRT spill remain dynamic; a dim cyan strip appears only when the bake package is absent. |
 
 Toggle switches the live Bevy scene (not a label-only flag). Select the `New`
 variant with `SPEC_CHUM_ROOM_SCENE=new`. The toolbar control, scene-variant

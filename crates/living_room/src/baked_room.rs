@@ -144,10 +144,11 @@ fn bind_baked_lightmap(
         if !name.starts_with(BAKED_MESH_NAME) {
             continue;
         }
-        if meshes
-            .get(&mesh.0)
-            .is_none_or(|mesh| mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_none())
-        {
+        let Some(baked_mesh) = meshes.get(&mesh.0) else {
+            // Scene children can appear before their mesh asset is available.
+            continue;
+        };
+        if baked_mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_none() {
             bevy::log::error!("#149 baked mesh {name:?} has no TEXCOORD_1; regenerate lightmaps");
             continue;
         }
