@@ -381,6 +381,15 @@ fn room_wide_look(look: Vec3) -> Vec3 {
     look + Vec3::new(0.0, -0.21, 2.02)
 }
 
+fn intro_look_target(look: Vec3, end_preset: u8, t: f32) -> Vec3 {
+    let end_target = if end_preset == ZOOM_PRESET_COUNT - 1 {
+        room_wide_look(look)
+    } else {
+        look
+    };
+    room_wide_look(look).lerp(end_target, ease_in_out_smoother(t))
+}
+
 /// Camera pose for a (possibly fractional) preset index along the back-and-up path.
 pub fn pose_at_zoom(t: f32, look: Vec3) -> Transform {
     let max_i = (ZOOM_PRESETS.len() - 1) as f32;
@@ -631,7 +640,7 @@ fn update_intro_camera(
     let end = pose_at_zoom(f32::from(end_preset), look_at);
     if let Ok(mut tf) = cams.single_mut() {
         let pos = lerp_eye_pullback_rise(intro.start.translation, end.translation, t);
-        let target = room_wide_look(look_at).lerp(look_at, ease_in_out_smoother(t));
+        let target = intro_look_target(look_at, end_preset, t);
         *tf = Transform::from_translation(pos).looking_at(target, Vec3::Y);
     }
 
@@ -766,6 +775,17 @@ mod tests {
         let end = lerp_eye_pullback_rise(from, to, 1.0);
         assert!(start.distance(from) < 0.001);
         assert!(end.distance(to) < 0.001);
+    }
+
+    #[test]
+    fn intro_target_matches_selected_preset() {
+        let look = Vec3::new(0.2, 1.1, -2.0);
+        assert!(intro_look_target(look, 0, 1.0).distance(look) < 0.001);
+        assert!(intro_look_target(look, ZOOM_PRESET_COUNT - 2, 1.0).distance(look) < 0.001);
+        assert!(
+            intro_look_target(look, ZOOM_PRESET_COUNT - 1, 1.0).distance(room_wide_look(look))
+                < 0.001
+        );
     }
 
     #[test]

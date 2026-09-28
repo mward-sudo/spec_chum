@@ -123,9 +123,15 @@ fn animate_opening_lighting(
 ) {
     // `apply_scene_variant` sets the full-strength baseline before this system
     // scales it. Refresh the baseline when the user switches scene variants.
-    if ambient_base.is_none() || variant.is_changed() {
-        *ambient_base = Some(ambient.brightness);
-    }
+    let baked_just_enabled = baked
+        .as_ref()
+        .is_some_and(bevy::ecs::change_detection::DetectChanges::is_added);
+    refresh_ambient_baseline(
+        &mut ambient_base,
+        ambient.brightness,
+        variant.is_changed(),
+        baked_just_enabled,
+    );
     let room_gain = opening.light_gain();
     let practical_gain = opening.practical_light_gain();
     if let Some(base) = *ambient_base {
@@ -234,6 +240,17 @@ fn spawn_new_variant_wip_marker(
 }
 
 // Bevy Queries + resources for Current/New room lighting (#149).
+fn refresh_ambient_baseline(
+    ambient_base: &mut Option<f32>,
+    brightness: f32,
+    variant_changed: bool,
+    baked_just_enabled: bool,
+) {
+    if ambient_base.is_none() || variant_changed || baked_just_enabled {
+        *ambient_base = Some(brightness);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_scene_variant(
     mut commands: Commands,
@@ -254,7 +271,10 @@ fn apply_scene_variant(
 ) {
     // With zero DynamicRoomFillLight entities (e.g. Skein room), fill_intensity stays
     // empty — track init separately so we do not re-apply EnvMap every frame.
-    if !variant.is_changed() && *fill_bases_ready {
+    let baked_just_enabled = baked
+        .as_ref()
+        .is_some_and(bevy::ecs::change_detection::DetectChanges::is_added);
+    if !variant.is_changed() && !baked_just_enabled && *fill_bases_ready {
         return;
     }
 
@@ -346,5 +366,15 @@ mod tests {
         assert_eq!(SceneVariant::from_u32(2), None);
         assert_eq!(SceneVariant::Current.as_u32(), 0);
         assert_eq!(SceneVariant::New.as_u32(), 1);
+    }
+
+    #[test]
+    fn ambient_baseline_refreshes_when_bake_activates() {
+        let mut ambient_base = Some(74.0);
+        refresh_ambient_baseline(&mut ambient_base, 38.0, false, true);
+        assert_eq!(ambient_base, Some(38.0));
+
+        refresh_ambient_baseline(&mut ambient_base, 42.0, false, false);
+        assert_eq!(ambient_base, Some(38.0));
     }
 }

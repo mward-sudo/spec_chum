@@ -414,9 +414,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/camera.rs": {
-    "mtime": 1790564242.0967937,
-    "seen": 1790568067.308556,
-    "ast_hash": "c6b4c00d2ca07e6a725ac99408a2b0e0",
+    "mtime": 1790568923.4061468,
+    "seen": 1790569035.5904891,
+    "ast_hash": "a92ca6b16d36801c92d39e921c58230d",
     "semantic_hash": ""
   },
   "crates/living_room/src/crt.rs": {
@@ -450,9 +450,9 @@
     "semantic_hash": "8cd78449039d538bba10b185dc3ea2f4"
   },
   "crates/living_room/src/glow.rs": {
-    "mtime": 1790522953.203162,
-    "seen": 1790523014.4132211,
-    "ast_hash": "2f080c71874d7e986f5da72fc0dc6352",
+    "mtime": 1790568923.409637,
+    "seen": 1790569035.590684,
+    "ast_hash": "662056e44df6943bf5ec6619000c0865",
     "semantic_hash": ""
   },
   "crates/living_room/src/headless.rs": {
@@ -522,9 +522,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/room.rs": {
-    "mtime": 1790525319.854085,
-    "seen": 1790525327.438011,
-    "ast_hash": "466a85c517ffbfbebc9d91f0a4358685",
+    "mtime": 1790568909.380609,
+    "seen": 1790569035.59111,
+    "ast_hash": "b0875a6dd610578dc81aaa357832d98b",
     "semantic_hash": ""
   },
   "crates/living_room/src/ui_overlay.rs": {
@@ -1620,9 +1620,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/scene_variant.rs": {
-    "mtime": 1790565140.3349981,
-    "seen": 1790568067.3091981,
-    "ast_hash": "c9dc55d7dc3e6e2c5a2524d5aec6b49a",
+    "mtime": 1790569211.2844753,
+    "seen": 1790569304.891242,
+    "ast_hash": "bbd886e58d05e32a89f0fd244f2ac351",
     "semantic_hash": ""
   },
   "crates/agent_client/Cargo.toml": {
@@ -1728,9 +1728,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/baked_room.rs": {
-    "mtime": 1790567922.10164,
-    "seen": 1790568067.308554,
-    "ast_hash": "792c34dd4739b23ed47998a3a00c48da",
+    "mtime": 1790568290.5282543,
+    "seen": 1790569035.590488,
+    "ast_hash": "f5c81715e6efff4593a5303dc372e2ba",
     "semantic_hash": ""
   },
   "scripts/bake_living_room_lightmaps.sh": {

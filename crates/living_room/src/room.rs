@@ -463,7 +463,7 @@ fn spawn_polyhaven_wall_sconces(
     // in the dark room. Add a small warm emitter over the model's bulb glass.
     let bulb_emissive = Vec3::new(2.5, 1.05, 0.28);
     let initial_light_gain = crate::camera::OPENING_DIM_FACTOR;
-    let bulb_material = materials.add(StandardMaterial {
+    let bulb_material = StandardMaterial {
         base_color: Color::srgb(1.0, 0.72, 0.38),
         emissive: LinearRgba::rgb(
             bulb_emissive.x * initial_light_gain,
@@ -472,7 +472,9 @@ fn spawn_polyhaven_wall_sconces(
         ),
         unlit: true,
         ..default()
-    });
+    };
+    let regular_bulb_material = materials.add(bulb_material.clone());
+    let tv_accent_bulb_material = materials.add(bulb_material);
     for (pos, into_room, name, lit) in mounts {
         let rot = Quat::from_rotation_arc(Vec3::Z, into_room.normalize());
         commands.spawn((
@@ -498,7 +500,11 @@ fn spawn_polyhaven_wall_sconces(
             let accent = name == "wall_sconce_tv_centre";
             let bulb = (
                 Mesh3d(bulb_mesh.clone()),
-                MeshMaterial3d(bulb_material.clone()),
+                MeshMaterial3d(if accent {
+                    tv_accent_bulb_material.clone()
+                } else {
+                    regular_bulb_material.clone()
+                }),
                 Transform::from_translation(bulb_world),
                 OpeningSconceBulb(bulb_emissive),
             );

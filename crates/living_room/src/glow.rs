@@ -270,7 +270,7 @@ fn sync_glow_tints(
             continue;
         }
         light.color = tint;
-        light.intensity = base * driven.intensity_scale * opening.light_gain();
+        light.intensity = base * framebuffer_spill_gain(*opening, driven.intensity_scale);
     }
     for (driven, mut light, dynamic) in &mut spots {
         if suppress_wall_bounce && dynamic.is_some() {
@@ -278,8 +278,12 @@ fn sync_glow_tints(
             continue;
         }
         light.color = tint;
-        light.intensity = base * driven.intensity_scale * opening.light_gain();
+        light.intensity = base * framebuffer_spill_gain(*opening, driven.intensity_scale);
     }
+}
+
+fn framebuffer_spill_gain(opening: crate::camera::OpeningSequence, intensity_scale: f32) -> f32 {
+    intensity_scale * opening.light_gain() * opening.crt_power()
 }
 
 #[cfg(test)]
@@ -289,6 +293,14 @@ mod tests {
     #[test]
     fn glow_driven_default_is_unit_scale() {
         assert!((GlowDriven::default().intensity_scale - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn framebuffer_spill_waits_for_crt_power() {
+        assert_eq!(
+            framebuffer_spill_gain(crate::camera::OpeningSequence::default(), 1.0),
+            0.0
+        );
     }
 
     #[test]
