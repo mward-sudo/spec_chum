@@ -59,6 +59,13 @@ if grep -Fq "$SECRET_SENTINEL" "$TMP_DIR/openrouter-output" || \
 fi
 
 env -i PATH="$CLEAN_PATH" \
+  GRAPHIFY_TEST_CAPTURE="$TMP_DIR/openrouter-default-model" \
+  GRAPHIFY_PROVIDER=openrouter \
+  bash -c 'IFS= read -r OPENROUTER_API_KEY; export OPENROUTER_API_KEY; exec "$1" --full' \
+  _ "$ROOT/scripts/graphify_update.sh" <<<"$SECRET_SENTINEL" >"$TMP_DIR/openrouter-default-model-output"
+grep -Fqx 'GRAPHIFY_MODEL=openai/gpt-4.1-mini' "$TMP_DIR/openrouter-default-model"
+
+env -i PATH="$CLEAN_PATH" \
   GRAPHIFY_TEST_CAPTURE="$TMP_DIR/openrouter-key-update" \
   GRAPHIFY_PROVIDER=openrouter \
   bash -c 'IFS= read -r OPENROUTER_API_KEY; export OPENROUTER_API_KEY; exec "$1"' \

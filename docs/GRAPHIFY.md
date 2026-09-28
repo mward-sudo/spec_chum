@@ -1,8 +1,14 @@
 # Graphify workflow
 
-Install the current CLI with `uv tool install graphifyy`, then ensure its bin
-directory is on `PATH`. Check it with `command -v graphify` and
-`graphify --version`.
+Install Graphify with its optional OpenAI-compatible backend so OpenRouter
+full refreshes can run:
+
+```sh
+uv tool install --force "graphifyy[openai]"
+```
+
+Then ensure the tool's bin directory is on `PATH`. Check with
+`command -v graphify` and `graphify --version`.
 
 Use the repository wrapper to refresh the checked-in graph:
 
@@ -28,9 +34,10 @@ unset OPENROUTER_API_KEY GRAPHIFY_PROVIDER GRAPHIFY_OPENROUTER_MODEL
 ```
 
 `GRAPHIFY_OPENROUTER_MODEL` is optional. If omitted, an existing
-`GRAPHIFY_OPENAI_MODEL` or `OPENAI_MODEL` is used; otherwise Graphify chooses
-its configured default. The wrapper maps the key to `OPENAI_API_KEY` and sets
-`OPENAI_BASE_URL=https://openrouter.ai/api/v1` only for the opt-in provider.
+`GRAPHIFY_OPENAI_MODEL` or `OPENAI_MODEL` is used; otherwise the wrapper uses
+OpenRouter's `openai/gpt-4.1-mini` model slug. The wrapper maps the key to
+`OPENAI_API_KEY` and sets `OPENAI_BASE_URL=https://openrouter.ai/api/v1` only
+for the opt-in provider.
 It assigns the secret using a shell builtin and invokes Graphify without the
 secret in its arguments. Avoid shell tracing (`set -x`) while the key is in
 the environment. Full extraction can incur API charges; AST-only updates do

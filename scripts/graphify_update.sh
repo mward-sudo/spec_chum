@@ -58,6 +58,8 @@ case "$PROVIDER" in
       # provider-specific override there so it wins over inherited settings.
       if [[ -n "${GRAPHIFY_OPENROUTER_MODEL:-}" ]]; then
         export GRAPHIFY_OPENAI_MODEL="$GRAPHIFY_OPENROUTER_MODEL"
+      elif [[ -z "${GRAPHIFY_OPENAI_MODEL:-}" && -z "${OPENAI_MODEL:-}" ]]; then
+        export GRAPHIFY_OPENAI_MODEL="openai/gpt-4.1-mini"
       fi
     else
       # Incremental AST refreshes do not use an LLM; keep the unused key out
