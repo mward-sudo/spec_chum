@@ -12,8 +12,8 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1790527074.1550791,
-    "seen": 1790564234.001169,
+    "mtime": 1790564905.1147404,
+    "seen": 1790568067.303712,
     "ast_hash": "081b565be5d70d5064c99afe399988ef",
     "semantic_hash": ""
   },
@@ -414,9 +414,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/camera.rs": {
-    "mtime": 1790564191.6072376,
-    "seen": 1790564234.004174,
-    "ast_hash": "d373acc045d6b70a9932c13089bba03b",
+    "mtime": 1790564242.0967937,
+    "seen": 1790568067.308556,
+    "ast_hash": "c6b4c00d2ca07e6a725ac99408a2b0e0",
     "semantic_hash": ""
   },
   "crates/living_room/src/crt.rs": {
@@ -870,9 +870,9 @@
     "semantic_hash": ""
   },
   "docs/LIVING_ROOM.md": {
-    "mtime": 1790564204.905786,
-    "seen": 1790564234.006828,
-    "ast_hash": "5b1def7d7ed9e0d305f89525c2f866a4",
+    "mtime": 1790567266.8277688,
+    "seen": 1790568067.312795,
+    "ast_hash": "e7a6ff1daa46d37f3b358c4f6af0931f",
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
@@ -1620,9 +1620,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/scene_variant.rs": {
-    "mtime": 1790526389.4997945,
-    "seen": 1790526406.144282,
-    "ast_hash": "91f0e45d55d4d8a5733294c7d24a544a",
+    "mtime": 1790565140.3349981,
+    "seen": 1790568067.3091981,
+    "ast_hash": "c9dc55d7dc3e6e2c5a2524d5aec6b49a",
     "semantic_hash": ""
   },
   "crates/agent_client/Cargo.toml": {
@@ -1662,9 +1662,9 @@
     "semantic_hash": ""
   },
   "scripts/blender/generate_living_room_edit.py": {
-    "mtime": 1790525206.642391,
-    "seen": 1790525222.8229918,
-    "ast_hash": "08cb7ae291d6239e997bcbb33f29c7f1",
+    "mtime": 1790567189.5431921,
+    "seen": 1790568067.311028,
+    "ast_hash": "67bbe5d48bf06107cf11185900d6781d",
     "semantic_hash": ""
   },
   "scripts/blender/tag_living_room_skein_gltf.py": {
@@ -1728,9 +1728,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/baked_room.rs": {
-    "mtime": 1790564162.8725426,
-    "seen": 1790564234.004173,
-    "ast_hash": "e9db825db5456c9868e53ed8055119c1",
+    "mtime": 1790567922.10164,
+    "seen": 1790568067.308554,
+    "ast_hash": "792c34dd4739b23ed47998a3a00c48da",
     "semantic_hash": ""
   },
   "scripts/bake_living_room_lightmaps.sh": {

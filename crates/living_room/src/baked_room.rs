@@ -6,6 +6,7 @@
 use bevy::gltf::GltfMeshName;
 use bevy::pbr::Lightmap;
 use bevy::prelude::*;
+use bevy::world_serialization::{WorldInstance, WorldInstanceSpawner};
 
 use crate::camera::OpeningSequence;
 use crate::hybrid::RoomStatic;
@@ -15,11 +16,13 @@ const SCENE: &str = "lightmaps/room_static.gltf#Scene0";
 const IMAGE: &str = "lightmaps/room_static_lightmap.png";
 const BAKED_MESH_NAME: &str = "spec_chum_room_static_baked";
 
+fn all_baked_meshes_bound(mesh_count: usize, bound_count: usize) -> bool {
+    mesh_count > 0 && mesh_count == bound_count
+}
+
 /// Present only when a complete local bake is available for the procedural room.
 #[derive(Resource, Debug)]
-pub struct BakedRoomEnabled {
-    lightmap: Handle<Image>,
-}
+pub struct BakedRoomEnabled;
 
 #[derive(Component, Debug)]
 struct PendingBakedRoom {
@@ -31,6 +34,13 @@ type ProceduralStaticRootFilter = (
     Without<SceneVariantOnly>,
     Without<PendingBakedRoom>,
 );
+type BakedMeshPrimitiveQuery<'a> = (
+    &'a GltfMeshName,
+    Option<&'a Mesh3d>,
+    Option<&'a MeshMaterial3d<StandardMaterial>>,
+    Option<&'a BakedRoomSurface>,
+    Option<&'a BakedMeshInvalid>,
+);
 
 #[derive(Component, Debug)]
 struct BakedRoomSurface {
@@ -39,17 +49,18 @@ struct BakedRoomSurface {
     base_emissive: LinearRgba,
 }
 
+#[derive(Component, Debug)]
+struct BakedMeshInvalid;
+
 #[derive(Debug, Default)]
 pub struct BakedRoomPlugin;
 
 impl Plugin for BakedRoomPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_baked_room)
-            .add_systems(PreUpdate, activate_baked_room_when_loaded)
-            .add_systems(
-                Update,
-                (bind_baked_lightmap, animate_baked_lighting).chain(),
-            );
+        app.add_systems(Startup, spawn_baked_room).add_systems(
+            Update,
+            (bind_baked_lightmap, animate_baked_lighting).chain(),
+        );
     }
 }
 
@@ -85,20 +96,96 @@ fn spawn_baked_room(
     ));
 }
 
-/// Activate the baked path only after its scene has spawned, leaving the
-/// procedural room visible while the glTF loads or if it fails to load.
-fn activate_baked_room_when_loaded(
+/// Blender exports the atlas UVs as `TEXCOORD_1` on each material primitive.
+/// Bevy's glTF loader creates one entity per primitive, so attach the same atlas
+/// to each primitive. Keep the procedural room visible until every primitive
+/// in the ready world instance has received its lightmap material.
+fn bind_baked_lightmap(
     mut commands: Commands,
     variant: Res<SceneVariant>,
-    pending_roots: Query<(Entity, &Children, &PendingBakedRoom)>,
+    mut world_instances: ResMut<WorldInstanceSpawner>,
+    meshes: Res<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    pending_roots: Query<(Entity, &PendingBakedRoom, &WorldInstance)>,
+    loaded: Query<BakedMeshPrimitiveQuery<'_>>,
     static_roots: Query<Entity, ProceduralStaticRootFilter>,
 ) {
-    for (entity, children, pending) in &pending_roots {
-        if children.is_empty() {
+    for (root, pending, instance) in &pending_roots {
+        if !world_instances.instance_is_ready(**instance) {
             continue;
         }
 
-        commands.entity(entity).insert((
+        let mut mesh_count = 0;
+        let mut bound_count = 0;
+        let mut invalid_mesh = false;
+        for entity in world_instances.iter_instance_entities(**instance) {
+            let Ok((name, mesh, source_material, surface, invalid)) = loaded.get(entity) else {
+                continue;
+            };
+            if !name.starts_with(BAKED_MESH_NAME) {
+                continue;
+            }
+            mesh_count += 1;
+            if surface.is_some() {
+                bound_count += 1;
+                continue;
+            }
+            if invalid.is_some() {
+                invalid_mesh = true;
+                continue;
+            }
+
+            let (Some(mesh), Some(source_material)) = (mesh, source_material) else {
+                continue;
+            };
+            let Some(baked_mesh) = meshes.get(&mesh.0) else {
+                continue;
+            };
+            if baked_mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_none() {
+                bevy::log::error!(
+                    "#149 baked mesh {name:?} has no TEXCOORD_1; regenerate lightmaps"
+                );
+                commands.entity(entity).insert(BakedMeshInvalid);
+                invalid_mesh = true;
+                continue;
+            }
+            let Some(mut material) = materials.get(&source_material.0).cloned() else {
+                continue;
+            };
+            let base_lightmap_exposure = material.lightmap_exposure;
+            let base_emissive = material.emissive;
+            // The baked atlas and exported bulb glow otherwise appear at full
+            // strength, bypassing the room's opening light animation.
+            material.lightmap_exposure = 0.0;
+            material.emissive = LinearRgba::BLACK;
+            let material = materials.add(material);
+            commands.entity(entity).insert((
+                Lightmap {
+                    image: pending.lightmap.clone(),
+                    ..default()
+                },
+                MeshMaterial3d(material.clone()),
+                BakedRoomSurface {
+                    material,
+                    base_lightmap_exposure,
+                    base_emissive,
+                },
+            ));
+            bound_count += 1;
+        }
+
+        if invalid_mesh {
+            world_instances.despawn_instance(**instance);
+            commands.entity(root).despawn();
+            bevy::log::warn!("#149 Blender bake rejected; keeping the procedural room visible");
+            continue;
+        }
+
+        if !all_baked_meshes_bound(mesh_count, bound_count) {
+            continue;
+        }
+
+        commands.entity(root).insert((
             SceneVariantOnly(SceneVariant::New),
             if *variant == SceneVariant::New {
                 Visibility::Visible
@@ -106,74 +193,19 @@ fn activate_baked_room_when_loaded(
                 Visibility::Hidden
             },
         ));
-        commands.entity(entity).remove::<PendingBakedRoom>();
-        commands.insert_resource(BakedRoomEnabled {
-            lightmap: pending.lightmap.clone(),
-        });
+        commands.entity(root).remove::<PendingBakedRoom>();
+        commands.insert_resource(BakedRoomEnabled);
         for static_root in &static_roots {
-            commands
-                .entity(static_root)
-                .insert(SceneVariantOnly(SceneVariant::Current));
+            commands.entity(static_root).insert((
+                SceneVariantOnly(SceneVariant::Current),
+                if *variant == SceneVariant::New {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Visible
+                },
+            ));
         }
-        bevy::log::info!("#149 Blender lightmap enabled after baked scene load");
-    }
-}
-
-/// Blender exports the atlas UVs as `TEXCOORD_1` on each material primitive.
-/// Bevy's glTF loader creates one entity per primitive, so attach the same atlas
-/// to each child with the baked mesh name.
-fn bind_baked_lightmap(
-    mut commands: Commands,
-    baked: Option<Res<BakedRoomEnabled>>,
-    meshes: Res<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    loaded: Query<
-        (
-            Entity,
-            &GltfMeshName,
-            &Mesh3d,
-            &MeshMaterial3d<StandardMaterial>,
-        ),
-        Without<Lightmap>,
-    >,
-) {
-    let Some(baked) = baked else {
-        return;
-    };
-    for (entity, name, mesh, source_material) in &loaded {
-        if !name.starts_with(BAKED_MESH_NAME) {
-            continue;
-        }
-        let Some(baked_mesh) = meshes.get(&mesh.0) else {
-            // Scene children can appear before their mesh asset is available.
-            continue;
-        };
-        if baked_mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_none() {
-            bevy::log::error!("#149 baked mesh {name:?} has no TEXCOORD_1; regenerate lightmaps");
-            continue;
-        }
-        let Some(mut material) = materials.get(&source_material.0).cloned() else {
-            continue;
-        };
-        let base_lightmap_exposure = material.lightmap_exposure;
-        let base_emissive = material.emissive;
-        // The baked atlas and exported bulb glow otherwise appear at full
-        // strength, bypassing the room's opening light animation.
-        material.lightmap_exposure = 0.0;
-        material.emissive = LinearRgba::BLACK;
-        let material = materials.add(material);
-        commands.entity(entity).insert((
-            Lightmap {
-                image: baked.lightmap.clone(),
-                ..default()
-            },
-            MeshMaterial3d(material.clone()),
-            BakedRoomSurface {
-                material,
-                base_lightmap_exposure,
-                base_emissive,
-            },
-        ));
+        bevy::log::info!("#149 Blender lightmap enabled after every baked mesh was bound");
     }
 }
 
@@ -190,5 +222,17 @@ fn animate_baked_lighting(
         };
         material.lightmap_exposure = surface.base_lightmap_exposure * room_gain;
         material.emissive = surface.base_emissive * practical_gain;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_baked_meshes_bound;
+
+    #[test]
+    fn baked_room_waits_for_every_mesh_lightmap() {
+        assert!(!all_baked_meshes_bound(0, 0));
+        assert!(!all_baked_meshes_bound(3, 2));
+        assert!(all_baked_meshes_bound(3, 3));
     }
 }

@@ -240,9 +240,10 @@ opened independently for inspection.
 The app loads the baked room only for the `New` variant when both glTF and atlas
 are present. `Current` continues to use the procedural baseline, and a missing
 bake leaves `New` on its comparison fallback. The procedural room stays visible
-until the baked glTF scene has spawned; a failed or empty scene load therefore
-keeps the fallback room visible. The opening waits for scene readiness for up to
-three seconds, then proceeds so a failed load cannot hold the room on black.
+until every baked mesh has received the lightmap; failed or incomplete mesh
+binding leaves the fallback room visible. The opening waits for scene readiness
+for up to three seconds, then proceeds so a failed load cannot hold the room on
+black.
 Opening light levels animate the baked exposure and live lights together.
 
 Run `./scripts/check_living_room.sh` after rebaking or changing the Bevy binding.

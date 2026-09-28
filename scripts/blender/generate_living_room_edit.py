@@ -649,6 +649,7 @@ def build_room(assets: Path) -> None:
         bsdf.inputs["Roughness"].default_value = roughness
         if emission is not None:
             bsdf.inputs["Emission Color"].default_value = (*emission, 1.0)
+            bsdf.inputs["Emission Strength"].default_value = 1.0
         return mat
 
     vhs_mat = vhs_material("VHS deck charcoal", (0.075, 0.085, 0.095), 0.32, 0.48)
