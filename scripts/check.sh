@@ -22,6 +22,8 @@ if [[ "${SPEC_CHUM_CHECK_LIVING_ROOM:-}" == "1" ]]; then
   RUN_LIVING_ROOM=1
 fi
 
+echo "==> graphify provider smoke test (no network)"
+./scripts/test_graphify_update.sh
 echo "==> cargo fmt --check"
 cargo fmt --all -- --check
 
