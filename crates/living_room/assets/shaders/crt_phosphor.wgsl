@@ -188,8 +188,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // CRT power-up: let a broad central phosphor glow bloom over the raster.
-    // Keep startup lighting additive so a timing/material issue can never hide
-    // the Spectrum picture itself.
+    // Add a warm central phosphor glow during startup; CRT power still gates
+    // the raster below, so zero power intentionally produces a black screen.
     let powered = smoothstep(0.0, 1.0, power);
     let radial = length((tube_uv - vec2(0.5)) * vec2(1.0, 0.75));
     let glow_radius = mix(0.32, 0.90, powered);

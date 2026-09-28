@@ -335,9 +335,9 @@ fn apply_scene_variant(
             };
             for (i, mut light) in fill_lights.iter_mut().enumerate() {
                 if let Some(&base) = fill_intensity.get(i) {
-                    // Retain a reduced live sconce contribution until the baked
-                    // atlas has enough energy to light the room on its own.
-                    light.intensity = if baked.is_some() { base * 0.4 } else { base };
+                    // The opening-lighting system applies the baked sconce scale.
+                    // Keep this variant baseline unscaled so that factor has one owner.
+                    light.intensity = base;
                 }
             }
             for entity in &cams {

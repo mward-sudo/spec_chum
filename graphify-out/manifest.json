@@ -1620,9 +1620,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/scene_variant.rs": {
-    "mtime": 1790569211.2844753,
-    "seen": 1790569304.891242,
-    "ast_hash": "bbd886e58d05e32a89f0fd244f2ac351",
+    "mtime": 1790569922.1812944,
+    "seen": 1790569989.2415621,
+    "ast_hash": "d14b9c0717a4c443c9e2ff208d0106f7",
     "semantic_hash": ""
   },
   "crates/agent_client/Cargo.toml": {
