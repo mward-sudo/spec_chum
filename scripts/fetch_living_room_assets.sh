@@ -106,6 +106,18 @@ download "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modern_wooden_ca
   "$ROOT/models/modern_wooden_cabinet/textures/modern_wooden_cabinet_arm_1k.jpg"
 
 # Floor toys / 80s clutter
+# Potted foliage (common domestic accent; placed at the TV-wall end of the room)
+download "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/potted_plant_04/potted_plant_04_1k.gltf" \
+  "$ROOT/models/potted_plant_04/potted_plant_04_1k.gltf"
+download "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/potted_plant_04/potted_plant_04.bin" \
+  "$ROOT/models/potted_plant_04/potted_plant_04.bin"
+download "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/potted_plant_04/potted_plant_04_diff_1k.jpg" \
+  "$ROOT/models/potted_plant_04/textures/potted_plant_04_diff_1k.jpg"
+download "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/potted_plant_04/potted_plant_04_nor_gl_1k.jpg" \
+  "$ROOT/models/potted_plant_04/textures/potted_plant_04_nor_gl_1k.jpg"
+download "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/potted_plant_04/potted_plant_04_arm_1k.jpg" \
+  "$ROOT/models/potted_plant_04/textures/potted_plant_04_arm_1k.jpg"
+
 download "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rubber_duck_toy/rubber_duck_toy_1k.gltf" \
   "$ROOT/models/rubber_duck_toy/rubber_duck_toy_1k.gltf"
 download "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/rubber_duck_toy/rubber_duck_toy.bin" \

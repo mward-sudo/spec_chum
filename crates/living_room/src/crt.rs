@@ -235,13 +235,12 @@ fn setup_crt_resources(
         48,
         36,
     ));
-    // Middle ground (#149): glossy enough to read CRT curvature at sofa pullback,
-    // not chrome (0.04 / 1.0 whitened the aperture) and not flat (0.18 / 0.55 hid
-    // the glass). Light placement still carries most of the hotspot avoidance.
+    // Keep just a soft glass sheen. Strong specular reflections moved across the
+    // curved screen during the opening and vanished at the frontal settle.
     let glass_mat = std_mats.add(StandardMaterial {
-        base_color: Color::srgba(0.55, 0.65, 0.75, 0.08),
-        perceptual_roughness: 0.10,
-        reflectance: 0.78,
+        base_color: Color::srgba(0.55, 0.65, 0.75, 0.06),
+        perceptual_roughness: 0.28,
+        reflectance: 0.32,
         metallic: 0.0,
         alpha_mode: AlphaMode::Blend,
         ..default()
@@ -335,6 +334,7 @@ fn attach_crt_to_television(
 fn animate_crt_params(
     time: Res<Time>,
     look: Option<Res<crate::camera::CrtLookBlend>>,
+    opening: Option<Res<crate::camera::OpeningSequence>>,
     mut materials: ResMut<Assets<CrtPhosphorMaterial>>,
     query: Query<&MeshMaterial3d<CrtPhosphorMaterial>, With<CrtPhosphor>>,
 ) {
@@ -345,6 +345,7 @@ fn animate_crt_params(
     let grille = 0.025 * near + t * 0.28;
     let soft = 0.02 * near + t * 0.38;
     let bright = 1.60 + t * 0.70;
+    let power = opening.map_or(1.0, |sequence| sequence.crt_power());
     for handle in &query {
         if let Some(mut mat) = materials.get_mut(handle) {
             mat.params0.x = time.elapsed_secs();
@@ -353,6 +354,7 @@ fn animate_crt_params(
             mat.params0.w = bright;
             mat.params1.z = soft;
             mat.params1.w = PHOSPHOR_W / PHOSPHOR_MESH_H;
+            mat.params2.y = power;
         }
     }
 }

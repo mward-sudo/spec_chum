@@ -13,7 +13,19 @@ use bevy::prelude::*;
 use crate::crt::CrtPhosphor;
 use crate::quality;
 
-const INTRO_SECS: f32 = 1.5;
+const TV_SPOT_FADE_SECS: f32 = 0.40;
+const CAMERA_MOVE_DELAY_SECS: f32 = 0.0;
+const CAMERA_MOVE_SECS: f32 = 4.40;
+const INTRO_SECS: f32 = CAMERA_MOVE_DELAY_SECS + CAMERA_MOVE_SECS;
+// Keep a failed or empty WorldAssetRoot from leaving the opening on black forever.
+const SCENE_READY_TIMEOUT_SECS: f32 = 3.0;
+const PRACTICAL_LIGHT_RISE_DELAY_SECS: f32 = 1.15;
+const PRACTICAL_LIGHT_RISE_SECS: f32 = 2.00;
+const LIGHT_RISE_DELAY_SECS: f32 = 0.55;
+const LIGHT_RISE_SECS: f32 = 2.60;
+const CRT_POWER_DELAY_SECS: f32 = 3.55;
+const CRT_POWER_SECS: f32 = 0.85;
+pub(crate) const OPENING_DIM_FACTOR: f32 = 0.0;
 
 /// Vertical FOV (~49°). Shared across zoom presets.
 const LOCKED_FOV: f32 = 0.85;
@@ -34,14 +46,10 @@ fn clamp01(t: f32) -> f32 {
     t.clamp(0.0, 1.0)
 }
 
-/// Ease-in-out cubic (Penner): `4t³` if t<0.5 else `1-(−2t+2)³/2`.
-fn ease_in_out_cubic(t: f32) -> f32 {
+/// Quintic smootherstep gives the opening a gentle start and a clean settle.
+fn ease_in_out_smoother(t: f32) -> f32 {
     let t = clamp01(t);
-    if t < 0.5 {
-        4.0 * t * t * t
-    } else {
-        1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
-    }
+    t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 }
 
 /// Ease-out cubic (Penner): `1-(1-t)³` — snappy start, soft settle (scroll zoom).
@@ -50,14 +58,16 @@ fn ease_out_cubic(t: f32) -> f32 {
     1.0 - (1.0 - t).powi(3)
 }
 
-/// Eye-position blend with ease-in-out cubic on all axes (intro dolly).
+/// Soft dolly with a restrained lateral / vertical arc (opening camera move).
 pub fn lerp_eye_pullback_rise(from: Vec3, to: Vec3, t: f32) -> Vec3 {
-    let e = ease_in_out_cubic(t);
-    Vec3::new(
+    let e = ease_in_out_smoother(t);
+    let linear = Vec3::new(
         from.x + (to.x - from.x) * e,
         from.y + (to.y - from.y) * e,
         from.z + (to.z - from.z) * e,
-    )
+    );
+    let arc = (std::f32::consts::PI * e).sin();
+    linear + Vec3::new(-0.06 * arc, 0.035 * arc, 0.0)
 }
 
 /// Eye-position blend with ease-out cubic — scroll/trackpad preset swings.
@@ -82,7 +92,7 @@ struct ZoomPreset {
 const ZOOM_PRESETS: [ZoomPreset; 5] = [
     // Near-fill CRT — tube almost fills the view (still a slim chrome margin).
     ZoomPreset {
-        crt_fill: 0.78,
+        crt_fill: 0.85,
         y_lift: 0.0,
     },
     // Close CRT — readable glyphs, clear of toolbar / glass footer.
@@ -100,10 +110,11 @@ const ZOOM_PRESETS: [ZoomPreset; 5] = [
         crt_fill: 0.26,
         y_lift: 0.18,
     },
-    // Doorway / back-and-up swing.
+    // Doorway / room-wide view. Pull farther back so the seating area is in
+    // frame as well as the TV; its look target shifts into the room at preset 4.
     ZoomPreset {
-        crt_fill: 0.13,
-        y_lift: 0.55,
+        crt_fill: 0.062,
+        y_lift: 1.24,
     },
 ];
 
@@ -116,7 +127,91 @@ pub struct CameraIntro {
     pub elapsed: f32,
     pub start: Transform,
     pub end: Transform,
+    end_preset: u8,
 }
+
+/// Shared lighting and CRT power-up timeline for the scene opening.
+#[derive(Resource, Debug, Clone, Copy)]
+pub struct OpeningSequence {
+    elapsed_secs: f32,
+    scene_wait_secs: f32,
+    scene_ready: bool,
+}
+
+impl Default for OpeningSequence {
+    fn default() -> Self {
+        Self {
+            elapsed_secs: 0.0,
+            scene_wait_secs: 0.0,
+            scene_ready: false,
+        }
+    }
+}
+
+impl OpeningSequence {
+    pub fn light_gain(self) -> f32 {
+        let t = ((self.elapsed_secs - LIGHT_RISE_DELAY_SECS) / LIGHT_RISE_SECS).clamp(0.0, 1.0);
+        OPENING_DIM_FACTOR + (1.0 - OPENING_DIM_FACTOR) * ease_in_out_smoother(t)
+    }
+
+    pub fn practical_light_gain(self) -> f32 {
+        let t = ((self.elapsed_secs - PRACTICAL_LIGHT_RISE_DELAY_SECS) / PRACTICAL_LIGHT_RISE_SECS)
+            .clamp(0.0, 1.0);
+        OPENING_DIM_FACTOR + (1.0 - OPENING_DIM_FACTOR) * ease_in_out_smoother(t)
+    }
+
+    pub fn crt_power(self) -> f32 {
+        let t = ((self.elapsed_secs - CRT_POWER_DELAY_SECS) / CRT_POWER_SECS).clamp(0.0, 1.0);
+        ease_in_out_smoother(t)
+    }
+
+    pub fn tv_spot_gain(self) -> f32 {
+        let fade_in = ease_out_cubic(self.elapsed_secs / TV_SPOT_FADE_SECS);
+        // Hold the localized TV accent while the room lighting rises, then
+        // taper it smoothly as the CRT switches on near the camera settle.
+        let fade_out = ease_in_out_smoother((self.elapsed_secs - 2.65) / 1.20);
+        5_600.0 * fade_in * (1.0 - fade_out)
+    }
+
+    fn set_elapsed(&mut self, elapsed_secs: f32) {
+        self.elapsed_secs = elapsed_secs;
+        self.scene_wait_secs = SCENE_READY_TIMEOUT_SECS;
+        self.scene_ready = true;
+    }
+    fn advance(&mut self, delta_secs: f32, scene_ready: bool) {
+        if !self.scene_ready {
+            self.scene_wait_secs =
+                (self.scene_wait_secs + delta_secs).min(SCENE_READY_TIMEOUT_SECS);
+            self.scene_ready = scene_ready || self.scene_wait_secs >= SCENE_READY_TIMEOUT_SECS;
+        }
+        if self.scene_ready {
+            self.elapsed_secs = (self.elapsed_secs + delta_secs).min(INTRO_SECS);
+        }
+    }
+
+    fn elapsed(self) -> f32 {
+        self.elapsed_secs
+    }
+}
+
+fn advance_opening_sequence(
+    time: Res<Time>,
+    mut opening: ResMut<OpeningSequence>,
+    scene_roots: Query<(&WorldAssetRoot, Option<&Children>)>,
+) {
+    // Start the timeline on the first rendered frame. Asset instantiation must
+    // not leave the opening stalled on black; the camera-mounted spinner reports
+    // loading while the scene catches up.
+    let root_count = scene_roots.iter().count();
+    let scene_ready = root_count > 0
+        && scene_roots
+            .iter()
+            .all(|(_, children)| children.is_some_and(|children| !children.is_empty()));
+    opening.advance(time.delta_secs(), scene_ready);
+}
+
+/// Preset selected when the opening camera move settles.
+const INTRO_DESTINATION_PRESET: u8 = 0;
 
 /// Present once the camera is locked (zoom presets active).
 #[derive(Resource, Debug, Default)]
@@ -126,11 +221,11 @@ pub struct CameraLocked;
 #[derive(Resource, Debug, Default)]
 pub struct IntroSkipRequest(pub bool);
 
-/// After intro skip/finish, jump to this preset (embed starts on living-room hero).
+/// Optional override for the preset selected when intro finishes.
 #[derive(Resource, Debug, Default)]
 pub struct PostIntroZoom(pub Option<u8>);
 
-/// 0 = near full-screen CRT (readable glyphs); 1 = pulled-back living-room CRT look.
+/// 0 = near full-screen CRT (readable glyphs); higher values pull back into the room.
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct CrtLookBlend(pub f32);
 
@@ -245,6 +340,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<IntroSkipRequest>()
             .init_resource::<PostIntroZoom>()
+            .init_resource::<OpeningSequence>()
             .init_resource::<CameraZoom>()
             .init_resource::<CrtLookBlend>()
             .init_resource::<ZoomScrollAccum>()
@@ -252,6 +348,9 @@ impl Plugin for CameraPlugin {
             .add_systems(
                 Update,
                 (
+                    advance_opening_sequence,
+                    animate_tv_spotlight,
+                    animate_loading_spinner,
                     skip_intro,
                     update_intro_camera,
                     zoom_from_scroll,
@@ -278,6 +377,19 @@ fn preset_eye(look: Vec3, preset: ZoomPreset) -> Vec3 {
     look + Vec3::new(0.0, preset.y_lift, dist)
 }
 
+fn room_wide_look(look: Vec3) -> Vec3 {
+    look + Vec3::new(0.0, -0.21, 2.02)
+}
+
+fn intro_look_target(look: Vec3, end_preset: u8, t: f32) -> Vec3 {
+    let end_target = if end_preset == ZOOM_PRESET_COUNT - 1 {
+        room_wide_look(look)
+    } else {
+        look
+    };
+    room_wide_look(look).lerp(end_target, ease_in_out_smoother(t))
+}
+
 /// Camera pose for a (possibly fractional) preset index along the back-and-up path.
 pub fn pose_at_zoom(t: f32, look: Vec3) -> Transform {
     let max_i = (ZOOM_PRESETS.len() - 1) as f32;
@@ -289,20 +401,66 @@ pub fn pose_at_zoom(t: f32, look: Vec3) -> Transform {
     let p0 = preset_eye(look, ZOOM_PRESETS[i0]);
     let p1 = preset_eye(look, ZOOM_PRESETS[i1]);
     let pos = lerp_eye_zoom(p0, p1, f);
-    Transform::from_translation(pos).looking_at(look, Vec3::Y)
+    let target = if i1 == ZOOM_PRESETS.len() - 1 && i0 != i1 {
+        look.lerp(room_wide_look(look), ease_out_cubic(f))
+    } else if i0 == ZOOM_PRESETS.len() - 1 {
+        room_wide_look(look)
+    } else {
+        look
+    };
+    Transform::from_translation(pos).looking_at(target, Vec3::Y)
 }
 
-pub(crate) fn setup_camera(mut commands: Commands) {
+pub(crate) fn setup_camera(
+    mut commands: Commands,
+    post_zoom: Res<PostIntroZoom>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     let look = screen_look_at();
-    let start = Transform::from_xyz(0.15, 1.85, 2.15).looking_at(look, Vec3::Y);
-    let end = pose_at_zoom(0.0, look);
+    let end_preset = post_zoom
+        .0
+        .unwrap_or(INTRO_DESTINATION_PRESET)
+        .min(ZOOM_PRESET_COUNT - 1);
+    // Keep the high-angle establishing position inside the room shell. Starting
+    // above the ceiling made the TV and its spotlight occluded until the camera
+    // passed through the ceiling, which read as a sudden lighting pop.
+    let start_eye = preset_eye(look, ZOOM_PRESETS[ZOOM_PRESETS.len() - 1]);
+    let start = Transform::from_translation(start_eye).looking_at(room_wide_look(look), Vec3::Y);
+    let end = pose_at_zoom(f32::from(end_preset), look);
 
     commands.insert_resource(CameraIntro {
         elapsed: 0.0,
         start,
         end,
+        end_preset,
     });
     commands.insert_resource(CameraZoom::default());
+    commands.spawn((
+        SpotLight {
+            color: Color::srgb(1.0, 0.70, 0.43),
+            intensity: 0.0,
+            range: 2.4,
+            radius: 0.16,
+            inner_angle: 0.24,
+            outer_angle: 0.68,
+            shadow_maps_enabled: false,
+            ..default()
+        },
+        // Use the center sconce bulb as a motivated source for the TV-wall
+        // accent rather than shining a hidden lamp directly into the glass.
+        Transform::from_translation(Vec3::new(
+            0.0,
+            1.85 + 0.107,
+            -crate::room::ROOM_D * 0.5 + 0.03 + 0.192,
+        ))
+        .looking_at(
+            crate::room::TV_STAND_POS + Vec3::new(0.0, 1.42, 0.28),
+            Vec3::Y,
+        ),
+        OpeningTvSpotlight,
+        Name::new("opening_tv_spotlight"),
+    ));
 
     let mut cam = commands.spawn((
         Camera3d::default(),
@@ -345,6 +503,74 @@ pub(crate) fn setup_camera(mut commands: Commands) {
             ..Bloom::NATURAL
         });
     }
+
+    // Camera-space loading mark: visible over the black clear while glTF scenes
+    // instantiate, then hidden as soon as the complete room is ready.
+    let camera_entity = cam.id();
+    let spinner = commands
+        .spawn((
+            Transform::from_xyz(0.82, -0.46, -1.15),
+            Visibility::Visible,
+            OpeningLoadingSpinner,
+            Name::new("room_loading_spinner"),
+        ))
+        .id();
+    let bead_mesh = meshes.add(Sphere::new(0.008).mesh().uv(8, 6));
+    commands.entity(spinner).with_children(|parent| {
+        for i in 0..8 {
+            let angle = i as f32 * std::f32::consts::TAU / 8.0;
+            let level = (i + 1) as f32 / 8.0;
+            let material = materials.add(StandardMaterial {
+                base_color: Color::srgb(
+                    0.20 + level * 0.38,
+                    0.44 + level * 0.38,
+                    0.58 + level * 0.35,
+                ),
+                emissive: LinearRgba::rgb(0.12 + level * 0.8, 0.3 + level * 1.5, 0.5 + level * 2.0),
+                unlit: true,
+                ..default()
+            });
+            parent.spawn((
+                Mesh3d(bead_mesh.clone()),
+                MeshMaterial3d(material),
+                Transform::from_xyz(angle.cos() * 0.042, angle.sin() * 0.042, 0.0),
+                Name::new("room_loading_spinner_bead"),
+            ));
+        }
+    });
+    commands.entity(camera_entity).add_child(spinner);
+}
+
+#[derive(Component)]
+struct OpeningLoadingSpinner;
+
+fn animate_loading_spinner(
+    time: Res<Time>,
+    opening: Res<OpeningSequence>,
+    mut spinner: Query<(&mut Transform, &mut Visibility), With<OpeningLoadingSpinner>>,
+) {
+    let Ok((mut transform, mut visibility)) = spinner.single_mut() else {
+        return;
+    };
+    *visibility = if opening.scene_ready {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    };
+    transform.rotation = Quat::from_rotation_z(-time.elapsed_secs() * 4.0);
+}
+
+#[derive(Component)]
+struct OpeningTvSpotlight;
+
+fn animate_tv_spotlight(
+    opening: Res<OpeningSequence>,
+    mut spots: Query<&mut SpotLight, With<OpeningTvSpotlight>>,
+) {
+    let gain = opening.tv_spot_gain();
+    for mut spot in &mut spots {
+        spot.intensity = gain;
+    }
 }
 
 // Bevy system: intro skip needs input + camera + zoom resources together (#171).
@@ -358,6 +584,7 @@ fn skip_intro(
     mut commands: Commands,
     mut cams: Query<&mut Transform, With<LivingRoomCamera>>,
     mut zoom: ResMut<CameraZoom>,
+    mut opening: ResMut<OpeningSequence>,
 ) {
     let Some(mut intro) = intro else {
         skip_req.0 = false;
@@ -372,7 +599,8 @@ fn skip_intro(
         return;
     }
     intro.elapsed = INTRO_SECS;
-    let preset = post_zoom.0.take().unwrap_or(0);
+    opening.set_elapsed(INTRO_SECS);
+    let preset = post_zoom.0.take().unwrap_or(INTRO_DESTINATION_PRESET);
     *zoom = CameraZoom::default();
     zoom.jump_to(preset);
     if let Ok(mut tf) = cams.single_mut() {
@@ -383,7 +611,7 @@ fn skip_intro(
 }
 
 fn update_intro_camera(
-    time: Res<Time>,
+    opening: Res<OpeningSequence>,
     mut post_zoom: ResMut<PostIntroZoom>,
     intro: Option<ResMut<CameraIntro>>,
     mut commands: Commands,
@@ -394,21 +622,30 @@ fn update_intro_camera(
     let Some(mut intro) = intro else {
         return;
     };
-    intro.elapsed += time.delta_secs();
-    let t = (intro.elapsed / INTRO_SECS).clamp(0.0, 1.0);
+    intro.elapsed = opening.elapsed();
+    let t = ((intro.elapsed - CAMERA_MOVE_DELAY_SECS) / CAMERA_MOVE_SECS).clamp(0.0, 1.0);
 
     let look_at = phosphor
         .iter()
         .next()
         .map_or_else(screen_look_at, GlobalTransform::translation);
 
+    let end_preset = post_zoom
+        .0
+        .unwrap_or(intro.end_preset)
+        .min(ZOOM_PRESET_COUNT - 1);
+    // Recompute the endpoint from the live CRT transform. The GLTF scene can
+    // settle by a few pixels after startup; matching that live target prevents
+    // a final-frame correction when the zoom controls take over.
+    let end = pose_at_zoom(f32::from(end_preset), look_at);
     if let Ok(mut tf) = cams.single_mut() {
-        let pos = lerp_eye_pullback_rise(intro.start.translation, intro.end.translation, t);
-        *tf = Transform::from_translation(pos).looking_at(look_at, Vec3::Y);
+        let pos = lerp_eye_pullback_rise(intro.start.translation, end.translation, t);
+        let target = intro_look_target(look_at, end_preset, t);
+        *tf = Transform::from_translation(pos).looking_at(target, Vec3::Y);
     }
 
     if t >= 1.0 {
-        let preset = post_zoom.0.take().unwrap_or(0);
+        let preset = post_zoom.0.take().unwrap_or(intro.end_preset);
         *zoom = CameraZoom::default();
         zoom.jump_to(preset);
         if let Ok(mut tf) = cams.single_mut() {
@@ -495,8 +732,9 @@ pub(crate) fn apply_zoom_camera(
     for mut gtf in &mut glass_tf {
         gtf.scale = Vec3::new(1.0, 1.0, z_scale);
     }
-    // Fade glass with zoom instead of popping Visibility.
-    let glass_a = (t - 0.12).clamp(0.0, 1.0) * 0.10;
+    // Keep the glass reflection stable across the intro → locked-camera handoff.
+    // Setting alpha from zoom made it jump from the authored value to zero at preset 0.
+    let glass_a = 0.06;
     for handle in &mut glass {
         if let Some(mut mat) = std_mats.get_mut(&handle.0) {
             mat.base_color = Color::srgba(0.55, 0.65, 0.75, glass_a);
@@ -524,13 +762,13 @@ mod tests {
         assert!((ease_out_cubic(0.0) - 0.0).abs() < f32::EPSILON);
         assert!((ease_out_cubic(1.0) - 1.0).abs() < f32::EPSILON);
         // Snappier than ease-in-out at t=0.25.
-        assert!(ease_out_cubic(0.25) > ease_in_out_cubic(0.25));
+        assert!(ease_out_cubic(0.25) > ease_in_out_smoother(0.25));
     }
 
     #[test]
     fn easing_endpoints() {
-        assert!((ease_in_out_cubic(0.0) - 0.0).abs() < f32::EPSILON);
-        assert!((ease_in_out_cubic(1.0) - 1.0).abs() < f32::EPSILON);
+        assert!((ease_in_out_smoother(0.0) - 0.0).abs() < f32::EPSILON);
+        assert!((ease_in_out_smoother(1.0) - 1.0).abs() < f32::EPSILON);
         let from = Vec3::new(0.0, 0.0, 1.0);
         let to = Vec3::new(0.0, 1.0, 3.0);
         let start = lerp_eye_pullback_rise(from, to, 0.0);
@@ -540,8 +778,33 @@ mod tests {
     }
 
     #[test]
-    fn ease_in_out_cubic_midpoint() {
-        assert!((ease_in_out_cubic(0.5) - 0.5).abs() < f32::EPSILON);
+    fn intro_target_matches_selected_preset() {
+        let look = Vec3::new(0.2, 1.1, -2.0);
+        assert!(intro_look_target(look, 0, 1.0).distance(look) < 0.001);
+        assert!(intro_look_target(look, ZOOM_PRESET_COUNT - 2, 1.0).distance(look) < 0.001);
+        assert!(
+            intro_look_target(look, ZOOM_PRESET_COUNT - 1, 1.0).distance(room_wide_look(look))
+                < 0.001
+        );
+    }
+
+    #[test]
+    fn opening_waits_for_scene_or_bounded_timeout() {
+        let mut opening = OpeningSequence::default();
+        opening.advance(1.0, false);
+        assert!(!opening.scene_ready);
+        assert_eq!(opening.elapsed(), 0.0);
+
+        opening.advance(1.0, false);
+        assert!(!opening.scene_ready);
+        opening.advance(1.0, false);
+        assert!(opening.scene_ready);
+        assert_eq!(opening.elapsed(), 1.0);
+    }
+
+    #[test]
+    fn ease_in_out_smoother_midpoint() {
+        assert!((ease_in_out_smoother(0.5) - 0.5).abs() < f32::EPSILON);
     }
 
     #[test]

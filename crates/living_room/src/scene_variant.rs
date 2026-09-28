@@ -8,14 +8,17 @@
 
 use bevy::prelude::*;
 
-use crate::camera::LivingRoomCamera;
+use crate::camera::{LivingRoomCamera, OpeningSequence};
 use crate::quality;
+use crate::room::{OpeningSconceBulb, OpeningSconceLight, OpeningTvAccent};
+
+const NEW_ENVIRONMENT_MAP_INTENSITY: f32 = 125.0;
 
 /// Which living-room lighting/scene path is active.
 ///
 /// - [`Current`](Self::Current) — pre-#149 baseline (dynamic PBR fill + sconces).
-/// - [`New`](Self::New) — lightmap WIP: moodier cream ambient + sconces + stub
-///   [`EnvironmentMapLight`] + cyan strip; wall-bounce still suppressed.
+/// - [`New`](Self::New) — Blender lightmap when baked assets are available;
+///   otherwise the earlier IBL + cyan-strip comparison stub.
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SceneVariant {
     #[default]
@@ -50,11 +53,11 @@ pub struct SceneVariantOnly(pub SceneVariant);
 
 /// Dynamic room fill tagged for the #149 A/B harness.
 ///
-/// - Sconce bulbs (no [`crate::glow::GlowDriven`]): stay lit on both Current and New.
-/// - CRT wall-bounce ([`crate::glow::GlowDriven`]): still suppressed on New as the
-///   lightmap stub until baked fill lands.
+/// - Sconce bulbs (no [`crate::glow::GlowDriven`]): disabled on New with a bake.
+/// - CRT wall-bounce ([`crate::glow::GlowDriven`]): live with a bake, suppressed
+///   only on the older New stub.
 ///
-/// Temporary until baked lightmaps replace these lights (#149).
+/// Temporary while the Current/New comparison remains (#149).
 #[derive(Component, Reflect, Debug, Clone, Copy, Default)]
 #[reflect(Component, Default)]
 pub struct DynamicRoomFillLight;
@@ -88,13 +91,96 @@ impl Plugin for SceneVariantPlugin {
             )
             .add_systems(
                 Update,
-                apply_scene_variant.run_if(resource_exists::<NewVariantEnvironmentMap>),
+                (
+                    apply_scene_variant.run_if(resource_exists::<NewVariantEnvironmentMap>),
+                    animate_opening_lighting,
+                )
+                    .chain(),
             );
     }
 }
 
+// Bevy injects each system parameter separately; grouping these would obscure the lighting paths.
+#[allow(clippy::too_many_arguments)]
+fn animate_opening_lighting(
+    opening: Res<OpeningSequence>,
+    variant: Res<SceneVariant>,
+    baked: Option<Res<crate::baked_room::BakedRoomEnabled>>,
+    mut ambient: ResMut<GlobalAmbientLight>,
+    mut ambient_base: Local<Option<f32>>,
+    mut sconces: Query<(
+        &OpeningSconceLight,
+        &mut PointLight,
+        Option<&OpeningTvAccent>,
+    )>,
+    mut environment_maps: Query<&mut EnvironmentMapLight, With<LivingRoomCamera>>,
+    bulbs: Query<(
+        &OpeningSconceBulb,
+        &MeshMaterial3d<StandardMaterial>,
+        Option<&OpeningTvAccent>,
+    )>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // `apply_scene_variant` sets the full-strength baseline before this system
+    // scales it. Refresh the baseline when the user switches scene variants.
+    let baked_just_enabled = baked
+        .as_ref()
+        .is_some_and(bevy::ecs::change_detection::DetectChanges::is_added);
+    refresh_ambient_baseline(
+        &mut ambient_base,
+        ambient.brightness,
+        variant.is_changed(),
+        baked_just_enabled,
+    );
+    let room_gain = opening.light_gain();
+    let practical_gain = opening.practical_light_gain();
+    if let Some(base) = *ambient_base {
+        ambient.brightness = base * room_gain;
+    }
+
+    let baked_sconce_scale = if baked.is_some() && *variant == SceneVariant::New {
+        0.4
+    } else {
+        1.0
+    };
+    let tv_accent_gain = (opening.tv_spot_gain() / 5_600.0).clamp(0.0, 1.0);
+    for (sconce, mut light, accent) in &mut sconces {
+        let gain = if accent.is_some() {
+            practical_gain.max(tv_accent_gain)
+        } else {
+            practical_gain
+        };
+        light.intensity = sconce.0 * baked_sconce_scale * gain;
+    }
+    for (bulb, material, accent) in &bulbs {
+        let gain = if accent.is_some() {
+            practical_gain.max(tv_accent_gain)
+        } else {
+            practical_gain
+        };
+        let Some(mut material) = materials.get_mut(&material.0) else {
+            continue;
+        };
+        material.emissive = LinearRgba::rgb(bulb.0.x * gain, bulb.0.y * gain, bulb.0.z * gain);
+    }
+    // New's camera cubemap is a separate illumination path from GlobalAmbientLight.
+    // Fade it with the same curve so it cannot reveal the baked room in one step.
+    let environment_gain = if *variant == SceneVariant::New {
+        room_gain
+    } else {
+        0.0
+    };
+    for mut environment in &mut environment_maps {
+        environment.intensity = NEW_ENVIRONMENT_MAP_INTENSITY * environment_gain;
+    }
+}
+
 /// Build a 1×1×6 stub cubemap via Bevy's hemispherical helper (no HDR asset yet).
-fn prepare_new_environment_map(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn prepare_new_environment_map(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    opening: Res<OpeningSequence>,
+) {
     // Warm, muted hemispheres — subtle IBL fill for New without high-key wash.
     // (Earlier 2400 intensity + bright cyan sky blew Exposure ~8.2 into washout.)
     // Soft upper lobe: enough for a gentle glass sheen with moderate CRT glass,
@@ -106,7 +192,9 @@ fn prepare_new_environment_map(mut commands: Commands, mut images: ResMut<Assets
         Color::srgb(0.16, 0.11, 0.06), // dark warm floor bounce
     );
     // Indoor Exposure ~8.2: soft room fill; sconces + cream ambient carry mood.
-    light.intensity = 125.0;
+    // Seed the resource at the opening gain too, so its first insertion onto
+    // the camera cannot contribute a full-strength frame before animation runs.
+    light.intensity = NEW_ENVIRONMENT_MAP_INTENSITY * opening.light_gain();
     commands.insert_resource(NewVariantEnvironmentMap(light));
 }
 
@@ -117,6 +205,15 @@ fn spawn_new_variant_wip_marker(
     mut materials: ResMut<Assets<StandardMaterial>>,
     variant: Res<SceneVariant>,
 ) {
+    // A real bake has an obvious A/B difference without this temporary cue.
+    let asset_root = crate::resolve_asset_root();
+    if asset_root.join("lightmaps/room_static.gltf").is_file()
+        && asset_root
+            .join("lightmaps/room_static_lightmap.png")
+            .is_file()
+    {
+        return;
+    }
     let mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.12, 0.55, 0.65),
         // Dimmer than the first stub — cue only, not another wash source.
@@ -143,11 +240,23 @@ fn spawn_new_variant_wip_marker(
 }
 
 // Bevy Queries + resources for Current/New room lighting (#149).
+fn refresh_ambient_baseline(
+    ambient_base: &mut Option<f32>,
+    brightness: f32,
+    variant_changed: bool,
+    baked_just_enabled: bool,
+) {
+    if ambient_base.is_none() || variant_changed || baked_just_enabled {
+        *ambient_base = Some(brightness);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_scene_variant(
     mut commands: Commands,
     variant: Res<SceneVariant>,
     env_map: Res<NewVariantEnvironmentMap>,
+    baked: Option<Res<crate::baked_room::BakedRoomEnabled>>,
     mut ambient: ResMut<GlobalAmbientLight>,
     mut only: Query<(&SceneVariantOnly, &mut Visibility)>,
     cams: Query<Entity, With<LivingRoomCamera>>,
@@ -162,7 +271,10 @@ fn apply_scene_variant(
 ) {
     // With zero DynamicRoomFillLight entities (e.g. Skein room), fill_intensity stays
     // empty — track init separately so we do not re-apply EnvMap every frame.
-    if !variant.is_changed() && *fill_bases_ready {
+    let baked_just_enabled = baked
+        .as_ref()
+        .is_some_and(bevy::ecs::change_detection::DetectChanges::is_added);
+    if !variant.is_changed() && !baked_just_enabled && *fill_bases_ready {
         return;
     }
 
@@ -203,21 +315,28 @@ fn apply_scene_variant(
             }
         }
         SceneVariant::New => {
-            // Moodier cream-warm vs Current tungsten; stub IBL is soft fill so
-            // ambient stays near Current brightness (118 + IBL was high-key wash).
+            // Moodier cream-warm vs Current tungsten. Keep live sconce fill while
+            // the Blender atlas is still under-lit; the baked map alone made the
+            // room almost black in the New variant.
             let bright = crate::crt::bright_debug_enabled();
             ambient.color = if bright {
                 Color::srgb(0.58, 0.54, 0.48)
             } else {
                 Color::srgb(0.30, 0.24, 0.16)
             };
-            ambient.brightness = if skein_owns_lights {
+            ambient.brightness = if baked.is_some() {
+                // Support the live television and the room surfaces while the
+                // point lights provide the visible, localized sconce pools.
+                38.0 * if bright { 14.0 } else { 1.0 }
+            } else if skein_owns_lights {
                 crate::glow::skein_fallback_ambient_brightness(bright)
             } else {
                 74.0 * if bright { 14.0 } else { 1.0 }
             };
             for (i, mut light) in fill_lights.iter_mut().enumerate() {
                 if let Some(&base) = fill_intensity.get(i) {
+                    // The opening-lighting system applies the baked sconce scale.
+                    // Keep this variant baseline unscaled so that factor has one owner.
                     light.intensity = base;
                 }
             }
@@ -247,5 +366,15 @@ mod tests {
         assert_eq!(SceneVariant::from_u32(2), None);
         assert_eq!(SceneVariant::Current.as_u32(), 0);
         assert_eq!(SceneVariant::New.as_u32(), 1);
+    }
+
+    #[test]
+    fn ambient_baseline_refreshes_when_bake_activates() {
+        let mut ambient_base = Some(74.0);
+        refresh_ambient_baseline(&mut ambient_base, 38.0, false, true);
+        assert_eq!(ambient_base, Some(38.0));
+
+        refresh_ambient_baseline(&mut ambient_base, 42.0, false, false);
+        assert_eq!(ambient_base, Some(38.0));
     }
 }
