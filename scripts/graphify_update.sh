@@ -60,7 +60,8 @@ case "$PROVIDER" in
         export GRAPHIFY_OPENAI_MODEL="$GRAPHIFY_OPENROUTER_MODEL"
       fi
     else
-      # Incremental AST refreshes do not use an LLM or need provider secrets.
+      # Incremental AST refreshes do not use an LLM; keep the unused key out
+      # of the child process environment as well.
       unset OPENROUTER_API_KEY
     fi
     ;;
