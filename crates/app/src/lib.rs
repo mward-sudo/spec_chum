@@ -93,16 +93,6 @@ impl KeyScript {
     /// Idle frames after menu → 48 BASIC Enter so MAIN-EXEC settles (machine waits on PC).
     const MENU_TO_48_BASIC_WAIT: u32 = 120;
 
-    /// 48K keyword mode: J (`LOAD`) then `""` then Enter (PROGRAM tapes).
-    fn load_quotes_48k() -> Self {
-        Self::load_quotes_48k_inner(false)
-    }
-
-    /// 48K: `LOAD "" CODE` Enter (CODE tapes such as `attr_mark.tap`).
-    fn load_quotes_code_48k() -> Self {
-        Self::load_quotes_48k_inner(true)
-    }
-
     /// 128K / +3 boot menu → 48 BASIC, then keyword `LOAD ""` [CODE].
     ///
     /// +3's first item is disk **Loader**, not a tape loader — do not press Enter alone.
@@ -587,41 +577,32 @@ impl EmulatorSession {
         // +2A menu Loader is tape — Enter alone for PROGRAM (#145).
         // 128K/+3: 48 BASIC then keyword LOAD (matches Machine::type_load_quotes_*).
         self.pending_instant_play = pending_play;
-        self.key_script = Some(match self.model() {
-            Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068 => {
-                if with_code {
-                    KeyScript::load_quotes_code_48k()
-                } else {
-                    KeyScript::load_quotes_48k()
-                }
-            }
-            Model::SpectrumPlus2A => KeyScript::load_quotes_plus2a(with_code),
-            Model::Spectrum128
-            | Model::SpectrumPlus2
-            | Model::SpectrumPlus3
-            | Model::SpectrumPlus3e
-            | Model::Pentagon128
-            | Model::ScorpionZs256 => KeyScript::load_quotes_128_or_plus3(with_code),
+        let model = self.model();
+        let is_48k_class = model.is_48k_class();
+        self.key_script = Some(if is_48k_class {
+            KeyScript::load_quotes_48k_inner(with_code)
+        } else if model == Model::SpectrumPlus2A {
+            KeyScript::load_quotes_plus2a(with_code)
+        } else {
+            KeyScript::load_quotes_128_or_plus3(with_code)
         });
         if pending_play {
             return;
         }
-        let msg = match (self.model(), with_code) {
-            (
-                Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068,
-                true,
-            ) => "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan",
-            (
-                Model::Spectrum16K | Model::Spectrum48 | Model::TimexTC2048 | Model::TimexTS2068,
-                false,
-            ) => "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan",
-            (Model::SpectrumPlus2A, false) => {
+        let msg = match (is_48k_class, model, with_code) {
+            (true, _, true) => {
+                "Typing LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
+            }
+            (true, _, false) => {
+                "Typing LOAD \"\" — press Tape → Play when the border goes red/cyan"
+            }
+            (false, Model::SpectrumPlus2A, false) => {
                 "Selecting +2A tape Loader — press Tape → Play when border goes red/cyan"
             }
-            (_, true) => {
+            (false, _, true) => {
                 "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
             }
-            (_, false) => {
+            (false, _, false) => {
                 "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan"
             }
         };
