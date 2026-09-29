@@ -326,11 +326,7 @@ impl EmulatorSession {
                 }
                 if let Some(m) = host.machine_mut() {
                     m.insert_tape(tape::TapPlayer::new(img));
-                    let mut opts = m.tape_load_options();
-                    if opts.flash_load || opts.experience_load {
-                        opts.flash_load = false;
-                        m.set_tape_load_options(opts);
-                    }
+                    Self::clear_flash_load_if_active(m);
                 }
                 host.set_media_identity_from_bytes(&data, path);
                 let title = host
@@ -436,11 +432,7 @@ impl EmulatorSession {
         let host = &mut *self.host_mut();
         if let Some(m) = host.machine_mut() {
             m.set_tape_playing(false);
-            let mut opts = m.tape_load_options();
-            if opts.flash_load || opts.experience_load {
-                opts.flash_load = false;
-                m.set_tape_load_options(opts);
-            }
+            Self::clear_flash_load_if_active(m);
             host.set_status("Tape paused");
         }
     }
@@ -449,12 +441,16 @@ impl EmulatorSession {
         let host = &mut *self.host_mut();
         if let Some(m) = host.machine_mut() {
             m.rewind_tape();
-            let mut opts = m.tape_load_options();
-            if opts.flash_load || opts.experience_load {
-                opts.flash_load = false;
-                m.set_tape_load_options(opts);
-            }
+            Self::clear_flash_load_if_active(m);
             host.set_status("Tape rewound (paused)");
+        }
+    }
+
+    fn clear_flash_load_if_active(machine: &mut Machine) {
+        let mut options = machine.tape_load_options();
+        if options.flash_load || options.experience_load {
+            options.flash_load = false;
+            machine.set_tape_load_options(options);
         }
     }
 
