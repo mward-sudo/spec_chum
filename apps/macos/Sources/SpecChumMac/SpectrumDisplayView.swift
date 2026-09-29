@@ -197,6 +197,7 @@ final class SpectrumNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        InputLatencyProbe.noteFlatDraw()
         NSColor.black.setFill()
         bounds.fill()
 
@@ -259,6 +260,7 @@ final class SpectrumNSView: NSView {
         }
         // Ignore OS autorepeat — hold until keyUp.
         guard !event.isARepeat else { return }
+        InputLatencyProbe.noteKey(mode: "flat")
         applyKey(code: event.keyCode, pressed: true, flags: event.modifierFlags)
     }
 
@@ -333,6 +335,7 @@ final class SpectrumNSView: NSView {
             switch event.type {
             case .keyDown:
                 if !event.isARepeat {
+                    InputLatencyProbe.noteKey(mode: "flat")
                     self.applyKey(code: event.keyCode, pressed: true, flags: event.modifierFlags)
                 }
                 // Consume to avoid AppKit beep when we are not first responder.

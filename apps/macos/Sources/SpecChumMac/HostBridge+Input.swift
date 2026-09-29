@@ -5,46 +5,130 @@ import IOSurface
 import UniformTypeIdentifiers
 import CSpecChumHost
 
-/// Temporary input-latency probe (`SPEC_CHUM_INPUT_LATENCY=1` → `/tmp/spec-input-latency.log`).
+/// Opt-in input timing probe (`SPEC_CHUM_INPUT_LATENCY=1` → `/tmp/spec-input-latency.log`).
+/// Samples should be spaced apart; overlapping samples are reported as dropped.
 enum InputLatencyProbe {
+    private struct Sample {
+        let id: Int
+        let started: TimeInterval
+        let mode: String
+        var stage: Int
+        var coreFrameStarted: TimeInterval?
+    }
+
     static let enabled =
         ProcessInfo.processInfo.environment["SPEC_CHUM_INPUT_LATENCY"] == "1"
-    private static var tKey: CFAbsoluteTime = 0
-    private static var pending = false
+    private static let lock = NSLock()
+    private static let logQueue = DispatchQueue(label: "dev.specchum.input-latency-log", qos: .utility)
+    private static var nextSample = 0
+    private static var sample: Sample?
 
-    static func noteKey() {
+    static func noteKey(mode: String) {
         guard enabled else { return }
-        tKey = CFAbsoluteTimeGetCurrent()
-        pending = true
-        write("key t0")
+        let now = ProcessInfo.processInfo.systemUptime
+        lock.lock()
+        if let previous = sample {
+            enqueueLog("sample=\(previous.id) dropped=overlap")
+        }
+        nextSample &+= 1
+        sample = Sample(id: nextSample, started: now, mode: mode, stage: 0, coreFrameStarted: nil)
+        enqueueLog(String(format: "sample=%d mode=%@ stage=key_down", nextSample, mode))
+        lock.unlock()
     }
 
-    static func noteFbPublish() {
-        guard enabled, pending else { return }
-        write(String(format: "fb_publish +%.1fms", (CFAbsoluteTimeGetCurrent() - tKey) * 1000))
+    static func noteHostInputApplied() { advance("host_input_applied", to: 1) }
+
+    static func noteCoreFrameStarted() {
+        guard enabled else { return }
+        lock.lock()
+        guard var current = sample, current.stage == 1, current.coreFrameStarted == nil else {
+            lock.unlock()
+            return
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        current.coreFrameStarted = now
+        sample = current
+        recordLocked("core_frame_started", current: current)
+        lock.unlock()
     }
+
+    static func noteCoreFrame() {
+        guard enabled else { return }
+        lock.lock()
+        guard var current = sample, current.stage < 2 else {
+            lock.unlock()
+            return
+        }
+        current.stage = 2
+        sample = current
+        let frameMs = current.coreFrameStarted.map { (ProcessInfo.processInfo.systemUptime - $0) * 1000 } ?? 0
+        recordLocked("core_frame", current: current, detail: String(format: " frame_ms=%.2f", frameMs))
+        lock.unlock()
+    }
+
+    static func noteFbPublish() { advance("living_room_fb_published", to: 3, mode: "living_room") }
+
+    static func noteFbUploaded() { advance("living_room_fb_uploaded", to: 4, mode: "living_room") }
+    static func noteRoomTickStarted() { advance("room_tick_started", to: 5, mode: "living_room") }
+    static func noteRoomTickFinished() { advance("room_tick_finished", to: 6, mode: "living_room") }
+
+    static func noteFlatDraw() { finish("flat_draw", mode: "flat", after: 2, at: 3) }
 
     static func noteRoomPresent() {
-        guard enabled, pending else { return }
-        write(String(format: "room_present +%.1fms", (CFAbsoluteTimeGetCurrent() - tKey) * 1000))
-        pending = false
+        finish("living_room_layer_refresh", mode: "living_room", after: 6, at: 7)
     }
 
     static func noteScroll(steps: Int32) {
         guard enabled else { return }
-        write("scroll steps=\(steps) t=\(CFAbsoluteTimeGetCurrent())")
+        enqueueLog("scroll steps=\(steps)")
     }
 
-    private static func write(_ msg: String) {
-        let line = String(format: "%.6f %@\n", CFAbsoluteTimeGetCurrent(), msg)
-        fputs(line, stderr)
-        let url = URL(fileURLWithPath: "/tmp/spec-input-latency.log")
-        if let h = try? FileHandle(forWritingTo: url) {
-            h.seekToEndOfFile()
-            h.write(Data(line.utf8))
-            try? h.close()
-        } else {
-            try? Data(line.utf8).write(to: url)
+    private static func advance(_ stage: String, to nextStage: Int, mode: String? = nil) {
+        guard enabled else { return }
+        lock.lock()
+        guard var current = sample,
+              current.stage == nextStage - 1,
+              mode == nil || current.mode == mode
+        else {
+            lock.unlock()
+            return
+        }
+        current.stage = nextStage
+        sample = current
+        recordLocked(stage, current: current)
+        lock.unlock()
+    }
+
+    private static func finish(_ stage: String, mode: String, after expectedStage: Int, at finalStage: Int) {
+        guard enabled else { return }
+        lock.lock()
+        guard var current = sample, current.stage == expectedStage, current.mode == mode else {
+            lock.unlock()
+            return
+        }
+        current.stage = finalStage
+        recordLocked(stage, current: current)
+        sample = nil
+        lock.unlock()
+    }
+
+    private static func recordLocked(_ stage: String, current: Sample, detail: String = "") {
+        let elapsedMs = (ProcessInfo.processInfo.systemUptime - current.started) * 1000
+        enqueueLog(String(format: "sample=%d mode=%@ stage=%@ elapsed_ms=%.2f%@", current.id, current.mode, stage, elapsedMs, detail))
+    }
+
+    /// Keep disk I/O off the AppKit and render queues so the diagnostic does not stall input.
+    private static func enqueueLog(_ message: String) {
+        logQueue.async {
+            let line = "\(ProcessInfo.processInfo.systemUptime) \(message)\n"
+            let url = URL(fileURLWithPath: "/tmp/spec-input-latency.log")
+            if let handle = try? FileHandle(forWritingTo: url) {
+                defer { try? handle.close() }
+                _ = try? handle.seekToEnd()
+                try? handle.write(contentsOf: Data(line.utf8))
+            } else {
+                try? Data(line.utf8).write(to: url)
+            }
         }
     }
 }

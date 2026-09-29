@@ -579,7 +579,7 @@ final class HostBridge: ObservableObject {
     }
 
     func flushInputFrame() {
-        InputLatencyProbe.noteKey()
+        InputLatencyProbe.noteHostInputApplied()
         _ = runFrame()
         roomTickLock.lock()
         let busy = roomTickInFlight
@@ -625,7 +625,9 @@ final class HostBridge: ObservableObject {
             pushJoystick()
             pushMouse()
             tickKeyScript()
+            InputLatencyProbe.noteCoreFrameStarted()
             sc_run_frame(handle)
+            InputLatencyProbe.noteCoreFrame()
             syncTapePublished()
             enqueueAudio()
             publishLivingRoomFramebuffer()
@@ -642,7 +644,9 @@ final class HostBridge: ObservableObject {
             pushJoystick()
             pushMouse()
             tickKeyScript()
+            InputLatencyProbe.noteCoreFrameStarted()
             sc_run_frame(handle)
+            InputLatencyProbe.noteCoreFrame()
             // Enqueue each frame — sc_run_frame replaces PCM; skipping mid catch-up
             // underruns AudioQueue (especially under living-room hitching).
             enqueueAudio()
