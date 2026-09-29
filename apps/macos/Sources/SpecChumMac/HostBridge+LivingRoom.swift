@@ -333,8 +333,8 @@ extension HostBridge {
             base.copyMemory(from: fb, byteCount: byteLen)
         }
         roomFbGeneration &+= 1
-        roomFbLock.unlock()
         InputLatencyProbe.noteFbPublish()
+        roomFbLock.unlock()
         if roomPerfEnabled {
             roomPerfSpectrumFrames &+= 1
         }

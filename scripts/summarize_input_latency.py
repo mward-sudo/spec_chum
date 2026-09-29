@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 RECORD = re.compile(
-    r"^\S+ sample=(?P<sample>\d+) mode=(?P<mode>\S+) "
+    r"^\S+ session=(?P<session>\S+) sample=(?P<sample>\d+) mode=(?P<mode>\S+) "
     r"stage=(?P<stage>\S+)(?: elapsed_ms=(?P<elapsed>[\d.]+))?(?: .*)?$"
 )
 FINAL_STAGE = {"flat": "flat_draw", "living_room": "living_room_layer_refresh"}
@@ -34,18 +34,18 @@ def main() -> int:
     parser.add_argument("--minimum", type=int, default=10, help="minimum completed samples per mode")
     args = parser.parse_args()
 
-    samples: dict[str, tuple[str, dict[str, float]]] = {}
-    dropped: set[str] = set()
+    samples: dict[tuple[str, str], tuple[str, dict[str, float]]] = {}
+    dropped: set[tuple[str, str]] = set()
     for line in args.log.read_text(encoding="utf-8").splitlines():
         if " dropped=overlap" in line:
-            match = re.search(r"sample=(\d+)", line)
+            match = re.search(r"session=(\S+) sample=(\d+)", line)
             if match:
-                dropped.add(match.group(1))
+                dropped.add((match.group(1), match.group(2)))
             continue
         match = RECORD.match(line)
         if not match:
             continue
-        sample = match.group("sample")
+        sample = (match.group("session"), match.group("sample"))
         mode = match.group("mode")
         if sample not in samples:
             samples[sample] = (mode, {})
@@ -54,6 +54,8 @@ def main() -> int:
             samples[sample][1][match.group("stage")] = float(elapsed)
 
     enough_samples = True
+    sessions = {session for session, _ in samples}
+    print(f"sessions={len(sessions)}")
     for mode, final_stage in FINAL_STAGE.items():
         complete_samples = {
             sample: values

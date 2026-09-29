@@ -12,8 +12,8 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1790643402.3110144,
-    "seen": 1790643474.847223,
+    "mtime": 1790644676.131293,
+    "seen": 1790644699.569452,
     "ast_hash": "081b565be5d70d5064c99afe399988ef",
     "semantic_hash": ""
   },
@@ -84,9 +84,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/SpectrumDisplayView.swift": {
-    "mtime": 1790643343.7447448,
-    "seen": 1790643474.8488882,
-    "ast_hash": "7606fa6a640be0f31326515dc7fc732f",
+    "mtime": 1790644638.009989,
+    "seen": 1790644699.5700889,
+    "ast_hash": "e3b31d66b901e1d96e9b7ab9f03ecacf",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/SpectrumKeymap.swift": {
@@ -876,9 +876,9 @@
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {
-    "mtime": 1790643107.090967,
-    "seen": 1790643143.642577,
-    "ast_hash": "be2febf7acfa2d0da74619eb08c32715",
+    "mtime": 1790644667.6026452,
+    "seen": 1790644699.580401,
+    "ast_hash": "eef12a22eda9e956ea66c828234f8877",
     "semantic_hash": ""
   },
   "docs/MULTIFACE.md": {
@@ -1068,15 +1068,15 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift": {
-    "mtime": 1790643397.0987182,
-    "seen": 1790643474.848005,
-    "ast_hash": "a6a6d94586eaf98c4798953d6c7ef169",
+    "mtime": 1790644638.010996,
+    "seen": 1790644699.5697339,
+    "ast_hash": "60c493dac63d6582dc5241e426a070e0",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+LivingRoom.swift": {
-    "mtime": 1790574376.884673,
-    "seen": 1790643143.642347,
-    "ast_hash": "7daf3af76293bc7828270d2b2177a956",
+    "mtime": 1790644638.0078447,
+    "seen": 1790644699.5697348,
+    "ast_hash": "7a4f72edd8106bbeeca757d19f573c86",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Media.swift": {
@@ -2016,9 +2016,9 @@
     "semantic_hash": ""
   },
   "scripts/summarize_input_latency.py": {
-    "mtime": 1790574612.7033882,
-    "seen": 1790643143.6425622,
-    "ast_hash": "6168c1402aff81ae396ffc18e899bb1e",
+    "mtime": 1790644638.011897,
+    "seen": 1790644699.579767,
+    "ast_hash": "e2958f1950db336071e71a3f5818f403",
     "semantic_hash": ""
   }
 }

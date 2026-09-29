@@ -785,7 +785,7 @@
       "file_type": "code",
       "norm_label": ".notemousebutton()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L203"
+      "source_location": "L204"
     },
     {
       "id": "apps_macos_sources_specchummac_kempstonmousetracking_kempstonmousetracking_handlebutton",
@@ -2503,7 +2503,7 @@
       "file_type": "code",
       "norm_label": ".notemousedelta()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L196"
+      "source_location": "L197"
     },
     {
       "id": "apps_macos_sources_specchummac_kempstonmousetracking_kempstonmousetracking_handlemotion",
@@ -3071,7 +3071,7 @@
             "callee": "setFill",
             "receiver_type": "NSColor",
             "lang": "swift",
-            "line": "L201"
+            "line": "L200"
           }
         ]
       },
@@ -4211,13 +4211,13 @@
             "callee": "startWirelessControllerDiscovery",
             "receiver_type": "GCController",
             "lang": "swift",
-            "line": "L256"
+            "line": "L257"
           }
         ]
       },
       "norm_label": ".startgamepaddiscovery()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L255"
+      "source_location": "L256"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_tape_hostbridge_pushtapeloadoptions",
@@ -4853,7 +4853,7 @@
       "file_type": "code",
       "norm_label": ".applyjoystickmode()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L169"
+      "source_location": "L170"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_clearguestmousebuttons",
@@ -4865,7 +4865,7 @@
       "file_type": "code",
       "norm_label": ".clearguestmousebuttons()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L222"
+      "source_location": "L223"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_clearjoystick",
@@ -4877,7 +4877,7 @@
       "file_type": "code",
       "norm_label": ".clearjoystick()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L188"
+      "source_location": "L189"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_clearkeys",
@@ -4889,7 +4889,7 @@
       "file_type": "code",
       "norm_label": ".clearkeys()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L159"
+      "source_location": "L160"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_clearmousebuttons",
@@ -4901,7 +4901,7 @@
       "file_type": "code",
       "norm_label": ".clearmousebuttons()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L213"
+      "source_location": "L214"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_gamepadmask",
@@ -4917,13 +4917,13 @@
             "callee": "controllers",
             "receiver_type": "GCController",
             "lang": "swift",
-            "line": "L272"
+            "line": "L273"
           }
         ]
       },
       "norm_label": ".gamepadmask()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L270"
+      "source_location": "L271"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_pushjoystick",
@@ -4935,7 +4935,7 @@
       "file_type": "code",
       "norm_label": ".pushjoystick()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L245"
+      "source_location": "L246"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_pushmouse",
@@ -4947,7 +4947,7 @@
       "file_type": "code",
       "norm_label": ".pushmouse()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L228"
+      "source_location": "L229"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_setjoystick",
@@ -4959,7 +4959,7 @@
       "file_type": "code",
       "norm_label": ".setjoystick()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L182"
+      "source_location": "L183"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_setkey",
@@ -4971,7 +4971,7 @@
       "file_type": "code",
       "norm_label": ".setkey()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L137"
+      "source_location": "L138"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_setkeyboardjoystickmask",
@@ -4983,7 +4983,7 @@
       "file_type": "code",
       "norm_label": ".setkeyboardjoystickmask()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L165"
+      "source_location": "L166"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_hostbridge_synckeyboardmatrix",
@@ -4995,7 +4995,7 @@
       "file_type": "code",
       "norm_label": ".synckeyboardmatrix()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L143"
+      "source_location": "L144"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_livingroom_hostbridge_finishroomtick",
@@ -5163,7 +5163,7 @@
       "file_type": "code",
       "norm_label": ".advance()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L86"
+      "source_location": "L87"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_enqueuelog",
@@ -5175,7 +5175,7 @@
       "file_type": "code",
       "norm_label": ".enqueuelog()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L121"
+      "source_location": "L122"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_finish",
@@ -5187,7 +5187,7 @@
       "file_type": "code",
       "norm_label": ".finish()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L102"
+      "source_location": "L103"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_notecoreframe",
@@ -5199,7 +5199,7 @@
       "file_type": "code",
       "norm_label": ".notecoreframe()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L55"
+      "source_location": "L56"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_notecoreframestarted",
@@ -5211,7 +5211,7 @@
       "file_type": "code",
       "norm_label": ".notecoreframestarted()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L41"
+      "source_location": "L42"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_notefbpublish",
@@ -5223,7 +5223,7 @@
       "file_type": "code",
       "norm_label": ".notefbpublish()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L69"
+      "source_location": "L70"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_notefbuploaded",
@@ -5235,7 +5235,7 @@
       "file_type": "code",
       "norm_label": ".notefbuploaded()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L71"
+      "source_location": "L72"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_noteflatdraw",
@@ -5247,7 +5247,7 @@
       "file_type": "code",
       "norm_label": ".noteflatdraw()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L75"
+      "source_location": "L76"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_notehostinputapplied",
@@ -5259,7 +5259,7 @@
       "file_type": "code",
       "norm_label": ".notehostinputapplied()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L39"
+      "source_location": "L40"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_notekey",
@@ -5271,7 +5271,7 @@
       "file_type": "code",
       "norm_label": ".notekey()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L26"
+      "source_location": "L27"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_noteroompresent",
@@ -5283,7 +5283,7 @@
       "file_type": "code",
       "norm_label": ".noteroompresent()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L77"
+      "source_location": "L78"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_noteroomtickfinished",
@@ -5295,7 +5295,7 @@
       "file_type": "code",
       "norm_label": ".noteroomtickfinished()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L73"
+      "source_location": "L74"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_noteroomtickstarted",
@@ -5307,7 +5307,7 @@
       "file_type": "code",
       "norm_label": ".noteroomtickstarted()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L72"
+      "source_location": "L73"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_notescroll",
@@ -5319,7 +5319,7 @@
       "file_type": "code",
       "norm_label": ".notescroll()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L81"
+      "source_location": "L82"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_recordlocked",
@@ -5331,7 +5331,7 @@
       "file_type": "code",
       "norm_label": ".recordlocked()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L115"
+      "source_location": "L116"
     },
     {
       "id": "apps_macos_sources_specchummac_livingroomdisplayview_livingroomnsview_syncmatrix",
@@ -71013,7 +71013,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L219",
+      "source_location": "L220",
       "weight": 1.0
     },
     {
@@ -71025,7 +71025,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L251",
+      "source_location": "L252",
       "weight": 1.0
     },
     {
@@ -71037,7 +71037,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L148",
+      "source_location": "L149",
       "weight": 1.0
     },
     {
@@ -71049,7 +71049,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L150",
+      "source_location": "L151",
       "weight": 1.0
     },
     {
@@ -71061,7 +71061,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L155",
+      "source_location": "L156",
       "weight": 1.0
     },
     {
@@ -71073,7 +71073,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L98",
+      "source_location": "L99",
       "weight": 1.0
     },
     {
@@ -71085,7 +71085,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L110",
+      "source_location": "L111",
       "weight": 1.0
     },
     {
@@ -71097,7 +71097,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L65",
+      "source_location": "L66",
       "weight": 1.0
     },
     {
@@ -71109,7 +71109,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L51",
+      "source_location": "L52",
       "weight": 1.0
     },
     {
@@ -71121,7 +71121,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L69",
+      "source_location": "L70",
       "weight": 1.0
     },
     {
@@ -71133,7 +71133,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L71",
+      "source_location": "L72",
       "weight": 1.0
     },
     {
@@ -71145,7 +71145,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L75",
+      "source_location": "L76",
       "weight": 1.0
     },
     {
@@ -71157,7 +71157,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L39",
+      "source_location": "L40",
       "weight": 1.0
     },
     {
@@ -71169,7 +71169,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L31",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -71181,7 +71181,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L34",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -71193,7 +71193,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L78",
+      "source_location": "L79",
       "weight": 1.0
     },
     {
@@ -71205,7 +71205,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L73",
+      "source_location": "L74",
       "weight": 1.0
     },
     {
@@ -71217,7 +71217,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L72",
+      "source_location": "L73",
       "weight": 1.0
     },
     {
@@ -71229,7 +71229,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L83",
+      "source_location": "L84",
       "weight": 1.0
     },
     {
@@ -71241,7 +71241,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L117",
+      "source_location": "L118",
       "weight": 1.0
     },
     {
@@ -71469,7 +71469,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+LivingRoom.swift",
-      "source_location": "L337",
+      "source_location": "L336",
       "weight": 1.0
     },
     {
@@ -73622,18 +73622,6 @@
     },
     {
       "source": "apps_macos_sources_specchummac_spectrumdisplayview_spectrumnsview_draw",
-      "target": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_noteflatdraw",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "apps/macos/Sources/SpecChumMac/SpectrumDisplayView.swift",
-      "source_location": "L200",
-      "weight": 1.0
-    },
-    {
-      "source": "apps_macos_sources_specchummac_spectrumdisplayview_spectrumnsview_draw",
       "target": "apps_macos_sources_specchummac_spectrumdisplayview_spectrumnsview_ensurebitmap",
       "relation": "calls",
       "_origin": "ast",
@@ -73641,7 +73629,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/SpectrumDisplayView.swift",
-      "source_location": "L209",
+      "source_location": "L208",
+      "weight": 1.0
+    },
+    {
+      "source": "apps_macos_sources_specchummac_spectrumdisplayview_spectrumnsview_draw",
+      "target": "apps_macos_sources_specchummac_hostbridge_input_inputlatencyprobe_noteflatdraw",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "apps/macos/Sources/SpecChumMac/SpectrumDisplayView.swift",
+      "source_location": "L230",
       "weight": 1.0
     },
     {
@@ -125361,7 +125361,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "scripts/summarize_input_latency.py",
-      "source_location": "L69",
+      "source_location": "L71",
       "weight": 1.0
     },
     {
@@ -158013,7 +158013,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L169",
+      "source_location": "L170",
       "weight": 1.0
     },
     {
@@ -158025,7 +158025,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L203",
+      "source_location": "L204",
       "weight": 1.0
     },
     {
@@ -158037,7 +158037,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L203",
+      "source_location": "L204",
       "weight": 1.0
     },
     {
@@ -158049,7 +158049,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L196",
+      "source_location": "L197",
       "weight": 1.0
     },
     {
@@ -158061,7 +158061,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L182",
+      "source_location": "L183",
       "weight": 1.0
     },
     {
@@ -158073,7 +158073,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L137",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -158085,7 +158085,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L137",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -158097,7 +158097,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L165",
+      "source_location": "L166",
       "weight": 1.0
     },
     {
@@ -158109,7 +158109,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L143",
+      "source_location": "L144",
       "weight": 1.0
     },
     {
@@ -158121,7 +158121,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L86",
+      "source_location": "L87",
       "weight": 1.0
     },
     {
@@ -158133,7 +158133,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L86",
+      "source_location": "L87",
       "weight": 1.0
     },
     {
@@ -158145,7 +158145,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L121",
+      "source_location": "L122",
       "weight": 1.0
     },
     {
@@ -158157,7 +158157,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L102",
+      "source_location": "L103",
       "weight": 1.0
     },
     {
@@ -158169,7 +158169,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L102",
+      "source_location": "L103",
       "weight": 1.0
     },
     {
@@ -158181,7 +158181,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L26",
+      "source_location": "L27",
       "weight": 1.0
     },
     {
@@ -158193,7 +158193,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L81",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -158205,7 +158205,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L115",
+      "source_location": "L116",
       "weight": 1.0
     },
     {
@@ -158217,7 +158217,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L115",
+      "source_location": "L116",
       "weight": 1.0
     },
     {
@@ -175797,7 +175797,7 @@
         "swift_plain_return": true
       },
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L169",
+      "source_location": "L170",
       "weight": 1.0
     },
     {
@@ -175812,7 +175812,7 @@
         "swift_plain_return": true
       },
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L188",
+      "source_location": "L189",
       "weight": 1.0
     },
     {
@@ -175827,7 +175827,7 @@
         "swift_plain_return": true
       },
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L270",
+      "source_location": "L271",
       "weight": 1.0
     },
     {
@@ -175842,7 +175842,7 @@
         "swift_plain_return": true
       },
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L182",
+      "source_location": "L183",
       "weight": 1.0
     },
     {
@@ -190682,7 +190682,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L136",
+      "source_location": "L137",
       "weight": 1.0
     },
     {
@@ -223033,7 +223033,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L137",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -223044,7 +223044,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L143",
+      "source_location": "L144",
       "weight": 1.0
     },
     {
@@ -223055,7 +223055,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L159",
+      "source_location": "L160",
       "weight": 1.0
     },
     {
@@ -223066,7 +223066,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L165",
+      "source_location": "L166",
       "weight": 1.0
     },
     {
@@ -223077,7 +223077,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L169",
+      "source_location": "L170",
       "weight": 1.0
     },
     {
@@ -223088,7 +223088,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L182",
+      "source_location": "L183",
       "weight": 1.0
     },
     {
@@ -223099,7 +223099,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L188",
+      "source_location": "L189",
       "weight": 1.0
     },
     {
@@ -223110,7 +223110,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L196",
+      "source_location": "L197",
       "weight": 1.0
     },
     {
@@ -223121,7 +223121,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L203",
+      "source_location": "L204",
       "weight": 1.0
     },
     {
@@ -223132,7 +223132,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L213",
+      "source_location": "L214",
       "weight": 1.0
     },
     {
@@ -223143,7 +223143,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L222",
+      "source_location": "L223",
       "weight": 1.0
     },
     {
@@ -223154,7 +223154,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L228",
+      "source_location": "L229",
       "weight": 1.0
     },
     {
@@ -223165,7 +223165,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L245",
+      "source_location": "L246",
       "weight": 1.0
     },
     {
@@ -223176,7 +223176,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L255",
+      "source_location": "L256",
       "weight": 1.0
     },
     {
@@ -223187,7 +223187,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L270",
+      "source_location": "L271",
       "weight": 1.0
     },
     {
@@ -224331,7 +224331,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L102",
+      "source_location": "L103",
       "weight": 1.0
     },
     {
@@ -224342,7 +224342,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L115",
+      "source_location": "L116",
       "weight": 1.0
     },
     {
@@ -224353,7 +224353,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L121",
+      "source_location": "L122",
       "weight": 1.0
     },
     {
@@ -224364,7 +224364,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L26",
+      "source_location": "L27",
       "weight": 1.0
     },
     {
@@ -224375,7 +224375,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L39",
+      "source_location": "L40",
       "weight": 1.0
     },
     {
@@ -224386,7 +224386,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L41",
+      "source_location": "L42",
       "weight": 1.0
     },
     {
@@ -224397,7 +224397,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L55",
+      "source_location": "L56",
       "weight": 1.0
     },
     {
@@ -224408,7 +224408,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L69",
+      "source_location": "L70",
       "weight": 1.0
     },
     {
@@ -224419,7 +224419,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L71",
+      "source_location": "L72",
       "weight": 1.0
     },
     {
@@ -224430,7 +224430,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L72",
+      "source_location": "L73",
       "weight": 1.0
     },
     {
@@ -224441,7 +224441,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L73",
+      "source_location": "L74",
       "weight": 1.0
     },
     {
@@ -224452,7 +224452,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L75",
+      "source_location": "L76",
       "weight": 1.0
     },
     {
@@ -224463,7 +224463,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L77",
+      "source_location": "L78",
       "weight": 1.0
     },
     {
@@ -224474,7 +224474,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L81",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -224485,7 +224485,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L86",
+      "source_location": "L87",
       "weight": 1.0
     },
     {
@@ -241792,7 +241792,7 @@
       "confidence_score": 0.8,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L64",
+      "source_location": "L65",
       "weight": 1.0
     },
     {
@@ -242380,7 +242380,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Input.swift",
-      "source_location": "L156",
+      "source_location": "L157",
       "weight": 1.0
     },
     {
@@ -250554,5 +250554,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "56f9ac100dd2dd67631a270652985abd27fa0e6b"
+  "built_at_commit": "7ce2ae57b4613c945dd3cff4052df942657392a7"
 }

@@ -18,6 +18,7 @@ enum InputLatencyProbe {
 
     static let enabled =
         ProcessInfo.processInfo.environment["SPEC_CHUM_INPUT_LATENCY"] == "1"
+    private static let sessionId = UUID().uuidString
     private static let lock = NSLock()
     private static let logQueue = DispatchQueue(label: "dev.specchum.input-latency-log", qos: .utility)
     private static var nextSample = 0
@@ -120,7 +121,7 @@ enum InputLatencyProbe {
     /// Keep disk I/O off the AppKit and render queues so the diagnostic does not stall input.
     private static func enqueueLog(_ message: String) {
         logQueue.async {
-            let line = "\(ProcessInfo.processInfo.systemUptime) \(message)\n"
+            let line = "\(ProcessInfo.processInfo.systemUptime) session=\(sessionId) \(message)\n"
             let url = URL(fileURLWithPath: "/tmp/spec-input-latency.log")
             if let handle = try? FileHandle(forWritingTo: url) {
                 defer { try? handle.close() }

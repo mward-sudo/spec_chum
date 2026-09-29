@@ -288,10 +288,11 @@ SPEC_CHUM_INPUT_LATENCY=1 ./scripts/run_macos_app.sh
 The probe is disabled by default. When enabled, it records monotonic elapsed
 time from AppKit `keyDown` through host key application, next core-frame start,
 and core-frame execution. Flat mode ends at the `SpectrumNSView.draw` callback.
-Living-room mode records framebuffer publish/upload, Bevy tick start/finish, then the main-thread
-IOSurface layer refresh. These are host presentation milestones, not measured
-photon-onset times; the display compositor and scanout add up to another refresh
-interval.
+Living-room mode records framebuffer publish/upload, Bevy tick start/finish,
+then the main-thread IOSurface layer refresh. Each app launch has a unique
+session ID, so the summarizer keeps sample IDs from separate launches distinct.
+These are host presentation milestones, not measured photon-onset times; the
+display compositor and scanout add up to another refresh interval.
 
 Use the same 48K session and display size in both modes. Press the same key ten
 times per mode, with enough time between presses for each sample to finish.

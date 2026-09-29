@@ -197,7 +197,6 @@ final class SpectrumNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        InputLatencyProbe.noteFlatDraw()
         NSColor.black.setFill()
         bounds.fill()
 
@@ -228,6 +227,7 @@ final class SpectrumNSView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.interpolationQuality = .none
         ctx.draw(cgImage, in: rect)
+        InputLatencyProbe.noteFlatDraw()
     }
 
     private func ensureBitmap(width: Int, height: Int) -> NSBitmapImageRep? {
