@@ -11,11 +11,15 @@ Shared mark for packaged hosts ([#231](https://github.com/mward-sudo/spec_chum/i
 | `../../crates/app/assets/icon.png` | egui window icon |
 | `../../crates/app/assets/icon.ico` | egui Windows PE resource (`winres`) |
 
-Regenerate (Pillow + macOS `iconutil` for `.icns`):
+The source master is the supplied Spectrum Enter artwork in
+`spec-chum-1024.png`. The supplied Windows `.ico`, macOS `.icns` and iconset,
+and Linux PNG are retained here so regeneration does not depend on the original
+download. The generator resizes the master for egui and size-specific PNGs.
+
+Regenerate (Pillow; macOS `iconutil` rebuilds `.icns` from the retained iconset):
 
 ```bash
 python3 scripts/generate_app_icons.py
 ```
 
-Design: dark CRT bezel, green BASIC block cursor, classic Spectrum rainbow stripe.
-Keep the mark concrete and Spectrum-flavoured — avoid generic abstract gradients.
+Keep the Spectrum Enter key and rainbow artwork consistent across app surfaces.

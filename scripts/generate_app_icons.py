@@ -5,11 +5,13 @@ Requires Pillow. Produces:
   packaging/icon/spec-chum-{256,512,1024}.png  — master sizes
   packaging/linux/spec-chum.png                — desktop / AppImage / .deb
   packaging/windows/spec-chum.ico              — PE + Inno Setup
-  packaging/macos/AppIcon.icns                 — Spec Chum.app (via iconutil)
+  packaging/macos/AppIcon.icns                 — Spec Chum.app
   crates/app/assets/icon.png                   — egui window icon
   crates/app/assets/icon.ico                   — winres PE resource
 
-Design: dark CRT bezel, green BASIC block cursor, classic Spectrum rainbow stripe.
+Source: packaging/icon/spec-chum-1024.png, the Spectrum Enter icon master.
+Platform exports and the macOS iconset are retained under packaging/icon so
+regeneration does not depend on the original download.
 """
 
 from __future__ import annotations
@@ -20,82 +22,21 @@ import sys
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 
-BLACK = (0, 0, 0, 255)
-BEZEL = (48, 48, 48, 255)
-SCREEN = (8, 24, 20, 255)
-CURSOR = (0, 216, 0, 255)
-WHITE = (220, 220, 220, 255)
-RAINBOW = [
-    (216, 0, 0, 255),  # red
-    (252, 216, 0, 255),  # yellow
-    (0, 216, 0, 255),  # green
-    (0, 216, 216, 255),  # cyan
-    (0, 0, 216, 255),  # blue
-    (216, 0, 216, 255),  # magenta
-]
+MASTER = ROOT / "packaging/icon/spec-chum-1024.png"
 
 
-def draw_icon(size: int) -> Image.Image:
-    """Draw the Spec Chum mark at ``size``×``size`` (RGBA)."""
-    im = Image.new("RGBA", (size, size), BLACK)
-    draw = ImageDraw.Draw(im)
-
-    def u(v: float) -> int:
-        return int(round(v * size / 256.0))
-
-    margin = u(12)
-    draw.rounded_rectangle(
-        [margin, margin, size - 1 - margin, size - 1 - margin],
-        radius=u(28),
-        fill=BEZEL,
-    )
-
-    inset = u(36)
-    stripe_h = u(22)
-    draw.rounded_rectangle(
-        [inset, inset, size - 1 - inset, size - 1 - inset - stripe_h - u(6)],
-        radius=u(10),
-        fill=SCREEN,
-    )
-
-    stripe_top = size - 1 - inset - stripe_h
-    stripe_bot = size - 1 - inset
-    band_w = (size - 2 * inset) / 6.0
-    for i, color in enumerate(RAINBOW):
-        x0 = inset + int(round(i * band_w))
-        x1 = inset + int(round((i + 1) * band_w)) - 1
-        draw.rectangle([x0, stripe_top, x1, stripe_bot], fill=color)
-
-    if size >= 32:
-        cw, ch = max(1, u(18)), max(1, u(28))
-        cx = size // 2 - cw // 2
-        cy = inset + u(48)
-        draw.rectangle([cx, cy, cx + cw, cy + ch], fill=CURSOR)
-    elif size >= 16:
-        draw.rectangle(
-            [size // 2 - 2, size // 2 - 4, size // 2 + 2, size // 2 + 4],
-            fill=CURSOR,
-        )
-
-    if size >= 64:
-        r = max(1, u(3))
-        for sx, sy in (
-            (u(22), u(22)),
-            (size - u(22), u(22)),
-            (u(22), size - u(22)),
-            (size - u(22), size - u(22)),
-        ):
-            draw.ellipse([sx - r, sy - r, sx + r, sy + r], fill=WHITE)
-
-    return im
+def load_icon(size: int) -> Image.Image:
+    """Resize the supplied Spectrum Enter master with high-quality filtering."""
+    with Image.open(MASTER) as source:
+        return source.convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
 
 
 def write_png(path: Path, size: int, *, rgba: bool) -> None:
-    im = draw_icon(size)
+    im = load_icon(size)
     path.parent.mkdir(parents=True, exist_ok=True)
     if rgba:
         im.save(path, optimize=True)
@@ -105,25 +46,17 @@ def write_png(path: Path, size: int, *, rgba: bool) -> None:
 
 
 def write_ico(path: Path) -> None:
-    sizes = [16, 24, 32, 48, 64, 128, 256]
-    images = [draw_icon(sz) for sz in sizes]
+    source = ROOT / "packaging/icon/SpectrumEnter.ico"
     path.parent.mkdir(parents=True, exist_ok=True)
-    images[-1].save(
-        path,
-        format="ICO",
-        sizes=[(im.width, im.height) for im in images],
-        append_images=images[:-1],
-    )
-    print(f"wrote {path.relative_to(ROOT)} ({len(sizes)} sizes)")
+    shutil.copyfile(source, path)
+    print(f"copied {path.relative_to(ROOT)} from {source.relative_to(ROOT)}")
 
 
 def write_icns(path: Path) -> None:
+    source = ROOT / "packaging/icon/SpectrumEnter.icns"
     if sys.platform != "darwin":
-        print("skip AppIcon.icns (iconutil is macOS-only)", file=sys.stderr)
-        if not path.is_file():
-            raise SystemExit(
-                "packaging/macos/AppIcon.icns missing; generate on macOS once"
-            )
+        shutil.copyfile(source, path)
+        print(f"copied {path.relative_to(ROOT)} from {source.relative_to(ROOT)}")
         return
 
     mapping = [
@@ -142,7 +75,7 @@ def write_icns(path: Path) -> None:
         iconset = Path(tmp) / "AppIcon.iconset"
         iconset.mkdir()
         for name, sz in mapping:
-            draw_icon(sz).save(iconset / name)
+            shutil.copyfile(ROOT / "packaging/icon/iconset" / name, iconset / name)
         path.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["iconutil", "-c", "icns", str(iconset), "-o", str(path)],
@@ -152,12 +85,18 @@ def write_icns(path: Path) -> None:
 
 
 def main() -> int:
-    write_png(ROOT / "packaging/icon/spec-chum-256.png", 256, rgba=False)
-    write_png(ROOT / "packaging/icon/spec-chum-512.png", 512, rgba=False)
-    write_png(ROOT / "packaging/icon/spec-chum-1024.png", 1024, rgba=False)
-    write_png(ROOT / "packaging/linux/spec-chum.png", 256, rgba=False)
+    if not MASTER.is_file():
+        raise SystemExit(f"missing icon master: {MASTER}")
+    print(f"using {MASTER.relative_to(ROOT)}")
+    write_png(ROOT / "packaging/icon/spec-chum-256.png", 256, rgba=True)
+    write_png(ROOT / "packaging/icon/spec-chum-512.png", 512, rgba=True)
     # RGBA for egui IconData (png crate decodes without expansion).
     write_png(ROOT / "crates/app/assets/icon.png", 256, rgba=True)
+    # Keep the Linux release export supplied with the pack's platform assets.
+    shutil.copyfile(
+        ROOT / "packaging/icon/linux/spec-chum.png",
+        ROOT / "packaging/linux/spec-chum.png",
+    )
     write_ico(ROOT / "packaging/windows/spec-chum.ico")
     shutil.copyfile(
         ROOT / "packaging/windows/spec-chum.ico",
