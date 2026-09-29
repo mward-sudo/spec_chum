@@ -143,51 +143,22 @@ pub struct HardwareCompat {
 #[must_use]
 pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
     let m = model.to_model();
+    let supports_peripherals = matches!(
+        m,
+        Model::Spectrum16K
+            | Model::Spectrum48
+            | Model::TimexTC2048
+            | Model::TimexTS2068
+            | Model::Spectrum128
+            | Model::SpectrumPlus2
+            | Model::Pentagon128
+            | Model::ScorpionZs256
+    );
     HardwareCompat {
-        multiface: matches!(
-            m,
-            Model::Spectrum16K
-                | Model::Spectrum48
-                | Model::TimexTC2048
-                | Model::TimexTS2068
-                | Model::Spectrum128
-                | Model::SpectrumPlus2
-                | Model::Pentagon128
-                | Model::ScorpionZs256
-        ),
-        divmmc: matches!(
-            m,
-            Model::Spectrum16K
-                | Model::Spectrum48
-                | Model::TimexTC2048
-                | Model::TimexTS2068
-                | Model::Spectrum128
-                | Model::SpectrumPlus2
-                | Model::Pentagon128
-                | Model::ScorpionZs256
-        ),
-        interface1: matches!(
-            m,
-            Model::Spectrum16K
-                | Model::Spectrum48
-                | Model::TimexTC2048
-                | Model::TimexTS2068
-                | Model::Spectrum128
-                | Model::SpectrumPlus2
-                | Model::Pentagon128
-                | Model::ScorpionZs256
-        ),
-        beta: matches!(
-            m,
-            Model::Spectrum16K
-                | Model::Spectrum48
-                | Model::TimexTC2048
-                | Model::TimexTS2068
-                | Model::Spectrum128
-                | Model::SpectrumPlus2
-                | Model::Pentagon128
-                | Model::ScorpionZs256
-        ),
+        multiface: supports_peripherals,
+        divmmc: supports_peripherals,
+        interface1: supports_peripherals,
+        beta: supports_peripherals,
         ay_stereo: matches!(
             m,
             Model::Spectrum128
@@ -423,32 +394,8 @@ fn build_machine(
     rom: &[u8],
     overrides: &BTreeMap<String, PathBuf>,
 ) -> Result<Machine, MachineConfigError> {
-    match model {
-        Model::Spectrum16K => Machine::new_16k(rom),
-        Model::Spectrum48 => Machine::new_48k(rom),
-        Model::Spectrum128 => Machine::new_128k(rom),
-        Model::SpectrumPlus2 => Machine::new_plus2(rom),
-        Model::SpectrumPlus2A => Machine::new_plus2a(rom),
-        Model::SpectrumPlus3 => Machine::new_plus3(rom),
-        Model::SpectrumPlus3e => Machine::new_plus3e(rom),
-        Model::ScorpionZs256 => {
-            let trdos = machine::read_trdos_rom_with_overrides(Model::ScorpionZs256, overrides)
-                .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
-            Machine::new_scorpion_zs256(rom, &trdos)
-        }
-        Model::Pentagon128 => {
-            let trdos = machine::read_trdos_rom_with_overrides(Model::Pentagon128, overrides)
-                .map_err(|e| MachineConfigError::Machine(format!("TR-DOS ROM: {e}")))?;
-            Machine::new_pentagon128(rom, &trdos)
-        }
-        Model::TimexTC2048 => Machine::new_timex_tc2048(rom),
-        Model::TimexTS2068 => {
-            let exrom = machine::read_exrom_with_overrides(Model::TimexTS2068, overrides)
-                .map_err(|e| MachineConfigError::Machine(format!("EX-ROM: {e}")))?;
-            Machine::new_timex_ts2068(rom, &exrom)
-        }
-    }
-    .map_err(|e| MachineConfigError::Machine(e.to_string()))
+    Machine::from_rom_with_overrides(model, rom, overrides)
+        .map_err(|e| MachineConfigError::Machine(e.to_string()))
 }
 
 /// Build a [`Machine`] from a user config and attach enabled peripherals.
@@ -465,8 +412,9 @@ pub fn apply_user_config(
     let (rom, rom_label) = resolve_main_rom(&config, roots, &overrides)?;
     let mut machine = build_machine(model, &rom, &overrides)?;
     let mut notes = Vec::new();
+    let compat = hardware_compat(config.base);
 
-    if config.attach_multiface && hardware_compat(config.base).multiface {
+    if config.attach_multiface && compat.multiface {
         match &config.multiface_rom_path {
             Some(path) if Path::new(path).is_file() => {
                 let data = std::fs::read(path).map_err(|e| MachineConfigError::Io {
@@ -484,7 +432,7 @@ pub fn apply_user_config(
         }
     }
 
-    if config.attach_divmmc && hardware_compat(config.base).divmmc {
+    if config.attach_divmmc && compat.divmmc {
         machine
             .attach_divmmc()
             .map_err(|e| MachineConfigError::Peripheral {
@@ -509,7 +457,7 @@ pub fn apply_user_config(
         }
     }
 
-    if config.attach_interface1 && hardware_compat(config.base).interface1 {
+    if config.attach_interface1 && compat.interface1 {
         let if1 = machine
             .attach_interface1()
             .map_err(|e| MachineConfigError::Peripheral {
@@ -554,7 +502,7 @@ pub fn apply_user_config(
         }
     }
 
-    if config.attach_beta && hardware_compat(config.base).beta {
+    if config.attach_beta && compat.beta {
         machine
             .attach_beta()
             .map_err(|e| MachineConfigError::Peripheral {
@@ -581,7 +529,7 @@ pub fn apply_user_config(
         }
     }
 
-    if hardware_compat(config.base).ay_stereo {
+    if compat.ay_stereo {
         machine.set_ay_stereo_mode(config.ay_stereo.to_mode());
     }
 

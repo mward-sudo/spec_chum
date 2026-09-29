@@ -148,7 +148,36 @@ pub fn model_rom_path_key(model: PrefModel, slot_id: &str) -> String {
     format!("{}_{slot_id}", pref_model_slug(model))
 }
 
+pub(crate) fn slot_rom_overrides(
+    model: PrefModel,
+    rom_paths: &BTreeMap<String, String>,
+) -> BTreeMap<String, PathBuf> {
+    let prefix = format!("{}_", pref_model_slug(model));
+    rom_paths
+        .iter()
+        .filter_map(|(key, path)| {
+            key.strip_prefix(&prefix)
+                .map(|slot| (slot.to_string(), PathBuf::from(path)))
+        })
+        .collect()
+}
+
 impl UiPreferences {
+    /// Apply a preference edit to the session, restoring the old values on failure.
+    pub fn update_and_apply(
+        &mut self,
+        session: &mut HostSession,
+        update: impl FnOnce(&mut Self),
+    ) -> Result<(), HostError> {
+        let previous = self.clone();
+        update(self);
+        if let Err(error) = self.apply_to_host_session(session) {
+            *self = previous;
+            return Err(error);
+        }
+        Ok(())
+    }
+
     /// Normalize clamps / drop bad recent paths / force schema version.
     #[must_use]
     pub fn sanitized(mut self) -> Self {
@@ -204,14 +233,7 @@ impl UiPreferences {
     /// Per-slot override paths for `model` (`main`, `trdos`, …).
     #[must_use]
     pub fn slot_rom_paths_for_model(&self, model: PrefModel) -> BTreeMap<String, PathBuf> {
-        let prefix = format!("{}_", pref_model_slug(model));
-        self.model_rom_paths
-            .iter()
-            .filter_map(|(key, path)| {
-                key.strip_prefix(&prefix)
-                    .map(|slot| (slot.to_string(), PathBuf::from(path)))
-            })
-            .collect()
+        slot_rom_overrides(model, &self.model_rom_paths)
     }
 
     #[must_use]
@@ -285,9 +307,12 @@ impl UiPreferences {
     /// Apply the guest-facing session settings shared by native hosts.
     /// Host audio volume and mute remain owned by each shell's output stream.
     pub fn apply_to_host_session(&self, session: &mut HostSession) -> Result<(), HostError> {
+        // Do the only fallible operation before changing any other session state.
+        if session.has_machine() {
+            session.set_tape_load_options(self.tape_load_options())?;
+        }
         session.set_joystick_mode(self.joystick_mode.to_mode());
         session.set_online_tape_titles(self.online_tape_titles);
-        session.set_tape_load_options(self.tape_load_options())?;
         if let Some(machine) = session.machine_mut() {
             machine.set_ay_stereo_mode(self.effective_ay_stereo());
         }
@@ -704,6 +729,24 @@ mod tests {
     }
 
     #[test]
+    fn apply_to_machine_less_session_updates_host_preferences() {
+        let prefs = UiPreferences {
+            joystick_mode: PrefJoystick::Cursor,
+            online_tape_titles: true,
+            ..UiPreferences::default()
+        };
+        let mut session = HostSession::new(ModelId::Spectrum48, true);
+
+        prefs
+            .apply_to_host_session(&mut session)
+            .expect("machine-specific preferences are skipped without a machine");
+
+        assert!(!session.has_machine());
+        assert_eq!(session.joystick_mode(), JoystickMode::Cursor);
+        assert!(session.online_tape_titles());
+    }
+
+    #[test]
     fn tape_options_never_sticky_flash() {
         let mut p = UiPreferences::default();
         p.set_tape_from_options(TapeLoadOptions {
@@ -742,6 +785,24 @@ mod tests {
             session.machine().expect("loaded machine").ay_stereo_mode(),
             prefs.effective_ay_stereo()
         );
+    }
+
+    #[test]
+    fn host_preferences_apply_without_machine() {
+        let prefs = UiPreferences {
+            joystick_mode: PrefJoystick::Cursor,
+            online_tape_titles: true,
+            ..UiPreferences::default()
+        };
+        let mut session = HostSession::new(ModelId::Spectrum48, true);
+
+        prefs
+            .apply_to_host_session(&mut session)
+            .expect("machine-specific preferences are skipped without a machine");
+
+        assert!(!session.has_machine());
+        assert_eq!(session.joystick_mode(), JoystickMode::Cursor);
+        assert!(session.online_tape_titles());
     }
 
     #[test]

@@ -23,12 +23,12 @@ use spec_chum_host::{
     sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel, UiPreferences,
 };
 
-use linux_shell::audio::{self, PcmRing};
-use linux_shell::commands::model_menu_label;
 use linux_shell::keymap::{
     apply_chord, apply_modifiers, chord_for_keyval, is_modifier_keyval,
     suppresses_modifier_caps_with_shift,
 };
+use native_shell_common::audio::{self, PcmRing};
+use native_shell_common::commands::model_menu_label;
 
 const APP_ID: &str = "org.specchum.SpecChumLinux";
 
@@ -49,7 +49,7 @@ impl HostSlot {
 struct AppState {
     host: HostSlot,
     pcm: Arc<Mutex<PcmRing>>,
-    _stream: Option<cpal::Stream>,
+    _stream: Option<audio::OutputStream>,
     _agent: Option<agent_server::embedded::EmbeddedServer>,
     _plane: Option<Arc<ControlPlane>>,
     prefs: UiPreferences,
@@ -93,7 +93,7 @@ impl AppState {
             ring.volume = prefs.volume;
             ring.muted = prefs.muted;
         }
-        let stream = audio::start_stream(Arc::clone(&pcm));
+        let stream = audio::start_stream(Arc::clone(&pcm), audio::ShellPlatform::Linux);
 
         let (host, plane, agent) = if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() == Some("1")
         {
@@ -389,38 +389,31 @@ impl AppState {
         }
     }
 
-    fn set_joystick(&mut self, joy: spec_chum_host::PrefJoystick) {
-        let previous = self.prefs.clone();
-        self.prefs.set_joystick(joy.to_mode());
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("Joystick", &e);
-            return;
+    fn update_prefs(&mut self, title: &str, update: impl FnOnce(&mut UiPreferences)) -> bool {
+        if let Err(e) = self
+            .host
+            .with_mut(|session| self.prefs.update_and_apply(session, update))
+        {
+            self.report_err(title, &e);
+            return false;
         }
         self.persist_prefs();
+        true
+    }
+
+    fn set_joystick(&mut self, joy: spec_chum_host::PrefJoystick) {
+        self.update_prefs("Joystick", |prefs| prefs.set_joystick(joy.to_mode()));
     }
 
     fn set_tape_ear_speed(&mut self, speed: u32) {
-        let previous = self.prefs.clone();
-        self.prefs.tape_experience = false;
-        self.prefs.tape_ear_speed = speed;
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("Tape EAR speed", &e);
-            return;
-        }
-        self.persist_prefs();
+        self.update_prefs("Tape EAR speed", |prefs| {
+            prefs.tape_experience = false;
+            prefs.tape_ear_speed = speed;
+        });
     }
 
     fn set_tape_experience(&mut self) {
-        let previous = self.prefs.clone();
-        self.prefs.tape_experience = true;
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("Experience load", &e);
-            return;
-        }
-        self.persist_prefs();
+        self.update_prefs("Experience load", |prefs| prefs.tape_experience = true);
     }
 
     fn set_tape_instant(&mut self) {
@@ -457,14 +450,7 @@ impl AppState {
     }
 
     fn set_ay(&mut self, mode: PrefAyStereo) {
-        let previous = self.prefs.clone();
-        self.prefs.set_ay_stereo(mode.to_mode());
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("AY stereo", &e);
-            return;
-        }
-        self.persist_prefs();
+        self.update_prefs("AY stereo", |prefs| prefs.set_ay_stereo(mode.to_mode()));
     }
 
     fn toggle_debug_window(&mut self, parent: &ApplicationWindow, state: &Rc<RefCell<AppState>>) {
@@ -523,37 +509,18 @@ impl AppState {
         let Some(buffer) = self.debug_buffer.as_ref() else {
             return;
         };
-        let text = self.host.with_mut(|s| {
-            let inspect = s.inspect_text().unwrap_or_else(|e| format!("inspect: {e}"));
-            let disasm = s.disasm(None, 16).unwrap_or_default();
-            let breaks = s
-                .list_pc_breakpoints()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|pc| format!("${pc:04X}"))
-                .collect::<Vec<_>>()
-                .join(" ");
-            let paused = if s.paused() { "paused" } else { "running" };
-            format!("{inspect}\n\n--- disasm ({paused}) ---\n{disasm}\n\nbreakpoints: {breaks}\n")
-        });
+        let text = self.host.with_mut(|session| session.debugger_text());
         buffer.set_text(&text);
         self.last_debug_refresh = Instant::now();
     }
 
     fn debug_pause(&mut self) {
-        self.host.with_mut(|s| {
-            s.set_paused(true);
-            s.set_status("Paused");
-        });
+        self.host.with_mut(HostSession::debug_pause);
         self.refresh_debug_text();
     }
 
     fn debug_continue(&mut self) {
-        self.host_action("Continue", |s| {
-            s.continue_execution()?;
-            s.set_running(true);
-            Ok(())
-        });
+        self.host_action("Continue", HostSession::debug_continue);
         self.refresh_debug_text();
     }
 

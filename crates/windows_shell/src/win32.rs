@@ -34,21 +34,23 @@ use spec_chum_host::{
     sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel, UiPreferences,
 };
 
-use windows_shell::audio::{self, PcmRing};
-use windows_shell::commands::{
+use native_shell_common::audio::{self, PcmRing};
+use native_shell_common::commands::{
     ear_speed_from_menu_id, joystick_from_menu_id, menu_id_for_model, model_from_menu_id,
-    model_menu_label, IDM_DBG_BREAK_PC, IDM_DBG_CLEAR_BREAKS, IDM_DBG_CONTINUE, IDM_DBG_PAUSE,
-    IDM_DBG_REFRESH, IDM_DBG_STEP, IDM_DBG_TOGGLE, IDM_FILE_EXIT, IDM_FILE_OPEN_DSK,
-    IDM_FILE_OPEN_RZX, IDM_FILE_OPEN_SNAPSHOT, IDM_FILE_OPEN_TAPE, IDM_FILE_OPEN_TRD,
-    IDM_HW_ATTACH_BETA, IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1, IDM_HW_ATTACH_MULTIFACE,
-    IDM_HW_DIVMMC_EEPROM, IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1, IDM_HW_EJECT_DCK,
-    IDM_HW_INSERT_DCK, IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM, IDM_HW_MULTIFACE_NMI,
-    IDM_HW_OPEN_TRD, IDM_MACHINE_RESET, IDM_SET_AY_ABC, IDM_SET_AY_ACB, IDM_SET_AY_MONO,
-    IDM_SET_JOY_CURSOR, IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L, IDM_SET_JOY_SINCLAIR_R,
-    IDM_SET_KEMPSTON_MOUSE, IDM_SET_MUTE, IDM_SET_ONLINE_TITLES, IDM_SET_TAPE_EAR_1,
-    IDM_SET_TAPE_EAR_10, IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20, IDM_SET_TAPE_EAR_5,
-    IDM_SET_TAPE_EXPERIENCE, IDM_SET_TAPE_INSTANT, IDM_SET_THROTTLE, IDM_TAPE_PAUSE, IDM_TAPE_PLAY,
-    IDM_TAPE_REWIND,
+    model_menu_label,
+};
+use native_shell_common::{
+    IDM_DBG_BREAK_PC, IDM_DBG_CLEAR_BREAKS, IDM_DBG_CONTINUE, IDM_DBG_PAUSE, IDM_DBG_REFRESH,
+    IDM_DBG_STEP, IDM_DBG_TOGGLE, IDM_FILE_EXIT, IDM_FILE_OPEN_DSK, IDM_FILE_OPEN_RZX,
+    IDM_FILE_OPEN_SNAPSHOT, IDM_FILE_OPEN_TAPE, IDM_FILE_OPEN_TRD, IDM_HW_ATTACH_BETA,
+    IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1, IDM_HW_ATTACH_MULTIFACE, IDM_HW_DIVMMC_EEPROM,
+    IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1, IDM_HW_EJECT_DCK, IDM_HW_INSERT_DCK,
+    IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM, IDM_HW_MULTIFACE_NMI, IDM_HW_OPEN_TRD,
+    IDM_MACHINE_RESET, IDM_SET_AY_ABC, IDM_SET_AY_ACB, IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR,
+    IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L, IDM_SET_JOY_SINCLAIR_R, IDM_SET_KEMPSTON_MOUSE,
+    IDM_SET_MUTE, IDM_SET_ONLINE_TITLES, IDM_SET_TAPE_EAR_1, IDM_SET_TAPE_EAR_10,
+    IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20, IDM_SET_TAPE_EAR_5, IDM_SET_TAPE_EXPERIENCE,
+    IDM_SET_TAPE_INSTANT, IDM_SET_THROTTLE, IDM_TAPE_PAUSE, IDM_TAPE_PLAY, IDM_TAPE_REWIND,
 };
 use windows_shell::keymap::{
     self, apply_chord, apply_modifiers, chord_for_vk, suppresses_modifier_caps,
@@ -79,7 +81,7 @@ impl HostSlot {
 struct AppState {
     host: HostSlot,
     pcm: Arc<Mutex<PcmRing>>,
-    _stream: Option<cpal::Stream>,
+    _stream: Option<audio::OutputStream>,
     _agent: Option<agent_server::embedded::EmbeddedServer>,
     plane: Option<Arc<ControlPlane>>,
     prefs: UiPreferences,
@@ -138,7 +140,7 @@ impl AppState {
             ring.volume = prefs.volume;
             ring.muted = prefs.muted;
         }
-        let stream = audio::start_stream(Arc::clone(&pcm));
+        let stream = audio::start_stream(Arc::clone(&pcm), audio::ShellPlatform::Windows);
 
         let (host, plane, agent) = if std::env::var("SPEC_CHUM_AGENT").ok().as_deref() == Some("1")
         {
@@ -504,38 +506,31 @@ impl AppState {
         }
     }
 
-    fn set_joystick(&mut self, joy: spec_chum_host::PrefJoystick) {
-        let previous = self.prefs.clone();
-        self.prefs.set_joystick(joy.to_mode());
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("Joystick", &e);
-            return;
+    fn update_prefs(&mut self, title: &str, update: impl FnOnce(&mut UiPreferences)) -> bool {
+        if let Err(e) = self
+            .host
+            .with_mut(|session| self.prefs.update_and_apply(session, update))
+        {
+            self.report_err(title, &e);
+            return false;
         }
         self.persist_prefs();
+        true
+    }
+
+    fn set_joystick(&mut self, joy: spec_chum_host::PrefJoystick) {
+        self.update_prefs("Joystick", |prefs| prefs.set_joystick(joy.to_mode()));
     }
 
     fn set_tape_ear_speed(&mut self, speed: u32) {
-        let previous = self.prefs.clone();
-        self.prefs.tape_experience = false;
-        self.prefs.tape_ear_speed = speed;
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("Tape EAR speed", &e);
-            return;
-        }
-        self.persist_prefs();
+        self.update_prefs("Tape EAR speed", |prefs| {
+            prefs.tape_experience = false;
+            prefs.tape_ear_speed = speed;
+        });
     }
 
     fn set_tape_experience(&mut self) {
-        let previous = self.prefs.clone();
-        self.prefs.tape_experience = true;
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("Experience load", &e);
-            return;
-        }
-        self.persist_prefs();
+        self.update_prefs("Experience load", |prefs| prefs.tape_experience = true);
     }
 
     fn set_tape_instant(&mut self) {
@@ -574,14 +569,7 @@ impl AppState {
     }
 
     fn set_ay(&mut self, mode: PrefAyStereo) {
-        let previous = self.prefs.clone();
-        self.prefs.set_ay_stereo(mode.to_mode());
-        if let Err(e) = self.apply_prefs_to_host() {
-            self.prefs = previous;
-            self.report_err("AY stereo", &e);
-            return;
-        }
-        self.persist_prefs();
+        self.update_prefs("AY stereo", |prefs| prefs.set_ay_stereo(mode.to_mode()));
     }
 
     fn host_action(
@@ -632,19 +620,7 @@ impl AppState {
         let Some(edit) = self.debug_edit else {
             return;
         };
-        let text = self.host.with_mut(|s| {
-            let inspect = s.inspect_text().unwrap_or_else(|e| format!("inspect: {e}"));
-            let disasm = s.disasm(None, 16).unwrap_or_default();
-            let breaks = s
-                .list_pc_breakpoints()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|pc| format!("${pc:04X}"))
-                .collect::<Vec<_>>()
-                .join(" ");
-            let paused = if s.paused() { "paused" } else { "running" };
-            format!("{inspect}\n\n--- disasm ({paused}) ---\n{disasm}\n\nbreakpoints: {breaks}\n")
-        });
+        let text = self.host.with_mut(|session| session.debugger_text());
         // Win32 multiline EDIT expects CRLF line endings.
         let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         set_window_title(edit, &text);
@@ -652,19 +628,12 @@ impl AppState {
     }
 
     fn debug_pause(&mut self) {
-        self.host.with_mut(|s| {
-            s.set_paused(true);
-            s.set_status("Paused");
-        });
+        self.host.with_mut(HostSession::debug_pause);
         self.refresh_debug_text();
     }
 
     fn debug_continue(&mut self) {
-        self.host_action("Continue", |s| {
-            s.continue_execution()?;
-            s.set_running(true);
-            Ok(())
-        });
+        self.host_action("Continue", HostSession::debug_continue);
         self.refresh_debug_text();
     }
 

@@ -3,11 +3,8 @@
 /// Compute the largest size that fits `avail` while preserving `src` aspect ratio.
 #[must_use]
 pub fn fit_size(src: egui::Vec2, avail: egui::Vec2) -> egui::Vec2 {
-    if src.x <= 0.0 || src.y <= 0.0 || avail.x <= 0.0 || avail.y <= 0.0 {
-        return egui::Vec2::ZERO;
-    }
-    let scale = (avail.x / src.x).min(avail.y / src.y);
-    egui::vec2(src.x * scale, src.y * scale)
+    let (width, height) = control_plane::fit_size(src.x, src.y, avail.x, avail.y);
+    egui::vec2(width, height)
 }
 
 #[cfg(test)]

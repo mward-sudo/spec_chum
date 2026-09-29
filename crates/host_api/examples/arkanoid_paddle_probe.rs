@@ -32,18 +32,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-
-fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn arkanoid_path() -> PathBuf {
-    env::var_os("SPEC_CHUM_ARKANOID_TZX")
-        .map(PathBuf::from)
-        .or_else(|| env::args().nth(1).map(PathBuf::from))
-        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join("Downloads/Arkanoid.tzx")))
-        .expect("tape path")
-}
+mod support;
+use support::{arkanoid_path, workspace_root};
 
 fn word(m: &machine::Machine, a: u16) -> u16 {
     u16::from(m.read_mem(a)) | (u16::from(m.read_mem(a.wrapping_add(1))) << 8)

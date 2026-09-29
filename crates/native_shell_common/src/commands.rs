@@ -1,4 +1,4 @@
-//! Menu command IDs and pure helpers for the Win32 shell (#351 deepen).
+//! Shared menu command IDs and pure helpers for the native shells (#351).
 //!
 //! Shared so keymap-style unit tests can run on non-Windows hosts.
 
@@ -81,7 +81,7 @@ pub fn menu_id_for_model(model: ModelId) -> usize {
         .map_or(IDM_MACHINE_MODEL_BASE, |i| IDM_MACHINE_MODEL_BASE + i)
 }
 
-/// Human label for a built-in model (Win32 menu text).
+/// Human label for a built-in model (native menu text).
 #[must_use]
 pub fn model_menu_label(model: ModelId) -> &'static str {
     machine::model_title(model.to_model())

@@ -153,30 +153,15 @@ impl Ay8912 {
     fn tone_period(&self, ch: usize) -> u16 {
         let fine = u16::from(self.regs[ch * 2]);
         let coarse = u16::from(self.regs[ch * 2 + 1] & 0x0f);
-        let p = fine | (coarse << 8);
-        if p == 0 {
-            1
-        } else {
-            p
-        }
+        (fine | (coarse << 8)).max(1)
     }
 
     fn noise_period(&self) -> u16 {
-        let p = u16::from(self.regs[6] & 0x1f);
-        if p == 0 {
-            1
-        } else {
-            p
-        }
+        u16::from(self.regs[6] & 0x1f).max(1)
     }
 
     fn env_period(&self) -> u16 {
-        let p = u16::from(self.regs[11]) | (u16::from(self.regs[12]) << 8);
-        if p == 0 {
-            1
-        } else {
-            p
-        }
+        (u16::from(self.regs[11]) | (u16::from(self.regs[12]) << 8)).max(1)
     }
 
     fn channel_volume(&self, ch: usize) -> f32 {

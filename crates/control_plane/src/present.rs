@@ -25,8 +25,6 @@ fn host_display_rgba_len_checked(w: usize, h: usize) -> ApiResult<usize> {
 }
 
 /// Largest size that fits `avail` while preserving `src` aspect ratio.
-///
-/// Matches [`app::display::fit_size`] (egui central panel).
 #[must_use]
 pub fn fit_size(src_w: f32, src_h: f32, avail_w: f32, avail_h: f32) -> (f32, f32) {
     if src_w <= 0.0 || src_h <= 0.0 || avail_w <= 0.0 || avail_h <= 0.0 {

@@ -13,19 +13,8 @@ use machine::TapeLoadOptions;
 use spec_chum_host::{HostSession, ModelId};
 use std::env;
 use std::io::{self, Write};
-use std::path::PathBuf;
-
-fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn arkanoid_path() -> PathBuf {
-    env::var_os("SPEC_CHUM_ARKANOID_TZX")
-        .map(PathBuf::from)
-        .or_else(|| env::args().nth(1).map(PathBuf::from))
-        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join("Downloads/Arkanoid.tzx")))
-        .expect("tape path")
-}
+mod support;
+use support::{arkanoid_path, workspace_root};
 
 fn dump(s: &HostSession, label: &str, addr: u16, count: usize) {
     match s.disasm(Some(addr), count) {

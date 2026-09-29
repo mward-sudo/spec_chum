@@ -42,6 +42,13 @@ fn describe_categories(c: Category) -> String {
     }
 }
 
+fn append_text_events(out: &mut String, events: &[TraceEvent]) {
+    for ev in events {
+        out.push_str(&ev.to_string());
+        out.push('\n');
+    }
+}
+
 /// Format the ring as text (one event per line) with a short header.
 #[must_use]
 pub fn dump_string() -> String {
@@ -54,10 +61,7 @@ pub fn dump_string() -> String {
         cats.bits(),
         describe_categories(cats)
     ));
-    for ev in &events {
-        out.push_str(&ev.to_string());
-        out.push('\n');
-    }
+    append_text_events(&mut out, &events);
     out
 }
 
@@ -108,10 +112,7 @@ pub fn dump_filtered(filter: DumpFilter) -> String {
         "# spec_chum trace dump events={} (filtered)\n",
         events.len()
     ));
-    for ev in &events {
-        out.push_str(&ev.to_string());
-        out.push('\n');
-    }
+    append_text_events(&mut out, &events);
     out
 }
 

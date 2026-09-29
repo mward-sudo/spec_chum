@@ -58,6 +58,18 @@ pub enum RomLoadError {
     Io(#[from] std::io::Error),
 }
 
+fn require_rom_size(data: &[u8], kind: &'static str, expected: usize) -> Result<(), RomLoadError> {
+    if data.len() == expected {
+        Ok(())
+    } else {
+        Err(RomLoadError::WrongSize {
+            kind,
+            expected,
+            got: data.len(),
+        })
+    }
+}
+
 fn emit_floating_sampled(port: u16, frame_t: u32, value: u8) {
     static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     if !trace::enabled(trace::Category::BUS) {
@@ -197,26 +209,14 @@ impl Bus48 {
     }
 
     pub fn load_rom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
-        if data.len() != 16384 {
-            return Err(RomLoadError::WrongSize {
-                kind: "48K ROM",
-                expected: 16384,
-                got: data.len(),
-            });
-        }
+        require_rom_size(data, "48K ROM", 16384)?;
         self.rom.copy_from_slice(data);
         Ok(())
     }
 
     /// Load the 8 KiB Timex EX-ROM (TS2068 / TC2068).
     pub fn load_timex_exrom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
-        if data.len() != TIMEX_EXROM_SIZE {
-            return Err(RomLoadError::WrongSize {
-                kind: "Timex EX-ROM",
-                expected: TIMEX_EXROM_SIZE,
-                got: data.len(),
-            });
-        }
+        require_rom_size(data, "Timex EX-ROM", TIMEX_EXROM_SIZE)?;
         self.timex_exrom.copy_from_slice(data);
         Ok(())
     }
@@ -772,13 +772,7 @@ impl Bus128 {
     }
 
     pub fn load_rom128(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
-        if data.len() != 32768 {
-            return Err(RomLoadError::WrongSize {
-                kind: "128 ROM",
-                expected: 32768,
-                got: data.len(),
-            });
-        }
+        require_rom_size(data, "128 ROM", 32768)?;
         self.rom[0].copy_from_slice(&data[0..16384]);
         self.rom[1].copy_from_slice(&data[16384..32768]);
         Ok(())
@@ -786,13 +780,7 @@ impl Bus128 {
 
     /// Load Scorpion ZS-256 main ROM (3 × 16 KiB; TR-DOS is separate via Beta).
     pub fn load_rom_scorpion(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
-        if data.len() != 49152 {
-            return Err(RomLoadError::WrongSize {
-                kind: "Scorpion ROM",
-                expected: 49152,
-                got: data.len(),
-            });
-        }
+        require_rom_size(data, "Scorpion ROM", 49152)?;
         for i in 0..3 {
             self.rom[i].copy_from_slice(&data[i * 16384..(i + 1) * 16384]);
         }
