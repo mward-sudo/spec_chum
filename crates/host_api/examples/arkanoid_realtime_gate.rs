@@ -19,21 +19,11 @@ use spec_chum_host::{HostSession, ModelId};
 use std::collections::BTreeMap;
 use std::env;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+mod support;
+use support::{arkanoid_path, workspace_root};
 
 const T_PER_FRAME: u64 = 69_888;
-
-fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn arkanoid_path() -> PathBuf {
-    env::var_os("SPEC_CHUM_ARKANOID_TZX")
-        .map(PathBuf::from)
-        .or_else(|| env::args().nth(1).map(PathBuf::from))
-        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join("Downloads/Arkanoid.tzx")))
-        .expect("tape path")
-}
 
 fn env_u64(key: &str, default: u64) -> u64 {
     env::var(key)

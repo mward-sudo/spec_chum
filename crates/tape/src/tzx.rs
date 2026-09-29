@@ -80,6 +80,11 @@ fn ensure_block_budget(block_starts: &[usize]) -> Result<(), TzxError> {
     Ok(())
 }
 
+/// Read a little-endian 24-bit length after the enclosing block header is checked.
+fn read_u24_le(data: &[u8], i: usize) -> u32 {
+    u32::from(data[i]) | (u32::from(data[i + 1]) << 8) | (u32::from(data[i + 2]) << 16)
+}
+
 /// Advance `i` past the body of a known TZX block (`id` already consumed).
 ///
 /// Used to build the block-offset index for Jump/Call/Select relative addressing.
@@ -96,9 +101,7 @@ fn advance_past_tzx_block_body(data: &[u8], id: u8, mut i: usize) -> Result<usiz
             if i + 18 > data.len() {
                 return Err(TzxError::Format("truncated 0x11".into()));
             }
-            let len = (u32::from(data[i + 15])
-                | (u32::from(data[i + 16]) << 8)
-                | (u32::from(data[i + 17]) << 16)) as usize;
+            let len = read_u24_le(data, i + 15) as usize;
             i += 18 + len;
         }
         0x12 => i += 4,
@@ -110,18 +113,14 @@ fn advance_past_tzx_block_body(data: &[u8], id: u8, mut i: usize) -> Result<usiz
             if i + 10 > data.len() {
                 return Err(TzxError::Format("truncated 0x14".into()));
             }
-            let len = (u32::from(data[i + 7])
-                | (u32::from(data[i + 8]) << 8)
-                | (u32::from(data[i + 9]) << 16)) as usize;
+            let len = read_u24_le(data, i + 7) as usize;
             i += 10 + len;
         }
         0x15 => {
             if i + 8 > data.len() {
                 return Err(TzxError::Format("truncated 0x15".into()));
             }
-            let len = (u32::from(data[i + 5])
-                | (u32::from(data[i + 6]) << 8)
-                | (u32::from(data[i + 7]) << 16)) as usize;
+            let len = read_u24_le(data, i + 5) as usize;
             i += 8 + len;
         }
         0x18 | 0x19 => {
@@ -391,9 +390,7 @@ impl TzxPlayer {
                     let pilot_pulses = u16::from_le_bytes([data[i + 10], data[i + 11]]);
                     let used_bits = data[i + 12];
                     let pause_ms = u16::from_le_bytes([data[i + 13], data[i + 14]]);
-                    let len = u32::from(data[i + 15])
-                        | (u32::from(data[i + 16]) << 8)
-                        | (u32::from(data[i + 17]) << 16);
+                    let len = read_u24_le(data, i + 15);
                     i += 18;
                     let len = len as usize;
                     if i + len > data.len() {
@@ -481,9 +478,7 @@ impl TzxPlayer {
                     let one = u16::from_le_bytes([data[i + 2], data[i + 3]]);
                     let used_bits = data[i + 4];
                     let pause_ms = u16::from_le_bytes([data[i + 5], data[i + 6]]);
-                    let len = u32::from(data[i + 7])
-                        | (u32::from(data[i + 8]) << 8)
-                        | (u32::from(data[i + 9]) << 16);
+                    let len = read_u24_le(data, i + 7);
                     i += 10;
                     let len = len as usize;
                     if i + len > data.len() {
@@ -521,9 +516,7 @@ impl TzxPlayer {
                     let t_per_sample = u16::from_le_bytes([data[i], data[i + 1]]);
                     let pause_ms = u16::from_le_bytes([data[i + 2], data[i + 3]]);
                     let used_bits = data[i + 4];
-                    let len = (u32::from(data[i + 5])
-                        | (u32::from(data[i + 6]) << 8)
-                        | (u32::from(data[i + 7]) << 16)) as usize;
+                    let len = read_u24_le(data, i + 5) as usize;
                     i += 8;
                     if i + len > data.len() {
                         return Err(TzxError::Format("0x15 data truncated".into()));
@@ -1115,9 +1108,7 @@ impl TzxPlayer {
                     if i + 18 > data.len() {
                         break;
                     }
-                    let len = (u32::from(data[i + 15])
-                        | (u32::from(data[i + 16]) << 8)
-                        | (u32::from(data[i + 17]) << 16)) as usize;
+                    let len = read_u24_le(data, i + 15) as usize;
                     i += 18 + len;
                 }
                 0x12 => i += 4,
@@ -1129,9 +1120,7 @@ impl TzxPlayer {
                     if i + 10 > data.len() {
                         break;
                     }
-                    let len = (u32::from(data[i + 7])
-                        | (u32::from(data[i + 8]) << 8)
-                        | (u32::from(data[i + 9]) << 16)) as usize;
+                    let len = read_u24_le(data, i + 7) as usize;
                     i += 10 + len;
                 }
                 0x15 => {

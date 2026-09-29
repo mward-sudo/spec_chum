@@ -42,6 +42,46 @@ pub fn multiface128_port_match(port: u16) -> bool {
     port & 0x0072 == 0x0032
 }
 
+fn load_multiface_rom<const N: usize>(
+    rom: &mut [u8; N],
+    loaded: &mut bool,
+    data: &[u8],
+    kind: &'static str,
+) -> Result<(), RomLoadError> {
+    crate::require_rom_size(data, kind, N)?;
+    rom.copy_from_slice(data);
+    *loaded = true;
+    Ok(())
+}
+
+fn read_overlay(
+    rom: &[u8; MULTIFACE1_SIZE],
+    ram: &[u8; MULTIFACE1_SIZE],
+    paged: bool,
+    addr: u16,
+) -> Option<u8> {
+    if !paged {
+        return None;
+    }
+    match addr {
+        0x0000..=0x1fff => Some(rom[addr as usize]),
+        0x2000..=0x3fff => Some(ram[addr as usize - 0x2000]),
+        _ => None,
+    }
+}
+
+fn write_overlay(ram: &mut [u8; MULTIFACE1_SIZE], paged: bool, addr: u16, value: u8) -> bool {
+    if !paged {
+        return false;
+    }
+    if (0x2000..=0x3fff).contains(&addr) {
+        ram[addr as usize - 0x2000] = value;
+        return true;
+    }
+    // ROM region ignores writes while paged.
+    addr < 0x2000
+}
+
 /// Romantic Instruments Multiface 1 overlay for 48K machines.
 #[derive(Clone, Debug)]
 pub struct Multiface1 {
@@ -75,16 +115,7 @@ impl Multiface1 {
 
     /// Load an 8 KiB Multiface ROM image from memory.
     pub fn load_rom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
-        if data.len() != MULTIFACE1_SIZE {
-            return Err(RomLoadError::WrongSize {
-                kind: "Multiface 1 ROM",
-                expected: MULTIFACE1_SIZE,
-                got: data.len(),
-            });
-        }
-        self.rom.copy_from_slice(data);
-        self.rom_loaded = true;
-        Ok(())
+        load_multiface_rom(&mut self.rom, &mut self.rom_loaded, data, "Multiface 1 ROM")
     }
 
     /// Load Multiface ROM from a filesystem path.
@@ -178,27 +209,12 @@ impl Multiface1 {
     /// Read through the MF overlay when paged; `None` if MF does not own `addr`.
     #[must_use]
     pub fn read(&self, addr: u16) -> Option<u8> {
-        if !self.paged {
-            return None;
-        }
-        match addr {
-            0x0000..=0x1fff => Some(self.rom[addr as usize]),
-            0x2000..=0x3fff => Some(self.ram[addr as usize - 0x2000]),
-            _ => None,
-        }
+        read_overlay(&self.rom, &self.ram, self.paged, addr)
     }
 
     /// Write to MF RAM when paged; returns true if handled.
     pub fn write(&mut self, addr: u16, value: u8) -> bool {
-        if !self.paged {
-            return false;
-        }
-        if (0x2000..=0x3fff).contains(&addr) {
-            self.ram[addr as usize - 0x2000] = value;
-            return true;
-        }
-        // ROM region ignores writes while paged.
-        addr < 0x2000
+        write_overlay(&mut self.ram, self.paged, addr, value)
     }
 }
 
@@ -240,16 +256,12 @@ impl Multiface128 {
 
     /// Load an 8 KiB Multiface 128 ROM image from memory.
     pub fn load_rom(&mut self, data: &[u8]) -> Result<(), RomLoadError> {
-        if data.len() != MULTIFACE128_SIZE {
-            return Err(RomLoadError::WrongSize {
-                kind: "Multiface 128 ROM",
-                expected: MULTIFACE128_SIZE,
-                got: data.len(),
-            });
-        }
-        self.rom.copy_from_slice(data);
-        self.rom_loaded = true;
-        Ok(())
+        load_multiface_rom(
+            &mut self.rom,
+            &mut self.rom_loaded,
+            data,
+            "Multiface 128 ROM",
+        )
     }
 
     /// Load Multiface 128 ROM from a filesystem path.
@@ -344,26 +356,12 @@ impl Multiface128 {
     /// Read through the MF overlay when paged; `None` if MF does not own `addr`.
     #[must_use]
     pub fn read(&self, addr: u16) -> Option<u8> {
-        if !self.paged {
-            return None;
-        }
-        match addr {
-            0x0000..=0x1fff => Some(self.rom[addr as usize]),
-            0x2000..=0x3fff => Some(self.ram[addr as usize - 0x2000]),
-            _ => None,
-        }
+        read_overlay(&self.rom, &self.ram, self.paged, addr)
     }
 
     /// Write to MF RAM when paged; returns true if handled.
     pub fn write(&mut self, addr: u16, value: u8) -> bool {
-        if !self.paged {
-            return false;
-        }
-        if (0x2000..=0x3fff).contains(&addr) {
-            self.ram[addr as usize - 0x2000] = value;
-            return true;
-        }
-        addr < 0x2000
+        write_overlay(&mut self.ram, self.paged, addr, value)
     }
 }
 

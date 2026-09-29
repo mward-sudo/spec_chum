@@ -1,0 +1,16 @@
+[package]
+name = "native_shell_common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared audio and command helpers for native Spec Chum shells"
+publish = false
+
+[dependencies]
+cpal = { workspace = true }
+host_api = { workspace = true }
+machine = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

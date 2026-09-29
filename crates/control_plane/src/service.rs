@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use spec_chum_host::{
     machine_config::UserMachineConfig,
     rom_setup::{model_rom_paths_snapshot, rom_setup_json},
-    HostError, HostSession, ModelId, PrefJoystick,
+    HostError, HostSession, ModelId, PrefJoystick, KEYBOARD_BIT_MAX, KEYBOARD_KEY_RANGE_ERROR,
+    KEYBOARD_ROWS,
 };
 use trace::{Category, DumpFilter};
 
@@ -227,34 +228,9 @@ impl ControlPlane {
         height: Option<u32>,
         scale: Option<u32>,
     ) -> ApiResult<(Vec<u8>, PresentMeta)> {
-        let (src, sw, sh) = self.with_session_ref(|session| {
-            if !session.has_machine() {
-                return Err(ApiError::NoMachine);
-            }
-            let w = session.width();
-            let h = session.height();
-            let rgba = session.framebuffer().to_vec();
-            Ok((rgba, w, h))
-        })?;
-
-        let (panel_w, panel_h) = {
-            let hv = self.host_view.lock();
-            (hv.panel_w, hv.panel_h)
-        };
-        let (dw, dh, panel) = resolve_present_size(sw, sh, width, height, scale, panel_w, panel_h)?;
-        let rgba = compose_nearest_letterbox(&src, sw, sh, dw, dh)?;
-        let png = encode_rgba_png(&rgba, dw, dh)?;
-        Ok((
-            png,
-            PresentMeta {
-                width: dw,
-                height: dh,
-                source_width: sw,
-                source_height: sh,
-                filter: "nearest",
-                panel,
-            },
-        ))
+        let (rgba, meta) = self.host_display_presented_rgba(width, height, scale)?;
+        let png = encode_rgba_png(&rgba, meta.width, meta.height)?;
+        Ok((png, meta))
     }
 
     /// RGBA bytes for presented display (same sizing rules as [`Self::host_display_presented`]).
@@ -268,10 +244,11 @@ impl ControlPlane {
             if !session.has_machine() {
                 return Err(ApiError::NoMachine);
             }
-            let w = session.width();
-            let h = session.height();
-            let rgba = session.framebuffer().to_vec();
-            Ok((rgba, w, h))
+            Ok((
+                session.framebuffer().to_vec(),
+                session.width(),
+                session.height(),
+            ))
         })?;
         let (panel_w, panel_h) = {
             let hv = self.host_view.lock();
@@ -484,8 +461,8 @@ impl ControlPlane {
     }
 
     pub fn set_key(&self, row: usize, bit: u8, pressed: bool) -> ApiResult<()> {
-        if row > 7 || bit > 4 {
-            return Err(ApiError::BadRequest("key row/bit out of range".into()));
+        if row >= KEYBOARD_ROWS || bit > KEYBOARD_BIT_MAX {
+            return Err(ApiError::BadRequest(KEYBOARD_KEY_RANGE_ERROR.into()));
         }
         self.with_session_mut(|s| {
             s.set_key(row, bit, pressed)?;

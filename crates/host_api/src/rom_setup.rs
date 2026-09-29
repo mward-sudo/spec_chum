@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use machine::{Model, RomSlotStatus};
 use serde::Serialize;
 
-use crate::prefs::{model_rom_path_key, pref_model_slug, PrefModel};
+use crate::prefs::{model_rom_path_key, slot_rom_overrides, PrefModel};
 use crate::session::ModelId;
 
 #[derive(Clone, Debug, Serialize)]
@@ -80,15 +80,7 @@ fn slot_overrides(
     model: ModelId,
     rom_paths: &BTreeMap<String, String>,
 ) -> BTreeMap<String, PathBuf> {
-    let pref = PrefModel::from_model(model.to_model());
-    let prefix = format!("{}_", pref_model_slug(pref));
-    rom_paths
-        .iter()
-        .filter_map(|(key, path)| {
-            key.strip_prefix(&prefix)
-                .map(|slot| (slot.to_string(), PathBuf::from(path)))
-        })
-        .collect()
+    slot_rom_overrides(PrefModel::from_model(model.to_model()), rom_paths)
 }
 
 fn canonical_persist_path(source: &Path) -> PathBuf {

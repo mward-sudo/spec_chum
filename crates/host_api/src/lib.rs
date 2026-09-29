@@ -32,4 +32,5 @@ pub use rom_setup::{
 };
 pub use session::{
     HostError, HostRegs, HostSession, ModelId, RegsPatch, TypeLoadResult, AUDIO_SAMPLE_RATE,
+    KEYBOARD_BITS_PER_ROW, KEYBOARD_BIT_MAX, KEYBOARD_KEY_RANGE_ERROR, KEYBOARD_ROWS,
 };

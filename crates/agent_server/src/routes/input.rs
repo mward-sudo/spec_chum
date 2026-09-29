@@ -8,6 +8,11 @@ use axum::{
 };
 use control_plane::{ApiError, PrefsPatch};
 use serde::Deserialize;
+use spec_chum_host::{KEYBOARD_BIT_MAX, KEYBOARD_KEY_RANGE_ERROR, KEYBOARD_ROWS};
+
+fn valid_key(row: usize, bit: u8) -> bool {
+    row < KEYBOARD_ROWS && bit <= KEYBOARD_BIT_MAX
+}
 
 use super::{api_error, auth_empty, auth_json, check_auth, AppState};
 
@@ -130,20 +135,20 @@ pub(crate) async fn set_keys(
                 ApiError::BadRequest("keys body requires clear, keys[], or row+bit".into()),
             );
         };
-        if row > 7 || bit > 4 {
+        if !valid_key(row, bit) {
             return api_error(
                 &state.plane,
-                ApiError::BadRequest("key row/bit out of range".into()),
+                ApiError::BadRequest(KEYBOARD_KEY_RANGE_ERROR.into()),
             );
         }
         let pressed = body.pressed.unwrap_or(true);
         auth_empty(&state, &headers, || state.plane.set_key(row, bit, pressed))
     } else {
         for key in &body.keys {
-            if key.row > 7 || key.bit > 4 {
+            if !valid_key(key.row, key.bit) {
                 return api_error(
                     &state.plane,
-                    ApiError::BadRequest("key row/bit out of range".into()),
+                    ApiError::BadRequest(KEYBOARD_KEY_RANGE_ERROR.into()),
                 );
             }
         }

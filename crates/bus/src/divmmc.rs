@@ -646,12 +646,16 @@ impl DivMmc {
 mod tests {
     use super::*;
 
+    fn spi_select_slot(d: &mut DivMmc, slot: u8) {
+        d.out_port(PORT_SPI_CS, !(1u8 << slot));
+    }
+
     fn spi_select(d: &mut DivMmc) {
-        d.out_port(PORT_SPI_CS, 0xfe); // bit0 low → slot 0
+        spi_select_slot(d, 0);
     }
 
     fn spi_select_slot1(d: &mut DivMmc) {
-        d.out_port(PORT_SPI_CS, 0xfd); // bit1 low → slot 1
+        spi_select_slot(d, 1);
     }
 
     fn spi_deselect(d: &mut DivMmc) {
@@ -678,54 +682,36 @@ mod tests {
         spi_rx(d)
     }
 
-    fn spi_init_ready(d: &mut DivMmc) {
-        // ESXDOS / DivMMC Ready SDHC path: CMD0 → CMD8 → ACMD41(HCS).
-        spi_select(d);
+    fn spi_init(d: &mut DivMmc, slot: u8, high_capacity: bool) {
+        // CMD0 → CMD8 → ACMD41; HCS selects SDHC rather than SDSC addressing.
+        spi_select_slot(d, slot);
         assert_eq!(spi_cmd(d, 0, 0, 0x95), 0x01);
         spi_deselect(d);
-        spi_select(d);
+        spi_select_slot(d, slot);
         assert_eq!(spi_cmd(d, 8, 0x1aa, 0x87), 0x01);
         for _ in 0..4 {
             let _ = spi_rx(d);
         }
         spi_deselect(d);
-        spi_select(d);
+        spi_select_slot(d, slot);
         assert_eq!(spi_cmd(d, 55, 0, 0x65), 0x01);
-        assert_eq!(spi_cmd(d, 41, ACMD41_HCS, 0x77), 0x00);
+        assert_eq!(
+            spi_cmd(d, 41, if high_capacity { ACMD41_HCS } else { 0 }, 0x77),
+            0x00
+        );
         spi_deselect(d);
+    }
+
+    fn spi_init_ready(d: &mut DivMmc) {
+        spi_init(d, 0, true);
     }
 
     fn spi_init_ready_slot1(d: &mut DivMmc) {
-        spi_select_slot1(d);
-        assert_eq!(spi_cmd(d, 0, 0, 0x95), 0x01);
-        spi_deselect(d);
-        spi_select_slot1(d);
-        assert_eq!(spi_cmd(d, 8, 0x1aa, 0x87), 0x01);
-        for _ in 0..4 {
-            let _ = spi_rx(d);
-        }
-        spi_deselect(d);
-        spi_select_slot1(d);
-        assert_eq!(spi_cmd(d, 55, 0, 0x65), 0x01);
-        assert_eq!(spi_cmd(d, 41, ACMD41_HCS, 0x77), 0x00);
-        spi_deselect(d);
+        spi_init(d, 1, true);
     }
 
     fn spi_init_sdsc(d: &mut DivMmc) {
-        spi_select(d);
-        assert_eq!(spi_cmd(d, 0, 0, 0x95), 0x01);
-        spi_deselect(d);
-        spi_select(d);
-        assert_eq!(spi_cmd(d, 8, 0x1aa, 0x87), 0x01);
-        for _ in 0..4 {
-            let _ = spi_rx(d);
-        }
-        spi_deselect(d);
-        spi_select(d);
-        assert_eq!(spi_cmd(d, 55, 0, 0x65), 0x01);
-        // No HCS → SDSC byte addressing (legacy cards).
-        assert_eq!(spi_cmd(d, 41, 0, 0x77), 0x00);
-        spi_deselect(d);
+        spi_init(d, 0, false);
     }
 
     fn spi_wait_token(d: &mut DivMmc) -> u8 {

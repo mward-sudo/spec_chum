@@ -263,6 +263,14 @@ pub fn palette_rgb(color: u8, bright: bool) -> [u8; 3] {
     }
 }
 
+#[inline]
+fn write_pixel_rgba(out: &mut [u8], i: usize, rgb: [u8; 3]) {
+    out[i] = rgb[0];
+    out[i + 1] = rgb[1];
+    out[i + 2] = rgb[2];
+    out[i + 3] = 255;
+}
+
 /// Bitmap bytes (`6144`) plus one attribute byte per paper line (`192 * 32`).
 const BEAM_BITMAP_LEN: usize = 6144;
 const BEAM_ATTR_LEN: usize = 192 * 32;
@@ -655,10 +663,7 @@ impl Ula48 {
 
         // Solid hi-res paper for border (and as backdrop).
         for i in (0..w * h * 4).step_by(4) {
-            out[i] = paper_rgb[0];
-            out[i + 1] = paper_rgb[1];
-            out[i + 2] = paper_rgb[2];
-            out[i + 3] = 255;
+            write_pixel_rgba(out, i, paper_rgb);
         }
 
         if screen.len() < TimexHiresMode::MIN_SCREEN_LEN {
@@ -679,10 +684,7 @@ impl Ula48 {
                     let on = word & (0x8000 >> bit) != 0;
                     let rgb = if on { ink_rgb } else { paper_rgb };
                     let i = (y * w + x0 + bit) * 4;
-                    out[i] = rgb[0];
-                    out[i + 1] = rgb[1];
-                    out[i + 2] = rgb[2];
-                    out[i + 3] = 255;
+                    write_pixel_rgba(out, i, rgb);
                 }
             }
         }
@@ -716,19 +718,13 @@ impl Ula48 {
                     let t = Self::pixel_tstate(x, y, ox, oy, paper_start, t_line);
                     let rgb = palette_rgb(self.border_at(t), false);
                     let i = (y * w + x) * 4;
-                    out[i] = rgb[0];
-                    out[i + 1] = rgb[1];
-                    out[i + 2] = rgb[2];
-                    out[i + 3] = 255;
+                    write_pixel_rgba(out, i, rgb);
                 }
             }
         } else {
             let border_rgb = palette_rgb(self.border, false);
             for i in (0..w * h * 4).step_by(4) {
-                out[i] = border_rgb[0];
-                out[i + 1] = border_rgb[1];
-                out[i + 2] = border_rgb[2];
-                out[i + 3] = 255;
+                write_pixel_rgba(out, i, border_rgb);
             }
         }
 
@@ -799,10 +795,7 @@ impl Ula48 {
                 let x = ox + px;
                 let y = oy + py;
                 let i = (y * w + x) * 4;
-                out[i] = rgb[0];
-                out[i + 1] = rgb[1];
-                out[i + 2] = rgb[2];
-                out[i + 3] = 255;
+                write_pixel_rgba(out, i, rgb);
             }
         }
     }

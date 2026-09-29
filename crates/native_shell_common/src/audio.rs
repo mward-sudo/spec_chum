@@ -1,4 +1,4 @@
-//! Host PCM playback from [`HostSession::audio_pcm`] snapshots.
+//! Shared PCM ring and CPAL output stream for native shells.
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -7,7 +7,22 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample};
 use parking_lot::Mutex;
 
-/// Shared ring fed each emulated frame; drained by the cpal callback.
+#[derive(Clone, Copy, Debug)]
+pub enum ShellPlatform {
+    Linux,
+    Windows,
+}
+
+impl ShellPlatform {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Linux => "linux",
+            Self::Windows => "windows",
+        }
+    }
+}
+
+/// Shared ring fed each emulated frame and drained by the audio callback.
 #[derive(Debug, Default)]
 pub struct PcmRing {
     samples: VecDeque<f32>,
@@ -36,38 +51,51 @@ impl PcmRing {
     }
 
     fn pop_sample(&mut self) -> f32 {
-        let s = self.samples.pop_front().unwrap_or(0.0);
+        let sample = self.samples.pop_front().unwrap_or(0.0);
         if self.muted {
             return 0.0;
         }
-        (s * self.volume.clamp(0.0, 1.0)).clamp(-1.0, 1.0)
+        (sample * self.volume.clamp(0.0, 1.0)).clamp(-1.0, 1.0)
     }
 }
 
-/// Start a cpal output stream that drains `ring`. Returns `None` when no device.
-pub fn start_stream(ring: Arc<Mutex<PcmRing>>) -> Option<cpal::Stream> {
+/// Start a CPAL output stream, supporting the common signed, unsigned, and float formats.
+pub fn start_stream(ring: Arc<Mutex<PcmRing>>, platform: ShellPlatform) -> Option<cpal::Stream> {
+    let platform = platform.name();
     let host = cpal::default_host();
-    let device = host.default_output_device()?;
-    let config = match device.default_output_config() {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("spec-chum-windows: audio config failed: {e}");
+    let device = match host.default_output_device() {
+        Some(device) => device,
+        None => {
+            eprintln!("spec-chum-{platform}: no default audio output device");
             return None;
         }
     };
-    let channels = config.channels();
+    let config = match device.default_output_config() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("spec-chum-{platform}: audio config failed: {error}");
+            return None;
+        }
+    };
+    let channel_count = config.channels();
     let stream_config = config.config();
     let stream = match config.sample_format() {
-        SampleFormat::F32 => build_stream::<f32>(&device, &stream_config, channels, ring),
-        SampleFormat::I16 => build_stream::<i16>(&device, &stream_config, channels, ring),
-        SampleFormat::U16 => build_stream::<u16>(&device, &stream_config, channels, ring),
+        SampleFormat::F32 => {
+            build_stream::<f32>(&device, &stream_config, channel_count, ring, platform)
+        }
+        SampleFormat::I16 => {
+            build_stream::<i16>(&device, &stream_config, channel_count, ring, platform)
+        }
+        SampleFormat::U16 => {
+            build_stream::<u16>(&device, &stream_config, channel_count, ring, platform)
+        }
         other => {
-            eprintln!("spec-chum-windows: unsupported audio sample format {other:?}");
+            eprintln!("spec-chum-{platform}: unsupported audio sample format {other:?}");
             return None;
         }
     }?;
-    if let Err(e) = stream.play() {
-        eprintln!("spec-chum-windows: audio play failed: {e}");
+    if let Err(error) = stream.play() {
+        eprintln!("spec-chum-{platform}: audio play failed: {error}");
         return None;
     }
     Some(stream)
@@ -76,8 +104,9 @@ pub fn start_stream(ring: Arc<Mutex<PcmRing>>) -> Option<cpal::Stream> {
 fn build_stream<T>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    channels: u16,
+    channel_count: u16,
     ring: Arc<Mutex<PcmRing>>,
+    platform: &'static str,
 ) -> Option<cpal::Stream>
 where
     T: SizedSample + FromSample<f32> + Send + 'static,
@@ -85,15 +114,15 @@ where
     match device.build_output_stream(
         config,
         move |data: &mut [T], _| {
-            let mut st = ring.lock();
-            fill_output_samples(data, usize::from(channels), &mut st);
+            let mut samples = ring.lock();
+            fill_output_samples(data, usize::from(channel_count), &mut samples);
         },
-        |err| eprintln!("spec-chum-windows audio error: {err}"),
+        move |error| eprintln!("spec-chum-{platform} audio error: {error}"),
         None,
     ) {
-        Ok(s) => Some(s),
-        Err(e) => {
-            eprintln!("spec-chum-windows: build audio stream failed: {e}");
+        Ok(stream) => Some(stream),
+        Err(error) => {
+            eprintln!("spec-chum-{platform}: build audio stream failed: {error}");
             None
         }
     }
@@ -106,8 +135,8 @@ where
     for frame in data.chunks_mut(channels.max(1)) {
         let sample = T::from_sample(ring.pop_sample());
         frame[0] = sample;
-        for out in frame.iter_mut().skip(1) {
-            *out = sample;
+        for channel in frame.iter_mut().skip(1) {
+            *channel = sample;
         }
     }
 }

@@ -4959,12 +4959,12 @@ dependencies = [
  "agent_server",
  "anyhow",
  "control_plane",
- "cpal 0.15.3",
  "gdk4",
  "glib",
  "gtk4",
  "host_api",
  "machine",
+ "native_shell_common",
  "parking_lot",
  "rfd",
 ]
@@ -5228,6 +5228,15 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "unicode-ident",
+]
+
+[[package]]
+name = "native_shell_common"
+version = "0.7.0"
+dependencies = [
+ "cpal 0.15.3",
+ "host_api",
+ "parking_lot",
 ]
 
 [[package]]
@@ -8938,9 +8947,9 @@ dependencies = [
  "agent_server",
  "anyhow",
  "control_plane",
- "cpal 0.15.3",
  "host_api",
  "machine",
+ "native_shell_common",
  "parking_lot",
  "rfd",
  "windows 0.61.3",

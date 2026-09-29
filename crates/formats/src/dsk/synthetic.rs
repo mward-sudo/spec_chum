@@ -2,22 +2,39 @@
 
 use super::{DskImage, Sector, TrackData};
 
+fn synthetic_cpc_dsk(sectors: &[&[u8]]) -> Vec<u8> {
+    let track_size = 0x100 + 256 * sectors.len();
+    let mut data = vec![0u8; 0x100];
+    data[0..8].copy_from_slice(b"MV - CPC");
+    data[0x30] = 1;
+    data[0x31] = 1;
+    data[0x32..0x34].copy_from_slice(&(track_size as u16).to_le_bytes());
+
+    let mut track = vec![0u8; track_size];
+    track[0..12].copy_from_slice(b"Track-Info\r\n");
+    if !sectors.is_empty() {
+        track[0x14] = 1;
+        track[0x15] = sectors.len() as u8;
+    }
+    for (index, payload) in sectors.iter().enumerate() {
+        let descriptor = 0x18 + index * 8;
+        track[descriptor + 2] = 0xc1 + index as u8;
+        track[descriptor + 3] = 1;
+        let start = 0x100 + index * 256;
+        let len = payload.len().min(256);
+        track[start..start + len].copy_from_slice(&payload[..len]);
+    }
+    data.extend_from_slice(&track);
+    data
+}
+
 impl DskImage {
     /// Raw CPC DSK bytes: one track with an empty Track-Info header (no sectors).
     ///
     /// Shared test fixture for “parseable but empty” disks (insert / model-reject paths).
     #[must_use]
     pub fn synthetic_empty_track_bytes() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1;
-        data[0x31] = 1;
-        let track_size: u16 = 0x100;
-        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-        let mut track = vec![0u8; track_size as usize];
-        track[0..12].copy_from_slice(b"Track-Info\r\n");
-        data.extend_from_slice(&track);
-        data
+        synthetic_cpc_dsk(&[])
     }
 
     /// Parsed [`Self::synthetic_empty_track_bytes`].
@@ -31,27 +48,7 @@ impl DskImage {
     /// Shared test fixture — see [`Self::synthetic_one_sector`].
     #[must_use]
     pub fn synthetic_one_sector_bytes() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1;
-        data[0x31] = 1;
-        let track_size: u16 = 0x100 + 256;
-        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-
-        let mut track = vec![0u8; track_size as usize];
-        track[0..12].copy_from_slice(b"Track-Info\r\n");
-        track[0x10] = 0;
-        track[0x11] = 0;
-        track[0x14] = 1;
-        track[0x15] = 1;
-        track[0x18] = 0;
-        track[0x19] = 0;
-        track[0x1a] = 0xc1;
-        track[0x1b] = 1;
-        track[0x100] = 0x42;
-        track[0x101] = 0x43;
-        data.extend_from_slice(&track);
-        data
+        synthetic_cpc_dsk(&[&[0x42, 0x43]])
     }
 
     /// Parsed [`Self::synthetic_one_sector_bytes`].
@@ -63,33 +60,7 @@ impl DskImage {
     /// Raw CPC DSK bytes: one track, two 256-byte sectors (ids `0xC1`, `0xC2`).
     #[must_use]
     pub fn synthetic_two_sectors_bytes() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[0..8].copy_from_slice(b"MV - CPC");
-        data[0x30] = 1;
-        data[0x31] = 1;
-        let track_size: u16 = 0x100 + 256 * 2;
-        data[0x32..0x34].copy_from_slice(&track_size.to_le_bytes());
-
-        let mut track = vec![0u8; track_size as usize];
-        track[0..12].copy_from_slice(b"Track-Info\r\n");
-        track[0x10] = 0;
-        track[0x11] = 0;
-        track[0x14] = 1;
-        track[0x15] = 2;
-        track[0x18] = 0;
-        track[0x19] = 0;
-        track[0x1a] = 0xc1;
-        track[0x1b] = 1;
-        track[0x20] = 0;
-        track[0x21] = 0;
-        track[0x22] = 0xc2;
-        track[0x23] = 1;
-        track[0x100] = 0xa1;
-        track[0x101] = 0xa2;
-        track[0x200] = 0xb1;
-        track[0x201] = 0xb2;
-        data.extend_from_slice(&track);
-        data
+        synthetic_cpc_dsk(&[&[0xa1, 0xa2], &[0xb1, 0xb2]])
     }
 
     /// Parsed [`Self::synthetic_two_sectors_bytes`].

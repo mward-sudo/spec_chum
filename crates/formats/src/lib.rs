@@ -414,34 +414,7 @@ impl Snapshot128 {
 }
 
 fn decode_z80_v1(src: &[u8], ram: &mut [u8; 49152]) {
-    let mut i = 0usize;
-    let mut o = 0usize;
-    while i < src.len() && o < 49152 {
-        if i + 3 < src.len()
-            && src[i] == 0x00
-            && src[i + 1] == 0xed
-            && src[i + 2] == 0xed
-            && src[i + 3] == 0x00
-        {
-            break;
-        }
-        if i + 3 < src.len() && src[i] == 0xed && src[i + 1] == 0xed {
-            let n = src[i + 2] as usize;
-            let v = src[i + 3];
-            for _ in 0..n {
-                if o >= 49152 {
-                    break;
-                }
-                ram[o] = v;
-                o += 1;
-            }
-            i += 4;
-        } else {
-            ram[o] = src[i];
-            o += 1;
-            i += 1;
-        }
-    }
+    decode_z80_rle(src, ram, true);
 }
 
 fn take_z80_page_block(src: &mut &[u8]) -> Result<(u8, Vec<u8>), FormatError> {
@@ -500,16 +473,20 @@ fn load_z80_v2_pages_128(mut src: &[u8], banks: &mut [[u8; 16384]; 8]) -> Result
 }
 
 fn decode_z80_page(src: &[u8], dest: &mut [u8]) {
+    decode_z80_rle(src, dest, false);
+}
+
+fn decode_z80_rle(src: &[u8], dest: &mut [u8], stop_at_v1_end_marker: bool) {
     let mut i = 0;
     let mut o = 0;
     while i < src.len() && o < dest.len() {
+        if stop_at_v1_end_marker && i + 3 < src.len() && src[i..i + 4] == [0x00, 0xed, 0xed, 0x00] {
+            break;
+        }
         if i + 3 < src.len() && src[i] == 0xed && src[i + 1] == 0xed {
             let n = src[i + 2] as usize;
             let v = src[i + 3];
-            for _ in 0..n {
-                if o >= dest.len() {
-                    break;
-                }
+            for _ in 0..n.min(dest.len() - o) {
                 dest[o] = v;
                 o += 1;
             }
