@@ -1,12 +1,14 @@
 //! Safe session wrapper around [`machine::Machine`] for host frontends.
 
+mod media_title;
+use media_title::PendingMediaTitle;
+
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use formats::MediaTitleSource;
 use machine::{JoystickMode, JoystickState, Machine, Model, Watch};
 use parking_lot::Mutex;
-use std::sync::Arc;
-use std::thread;
 use thiserror::Error;
 
 pub const KEYBOARD_ROWS: usize = 8;
@@ -210,15 +212,6 @@ pub struct HostSession {
     host_keys: [[bool; 5]; 8],
 }
 
-/// Background title enrichment waiting to be applied on the host thread.
-#[derive(Clone, Debug)]
-struct PendingMediaTitle {
-    generation: u64,
-    sha512_hex: String,
-    title: String,
-    source: MediaTitleSource,
-}
-
 fn require_machine(machine: Option<&Machine>) -> Result<&Machine, HostError> {
     machine.ok_or(HostError::NoMachine)
 }
@@ -343,146 +336,6 @@ impl HostSession {
     /// Replace the host status string (UI / debug surfaces).
     pub fn set_status(&mut self, status: impl Into<String>) {
         self.status = status.into();
-    }
-
-    /// Human title for chrome / agent status (catalogue, cache, online, or filename).
-    /// Returns `None` when no tape is inserted (avoids stale titles after model/ROM reload).
-    /// Applies any completed background `ZXInfo` enrichment first (#373).
-    #[must_use]
-    pub fn media_title(&mut self) -> Option<&str> {
-        self.apply_pending_media_title();
-        if !self.has_tape() {
-            return None;
-        }
-        self.media_title.as_deref()
-    }
-
-    /// SHA-512 hex of the last inserted tape file, when known.
-    /// Returns `None` when no tape is inserted.
-    #[must_use]
-    pub fn media_sha512(&mut self) -> Option<&str> {
-        self.apply_pending_media_title();
-        if !self.has_tape() {
-            return None;
-        }
-        self.media_sha512.as_deref()
-    }
-
-    /// Opt-in `ZXInfo` online title lookup (hash only). Default off for privacy (#373).
-    pub fn set_online_tape_titles(&mut self, enabled: bool) {
-        self.online_tape_titles = enabled;
-    }
-
-    /// Whether online `ZXInfo` title lookup is enabled.
-    #[must_use]
-    pub fn online_tape_titles(&self) -> bool {
-        self.online_tape_titles
-    }
-
-    /// Where the current media title came from, when a tape is inserted.
-    #[must_use]
-    pub fn media_title_source(&mut self) -> Option<MediaTitleSource> {
-        self.apply_pending_media_title();
-        if !self.has_tape() {
-            return None;
-        }
-        self.media_title_source
-    }
-
-    /// Resolve and store tape display identity from `path` (offline catalogue / filename).
-    pub fn set_media_identity_from_path(&mut self, path: &Path) {
-        if let Ok(id) = formats::identify_path(path) {
-            self.install_media_identity(id.display_title, Some(id.sha512_hex), id.source);
-        } else {
-            let title = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .filter(|s| !s.is_empty());
-            self.install_media_identity(
-                title.unwrap_or_else(|| path.display().to_string()),
-                None,
-                MediaTitleSource::Filename,
-            );
-        }
-    }
-
-    /// Resolve identity from bytes already read for open (avoids a second read).
-    pub fn set_media_identity_from_bytes(&mut self, bytes: &[u8], path: &Path) {
-        let id = formats::identify_bytes(bytes, path);
-        self.install_media_identity(id.display_title, Some(id.sha512_hex), id.source);
-    }
-
-    fn install_media_identity(
-        &mut self,
-        title: String,
-        sha512_hex: Option<String>,
-        source: MediaTitleSource,
-    ) {
-        self.media_title_generation = self.media_title_generation.wrapping_add(1);
-        *self.pending_media_title.lock() = None;
-        self.media_title = Some(title);
-        self.media_sha512 = sha512_hex;
-        self.media_title_source = Some(source);
-        self.maybe_spawn_online_lookup();
-    }
-
-    fn clear_media_identity(&mut self) {
-        self.media_title_generation = self.media_title_generation.wrapping_add(1);
-        *self.pending_media_title.lock() = None;
-        self.media_title = None;
-        self.media_sha512 = None;
-        self.media_title_source = None;
-    }
-
-    fn maybe_spawn_online_lookup(&mut self) {
-        if !self.online_tape_titles {
-            return;
-        }
-        if self.media_title_source != Some(MediaTitleSource::Filename) {
-            return;
-        }
-        let Some(sha) = self.media_sha512.clone() else {
-            return;
-        };
-        let generation = self.media_title_generation;
-        let inbox = Arc::clone(&self.pending_media_title);
-        let cache_path = crate::media_title_lookup::default_cache_path();
-        thread::spawn(move || {
-            let Some(enrich) = crate::media_title_lookup::lookup_online(&sha, &cache_path) else {
-                return;
-            };
-            *inbox.lock() = Some(PendingMediaTitle {
-                generation,
-                sha512_hex: sha,
-                title: enrich.title,
-                source: enrich.source,
-            });
-        });
-    }
-
-    /// Apply a completed background title enrichment when still valid for this tape.
-    pub fn apply_pending_media_title(&mut self) {
-        let pending = self.pending_media_title.lock().take();
-        let Some(pending) = pending else {
-            return;
-        };
-        if pending.generation != self.media_title_generation {
-            return;
-        }
-        if self.media_sha512.as_deref() != Some(pending.sha512_hex.as_str()) {
-            return;
-        }
-        if !self.has_tape() {
-            return;
-        }
-        let old = self.media_title.clone();
-        self.media_title = Some(pending.title.clone());
-        self.media_title_source = Some(pending.source);
-        if let Some(old) = old {
-            if self.status.contains(&old) {
-                self.status = self.status.replacen(&old, &pending.title, 1);
-            }
-        }
     }
 
     #[must_use]
