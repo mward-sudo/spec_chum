@@ -333,8 +333,8 @@ extension HostBridge {
             base.copyMemory(from: fb, byteCount: byteLen)
         }
         roomFbGeneration &+= 1
-        roomFbLock.unlock()
         InputLatencyProbe.noteFbPublish()
+        roomFbLock.unlock()
         if roomPerfEnabled {
             roomPerfSpectrumFrames &+= 1
         }
@@ -383,11 +383,14 @@ extension HostBridge {
             }
             if setRc == 0, shouldUpload {
                 self.roomFbLastUploadedGen = gen
+                InputLatencyProbe.noteFbUploaded()
             }
             self.roomFbLock.unlock()
 
             let t0 = ProcessInfo.processInfo.systemUptime
+            InputLatencyProbe.noteRoomTickStarted()
             _ = sc_room_tick(room)
+            InputLatencyProbe.noteRoomTickFinished()
             let roomMs = (ProcessInfo.processInfo.systemUptime - t0) * 1000.0
             var snap = ScRoomPerfSnapshot()
             let gotSnap = self.roomPerfEnabled && sc_room_perf_snapshot(room, &snap) == 0

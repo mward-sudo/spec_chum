@@ -275,6 +275,46 @@ egui’s `request_repaint_after(20ms)` throttle:
 not a rapid flicker. With `SPEC_CHUM_ROOM_PERF=1`, HUD `specHz` ≈ 50 and `roomHz`
 tracks the display when living room is on.
 
+## Input latency comparison (#480)
+
+For a repeatable host-side A/B sample, build the app once, then stage it with
+the opt-in probe enabled:
+
+```bash
+./scripts/build_macos_app.sh
+SPEC_CHUM_INPUT_LATENCY=1 ./scripts/run_macos_app.sh
+```
+
+The probe is disabled by default. When enabled, it records monotonic elapsed
+time from AppKit `keyDown` through host key application, next core-frame start,
+and core-frame execution. Flat mode ends at the `SpectrumNSView.draw` callback.
+Living-room mode records framebuffer publish/upload, Bevy tick start/finish,
+then the main-thread IOSurface layer refresh. Each app launch has a unique
+session ID, so the summarizer keeps sample IDs from separate launches distinct.
+These are host presentation milestones, not measured photon-onset times; the
+display compositor and scanout add up to another refresh interval.
+
+Use the same 48K session and display size in both modes. Press the same key ten
+times per mode, with enough time between presses for each sample to finish.
+Keep other applications and window size unchanged. The probe keeps only one
+sample active; any faster overlapping keydown is marked as dropped. Summarize
+the completed samples with:
+
+```bash
+python3 scripts/summarize_input_latency.py /tmp/spec-input-latency.log
+```
+
+The summary requires at least ten completed samples per mode and reports
+median and nearest-rank p95 at each recorded stage. Baseline from a 48K Mac
+session for issue #480 (10 samples per mode): flat key-down to draw was
+17.88 ms median / 28.00 ms p95; living-room key-down to layer refresh was
+30.93 ms median / 48.21 ms p95. Host key handling was 0.03 ms median in both
+modes. The living-room path added about 7 ms median for framebuffer upload and
+about 3.6 ms for the Bevy tick after that upload. These callbacks do not measure
+photon onset, and the user reported that the lag was no longer perceptible in
+either 48K or 128K mode during follow-up. Treat this as a diagnostic baseline,
+not a confirmed reproduction of a persistent user-visible fault.
+
 ## UI conventions (HIG-oriented)
 
 - **Menus:** File Open… (ellipsis + separators); app menus Tape / Machine / Hardware / Debug; View → Show Inspector; Help → Spec Chum Help. ⌘-modified shortcuts only — they clear the matrix so Spectrum typing is not stolen when the display is focused.

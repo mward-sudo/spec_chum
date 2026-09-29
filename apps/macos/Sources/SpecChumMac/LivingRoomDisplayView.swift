@@ -380,6 +380,7 @@ final class LivingRoomNSView: NSView {
             return
         }
         if event.isARepeat { return }
+        InputLatencyProbe.noteKey(mode: "living_room")
         if event.keyCode == 49 || event.keyCode == 53 {
             host?.skipLivingRoomIntro()
         }
