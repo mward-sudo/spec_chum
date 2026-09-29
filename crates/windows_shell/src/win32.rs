@@ -81,7 +81,7 @@ impl HostSlot {
 struct AppState {
     host: HostSlot,
     pcm: Arc<Mutex<PcmRing>>,
-    _stream: Option<cpal::Stream>,
+    _stream: Option<audio::OutputStream>,
     _agent: Option<agent_server::embedded::EmbeddedServer>,
     plane: Option<Arc<ControlPlane>>,
     prefs: UiPreferences,
@@ -620,7 +620,7 @@ impl AppState {
         let Some(edit) = self.debug_edit else {
             return;
         };
-        let text = self.host.with_mut(HostSession::debugger_text);
+        let text = self.host.with_mut(|session| session.debugger_text());
         // Win32 multiline EDIT expects CRLF line endings.
         let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         set_window_title(edit, &text);

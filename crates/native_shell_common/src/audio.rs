@@ -7,6 +7,8 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample};
 use parking_lot::Mutex;
 
+pub type OutputStream = cpal::Stream;
+
 #[derive(Clone, Copy, Debug)]
 pub enum ShellPlatform {
     Linux,
@@ -60,7 +62,7 @@ impl PcmRing {
 }
 
 /// Start a CPAL output stream, supporting the common signed, unsigned, and float formats.
-pub fn start_stream(ring: Arc<Mutex<PcmRing>>, platform: ShellPlatform) -> Option<cpal::Stream> {
+pub fn start_stream(ring: Arc<Mutex<PcmRing>>, platform: ShellPlatform) -> Option<OutputStream> {
     let platform = platform.name();
     let host = cpal::default_host();
     let device = match host.default_output_device() {

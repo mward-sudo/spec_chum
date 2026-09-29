@@ -2,3 +2,6 @@
 
 pub mod audio;
 pub mod commands;
+
+pub use audio::OutputStream;
+pub use commands::*;

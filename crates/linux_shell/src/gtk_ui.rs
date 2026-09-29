@@ -49,7 +49,7 @@ impl HostSlot {
 struct AppState {
     host: HostSlot,
     pcm: Arc<Mutex<PcmRing>>,
-    _stream: Option<cpal::Stream>,
+    _stream: Option<audio::OutputStream>,
     _agent: Option<agent_server::embedded::EmbeddedServer>,
     _plane: Option<Arc<ControlPlane>>,
     prefs: UiPreferences,
@@ -509,7 +509,7 @@ impl AppState {
         let Some(buffer) = self.debug_buffer.as_ref() else {
             return;
         };
-        let text = self.host.with_mut(HostSession::debugger_text);
+        let text = self.host.with_mut(|session| session.debugger_text());
         buffer.set_text(&text);
         self.last_debug_refresh = Instant::now();
     }
