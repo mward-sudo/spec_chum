@@ -729,6 +729,24 @@ mod tests {
     }
 
     #[test]
+    fn apply_to_machine_less_session_updates_host_preferences() {
+        let prefs = UiPreferences {
+            joystick_mode: PrefJoystick::Cursor,
+            online_tape_titles: true,
+            ..UiPreferences::default()
+        };
+        let mut session = HostSession::new(ModelId::Spectrum48, true);
+
+        prefs
+            .apply_to_host_session(&mut session)
+            .expect("machine-specific preferences are skipped without a machine");
+
+        assert!(!session.has_machine());
+        assert_eq!(session.joystick_mode(), JoystickMode::Cursor);
+        assert!(session.online_tape_titles());
+    }
+
+    #[test]
     fn tape_options_never_sticky_flash() {
         let mut p = UiPreferences::default();
         p.set_tape_from_options(TapeLoadOptions {

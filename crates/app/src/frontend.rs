@@ -1705,14 +1705,12 @@ of their copyrighted material but retain that copyright.",
                     if paused {
                         if ui.button("Run").clicked() {
                             let mut host = self.session.host_mut();
-                            match host.continue_execution() {
-                                Ok(()) => host.set_running(true),
-                                Err(error) => host.set_status(error.to_string()),
+                            if let Err(error) = host.debug_continue() {
+                                host.set_status(error.to_string());
                             }
                         }
                     } else if ui.button("Pause").clicked() {
-                        self.session.host_mut().set_paused(true);
-                        self.session.host_mut().set_status("Paused");
+                        self.session.host_mut().debug_pause();
                     }
                     if ui.button("Step").clicked() {
                         let mut host = self.session.host_mut();
