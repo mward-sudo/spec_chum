@@ -43,3 +43,5 @@ graphify-out/.graphify_extract.json
 graphify-out/.graphify_old.json
 graphify-out/20??-??-??/
 
+# Local living-room scene capture
+/tmp-new-scene-149.png
