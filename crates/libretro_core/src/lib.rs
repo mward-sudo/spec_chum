@@ -115,6 +115,7 @@ pub struct SpecChumCore {
     audio: Vec<[i16; 2]>,
     held_keys: Vec<KeyboardKey>,
     keyboard_matrix: [[bool; 5]; 8],
+    pending_error: Option<String>,
 }
 
 impl SpecChumCore {
@@ -154,6 +155,7 @@ impl SpecChumCore {
         self.audio.clear();
         self.held_keys.clear();
         self.keyboard_matrix = [[false; 5]; 8];
+        self.pending_error = None;
         self.session = Some(session);
         Ok(())
     }
@@ -180,9 +182,10 @@ impl SpecChumCore {
             for (row, (previous, next)) in self.keyboard_matrix.iter_mut().zip(desired).enumerate()
             {
                 for (bit, (was_pressed, is_pressed)) in previous.iter_mut().zip(next).enumerate() {
-                    if *was_pressed != is_pressed
-                        && session.set_key(row, bit as u8, is_pressed).is_ok()
-                    {
+                    let Ok(bit) = u8::try_from(bit) else {
+                        continue;
+                    };
+                    if *was_pressed != is_pressed && session.set_key(row, bit, is_pressed).is_ok() {
                         *was_pressed = is_pressed;
                     }
                 }
@@ -250,12 +253,16 @@ impl Core for SpecChumCore {
 
     fn reset(&mut self) {
         if let Some(session) = self.session.as_mut() {
-            let _ = session.reset();
+            self.pending_error = session.reset().err().map(|error| error.to_string());
         }
     }
 
     fn run(&mut self, runtime: &mut Runtime<'_>) {
         runtime.poll_input();
+        self.sync_keyboard();
+        if let Some(error) = self.pending_error.take() {
+            runtime.set_message(error, 300);
+        }
         let mask = joystick_mask([
             runtime.joypad_pressed(0, JoypadButton::Right),
             runtime.joypad_pressed(0, JoypadButton::Left),
@@ -270,7 +277,9 @@ impl Core for SpecChumCore {
             return;
         };
 
-        let _ = session.set_joystick(joystick_mask);
+        if let Err(error) = session.set_joystick(joystick_mask) {
+            runtime.set_message(error.to_string(), 300);
+        }
         session.run_frame();
 
         let width = session.width();
