@@ -28,4 +28,4 @@ Do not use `cat` / `sed` / `awk` / `head` / `tail` / shell `rg` / `find` for rep
 ## Do not contradict
 
 - Never edit `.cursor/plans/`
-- Pre-done Rust gate: `./scripts/check.sh` (`AGENTS.md`)
+- Rust checks: `./scripts/check_crates.sh` while iterating; `./scripts/check.sh` for the full workspace gate (`AGENTS.md`)

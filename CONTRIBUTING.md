@@ -45,18 +45,7 @@ GitHub Release binaries (macOS / Linux / Windows) are produced by tagging
 
 ## AI / agent-assisted work
 
-> **Audience:** LLM coding assistants and humans using them. Human-only contributors
-> can skip this section. Product how-tos live under [`docs/`](docs/README.md).
-
-- Read `AGENTS.md` for crate boundaries, hard constraints, and the shared **Agentic coding loop** (scope, progress records, handoffs, and human decision points). Keep issue intent, PR implementation/review state, and active handoff notes aligned; avoid standalone progress files for short tasks.
-- **graphify:** after Rust changes run `./scripts/graphify_update.sh` and commit `graphify-out/` when the graph changes; optional `./scripts/graphify_install_hooks.sh` for post-commit refresh. Skip one automatic refresh with `GRAPHIFY_SKIP_HOOK=1 git commit …`, or uninstall the hook with `./scripts/graphify_install_hooks.sh uninstall`. See `AGENTS.md` → “graphify knowledge graph”.
-- Cursor project rules live in `.cursor/rules/` (always-on project policy + Rust globs), including `github-issues.mdc` for tracker sync and `pr-review-merge.mdc` for bot review gates.
-- For substantive work, assistants should consult related issues so implementation follows tracked acceptance criteria. See `AGENTS.md` for the proportional task record and handoff approach.
-- Assistants should be **clippy-first**: iterate with `./scripts/check_crates.sh`; run `./scripts/check.sh` for merge-ready/full-workspace confidence or when project policy requires it. Match verification to the change and report exact checks/results; do not claim checks that were not run.
-- Keep PRs focused. When multiple agents work in parallel, assign non-overlapping ownership and integrate through the coordinating agent; avoid delegation for work that is faster to do directly.
-- **Emulator debugging automation:** [Agent Debug HTTP API](docs/AGENT_DEBUG_API.md) is **implemented** ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`; guest framebuffer as 1:1 PNG. Also see [DEBUGGING.md](docs/DEBUGGING.md) and `.cursor/skills/spec-chum-debugging/SKILL.md`.
-- Do **not** edit plan files under `.cursor/plans/` (or similar).
-- **Before merge / finish PR:** agent checklist in `.cursor/rules/pr-review-merge.mdc`. Try to get one CodeRabbit review through GitHub or the local CLI / IDE. Do not wait more than 10 minutes on a rate-limited review surface; if neither path can complete a review, the main agent reviews the diff and records the rate-limit result in a one-line PR note.
+Coding assistants: read [`AGENTS.md`](AGENTS.md) and applicable [`.cursor/rules/`](.cursor/rules/) for shared workflow, project constraints, issue tracking, Graphify, and PR gates. Topic guides are indexed in [`docs/README.md`](docs/README.md). Human-only contributors can skip this section.
 
 ## CodeRabbit — in-editor review (Cursor plugin)
 
@@ -70,22 +59,14 @@ This **complements** the GitHub PR workflow below. A local review can serve as t
 
 Repo config: [`.coderabbit.yaml`](.coderabbit.yaml) ([auto-review docs](https://docs.coderabbit.ai/configuration/auto-review), [review commands](https://docs.coderabbit.ai/reference/review-commands)). Automatic reviews are **off** so iteration pushes do not burn allowance. `path_filters` skips lockfiles, `.cursor/plans/`, and `graphify-out/**`.
 
-### Free OSS review limits and quota-conscious use
-
-CodeRabbit currently gives public repositories free OSS access without a minimum star count. For public repositories with fewer than 10 stars, reviews must be triggered manually; Spec Chum currently has 0 stars (checked 2026-09-26). The OSS PR review allowance varies with project popularity (currently 1–10 PR reviews per developer per rolling hour, additionally scoped per repository); the CLI allowance is 3 reviews per developer per hour, and IDE review allowance is 1 per developer per hour. OSS PRs are subject to a 100–300 file limit per review, depending on popularity and after path exclusions. Each PR review event, including `@coderabbitai review` / `full review`, uses one PR slot; local CLI reviews use the separate CLI allowance. Batch changes and avoid duplicate surfaces. Check available capacity without starting a review with `@coderabbitai rate limit`. Check the current CodeRabbit [plan/rate-limit details](https://docs.coderabbit.ai/management/plans) and [review rate-limit guidance](https://docs.coderabbit.ai/management/rate-limits) because the exact allowance can change.
-
-Do not authorize CodeRabbit usage-based reviews, `--use-credits`, a paid plan upgrade, or paid over-limit review without the user's explicit approval. If the included allowance is exhausted, wait for it to refill rather than spending credits. Usage-based reviews cost $0.25 per reviewed file when enabled on an eligible paid plan.
-
-Workflow:
-
-See `AGENTS.md` → “Jev-guided workflow” for intake routing and genuine loop-boundary calls. Jev does not review code or replace deterministic checks or the required CodeRabbit review process for a ready PR.
+Review limits change; check CodeRabbit's [plan](https://docs.coderabbit.ai/management/plans) and [rate-limit guidance](https://docs.coderabbit.ai/management/rate-limits) when needed. Do not enable paid usage-based reviews or upgrade without the user's explicit approval.
 
 1. Keep the PR as a **draft** while iterating (bot-review check skips CR completeness on drafts).
 2. When merge-candidate: mark **Ready for review** and request a first pass with `@coderabbitai full review` or label `coderabbit-review`. If GitHub reports a rate limit beyond 10 minutes, try local CodeRabbit CLI / IDE review. Once a review is pending or in progress, let it complete regardless of elapsed time. Undraft alone does not request a review; on-demand / label skips are not rate limits.
 3. Batch fixes locally and push once when the fix set is ready. Then request one **incremental** pass with `@coderabbitai review` to cover the new HEAD. Avoid repeated review requests while fixes are still in progress; do not burn another full review unless the prior full review never completed or CodeRabbit asks for one.
 4. Disposition **every** actionable finding (threads **and** outside-diff / summary nits): fix in code, reply wontfix with reason and resolve, or open a follow-up GitHub issue (preferred for deferred nits) then resolve — never leave them hanging. Then run the merge gate below.
 
-**Rate limits do not block implementation or require a long wait.** Continue coding, testing, and updating the draft PR while CodeRabbit is unavailable. Do not wait more than 10 minutes on either review surface: try the other surface, and if neither review completes, proceed after main-agent review and record the rate-limit result in a one-line PR note.
+**Rate limits do not block implementation.** Continue work while CodeRabbit is unavailable. Apply the 10-minute rate-limit fallback below; a pending review is not rate-limited and must complete.
 
 **Human trigger preferred:** CodeRabbit may ignore review commands and thread replies from other GitHub bots (`Skipped: comment is from another GitHub bot`). Prefer a human `@coderabbitai …` comment when agents’ requests are ignored. Label `coderabbit-review` remains a backup.
 
@@ -95,20 +76,17 @@ If the YAML and CodeRabbit GitHub app UI disagree, keep **Automatic Reviews** of
 
 ## Review check before merge
 
-**Trap for agents:** CI gate-1 soft-pass (GitHub rate-limit >10m / unparsable) is not itself a review. Try to complete one CodeRabbit review on the current diff through GitHub or the local CLI / IDE. A parsed reset of 10 minutes or less remains a hold: wait for the reset and retry. The 10-minute limit applies only to rate limiting; once a review is pending or in progress, let it complete regardless of elapsed time. If all available review surfaces remain rate-limited beyond 10 minutes, main-agent review plus a one-line PR note is sufficient. Soft-pass ≠ on-demand/label skip. Short checklist: `.cursor/rules/pr-review-merge.mdc`.
-
-Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignore CodeRabbit. For **ready** PRs, request a review and use whichever surface is available. A local review does not change the GitHub status, but it can satisfy the agent review step when GitHub is rate-limited beyond 10 minutes. The 10-minute limit applies only to rate limiting; let a pending review complete regardless of elapsed time. If all available review surfaces remain rate-limited beyond 10 minutes, main-agent review and a one-line PR note record the fallback. Always disposition unresolved actionable bot threads.
+For a ready PR, request one CodeRabbit review on the current HEAD and disposition all actionable findings. A completed local review supports the documented fallback when GitHub is rate-limited beyond 10 minutes; it does **not** change GitHub status. Wait for pending reviews regardless of duration. On-demand skips are not rate limits.
 
 **Hold policy (ready / non-draft):**
 
 - **Hard-fail gate 1:** CodeRabbit commit status pending, in progress/queued, failed/errored, **missing** (never requested / no status), or **on-demand / label skip** (`Review skipped: excluded by label configuration`, `Review skipped: on demand`, etc. — same as never requested). Soft-pass ≠ skip-without-request.
-- **Soft-pass gate 1 (CI) / merge rules:** `Review rate limited` (or similar *after a request*) is **not** `Review completed`. CI soft-passes when GitHub reports reset **>10m** (parsed from status descriptions such as “Next included review available in N minutes”) or the reset is unparsable; it holds when the parsed reset is **≤10m**. Use a completed local review when GitHub is delayed beyond 10 minutes. The 10-minute limit applies only to rate limiting: if a review is pending or in progress, let it complete regardless of elapsed time. If all available surfaces remain rate-limited beyond 10 minutes, main-agent review plus a **one-line PR note** is sufficient. CI cannot see local review evidence; its soft-pass is not a review.
-- **Rate-limit merge decision:** Do not wait more than 10 minutes on a rate-limited review surface. If its parsed reset is **≤10 minutes**, wait until that reset and retry; keep the merge held until then. If a parsed reset is **>10 minutes**, that review is not required; try the other surface. A pending review remains a hold until it completes, regardless of elapsed time. If all available surfaces remain rate-limited beyond 10 minutes, complete main-agent diff review, document the attempts and reset in a one-line PR note, and proceed. On-demand / label skips are not rate limits; request a review through the other surface.
+- **Rate limit:** reset **≤10m** means wait and retry; **>10m** means try another review surface. If all available surfaces remain rate-limited beyond 10m, main-agent diff review plus a one-line PR note is sufficient. An unparsable reset soft-passes CI but still requires main-agent review and a note. A local review does not satisfy GitHub status; CI cannot see it.
 - **Hard-fail gate 2:** unresolved actionable bot review threads (unless user waives via `rmw` / `rmcw`, `--waive`, or label). Always disposition actionable findings from any completed review. The review timing rule does not waive unresolved threads.
 
 **Drafts:** `./scripts/check_pr_reviews.sh` skips CodeRabbit HEAD completeness but still fails on unresolved bot threads. Do not merge drafts.
 
-**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh` on PRs, when reviews/comments arrive, and when CodeRabbit updates its **commit status** (so a prior pending/in-progress red check clears on `Review completed` / terminal rate-limited without a manual re-run). Uses the default `GITHUB_TOKEN` (`statuses: write` + `checks: write`). The ruleset required context is the API-published **commit status** **`unresolved bot threads`** (a same-named check-run is also published for Checks UI; job name is `bot-review-gate` so cancelled runs cannot block merge — [#318](https://github.com/mward-sudo/spec_chum/issues/318), [#323](https://github.com/mward-sudo/spec_chum/issues/323)). Treat a failing **published** status as blocking for merge. After resolving threads, re-run that job if GitHub did not re-trigger it. On-demand/label skips are not rate limits; request the other review path. GitHub rate-limited soft-passes CI when reset is **>10m** or unparsable, and holds when parsed **≤10m**; agents may use the local review or the main-agent fallback above.
+**CI:** workflow **Bot review threads** (`.github/workflows/pr-bot-reviews.yml`) runs `./scripts/check_pr_reviews.sh`. The required published commit status is `unresolved bot threads`; a failing status blocks merge. Re-run the job after resolving threads if GitHub did not trigger it. CI cannot see local review evidence.
 
 **Agents / local (mandatory before merge):**
 
@@ -121,7 +99,7 @@ Lesson from [#83](https://github.com/mward-sudo/spec_chum/pull/83): do not ignor
 # Or add PR label: waive-bot-reviews
 ```
 
-The script (1) on ready PRs checks CodeRabbit on HEAD — hard-fails pending/missing/error/on-demand-skip and rate-limit with parsed reset ≤10m; **soft-passes** GitHub rate-limited when reset >10m or unparsable (drafts skip this step; CI cannot see local review evidence); then (2) paginates GraphQL `reviewThreads`, prints unresolved bot comment URLs, and exits non-zero unless waived. Agents should try local or GitHub review. The 10-minute limit applies only to a rate-limited surface; let pending reviews complete, and document a main-agent fallback if all available surfaces remain rate-limited beyond 10 minutes. Cursor rule: `.cursor/rules/pr-review-merge.mdc`.
+The script checks ready-PR review status, then unresolved bot `reviewThreads`; it exits non-zero unless waived. Drafts skip review-status completeness but still fail on unresolved threads. Agent checklist: `.cursor/rules/pr-review-merge.mdc`.
 
 ## TDD
 

@@ -16,10 +16,10 @@ alwaysApply: true
 
 ## Must
 
-- Same **product** features on every first-party GUI host unless genuinely platform-specific
+- Same **product** features on every first-party GUI host unless genuinely platform-specific or explicitly deferred as part of a bounded vertical slice
 - Shared behaviour in `control_plane` / `host_api` / `machine`; hosts are thin adapters
 - GUI/agent-visible change → update **every** host (or shared backend) in the **same PR** + docs as needed
-- **Never** silent follow-up (“egui now, Mac/Windows/Linux later”) except documented vertical-slice deferrals in #351 / `docs/WINDOWS_NATIVE.md` / `docs/LINUX_NATIVE.md`
+- **Never** a silent follow-up. If a bounded vertical slice defers a host, document the omitted capability, affected host, and follow-up in the issue/PR and topic docs.
 
 ## May differ (HIG / presentation only)
 
@@ -35,4 +35,4 @@ alwaysApply: true
 - Grep: `crates/app`, `apps/macos`, `crates/windows_shell`, `crates/linux_shell`, living_room agent FFI
 - `SPEC_CHUM_AGENT=1`: verify all host embed paths
 - Rebuild touched hosts (`build_macos_app.sh` / Windows / Linux scripts as applicable)
-- Missing feature on any host (outside explicit slice deferral) → work not finished
+- Missing feature on any host (outside an explicit, documented slice deferral) → work not finished

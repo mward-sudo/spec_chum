@@ -119,7 +119,7 @@ wrappers** over `HostSession` + the global `trace` ring for **non-Rust shells**
 
 | Option | Verdict |
 | --- | --- |
-| **HTTP REST on `127.0.0.1`** | **Chosen.** PNG bodies and JSON inspect fit naturally; easy `curl` / scripts; optional OpenAPI; debuggable in a browser tab. |
+| **HTTP REST on `127.0.0.1`** | **Chosen.** PNG bodies and JSON inspect fit naturally; easy `curl` / scripts; published OpenAPI schema; debuggable in a browser tab. |
 | Unix domain socket + JSON-RPC | Lower overhead, but weaker tooling ergonomics and no standard file-download story for framebuffers. |
 | gRPC + protobuf | Heavy codegen/deps for a localhost-only tool; poor fit for “save this PNG”. |
 | **WebSocket** | Additive `/v1/events` transport; the first event family is PC breakpoint hits. Trace and tape events remain separate follow-ups ([#451](https://github.com/mward-sudo/spec_chum/issues/451), [#236](https://github.com/mward-sudo/spec_chum/issues/236)). |
@@ -245,7 +245,7 @@ Routes available on the loopback server today (plus notes where behaviour is def
 | Breakpoints | `GET`/`POST /v1/debug/breakpoints` (body `{ "pc" }`); `DELETE /v1/debug/breakpoints/{pc}`; mem watches at `/v1/debug/watches`; port watches at `/v1/debug/port-watches` |
 | Trace | `GET /v1/trace/categories` — list enabled categories; `PUT /v1/trace/categories` — enable/disable; `POST /v1/trace/clear`; `GET /v1/trace` — ring text/JSON/ndjson |
 | Run control | `POST /v1/run-until` — PC, mem write, port, halt, insn budget |
-| Step semantics | `step` = one instruction; `step-over` deferred until call-stack support exists — document as optional |
+| Step semantics | `step` executes one instruction; step-over is not implemented |
 
 ### Breakpoint WebSocket events (#451)
 
@@ -326,7 +326,7 @@ Smallest useful automation surface:
 7. `GET /v1/trace/categories`, `PUT /v1/trace/categories`, `GET /v1/trace`
 
 
-### Phase G — prefs / mouse / eject / continue
+### Preferences, mouse, tape eject, and continue
 
 | Route | Notes |
 | --- | --- |
@@ -351,7 +351,7 @@ port-watch HTTP path when `--agent-url` is set.
 
 Living-room display toggle is **deferred** (not modeled in shared prefs yet).
 
-### Phase H — peripherals HTTP attach
+### Peripheral attachment
 
 | Route | Notes |
 | --- | --- |
@@ -494,4 +494,3 @@ Prefer this over unconstrained OS screenshots or GUI automation.
 - **ZRCP or DZRP adapter** on the same backend could help DeZog users, but doubles protocol maintenance; defer unless a concrete consumer appears.
 - **Fuse-compatible subset** — no published Fuse remote API to emulate; not worth inventing a faux-Fuse dialect.
 - **WebSocket push** — PC breakpoint events are implemented as the first slice ([#451](https://github.com/mward-sudo/spec_chum/issues/451)); trace and tape progress remain later event families under [#236](https://github.com/mward-sudo/spec_chum/issues/236).
-- **OpenAPI schema** — machine-readable route catalog; same [#236](https://github.com/mward-sudo/spec_chum/issues/236).

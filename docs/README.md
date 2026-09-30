@@ -37,6 +37,8 @@ Build, test, package, and extend the emulator.
 | [UI_ARCHITECTURE.md](UI_ARCHITECTURE.md) | Contributors | Host stack choices; native-shell strategy (#351) |
 | [DEBUGGING.md](DEBUGGING.md) | Contributors | Trace categories, `spec_chum debug`, Inspect |
 | [AGENT_DEBUG_API.md](AGENT_DEBUG_API.md) | Contributors / automation | Loopback HTTP control & inspect API |
+| [GRAPHIFY.md](GRAPHIFY.md) | Contributors | Graph setup and refresh |
+| [MODULE_COHESION.md](MODULE_COHESION.md) | Contributors | Module ownership boundaries and extraction guidance |
 | [../packaging/icon/README.md](../packaging/icon/README.md) | Packaging | Shared app icon assets |
 
 ## Automation surface (product feature)

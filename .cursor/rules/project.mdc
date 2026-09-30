@@ -1,24 +1,9 @@
 ---
-description: Spec Chum rules map, hard constraints, agent checklist
+description: Spec Chum rules index
 alwaysApply: true
 ---
 
 # Spec Chum — agent rules map
-
-## Precedence
-
-1. User instructions
-2. Cross-tool project constraints in `AGENTS.md`
-3. This map and tool-specific `.cursor/rules/*.mdc` (workflow detail; cannot override 1 or 2)
-4. `CONTRIBUTING.md` and `docs/*` for contributor and topic detail
-
-## Hard constraints (never violate)
-
-- No plan edits under `.cursor/plans/`
-- No ROM binaries in git (`./scripts/fetch_roms.sh`)
-- No macOS **system** speaker volume changes
-- Prefer additive, owning-crate changes; no drive-by cross-crate refactors
-- Release tag `vX.Y.Z` requires `./scripts/run_slow_tests.sh` (default CI ≠ enough)
 
 ## Rules index (open for detail)
 
@@ -31,18 +16,6 @@ alwaysApply: true
 | GitHub Issues sync | `github-issues.mdc` |
 | Tools vs Shell | `prefer-tools-over-cli.mdc` |
 | Rust idioms (glob `*.rs`) | `rust.mdc` |
-| Crate map / workflow / cloud | `AGENTS.md` |
+| Crate map / shared workflow | `AGENTS.md` |
 
-## Always-on checklist
-
-1. Follow `AGENTS.md` → “Agentic coding loop” for scope, progress notes, handoffs, and human decision points.
-2. Check related issues for substantive implementation → `github-issues.mdc`
-3. Use graphify when architectural context or call paths are unclear → `graphify.mdc`
-4. GUI change? Update **all** first-party hosts in **same PR** → `gui-app-parity.mdc`
-5. Feature work? Prefer behavior-complete vertical slices; use horizontal work for layer-wide or accuracy-driven changes → `AGENTS.md`
-6. Match checks to scope; use `./scripts/check_crates.sh` while iterating and `./scripts/check.sh` for full-workspace/merge readiness · Living room: `./scripts/check_living_room.sh` (release)
-7. Finish/merge PR? Follow `pr-review-merge.mdc` (**CI soft-pass ≠ merge-ready**)
-
-## Emulator crates (core)
-
-`z80`, `bus`, `ula`, `tape`, `formats`, `machine`, `app` (+ hosts: SpecChumMac, `windows_shell`, `linux_shell`).
+`AGENTS.md` is the cross-tool source for constraints and workflow. Follow its task-sized implementation and check loop; use the rules above for their named Cursor-specific details. Release tags also require `./scripts/run_slow_tests.sh`.

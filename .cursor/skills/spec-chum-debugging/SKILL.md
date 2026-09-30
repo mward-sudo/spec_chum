@@ -6,7 +6,7 @@ description: >-
   trace categories. Use when debugging the emulator, tape load failures,
   LD-BYTES, EAR polarity, flash-load, type-load, inspect dumps, Fuse/z80test
   mismatches, host_api sc_debug_*, egui Debug window, or the Agent Debug HTTP
-  API (localhost control plane, Phase A implemented).
+  API (implemented localhost control plane).
 ---
 
 # Spec Chum debugging
@@ -18,7 +18,7 @@ Project debugger workflow for agents. Full detail: [`docs/DEBUGGING.md`](../../.
 | Goal | Use |
 | --- | --- |
 | **Long-lived control + 1:1 framebuffer PNG** | **Agent Debug HTTP API** — `spec-chum-agent` or `spec-chum-debug --serve` |
-| Scripted repro via API client | `SPEC_CHUM_AGENT_URL=… spec-chum-debug …` (Phase B subset) |
+| Scripted repro via API client | `SPEC_CHUM_AGENT_URL=… spec-chum-debug …` |
 | Scripted repro, Inspect JSON, breakpoints, tape `type-load` | Headless **`spec-chum-debug`** (local one-shot process) |
 | Regression / harness / matrix | **`cargo test -p machine`** (and `tape` / `trace` / `z80`) |
 | Interactive Pause / Step / disasm UI | **egui** `cargo run -p app` → Menu **Debug** |
@@ -36,8 +36,8 @@ server), not a new CLI process.
 
 > **Implemented (Phases A–H + memory regions):** loopback HTTP on `127.0.0.1:17384` (default).
 > Design: [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md).
-> Optional later: WebSocket / OpenAPI — [#236](https://github.com/mward-sudo/spec_chum/issues/236).
-> Phase C docs: C ABI = FFI-only; HTTP/`control_plane` = primary for agents.
+> OpenAPI is published at `/openapi.json`; WebSocket events are available at `/v1/events`.
+> C ABI debug calls are FFI-only; HTTP/`control_plane` is the primary automation API.
 
 **Unification goal:** one shared Rust backend (`control_plane`) serves HTTP and
 egui Debug / embedded `SPEC_CHUM_AGENT=1`. SpecChumMac in-process remains
@@ -62,7 +62,7 @@ cargo build -p agent_server --release
 - Long sessions: tape load mid-run, breakpoints, grab PNG after N frames.
 - Avoid GUI automation (file pickers, ROM dialogs, multi-monitor).
 
-### Embedded agent in egui (Phase B)
+### Embedded agent in egui
 
 `SPEC_CHUM_AGENT=1` starts loopback HTTP on the **same** live session as the egui
 Debug panel (`ControlPlane::from_shared` + `spawn_from_env_with_plane`).
@@ -88,7 +88,7 @@ cargo run -p agent_server --release -- --model 48k
 egui **Debug** and embedded HTTP share one `HostSession` behind `Arc` (#221).
 SpecChumMac in-process embed stays deferred (cycle-safe constraint).
 
-### HTTP client (Phase B)
+### HTTP client
 
 ```bash
 export SPEC_CHUM_AGENT_URL=http://127.0.0.1:17384
@@ -114,16 +114,6 @@ buffer (`sc_framebuffer_*` / `ula::framebuffer_dims`) — **exact guest pixels**
 
 - **Do** `Read` the saved PNG for visual assertions.
 - **Do not** capture the macOS/egui window or living-room Bevy view (scaled CRT).
-
-### Migration (summary)
-
-| Phase | What |
-| --- | --- |
-| A | Shared backend + HTTP server; parallel CLI/GUI |
-| B | `spec-chum-debug` + Debug UIs become API clients |
-| C | Dedupe redundant `host_api` debug paths where safe |
-
-Until Phase B ships, use `spec-chum-debug` + Inspect JSON below.
 
 ## Quick start
 
@@ -280,7 +270,7 @@ JSON: `--json dump-state` or `type-load --json` wraps `inspect` + `load_ok`.
 
 ## Deeper reference
 
-- [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md) — Phase A localhost control plane (implemented), framebuffer export, unification roadmap
+- [`docs/AGENT_DEBUG_API.md`](../../../docs/AGENT_DEBUG_API.md) — HTTP routes, framebuffer export, and security model
 - [`docs/DEBUGGING.md`](../../../docs/DEBUGGING.md) — categories, flash-load event table, harness recipes, hot-path cost
 - [`tests/fixtures/tape/README.md`](../../../tests/fixtures/tape/README.md) — fixtures + load matrix
 - `crates/debug_cli/src/main.rs` — authoritative CLI flags
