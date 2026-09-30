@@ -4925,6 +4925,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "libretro-core"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "316cb28071da01487f131e7878ef51c5a787b9f56c67caaecf758f663070264b"
+dependencies = [
+ "enumflags2",
+]
+
+[[package]]
 name = "libudev-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6996,6 +7005,14 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "spec_chum_libretro"
+version = "0.7.0"
+dependencies = [
+ "host_api",
+ "libretro-core",
 ]
 
 [[package]]

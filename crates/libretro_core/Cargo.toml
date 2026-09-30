@@ -1,0 +1,17 @@
+[package]
+name = "spec_chum_libretro"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Optional libretro host for the Spec Chum Spectrum emulator"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+host_api = { workspace = true }
+libretro-core = { workspace = true }
+
+[lints]
+workspace = true
