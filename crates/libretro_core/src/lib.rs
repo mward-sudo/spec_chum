@@ -24,6 +24,15 @@ fn joystick_mask(buttons: [bool; 5]) -> u8 {
         })
 }
 
+fn rgba_to_xrgb(rgba: &[u8], xrgb: &mut Vec<u8>) {
+    xrgb.clear();
+    xrgb.reserve(rgba.len());
+    for pixel in rgba.as_chunks::<4>().0 {
+        let packed = u32::from_be_bytes([0, pixel[0], pixel[1], pixel[2]]);
+        xrgb.extend_from_slice(&packed.to_ne_bytes());
+    }
+}
+
 fn sync_keys(held_keys: &[KeyboardKey]) -> spec_chum_host::keymap::SyncKeys {
     let key_codes: Vec<_> = held_keys.iter().filter_map(|key| key_code(*key)).collect();
     let shift = held_keys
@@ -266,8 +275,7 @@ impl Core for SpecChumCore {
 
         let width = session.width();
         let height = session.height();
-        self.pixels.clear();
-        self.pixels.extend_from_slice(session.framebuffer());
+        rgba_to_xrgb(session.framebuffer(), &mut self.pixels);
         self.audio.clear();
         self.audio.extend(session.audio_pcm().iter().map(|sample| {
             let value = (sample.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
@@ -306,6 +314,13 @@ mod tests {
     #[test]
     fn maps_joypad_directions_and_a_to_kempston() {
         assert_eq!(joystick_mask([true, false, true, false, true]), 0x15);
+    }
+
+    #[test]
+    fn converts_rgba_bytes_to_xrgb8888_pixels() {
+        let mut pixels = Vec::new();
+        rgba_to_xrgb(&[0x12, 0x34, 0x56, 0xff], &mut pixels);
+        assert_eq!(pixels, 0x0012_3456_u32.to_ne_bytes());
     }
 
     #[test]
