@@ -59,15 +59,19 @@ impl Memory for MemIo48<'_> {
     }
 
     fn write(&mut self, addr: u16, value: u8, t: u64) -> u32 {
+        let frame_t = self.ula_t(t);
         let wait = if Bus48::is_contended(addr) {
-            ula::contention_delay_48(self.ula_t(t))
+            ula::contention_delay_48(frame_t)
         } else {
             0
         };
         if wait > 0 && trace::enabled(trace::Category::BUS) {
-            emit_contend_sampled(addr, self.ula_t(t), wait);
+            emit_contend_sampled(addr, frame_t, wait);
         }
+        let saved = self.bus.frame_t;
+        self.bus.frame_t = frame_t;
         self.bus.write(addr, value);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.mem_access(addr, true, value);
         }
@@ -204,11 +208,11 @@ impl Memory for MemIo128<'_> {
         } else {
             self.bus.contend_at(addr)
         };
-        self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
             emit_contend_sampled(addr, ft, wait);
         }
         self.bus.write(addr, value);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.mem_access(addr, true, value);
         }
@@ -328,11 +332,11 @@ impl Memory for MemIoPlus3<'_> {
         let saved = self.bus.frame_t;
         self.bus.frame_t = ft;
         let wait = self.bus.contend_at(addr);
-        self.bus.frame_t = saved;
         if wait > 0 && trace::enabled(trace::Category::BUS) {
             emit_contend_sampled(addr, ft, wait);
         }
         self.bus.write(addr, value);
+        self.bus.frame_t = saved;
         if let Some(w) = self.watch.as_ref() {
             w.mem_access(addr, true, value);
         }

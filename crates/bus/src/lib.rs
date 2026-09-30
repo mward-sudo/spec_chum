@@ -36,7 +36,7 @@ pub use timex_dock::{TimexDock, TimexDockChunk, TimexDockError};
 use thiserror::Error;
 use ula::{
     contention_delay, contention_delay_128, floating_bus_byte, floating_bus_byte_128, Ula48,
-    FRAME_TSTATES_48, PAPER_START_48, T_LINE_48,
+    FRAME_TSTATES_48, PAPER_START_128, PAPER_START_48, T_LINE_128, T_LINE_48,
 };
 
 /// Errors loading a fixed-size (or minimum-size) ROM / EEPROM image into the bus.
@@ -441,8 +441,14 @@ impl Bus48 {
             if off < 6912 {
                 let old = self.ram[off];
                 if old != value {
-                    self.ula
-                        .note_screen_write(off, old, self.frame_t, PAPER_START_48, T_LINE_48);
+                    self.ula.note_screen_write(
+                        5,
+                        off,
+                        old,
+                        self.frame_t,
+                        PAPER_START_48,
+                        T_LINE_48,
+                    );
                 }
             }
             self.ram[off] = value;
@@ -870,15 +876,27 @@ impl Bus128 {
                 return;
             }
         }
-        match addr {
-            0x0000..=0x3fff => {
-                if self.ram0_at_0000() {
-                    self.banks[0][addr as usize] = value;
+        if let Some((bank, off)) = match addr {
+            0x0000..=0x3fff if self.ram0_at_0000() => Some((0, addr as usize)),
+            0x0000..=0x3fff => None,
+            0x4000..=0x7fff => Some((5, addr as usize - 0x4000)),
+            0x8000..=0xbfff => Some((2, addr as usize - 0x8000)),
+            0xc000..=0xffff => Some((self.paged_bank(), addr as usize - 0xc000)),
+        } {
+            if matches!(bank, 5 | 7) && off < 6912 {
+                let old = self.banks[bank][off];
+                if old != value {
+                    self.ula.note_screen_write(
+                        bank as u8,
+                        off,
+                        old,
+                        self.frame_t,
+                        PAPER_START_128,
+                        T_LINE_128,
+                    );
                 }
             }
-            0x4000..=0x7fff => self.banks[5][addr as usize - 0x4000] = value,
-            0x8000..=0xbfff => self.banks[2][addr as usize - 0x8000] = value,
-            0xc000..=0xffff => self.banks[self.paged_bank()][addr as usize - 0xc000] = value,
+            self.banks[bank][off] = value;
         }
     }
 

@@ -2369,6 +2369,133 @@ fn memio_mid_instruction_contention_table() {
     );
 }
 
+fn assert_beam_attribute_split(out: &[u8], model: &str) {
+    let pixel = |py: usize| {
+        let i = py * 256 * 4;
+        [out[i], out[i + 1], out[i + 2]]
+    };
+    let old_ink = ula::palette_rgb(7, false);
+    let new_ink = ula::palette_rgb(2, false);
+    assert_eq!(
+        pixel(0),
+        old_ink,
+        "{model}: earlier row keeps its old attribute"
+    );
+    assert_eq!(
+        pixel(4),
+        old_ink,
+        "{model}: fetched row keeps its old attribute"
+    );
+    assert_eq!(
+        pixel(5),
+        new_ink,
+        "{model}: later row uses the new attribute"
+    );
+    assert_eq!(
+        pixel(7),
+        new_ink,
+        "{model}: later row uses the new attribute"
+    );
+}
+
+fn fill_attribute_split_screen(screen: &mut [u8]) {
+    screen[6144..6912].fill(7);
+    for py in 0..8 {
+        screen[py * 256] = 0xff;
+    }
+}
+
+#[test]
+fn screen_write_uses_memory_access_time_on_48k() {
+    let mut bus = Bus48::new();
+    bus.ula.begin_frame();
+    fill_attribute_split_screen(&mut bus.ram);
+    let write_t = ula::PAPER_START_48 + 4 * ula::T_LINE_48 + 5;
+    {
+        let mut mem = MemIo48 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 0,
+            opcode_pc: None,
+        };
+        mem.write(0x5800, 2, u64::from(write_t));
+    }
+    assert_eq!(
+        bus.frame_t, 0,
+        "temporary access time must not advance the bus"
+    );
+
+    let mut out = vec![0; 256 * 192 * 4];
+    bus.ula.render_rgba(bus.screen_bytes(), &mut out, false);
+    assert_beam_attribute_split(&out, "48K");
+}
+
+#[test]
+fn screen_write_history_tracks_bank_7_on_128k() {
+    let mut bus = Bus128::new();
+    bus.ula.begin_frame();
+    fill_attribute_split_screen(&mut bus.banks[7]);
+    bus.out_7ffd(0x0f); // bank 7 displayed and mapped at C000
+    let write_t = ula::PAPER_START_128 + 4 * ula::T_LINE_128 + 5;
+    {
+        let mut mem = MemIo128 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 0,
+            opcode_pc: None,
+            pentagon: false,
+        };
+        mem.write(0xd800, 2, u64::from(write_t));
+    }
+    assert_eq!(
+        bus.frame_t, 0,
+        "temporary access time must not advance the bus"
+    );
+
+    let mut out = vec![0; 256 * 192 * 4];
+    bus.ula.render_rgba_timed_dual(
+        &bus.banks[5][..6912],
+        &bus.banks[7][..6912],
+        &mut out,
+        false,
+        ula::PAPER_START_128,
+        ula::T_LINE_128,
+    );
+    assert_beam_attribute_split(&out, "128K bank 7");
+}
+
+#[test]
+fn screen_write_history_tracks_bank_7_on_plus3() {
+    let mut bus = BusPlus3::new();
+    bus.ula.begin_frame();
+    fill_attribute_split_screen(&mut bus.banks[7]);
+    bus.out_7ffd(0x0f); // bank 7 displayed and mapped at C000
+    let write_t = ula::PAPER_START_128 + 4 * ula::T_LINE_128 + 5;
+    {
+        let mut mem = MemIoPlus3 {
+            bus: &mut bus,
+            watch: None,
+            t_step_start: 0,
+        };
+        mem.write(0xd800, 2, u64::from(write_t));
+    }
+    assert_eq!(
+        bus.frame_t, 0,
+        "temporary access time must not advance the bus"
+    );
+
+    let mut out = vec![0; 256 * 192 * 4];
+    bus.ula.render_rgba_timed_dual(
+        &bus.banks[5][..6912],
+        &bus.banks[7][..6912],
+        &mut out,
+        false,
+        ula::PAPER_START_128,
+        ula::T_LINE_128,
+    );
+    assert_beam_attribute_split(&out, "+3 bank 7");
+}
+
 /// Original Sinclair ULA snow: M1 refresh hook records overrides on 48K/128K paths.
 #[test]
 fn m1_refresh_records_snow_48k() {
