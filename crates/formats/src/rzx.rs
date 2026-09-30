@@ -12,6 +12,7 @@ const SNAPSHOT_BLOCK_HEADER_LEN: usize = 12;
 const MAX_INPUT_BLOCK_BYTES: usize = 64 * 1024 * 1024;
 const MAX_SNAPSHOT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_FRAMES: usize = 1_000_000;
+const MAX_RETAINED_INPUT_BYTES: usize = 64 * 1024 * 1024;
 
 /// One frame of recorded input (IORQ port reads / keyboard matrix bytes).
 #[derive(Clone, Debug, Default)]
@@ -59,6 +60,7 @@ impl RzxRecording {
 
         let mut recording = Self::default();
         let mut input_started = false;
+        let mut retained_input_bytes = 0usize;
         let mut offset = 10usize;
         while offset < data.len() {
             if data.len() - offset < 5 {
@@ -97,7 +99,7 @@ impl RzxRecording {
                 }
                 0x80 => {
                     input_started = true;
-                    parse_input_block(body, &mut recording.frames)?;
+                    parse_input_block(body, &mut recording.frames, &mut retained_input_bytes)?;
                 }
                 _ => {} // Creator, security and unknown blocks are skipped by their length.
             }
@@ -107,7 +109,11 @@ impl RzxRecording {
     }
 }
 
-fn parse_input_block(body: &[u8], frames: &mut Vec<RzxFrame>) -> Result<(), FormatError> {
+fn parse_input_block(
+    body: &[u8],
+    frames: &mut Vec<RzxFrame>,
+    retained_input_bytes: &mut usize,
+) -> Result<(), FormatError> {
     if body.len() < INPUT_BLOCK_HEADER_LEN {
         return Err(FormatError::Format("short RZX input block header".into()));
     }
@@ -142,6 +148,11 @@ fn parse_input_block(body: &[u8], frames: &mut Vec<RzxFrame>) -> Result<(), Form
     let mut cursor = 0usize;
     let mut parsed = 0usize;
     while cursor < data.len() {
+        if parsed == frame_count {
+            return Err(FormatError::Format(format!(
+                "RZX input block contains more than the declared {frame_count} frames"
+            )));
+        }
         if data.len() - cursor < 4 {
             return Err(FormatError::Format(
                 "truncated RZX frame header in input block".into(),
@@ -151,12 +162,13 @@ fn parse_input_block(body: &[u8], frames: &mut Vec<RzxFrame>) -> Result<(), Form
         let input_count = u16::from_le_bytes([data[cursor + 2], data[cursor + 3]]) as usize;
         cursor += 4;
         if input_count == 0xffff {
-            let inputs = frames
+            let previous = frames
                 .last()
-                .map_or_else(Vec::new, |frame| frame.inputs.clone());
+                .map_or(&[][..], |frame| frame.inputs.as_slice());
+            retain_input_bytes(retained_input_bytes, previous.len())?;
             frames.push(RzxFrame {
                 fetch_count,
-                inputs,
+                inputs: previous.to_vec(),
             });
         } else {
             let Some(end) = cursor.checked_add(input_count) else {
@@ -167,6 +179,7 @@ fn parse_input_block(body: &[u8], frames: &mut Vec<RzxFrame>) -> Result<(), Form
             if end > data.len() {
                 return Err(FormatError::Format("RZX frame inputs truncated".into()));
             }
+            retain_input_bytes(retained_input_bytes, input_count)?;
             frames.push(RzxFrame {
                 fetch_count,
                 inputs: data[cursor..end].to_vec(),
@@ -180,6 +193,21 @@ fn parse_input_block(body: &[u8], frames: &mut Vec<RzxFrame>) -> Result<(), Form
             "RZX input frame count mismatch: header says {frame_count}, found {parsed}"
         )));
     }
+    Ok(())
+}
+
+fn retain_input_bytes(retained: &mut usize, additional: usize) -> Result<(), FormatError> {
+    let Some(total) = retained.checked_add(additional) else {
+        return Err(FormatError::Format(
+            "RZX retained input length overflow".into(),
+        ));
+    };
+    if total > MAX_RETAINED_INPUT_BYTES {
+        return Err(FormatError::Format(format!(
+            "RZX retained input exceeds limit of {MAX_RETAINED_INPUT_BYTES} bytes"
+        )));
+    }
+    *retained = total;
     Ok(())
 }
 
@@ -464,6 +492,30 @@ mod tests {
         let compressed = encoder.finish().expect("finish test payload");
         let error = decompress_zlib(&compressed, 32, "test payload").expect_err("limit applies");
         assert!(error.to_string().contains("exceeds limit"));
+    }
+
+    #[test]
+    fn reject_frames_beyond_count_and_repeated_input_amplification() {
+        let mut body = input_block(&[(10, &[0x21])], false);
+        body[0..4].copy_from_slice(&0u32.to_le_bytes());
+        assert!(RzxRecording::parse(&rzx_with_block(0x80, &body))
+            .expect_err("frames exceed declared count")
+            .to_string()
+            .contains("more than the declared 0 frames"));
+
+        let mut body = input_block(&[(3, &[])], false);
+        let repeated_count = INPUT_BLOCK_HEADER_LEN + 2;
+        body[repeated_count..repeated_count + 2].copy_from_slice(&u16::MAX.to_le_bytes());
+        let mut frames = vec![RzxFrame {
+            fetch_count: 10,
+            inputs: vec![0x21],
+        }];
+        let mut retained = MAX_RETAINED_INPUT_BYTES;
+        assert!(parse_input_block(&body, &mut frames, &mut retained)
+            .expect_err("repeated inputs exceed retained limit")
+            .to_string()
+            .contains("retained input exceeds limit"));
+        assert_eq!(frames.len(), 1, "reject before cloning repeated input");
     }
 
     #[test]
