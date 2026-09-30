@@ -20,7 +20,7 @@ pub use mdr::{
 pub use media_identity::{
     catalogue_title, identify_bytes, identify_path, sha512_hex, MediaIdentity, MediaTitleSource,
 };
-pub use rzx::{apply_input_byte, RzxFrame, RzxRecording};
+pub use rzx::{apply_input_byte, RzxFrame, RzxRecording, RzxSnapshot};
 pub use trd::{TrdImage, TRD_SECTORS_PER_TRACK, TRD_SECTOR_SIZE};
 
 use std::path::Path;

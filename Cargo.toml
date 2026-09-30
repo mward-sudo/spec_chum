@@ -50,6 +50,7 @@ agent_server = { path = "crates/agent_server" }
 agent_client = { path = "crates/agent_client" }
 debug_cli = { path = "crates/debug_cli" }
 axum = "0.8"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace"] }

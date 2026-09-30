@@ -1158,6 +1158,10 @@ fn synthetic_sna48_bytes() -> Vec<u8> {
     data
 }
 
+fn synthetic_rzx_without_snapshot() -> Vec<u8> {
+    b"RZX!\x00\x0d\0\0\0\0".to_vec()
+}
+
 /// Minimal uncompressed Z80 v1 (48K).
 fn synthetic_z80_v1_bytes() -> Vec<u8> {
     let mut data = vec![0u8; 30 + 49152];
@@ -1307,10 +1311,10 @@ fn load_snapshot_without_machine_autoloads_48k_rom() {
 #[test]
 fn load_rzx_and_dsk_require_machine() {
     let mut s = HostSession::new(ModelId::SpectrumPlus3, false);
-    assert!(matches!(
-        s.load_rzx(Path::new("/tmp/missing.rzx")),
-        Err(HostError::NoMachine)
-    ));
+    let rzx_path = std::env::temp_dir().join("spec_chum_host_api_no_snapshot.rzx");
+    std::fs::write(&rzx_path, synthetic_rzx_without_snapshot()).expect("write RZX");
+    assert!(matches!(s.load_rzx(&rzx_path), Err(HostError::NoMachine)));
+    let _ = std::fs::remove_file(&rzx_path);
     assert!(matches!(
         s.load_dsk(Path::new("/tmp/missing.dsk")),
         Err(HostError::NoMachine)
@@ -1319,6 +1323,66 @@ fn load_rzx_and_dsk_require_machine() {
         s.load_trd(Path::new("/tmp/missing.trd")),
         Err(HostError::NoMachine)
     ));
+}
+
+#[test]
+fn load_rzx_embedded_snapshot_initializes_machine_and_replays_input() {
+    if rom48().is_none() {
+        eprintln!("skip: roms/spec48.rom missing");
+        return;
+    }
+    let path = std::env::temp_dir().join("spec_chum_host_api_embedded_snapshot.rzx");
+    std::fs::write(
+        &path,
+        include_bytes!("../../../tests/fixtures/rzx/embedded_sna_compressed.rzx"),
+    )
+    .expect("write RZX fixture");
+
+    let mut session = HostSession::new(ModelId::SpectrumPlus3, false);
+    session
+        .load_rzx(&path)
+        .expect("load embedded snapshot replay");
+    assert!(session.has_machine());
+    assert_eq!(session.model(), ModelId::Spectrum48);
+    assert_eq!(session.regs().expect("regs").pc, 0x8000);
+    assert_eq!(session.peek(0x8000).expect("snapshot RAM"), 0xaa);
+    session
+        .machine
+        .as_mut()
+        .expect("machine initialized from snapshot")
+        .run_frame();
+    assert_eq!(
+        session
+            .machine
+            .as_mut()
+            .expect("machine remains loaded")
+            .keyboard_mut()
+            .rows[1],
+        0x01
+    );
+    assert!(session.status().contains("Loaded RZX"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn load_rzx_embedded_z80_snapshot_initializes_machine() {
+    if rom48().is_none() {
+        eprintln!("skip: roms/spec48.rom missing");
+        return;
+    }
+    let path = std::env::temp_dir().join("spec_chum_host_api_embedded_z80.rzx");
+    std::fs::write(
+        &path,
+        include_bytes!("../../../tests/fixtures/rzx/embedded_z80_compressed.rzx"),
+    )
+    .expect("write RZX fixture");
+
+    let mut session = HostSession::new(ModelId::SpectrumPlus3, false);
+    session.load_rzx(&path).expect("load embedded Z80 replay");
+    assert_eq!(session.model(), ModelId::Spectrum48);
+    assert_eq!(session.regs().expect("regs").pc, 0x8100);
+    assert_eq!(session.peek(0x5000).expect("snapshot RAM"), 0x42);
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]

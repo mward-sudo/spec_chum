@@ -652,17 +652,9 @@ impl EmulatorSession {
     }
 
     pub fn load_rzx(&mut self, path: &Path) {
-        match formats::RzxRecording::load(path) {
-            Ok(rec) => {
-                let host = &mut *self.host_mut();
-                if let Some(m) = host.machine_mut() {
-                    m.insert_rzx(rec);
-                    host.set_status(format!("Loaded RZX {}", path.display()));
-                } else {
-                    host.set_status("Load a machine ROM before RZX");
-                }
-            }
-            Err(e) => self.host_mut().set_status(format!("RZX error: {e}")),
+        let result = self.host_mut().load_rzx(path);
+        if let Err(error) = result {
+            self.host_mut().set_status(format!("RZX error: {error}"));
         }
     }
 

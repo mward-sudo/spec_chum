@@ -521,10 +521,34 @@ impl HostSession {
     /// (including 128K↔Plus3) and for 48K snapshots loaded onto a non-48K machine; requires
     /// ROM autoload before apply.
     pub fn load_snapshot(&mut self, path: &Path) -> Result<(), HostError> {
-        if let Ok(snap) =
-            formats::Snapshot128::load_sna(path).or_else(|_| formats::Snapshot128::load_z80(path))
-        {
-            let required = match snap.model {
+        let data = std::fs::read(path)?;
+        let model = self.apply_snapshot_bytes(&data, None)?;
+        self.status = if model == ModelId::Spectrum48 {
+            format!("Loaded snapshot {}", path.display())
+        } else {
+            format!("Loaded {model:?} snapshot {}", path.display())
+        };
+        Ok(())
+    }
+
+    fn apply_snapshot_bytes(
+        &mut self,
+        data: &[u8],
+        extension: Option<&str>,
+    ) -> Result<ModelId, HostError> {
+        let snapshot128 = match extension {
+            Some("SNA") => formats::Snapshot128::parse_sna(data),
+            Some("Z80") => formats::Snapshot128::parse_z80(data),
+            Some(other) => {
+                return Err(HostError::Message(format!(
+                    "unsupported snapshot format '{other}'"
+                )));
+            }
+            None => formats::Snapshot128::parse_sna(data)
+                .or_else(|_| formats::Snapshot128::parse_z80(data)),
+        };
+        if let Ok(snapshot) = snapshot128 {
+            let required = match snapshot.model {
                 formats::Snapshot128Model::SpectrumPlus3 => ModelId::SpectrumPlus3,
                 formats::Snapshot128Model::SpectrumPlus2A => ModelId::SpectrumPlus2A,
                 formats::Snapshot128Model::Spectrum128 => ModelId::Spectrum128,
@@ -539,17 +563,25 @@ impl HostSession {
                     )));
                 }
             }
-            let m = require_machine_mut(self.machine.as_mut())?;
-            m.apply_snapshot128(&snap);
-            // Model switch builds a fresh Machine — restore retained host joystick.
-            m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+            let machine = require_machine_mut(self.machine.as_mut())?;
+            machine.apply_snapshot128(&snapshot);
+            machine.apply_joystick_state(self.joystick_mode, self.joystick_state);
             self.reapply_host_keys();
-            self.status = format!("Loaded {required:?} snapshot {}", path.display());
-            return Ok(());
+            return Ok(required);
         }
-        let snap = formats::Snapshot48::load_sna(path)
-            .or_else(|_| formats::Snapshot48::load_z80(path))
-            .map_err(|e| HostError::Message(e.to_string()))?;
+
+        let snapshot48 = match extension {
+            Some("SNA") => formats::Snapshot48::parse_sna(data),
+            Some("Z80") => formats::Snapshot48::parse_z80(data),
+            Some(other) => {
+                return Err(HostError::Message(format!(
+                    "unsupported snapshot format '{other}'"
+                )));
+            }
+            None => formats::Snapshot48::parse_sna(data)
+                .or_else(|_| formats::Snapshot48::parse_z80(data)),
+        }
+        .map_err(|error| HostError::Message(error.to_string()))?;
         if self.machine.is_none() || self.model != ModelId::Spectrum48 {
             self.model = ModelId::Spectrum48;
             self.machine = None;
@@ -561,23 +593,29 @@ impl HostSession {
                 ));
             }
         }
-        let m = require_machine_mut(self.machine.as_mut())?;
-        m.apply_snapshot48(&snap);
-        m.apply_joystick_state(self.joystick_mode, self.joystick_state);
+        let machine = require_machine_mut(self.machine.as_mut())?;
+        machine.apply_snapshot48(&snapshot48);
+        machine.apply_joystick_state(self.joystick_mode, self.joystick_state);
         self.reapply_host_keys();
-        self.status = format!("Loaded snapshot {}", path.display());
-        Ok(())
+        Ok(ModelId::Spectrum48)
     }
 
-    /// Read an RZX recording from `path` and attach it to the loaded machine for replay.
+    /// Read an RZX recording from `path`, apply an initial embedded snapshot when present, and
+    /// attach its input frames to the resulting machine for replay.
     ///
     /// This path accepts a file path (unlike machine APIs that take parsed recordings).
-    /// Missing-machine, I/O, and format errors are returned as [`HostError`].
+    /// A recording without an embedded snapshot requires a loaded machine. I/O and format errors
+    /// are returned as [`HostError`].
     pub fn load_rzx(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
-        let rec =
+        if self.machine.is_none() && !path.exists() {
+            return Err(HostError::NoMachine);
+        }
+        let mut rec =
             formats::RzxRecording::load(path).map_err(|e| HostError::Message(e.to_string()))?;
-        m.insert_rzx(rec);
+        if let Some(snapshot) = rec.snapshot.take() {
+            self.apply_snapshot_bytes(&snapshot.data, Some(&snapshot.extension))?;
+        }
+        require_machine_mut(self.machine.as_mut())?.insert_rzx(rec);
         self.status = format!("Loaded RZX {}", path.display());
         Ok(())
     }

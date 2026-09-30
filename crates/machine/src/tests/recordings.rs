@@ -7,8 +7,10 @@ fn minimal_rzx(frames: &[(u16, &[u8])]) -> Vec<u8> {
     v.extend_from_slice(&[0x00, 0x0d]);
     v.extend_from_slice(&[0, 0, 0, 0]);
     let mut body = Vec::new();
-    body.extend_from_slice(&[0, 0, 0, 0]);
-    body.push(0); // uncompressed
+    body.extend_from_slice(&(frames.len() as u32).to_le_bytes());
+    body.push(0); // reserved
+    body.extend_from_slice(&0u32.to_le_bytes()); // T-states at block start
+    body.extend_from_slice(&0u32.to_le_bytes()); // uncompressed input data
     for &(fetch, inputs) in frames {
         body.extend_from_slice(&fetch.to_le_bytes());
         body.extend_from_slice(&(inputs.len() as u16).to_le_bytes());

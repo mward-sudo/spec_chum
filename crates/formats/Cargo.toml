@@ -6,6 +6,7 @@ license.workspace = true
 description = "Spec Chum formats crate"
 
 [dependencies]
+flate2 = { workspace = true }
 sha2 = { workspace = true }
 
 # Crate-local lints (#171): pedantic warn with endemic cast/name allows.

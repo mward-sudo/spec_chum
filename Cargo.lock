@@ -3642,6 +3642,7 @@ dependencies = [
 name = "formats"
 version = "0.7.0"
 dependencies = [
+ "flate2",
  "sha2",
 ]
 
