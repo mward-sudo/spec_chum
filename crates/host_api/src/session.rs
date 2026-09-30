@@ -221,6 +221,9 @@ fn require_machine_mut(machine: Option<&mut Machine>) -> Result<&mut Machine, Ho
 }
 
 impl HostSession {
+    /// Create an unloaded session for `model` with the selected border mode.
+    ///
+    /// ROM loading is a separate operation; this initializes status and buffers only.
     #[must_use]
     pub fn new(model: ModelId, with_border: bool) -> Self {
         trace::init_from_env();
@@ -278,10 +281,12 @@ impl HostSession {
         self.running
     }
 
+    /// Allow or suppress frame advancement. A stopped session keeps its machine and pixels.
     pub fn set_running(&mut self, running: bool) {
         self.running = running;
     }
 
+    /// Change framebuffer dimensions and immediately redraw the current machine, if loaded.
     pub fn set_border(&mut self, with_border: bool) {
         if self.with_border == with_border {
             return;
@@ -360,6 +365,8 @@ impl HostSession {
         &self.audio_pcm
     }
 
+    /// Select a model and unload the current machine without attempting ROM discovery.
+    /// Use [`Self::select_model`] to also try loading the model ROM.
     pub fn set_model(&mut self, model: ModelId) {
         self.model = model;
         self.machine = None;
@@ -382,12 +389,17 @@ impl HostSession {
         }
     }
 
-    /// Load ROM bytes for the current model.
+    /// Build and install the selected model using already-read ROM bytes.
+    ///
+    /// Returns a host error if the ROM or any required model-specific ROM is invalid or missing.
     pub fn load_rom_bytes(&mut self, rom: &[u8]) -> Result<(), HostError> {
         let overrides = crate::rom_setup::slot_rom_overrides_for_model(self.model);
         self.load_rom_bytes_with_overrides(rom, &overrides)
     }
 
+    /// Read ROM bytes from `path`, load them for the selected model, and update status.
+    ///
+    /// File I/O and machine-construction failures are returned as [`HostError`].
     pub fn load_rom_path(&mut self, path: &Path) -> Result<(), HostError> {
         let data = std::fs::read(path)?;
         self.load_rom_bytes(&data)?;
@@ -395,7 +407,10 @@ impl HostSession {
         Ok(())
     }
 
-    /// Boot from a saved user profile (#187).
+    /// Boot from a saved user profile (#187), applying its model and joystick mode.
+    ///
+    /// The configuration's ROM paths are resolved before replacing the current machine;
+    /// invalid configuration or unavailable ROMs are returned as `MachineConfigError`.
     pub fn apply_user_config(
         &mut self,
         config: &crate::machine_config::UserMachineConfig,
@@ -411,6 +426,9 @@ impl HostSession {
         Ok(())
     }
 
+    /// Reset the loaded machine while preserving host joystick and held-key state.
+    ///
+    /// An inserted tape remains present and paused. Returns [`HostError::NoMachine`] if unloaded.
     pub fn reset(&mut self) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         let mode = self.joystick_mode;
@@ -426,6 +444,10 @@ impl HostSession {
         Ok(())
     }
 
+    /// Read and insert a TAP or TZX file, initially paused, and update its media identity.
+    ///
+    /// Requires a loaded machine. Unsupported extensions, file errors, and parse errors are
+    /// returned without reporting a successful insertion; formats are selected by file extension.
     pub fn open_tape(&mut self, path: &Path) -> Result<(), HostError> {
         if self.machine.is_none() {
             return Err(HostError::NoMachine);
@@ -493,7 +515,7 @@ impl HostSession {
         Ok(())
     }
 
-    /// Load a SNA/Z80 snapshot (128K/+3 first, then 48K), switching model when needed.
+    /// Load a SNA/Z80 snapshot from `path` (128K/+3 first, then 48K), switching model when needed.
     ///
     /// Mirrors egui `SpecChumApp::load_snapshot`: selects the matching model for 128K/+3
     /// (including 128K↔Plus3) and for 48K snapshots loaded onto a non-48K machine; requires
@@ -547,7 +569,10 @@ impl HostSession {
         Ok(())
     }
 
-    /// Load an RZX recording into the current machine.
+    /// Read an RZX recording from `path` and attach it to the loaded machine for replay.
+    ///
+    /// This path accepts a file path (unlike machine APIs that take parsed recordings).
+    /// Missing-machine, I/O, and format errors are returned as [`HostError`].
     pub fn load_rzx(&mut self, path: &Path) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         let rec =
@@ -557,7 +582,9 @@ impl HostSession {
         Ok(())
     }
 
-    /// Insert a +3 DSK image (requires a Plus3 machine).
+    /// Read a DSK image from `path` and insert it into the loaded +3 machine.
+    ///
+    /// Missing-machine, I/O, unsupported-model, and format errors are returned as [`HostError`].
     pub fn load_dsk(&mut self, path: &Path) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         let img = formats::DskImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
@@ -567,7 +594,9 @@ impl HostSession {
         Ok(())
     }
 
-    /// Attach Beta Disk / TR-DOS and insert a `.trd` (48K/128K).
+    /// Read a TRD image from `path` and insert it into the loaded machine's Beta Disk interface.
+    ///
+    /// Missing-machine, I/O, unsupported-model, and format errors are returned as [`HostError`].
     pub fn load_trd(&mut self, path: &Path) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         let img = formats::TrdImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
@@ -658,6 +687,7 @@ impl HostSession {
         Ok(())
     }
 
+    /// Start the inserted tape deck. Returns an error when no machine or tape is present.
     pub fn play_tape(&mut self) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         if !m.has_tape() {
@@ -669,6 +699,7 @@ impl HostSession {
         Ok(())
     }
 
+    /// Pause the tape deck; requires a loaded machine but succeeds if no tape is inserted.
     pub fn pause_tape(&mut self) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         m.set_tape_playing(false);
@@ -676,6 +707,7 @@ impl HostSession {
         Ok(())
     }
 
+    /// Rewind the tape deck and leave it paused; requires a loaded machine.
     pub fn rewind_tape(&mut self) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         m.rewind_tape();
@@ -697,6 +729,9 @@ impl HostSession {
         self.machine.as_ref().map(Machine::tape_load_options)
     }
 
+    /// Set tape loading behavior and update status with the effective mode and speed.
+    ///
+    /// Requires a loaded machine; the options apply to the machine's current tape path.
     pub fn set_tape_load_options(
         &mut self,
         opts: machine::TapeLoadOptions,
@@ -726,6 +761,7 @@ impl HostSession {
         Ok(())
     }
 
+    /// Release all host-held Spectrum matrix keys while preserving joystick input.
     pub fn clear_keys(&mut self) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         self.host_keys = [[false; 5]; 8];
@@ -749,6 +785,7 @@ impl HostSession {
         Ok(())
     }
 
+    /// Clear host joystick buttons and recompose the effective keyboard input.
     pub fn clear_joystick(&mut self) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         self.joystick_state = JoystickState::empty();
@@ -1087,7 +1124,9 @@ impl HostSession {
         self.machine.as_ref().is_some_and(|m| m.debugger().paused)
     }
 
-    /// Resume after a debugger stop (`continue_from_pc` so a PC break is not re-hit).
+    /// Resume after a debugger stop, allowing the breakpoint at the current PC to be passed once.
+    ///
+    /// This clears the debugger pause state but does not change the host `running` flag.
     pub fn continue_execution(&mut self) -> Result<(), HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         let pc = m.cpu().regs.pc;
@@ -1095,6 +1134,7 @@ impl HostSession {
         Ok(())
     }
 
+    /// Resume debugger execution and enable host frame advancement.
     pub fn debug_continue(&mut self) -> Result<(), HostError> {
         self.continue_execution()?;
         self.set_running(true);
@@ -1134,7 +1174,9 @@ impl HostSession {
         Ok(m.debugger_mut().remove_port_watch(addr))
     }
 
-    /// Run until breakpoint, halt, or instruction budget.
+    /// Execute up to `max_insns` instructions, stopping on a breakpoint, halt, or exhausted budget.
+    ///
+    /// Requires a loaded machine; the returned reason also reports an exhausted budget.
     pub fn run_until_break(&mut self, max_insns: u32) -> Result<machine::BreakReason, HostError> {
         let m = require_machine_mut(self.machine.as_mut())?;
         Ok(m.run_until_break(u64::from(max_insns)))
@@ -1266,7 +1308,9 @@ impl HostSession {
         Ok(m.hexdump(addr, len))
     }
 
-    /// Run `frames` video frames (respects pause / running flag).
+    /// Advance up to `frames` video frames, respecting the running flag and stopping when paused.
+    ///
+    /// Requires a loaded machine. Returns the last debugger break reason observed.
     pub fn run_frames(&mut self, frames: u32) -> Result<machine::BreakReason, HostError> {
         if self.machine.is_none() {
             return Err(HostError::NoMachine);
@@ -1290,7 +1334,11 @@ impl HostSession {
         Ok(last)
     }
 
-    /// Scripted LOAD "" [CODE] — tape must already be open; deck starts paused.
+    /// Type `LOAD ""` (and optionally `CODE`) from an inserted tape, then run until the load marker or frame budget.
+    ///
+    /// Requires an inserted tape. `warmup` frames run before typing; `max == 0` selects a
+    /// default budget based on the active tape-load mode. The result reports whether the
+    /// expected BASIC/code marker appeared; machine absence and missing tape are errors.
     pub fn type_load(
         &mut self,
         with_code: bool,
