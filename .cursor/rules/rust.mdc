@@ -43,7 +43,8 @@ let v = x.unwrap();
 ## Verification
 
 ```bash
-./scripts/check.sh
+./scripts/check_crates.sh    # while iterating
+./scripts/check.sh          # full workspace gate / before merge
 ```
 
 Fix fmt/clippy/test failures before considering the change complete.

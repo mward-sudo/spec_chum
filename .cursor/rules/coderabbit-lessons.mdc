@@ -3,7 +3,7 @@ description: Disposition triad + durable Spec Chum code habits from CR
 alwaysApply: true
 ---
 
-# CodeRabbit lessons (agent habits)
+# Review findings and recurring code habits
 
 Merge-gate / quota / when-to-request → `pr-review-merge.mdc` + `CONTRIBUTING.md`. Issues → `github-issues.mdc`.
 
@@ -20,42 +20,9 @@ Never leave hanging (threads **and** outside-diff / summary nits):
 - Incomplete acceptance / deepen-in-progress → `Refs #N`, never `Closes`
 - Stubs / `assert!(… \|\| true)` / “smoke only” ≠ done
 
-## Durable code habits
+## Durable habits
 
-**Cross-crate / living_room**
-
-- `./scripts/check.sh` excludes `living_room` unless `SPEC_CHUM_CHECK_LIVING_ROOM=1`
-- Shared FFI / `host_api` / tape options → also `./scripts/check_living_room.sh`; grep `living_room` + `apps/macos`
-
-**Struct / API fields**
-
-- New public struct fields break all struct-literal sites — grep constructors + FFI; keep egui / macOS / `host_api` / `living_room` in sync
-
-**Tests**
-
-- Assert real outcomes (not `assert!(true)` / hand-forced state)
-- Meaningful preconditions; ROM tests skip cleanly without `roms/`
-- No copy-pasted synthetic media builders across crates — share helper or defer with issue
-
-**Tape / EAR / UI**
-
-- One EAR/pulse convention; UI must match active load path (flash vs EAR)
-- Empty / pulse-free decks: honest progress + completion
-
-**Frame / audio**
-
-- Carry speaker/AY/late edges across frame boundary; saturating progress math; don’t print OK after soft budget fail
-
-**Host / ABI / input**
-
-- One C-header source of truth; keep UI model ↔ machine model aligned on snapshot load
-- Don’t leave guest input latched when host disables it; reset-as-model-reselect must preserve/reinsert media intentionally
-- Living-room: don’t block UI on room queue; generation-safe stall recovery
-
-**Errors / I/O**
-
-- Don’t discard `Result` from play/start/write/init; buffer traces (no per-event reopen); atomic downloads; no hardcoded machine paths
-
-**CI / packaging (when touched)**
-
-- Pin Actions to SHAs; keep crate version + macOS numeric bundle version in sync
+- Check all callers and GUI hosts when changing shared APIs, public fields, FFI, or host options. Run the relevant living-room/release gate when those paths are affected.
+- Test observable outcomes with meaningful preconditions; ROM-dependent tests skip cleanly when ROMs are absent. Do not stub success or discard I/O errors.
+- Preserve hardware timing and cross-frame state; convenience tape paths must still load correctly.
+- Keep ABI/header and packaging versions in sync when changing those surfaces. Pin GitHub Actions to full commit SHAs.

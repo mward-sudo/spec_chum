@@ -14,7 +14,7 @@ Use the repository wrapper to refresh the checked-in graph:
 
 ```sh
 ./scripts/graphify_update.sh          # incremental code/AST update
-./scripts/graphify_update.sh --full   # full extraction; may call an LLM
+./scripts/graphify_update.sh --full   # optional full extraction; may call an LLM
 ```
 
 The default provider behavior is unchanged. For a full refresh through
@@ -41,7 +41,9 @@ for the opt-in provider.
 It assigns the secret using a shell builtin and invokes Graphify without the
 secret in its arguments. Avoid shell tracing (`set -x`) while the key is in
 the environment. Full extraction can incur API charges; AST-only updates do
-not need an API key.
+not need an API key. Run a full refresh after documentation changes only when
+those sources are represented in the graph; ordinary prose edits do not need
+an LLM-backed refresh.
 
 The default workspace gate runs `scripts/test_graphify_update.sh`, which uses a
 temporary fake `graphify` executable to check routing, model precedence,

@@ -61,11 +61,11 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 
 Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run_macos_app.sh` (see `docs/MACOS_NATIVE.md`). Models include distinct **+2A** (tape Loader) and **+3** (disk Loader).
 
-**GUI parity:** egui (`crates/app`), SpecChumMac, the Windows Win32 shell (`crates/windows_shell`; release primary), and the Linux GTK4 shell (`crates/linux_shell`; release primary) must stay **feature-aligned** unless a capability is genuinely platform-specific. **Chrome may follow platform HIG** (⌘ vs Ctrl, native menus/materials). Shared logic in `control_plane` / `host_api`; hosts get the same agent HTTP surface. **Never leave another host as a silent follow-up** (vertical-slice deferrals must be explicit in docs). See `.cursor/rules/gui-app-parity.mdc`.
+**GUI parity:** egui (`crates/app`), SpecChumMac, Windows, and Linux stay feature-aligned unless a capability is platform-specific. A bounded vertical slice may defer a host only when the missing capability, affected host, and follow-up are explicit in the issue/PR and topic docs. Chrome may follow platform HIG; shared behavior belongs in `control_plane` / `host_api`. See `.cursor/rules/gui-app-parity.mdc`.
 
 ## Hard constraints
 
-- Do **not** edit plan files under `.cursor/plans/` (or similar).
+- Do **not** edit plan files, including files under `.cursor/plans/`.
 - Do **not** commit ROM binaries (`roms/`, `*.rom`).
 - Do **not** change macOS **system** speaker volume (`osascript` `set volume` / `output volume`, CoreAudio device gain, etc.) or force-unmute the Mac. App-internal mute/volume (`specChum.outputVolume`) is the user’s preference — leave it alone unless the user explicitly asks.
 - Non-test code must not use bare `unwrap`; the workspace Clippy `unwrap_used = warn` lint is promoted to an error by CI/check scripts (`-D warnings`). Prefer `?` or return a typed error; use `expect` only for a documented invariant that cannot fail at that point, with a message stating the invariant. `expect_used` is allowed by Clippy, so this is a project rule rather than an enforced lint.
@@ -73,25 +73,7 @@ Optional native macOS SwiftUI shell: `apps/macos/` — build with `./scripts/run
 - Binary (`app`): `anyhow` is fine for top-level error context.
 - `unsafe` is denied workspace-wide; only introduce it with a documented `SAFETY` rationale and a narrowly scoped `#[allow(unsafe_code)]`.
 
-GitHub Release archives (single primary app per platform) are built by
-`.github/workflows/release.yml` on `vX.Y.Z` tags. See [docs/RELEASE.md](docs/RELEASE.md).
-Do not commit ROM binaries. Release CI fetches redistributable ROMs and embeds
-them inside packages (macOS SpecChumMac `.app` / Windows / Linux — see
-[docs/ROMS.md](docs/ROMS.md)). macOS ships SpecChumMac as a **`.dmg.zip`**
-(unzip → `.dmg` with Applications shortcut; notarised/stapled when Apple
-secrets are set;
-[#403](https://github.com/mward-sudo/spec_chum/issues/403),
-[#363](https://github.com/mward-sudo/spec_chum/issues/363),
-[#361](https://github.com/mward-sudo/spec_chum/issues/361),
-[#354](https://github.com/mward-sudo/spec_chum/issues/354));
-Windows a portable `.zip` **and** Inno Setup `*-setup.exe`; Linux a `.tar.gz`,
-**AppImage**, and **`.deb`**. Shared Spectrum app icon (macOS `.icns` / Windows `.ico` /
-Linux PNG / egui window) lives under `packaging/` — regenerate with
-`python3 scripts/generate_app_icons.py`
-([#231](https://github.com/mward-sudo/spec_chum/issues/231)).
-Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351) — strategy in [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md#native-shells-351) (Windows: Win32 `windows_shell` release primary, see [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md); Linux: GTK4 `linux_shell` release primary, see [docs/LINUX_NATIVE.md](docs/LINUX_NATIVE.md)).
-**Before tagging `vX.Y.Z`:** the full slow suite must pass — `./scripts/run_slow_tests.sh`
-(z80doc + system-tests + z80full). Default CI / `./scripts/check.sh` alone is not enough.
+Release packaging: [docs/RELEASE.md](docs/RELEASE.md). Before tagging `vX.Y.Z`, run `./scripts/run_slow_tests.sh`; default CI is not enough.
 
 ## Verification workflow (clippy-first)
 
@@ -99,14 +81,14 @@ Native UI shells: [#351](https://github.com/mward-sudo/spec_chum/issues/351) —
 
 When a task is active, `continue` resumes that work with its existing scope; it does not add a request for review or merge unless those were already requested. With no active task, `continue` means pick an appropriate open issue and implement it. The shorthand encodes order: `CRM` means continue implementation, then review, then merge; `RMC` means review and merge the current work, then continue; `RM` means review and merge the current work. Follow the repository's review and merge gates before merging.
 
-**While iterating** — debug-build only crates relevant to the task:
+**While iterating** — run debug checks for crates relevant to the task:
 
 ```bash
 ./scripts/check_crates.sh                 # infer from git diff vs origin/main
 ./scripts/check_crates.sh control_plane agent_server host_api
 ```
 
-**For full-workspace / merge readiness** — full workspace gate (debug, excludes `living_room`):
+**Workspace gate** — full debug workspace check (excludes `living_room`):
 
 ```bash
 ./scripts/check.sh
@@ -130,10 +112,6 @@ Do not run `cargo check -p living_room` (debug) unless you intentionally need Be
 
 Checked-in graph outputs live under `graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`, AST `cache/`). CodeRabbit skips `graphify-out/**` via `.coderabbit.yaml` `path_filters` (review-only; keep the tree committed). Local CLI: rely on that YAML, or scope with `coderabbit review --agent --dir crates` / `--dir apps`.
 
-### Instruction precedence
-
-User instructions take precedence, followed by this cross-tool `AGENTS.md`, then tool-specific instructions (such as `.cursor/rules/` or another agent's local rules). Tool-specific rules may add workflow details but must not override user instructions or project-wide constraints here. `CONTRIBUTING.md` and `docs/` provide contributor and topic detail; they do not override these instructions. Keep shared constraints and facts in this file, and tool-only workflow in the relevant tool configuration.
-
 ### CLI setup and fallback
 
 Install the current CLI with `uv tool install graphifyy` (or `pipx install graphifyy`), then ensure the tool's bin directory is on `PATH`. Confirm setup with `command -v graphify` and `graphify --version`. If graphify is unavailable, use the checked-in `graphify-out/` artifacts when useful, then continue with normal source exploration; record that the graph query was unavailable. Graph queries remain the preferred architecture entry point when the CLI is available.
@@ -142,7 +120,7 @@ Install the current CLI with `uv tool install graphifyy` (or `pipx install graph
 | --- | --- |
 | Query architecture | `graphify query "…"` / `graphify path A B` / `graphify explain concept` |
 | Refresh after **code** edits | `./scripts/graphify_update.sh` (AST-only, no API cost) |
-| Refresh after **doc** edits | `./scripts/graphify_update.sh --full` (LLM; needs API key) |
+| Refresh after docs/images | Optional: `./scripts/graphify_update.sh --full` when those sources are represented in the graph (may call an LLM) |
 | Auto-refresh on commit | `./scripts/graphify_install_hooks.sh` (once per clone) |
 | Skip one automatic refresh | `GRAPHIFY_SKIP_HOOK=1 git commit …` |
 | After substantive code/architecture work | Optionally skim `GRAPH_REPORT.md` Suggested Questions; track a relevant follow-up only if it is actionable and worth doing — see `.cursor/rules/graphify.mdc` |
@@ -161,26 +139,18 @@ Tier matrix and gate inventory: [docs/TESTING.md](docs/TESTING.md) ([#171](https
 
 ## PR / stack / merge gate
 
-Track substantive planned work in GitHub Issues (milestones M0–M4); tiny self-contained fixes can remain untracked. Prefer focused PRs. See `CONTRIBUTING.md` for `gh stack` and the full merge-gate SSOT.
+Track substantive work in GitHub Issues; tiny self-contained fixes can remain untracked. Prefer focused PRs. See `CONTRIBUTING.md` for stack and merge details.
 
 - Issues: `.cursor/rules/github-issues.mdc` (check related work for substantive implementation; `Closes` vs `Refs`).
 - Merge / CodeRabbit: **agent checklist** `.cursor/rules/pr-review-merge.mdc` — try one local or GitHub review; do not wait more than 10 minutes on a rate-limited surface. CI soft-pass is not a review; document the rate-limit and disposition every finding from any completed review.
 - Detail + human workflow: `CONTRIBUTING.md` → “CodeRabbit — review when ready” / “Review check before merge”.
 - Disposition habits: `.cursor/rules/coderabbit-lessons.mdc`.
 
-Closed accuracy/feature baselines (historical): [#33](https://github.com/mward-sudo/spec_chum/issues/33) AY, [#34](https://github.com/mward-sudo/spec_chum/issues/34) border/beam, [#24](https://github.com/mward-sudo/spec_chum/issues/24) +2A/+3, [#25](https://github.com/mward-sudo/spec_chum/issues/25) TZX/RZX/Kempston/disk.
+## Further guidance
 
-## Cursor Cloud specific instructions
+- Developer workflow and testing: [CONTRIBUTING.md](CONTRIBUTING.md), [docs/README.md](docs/README.md), and [docs/TESTING.md](docs/TESTING.md).
+- Emulator automation: [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md), [docs/DEBUGGING.md](docs/DEBUGGING.md), and `.cursor/skills/spec-chum-debugging/SKILL.md`.
 
-The startup update script already runs `cargo fetch` and `./scripts/fetch_roms.sh`, and the base image already has the audio/GUI system libraries (`libasound2-dev`, `libgtk-3-dev`, `libglib2.0-dev`, `libudev-dev`, plus Mesa/X11 runtime libs). So on a fresh cloud agent you can go straight to building, testing, and running.
+## Instruction precedence
 
-Standard commands are in `README.md` and the "Agent workflow" / "Testing expectations" sections above (`./scripts/check.sh`, `cargo test --workspace`, `cargo run -p app --release`). Non-obvious cloud caveats only:
-
-- **ROMs are required for `app` / headless debug execution and ROM-dependent tests, and are not in git.** They live under `roms/` (gitignored) and are fetched by `./scripts/fetch_roms.sh` (already run by the update script). Without them those binaries error at ROM load, and ROM-dependent integration tests skip. Re-run the script if `roms/` is missing.
-- **Running the egui app (`spec_chum`) needs an X display.** In the cloud VM the desktop is on `DISPLAY=:1` with software GL (llvmpipe), which works fine. Launch with `DISPLAY=:1 ./target/release/spec_chum` (build release first for smooth interaction). Keep it in a tmux session so it survives.
-- **ALSA "cannot find card '0'" / "Unknown PCM default" warnings are harmless.** The VM has no sound card; the app (and `cpal`) degrade gracefully and keep running — do not treat these as failures.
-- **Headless emulator driving:** prefer `spec_chum --serve` / `spec_chum debug …`
-  (or the source-build alias `spec-chum-debug`) / the **Agent Debug HTTP API**
-  (`spec-chum-agent` on `127.0.0.1:17384`). See `.cursor/skills/spec-chum-debugging/SKILL.md`
-  and [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md).
-- **Driving the GUI keyboard (computer-use):** the Spectrum uses single-key keyword entry — pressing `p` at the `K` cursor inserts the whole `PRINT` keyword, including its trailing space (do not type the word letter-by-letter). Symbol-layer chars via computer-use are flaky (`"` is Shift+apostrophe and often mis-types stray apostrophes); prefer simple numeric expressions like `PRINT 2+2` for reliable smoke tests. Host→matrix mapping lives in `crates/app/src/keymap.rs`.
+User instructions take precedence, then this cross-tool file, then tool-specific rules. Contributor and topic docs add detail but do not override these constraints.
