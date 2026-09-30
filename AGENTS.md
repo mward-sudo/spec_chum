@@ -53,6 +53,7 @@ From-scratch ZX Spectrum emulator in Rust + egui. **Hardware-faithful** cycle-ac
 | `trace` | Structured debug ring buffer (env/host gated) |
 | `debug_cli` | Headless agent debugger library + `spec-chum-debug` alias; preferred entry is `spec_chum --serve` / `spec_chum debug …` |
 | `host_api` | C ABI host surface for native shells / future cores |
+| `libretro_core` | Optional RetroArch/libretro core over `host_api` — see [docs/LIBRETRO.md](docs/LIBRETRO.md) / [#64](https://github.com/mward-sudo/spec_chum/issues/64) |
 | `control_plane` / `agent_server` | Localhost agent debug HTTP API ([#210](https://github.com/mward-sudo/spec_chum/issues/210)) — `spec_chum --serve` / `spec-chum-agent` / `spec-chum-debug --serve`; see [docs/AGENT_DEBUG_API.md](docs/AGENT_DEBUG_API.md) |
 | `app` | egui / eframe frontend binary (see `docs/UI_ARCHITECTURE.md`) |
 | `windows_shell` | Native Win32 shell (`spec_chum_windows` → release `spec_chum.exe`) over `host_api` — [docs/WINDOWS_NATIVE.md](docs/WINDOWS_NATIVE.md) / [#351](https://github.com/mward-sudo/spec_chum/issues/351) |

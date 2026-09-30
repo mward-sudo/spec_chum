@@ -17,6 +17,7 @@ Start here if you want to run Spec Chum and play Spectrum software.
 | [WINDOWS_NATIVE.md](WINDOWS_NATIVE.md) | Win32 shell (`windows_shell`); Windows release primary |
 | [LINUX_NATIVE.md](LINUX_NATIVE.md) | GTK4 shell (`linux_shell`); Linux release primary |
 | [LIVING_ROOM.md](LIVING_ROOM.md) | Experimental Bevy 3D CRT living-room mode |
+| [LIBRETRO.md](LIBRETRO.md) | Optional RetroArch / libretro core |
 | [MULTIFACE.md](MULTIFACE.md) | Multiface 1 attach / firmware notes |
 | [TIMEX.md](TIMEX.md) | Timex TC2048 / TS2068 models and docks |
 | [TAPE_IDENTITY.md](TAPE_IDENTITY.md) | How media titles / hashes are shown |
