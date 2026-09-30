@@ -6,8 +6,8 @@ GitHub Actions builds **macOS**, **Linux**, and **Windows** archives and attache
 them to a GitHub Release when a version tag is pushed.
 
 **macOS** ships the native **SpecChumMac** SwiftUI app (`apps/macos`) as a
-**`.dmg.zip`** (a zip containing the `.dmg`, which is notarised/stapled when
-Apple secrets are set). **Windows** ships the native Win32 **`windows_shell`**
+**`.dmg.zip`** (a zip containing the `.dmg`, which is signed and notarised/
+stapled when Apple secrets are set). **Windows** ships the native Win32 **`windows_shell`**
 as `spec_chum.exe` (portable `.zip` + Inno Setup). **Linux** ships the native
 GTK4 **`linux_shell`** as `spec_chum` (`.tar.gz` / AppImage / `.deb`). On all
 three native shells, Agent Debug HTTP uses the embedded loopback server
@@ -31,8 +31,8 @@ This is the release-artifact switch from egui-on-macOS
 release primaries are Win32 `windows_shell` and GTK4 `linux_shell`
 ([#351](https://github.com/mward-sudo/spec_chum/issues/351);
 strategy: [UI_ARCHITECTURE.md — Native shells](UI_ARCHITECTURE.md#native-shells-351)).
-When Apple notary secrets are set, CI notarises and staples the **inner** `.dmg`
-before zipping — see signing table below
+When Apple signing and notary secrets are set, CI signs the **app** and **inner**
+`.dmg`, notarises and staples the DMG, before zipping — see signing table below
 ([#354](https://github.com/mward-sudo/spec_chum/issues/354),
 Refs [#231](https://github.com/mward-sudo/spec_chum/issues/231)). Windows ships a
 **portable `.zip`** and an **Inno Setup `*-setup.exe`** (Start Menu + uninstall)
@@ -216,8 +216,8 @@ SPEC_CHUM_AGENT=1 SPEC_CHUM_AGENT_TOKEN="$(openssl rand -hex 16)" \
 **not** attached to GitHub Release archives.)
 
 Linux ships `.tar.gz` + AppImage + `.deb`; Windows ships a portable `.zip` and an
-Inno Setup `*-setup.exe`; macOS ships a `.dmg.zip` only (inner `.dmg` is
-notarised/stapled when secrets are set).
+Inno Setup `*-setup.exe`; macOS ships a `.dmg.zip` only (inner `.dmg` is signed,
+notarised and stapled when secrets are set).
 ROM **bytes are not in git**; release CI runs `./scripts/fetch_roms.sh` and embeds
 the managed redistributable set (see [ROMS.md](ROMS.md)). Shared app icon assets
 live under `packaging/` (see `packaging/icon/README.md`); regenerate with
@@ -239,8 +239,14 @@ an empty tag still builds `dev-<sha>` artifacts only.
 
 ## Signing (optional)
 
-Unsigned assets still publish. Signing steps **no-op** when the matching secret
-is absent so a first release does not require certificates.
+Unsigned assets still publish. macOS and Windows signing steps **no-op** when
+the matching secret is absent so a first release does not require certificates.
+Ad hoc macOS signing was evaluated as a free fallback: it creates a verifiable
+integrity seal but is not a Developer ID signature and cannot be notarised. It
+does not pass `spctl` assessment as a quarantined download, so it is not applied
+to release artifacts. Finder launch behavior can differ from `spctl`; test
+results on one machine are not enough to claim it removes the release
+first-launch blocker.
 
 | Platform | What | Repository secrets |
 | --- | --- | --- |
@@ -262,10 +268,11 @@ after the `.dmg` is codesigned, `scripts/ci/notarize-macos.sh` submits it with
 that DMG as the published `*.dmg.zip` asset ([#403](https://github.com/mward-sudo/spec_chum/issues/403)). Prefer an
 **App Store Connect API key** (Team key: Issuer UUID + Key ID + `.p8`
 base64). Apple ID + app-specific password + Team ID works as a fallback. When
-neither credential set is complete, the step **no-ops** (codesigned-but-
-unnotarised assets still publish; Gatekeeper may warn until secrets are set).
-Notary secrets are independent of the Developer ID `.p12` — you need both for a
-fully Gatekeeper-clean release.
+neither supported notary credential set is complete, the notarisation step
+**no-ops** and assets still publish. If Developer ID signing secrets are set,
+the app and DMG remain signed but unnotarised; without those signing secrets,
+they are unsigned. Notary secrets are independent of the Developer ID `.p12` —
+you need both for a fully Gatekeeper-clean release.
 
 Verify a notarised download (after install / mount):
 
