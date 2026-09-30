@@ -11,7 +11,7 @@
 //! Port `1FFD` bit 3 is the floppy motor; [`formats::Plus3Fdc::set_motor`] is
 //! updated on every `1FFD` write. FDC I/O is not Sinclair ULA-contended.
 
-use ula::{contention_delay_128, Ula48, FRAME_TSTATES_128};
+use ula::{contention_delay_128, Ula48, FRAME_TSTATES_128, PAPER_START_128, T_LINE_128};
 
 use crate::{require_rom_size, Ay8912, Keyboard, RomLoadError};
 
@@ -170,6 +170,19 @@ impl BusPlus3 {
     pub fn write(&mut self, addr: u16, value: u8) {
         let (is_rom, bank, off) = self.bank_at(addr);
         if !is_rom {
+            if matches!(bank, 5 | 7) && off < 6912 {
+                let old = self.banks[bank][off];
+                if old != value {
+                    self.ula.note_screen_write(
+                        bank as u8,
+                        off,
+                        old,
+                        self.frame_t,
+                        PAPER_START_128,
+                        T_LINE_128,
+                    );
+                }
+            }
             self.banks[bank][off] = value;
         }
     }
