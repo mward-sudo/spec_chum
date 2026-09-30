@@ -1,7 +1,7 @@
 //! Windows Virtual-Key → Spectrum matrix chords.
 //!
 //! Mirrors [`app::keymap`] / [`spec_chum_host::keymap`] semantics: Ctrl → Symbol,
-//! Shift → Caps (unless punctuation owns Symbol), arrows → Caps cursor.
+//! Shift → Caps (letters), Symbol+digit for shifted digits, arrows/Tab → selected joystick.
 
 use spec_chum_host::keymap::Chord;
 
@@ -11,6 +11,7 @@ use spec_chum_host::keymap::{CAPS, SYM};
 /// Windows Virtual-Key codes used by the shell (subset of Winuser.h).
 pub mod vk {
     pub const BACK: u16 = 0x08;
+    pub const TAB: u16 = 0x09;
     pub const RETURN: u16 = 0x0D;
     pub const SHIFT: u16 = 0x10;
     pub const CONTROL: u16 = 0x11;
@@ -36,20 +37,47 @@ pub mod vk {
 /// Map a Virtual-Key + modifiers to Spectrum matrix chords.
 #[must_use]
 pub fn chord_for_vk(vk: u16, shift: bool) -> Option<Chord> {
-    match vk {
-        vk::LEFT => return Some(Chord::with_caps(3, 4)),
-        vk::DOWN => return Some(Chord::with_caps(4, 4)),
-        vk::UP => return Some(Chord::with_caps(4, 3)),
-        vk::RIGHT => return Some(Chord::with_caps(4, 2)),
-        vk::BACK => return Some(Chord::with_caps(4, 0)),
-        _ => {}
+    if is_joystick_routing_key(vk) {
+        return None;
+    }
+    if vk == vk::BACK {
+        return Some(Chord::with_caps(4, 0));
     }
 
     if let Some(ch) = punct_chord(vk, shift) {
         return Some(ch);
     }
 
+    if shift {
+        if let Some((row, bit)) = letter_digit(vk).filter(|_| is_digit(vk)) {
+            return Some(Chord::with_sym(row, bit));
+        }
+    }
+
     letter_digit(vk).map(|(row, bit)| Chord::single(row, bit))
+}
+
+/// Arrow directions and Tab fire are routed through the selected host joystick mode.
+#[must_use]
+pub fn is_joystick_routing_key(vk: u16) -> bool {
+    matches!(vk, vk::LEFT | vk::RIGHT | vk::UP | vk::DOWN | vk::TAB)
+}
+
+/// Kempston-compatible direction/fire mask from held Windows Virtual-Key codes.
+#[must_use]
+pub fn kempston_mask(held: &[u16]) -> u8 {
+    let mut mask = 0;
+    for &code in held {
+        match code {
+            vk::RIGHT => mask |= 1 << 0,
+            vk::LEFT => mask |= 1 << 1,
+            vk::DOWN => mask |= 1 << 2,
+            vk::UP => mask |= 1 << 3,
+            vk::TAB => mask |= 1 << 4,
+            _ => {}
+        }
+    }
+    mask
 }
 
 /// Modifier keys alone (when no punctuation override is active).
@@ -58,28 +86,29 @@ pub fn modifier_keys(shift: bool, alt: bool, ctrl: bool, suppress_caps: bool) ->
     spec_chum_host::keymap::modifier_keys(shift, alt, ctrl, suppress_caps)
 }
 
-/// True when this key owns Symbol/Caps itself (punctuation / arrows / Backspace).
+/// True when this key owns Symbol/Caps itself (punctuation / Backspace).
 #[must_use]
-pub fn suppresses_modifier_caps(vk: u16) -> bool {
-    matches!(
-        vk,
-        vk::LEFT
-            | vk::RIGHT
-            | vk::UP
-            | vk::DOWN
-            | vk::BACK
-            | vk::OEM_1
-            | vk::OEM_PLUS
-            | vk::OEM_COMMA
-            | vk::OEM_MINUS
-            | vk::OEM_PERIOD
-            | vk::OEM_2
-            | vk::OEM_3
-            | vk::OEM_4
-            | vk::OEM_5
-            | vk::OEM_6
-            | vk::OEM_7
-    )
+pub fn suppresses_modifier_caps(vk: u16, shift: bool) -> bool {
+    (shift && is_digit(vk))
+        || matches!(
+            vk,
+            vk::BACK
+                | vk::OEM_1
+                | vk::OEM_PLUS
+                | vk::OEM_COMMA
+                | vk::OEM_MINUS
+                | vk::OEM_PERIOD
+                | vk::OEM_2
+                | vk::OEM_3
+                | vk::OEM_4
+                | vk::OEM_5
+                | vk::OEM_6
+                | vk::OEM_7
+        )
+}
+
+fn is_digit(vk: u16) -> bool {
+    (0x30..=0x39).contains(&vk)
 }
 
 fn letter_digit(vk: u16) -> Option<(usize, u8)> {
@@ -248,10 +277,10 @@ mod tests {
     }
 
     #[test]
-    fn arrow_left_is_caps_5() {
-        let ch = chord_for_vk(vk::LEFT, false).expect("left");
-        assert!(ch.keys.contains(&CAPS));
-        assert!(ch.keys.contains(&(3, 4)));
+    fn arrows_and_tab_are_joystick_routed() {
+        assert!(is_joystick_routing_key(vk::LEFT));
+        assert!(chord_for_vk(vk::LEFT, false).is_none());
+        assert_eq!(kempston_mask(&[vk::LEFT, vk::TAB]), 0x12);
     }
 
     #[test]
@@ -259,5 +288,45 @@ mod tests {
         let mods = modifier_keys(false, false, true, false);
         assert!(mods.contains(&SYM));
         assert!(!mods.contains(&CAPS));
+    }
+
+    #[test]
+    fn shifted_digits_use_symbol_layer_without_caps() {
+        let cases = [
+            (0x31, (3, 0)),
+            (0x32, (3, 1)),
+            (0x33, (3, 2)),
+            (0x34, (3, 3)),
+            (0x35, (3, 4)),
+            (0x36, (4, 4)),
+            (0x37, (4, 3)),
+            (0x38, (4, 2)),
+            (0x39, (4, 1)),
+            (0x30, (4, 0)),
+        ];
+        for (vk, digit) in cases {
+            assert_eq!(chord_for_vk(vk, true).unwrap().keys, vec![SYM, digit]);
+            assert!(suppresses_modifier_caps(vk, true));
+            assert!(
+                modifier_keys(true, false, false, suppresses_modifier_caps(vk, true)).is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn punctuation_suppresses_caps_only_without_a_plain_letter_chord() {
+        let quote_owns_modifier = suppresses_modifier_caps(vk::OEM_7, true);
+        let letter_needs_modifier =
+            chord_for_vk(0x41, true).is_some() && !suppresses_modifier_caps(0x41, true);
+        assert!(spec_chum_host::keymap::caps_modifier_suppressed(
+            quote_owns_modifier,
+            false,
+            false
+        ));
+        assert!(!spec_chum_host::keymap::caps_modifier_suppressed(
+            quote_owns_modifier,
+            letter_needs_modifier,
+            false
+        ));
     }
 }

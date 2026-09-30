@@ -24,8 +24,7 @@ use spec_chum_host::{
 };
 
 use linux_shell::keymap::{
-    apply_chord, apply_modifiers, chord_for_keyval, is_modifier_keyval,
-    suppresses_modifier_caps_with_shift,
+    apply_chord, apply_modifiers, chord_for_keyval, is_modifier_keyval, suppresses_modifier_caps,
 };
 use native_shell_common::audio::{self, PcmRing};
 use native_shell_common::commands::model_menu_label;
@@ -167,20 +166,34 @@ impl AppState {
 
     fn refresh_input(&mut self) {
         let _ = self.host.with_mut(HostSession::clear_keys);
+        let held = self.held.clone();
         let shift = self.shift();
-        let mut suppress = false;
+        let mut has_owned_chord = false;
+        let mut has_plain_chord = false;
         for &kv in &self.held {
-            if suppresses_modifier_caps_with_shift(kv, shift) {
-                suppress = true;
+            if chord_for_keyval(kv, shift).is_some() {
+                if suppresses_modifier_caps(kv, shift) {
+                    has_owned_chord = true;
+                } else {
+                    has_plain_chord = true;
+                }
             }
         }
+        let suppress = spec_chum_host::keymap::caps_modifier_suppressed(
+            has_owned_chord,
+            has_plain_chord,
+            held.iter()
+                .copied()
+                .any(linux_shell::keymap::is_joystick_routing_key),
+        );
+        let mask = linux_shell::keymap::kempston_mask(&held);
+        let _ = self.host.with_mut(|session| session.set_joystick(mask));
         let alt = self.alt();
         let ctrl = self.ctrl();
         {
             let mut apply = |row, bit, pressed| self.set_key_matrix(row, bit, pressed);
             apply_modifiers(&mut apply, shift, alt, ctrl, suppress);
         }
-        let held = self.held.clone();
         for &kv in &held {
             if let Some(ch) = chord_for_keyval(kv, shift) {
                 let mut apply = |row, bit, pressed| self.set_key_matrix(row, bit, pressed);

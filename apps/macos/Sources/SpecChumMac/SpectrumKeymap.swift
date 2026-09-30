@@ -37,6 +37,10 @@ enum SpectrumKeymap {
             return punct
         }
 
+        if shift, let pair = letterDigit(keyCode: keyCode), isDigitKey(keyCode: keyCode) {
+            return [sym, pair]
+        }
+
         var keys: [(UInt32, UInt32)] = []
         if shift {
             keys.append(caps)
@@ -70,11 +74,23 @@ enum SpectrumKeymap {
         return out
     }
 
-    static func suppressesModifierCaps(keyCode: UInt16) -> Bool {
+    static func suppressesModifierCaps(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
+        if flags.contains(.shift), isDigitKey(keyCode: keyCode) {
+            return true
+        }
         switch keyCode {
         case 51: // delete
             return true
         case 39, 41, 43, 47, 44, 27, 24, 33, 30, 42, 50: // punct
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isDigitKey(keyCode: UInt16) -> Bool {
+        switch keyCode {
+        case 18, 19, 20, 21, 23, 22, 26, 28, 25, 29:
             return true
         default:
             return false
@@ -91,18 +107,6 @@ enum SpectrumKeymap {
         if held.contains(126) { mask |= 1 << 3 } // up
         if held.contains(48) { mask |= 1 << 4 } // Tab fire
         return mask
-    }
-
-    /// Caps+5/6/7/8 cursor chords for 128K boot menus and BASIC (egui Cursor mode parity).
-    /// Arrows still feed Kempston via `kempstonMask`; matrix chords are injected separately.
-    static func cursorChord(keyCode: UInt16) -> [(UInt32, UInt32)]? {
-        switch keyCode {
-        case 123: return [caps, (3, 4)] // left — 5
-        case 125: return [caps, (4, 4)] // down — 6
-        case 126: return [caps, (4, 3)] // up — 7
-        case 124: return [caps, (4, 2)] // right — 8
-        default: return nil
-        }
     }
 
     // MARK: - Private

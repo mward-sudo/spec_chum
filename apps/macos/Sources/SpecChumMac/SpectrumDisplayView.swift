@@ -403,30 +403,27 @@ final class SpectrumNSView: NSView {
     /// changes so `run_frame` never observes a cleared intermediate state.
     private func syncMatrix(flags: NSEvent.ModifierFlags) {
         host?.clearKeys()
-        let hasNonJoystickHeld = held.contains { !SpectrumKeymap.isJoystickRoutingKey(keyCode: $0) }
-        let suppressCaps: Bool
-        if hasNonJoystickHeld {
-            suppressCaps = held.contains { SpectrumKeymap.suppressesModifierCaps(keyCode: $0) }
-        } else {
-            suppressCaps = held.contains { code in
-                SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
-                    || SpectrumKeymap.suppressesModifierCaps(keyCode: code)
-            }
+        let hasJoystickKey = held.contains { SpectrumKeymap.isJoystickRoutingKey(keyCode: $0) }
+        let hasOwnedChord = held.contains { code in
+            !SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
+                && SpectrumKeymap.suppressesModifierCaps(keyCode: code, flags: flags)
         }
+        let hasPlainChord = held.contains { code in
+            !SpectrumKeymap.isJoystickRoutingKey(keyCode: code)
+                && !SpectrumKeymap.suppressesModifierCaps(keyCode: code, flags: flags)
+                && !SpectrumKeymap.chords(keyCode: code, flags: flags).isEmpty
+        }
+        let suppressCaps = (hasOwnedChord && !hasPlainChord)
+            || (!hasOwnedChord && !hasPlainChord && hasJoystickKey)
         for (row, bit) in SpectrumKeymap.modifierKeys(flags: flags, suppressCaps: suppressCaps) {
             host?.setKey(row: row, bit: bit, pressed: true)
         }
         for code in held {
-            if let cursor = SpectrumKeymap.cursorChord(keyCode: code) {
-                for (row, bit) in cursor {
-                    host?.setKey(row: row, bit: bit, pressed: true)
-                }
-            }
             if SpectrumKeymap.isJoystickRoutingKey(keyCode: code) {
                 continue
             }
             let chord = SpectrumKeymap.chords(keyCode: code, flags: flags)
-            if SpectrumKeymap.suppressesModifierCaps(keyCode: code) {
+            if SpectrumKeymap.suppressesModifierCaps(keyCode: code, flags: flags) {
                 for (row, bit) in chord {
                     host?.setKey(row: row, bit: bit, pressed: true)
                 }
