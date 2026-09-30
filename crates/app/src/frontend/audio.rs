@@ -6,6 +6,7 @@ use machine::FrameAudio;
 
 pub(super) struct BeeperState {
     edges: Vec<(u32, bool)>,
+    edge_index: usize,
     ay_samples: Vec<f32>,
     ay_left: Vec<f32>,
     ay_right: Vec<f32>,
@@ -24,6 +25,7 @@ impl Default for BeeperState {
     fn default() -> Self {
         Self {
             edges: Vec::new(),
+            edge_index: 0,
             ay_samples: Vec::new(),
             ay_left: Vec::new(),
             ay_right: Vec::new(),
@@ -54,6 +56,7 @@ impl BeeperState {
         self.volume = volume.clamp(0.0, 1.0);
         if !muted {
             self.edges = audio.beeper_edges;
+            self.edge_index = 0;
             self.ay_samples = audio.ay_samples;
             self.ay_left = audio.ay_left;
             self.ay_right = audio.ay_right;
@@ -91,10 +94,10 @@ pub(super) fn start_beeper(state: Arc<Mutex<BeeperState>>) -> Option<cpal::Strea
                 }
                 let ch = usize::from(st.channels.max(1));
                 for frame in data.chunks_mut(ch) {
-                    while let Some(&(edge_t, level)) = st.edges.first() {
+                    while let Some(&(edge_t, level)) = st.edges.get(st.edge_index) {
                         if st.t >= edge_t as f32 {
                             st.level = level;
-                            st.edges.remove(0);
+                            st.edge_index += 1;
                         } else {
                             break;
                         }

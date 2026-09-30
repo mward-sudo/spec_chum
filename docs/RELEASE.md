@@ -268,10 +268,11 @@ after the `.dmg` is codesigned, `scripts/ci/notarize-macos.sh` submits it with
 that DMG as the published `*.dmg.zip` asset ([#403](https://github.com/mward-sudo/spec_chum/issues/403)). Prefer an
 **App Store Connect API key** (Team key: Issuer UUID + Key ID + `.p8`
 base64). Apple ID + app-specific password + Team ID works as a fallback. When
-neither credential set is complete, the step **no-ops** and unsigned assets
-still publish.
-Notary secrets are independent of the Developer ID `.p12` — you need both for a
-fully Gatekeeper-clean release.
+neither supported notary credential set is complete, the notarisation step
+**no-ops** and assets still publish. If Developer ID signing secrets are set,
+the app and DMG remain signed but unnotarised; without those signing secrets,
+they are unsigned. Notary secrets are independent of the Developer ID `.p12` —
+you need both for a fully Gatekeeper-clean release.
 
 Verify a notarised download (after install / mount):
 

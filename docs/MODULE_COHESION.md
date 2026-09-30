@@ -1,6 +1,6 @@
 # Large-module responsibility map (#446)
 
-This map identifies responsibility boundaries in four large Rust modules. File size is a review signal, not an extraction goal. Keep public APIs stable and extract one cohesive responsibility per change; emulator timing and behavior remain the authority for `machine` and `tape` changes.
+This map identifies responsibility boundaries in four large Rust modules and records completed cohesive extractions alongside remaining candidates. File size is a review signal, not an extraction goal. Keep public APIs stable and extract one cohesive responsibility per change; emulator timing and behavior remain the authority for `machine` and `tape` changes.
 
 ## `host_api` boundary (#445)
 
@@ -31,11 +31,11 @@ The callers confirm this boundary: `app`, `windows_shell`, `linux_shell`, the ma
 
 ## Ranked extraction candidates
 
-Ranks indicate a useful first extraction to investigate, not a commitment to split every candidate.
+Completed splits are listed as completed; the remaining candidates are ranked by usefulness to investigate, not as a commitment to split every candidate.
 
 1. **Host tape identity/enrichment** (`host_api/src/session.rs`, approximately lines 321–460). The identity setters, source/hash accessors, opt-in online lookup and pending-result application form a distinct media-metadata responsibility. Risk: it shares `HostSession` fields and must preserve opt-in privacy, generation checks against stale async results, and clearing on media/model changes. Validation: focused `host_api` tests for local identity, opt-in lookup, stale-result rejection and clearing; `./scripts/check_crates.sh host_api`.
-2. **App ROM setup and custom configuration dialogs** (`app/src/frontend/dialogs.rs`). Extracted as a cohesive UI module; retain its shared preferences/session updates and save/cancel/error handling tests.
-3. **Machine model construction** (`machine/src/construction.rs`). Extracted from the live machine module while keeping public `Machine` constructors, ROM validation, trace IDs and model-specific setup intact. Preserve constructor tests and run `./scripts/check_crates.sh machine` for future changes.
+2. **App ROM setup and custom configuration dialogs** (`app/src/frontend/dialogs.rs`). Completed: extracted as a cohesive UI module; its shared preferences/session updates and save/cancel/error handling stay together.
+3. **Machine model construction** (`machine/src/construction.rs`). Completed: extracted from the live machine module while keeping public `Machine` constructors, ROM validation, trace IDs and model-specific setup intact.
 4. **Machine frame/tape execution** (`machine/src/lib.rs`). Keep frame advancement, tape EAR/traps and convenience loading together unless a narrower boundary can preserve their shared invariants. Risk: highest; helpers interact with CPU registers, bus paging, tape state, ULA/frame time and intentionally distinct convenience versus hardware timing. Validation must include the existing timing/tape tests and machine crate gate; do not extract merely to reduce line count.
 
-No extraction is performed by this map. For each follow-on, select one candidate, keep the public API stable, and compare behavior through focused tests before considering another boundary.
+The app dialogs, machine construction and TZX waveform synthesis are already separate modules. The remaining candidates are not extracted by this map. For each follow-on, select one candidate, keep the public API stable, and compare behavior through focused tests before considering another boundary.
