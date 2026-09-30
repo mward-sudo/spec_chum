@@ -301,13 +301,26 @@ impl AppState {
 
         let _ = self.host.with_mut(HostSession::clear_keys);
 
-        let mut suppress = false;
         let held = self.held.clone();
+        let mut has_owned_chord = false;
+        let mut has_plain_chord = false;
         for &vk in &held {
-            if suppresses_modifier_caps(vk) {
-                suppress = true;
+            if chord_for_vk(vk, shift).is_some() {
+                if suppresses_modifier_caps(vk, shift) {
+                    has_owned_chord = true;
+                } else {
+                    has_plain_chord = true;
+                }
             }
         }
+        let suppress = spec_chum_host::keymap::caps_modifier_suppressed(
+            has_owned_chord,
+            has_plain_chord,
+            held.iter().copied().any(keymap::is_joystick_routing_key),
+        );
+        let _ = self
+            .host
+            .with_mut(|session| session.set_joystick(keymap::kempston_mask(&held)));
         {
             let mut apply = |row, bit, pressed| self.set_key_matrix(row, bit, pressed);
             apply_modifiers(&mut apply, shift, alt, ctrl, suppress);

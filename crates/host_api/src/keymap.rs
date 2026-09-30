@@ -108,6 +108,12 @@ pub fn chord_for_ansi(key_code: u16, shift: bool) -> Option<Chord> {
         return Some(ch);
     }
 
+    if shift {
+        if let Some((row, bit)) = letter_digit_ansi(key_code).filter(|_| is_digit_ansi(key_code)) {
+            return Some(Chord::with_sym(row, bit));
+        }
+    }
+
     letter_digit_ansi(key_code).map(|(row, bit)| Chord::single(row, bit))
 }
 
@@ -131,11 +137,23 @@ pub fn modifier_keys(
 
 /// True when this key owns Symbol/Caps itself (punctuation / delete).
 #[must_use]
-pub fn suppresses_modifier_caps(key_code: u16) -> bool {
+pub fn suppresses_modifier_caps(key_code: u16, shift: bool) -> bool {
     if key_code == ansi::DELETE {
         return true;
     }
-    punct_chord_ansi(key_code, false).is_some() || punct_chord_ansi(key_code, true).is_some()
+    (shift && is_digit_ansi(key_code))
+        || punct_chord_ansi(key_code, false).is_some()
+        || punct_chord_ansi(key_code, true).is_some()
+}
+
+/// Whether a held chord group should omit host Shift's Caps modifier.
+#[must_use]
+pub fn caps_modifier_suppressed(
+    has_owned_chord: bool,
+    has_plain_chord: bool,
+    has_joystick_key: bool,
+) -> bool {
+    (has_owned_chord || has_joystick_key) && !has_plain_chord
 }
 
 /// Rebuild matrix keys + modifiers + Kempston mask from a held set (macOS `syncMatrix` parity).
@@ -148,17 +166,22 @@ pub struct SyncKeys {
 
 #[must_use]
 pub fn sync_keys(held: &[u16], shift: bool, option: bool, control: bool) -> SyncKeys {
-    let has_non_joystick_held = held
-        .iter()
-        .copied()
-        .any(|code| !is_joystick_routing_key(code));
-    let suppress_caps = if has_non_joystick_held {
-        held.iter().copied().any(suppresses_modifier_caps)
-    } else {
-        held.iter()
-            .copied()
-            .any(|code| is_joystick_routing_key(code) || suppresses_modifier_caps(code))
-    };
+    let mut has_owned_chord = false;
+    let mut has_plain_chord = false;
+    let mut has_joystick_key = false;
+    for &code in held {
+        if is_joystick_routing_key(code) {
+            has_joystick_key = true;
+        } else if chord_for_ansi(code, shift).is_some() {
+            if suppresses_modifier_caps(code, shift) {
+                has_owned_chord = true;
+            } else {
+                has_plain_chord = true;
+            }
+        }
+    }
+    let suppress_caps =
+        caps_modifier_suppressed(has_owned_chord, has_plain_chord, has_joystick_key);
     let modifiers = modifier_keys(shift, option, control, suppress_caps);
     let mut matrix = Vec::new();
     for &code in held {
@@ -168,7 +191,7 @@ pub fn sync_keys(held: &[u16], shift: bool, option: bool, control: bool) -> Sync
         let Some(chord) = chord_for_ansi(code, shift) else {
             continue;
         };
-        if suppresses_modifier_caps(code) {
+        if suppresses_modifier_caps(code, shift) {
             matrix.extend(chord.keys);
         } else {
             matrix.extend(chord.keys.into_iter().filter(|&k| k != CAPS && k != SYM));
@@ -183,6 +206,10 @@ pub fn sync_keys(held: &[u16], shift: bool, option: bool, control: bool) -> Sync
         matrix,
         kempston_mask: kempston_mask(held),
     }
+}
+
+fn is_digit_ansi(key_code: u16) -> bool {
+    matches!(key_code, 18 | 19 | 20 | 21 | 23 | 22 | 26 | 28 | 25 | 29)
 }
 
 fn letter_digit_ansi(key_code: u16) -> Option<(usize, u8)> {
@@ -315,7 +342,7 @@ fn punct_chord_ansi(key_code: u16, shift: bool) -> Option<Chord> {
 /// Human-readable mapping notes for Help / docs.
 pub const MAPPING_DOC: &str = "\
 Mac → Spectrum keyboard
-• Letters/digits: direct matrix; Shift = Caps Shift; Option/Alt = Symbol Shift
+• Letters: Shift = Caps Shift; shifted digits (e.g. ! from Shift+1) = Symbol Shift + digit; Option/Alt = Symbol Shift
 • \" (Shift+Quote) = Symbol + P    ' (Quote) = Symbol + 7
 • Arrows + Tab fire = host joystick (Settings: Kempston / Sinclair / Cursor)
 • Backspace = Caps + 0 (DELETE)
@@ -333,7 +360,7 @@ mod tests {
     fn quote_shift_is_symbol_p() {
         let c = chord_for_ansi(ansi::QUOTE, true).unwrap();
         assert_eq!(c.keys, vec![SYM, (5, 0)]);
-        assert!(suppresses_modifier_caps(ansi::QUOTE));
+        assert!(suppresses_modifier_caps(ansi::QUOTE, true));
     }
 
     #[test]
@@ -446,5 +473,43 @@ mod tests {
         let sync = sync_keys(&[ansi::QUOTE], false, true, false);
         assert_eq!(sync.modifiers, vec![SYM]);
         assert_eq!(sync.matrix, vec![(4, 3)]); // Symbol+7 for '
+    }
+
+    #[test]
+    fn shifted_digits_use_symbol_layer_without_caps() {
+        let cases = [
+            (18, vec![SYM, (3, 0)]),
+            (19, vec![SYM, (3, 1)]),
+            (20, vec![SYM, (3, 2)]),
+            (21, vec![SYM, (3, 3)]),
+            (23, vec![SYM, (3, 4)]),
+            (22, vec![SYM, (4, 4)]),
+            (26, vec![SYM, (4, 3)]),
+            (28, vec![SYM, (4, 2)]),
+            (25, vec![SYM, (4, 1)]),
+            (29, vec![SYM, (4, 0)]),
+        ];
+        for (code, want) in cases {
+            assert_eq!(chord_for_ansi(code, true).unwrap().keys, want, "key {code}");
+            assert!(suppresses_modifier_caps(code, true), "key {code}");
+            let sync = sync_keys(&[code], true, false, false);
+            assert!(sync.modifiers.is_empty(), "key {code}");
+            assert_eq!(sync.matrix, want, "key {code}");
+        }
+    }
+
+    #[test]
+    fn shifted_punctuation_keeps_caps_for_a_held_letter() {
+        let sync = sync_keys(&[ansi::QUOTE, 0], true, false, false);
+        assert_eq!(sync.modifiers, vec![CAPS]);
+        assert_eq!(sync.matrix, vec![SYM, (5, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn caps_modifier_suppression_tracks_the_whole_held_chord_group() {
+        assert!(caps_modifier_suppressed(true, false, false));
+        assert!(!caps_modifier_suppressed(true, true, false));
+        assert!(caps_modifier_suppressed(false, false, true));
+        assert!(!caps_modifier_suppressed(false, false, false));
     }
 }

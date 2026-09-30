@@ -971,22 +971,31 @@ impl EmulatorSession {
         machine.apply_joystick_state(joystick_mode, stick);
 
         let kb = machine.keyboard_mut();
-        let suppress_caps = keys_down
-            .iter()
-            .any(|k| keymap::suppresses_modifier_caps(*k));
+        let mut has_owned_chord = false;
+        let mut has_plain_chord = false;
+        let mut has_joystick_key = false;
+        for &key in keys_down {
+            if keymap::is_joystick_key(key) {
+                has_joystick_key = true;
+            } else if keymap::chord_for(key, modifiers).is_some() {
+                if keymap::suppresses_modifier_caps(key, modifiers.shift) {
+                    has_owned_chord = true;
+                } else {
+                    has_plain_chord = true;
+                }
+            }
+        }
+        let suppress_caps = spec_chum_host::keymap::caps_modifier_suppressed(
+            has_owned_chord,
+            has_plain_chord,
+            has_joystick_key,
+        );
         for (row, bit) in keymap::modifier_keys(modifiers, suppress_caps) {
             kb.set_key(row, bit, true);
         }
         for key in keys_down {
             // Arrow cursor chords are applied via joystick mode instead.
-            if matches!(
-                key,
-                egui::Key::ArrowLeft
-                    | egui::Key::ArrowRight
-                    | egui::Key::ArrowUp
-                    | egui::Key::ArrowDown
-                    | egui::Key::Tab
-            ) {
+            if keymap::is_joystick_key(*key) {
                 continue;
             }
             if let Some(chord) = keymap::chord_for(*key, modifiers) {

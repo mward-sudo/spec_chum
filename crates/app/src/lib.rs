@@ -61,6 +61,33 @@ mod tests {
     }
 
     #[test]
+    fn shifted_punctuation_keeps_caps_for_a_simultaneous_letter() {
+        let mut session = EmulatorSession::new(Model::Spectrum48, true);
+        let rom = vec![0; 16 * 1024];
+        session
+            .host_mut()
+            .set_machine(Machine::new_48k(&rom).expect("valid-sized test ROM"));
+        let keys = [egui::Key::Quote, egui::Key::A].into_iter().collect();
+        let mods = egui::Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+
+        session.sync_keyboard(&keys, mods, JoystickState::empty());
+
+        let rows = session
+            .host_mut()
+            .machine_mut()
+            .unwrap()
+            .keyboard_mut()
+            .rows;
+        assert_eq!(rows[0] & 1, 0, "Caps Shift stays pressed for A");
+        assert_eq!(rows[7] & (1 << 1), 0, "Symbol Shift forms the quote chord");
+        assert_eq!(rows[5] & 1, 0, "P forms the quote chord");
+        assert_eq!(rows[1] & 1, 0, "A remains shifted");
+    }
+
+    #[test]
     fn arrow_left_maps_joystick_kempston_and_cursor_mode() {
         let mut session = EmulatorSession::new(Model::Spectrum48, true);
         session.try_autoload_rom();

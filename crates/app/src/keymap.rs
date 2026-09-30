@@ -7,28 +7,36 @@ use eframe::egui::{Key, Modifiers};
 
 pub use spec_chum_host::keymap::{Chord, CAPS, MAPPING_DOC, SYM};
 
+pub(super) fn is_joystick_key(key: Key) -> bool {
+    matches!(
+        key,
+        Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown | Key::Tab
+    )
+}
+
 /// Map an egui key + modifiers to Spectrum matrix chords.
 ///
 /// Returns `None` when the key is unused (e.g. F-keys). Punctuation that needs
 /// Symbol Shift overrides Caps from the host Shift key. Arrow keys and Tab are
-/// joystick-routed in `sync_keyboard` (matrix injection skipped); direct
-/// `chord_for` calls still return Caps cursor chords for arrows.
+/// joystick-routed in `sync_keyboard` and return `None` here.
 #[must_use]
 pub fn chord_for(key: Key, modifiers: Modifiers) -> Option<Chord> {
-    // Arrow keys → Spectrum cursor (Caps + 5/6/7/8), regardless of Shift.
-    // Matrix injection is skipped in `sync_keyboard`; joystick routing applies them.
-    match key {
-        Key::ArrowLeft => return Some(Chord::with_caps(3, 4)), // 5
-        Key::ArrowDown => return Some(Chord::with_caps(4, 4)), // 6
-        Key::ArrowUp => return Some(Chord::with_caps(4, 3)),   // 7
-        Key::ArrowRight => return Some(Chord::with_caps(4, 2)), // 8
-        Key::Backspace => return Some(Chord::with_caps(4, 0)), // Caps+0 delete
-        _ => {}
+    if is_joystick_key(key) {
+        return None;
+    }
+    if key == Key::Backspace {
+        return Some(Chord::with_caps(4, 0));
     }
 
     // Symbol-layer punctuation (host Shift/Option must not inject Caps).
     if let Some(ch) = punct_chord(key, modifiers) {
         return Some(ch);
+    }
+
+    if modifiers.shift {
+        if let Some((row, bit)) = letter_digit(key).filter(|_| is_digit(key)) {
+            return Some(Chord::with_sym(row, bit));
+        }
     }
 
     // Alphanumeric + Enter/Space — plain matrix; Caps/Sym come from modifiers.
@@ -46,27 +54,40 @@ pub fn modifier_keys(modifiers: Modifiers, suppress_caps: bool) -> Vec<(usize, u
     )
 }
 
-/// True when this key event owns Symbol/Caps itself (punctuation / arrows).
+/// True when this key event owns Symbol/Caps itself (punctuation / Backspace).
 #[must_use]
-pub fn suppresses_modifier_caps(key: Key) -> bool {
+pub fn suppresses_modifier_caps(key: Key, shift: bool) -> bool {
+    (shift && is_digit(key))
+        || matches!(
+            key,
+            Key::Backspace
+                | Key::Quote
+                | Key::Semicolon
+                | Key::Comma
+                | Key::Period
+                | Key::Slash
+                | Key::Minus
+                | Key::Equals
+                | Key::OpenBracket
+                | Key::CloseBracket
+                | Key::Backslash
+                | Key::Backtick
+        )
+}
+
+fn is_digit(key: Key) -> bool {
     matches!(
         key,
-        Key::ArrowLeft
-            | Key::ArrowRight
-            | Key::ArrowUp
-            | Key::ArrowDown
-            | Key::Backspace
-            | Key::Quote
-            | Key::Semicolon
-            | Key::Comma
-            | Key::Period
-            | Key::Slash
-            | Key::Minus
-            | Key::Equals
-            | Key::OpenBracket
-            | Key::CloseBracket
-            | Key::Backslash
-            | Key::Backtick
+        Key::Num0
+            | Key::Num1
+            | Key::Num2
+            | Key::Num3
+            | Key::Num4
+            | Key::Num5
+            | Key::Num6
+            | Key::Num7
+            | Key::Num8
+            | Key::Num9
     )
 }
 
@@ -224,7 +245,7 @@ mod tests {
     fn quote_shift_is_symbol_p() {
         let c = chord_for(Key::Quote, mods_shift()).unwrap();
         assert_eq!(c.keys, vec![SYM, (5, 0)]);
-        assert!(suppresses_modifier_caps(Key::Quote));
+        assert!(suppresses_modifier_caps(Key::Quote, true));
     }
 
     #[test]
@@ -234,29 +255,17 @@ mod tests {
     }
 
     #[test]
-    fn arrows_are_caps_cursor() {
-        assert_eq!(
-            chord_for(Key::ArrowLeft, Modifiers::default())
-                .unwrap()
-                .keys,
-            vec![CAPS, (3, 4)]
-        );
-        assert_eq!(
-            chord_for(Key::ArrowDown, Modifiers::default())
-                .unwrap()
-                .keys,
-            vec![CAPS, (4, 4)]
-        );
-        assert_eq!(
-            chord_for(Key::ArrowUp, Modifiers::default()).unwrap().keys,
-            vec![CAPS, (4, 3)]
-        );
-        assert_eq!(
-            chord_for(Key::ArrowRight, Modifiers::default())
-                .unwrap()
-                .keys,
-            vec![CAPS, (4, 2)]
-        );
+    fn arrows_and_tab_are_joystick_routed() {
+        for key in [
+            Key::ArrowLeft,
+            Key::ArrowDown,
+            Key::ArrowUp,
+            Key::ArrowRight,
+            Key::Tab,
+        ] {
+            assert!(is_joystick_key(key));
+            assert!(chord_for(key, Modifiers::default()).is_none());
+        }
     }
 
     #[test]
@@ -272,5 +281,31 @@ mod tests {
         let m = mods_shift();
         assert_eq!(modifier_keys(m, false), vec![CAPS]);
         assert!(modifier_keys(m, true).is_empty());
+    }
+
+    #[test]
+    fn shifted_digits_use_symbol_layer_without_caps() {
+        let cases = [
+            (Key::Num1, (3, 0)),
+            (Key::Num2, (3, 1)),
+            (Key::Num3, (3, 2)),
+            (Key::Num4, (3, 3)),
+            (Key::Num5, (3, 4)),
+            (Key::Num6, (4, 4)),
+            (Key::Num7, (4, 3)),
+            (Key::Num8, (4, 2)),
+            (Key::Num9, (4, 1)),
+            (Key::Num0, (4, 0)),
+        ];
+        let shifted = Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        };
+        for (key, digit) in cases {
+            let chord = chord_for(key, shifted).unwrap();
+            assert_eq!(chord.keys, vec![SYM, digit], "key {key:?}");
+            assert!(suppresses_modifier_caps(key, true), "key {key:?}");
+            assert!(modifier_keys(shifted, suppresses_modifier_caps(key, true)).is_empty());
+        }
     }
 }
