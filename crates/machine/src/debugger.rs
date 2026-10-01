@@ -8,6 +8,24 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT_PC_HIT_ID: AtomicU64 = AtomicU64::new(0);
 const PC_HIT_HISTORY: usize = 128;
 
+fn next_pc_hit_id() -> u64 {
+    let mut current = NEXT_PC_HIT_ID.load(Ordering::Relaxed);
+    loop {
+        let next = current
+            .checked_add(1)
+            .expect("PC breakpoint identity space is not exhausted");
+        match NEXT_PC_HIT_ID.compare_exchange_weak(
+            current,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return next,
+            Err(observed) => current = observed,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PcBreakpointHit {
     /// Process-wide monotonic stop identity.
@@ -199,12 +217,7 @@ impl Debugger {
         if self.pc_breaks.contains(&pc) {
             self.paused = true;
             self.last_hit = BreakReason::Pc(pc);
-            let id = NEXT_PC_HIT_ID
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
-                    old.checked_add(1)
-                })
-                .expect("PC breakpoint identity space is not exhausted")
-                + 1;
+            let id = next_pc_hit_id();
             if self.pc_hits.len() == PC_HIT_HISTORY {
                 self.pc_hits.pop_front();
             }
