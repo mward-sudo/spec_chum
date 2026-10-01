@@ -183,7 +183,8 @@ final class LivingRoomNSView: NSView {
             metalLayer.device = device
             metalLayer.pixelFormat = .bgra8Unorm_srgb
             metalLayer.framebufferOnly = false
-            metalLayer.allowsNextDrawableTimeout = false
+            // nextDrawable() runs on AppKit main; let it time out so GPU stalls cannot freeze the UI.
+            metalLayer.allowsNextDrawableTimeout = true
             metalLayer.contentsScale = 1
             self.metalLayer = metalLayer
             layer = metalLayer
