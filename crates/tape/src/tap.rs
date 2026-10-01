@@ -536,7 +536,7 @@ mod tests {
     #[test]
     fn parse_empty() {
         let t = TapImage::parse(&[]).unwrap();
-        assert!(t.blocks.is_empty());
+        assert_eq!(t.blocks.len(), 0);
     }
 
     #[test]
