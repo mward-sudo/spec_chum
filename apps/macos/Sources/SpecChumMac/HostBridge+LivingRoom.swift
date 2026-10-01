@@ -296,9 +296,9 @@ extension HostBridge {
         roomFbLock.unlock()
         roomPerfLastSnap = nil
         if syncTeardown {
-            // Called from deinit: a weak reference to self may already be nil.
-            livingRoomThread.sync { [unowned self] in
-                self.teardownLivingRoomOnThread()
+            let bridge = Unmanaged.passUnretained(self)
+            livingRoomThread.sync {
+                bridge.takeUnretainedValue().teardownLivingRoomOnThread()
             }
         } else {
             livingRoomThread.async { [weak self] in
