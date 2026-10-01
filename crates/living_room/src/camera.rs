@@ -32,6 +32,8 @@ const LOCKED_FOV: f32 = 0.85;
 
 /// Phosphor mesh height in metres (`crt::PHOSPHOR_H` — aperture + geometric overscan).
 const PHOSPHOR_H: f32 = crate::crt::PHOSPHOR_H;
+const PHOSPHOR_W: f32 = crate::crt::PHOSPHOR_W;
+const DEFAULT_VIEWPORT_ASPECT: f32 = 16.0 / 9.0;
 
 /// Wall-clock duration for one preset→preset swing (independent of Bevy `Time`).
 pub const ZOOM_ANIM_SECS: f32 = 0.20;
@@ -125,8 +127,6 @@ pub const ZOOM_PRESET_COUNT: u8 = ZOOM_PRESETS.len() as u8;
 #[derive(Resource, Debug)]
 pub struct CameraIntro {
     pub elapsed: f32,
-    pub start: Transform,
-    pub end: Transform,
     end_preset: u8,
 }
 
@@ -366,14 +366,28 @@ pub(crate) fn screen_look_at() -> Vec3 {
     crate::crt::crt_screen_world_center()
 }
 
-fn distance_for_crt_fill(fov: f32, fill: f32) -> f32 {
+fn camera_aspect(camera: &Camera) -> f32 {
+    camera
+        .logical_viewport_size()
+        .filter(|size| size.x.is_finite() && size.y.is_finite() && size.x > 0.0 && size.y > 0.0)
+        .map_or(DEFAULT_VIEWPORT_ASPECT, |size| size.x / size.y)
+}
+
+fn distance_for_crt_fill(fov: f32, fill: f32, aspect_ratio: f32) -> f32 {
     let fill = fill.clamp(0.05, 0.95);
-    let visible_h = PHOSPHOR_H / fill;
+    let aspect_ratio = if aspect_ratio.is_finite() && aspect_ratio > 0.0 {
+        aspect_ratio
+    } else {
+        DEFAULT_VIEWPORT_ASPECT
+    };
+    // Perspective FOV is vertical. Increase the visible height when the
+    // viewport is too narrow to contain the phosphor's full horizontal span.
+    let visible_h = (PHOSPHOR_H / fill).max(PHOSPHOR_W / (aspect_ratio * fill));
     visible_h / (2.0 * (fov * 0.5).tan())
 }
 
-fn preset_eye(look: Vec3, preset: ZoomPreset) -> Vec3 {
-    let dist = distance_for_crt_fill(LOCKED_FOV, preset.crt_fill);
+fn preset_eye(look: Vec3, preset: ZoomPreset, aspect_ratio: f32) -> Vec3 {
+    let dist = distance_for_crt_fill(LOCKED_FOV, preset.crt_fill, aspect_ratio);
     look + Vec3::new(0.0, preset.y_lift, dist)
 }
 
@@ -392,14 +406,18 @@ fn intro_look_target(look: Vec3, end_preset: u8, t: f32) -> Vec3 {
 
 /// Camera pose for a (possibly fractional) preset index along the back-and-up path.
 pub fn pose_at_zoom(t: f32, look: Vec3) -> Transform {
+    pose_at_zoom_for_aspect(t, look, DEFAULT_VIEWPORT_ASPECT)
+}
+
+fn pose_at_zoom_for_aspect(t: f32, look: Vec3, aspect_ratio: f32) -> Transform {
     let max_i = (ZOOM_PRESETS.len() - 1) as f32;
     let t = t.clamp(0.0, max_i);
     let i0 = t.floor() as usize;
     let i1 = (i0 + 1).min(ZOOM_PRESETS.len() - 1);
     let f = (t - i0 as f32).clamp(0.0, 1.0);
 
-    let p0 = preset_eye(look, ZOOM_PRESETS[i0]);
-    let p1 = preset_eye(look, ZOOM_PRESETS[i1]);
+    let p0 = preset_eye(look, ZOOM_PRESETS[i0], aspect_ratio);
+    let p1 = preset_eye(look, ZOOM_PRESETS[i1], aspect_ratio);
     let pos = lerp_eye_zoom(p0, p1, f);
     let target = if i1 == ZOOM_PRESETS.len() - 1 && i0 != i1 {
         look.lerp(room_wide_look(look), ease_out_cubic(f))
@@ -425,14 +443,14 @@ pub(crate) fn setup_camera(
     // Keep the high-angle establishing position inside the room shell. Starting
     // above the ceiling made the TV and its spotlight occluded until the camera
     // passed through the ceiling, which read as a sudden lighting pop.
-    let start_eye = preset_eye(look, ZOOM_PRESETS[ZOOM_PRESETS.len() - 1]);
+    let start_eye = preset_eye(
+        look,
+        ZOOM_PRESETS[ZOOM_PRESETS.len() - 1],
+        DEFAULT_VIEWPORT_ASPECT,
+    );
     let start = Transform::from_translation(start_eye).looking_at(room_wide_look(look), Vec3::Y);
-    let end = pose_at_zoom(f32::from(end_preset), look);
-
     commands.insert_resource(CameraIntro {
         elapsed: 0.0,
-        start,
-        end,
         end_preset,
     });
     commands.insert_resource(CameraZoom::default());
@@ -582,7 +600,7 @@ fn skip_intro(
     mut post_zoom: ResMut<PostIntroZoom>,
     intro: Option<ResMut<CameraIntro>>,
     mut commands: Commands,
-    mut cams: Query<&mut Transform, With<LivingRoomCamera>>,
+    mut cams: Query<(&Camera, &mut Transform), With<LivingRoomCamera>>,
     mut zoom: ResMut<CameraZoom>,
     mut opening: ResMut<OpeningSequence>,
 ) {
@@ -603,8 +621,8 @@ fn skip_intro(
     let preset = post_zoom.0.take().unwrap_or(INTRO_DESTINATION_PRESET);
     *zoom = CameraZoom::default();
     zoom.jump_to(preset);
-    if let Ok(mut tf) = cams.single_mut() {
-        *tf = pose_at_zoom(f32::from(preset), screen_look_at());
+    if let Ok((camera, mut tf)) = cams.single_mut() {
+        *tf = pose_at_zoom_for_aspect(f32::from(preset), screen_look_at(), camera_aspect(camera));
     }
     commands.insert_resource(CameraLocked);
     commands.remove_resource::<CameraIntro>();
@@ -615,7 +633,7 @@ fn update_intro_camera(
     mut post_zoom: ResMut<PostIntroZoom>,
     intro: Option<ResMut<CameraIntro>>,
     mut commands: Commands,
-    mut cams: Query<&mut Transform, With<LivingRoomCamera>>,
+    mut cams: Query<(&Camera, &mut Transform), With<LivingRoomCamera>>,
     phosphor: Query<&GlobalTransform, With<CrtPhosphor>>,
     mut zoom: ResMut<CameraZoom>,
 ) {
@@ -637,9 +655,14 @@ fn update_intro_camera(
     // Recompute the endpoint from the live CRT transform. The GLTF scene can
     // settle by a few pixels after startup; matching that live target prevents
     // a final-frame correction when the zoom controls take over.
-    let end = pose_at_zoom(f32::from(end_preset), look_at);
-    if let Ok(mut tf) = cams.single_mut() {
-        let pos = lerp_eye_pullback_rise(intro.start.translation, end.translation, t);
+    let Ok((camera, mut tf)) = cams.single_mut() else {
+        return;
+    };
+    let aspect = camera_aspect(camera);
+    let end = pose_at_zoom_for_aspect(f32::from(end_preset), look_at, aspect);
+    let start_eye = preset_eye(look_at, ZOOM_PRESETS[ZOOM_PRESETS.len() - 1], aspect);
+    {
+        let pos = lerp_eye_pullback_rise(start_eye, end.translation, t);
         let target = intro_look_target(look_at, end_preset, t);
         *tf = Transform::from_translation(pos).looking_at(target, Vec3::Y);
     }
@@ -648,9 +671,6 @@ fn update_intro_camera(
         let preset = post_zoom.0.take().unwrap_or(intro.end_preset);
         *zoom = CameraZoom::default();
         zoom.jump_to(preset);
-        if let Ok(mut tf) = cams.single_mut() {
-            *tf = pose_at_zoom(f32::from(preset), look_at);
-        }
         commands.insert_resource(CameraLocked);
         commands.remove_resource::<CameraIntro>();
     }
@@ -690,7 +710,7 @@ pub(crate) fn apply_zoom_camera(
     locked: Option<Res<CameraLocked>>,
     mut zoom: ResMut<CameraZoom>,
     mut look_blend: ResMut<CrtLookBlend>,
-    mut cams: Query<(&mut Transform, Option<&mut Bloom>), With<LivingRoomCamera>>,
+    mut cams: Query<(&Camera, &mut Transform, Option<&mut Bloom>), With<LivingRoomCamera>>,
     phosphor: Query<&GlobalTransform, With<CrtPhosphor>>,
     mut phosphor_tf: Query<&mut Transform, (With<CrtPhosphor>, Without<LivingRoomCamera>)>,
     mut glass_tf: Query<
@@ -716,8 +736,8 @@ pub(crate) fn apply_zoom_camera(
     let max_i = f32::from(ZOOM_PRESET_COUNT.saturating_sub(1)).max(1.0);
     let t = (zoom.display / max_i).clamp(0.0, 1.0);
     look_blend.0 = t;
-    if let Ok((mut tf, bloom)) = cams.single_mut() {
-        *tf = pose_at_zoom(zoom.display, look);
+    if let Ok((camera, mut tf, bloom)) = cams.single_mut() {
+        *tf = pose_at_zoom_for_aspect(zoom.display, look, camera_aspect(camera));
         if let Some(mut bloom) = bloom {
             // Mild pull-back halation — strong bloom washes the CRT face (#233).
             bloom.intensity = 0.04 + t * 0.06;
@@ -829,8 +849,8 @@ mod tests {
         assert!(b.crt_fill < a.crt_fill);
         assert!(b.y_lift > a.y_lift);
         let look = Vec3::ZERO;
-        let near = preset_eye(look, a);
-        let far = preset_eye(look, b);
+        let near = preset_eye(look, a, DEFAULT_VIEWPORT_ASPECT);
+        let far = preset_eye(look, b, DEFAULT_VIEWPORT_ASPECT);
         assert!(far.z > near.z);
         assert!(far.y > near.y);
     }
@@ -875,9 +895,42 @@ mod tests {
     #[test]
     fn distance_matches_fill() {
         let fill = 0.28;
-        let d = distance_for_crt_fill(LOCKED_FOV, fill);
+        let d = distance_for_crt_fill(LOCKED_FOV, fill, DEFAULT_VIEWPORT_ASPECT);
         let visible_h = 2.0 * d * (LOCKED_FOV * 0.5).tan();
         let got = PHOSPHOR_H / visible_h;
         assert!((got - fill).abs() < 0.01, "fill={got}");
+    }
+
+    #[test]
+    fn phosphor_bounds_fit_wide_standard_and_narrow_viewports() {
+        let fill = ZOOM_PRESETS[0].crt_fill;
+        for aspect in [16.0 / 9.0, 4.0 / 3.0, 9.0 / 16.0] {
+            let distance = distance_for_crt_fill(LOCKED_FOV, fill, aspect);
+            let visible_h = 2.0 * distance * (LOCKED_FOV * 0.5).tan();
+            let visible_w = visible_h * aspect;
+            let vertical_fill = PHOSPHOR_H / visible_h;
+            let horizontal_fill = PHOSPHOR_W / visible_w;
+
+            assert!(
+                vertical_fill <= fill + 0.001,
+                "aspect={aspect}: {vertical_fill}"
+            );
+            assert!(
+                horizontal_fill <= fill + 0.001,
+                "aspect={aspect}: {horizontal_fill}"
+            );
+            assert!(
+                (vertical_fill.max(horizontal_fill) - fill).abs() < 0.001,
+                "aspect={aspect}: vertical={vertical_fill}, horizontal={horizontal_fill}"
+            );
+        }
+    }
+
+    #[test]
+    fn narrow_viewport_moves_camera_back_without_changing_zoom_preset() {
+        let look = Vec3::ZERO;
+        let wide = pose_at_zoom_for_aspect(0.0, look, 16.0 / 9.0).translation.z;
+        let narrow = pose_at_zoom_for_aspect(0.0, look, 9.0 / 16.0).translation.z;
+        assert!(narrow > wide);
     }
 }
