@@ -18,6 +18,9 @@ use crate::error::{ApiError, ApiResult};
 use crate::framebuffer::{encode_framebuffer_png, model_slug, parse_model_slug, FramebufferMeta};
 use crate::host_view::{new_shared_host_view, HostWindowCapture, SharedHostView};
 use crate::present::{compose_nearest_letterbox, encode_rgba_png, PresentMeta, PresentPanelSource};
+use crate::render_settings::{
+    RoomRenderSettings, RoomRenderSettingsPatch, SharedRoomRenderSettings,
+};
 
 /// Loopback HTTP server configuration.
 #[derive(Clone, Debug)]
@@ -111,6 +114,8 @@ pub struct ControlPlane {
     prefs: Mutex<SessionPrefs>,
     /// Optional host UI / window capture state (#239).
     host_view: SharedHostView,
+    /// Optional live living-room renderer settings (#462).
+    room_render_settings: Mutex<Option<SharedRoomRenderSettings>>,
 }
 
 /// Agent-visible host prefs snapshot (`GET`/`PATCH /v1/prefs`).
@@ -197,6 +202,7 @@ impl ControlPlane {
             last_error: Mutex::new(None),
             prefs: Mutex::new(SessionPrefs::default()),
             host_view: new_shared_host_view(),
+            room_render_settings: Mutex::new(None),
         }
     }
 
@@ -204,6 +210,37 @@ impl ControlPlane {
     #[must_use]
     pub fn host_view(&self) -> SharedHostView {
         Arc::clone(&self.host_view)
+    }
+
+    /// Attach renderer settings when an embedded living-room host is active.
+    pub fn attach_room_render_settings(&self, settings: SharedRoomRenderSettings) {
+        *self
+            .room_render_settings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(settings);
+    }
+
+    /// Read live room settings, or report unavailable when the renderer is detached.
+    pub fn room_render_settings(&self) -> ApiResult<RoomRenderSettings> {
+        self.room_render_settings
+            .lock()
+            .map_err(|_| ApiError::Message("room render settings slot lock poisoned".into()))?
+            .as_ref()
+            .ok_or_else(|| ApiError::Unavailable("living-room renderer is not attached".into()))?
+            .snapshot()
+    }
+
+    /// Apply a partial update to the attached living-room renderer settings.
+    pub fn patch_room_render_settings(
+        &self,
+        patch: &RoomRenderSettingsPatch,
+    ) -> ApiResult<RoomRenderSettings> {
+        self.room_render_settings
+            .lock()
+            .map_err(|_| ApiError::Message("room render settings slot lock poisoned".into()))?
+            .as_ref()
+            .ok_or_else(|| ApiError::Unavailable("living-room renderer is not attached".into()))?
+            .patch(*patch)
     }
 
     /// Publish last central-panel size from the live egui host (points).
@@ -1384,7 +1421,7 @@ mod tests {
     #[test]
     fn last_error_records_failures() {
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
-        assert!(plane.last_error().error.is_empty());
+        assert_eq!(plane.last_error().error.len(), 0);
         plane.record_error(&ApiError::BadRequest("test".into()));
         let last = plane.last_error();
         assert!(last.error.contains("test"));

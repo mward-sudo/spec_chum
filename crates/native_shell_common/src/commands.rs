@@ -127,7 +127,7 @@ mod tests {
         for m in ModelId::ALL {
             let id = menu_id_for_model(m);
             assert_eq!(model_from_menu_id(id), Some(m));
-            assert!(!model_menu_label(m).is_empty());
+            assert_ne!(model_menu_label(m).len(), 0);
             assert_eq!(model_menu_label(m), machine::model_title(m.to_model()));
         }
         assert_eq!(model_from_menu_id(IDM_MACHINE_RESET), None);

@@ -426,5 +426,5 @@ fn boggit_side1_matrix_when_present() {
         }
     }
     eprintln!("{report}");
-    assert!(failed.is_empty(), "boggit failures: {}", failed.join(", "));
+    assert_eq!(failed.len(), 0, "boggit failures: {}", failed.join(", "));
 }

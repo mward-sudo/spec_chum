@@ -173,7 +173,7 @@ mod tests {
                 MediaTitleSource::LocalCatalogue,
                 "{name} should hit catalogue"
             );
-            assert!(!id.display_title.is_empty(), "{name}");
+            assert_ne!(id.display_title.len(), 0, "{name}");
         }
     }
 }
