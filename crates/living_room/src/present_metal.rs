@@ -24,6 +24,27 @@ pub enum PresentIosurfaceError {
     NotMetal,
     #[error("MTLDevice newTextureWithDescriptor:iosurface:plane: failed")]
     TextureCreateFailed,
+    #[error("IOSurface bytesPerRow {actual} is smaller than required {minimum}")]
+    InvalidRowStride { actual: usize, minimum: usize },
+    #[error("IOSurface bytesPerRow {0} is not aligned to 16 bytes")]
+    UnalignedRowStride(usize),
+}
+
+fn validate_iosurface_row_stride(
+    bytes_per_row: usize,
+    width: u32,
+) -> Result<(), PresentIosurfaceError> {
+    let minimum_bytes_per_row = (width as usize).saturating_mul(4);
+    if bytes_per_row < minimum_bytes_per_row {
+        return Err(PresentIosurfaceError::InvalidRowStride {
+            actual: bytes_per_row,
+            minimum: minimum_bytes_per_row,
+        });
+    }
+    if !bytes_per_row.is_multiple_of(16) {
+        return Err(PresentIosurfaceError::UnalignedRowStride(bytes_per_row));
+    }
+    Ok(())
 }
 
 /// Import `iosurface` (IOSurfaceRef) into a wgpu texture on Bevy's MTLDevice.
@@ -53,6 +74,8 @@ pub fn import_iosurface_texture(
 
     // SAFETY: pointer from Swift is a live IOSurfaceRef (CFType).
     let surface = unsafe { &*iosurface.cast::<IOSurfaceRef>() };
+    let bytes_per_row = surface.bytes_per_row();
+    validate_iosurface_row_stride(bytes_per_row, width)?;
 
     let desc = MTLTextureDescriptor::new();
     desc.setTextureType(MTLTextureType::Type2D);
@@ -112,7 +135,31 @@ pub fn import_iosurface_texture(
 
 #[cfg(test)]
 mod tests {
-    use super::PresentIosurfaceError;
+    use super::{validate_iosurface_row_stride, PresentIosurfaceError};
+
+    #[test]
+    fn iosurface_stride_accepts_padded_unaligned_width() {
+        assert_eq!(validate_iosurface_row_stride(3424, 854), Ok(()));
+    }
+
+    #[test]
+    fn iosurface_stride_rejects_too_small_row() {
+        assert_eq!(
+            validate_iosurface_row_stride(3408, 854),
+            Err(PresentIosurfaceError::InvalidRowStride {
+                actual: 3408,
+                minimum: 3416,
+            })
+        );
+    }
+
+    #[test]
+    fn iosurface_stride_rejects_unaligned_row() {
+        assert_eq!(
+            validate_iosurface_row_stride(3416, 854),
+            Err(PresentIosurfaceError::UnalignedRowStride(3416))
+        );
+    }
 
     #[test]
     fn present_iosurface_error_display_matches_legacy_strings() {
@@ -127,6 +174,18 @@ mod tests {
         assert_eq!(
             PresentIosurfaceError::TextureCreateFailed.to_string(),
             "MTLDevice newTextureWithDescriptor:iosurface:plane: failed"
+        );
+        assert_eq!(
+            PresentIosurfaceError::InvalidRowStride {
+                actual: 3408,
+                minimum: 3416
+            }
+            .to_string(),
+            "IOSurface bytesPerRow 3408 is smaller than required 3416"
+        );
+        assert_eq!(
+            PresentIosurfaceError::UnalignedRowStride(3416).to_string(),
+            "IOSurface bytesPerRow 3416 is not aligned to 16 bytes"
         );
     }
 }
