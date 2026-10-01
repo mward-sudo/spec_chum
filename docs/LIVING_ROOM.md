@@ -260,7 +260,8 @@ For visual review in SpecChumMac, enable Living Room and select **Scene: New**.
 | **2** | Linear `CALayer` filters + aspect-matched present (2560 cap) |
 | **3** | Display delta via `sc_room_set_frame_delta_seconds`; zoom/skip = cheap mutations |
 
-Phase 4 (`CAMetalLayer` drawable) and Phase 5 (pipelined Bevy) remain optional follow-ups.
+Phase 4 (`CAMetalLayer` drawable) remains optional. Phase 5 (pipelined Bevy) was
+evaluated and rejected for the current Mac embed; see the results below.
 Refs [#146](https://github.com/mward-sudo/spec_chum/issues/146).
 
 ### Automated test coverage gap
@@ -382,7 +383,7 @@ Do **not** set `presentsWithTransaction` without measuring — it helps some Swi
   (`sc_room_set_frame_delta_seconds`) — not Spectrum 1/50
 - Present: GPU blit into IOSurface (`present.rs` / `present_metal.rs`); `PollType::Poll` when presenting
 
-**Pipelined rendering (Phase 5, optional):** Bevy moves the render schedule to a dedicated
+**Rejected Phase 5 evaluation:** Bevy moves the render schedule to a dedicated
 thread so frame N render overlaps frame N+1 sim. Attractive now that DisplayLink owns pacing,
 but risks:
 
@@ -411,7 +412,7 @@ material performance gain.
 | **2 — Present filter + res** | **Done** | CALayer **linear** filters; aspect-matched present up to **2560** long-edge (default **1920×1080**). | Resize recreate cost on debounced window changes |
 | **3 — CRT look / Δt** | **Done** | Display delta for Bevy `Time`; zoom/skip without forced tick; phosphor nearest / present linear. | Over-softening if phosphor sampler flipped to linear |
 | **4 — Drawable path (optional)** | Open | `CAMetalLayer` + DisplayLink; blit or texture into drawable; retire IOSurface if redundant. | wgpu-hal / MTLDevice identity; drawable timeout under SwiftUI load |
-| **5 — Pipelined spike (optional)** | Open | Re-enable `PipelinedRenderingPlugin` behind env; soak test zoom + tape load. | Deadlock / frame pacing regression — ship only if green |
+| **5 — Pipelined spike** | Rejected | No material headless performance gain; native embed rendered black without render-completion coordination. Revisit only with a host completion handoff and measured benefit. | Async renderer and IOSurface presentation are not synchronized |
 
 ### What NOT to do
 
