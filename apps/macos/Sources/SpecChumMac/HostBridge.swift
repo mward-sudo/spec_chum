@@ -200,36 +200,36 @@ final class HostBridge: ObservableObject {
     }
     /// Weak flat-mode present view — refreshed directly from `runFrame` (no @Published churn).
     weak var spectrumPresentView: SpectrumNSView?
-    /// Bevy/room FFI handle — only touched on `livingRoomQueue` (see header thread affinity).
+    /// Bevy/room FFI handle — only touched on `livingRoomThread` (see header thread affinity).
     var livingRoomHandle: UnsafeMutableRawPointer?
     /// Main-thread mirror: room created and ready for enqueue.
     var livingRoomReady = false
     /// Main-thread: create already queued (avoid sync waits / duplicate creates).
     var livingRoomCreateInFlight = false
-    /// Serial queue for all `sc_room_*` on the embed handle (Bevy must not block AppKit).
-    let livingRoomQueue = DispatchQueue(label: "dev.specchum.living-room", qos: .userInteractive)
-    /// Coalesce: at most one set_fb+tick in flight on the room queue.
+    /// Pinned OS thread for all `sc_room_*` calls; Bevy must not block AppKit.
+    let livingRoomThread = LivingRoomThread()
+    /// Coalesce: at most one set_fb+tick in flight on the room thread.
     var roomTickInFlight = false
-    /// When `roomTickInFlight` was set; used to recover if Bevy/GPU stalls on the room queue.
+    /// When `roomTickInFlight` was set; used to recover if Bevy/GPU stalls on the room thread.
     var roomTickStartedUptime: TimeInterval = 0
     /// Bumped on watchdog recovery / teardown so stale queue completions cannot clear a newer gate.
     var roomTickGeneration: UInt64 = 0
     static let roomTickStuckSeconds: TimeInterval = 3.0
     let roomTickLock = NSLock()
-    /// Coalesce stepped IOSurface rebinds on the room queue (full resize was freezing the UI).
+    /// Coalesce stepped IOSurface rebinds on the room thread (full resize was freezing the UI).
     var roomPresentBindInFlight = false
-    /// When `roomPresentBindInFlight` was set; used to recover if the room queue stalls.
+    /// When `roomPresentBindInFlight` was set; used to recover if the room thread stalls.
     var roomPresentBindStartedUptime: TimeInterval = 0
     /// Bumped on watchdog recovery / teardown so stale bind completions cannot replay pending work.
     var roomPresentBindGeneration: UInt64 = 0
     var roomPresentBindPending: (surface: IOSurface, width: UInt32, height: UInt32)?
-    /// Latest Spectrum RGBA published on main; consumed on room queue (DisplayLink).
+    /// Latest Spectrum RGBA published on main; consumed on room thread (DisplayLink).
     let roomFbLock = NSLock()
     var roomFbPublished: [UInt8] = []
     var roomFbGeneration: UInt64 = 0
-    /// Only touched on `livingRoomQueue`.
+    /// Only touched on `livingRoomThread`.
     var roomFbLastUploadedGen: UInt64 = 0
-    /// Strong IOSurface retain for the async bind + room texture lifetime (queue only).
+    /// Strong IOSurface retain for the async bind + room texture lifetime (room thread only).
     var livingRoomBoundSurface: IOSurface?
     /// Weak present view — refresh CALayer.contents on main after each room tick (no @Published).
     weak var livingRoomPresentView: LivingRoomNSView?
@@ -239,9 +239,9 @@ final class HostBridge: ObservableObject {
     /// Authoritative present size (stepped) — main thread only (#300).
     var roomPresentWidth: UInt32 = 1920
     var roomPresentHeight: UInt32 = 1080
-    /// Last size applied on `livingRoomQueue` (resize decisions); queue only.
-    var roomQueuePresentWidth: UInt32 = 1920
-    var roomQueuePresentHeight: UInt32 = 1080
+    /// Last size applied on `livingRoomThread` (resize decisions); room thread only.
+    var roomThreadPresentWidth: UInt32 = 1920
+    var roomThreadPresentHeight: UInt32 = 1080
     /// 50 Hz host clock (owns Spectrum pacing; SwiftUI only presents).
     var frameTimer: DispatchSourceTimer?
     @Published var debugPc: UInt16 = 0

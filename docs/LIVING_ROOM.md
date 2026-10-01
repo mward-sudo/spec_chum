@@ -370,7 +370,7 @@ Do **not** set `presentsWithTransaction` without measuring — it helps some Swi
 **Implemented:**
 
 - Keys: `LivingRoomNSView` → `host_api` on **main** (not gated on Bevy).
-- Zoom / skip intro: `livingRoomQueue.async` → `sc_room_nudge_zoom` / `sc_room_skip_intro` only — **no forced `sc_room_tick`**; DisplayLink presents the new pose.
+- Zoom / skip intro: `livingRoomThread.async` → `sc_room_nudge_zoom` / `sc_room_skip_intro` only — **no forced `sc_room_tick`**; DisplayLink presents the new pose.
 - Coalesce: at most one room tick in flight; “latest wins” for FB publish; never unbounded tick queues.
 - On Bevy overrun: drop/coalesce **room** frames; never skip or delay Spectrum `sc_run_frame`.
 
@@ -383,25 +383,29 @@ Do **not** set `presentsWithTransaction` without measuring — it helps some Swi
   (`sc_room_set_frame_delta_seconds`) — not Spectrum 1/50
 - Present: GPU blit into IOSurface (`present.rs` / `present_metal.rs`); `PollType::Poll` when presenting
 
-**Rejected Phase 5 evaluation:** Bevy moves the render schedule to a dedicated
-thread so frame N render overlaps frame N+1 sim. Attractive now that DisplayLink owns pacing,
-but risks:
+**Phase 5 evaluation:** Bevy moves the render schedule to a dedicated thread so
+frame N render overlaps frame N+1 sim. A five-minute headless A/B soak completed
+18,000 frames per mode, with changing Spectrum framebuffers and camera zoom.
+The baseline averaged 9.15 ms per tick (p95 12.09 ms); pipelined rendering
+averaged 8.96 ms (p95 12.40 ms). Both met the 60 Hz budget and missed 120 Hz,
+with no meaningful improvement.
+
+The first native pipeline run rendered black because a serial DispatchQueue did
+not keep one OS thread across jobs. Bevy's `MainThreadExecutor` is thread-local;
+the render worker waits for main-world work when `SubApps::update` runs from a
+different OS thread than the one that created the room. A dedicated
+`LivingRoomThread` fixes that affinity, and a sustained native run rendered the
+Spectrum boot screen with `roomHz=137`, `specHz=51`, and `present=1`. Keep
+pipelined rendering disabled by default pending a separate performance case;
+revisit it only with measured benefit and explicit render-completion ownership.
+
+Other lifecycle risks to test before enabling it:
 
 - Manual `SubApps::update` + extract channels assume Bevy’s runner lifecycle; headless + force-load staticlib may deadlock or double-own the render thread.
 - Present blit must stay inside Bevy’s ordered submit (already true); out-of-band Metal present races.
 
-**Recommendation:** keep pipelined rendering disabled in the headless embed.
-A five-minute headless A/B soak completed 18,000 frames per mode, with changing
-Spectrum framebuffers and camera zoom. The baseline averaged 9.15 ms per tick
-(p95 12.09 ms); pipelined rendering averaged 8.96 ms (p95 12.40 ms). Both met
-the 60 Hz budget and missed 120 Hz, with no meaningful improvement. In the
-native SpecChumMac host the pipeline-enabled build displayed a black frame after
-startup. The pipeline moves Bevy's render schedule to its own thread, while the
-Mac host refreshes the IOSurface as soon as `sc_room_tick` returns; that API has
-no render-completion handoff for the asynchronous path. The host can therefore
-present the surface before the frame is ready. The experiment was removed;
-revisit only with an explicit render-completion handoff and evidence of a
-material performance gain.
+The pinned thread is now used for all room FFI calls, even while pipelining is
+disabled, so the same host remains safe if the experiment is repeated.
 
 ### Phases
 
@@ -412,7 +416,7 @@ material performance gain.
 | **2 — Present filter + res** | **Done** | CALayer **linear** filters; aspect-matched present up to **2560** long-edge (default **1920×1080**). | Resize recreate cost on debounced window changes |
 | **3 — CRT look / Δt** | **Done** | Display delta for Bevy `Time`; zoom/skip without forced tick; phosphor nearest / present linear. | Over-softening if phosphor sampler flipped to linear |
 | **4 — Drawable path (optional)** | Open | `CAMetalLayer` + DisplayLink; blit or texture into drawable; retire IOSurface if redundant. | wgpu-hal / MTLDevice identity; drawable timeout under SwiftUI load |
-| **5 — Pipelined spike** | Rejected | No material headless performance gain; native embed rendered black without render-completion coordination. Revisit only with a host completion handoff and measured benefit. | Async renderer and IOSurface presentation are not synchronized |
+| **5 — Pipelined spike** | Deferred | No material headless performance gain. The initial black screen was Bevy main-executor thread affinity and is fixed by the pinned host thread; native rendering now succeeds. Keep disabled pending measured benefit and explicit frame ownership. | Async renderer and IOSurface presentation still need lifecycle and completion validation |
 
 ### What NOT to do
 
@@ -422,7 +426,7 @@ material performance gain.
 - Bind Bevy render size 1:1 to Retina backing without a budget (create/resize stalls).
 - Resurrect living_room `cdylib` next to `host_api`.
 - Use `@Published displayTick` spam for room present.
-- Block main on `livingRoomQueue.sync` except create/destroy/bind.
+- Block main on `livingRoomThread.sync` except create/destroy/bind.
 - Tie Bevy animation time permanently to ManualDuration 1/50 once display-paced.
 
 ### Acceptance criteria (user goals)
@@ -614,7 +618,7 @@ if a GPU trace shows Bevy overhead **after** lightmaps and tier-2 wins land.
 | Item | Notes |
 | --- | --- |
 | **MetalFX spatial upscaling (#462)** | Deferred. A minimal native probe reproduced and isolated the prototype crash: Metal requires IOSurface texture `bytesPerRow` alignment to 16 bytes. An 854-pixel BGRA surface requested at 3416 bytes aborted; explicitly allocating 3424 bytes imported successfully. The native IOSurface allocator now pads rows to 16 bytes. The larger scaler prototype remains reverted until distinct render/input/output surfaces use completion-gated rotation and sustained frame-integrity, visual-parity, and net-performance checks pass. |
-| **Pipelined rendering spike** | Rejected for now: no material headless perf gain and native SpecChumMac rendered black. Revisit only with a host-path fix and a measurable benefit. |
+| **Pipelined rendering spike** | Deferred: thread affinity fixed the native black screen, but headless A/B showed no material perf gain. Keep disabled pending a measured benefit and completion/lifecycle validation. |
 | **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. SpecChumMac temporary Current/New A/B toggle documents verification until this lands. Opt-in **Skein** (`--features skein`) helps tag Bevy markers / lights from Blender while lightmaps land — see [Scene editing with Skein](#scene-editing-with-skein-opt-in-standalone-only). |
 | **Halation in CRT material** | Move main glow from separate bloom pass into phosphor shader (tier-2 structural). |
 
