@@ -4,7 +4,6 @@ use bevy::app::SubApps;
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
-use bevy::render::pipelined_rendering::PipelinedRenderingPlugin;
 use bevy::render::renderer::RenderDevice;
 use bevy::render::{
     render_resource::{Extent3d, PollType, TextureDimension, TextureFormat, TextureUsages},
@@ -79,7 +78,6 @@ impl HeadlessRoom {
     pub fn try_new(width: u32, height: u32) -> Result<Self, HeadlessRoomError> {
         let width = width.max(64);
         let height = height.max(64);
-
         crate::verify_polyhaven_assets(&crate::resolve_asset_root())
             .map_err(HeadlessRoomError::MissingAssets)?;
 
@@ -101,7 +99,7 @@ impl HeadlessRoom {
                 .set(render_plugin)
                 .set(asset_plugin())
                 .disable::<WinitPlugin>()
-                .disable::<PipelinedRenderingPlugin>(),
+                .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>(),
         )
         .insert_resource(LatestRoomFrame::new(width, height))
         .insert_resource(HeadlessSize { width, height })

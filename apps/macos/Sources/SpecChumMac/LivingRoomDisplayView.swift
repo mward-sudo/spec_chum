@@ -257,7 +257,8 @@ final class LivingRoomNSView: NSView {
 
     private static func makeIOSurface(width: Int, height: Int) -> IOSurface? {
         let bytesPerElement = 4
-        let bytesPerRow = width * bytesPerElement
+        // Metal requires IOSurface-backed texture row bytes to be 16-byte aligned.
+        let bytesPerRow = (width * bytesPerElement + 15) & ~15
         let props: [IOSurfacePropertyKey: Any] = [
             .width: width,
             .height: height,

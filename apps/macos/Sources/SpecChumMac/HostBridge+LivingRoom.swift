@@ -6,12 +6,12 @@ import UniformTypeIdentifiers
 import CSpecChumHost
 
 extension HostBridge {
-    /// Temporary #149 A/B: push Current/New into the Bevy room (room queue).
+    /// Temporary #149 A/B: push Current/New into the Bevy room (room thread).
     /// Remove with the SpecChumMac toolbar toggle when lightmaps ship.
     func applyLivingRoomSceneVariant() {
         guard livingRoomReady else { return }
         let variant: UInt32 = livingRoomSceneNew ? 1 : 0
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             guard let self, let room = self.livingRoomHandle else { return }
             let rc = sc_room_set_scene_variant(room, variant)
             DispatchQueue.main.async {
@@ -34,7 +34,7 @@ extension HostBridge {
 
     func skipLivingRoomIntro() {
         guard livingRoomMode, livingRoomReady else { return }
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             guard let self, let room = self.livingRoomHandle else { return }
             let rc = sc_room_skip_intro(room)
             // Pose applies on next DisplayLink tick — no forced Bevy frame here.
@@ -62,15 +62,15 @@ extension HostBridge {
         // One step max per burst — discard remainder so leftover pixels don't re-trigger.
         scrollZoomAccum = 0
         InputLatencyProbe.noteScroll(steps: steps)
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             guard let self, let room = self.livingRoomHandle else { return }
             _ = sc_room_nudge_zoom(room, steps)
             // Pose eases on DisplayLink ticks — no forced sc_room_tick here.
         }
     }
 
-    /// Bind a shared IOSurface for zero-copy present (room queue, never blocks AppKit main).
-    /// Captures `surface` strongly until the bind runs; the room queue also retains it
+    /// Bind a shared IOSurface for zero-copy present (room thread, never blocks AppKit main).
+    /// Captures `surface` strongly until the bind runs; the room thread also retains it
     /// for the texture lifetime (resize must not free the surface mid-bind).
     func bindLivingRoomPresent(surface: IOSurface, width: UInt32, height: UInt32) {
         ensureLivingRoom()
@@ -103,7 +103,7 @@ extension HostBridge {
         )
     }
 
-    /// Must run on `livingRoomQueue` only via `enqueueLivingRoomPresentBind`.
+    /// Must run on `livingRoomThread` only via `enqueueLivingRoomPresentBind`.
     /// Returns whether the bind applied; main updates `roomPresentWidth`/`Height` on success.
     @discardableResult
     func performLivingRoomPresentBind(surface: IOSurface, width: UInt32, height: UInt32) -> Bool {
@@ -111,13 +111,13 @@ extension HostBridge {
         livingRoomBoundSurface = surface
         let ptr = Unmanaged.passUnretained(surface).toOpaque()
         var bindError: String?
-        if width != roomQueuePresentWidth || height != roomQueuePresentHeight {
+        if width != roomThreadPresentWidth || height != roomThreadPresentHeight {
             if sc_room_resize(room, width, height) != 0 {
                 bindError = HostBridge.takeRoomLastError() ?? "Living room resize failed"
             } else {
                 // Resizing the initial surface must not act like a user skip.
-                roomQueuePresentWidth = width
-                roomQueuePresentHeight = height
+                roomThreadPresentWidth = width
+                roomThreadPresentHeight = height
             }
         }
         if bindError == nil, sc_room_set_present_iosurface(room, ptr, width, height) != 0 {
@@ -141,7 +141,7 @@ extension HostBridge {
         generation: UInt64
     ) {
         let retained = surface
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             guard let self else { return }
             let ok = self.performLivingRoomPresentBind(surface: retained, width: width, height: height)
             DispatchQueue.main.async { [weak self] in
@@ -170,7 +170,7 @@ extension HostBridge {
     }
 
     func clearLivingRoomPresent() {
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             guard let self else { return }
             self.livingRoomBoundSurface = nil
             guard let room = self.livingRoomHandle else { return }
@@ -178,15 +178,15 @@ extension HostBridge {
         }
     }
 
-    /// Non-blocking: create Bevy on `livingRoomQueue` and mark ready on main.
+    /// Non-blocking: create Bevy on `livingRoomThread` and mark ready on main.
     func ensureLivingRoom() {
         if livingRoomReady || livingRoomCreateInFlight { return }
         livingRoomCreateInFlight = true
         let createW = roomPresentWidth
         let createH = roomPresentHeight
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             guard let self else { return }
-            let createError = self.createLivingRoomOnQueue(
+            let createError = self.createLivingRoomOnThread(
                 warmupTicks: 0,
                 width: createW,
                 height: createH
@@ -229,9 +229,9 @@ extension HostBridge {
         livingRoomCreateInFlight = true
         let createW = roomPresentWidth
         let createH = roomPresentHeight
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             guard let self else { return }
-            let createError = self.createLivingRoomOnQueue(
+            let createError = self.createLivingRoomOnThread(
                 warmupTicks: 4,
                 width: createW,
                 height: createH
@@ -257,16 +257,16 @@ extension HostBridge {
         }
     }
 
-    /// Must run on `livingRoomQueue`. Creates Bevy and leaves its opening camera move active.
-    func createLivingRoomOnQueue(warmupTicks: Int, width: UInt32, height: UInt32) -> String? {
+    /// Must run on `livingRoomThread`. Creates Bevy and leaves its opening camera move active.
+    func createLivingRoomOnThread(warmupTicks: Int, width: UInt32, height: UInt32) -> String? {
         guard livingRoomHandle == nil else { return nil }
         livingRoomHandle = sc_room_create(width, height)
         guard livingRoomHandle != nil else {
             return HostBridge.takeRoomLastError()
                 ?? "Living room renderer failed — run cargo build -p living_room --release --no-default-features"
         }
-        roomQueuePresentWidth = width
-        roomQueuePresentHeight = height
+        roomThreadPresentWidth = width
+        roomThreadPresentHeight = height
         roomFbLastUploadedGen = 0
         if warmupTicks > 0, let room = livingRoomHandle {
             for _ in 0..<warmupTicks {
@@ -295,25 +295,31 @@ extension HostBridge {
         roomFbGeneration = 0
         roomFbLock.unlock()
         roomPerfLastSnap = nil
-        let teardown = { [weak self] in
-            guard let self else { return }
-            self.roomFbLastUploadedGen = 0
-            self.livingRoomBoundSurface = nil
-            self.roomQueuePresentWidth = 1920
-            self.roomQueuePresentHeight = 1080
-            if let livingRoomHandle = self.livingRoomHandle {
-                _ = sc_room_set_present_iosurface(livingRoomHandle, nil, 0, 0)
-                sc_room_destroy(livingRoomHandle)
-            }
-            self.livingRoomHandle = nil
-        }
         if syncTeardown {
-            livingRoomQueue.sync(execute: teardown)
+            let bridge = Unmanaged.passUnretained(self)
+            livingRoomThread.sync {
+                bridge.takeUnretainedValue().teardownLivingRoomOnThread()
+            }
         } else {
-            livingRoomQueue.async(execute: teardown)
+            livingRoomThread.async { [weak self] in
+                self?.teardownLivingRoomOnThread()
+            }
         }
         roomPresentWidth = 1920
         roomPresentHeight = 1080
+    }
+
+    /// Runs after all earlier room operations on the same OS thread that created Bevy.
+    private func teardownLivingRoomOnThread() {
+        roomFbLastUploadedGen = 0
+        livingRoomBoundSurface = nil
+        roomThreadPresentWidth = 1920
+        roomThreadPresentHeight = 1080
+        if let livingRoomHandle {
+            _ = sc_room_set_present_iosurface(livingRoomHandle, nil, 0, 0)
+            sc_room_destroy(livingRoomHandle)
+        }
+        livingRoomHandle = nil
     }
 
     /// Main: copy latest Spectrum RGBA into the publish slot (DisplayLink consumes).
@@ -361,7 +367,7 @@ extension HostBridge {
             return
         }
         let dt = Float(max(deltaSeconds, 1.0 / 240.0))
-        livingRoomQueue.async { [weak self] in
+        livingRoomThread.async { [weak self] in
             defer { self?.finishRoomTick(generation: tickGen) }
             guard let self,
                   self.shouldRunRoomTick(generation: tickGen),
@@ -423,7 +429,7 @@ extension HostBridge {
         roomTickStartedUptime = 0
     }
 
-    /// If Bevy/GPU blocked the room queue too long, drop the coalesce gate so DisplayLink can resume.
+    /// If Bevy/GPU blocked the room thread too long, drop the coalesce gate so DisplayLink can resume.
     func recoverStuckRoomTickIfNeeded() {
         roomTickLock.lock()
         let stuck = roomTickInFlight
