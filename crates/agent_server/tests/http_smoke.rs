@@ -350,7 +350,7 @@ async fn agent_api_port_watch_crud() {
         .await
         .expect("port watch list body");
     let watches: Vec<serde_json::Value> = serde_json::from_slice(&body).expect("port watch json");
-    assert!(watches.is_empty());
+    assert_eq!(watches.len(), 0);
 
     let add = app
         .clone()
@@ -451,7 +451,7 @@ async fn agent_api_port_watch_crud() {
         .expect("port watch list body 3");
     let watches3: Vec<serde_json::Value> =
         serde_json::from_slice(&body3).expect("port watch json 3");
-    assert!(watches3.is_empty());
+    assert_eq!(watches3.len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -280,7 +280,7 @@ mod tests {
     fn shift_modifier_is_caps_unless_suppressed() {
         let m = mods_shift();
         assert_eq!(modifier_keys(m, false), vec![CAPS]);
-        assert!(modifier_keys(m, true).is_empty());
+        assert_eq!(modifier_keys(m, true).len(), 0);
     }
 
     #[test]
@@ -305,7 +305,10 @@ mod tests {
             let chord = chord_for(key, shifted).unwrap();
             assert_eq!(chord.keys, vec![SYM, digit], "key {key:?}");
             assert!(suppresses_modifier_caps(key, true), "key {key:?}");
-            assert!(modifier_keys(shifted, suppresses_modifier_caps(key, true)).is_empty());
+            assert_eq!(
+                modifier_keys(shifted, suppresses_modifier_caps(key, true)).len(),
+                0
+            );
         }
     }
 }
