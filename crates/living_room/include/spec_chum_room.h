@@ -39,8 +39,12 @@ uint32_t sc_room_scene_variant(void *handle);
  */
 void sc_room_set_frame_delta_seconds(void *handle, float dt_seconds);
 int sc_room_tick(void *handle);
+/** Present one CAMetalLayer drawable on the same Metal queue; drawable stays retained through return. */
+int sc_room_tick_drawable(void *handle, void *drawable, uint32_t width, uint32_t height);
 /** Recreate the offscreen (and present) target. Returns 0 on success. */
 int sc_room_resize(void *handle, uint32_t width, uint32_t height);
+/** Use a smaller Bevy camera image while keeping the given host present size. */
+int sc_room_set_render_scale(void *handle, float scale);
 /**
  * macOS: bind an IOSurface for zero-copy present (GPU blit each tick).
  * `iosurface` is CFTypeRef / IOSurfaceRef retained by the caller for the
@@ -70,6 +74,8 @@ typedef struct ScRoomPerfSnapshot {
     uint64_t max_tick_us;
     uint32_t width;
     uint32_t height;
+    uint32_t present_width;
+    uint32_t present_height;
     uint32_t zoom_preset;
     uint8_t has_present;
     uint8_t thread_hint;

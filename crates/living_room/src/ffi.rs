@@ -242,6 +242,36 @@ pub extern "C" fn sc_room_tick(handle: *mut c_void) -> c_int {
     })
 }
 
+/// Pump one frame into a host-retained CAMetalDrawable and present it on Bevy's Metal queue.
+///
+/// `drawable` must remain alive until this call returns. Use this only when the room was
+/// configured with a MetalFX render scale; otherwise use `sc_room_tick` and IOSurface.
+#[cfg(target_os = "macos")]
+#[no_mangle]
+pub extern "C" fn sc_room_tick_drawable(
+    handle: *mut c_void,
+    drawable: *mut c_void,
+    width: c_uint,
+    height: c_uint,
+) -> c_int {
+    catch_int(|| {
+        clear_last_error();
+        let Some(h) = room_mut(handle) else {
+            set_last_error("null handle");
+            return -1;
+        };
+        // SAFETY: the C ABI contract requires Swift to keep its CAMetalDrawable alive for
+        // this synchronous call. `present_to_drawable` encodes and presents before return.
+        match unsafe { h.room.tick_with_drawable(drawable, width, height) } {
+            Ok(()) => 0,
+            Err(error) => {
+                set_last_error(error.to_string());
+                -1
+            }
+        }
+    })
+}
+
 #[no_mangle]
 pub extern "C" fn sc_room_resize(handle: *mut c_void, width: c_uint, height: c_uint) -> c_int {
     catch_int(|| {
@@ -251,6 +281,32 @@ pub extern "C" fn sc_room_resize(handle: *mut c_void, width: c_uint, height: c_u
             return -1;
         };
         match h.room.resize(width, height) {
+            Ok(()) => {
+                let bytes = (h.room.width() as usize)
+                    .saturating_mul(h.room.height() as usize)
+                    .saturating_mul(4);
+                h.frame.resize(bytes, 0);
+                0
+            }
+            Err(e) => {
+                set_last_error(e.to_string());
+                -1
+            }
+        }
+    })
+}
+
+/// Set the offscreen camera render scale relative to the native present size.
+/// Values below 1.0 require the optional macOS MetalFX present path.
+#[no_mangle]
+pub extern "C" fn sc_room_set_render_scale(handle: *mut c_void, scale: f32) -> c_int {
+    catch_int(|| {
+        clear_last_error();
+        let Some(h) = room_mut(handle) else {
+            set_last_error("null handle");
+            return -1;
+        };
+        match h.room.set_render_scale(scale) {
             Ok(()) => {
                 let bytes = (h.room.width() as usize)
                     .saturating_mul(h.room.height() as usize)
@@ -324,6 +380,8 @@ pub struct ScRoomPerfSnapshot {
     pub max_tick_us: u64,
     pub width: u32,
     pub height: u32,
+    pub present_width: u32,
+    pub present_height: u32,
     pub zoom_preset: u32,
     pub has_present: u8,
     pub thread_hint: u8,
@@ -363,6 +421,8 @@ pub extern "C" fn sc_room_perf_snapshot(
                 max_tick_us: p.max_tick_us,
                 width: h.room.width(),
                 height: h.room.height(),
+                present_width: h.room.present_width(),
+                present_height: h.room.present_height(),
                 zoom_preset: u32::from(h.room.zoom_preset()),
                 has_present: u8::from(h.room.has_present_target()),
                 thread_hint: crate::perf::tick_thread_hint() as u8,
