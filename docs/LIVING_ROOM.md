@@ -260,7 +260,8 @@ For visual review in SpecChumMac, enable Living Room and select **Scene: New**.
 | **2** | Linear `CALayer` filters + aspect-matched present (2560 cap) |
 | **3** | Display delta via `sc_room_set_frame_delta_seconds`; zoom/skip = cheap mutations |
 
-Phase 4 (`CAMetalLayer` drawable) and Phase 5 (pipelined Bevy) remain optional follow-ups.
+Phase 4 (`CAMetalLayer` drawable) remains optional. Phase 5 (pipelined Bevy) was
+evaluated and rejected for the current Mac embed; see the results below.
 Refs [#146](https://github.com/mward-sudo/spec_chum/issues/146).
 
 ### Automated test coverage gap
@@ -382,16 +383,25 @@ Do **not** set `presentsWithTransaction` without measuring — it helps some Swi
   (`sc_room_set_frame_delta_seconds`) — not Spectrum 1/50
 - Present: GPU blit into IOSurface (`present.rs` / `present_metal.rs`); `PollType::Poll` when presenting
 
-**Pipelined rendering (Phase 5, optional):** Bevy moves the render schedule to a dedicated
+**Rejected Phase 5 evaluation:** Bevy moves the render schedule to a dedicated
 thread so frame N render overlaps frame N+1 sim. Attractive now that DisplayLink owns pacing,
 but risks:
 
 - Manual `SubApps::update` + extract channels assume Bevy’s runner lifecycle; headless + force-load staticlib may deadlock or double-own the render thread.
 - Present blit must stay inside Bevy’s ordered submit (already true); out-of-band Metal present races.
 
-**Recommendation:** keep pipelined **disabled**. A future spike may add
-`SPEC_CHUM_ROOM_PIPELINE=1` (not implemented yet). Display-rate pumping of
-non-pipelined `update()` already unlocks 60/120 Hz present.
+**Recommendation:** keep pipelined rendering disabled in the headless embed.
+A five-minute headless A/B soak completed 18,000 frames per mode, with changing
+Spectrum framebuffers and camera zoom. The baseline averaged 9.15 ms per tick
+(p95 12.09 ms); pipelined rendering averaged 8.96 ms (p95 12.40 ms). Both met
+the 60 Hz budget and missed 120 Hz, with no meaningful improvement. In the
+native SpecChumMac host the pipeline-enabled build displayed a black frame after
+startup. The pipeline moves Bevy's render schedule to its own thread, while the
+Mac host refreshes the IOSurface as soon as `sc_room_tick` returns; that API has
+no render-completion handoff for the asynchronous path. The host can therefore
+present the surface before the frame is ready. The experiment was removed;
+revisit only with an explicit render-completion handoff and evidence of a
+material performance gain.
 
 ### Phases
 
@@ -402,7 +412,7 @@ non-pipelined `update()` already unlocks 60/120 Hz present.
 | **2 — Present filter + res** | **Done** | CALayer **linear** filters; aspect-matched present up to **2560** long-edge (default **1920×1080**). | Resize recreate cost on debounced window changes |
 | **3 — CRT look / Δt** | **Done** | Display delta for Bevy `Time`; zoom/skip without forced tick; phosphor nearest / present linear. | Over-softening if phosphor sampler flipped to linear |
 | **4 — Drawable path (optional)** | Open | `CAMetalLayer` + DisplayLink; blit or texture into drawable; retire IOSurface if redundant. | wgpu-hal / MTLDevice identity; drawable timeout under SwiftUI load |
-| **5 — Pipelined spike (optional)** | Open | Re-enable `PipelinedRenderingPlugin` behind env; soak test zoom + tape load. | Deadlock / frame pacing regression — ship only if green |
+| **5 — Pipelined spike** | Rejected | No material headless performance gain; native embed rendered black without render-completion coordination. Revisit only with a host completion handoff and measured benefit. | Async renderer and IOSurface presentation are not synchronized |
 
 ### What NOT to do
 
@@ -535,7 +545,6 @@ Runtime A/B via `SPEC_CHUM_ROOM_*` (implemented in `crates/living_room/src/quali
 | `SPEC_CHUM_ROOM_SKEIN_SCENE` | auto | Standalone `--features skein` only: Bevy asset path for the **room** glTF (default `skein/living_room_edit.gltf#Scene0` if file exists → replaces procedural `room.rs`). `off` forces procedural. |
 | `SPEC_CHUM_ROOM_PERF` | off | Rolling tick µs to stderr + Swift HUD fields. |
 | `SPEC_CHUM_ROOM_PERF_SOFT` | off | `room_perf`: warn instead of fail on budget exceed. |
-| `SPEC_CHUM_ROOM_PIPELINE` | n/a | **Not implemented** — planned spike to re-enable `PipelinedRenderingPlugin` (always disabled today). |
 
 Dial down for matrix runs, e.g.:
 
@@ -605,7 +614,7 @@ if a GPU trace shows Bevy overhead **after** lightmaps and tier-2 wins land.
 | Item | Notes |
 | --- | --- |
 | **MetalFX spatial upscaling** | Render below backing scale, upscale in `present_metal.rs` — future win on Retina. |
-| **Pipelined rendering spike** | Planned only — no `SPEC_CHUM_ROOM_PIPELINE` reader yet; soak before ship. |
+| **Pipelined rendering spike** | Rejected for now: no material headless perf gain and native SpecChumMac rendered black. Revisit only with a host-path fix and a measurable benefit. |
 | **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. SpecChumMac temporary Current/New A/B toggle documents verification until this lands. Opt-in **Skein** (`--features skein`) helps tag Bevy markers / lights from Blender while lightmaps land — see [Scene editing with Skein](#scene-editing-with-skein-opt-in-standalone-only). |
 | **Halation in CRT material** | Move main glow from separate bloom pass into phosphor shader (tier-2 structural). |
 
