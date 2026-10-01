@@ -613,7 +613,7 @@ if a GPU trace shows Bevy overhead **after** lightmaps and tier-2 wins land.
 
 | Item | Notes |
 | --- | --- |
-| **MetalFX spatial upscaling** | Render below backing scale, upscale in `present_metal.rs` — future win on Retina. |
+| **MetalFX spatial upscaling (#462)** | Deferred. A host-side scaler needs a render-completion handoff and safe IOSurface reuse across Bevy/wgpu and Core Animation. The current path exposes no nonblocking completion signal; CPU-waiting after every tick may erase the GPU savings. Keep the stable full-resolution present path until a two-surface prototype measures a net win and passes sustained visual/frame-integrity testing. |
 | **Pipelined rendering spike** | Rejected for now: no material headless perf gain and native SpecChumMac rendered black. Revisit only with a host-path fix and a measurable benefit. |
 | **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. SpecChumMac temporary Current/New A/B toggle documents verification until this lands. Opt-in **Skein** (`--features skein`) helps tag Bevy markers / lights from Blender while lightmaps land — see [Scene editing with Skein](#scene-editing-with-skein-opt-in-standalone-only). |
 | **Halation in CRT material** | Move main glow from separate bloom pass into phosphor shader (tier-2 structural). |
