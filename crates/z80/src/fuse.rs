@@ -523,7 +523,7 @@ fn fuse_smoke_nop() {
     let dir = fixtures_dir();
     let tests = parse_in_file(&dir.join("tests.in"));
     let expected = parse_expected(&dir.join("tests.expected"));
-    assert!(!tests.is_empty());
+    assert_ne!(tests.len(), 0);
     assert_eq!(tests.len(), expected.len());
     let (tin, exp) = tests
         .iter()

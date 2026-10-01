@@ -62,7 +62,21 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLPixelFormat",
     "MTLTypes",
     "MTLResource",
+    "MTLCommandBuffer",
+    "MTLCommandEncoder",
+    "MTLCommandQueue",
+    "MTLBlitCommandEncoder",
+    "MTLDrawable",
     "objc2-io-surface",
+    "std",
+] }
+objc2-metal-fx = { version = "0.3.2", default-features = false, features = [
+    "MTLFXSpatialScaler",
+    "std",
+] }
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
+    "CAMetalLayer",
+    "objc2-metal",
     "std",
 ] }
 objc2-io-surface = { version = "0.3.2", default-features = false, features = [

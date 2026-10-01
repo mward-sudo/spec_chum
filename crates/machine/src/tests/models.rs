@@ -19,7 +19,7 @@ fn ay_frame_audio_nonzero_when_tone_programmed() {
         bus.out_port(0xbffd, 0x38); // tone A only
     }
     let audio = m.run_frame();
-    assert!(!audio.ay_samples.is_empty());
+    assert_ne!(audio.ay_samples.len(), 0);
     let energy: f32 = audio.ay_samples.iter().map(|s| s * s).sum();
     assert!(
         energy > 0.01,

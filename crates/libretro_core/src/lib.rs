@@ -348,7 +348,7 @@ mod tests {
             KeyboardKey::Up,
             KeyboardKey::Tab,
         ]);
-        assert!(synced.matrix.is_empty());
+        assert_eq!(synced.matrix.len(), 0);
         assert_eq!(synced.kempston_mask, 0x1f);
     }
 }

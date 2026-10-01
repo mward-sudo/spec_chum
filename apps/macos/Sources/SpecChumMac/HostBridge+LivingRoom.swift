@@ -178,6 +178,36 @@ extension HostBridge {
         }
     }
 
+    /// Resize the room's logical output before the next CAMetalDrawable tick.
+    func bindLivingRoomDrawableSize(width: UInt32, height: UInt32) {
+        guard livingRoomMode else { return }
+        roomPresentWidth = width
+        roomPresentHeight = height
+        livingRoomThread.async { [weak self] in
+            guard let self, let room = self.livingRoomHandle else { return }
+            guard width != self.roomThreadPresentWidth || height != self.roomThreadPresentHeight else {
+                return
+            }
+            guard sc_room_resize(room, width, height) == 0 else {
+                let error = HostBridge.takeRoomLastError() ?? "Living room drawable resize failed"
+                DispatchQueue.main.async { [weak self] in self?.status = error }
+                return
+            }
+            self.roomThreadPresentWidth = width
+            self.roomThreadPresentHeight = height
+        }
+    }
+
+    /// Restore full-resolution rendering if the CAMetalLayer could not be created by AppKit.
+    func setLivingRoomRenderScale(_ scale: Float) {
+        roomUsesMetalFX = false
+        livingRoomThread.async { [weak self] in
+            guard let self, let room = self.livingRoomHandle else { return }
+            _ = sc_room_set_render_scale(room, scale)
+            self.roomThreadUsesMetalFX = false
+        }
+    }
+
     /// Non-blocking: create Bevy on `livingRoomThread` and mark ready on main.
     func ensureLivingRoom() {
         if livingRoomReady || livingRoomCreateInFlight { return }
@@ -216,6 +246,8 @@ extension HostBridge {
                     self.status = createError
                 }
                 // First bind may have been skipped while create was in flight.
+                self.roomUsesMetalFX = self.roomThreadUsesMetalFX
+                self.livingRoomPresentView?.configureMetalFX(self.roomThreadUsesMetalFX)
                 self.livingRoomPresentView?.syncPresentTargetIfNeeded()
                 // Temporary #149: push A/B selection after create (env / toolbar).
                 self.applyLivingRoomSceneVariant()
@@ -250,6 +282,8 @@ extension HostBridge {
                     self.livingRoomMode = false
                     self.livingRoomReady = false
                 } else if self.livingRoomMode {
+                    self.roomUsesMetalFX = self.roomThreadUsesMetalFX
+                    self.livingRoomPresentView?.configureMetalFX(self.roomThreadUsesMetalFX)
                     self.livingRoomPresentView?.syncPresentTargetIfNeeded()
                     self.applyLivingRoomSceneVariant()
                 }
@@ -264,6 +298,15 @@ extension HostBridge {
         guard livingRoomHandle != nil else {
             return HostBridge.takeRoomLastError()
                 ?? "Living room renderer failed — run cargo build -p living_room --release --no-default-features"
+        }
+        roomThreadUsesMetalFX = false
+        if roomRenderScale < 1.0, let room = livingRoomHandle {
+            if sc_room_set_render_scale(room, roomRenderScale) == 0 {
+                roomThreadUsesMetalFX = true
+            } else {
+                let reason = HostBridge.takeRoomLastError() ?? "MetalFX spatial scaling unavailable"
+                NSLog("MetalFX spatial scaling unavailable; keeping full-resolution present: %@", reason)
+            }
         }
         roomThreadPresentWidth = width
         roomThreadPresentHeight = height
@@ -295,6 +338,7 @@ extension HostBridge {
         roomFbGeneration = 0
         roomFbLock.unlock()
         roomPerfLastSnap = nil
+        roomUsesMetalFX = false
         if syncTeardown {
             let bridge = Unmanaged.passUnretained(self)
             livingRoomThread.sync {
@@ -315,6 +359,7 @@ extension HostBridge {
         livingRoomBoundSurface = nil
         roomThreadPresentWidth = 1920
         roomThreadPresentHeight = 1080
+        roomThreadUsesMetalFX = false
         if let livingRoomHandle {
             _ = sc_room_set_present_iosurface(livingRoomHandle, nil, 0, 0)
             sc_room_destroy(livingRoomHandle)
@@ -366,6 +411,14 @@ extension HostBridge {
             finishRoomTick(generation: tickGen)
             return
         }
+        let usesMetalFX = roomUsesMetalFX
+        let drawable = usesMetalFX ? livingRoomPresentView?.nextMetalDrawable() : nil
+        if usesMetalFX, drawable == nil {
+            finishRoomTick(generation: tickGen)
+            return
+        }
+        let presentWidth = roomPresentWidth
+        let presentHeight = roomPresentHeight
         let dt = Float(max(deltaSeconds, 1.0 / 240.0))
         livingRoomThread.async { [weak self] in
             defer { self?.finishRoomTick(generation: tickGen) }
@@ -395,7 +448,25 @@ extension HostBridge {
 
             let t0 = ProcessInfo.processInfo.systemUptime
             InputLatencyProbe.noteRoomTickStarted()
-            _ = sc_room_tick(room)
+            if usesMetalFX, let drawable {
+                let pointer = Unmanaged.passUnretained(drawable).toOpaque()
+                withExtendedLifetime(drawable) {
+                    let rc = sc_room_tick_drawable(room, pointer, presentWidth, presentHeight)
+                    if rc != 0 {
+                        let error = HostBridge.takeRoomLastError() ?? "MetalFX drawable present failed"
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self else { return }
+                            NSLog("%@; falling back to full-resolution IOSurface", error)
+                            self.roomUsesMetalFX = false
+                            self.livingRoomPresentView?.configureMetalFX(false)
+                            self.setLivingRoomRenderScale(1.0)
+                            self.livingRoomPresentView?.syncPresentTargetIfNeeded()
+                        }
+                    }
+                }
+            } else {
+                _ = sc_room_tick(room)
+            }
             InputLatencyProbe.noteRoomTickFinished()
             let roomMs = (ProcessInfo.processInfo.systemUptime - t0) * 1000.0
             var snap = ScRoomPerfSnapshot()
@@ -407,7 +478,9 @@ extension HostBridge {
                     self.roomPerfRoomMaxMs = max(self.roomPerfRoomMaxMs, roomMs)
                     if gotSnap { self.roomPerfLastSnap = snap }
                 }
-                self.livingRoomPresentView?.refreshLayerContents()
+                if !usesMetalFX {
+                    self.livingRoomPresentView?.refreshLayerContents()
+                }
                 InputLatencyProbe.noteRoomPresent()
             }
         }
@@ -482,19 +555,21 @@ extension HostBridge {
                 }
             }()
             rustBit = String(
-                format: " bevy last=%.1f avg=%.1f max=%.1fms \(thr) %ux%u z%u present=%u",
+                format: " bevy last=%.1f avg=%.1f max=%.1fms \(thr) render=%ux%u present=%ux%u z%u target=%u",
                 Double(snap.last_tick_us) / 1000.0,
                 Double(snap.avg_window_us) / 1000.0,
                 Double(snap.max_window_us) / 1000.0,
                 snap.width,
                 snap.height,
+                snap.present_width,
+                snap.present_height,
                 snap.zoom_preset,
                 UInt(snap.has_present)
             )
         }
         let line = String(
             format:
-                "roomperf host avg=%.1f max=%.1fms hitches=%llu | roomHz=%.0f specHz=%.0f wall avg=%.1f max=%.1fms skip=%llu linear %ux%u%@",
+                "roomperf host avg=%.1f max=%.1fms hitches=%llu | roomHz=%.0f specHz=%.0f wall avg=%.1f max=%.1fms skip=%llu output %ux%u%@",
             hostAvg,
             roomPerfHostMaxMs,
             roomPerfHitches,

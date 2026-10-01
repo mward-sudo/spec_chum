@@ -9,7 +9,7 @@ fn synthetic_empty_track_parses_with_no_sectors() {
     assert_eq!(img.tracks, 1);
     assert_eq!(img.sides, 1);
     assert_eq!(img.tracks_data.len(), 1);
-    assert!(img.tracks_data[0].sectors.is_empty());
+    assert_eq!(img.tracks_data[0].sectors.len(), 0);
     assert!(img.find_sector(0, 0, 0xc1).is_none());
 }
 

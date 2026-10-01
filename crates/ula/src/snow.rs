@@ -341,7 +341,7 @@ mod tests {
         let screen = vec![0u8; 6912];
         let t = PAPER_START_48 + 3;
         let ovs = snow_overrides(t, 0, false, true, SnowTiming::Class48, &screen, None);
-        assert!(ovs.is_empty());
+        assert_eq!(ovs.len(), 0);
     }
 
     #[test]
@@ -362,7 +362,13 @@ mod tests {
         screen[0] = 0xAA;
         screen[1] = 0x55;
         let t = PAPER_START_48 + 3;
-        assert!(snow_overrides(t, 1, true, true, SnowTiming::Class48, &screen, None).is_empty());
-        assert!(snow_overrides(t, 1, false, false, SnowTiming::Class48, &screen, None).is_empty());
+        assert_eq!(
+            snow_overrides(t, 1, true, true, SnowTiming::Class48, &screen, None).len(),
+            0
+        );
+        assert_eq!(
+            snow_overrides(t, 1, false, false, SnowTiming::Class48, &screen, None).len(),
+            0
+        );
     }
 }

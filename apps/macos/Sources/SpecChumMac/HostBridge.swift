@@ -239,9 +239,19 @@ final class HostBridge: ObservableObject {
     /// Authoritative present size (stepped) — main thread only (#300).
     var roomPresentWidth: UInt32 = 1920
     var roomPresentHeight: UInt32 = 1080
+    /// Optional MetalFX render scale (for example `0.67`); unset keeps the stable IOSurface path.
+    let roomRenderScale: Float = {
+        guard let value = ProcessInfo.processInfo.environment["SPEC_CHUM_ROOM_METALFX_SCALE"],
+              let scale = Float(value), (0.5..<1.0).contains(scale)
+        else { return 1.0 }
+        return scale
+    }()
     /// Last size applied on `livingRoomThread` (resize decisions); room thread only.
     var roomThreadPresentWidth: UInt32 = 1920
     var roomThreadPresentHeight: UInt32 = 1080
+    var roomThreadUsesMetalFX = false
+    /// Main-thread mirror used by the display-link view.
+    var roomUsesMetalFX = false
     /// 50 Hz host clock (owns Spectrum pacing; SwiftUI only presents).
     var frameTimer: DispatchSourceTimer?
     @Published var debugPc: UInt16 = 0

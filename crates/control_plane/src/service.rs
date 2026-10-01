@@ -1384,7 +1384,7 @@ mod tests {
     #[test]
     fn last_error_records_failures() {
         let plane = ControlPlane::new(ModelId::Spectrum48, false);
-        assert!(plane.last_error().error.is_empty());
+        assert_eq!(plane.last_error().error.len(), 0);
         plane.record_error(&ApiError::BadRequest("test".into()));
         let last = plane.last_error();
         assert!(last.error.contains("test"));

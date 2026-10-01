@@ -374,7 +374,7 @@ mod tests {
         assert!(is_joystick_routing_key(ansi::LEFT));
         assert!(chord_for_ansi(ansi::LEFT, false).is_none());
         let sync = sync_keys(&[ansi::LEFT], false, false, false);
-        assert!(sync.matrix.is_empty());
+        assert_eq!(sync.matrix.len(), 0);
         assert_eq!(sync.kempston_mask, 0x02);
     }
 
@@ -393,29 +393,29 @@ mod tests {
     #[test]
     fn shift_modifier_is_caps_unless_suppressed() {
         assert_eq!(modifier_keys(true, false, false, false), vec![CAPS]);
-        assert!(modifier_keys(true, false, false, true).is_empty());
+        assert_eq!(modifier_keys(true, false, false, true).len(), 0);
     }
 
     #[test]
     fn tab_is_fire_only_via_kempston_mask() {
         let sync = sync_keys(&[ansi::TAB], false, false, false);
-        assert!(sync.matrix.is_empty());
+        assert_eq!(sync.matrix.len(), 0);
         assert_eq!(sync.kempston_mask, 0x10);
     }
 
     #[test]
     fn shift_arrow_suppresses_caps_modifier() {
         let sync = sync_keys(&[ansi::LEFT], true, false, false);
-        assert!(sync.modifiers.is_empty());
-        assert!(sync.matrix.is_empty());
+        assert_eq!(sync.modifiers.len(), 0);
+        assert_eq!(sync.matrix.len(), 0);
         assert_eq!(sync.kempston_mask, 0x02);
     }
 
     #[test]
     fn shift_tab_suppresses_caps_modifier() {
         let sync = sync_keys(&[ansi::TAB], true, false, false);
-        assert!(sync.modifiers.is_empty());
-        assert!(sync.matrix.is_empty());
+        assert_eq!(sync.modifiers.len(), 0);
+        assert_eq!(sync.matrix.len(), 0);
         assert_eq!(sync.kempston_mask, 0x10);
     }
 
@@ -493,7 +493,7 @@ mod tests {
             assert_eq!(chord_for_ansi(code, true).unwrap().keys, want, "key {code}");
             assert!(suppresses_modifier_caps(code, true), "key {code}");
             let sync = sync_keys(&[code], true, false, false);
-            assert!(sync.modifiers.is_empty(), "key {code}");
+            assert_eq!(sync.modifiers.len(), 0, "key {code}");
             assert_eq!(sync.matrix, want, "key {code}");
         }
     }
