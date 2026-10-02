@@ -123,6 +123,7 @@ fn exec_indexed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B, idx: Idx, prev_q: u8
             cpu.contend_cycles(op_addr, 2);
             exec_cb_addr(cpu, bus, op2, addr);
         }
+        0xed => exec_ed(cpu, bus),
         0xdd | 0xfd => {
             // nested prefix: treat as new prefix (consume and restart)
             // Simpler: ignore and re-fetch — real Z80 redefines; Fuse rarely nests.

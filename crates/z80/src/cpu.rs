@@ -477,6 +477,23 @@ mod tests {
     }
 
     #[test]
+    fn z80n_nextreg_accepts_ignored_index_prefixes() {
+        for (bytes, expected_t, expected_len, expected_value) in [
+            (&[0xdd, 0xed, 0x91, 0x50, 0xa7, 0x3e, 0x44][..], 24, 5, 0xa7),
+            (&[0xfd, 0xed, 0x92, 0x50, 0x3e, 0x44][..], 21, 4, 0x5a),
+        ] {
+            let mut cpu = next_cpu();
+            let mut bus = NextBus::program(bytes);
+
+            assert_eq!(cpu.step(&mut bus), expected_t);
+            assert_eq!(cpu.regs.pc, 0x1200 + expected_len);
+            assert_eq!(bus.writes, [(0x50, expected_value, u64::from(expected_t))]);
+            assert_eq!(cpu.step(&mut bus), 7, "following LD A,n must remain intact");
+            assert_eq!(cpu.regs.a, 0x44);
+        }
+    }
+
+    #[test]
     fn classic_ed_91_and_92_remain_unknown_eight_t_instructions() {
         assert_eq!(Cpu::new().profile(), CpuProfile::Z80);
         for opcode in [0x91, 0x92] {
