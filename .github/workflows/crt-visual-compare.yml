@@ -1,0 +1,110 @@
+name: CRT visual comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Baseline tag, branch, or commit
+        required: true
+        default: v0.4.0
+        type: string
+      candidate_ref:
+        description: Candidate tag, branch, or commit
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Headless baseline comparison
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/crt-visual-target
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.baseline_ref }}
+          path: baseline
+          persist-credentials: false
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.candidate_ref }}
+          path: candidate
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+
+      - name: Fetch shared CC0 living-room assets
+        run: |
+          cd candidate
+          ./scripts/fetch_living_room_assets.sh
+          rm -rf ../baseline/crates/living_room/assets/polyhaven
+          cp -R crates/living_room/assets/polyhaven ../baseline/crates/living_room/assets/polyhaven
+
+      - name: Use the same deterministic probe at both revisions
+        run: cp candidate/crates/living_room/examples/room_probe.rs baseline/crates/living_room/examples/room_probe.rs
+
+      - name: Render baseline without a window
+        run: cargo run --manifest-path baseline/Cargo.toml -p living_room --example room_probe --release -- 1280 720 "${{ runner.temp }}/baseline.ppm" 0
+
+      - name: Render candidate without a window
+        run: cargo run --manifest-path candidate/Cargo.toml -p living_room --example room_probe --release -- 1280 720 "${{ runner.temp }}/candidate.ppm" 0
+
+      - name: Build side-by-side PPM
+        env:
+          BASELINE_IMAGE: ${{ runner.temp }}/baseline.ppm
+          CANDIDATE_IMAGE: ${{ runner.temp }}/candidate.ppm
+          OUTPUT_IMAGE: ${{ runner.temp }}/side_by_side.ppm
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          width, height = 1280, 720
+          header = f"P6\n{width} {height}\n255\n".encode()
+          images = []
+          for key in ("BASELINE_IMAGE", "CANDIDATE_IMAGE"):
+              data = Path(os.environ[key]).read_bytes()
+              if not data.startswith(header):
+                  raise SystemExit(f"unexpected PPM header in {os.environ[key]}")
+              images.append(data[len(header):])
+          row_bytes = width * 3
+          combined = bytearray(f"P6\n{width * 2} {height}\n255\n".encode())
+          for row in range(height):
+              start = row * row_bytes
+              end = start + row_bytes
+              combined.extend(images[0][start:end])
+              combined.extend(images[1][start:end])
+          Path(os.environ["OUTPUT_IMAGE"]).write_bytes(combined)
+          PY
+
+      - name: Summarize capture
+        env:
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+        run: |
+          {
+            echo "## Headless CRT visual comparison"
+            echo
+            echo "- Baseline: `$BASELINE_REF`"
+            echo "- Candidate: `$CANDIDATE_REF`"
+            echo "- Capture: 1280×720, CRT test pattern, zoom preset 0"
+            echo "- Both captures use `HeadlessRoom`; no window is created or focused."
+            echo "- PPM readback may look darker or harsher than the live IOSurface path."
+            echo "- Artifact: `side_by_side.ppm` (baseline left, candidate right)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crt-visual-comparison
+          path: |
+            ${{ runner.temp }}/baseline.ppm
+            ${{ runner.temp }}/candidate.ppm
+            ${{ runner.temp }}/side_by_side.ppm
+          if-no-files-found: error
+          retention-days: 14

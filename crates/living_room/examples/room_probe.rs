@@ -1,4 +1,4 @@
-//! Headless visual probe — render the room and dump a PPM for eyeballing.
+//! Headless visual probe — render a CRT test pattern in the room and dump a PPM.
 //!
 //! Catches "present path renders, but the room is missing" regressions that a
 //! non-black pixel check in `room_perf` happily passes.
@@ -38,8 +38,7 @@ fn main() {
     let mut room = HeadlessRoom::new(w, h);
     room.request_skip_intro();
 
-    // Mid-grey Spectrum framebuffer so the CRT is clearly distinguishable.
-    let fb = vec![90u8; (SCREEN_W * SCREEN_H * 4) as usize];
+    let fb = crt_test_pattern();
     let mut buf = vec![0u8; (w * h * 4) as usize];
     // Intro skip resets zoom, so settle first, then nudge and let plates re-settle.
     for _ in 0..90 {
@@ -92,4 +91,40 @@ fn main() {
     }
     eprintln!("  zoom preset {}", room.zoom_preset());
     eprintln!("wrote {out_path}");
+}
+
+/// Color bars and fine horizontal/vertical edges make phosphor filtering visible.
+fn crt_test_pattern() -> Vec<u8> {
+    const BARS: [[u8; 3]; 8] = [
+        [235, 235, 235],
+        [235, 220, 32],
+        [32, 220, 220],
+        [32, 220, 48],
+        [235, 32, 220],
+        [220, 32, 32],
+        [32, 48, 220],
+        [12, 12, 12],
+    ];
+    let mut framebuffer = vec![0u8; (SCREEN_W * SCREEN_H * 4) as usize];
+    for y in 0..SCREEN_H {
+        for x in 0..SCREEN_W {
+            let rgb = if y < SCREEN_H / 2 {
+                BARS[(x * BARS.len() as u32 / SCREEN_W) as usize]
+            } else if y < SCREEN_H * 3 / 4 {
+                if (x / 4) % 2 == 0 {
+                    [240, 240, 240]
+                } else {
+                    [8, 8, 8]
+                }
+            } else if ((x / 8) + (y / 8)) % 2 == 0 {
+                [240, 240, 240]
+            } else {
+                [8, 8, 8]
+            };
+            let offset = ((y * SCREEN_W + x) * 4) as usize;
+            framebuffer[offset..offset + 3].copy_from_slice(&rgb);
+            framebuffer[offset + 3] = 255;
+        }
+    }
+    framebuffer
 }
