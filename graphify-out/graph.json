@@ -64065,7 +64065,7 @@
       "file_type": "code",
       "norm_label": "pbr_material()",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647"
+      "source_location": "L643"
     },
     {
       "id": "crates_living_room_src_room_rs_assets",
@@ -64208,7 +64208,7 @@
       "file_type": "code",
       "norm_label": "spawn_floor_toys()",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L554"
+      "source_location": "L550"
     },
     {
       "id": "crates_living_room_src_room_spawn_polyhaven_wall_sconces",
@@ -64219,7 +64219,7 @@
       "file_type": "code",
       "norm_label": "spawn_polyhaven_wall_sconces()",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L415"
+      "source_location": "L411"
     },
     {
       "id": "crates_living_room_src_room_spawn_spectrum_joystick",
@@ -64230,7 +64230,7 @@
       "file_type": "code",
       "norm_label": "spawn_spectrum_joystick()",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L586"
+      "source_location": "L582"
     },
     {
       "id": "crates_living_room_src_room_spawn_video_cassette_deck",
@@ -64241,7 +64241,7 @@
       "file_type": "code",
       "norm_label": "spawn_video_cassette_deck()",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L289"
+      "source_location": "L285"
     },
     {
       "id": "crates_host_api_src_ffi_mod",
@@ -70810,6 +70810,18 @@
       "type": "external"
     },
     {
+      "id": "hdr",
+      "label": "hdr",
+      "_origin": "semantic",
+      "community": 20,
+      "community_name": "camera.rs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "hdr",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "mouse",
       "label": "mouse",
       "_origin": "semantic",
@@ -72126,17 +72138,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "atomic",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "hdr",
-      "label": "hdr",
-      "community": 20,
-      "community_name": "camera.rs",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "hdr",
       "source_file": "",
       "type": "external"
     }
@@ -102031,7 +102032,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L280",
+      "source_location": "L276",
       "weight": 1.0
     },
     {
@@ -102043,7 +102044,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L281",
+      "source_location": "L277",
       "weight": 1.0
     },
     {
@@ -102055,7 +102056,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L282",
+      "source_location": "L278",
       "weight": 1.0
     },
     {
@@ -102067,7 +102068,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L283",
+      "source_location": "L279",
       "weight": 1.0
     },
     {
@@ -102103,7 +102104,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L509",
+      "source_location": "L505",
       "weight": 1.0
     },
     {
@@ -102115,7 +102116,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L533",
+      "source_location": "L529",
       "weight": 1.0
     },
     {
@@ -134491,7 +134492,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647",
+      "source_location": "L643",
       "weight": 1.0
     },
     {
@@ -134503,7 +134504,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647",
+      "source_location": "L643",
       "weight": 1.0
     },
     {
@@ -134623,7 +134624,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L415",
+      "source_location": "L411",
       "weight": 1.0
     },
     {
@@ -134635,7 +134636,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L415",
+      "source_location": "L411",
       "weight": 1.0
     },
     {
@@ -134647,7 +134648,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L586",
+      "source_location": "L582",
       "weight": 1.0
     },
     {
@@ -134659,7 +134660,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L586",
+      "source_location": "L582",
       "weight": 1.0
     },
     {
@@ -134671,7 +134672,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L289",
+      "source_location": "L285",
       "weight": 1.0
     },
     {
@@ -134683,7 +134684,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L289",
+      "source_location": "L285",
       "weight": 1.0
     },
     {
@@ -162799,7 +162800,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647",
+      "source_location": "L643",
       "weight": 1.0
     },
     {
@@ -162811,7 +162812,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647",
+      "source_location": "L643",
       "weight": 1.0
     },
     {
@@ -162823,7 +162824,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647",
+      "source_location": "L643",
       "weight": 1.0
     },
     {
@@ -162919,7 +162920,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L554",
+      "source_location": "L550",
       "weight": 1.0
     },
     {
@@ -162931,7 +162932,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L554",
+      "source_location": "L550",
       "weight": 1.0
     },
     {
@@ -162943,7 +162944,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L415",
+      "source_location": "L411",
       "weight": 1.0
     },
     {
@@ -162955,7 +162956,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L415",
+      "source_location": "L411",
       "weight": 1.0
     },
     {
@@ -162967,7 +162968,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L415",
+      "source_location": "L411",
       "weight": 1.0
     },
     {
@@ -162979,7 +162980,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L586",
+      "source_location": "L582",
       "weight": 1.0
     },
     {
@@ -162991,7 +162992,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L586",
+      "source_location": "L582",
       "weight": 1.0
     },
     {
@@ -163003,7 +163004,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L289",
+      "source_location": "L285",
       "weight": 1.0
     },
     {
@@ -163015,7 +163016,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L289",
+      "source_location": "L285",
       "weight": 1.0
     },
     {
@@ -178744,7 +178745,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647",
+      "source_location": "L643",
       "weight": 1.0
     },
     {
@@ -200724,7 +200725,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L289",
+      "source_location": "L285",
       "weight": 1.0
     },
     {
@@ -200768,7 +200769,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L415",
+      "source_location": "L411",
       "weight": 1.0
     },
     {
@@ -200790,7 +200791,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L554",
+      "source_location": "L550",
       "weight": 1.0
     },
     {
@@ -200801,7 +200802,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L586",
+      "source_location": "L582",
       "weight": 1.0
     },
     {
@@ -200823,7 +200824,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/living_room/src/room.rs",
-      "source_location": "L647",
+      "source_location": "L643",
       "weight": 1.0
     },
     {
@@ -245414,5 +245415,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "4633d32b7f25ab8df921d8953a2b6f3a96c30965"
+  "built_at_commit": "f7a8fd66f5f6ef2cbdaae8648f0f9207e7eee660"
 }

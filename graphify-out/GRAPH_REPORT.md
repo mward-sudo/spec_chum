@@ -1,7 +1,7 @@
 # Graph Report - spec_chum  (2026-10-02)
 
 ## Corpus Check
-- 314 files · ~1,258,849 words
+- 314 files · ~1,258,863 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 52 file(s) not represented in the graph (top: .tap 10, .mdc 8, (none) 6)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4633d32b`
+- Built from commit: `f7a8fd66`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1312,9 +1312,9 @@ Nodes (14): affine2, OpeningSconceBulb, OpeningSconceLight, OpeningTvAccent, ROO
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `HostBridge` connect `HostBridge` to `NSEvent`, `.viewDidMoveToWindow`, `SpectrumNSView`, `.pushTapeLoadOptions`, `.refreshInspector`, `TapeAudioPlayer`, `Model`, `LivingRoomNSView`, `PrefModelSlug`, `RomSetupSlot`, `LoadKeyScript`, `LivingRoomThread`, `MachineConfigEditorView`, `.handleMotion`, `InputLatencyProbe`, `.body`, `IOSurface`, `.setFlashLoad`, `ContentView`, `spec_chum_host`?**
-  _High betweenness centrality (0.184) - this node is a cross-community bridge._
+  _High betweenness centrality (0.185) - this node is a cross-community bridge._
 - **Why does `CatalogError` connect `spec_chum_host` to `HostBridge`?**
-  _High betweenness centrality (0.123) - this node is a cross-community bridge._
+  _High betweenness centrality (0.125) - this node is a cross-community bridge._
 - **Why does `LivingRoomThread` connect `LivingRoomThread` to `HostBridge`, `routes/mod.rs`?**
   _High betweenness centrality (0.052) - this node is a cross-community bridge._
 - **Are the 7 inferred relationships involving `HostBridge` (e.g. with `.livingRoomToolbar` and `.statusFooterMessageIsError`) actually correct?**
