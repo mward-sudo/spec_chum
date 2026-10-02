@@ -12,7 +12,7 @@
 #![allow(clippy::identity_op)]
 
 use crate::bus::{Io, Memory};
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, CpuProfile};
 use crate::flags::{
     adc8, add16, add8, and8, cp8, dec8_flags, inc8_flags, or8, parity, sbc8, sub8, sz53, szp, xor8,
 };
@@ -910,6 +910,17 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
         }
         0x67 => rrd(cpu, bus),
         0x6f => rld(cpu, bus),
+        0x91 if cpu.profile == CpuProfile::Z80N => {
+            let register = cpu.fetch8(bus);
+            let value = cpu.fetch8(bus);
+            cpu.add_t(6);
+            bus.nextreg_write(register, value, cpu.t);
+        }
+        0x92 if cpu.profile == CpuProfile::Z80N => {
+            let register = cpu.fetch8(bus);
+            cpu.add_t(6);
+            bus.nextreg_write(register, cpu.regs.a, cpu.t);
+        }
         0xa0 => block_ld(cpu, bus, true, false),
         0xa8 => block_ld(cpu, bus, false, false),
         0xb0 => block_ld(cpu, bus, true, true),
