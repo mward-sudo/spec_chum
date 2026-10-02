@@ -3,6 +3,7 @@
 use std::time::Instant;
 
 use bevy::anti_alias::fxaa::{Fxaa, Sensitivity};
+use bevy::camera::Hdr;
 use bevy::camera::{Exposure, ShadowLodOrigin};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
@@ -482,6 +483,7 @@ pub(crate) fn setup_camera(
 
     let mut cam = commands.spawn((
         Camera3d::default(),
+        Hdr,
         // Headless / image targets have no window camera; mark LOD origin explicitly.
         ShadowLodOrigin,
         // Few lights in a small room — skip tiled cluster allocation (cheap win on Metal).
