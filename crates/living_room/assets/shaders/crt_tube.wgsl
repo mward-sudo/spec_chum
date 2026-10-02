@@ -80,20 +80,64 @@ fn sample_halation_h(uv: vec2<f32>) -> vec3<f32> {
     return acc;
 }
 
-// Luminance-adaptive scanline weight (crt-aperture beam min/max + shape).
-// Floor the weight so thin Spectrum text rows are never fully extinguished.
-fn scanline_weight(uv_y: f32, col: vec3<f32>, strength: f32) -> f32 {
-    let luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    let bright = pow(clamp(luma, 0.0, 1.0), 1.0 / SCAN_SHAPE);
-    let beam = mix(SCAN_BEAM_MIN, SCAN_BEAM_MAX, bright);
-    // Distance from scan centre in line space (0..1 within a source line).
-    let line_y = fract(uv_y * SRC_H);
-    let x = abs(line_y - 0.5) * 2.0;
-    let core = smoothstep(0.0, 1.0, 1.0 - min(1.0, x / max(beam * 0.5, 0.05)));
-    let weight = mix(1.0 - strength, 1.0, core);
-    let w = mix(1.0, weight, strength);
-    // Floor keeps thin Spectrum glyph rows alive; 0.72 flattened scanlines into mush.
-    return max(w, 0.58);
+// Integral of the shaped beam core from its centre to `distance`. The core is
+// 1 - smoothstep(0, 1, distance / radius), whose full-line integral is radius.
+fn beam_integral(distance: f32, radius: f32) -> f32 {
+    let x = clamp(distance, 0.0, radius);
+    let x2 = x * x;
+    let r2 = radius * radius;
+    return x - (x2 * x) / r2 + (x2 * x2) / (2.0 * r2 * radius);
+}
+
+fn beam_core(distance: f32, radius: f32) -> f32 {
+    if distance >= radius {
+        return 0.0;
+    }
+    return 1.0 - smoothstep(0.0, 1.0, distance / radius);
+}
+
+fn raster_color(uv: vec2<f32>, soft_mix: f32) -> vec3<f32> {
+    let sharp = sample_nearest(uv);
+    let soft_h = sample_soft_h(uv);
+    let soft_sharp = sqrt(max(sharp * soft_h, vec3(0.0)));
+    return mix(sharp, soft_sharp, soft_mix);
+}
+
+// Reconstruct each source row as an emitted beam. Normalizing each shaped beam
+// by its analytic area preserves that row's integrated linear-light energy;
+// clipping the normalization at the top/bottom edge avoids losing edge rows.
+// Three rows suffice because the widest beam has a radius below one line pitch.
+fn scanline_reconstruction(uv: vec2<f32>, soft_mix: f32, strength: f32) -> vec3<f32> {
+    let line_y = uv.y * SRC_H;
+    let base_row = min(i32(floor(line_y)), i32(SRC_H) - 1);
+    let unfiltered = raster_color(uv, soft_mix);
+    var beam_color = vec3(0.0);
+    for (var offset = -1; offset <= 1; offset += 1) {
+        let row = base_row + offset;
+        if row >= 0 && row < i32(SRC_H) {
+            let row_y = f32(row) + 0.5;
+            let distance = abs(line_y - row_y);
+            if distance < SCAN_BEAM_MAX * 0.5 {
+                var row_color = unfiltered;
+                if row != base_row {
+                    row_color = raster_color(vec2(uv.x, row_y / SRC_H), soft_mix);
+                }
+                let luma = dot(row_color, vec3(0.2126, 0.7152, 0.0722));
+                let bright = pow(clamp(luma, 0.0, 1.0), 1.0 / SCAN_SHAPE);
+                let beam = mix(SCAN_BEAM_MIN, SCAN_BEAM_MAX, bright);
+                let radius = max(beam * 0.5, 0.05);
+                let area = beam_integral(row_y, radius)
+                    + beam_integral(SRC_H - row_y, radius);
+                let density = beam_core(distance, radius) / area;
+                beam_color += row_color * density;
+            }
+        }
+    }
+
+    // The former scanline control was quadratic in `strength`; retaining that
+    // response keeps the existing near/far look ramp gentle and predictable.
+    let amount = pow(clamp(strength, 0.0, 1.0), 2.0);
+    return mix(unfiltered, beam_color, amount);
 }
 
 /// Soften aperture mask so a channel never drops below ~70% (glyph edges stay).
@@ -150,16 +194,11 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     var uv = (content_uv - vec2(0.5)) / TEX_OVERSCAN + vec2(0.5);
     uv = clamp(uv, vec2(0.0), vec2(1.0));
 
-    // Soft H / sharp V: nearest texel (sharp) + optional horizontal soft mix.
-    let sharp = sample_nearest(uv);
-    let soft_h = sample_soft_h(uv);
-    // Geometric mean (crt-aperture sharp×soft) with soft_mix as blend toward soft-H path.
-    let soft_sharp = sqrt(max(sharp * soft_h, vec3(0.0)));
-    var color = mix(sharp, soft_sharp, soft_mix);
+    // Soft H / beam-reconstructed V: horizontal diffusion remains independent
+    // of the energy-normalized vertical electron-beam profile.
+    var color = scanline_reconstruction(uv, soft_mix, scan_str);
 
     color = max(color, vec3(BLACK_LIFT));
-    let scan = scanline_weight(uv.y, color, scan_str);
-    color *= scan;
     color *= aperture_grille(uv.x, grille_str);
 
     // Retain the historical feed for the selectable Bloom baseline. In material mode,
