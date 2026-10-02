@@ -7,6 +7,7 @@ mod interface1;
 mod kempston;
 mod kempston_mouse;
 mod multiface;
+mod next;
 mod plus3;
 mod timex;
 mod timex_dock;
@@ -27,6 +28,7 @@ pub use multiface::{
     multiface128_port_match, multiface1_port_match, Multiface1, Multiface128, MULTIFACE128_SIZE,
     MULTIFACE1_SIZE,
 };
+pub use next::{NextBus, NEXT_RAM_PAGE_COUNT, NEXT_ROM_SIZE};
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 pub use timex::{
     timex_joystick_mask, TimexScld, TimexScreenMode, TIMEX_ALTDFILE_OFFSET, TIMEX_EXROM_SIZE,
