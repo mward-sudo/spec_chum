@@ -24,6 +24,9 @@ const PI: f32 = 3.14159265;
 const BLACK_LIFT: f32 = 0.012;
 // Classic Spectrum-on-TV picture aspect (256×192 / 4:3).
 const CONTENT_ASPECT: f32 = 4.0 / 3.0;
+// Trinitron-style grille frequency across the visible picture, independent of
+// the Spectrum source raster and the tube render-target dimensions.
+const APERTURE_TRIADS: f32 = 280.0;
 // Slight UV zoom inside the 4:3 rect (emulated overscan; not geometric spill).
 const TEX_OVERSCAN: f32 = 1.012;
 
@@ -140,18 +143,36 @@ fn scanline_reconstruction(uv: vec2<f32>, soft_mix: f32, strength: f32) -> vec3<
     return mix(unfiltered, beam_color, amount);
 }
 
-/// Soften aperture mask so a channel never drops below ~70% (glyph edges stay).
-fn aperture_grille(uv_x: f32, strength: f32) -> vec3<f32> {
-    // Vertical RGB triad — Trinitron / aperture-grille class (crt-aperture MASK_COLORS=3).
-    let slot = floor(uv_x * SRC_W * 3.0) % 3.0;
-    var mask = vec3(1.0);
-    if slot < 1.0 {
-        mask = vec3(1.12, 0.82, 0.82);
-    } else if slot < 2.0 {
-        mask = vec3(0.82, 1.12, 0.82);
-    } else {
-        mask = vec3(0.82, 0.82, 1.12);
-    }
+// Antiderivative of a periodic, unit-width stripe with period three. Integrating
+// over the fragment footprint gives stable stripe coverage at tube resolution
+// and naturally fades the pattern as the downstream curved-mesh mips minify it.
+fn grille_stripe_integral(stripe_x: f32, channel: f32) -> f32 {
+    let shifted = stripe_x - channel;
+    let periods = floor(shifted / 3.0);
+    let within_period = shifted - periods * 3.0;
+    return periods + clamp(within_period, 0.0, 1.0);
+}
+
+fn grille_channel_coverage(stripe_x: f32, footprint: f32, channel: f32) -> f32 {
+    let half_footprint = footprint * 0.5;
+    let covered = grille_stripe_integral(stripe_x + half_footprint, channel)
+        - grille_stripe_integral(stripe_x - half_footprint, channel);
+    return clamp(covered / footprint, 0.0, 1.0);
+}
+
+/// Analytic RGB aperture grille in visible-picture coordinates. The 0.82 / 1.12
+/// levels retain the previous mask's strength and mean luminance.
+fn aperture_grille(content_x: f32, strength: f32) -> vec3<f32> {
+    let stripe_x = content_x * APERTURE_TRIADS * 3.0;
+    // WGSL derivatives are fragment-stage operations; fwidth tracks the actual
+    // pixel footprint and avoids hard transitions when a stripe approaches Nyquist.
+    let footprint = max(fwidth(stripe_x), 0.0001);
+    let coverage = vec3(
+        grille_channel_coverage(stripe_x, footprint, 0.0),
+        grille_channel_coverage(stripe_x, footprint, 1.0),
+        grille_channel_coverage(stripe_x, footprint, 2.0),
+    );
+    let mask = mix(vec3(0.82), vec3(1.12), coverage);
     return mix(vec3(1.0), mask, strength);
 }
 
@@ -199,7 +220,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = scanline_reconstruction(uv, soft_mix, scan_str);
 
     color = max(color, vec3(BLACK_LIFT));
-    color *= aperture_grille(uv.x, grille_str);
+    color *= aperture_grille(content_uv.x, grille_str);
 
     // Retain the historical feed for the selectable Bloom baseline. In material mode,
     // broaden the source on the phosphor and put the primary halo into the CRT surface.
