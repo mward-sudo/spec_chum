@@ -390,10 +390,10 @@
     "semantic_hash": ""
   },
   "crates/living_room/examples/room_probe.rs": {
-    "mtime": 1790876170.9657903,
-    "seen": 1790913062.908631,
-    "ast_hash": "1b3d07e86e42e513fef984512e7e0105",
-    "semantic_hash": "1b3d07e86e42e513fef984512e7e0105"
+    "mtime": 1790946556.604476,
+    "seen": 1790946566.859658,
+    "ast_hash": "ffce5d3ce7bd8b51fa053a827241fb74",
+    "semantic_hash": ""
   },
   "crates/living_room/include/spec_chum_room.h": {
     "mtime": 1790910845.3478422,
@@ -522,8 +522,8 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/room.rs": {
-    "mtime": 1790918901.6122813,
-    "seen": 1790918910.653132,
+    "mtime": 1790918935.4495213,
+    "seen": 1790946566.8601868,
     "ast_hash": "4c0abd653c1175d112a47d7af61402f7",
     "semantic_hash": ""
   },
