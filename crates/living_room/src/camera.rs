@@ -35,6 +35,7 @@ const LOCKED_FOV: f32 = 0.85;
 const PHOSPHOR_H: f32 = crate::crt::PHOSPHOR_H;
 const PHOSPHOR_W: f32 = crate::crt::PHOSPHOR_W;
 const DEFAULT_VIEWPORT_ASPECT: f32 = 16.0 / 9.0;
+const FRONT_WALL_CAMERA_CLEARANCE: f32 = 0.18;
 
 /// Wall-clock duration for one preset→preset swing (independent of Bevy `Time`).
 pub const ZOOM_ANIM_SECS: f32 = 0.20;
@@ -387,8 +388,15 @@ fn distance_for_crt_fill(fov: f32, fill: f32, aspect_ratio: f32) -> f32 {
     visible_h / (2.0 * (fov * 0.5).tan())
 }
 
-fn preset_eye(look: Vec3, preset: ZoomPreset, aspect_ratio: f32) -> Vec3 {
+fn preset_eye(look: Vec3, preset_index: usize, aspect_ratio: f32) -> Vec3 {
+    let preset = ZOOM_PRESETS[preset_index];
     let dist = distance_for_crt_fill(LOCKED_FOV, preset.crt_fill, aspect_ratio);
+    let dist = if preset_index == ZOOM_PRESETS.len() - 1 {
+        let room_edge = crate::room::ROOM_D * 0.5 - FRONT_WALL_CAMERA_CLEARANCE;
+        dist.min((room_edge - look.z).max(0.0))
+    } else {
+        dist
+    };
     look + Vec3::new(0.0, preset.y_lift, dist)
 }
 
@@ -417,8 +425,8 @@ fn pose_at_zoom_for_aspect(t: f32, look: Vec3, aspect_ratio: f32) -> Transform {
     let i1 = (i0 + 1).min(ZOOM_PRESETS.len() - 1);
     let f = (t - i0 as f32).clamp(0.0, 1.0);
 
-    let p0 = preset_eye(look, ZOOM_PRESETS[i0], aspect_ratio);
-    let p1 = preset_eye(look, ZOOM_PRESETS[i1], aspect_ratio);
+    let p0 = preset_eye(look, i0, aspect_ratio);
+    let p1 = preset_eye(look, i1, aspect_ratio);
     let pos = lerp_eye_zoom(p0, p1, f);
     let target = if i1 == ZOOM_PRESETS.len() - 1 && i0 != i1 {
         look.lerp(room_wide_look(look), ease_out_cubic(f))
@@ -444,11 +452,7 @@ pub(crate) fn setup_camera(
     // Keep the high-angle establishing position inside the room shell. Starting
     // above the ceiling made the TV and its spotlight occluded until the camera
     // passed through the ceiling, which read as a sudden lighting pop.
-    let start_eye = preset_eye(
-        look,
-        ZOOM_PRESETS[ZOOM_PRESETS.len() - 1],
-        DEFAULT_VIEWPORT_ASPECT,
-    );
+    let start_eye = preset_eye(look, ZOOM_PRESETS.len() - 1, DEFAULT_VIEWPORT_ASPECT);
     let start = Transform::from_translation(start_eye).looking_at(room_wide_look(look), Vec3::Y);
     commands.insert_resource(CameraIntro {
         elapsed: 0.0,
@@ -662,7 +666,7 @@ fn update_intro_camera(
     };
     let aspect = camera_aspect(camera);
     let end = pose_at_zoom_for_aspect(f32::from(end_preset), look_at, aspect);
-    let start_eye = preset_eye(look_at, ZOOM_PRESETS[ZOOM_PRESETS.len() - 1], aspect);
+    let start_eye = preset_eye(look_at, ZOOM_PRESETS.len() - 1, aspect);
     {
         let pos = lerp_eye_pullback_rise(start_eye, end.translation, t);
         let target = intro_look_target(look_at, end_preset, t);
@@ -847,12 +851,13 @@ mod tests {
     #[test]
     fn pullback_raises_and_shrinks_fill() {
         let a = ZOOM_PRESETS[0];
-        let b = ZOOM_PRESETS[ZOOM_PRESETS.len() - 1];
+        let last = ZOOM_PRESETS.len() - 1;
+        let b = ZOOM_PRESETS[last];
         assert!(b.crt_fill < a.crt_fill);
         assert!(b.y_lift > a.y_lift);
         let look = Vec3::ZERO;
-        let near = preset_eye(look, a, DEFAULT_VIEWPORT_ASPECT);
-        let far = preset_eye(look, b, DEFAULT_VIEWPORT_ASPECT);
+        let near = preset_eye(look, 0, DEFAULT_VIEWPORT_ASPECT);
+        let far = preset_eye(look, last, DEFAULT_VIEWPORT_ASPECT);
         assert!(far.z > near.z);
         assert!(far.y > near.y);
     }
@@ -934,5 +939,21 @@ mod tests {
         let wide = pose_at_zoom_for_aspect(0.0, look, 16.0 / 9.0).translation.z;
         let narrow = pose_at_zoom_for_aspect(0.0, look, 9.0 / 16.0).translation.z;
         assert!(narrow > wide);
+    }
+
+    #[test]
+    fn room_wide_zoom_stays_inside_front_boundary_at_any_viewport_aspect() {
+        let look = screen_look_at();
+        let furthest = (ZOOM_PRESETS.len() - 1) as f32;
+        let front_limit = crate::room::ROOM_D * 0.5 - FRONT_WALL_CAMERA_CLEARANCE;
+
+        for aspect in [16.0 / 9.0, 4.0 / 3.0, 9.0 / 16.0] {
+            let camera = pose_at_zoom_for_aspect(furthest, look, aspect);
+            assert!(
+                camera.translation.z <= front_limit,
+                "aspect={aspect}: camera z={} crossed front limit {front_limit}",
+                camera.translation.z
+            );
+        }
     }
 }

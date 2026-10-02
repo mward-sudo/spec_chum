@@ -12,8 +12,8 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1790916417.3206682,
-    "seen": 1790916579.1043189,
+    "mtime": 1790949789.4406369,
+    "seen": 1790954453.529153,
     "ast_hash": "081b565be5d70d5064c99afe399988ef",
     "semantic_hash": ""
   },
@@ -390,8 +390,8 @@
     "semantic_hash": ""
   },
   "crates/living_room/examples/room_probe.rs": {
-    "mtime": 1790946852.8952234,
-    "seen": 1790946941.676197,
+    "mtime": 1790947630.8809626,
+    "seen": 1790949278.694755,
     "ast_hash": "2392765e5868c94becdc6780d42d0776",
     "semantic_hash": ""
   },
@@ -414,15 +414,15 @@
     "semantic_hash": ""
   },
   "crates/living_room/src/camera.rs": {
-    "mtime": 1790915713.6572638,
-    "seen": 1790916579.113089,
-    "ast_hash": "abd62d74bf0962d472cc6bd714e9a82e",
+    "mtime": 1790948886.258231,
+    "seen": 1790949278.6952,
+    "ast_hash": "9a4fb486a8b402be7ab6c905db246a1b",
     "semantic_hash": ""
   },
   "crates/living_room/src/crt.rs": {
-    "mtime": 1790915694.0106306,
-    "seen": 1790916579.11309,
-    "ast_hash": "d11219330d71926f400a0bcac01445c4",
+    "mtime": 1790954316.8357599,
+    "seen": 1790954453.5442529,
+    "ast_hash": "7274f1d2a389d661fb95e77603d9e1af",
     "semantic_hash": ""
   },
   "crates/living_room/src/external_fb.rs": {
@@ -870,9 +870,9 @@
     "semantic_hash": ""
   },
   "docs/LIVING_ROOM.md": {
-    "mtime": 1790916552.8496463,
-    "seen": 1790916579.121544,
-    "ast_hash": "9b95dbb3ea95ea4a5c2fac67316a8b1c",
+    "mtime": 1790948253.3911932,
+    "seen": 1790949278.708577,
+    "ast_hash": "6420261e5b4ad13da9450f2f5e473306",
     "semantic_hash": ""
   },
   "docs/MACOS_NATIVE.md": {

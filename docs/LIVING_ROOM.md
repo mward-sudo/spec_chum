@@ -633,8 +633,11 @@ path now uses the sRGB source texture, an HDR room-camera intermediate, and one
 Bevy tonemapping/output conversion; the shader no longer applies manual gamma powers.
 **Suggested order:**
 
-1. **Tube-space RT** at 1280×960 + explicitly generated mip chain; keep the room-sized
-   present target separate and preserve the curved CRT mesh/bezel occlusion.
+1. **Tube-space RT**: the 352×296 sRGB framebuffer is reconstructed by an isolated
+   2D camera into a fixed 1280×960 linear HDR canvas. Its mip 0 is copied to a
+   separate 11-level tube image, then Bevy generates the remaining mips before
+   the room camera samples the curved CRT mesh. The bezel and room-sized present
+   target remain separate.
 2. Energy-conserving multi-line beam reconstruction and analytic aperture grille
    (~280 triads); then tube-space halation and horizontal filter fix.
 3. Delete zoom ramps for scan/grille/bright (wrong direction); remove FXAA on tube;
@@ -672,11 +675,12 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
   not copy its pipeline. Look is approximated with open **crt-aperture** /
   **crt-easymode** techniques on the mesh.
 - Curvature is **mesh geometry**, not a 2D barrel warp.
-- Phosphor WGSL (`crt_phosphor.wgsl`): luminance-adaptive beams (scan floor **0.58**),
+- Tube reconstruction WGSL (`crt_tube.wgsl`): luminance-adaptive beams (scan floor **0.58**),
   aperture-grille triad (~0.30), soft-H / sharp-V sampling (`soft_mix` ≈ 0.40),
   sRGB texture input and linear HDR shader output, brightness ≈ 2.4, black lift,
   vignette, PAL flicker ≤1%; tiny
-  in-shader halation/diffusion only.
+  in-shader halation/diffusion only. `crt_phosphor.wgsl` samples the completed
+  tube image with mip filtering on the physically curved mesh.
 - Bevy `Bloom` is the main room halation at pull-back zoom in the `bloom` baseline
   (intensity ramps with `CrtLookBlend` in `camera.rs`). The selectable `material`
   halation mode disables camera Bloom and moves the primary CRT halo into the
@@ -687,7 +691,7 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
 - Soft CRT spill (~1.1k–4.0k lm) tints walls from the framebuffer; TV-wall
   sconces ~14.4k lm tungsten; warm `GlobalAmbientLight` keeps sofa / wallpaper
   readable. Pull-back bloom stays mild so the tube face stays legible.
-- **Fidelity gaps** (tier 3): tube-space target/mips, Nyquist-limited mask/scanlines,
+- **Fidelity gaps** (tier 3): Nyquist-limited mask/scanlines,
   energy-conserving beam rebuild, and tube-space halation — see **Roadmap → Tier 3**.
   Lightmaps / `EnvironmentMapLight` remain [#149](https://github.com/mward-sudo/spec_chum/issues/149).
 
