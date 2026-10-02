@@ -46,10 +46,23 @@ pub(crate) struct FuseEvent {
     pub value: Option<u8>,
 }
 
+/// Instruction set selected for this CPU. The default preserves classic Z80
+/// behavior, including the treatment of unsupported ED opcodes as 8 T NOPs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CpuProfile {
+    #[default]
+    Z80,
+    /// Enable the Z80N NEXTREG instructions currently supported by this emulator.
+    /// Other Z80N-only opcodes retain classic Z80 decoding, including the
+    /// existing unknown-ED behavior where applicable.
+    Z80NNextReg,
+}
+
 /// Z80 CPU with cycle-counted instruction execution.
 #[derive(Clone, Debug, Default)]
 pub struct Cpu {
     pub regs: Registers,
+    pub(crate) profile: CpuProfile,
     /// Absolute T-state counter (host may wrap/reset per frame).
     pub t: u64,
     /// When true, maskable interrupts are not accepted (between EI and end of following insn).
@@ -62,6 +75,20 @@ impl Cpu {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Construct a CPU with an explicit instruction set.
+    #[must_use]
+    pub fn with_profile(profile: CpuProfile) -> Self {
+        Self {
+            profile,
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn profile(&self) -> CpuProfile {
+        self.profile
     }
 
     pub fn reset(&mut self) {
@@ -347,6 +374,152 @@ mod tests {
     use super::*;
     use crate::bus::FlatMem;
     use crate::registers::flag;
+
+    struct NextBus {
+        data: Box<[u8; 65536]>,
+        reads: Vec<(u16, u64)>,
+        writes: Vec<(u8, u8, u64)>,
+    }
+
+    impl NextBus {
+        fn program(bytes: &[u8]) -> Self {
+            let mut data = Box::new([0; 65536]);
+            data[0x1200..0x1200 + bytes.len()].copy_from_slice(bytes);
+            Self {
+                data,
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    impl Memory for NextBus {
+        fn read(&mut self, addr: u16, t: u64) -> (u8, u32) {
+            self.reads.push((addr, t));
+            (self.data[addr as usize], 0)
+        }
+
+        fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
+            self.data[addr as usize] = value;
+            0
+        }
+    }
+
+    impl Io for NextBus {
+        fn in_port(&mut self, _port: u16, _t: u64) -> (u8, u32) {
+            (0xff, 0)
+        }
+
+        fn out_port(&mut self, _port: u16, _value: u8, _t: u64) -> u32 {
+            0
+        }
+
+        fn nextreg_write(&mut self, register: u8, value: u8, t: u64) {
+            self.writes.push((register, value, t));
+        }
+    }
+
+    fn next_cpu() -> Cpu {
+        let mut cpu = Cpu::with_profile(CpuProfile::Z80NNextReg);
+        cpu.regs = Registers {
+            a: 0x5a,
+            f: 0xd7,
+            b: 0x33,
+            pc: 0x1200,
+            r: 0x81,
+            memptr: 0x9876,
+            q: 0xac,
+            ..Registers::default()
+        };
+        cpu
+    }
+
+    #[test]
+    fn nextreg_immediate_writes_register_with_20_timing() {
+        let mut cpu = next_cpu();
+        let before = cpu.regs;
+        let mut bus = NextBus::program(&[0xed, 0x91, 0x50, 0xa7]);
+
+        assert_eq!(cpu.step(&mut bus), 20);
+        assert_eq!(cpu.t, 20);
+        assert_eq!(
+            bus.reads,
+            [(0x1200, 0), (0x1201, 4), (0x1202, 8), (0x1203, 11)]
+        );
+        assert_eq!(bus.writes, [(0x50, 0xa7, 20)]);
+        assert_eq!(
+            cpu.regs,
+            Registers {
+                pc: 0x1204,
+                r: 0x83,
+                q: 0,
+                ..before
+            }
+        );
+    }
+
+    #[test]
+    fn nextreg_accumulator_writes_a_with_17_timing() {
+        let mut cpu = next_cpu();
+        let before = cpu.regs;
+        let mut bus = NextBus::program(&[0xed, 0x92, 0x50]);
+
+        assert_eq!(cpu.step(&mut bus), 17);
+        assert_eq!(cpu.t, 17);
+        assert_eq!(bus.reads, [(0x1200, 0), (0x1201, 4), (0x1202, 8)]);
+        assert_eq!(bus.writes, [(0x50, 0x5a, 17)]);
+        assert_eq!(
+            cpu.regs,
+            Registers {
+                pc: 0x1203,
+                r: 0x83,
+                q: 0,
+                ..before
+            }
+        );
+    }
+
+    #[test]
+    fn z80n_nextreg_accepts_ignored_index_prefixes() {
+        for (bytes, expected_t, expected_len, expected_value) in [
+            (&[0xdd, 0xed, 0x91, 0x50, 0xa7, 0x3e, 0x44][..], 24, 5, 0xa7),
+            (&[0xfd, 0xed, 0x92, 0x50, 0x3e, 0x44][..], 21, 4, 0x5a),
+        ] {
+            let mut cpu = next_cpu();
+            let mut bus = NextBus::program(bytes);
+
+            assert_eq!(cpu.step(&mut bus), expected_t);
+            assert_eq!(cpu.regs.pc, 0x1200 + expected_len);
+            assert_eq!(bus.writes, [(0x50, expected_value, u64::from(expected_t))]);
+            assert_eq!(cpu.step(&mut bus), 7, "following LD A,n must remain intact");
+            assert_eq!(cpu.regs.a, 0x44);
+        }
+    }
+
+    #[test]
+    fn classic_ed_91_and_92_remain_unknown_eight_t_instructions() {
+        assert_eq!(Cpu::new().profile(), CpuProfile::Z80);
+        for opcode in [0x91, 0x92] {
+            let mut cpu = Cpu::new();
+            cpu.regs.pc = 0x1200;
+            let mut bus = NextBus::program(&[0xed, opcode, 0x3e, 0x55]);
+
+            assert_eq!(cpu.step(&mut bus), 8);
+            assert_eq!(cpu.regs.pc, 0x1202);
+            assert_eq!(bus.reads, [(0x1200, 0), (0x1201, 4)]);
+            assert_eq!(bus.writes, []);
+            assert_eq!(cpu.step(&mut bus), 7, "following LD A,n must remain intact");
+            assert_eq!(cpu.regs.a, 0x55);
+            assert_eq!(cpu.regs.pc, 0x1204);
+        }
+    }
+
+    #[test]
+    fn reset_keeps_the_instruction_profile() {
+        let mut cpu = next_cpu();
+        cpu.reset();
+        assert_eq!(cpu.profile(), CpuProfile::Z80NNextReg);
+    }
 
     #[test]
     fn scf_ccf_use_q_for_undocumented_xy() {

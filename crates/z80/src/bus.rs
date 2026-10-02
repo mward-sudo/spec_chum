@@ -14,6 +14,10 @@ pub trait Memory {
 pub trait Io {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32);
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32;
+
+    /// Z80N NEXTREG write. Hosts with Next registers override this hook;
+    /// classic Z80 bus implementations need no extra behavior.
+    fn nextreg_write(&mut self, _register: u8, _value: u8, _t: u64) {}
 }
 
 /// Flat 64K RAM used by unit / Fuse tests.
