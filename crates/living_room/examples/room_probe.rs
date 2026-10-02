@@ -12,10 +12,14 @@
 
 use std::env;
 use std::io::Write;
+use std::thread;
+use std::time::Duration;
 
+use spec_chum_room::camera::ZOOM_PRESET_COUNT;
 use spec_chum_room::crt::{SCREEN_H, SCREEN_W};
 use spec_chum_room::HeadlessRoom;
 
+/// Render one headless room frame at a requested size and relative zoom stop.
 fn main() {
     let mut args = env::args().skip(1);
     let w: u32 = args
@@ -43,7 +47,18 @@ fn main() {
         room.tick();
     }
     if zoom_steps != 0 {
-        room.nudge_zoom(zoom_steps);
+        let direction = zoom_steps.signum();
+        let step_count = zoom_steps
+            .unsigned_abs()
+            .min(u32::from(ZOOM_PRESET_COUNT.saturating_sub(1)));
+        for _ in 0..step_count {
+            room.nudge_zoom(direction);
+            thread::sleep(Duration::from_millis(110));
+            for _ in 0..12 {
+                room.set_framebuffer(&fb);
+                room.tick();
+            }
+        }
     }
     for _ in 0..120 {
         room.set_framebuffer(&fb);

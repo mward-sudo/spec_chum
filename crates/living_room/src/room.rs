@@ -133,16 +133,12 @@ fn setup_procedural_room(
     ));
 
     let wall_t = 0.06;
+    // The camera's widest zoom looks back into the room from the front opening.
+    // Keep the shell open there so the front wall cannot occlude the CRT.
     for (name, pos, size, wallpaper) in [
         (
             "wall_back",
             Vec3::new(0.0, ROOM_H * 0.5, -ROOM_D * 0.5),
-            Vec3::new(ROOM_W, ROOM_H, wall_t),
-            wallpaper_back.clone(),
-        ),
-        (
-            "wall_front",
-            Vec3::new(0.0, ROOM_H * 0.5, ROOM_D * 0.5),
             Vec3::new(ROOM_W, ROOM_H, wall_t),
             wallpaper_back.clone(),
         ),
