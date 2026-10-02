@@ -2,7 +2,6 @@
 
 use std::time::Instant;
 
-use bevy::anti_alias::fxaa::{Fxaa, Sensitivity};
 use bevy::camera::Hdr;
 use bevy::camera::{Exposure, ShadowLodOrigin};
 use bevy::core_pipeline::tonemapping::Tonemapping;
@@ -513,13 +512,6 @@ pub(crate) fn setup_camera(
         LivingRoomCamera,
         Name::new("living_room_camera"),
     ));
-    if quality::fxaa_enabled() {
-        cam.insert(Fxaa {
-            enabled: true,
-            edge_threshold: Sensitivity::High,
-            edge_threshold_min: Sensitivity::High,
-        });
-    }
     if quality::bloom_enabled() {
         cam.insert(Bloom {
             intensity: 0.08,
