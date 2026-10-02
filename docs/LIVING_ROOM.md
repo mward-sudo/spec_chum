@@ -611,7 +611,7 @@ if a GPU trace shows Bevy overhead **after** lightmaps and tier-2 wins land.
 | Present-path perf harness (`SimulatePresentPath`) | **Done** |
 | Quality defaults restored (bloom 512, MSAA 4, 1920×1080) | **Done** |
 | `ClusterConfig::Single` on room camera | **Done** |
-| Scanline floor 0.58 in `crt_phosphor.wgsl` | **Done** |
+| Scanline floor 0.58 in `crt_tube.wgsl` | **Done** |
 | Hybrid plates default **off** | **Done** |
 
 ### Tier 2 — structural perf / lighting
@@ -639,7 +639,9 @@ Bevy tonemapping/output conversion; the shader no longer applies manual gamma po
    the room camera samples the curved CRT mesh. The bezel and room-sized present
    target remain separate.
 2. Energy-conserving multi-line beam reconstruction and analytic aperture grille
-   (~280 triads); then tube-space halation and horizontal filter fix.
+   (~280 triads); then tube-space horizontal-filter refinement. The tube-space
+   reconstruction and optional material-halation target are implemented in
+   `crt_tube.wgsl`; the curved-mesh sampling path remains in `crt_phosphor.wgsl`.
 3. Delete zoom ramps for scan/grille/bright (wrong direction); remove FXAA on tube;
    MSAA does not help inside the phosphor shader.
 
