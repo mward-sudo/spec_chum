@@ -49,12 +49,12 @@ jobs:
 
       - name: Render baseline without a window
         env:
-          CARGO_TARGET_DIR: ${{ runner.temp }}/crt-visual-target
+          CARGO_TARGET_DIR: ${{ runner.temp }}/crt-visual-target-baseline
         run: cargo run --manifest-path baseline/Cargo.toml -p living_room --example room_probe --release -- 1280 720 "${{ runner.temp }}/baseline.ppm" 0
 
       - name: Render candidate without a window
         env:
-          CARGO_TARGET_DIR: ${{ runner.temp }}/crt-visual-target
+          CARGO_TARGET_DIR: ${{ runner.temp }}/crt-visual-target-candidate
         run: cargo run --manifest-path candidate/Cargo.toml -p living_room --example room_probe --release -- 1280 720 "${{ runner.temp }}/candidate.ppm" 0
 
       - name: Build side-by-side PPM
