@@ -342,9 +342,9 @@ Spectrum framebuffer is **`SCREEN_W`×`SCREEN_H` = 352×296** (`crates/living_ro
 | Stage | Filter / size | Rationale |
 | --- | --- | --- |
 | Phosphor upload texture | **Nearest** (already) | Preserve 8×8 Spectrum glyphs; shader snaps with `textureLoad` |
-| Phosphor shader | Soft-H mix + sharp V; scan/grille via `CrtLookBlend` | CRT look at sofa distance; near-zero scan at CRT-fill zoom |
+| Phosphor shader | Fixed soft-H mix, scan and grille at every zoom | Camera distance and curved-mesh mip filtering change apparent size without changing phosphor parameters |
 | 3D room render target | **1920×1080** default; Swift caps long edge at **2560**, aspect-matched to view | Geometry needs pixels; CALayer linear-upscales when the window is larger |
-| Room MSAA | Optional **MSAA on room camera only** | Smooth bezel/furniture edges; phosphor mesh still samples nearest texels |
+| Room MSAA | Optional **MSAA on room camera only** | Smooths 3D mesh edges; does not change sampling inside the phosphor shader |
 | Phosphor mipmaps | **Off** for FB texture | Mips blur glyphs; CRT mesh is close to screen-facing |
 | Final present to window | **Linear / bilinear** CALayer (done) or Metal sampler | Upscale of the **composited 3D frame** must not be nearest |
 | Flat Spectrum mode (non-room) | Unchanged product path | Out of scope for this plan |
@@ -641,8 +641,8 @@ Bevy tonemapping/output conversion; the shader no longer applies manual gamma po
    (~280 triads); then tube-space horizontal-filter refinement. The tube-space
    reconstruction and optional material-halation target are implemented in
    `crt_tube.wgsl`; the curved-mesh sampling path remains in `crt_phosphor.wgsl`.
-3. Keep scan/grille/brightness fixed across zoom, and do not apply room post-process
-   FXAA to the tube; MSAA only smooths the room's 3D geometry, not phosphor sampling.
+3. Keep scan/grille/brightness fixed across zoom. Room-camera FXAA is removed because
+   it post-processes the tube too; MSAA only smooths room geometry, not phosphor sampling.
 
 Do **not** start tier 3 until tier-2 lighting/perf baseline is stable.
 
@@ -692,8 +692,8 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
 - Soft CRT spill (~1.1k–4.0k lm) tints walls from the framebuffer; TV-wall
   sconces ~14.4k lm tungsten; warm `GlobalAmbientLight` keeps sofa / wallpaper
   readable. Pull-back bloom stays mild so the tube face stays legible.
-- **Fidelity gaps** (tier 3): horizontal-filter refinement, fixed CRT look across zoom,
-  and final baseline comparison — see **Roadmap → Tier 3**.
+- **Fidelity gaps** (tier 3): horizontal-filter refinement and final baseline comparison —
+  see **Roadmap → Tier 3**.
   Lightmaps / `EnvironmentMapLight` remain [#149](https://github.com/mward-sudo/spec_chum/issues/149).
 
 ## Out of scope (v1)
