@@ -534,6 +534,12 @@ helps less than the old readback benchmark suggested.
 The live embed does **not** have the “black room” problem reported from headless
 readback probes.
 
+For a deterministic image comparison without opening the app, dispatch the
+**CRT visual comparison** workflow with a baseline ref (default `v0.4.0`) and
+candidate ref (default `main`). It uploads baseline, candidate and side-by-side
+PPM captures of the same color-bar, fine-line and checker pattern. Both renders
+use `HeadlessRoom` and create no window.
+
 ## Quality knobs
 
 Runtime A/B via `SPEC_CHUM_ROOM_*` (implemented in `crates/living_room/src/quality.rs`):
@@ -643,7 +649,8 @@ Bevy tonemapping/output conversion. **Completed and remaining work:**
 3. Keep scan/grille/brightness fixed across zoom. Room-camera FXAA is removed because
    it post-processes the tube too; MSAA only smooths room geometry, not phosphor sampling.
 
-Do **not** start tier 3 until tier-2 lighting/perf baseline is stable.
+Tier-2 prerequisites (#149 and #150) are complete. The remaining #148 work is
+the offline visual comparison against the v0.4.0 baseline.
 
 ## Quality gate
 
