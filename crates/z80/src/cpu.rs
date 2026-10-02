@@ -507,7 +507,7 @@ mod tests {
             assert_eq!(cpu.step(&mut bus), 8);
             assert_eq!(cpu.regs.pc, 0x1202);
             assert_eq!(bus.reads, [(0x1200, 0), (0x1201, 4)]);
-            assert!(bus.writes.is_empty());
+            assert_eq!(bus.writes, []);
             assert_eq!(cpu.step(&mut bus), 7, "following LD A,n must remain intact");
             assert_eq!(cpu.regs.a, 0x55);
             assert_eq!(cpu.regs.pc, 0x1204);
