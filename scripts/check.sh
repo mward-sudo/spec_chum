@@ -24,6 +24,8 @@ fi
 
 echo "==> graphify provider smoke test (no network)"
 ./scripts/test_graphify_update.sh
+echo "==> Spectrum Next asset validation tests (no network)"
+python3 -m unittest scripts.tests.test_system_next_assets
 echo "==> cargo fmt --check"
 cargo fmt --all -- --check
 

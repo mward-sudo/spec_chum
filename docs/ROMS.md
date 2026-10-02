@@ -97,33 +97,49 @@ Sparse checkout **excludes** `peripherals/Interface1` and `zx80-81` (see
 
 ### ZX Spectrum Next — System/Next distribution (#191)
 
-The current plan is to bundle an **exact, complete copy** of the official
-System/Next Distribution with Spec Chum releases. The Next Licence permits
-copying and distributing exact copies of the complete Distribution without
-charge; it prohibits selling the Distribution or charging a duplication fee.
-The Next Licence and **every constituent licence** must accompany the copy.
-Individual component licences take precedence over the Next Licence, so do not
-extract, modify, or redistribute a partial SD image under the umbrella grant.
+The official SpecNext site currently publishes System/Next 24.11. Its complete
+archive is the only pinned distribution asset; the separately published
+emulator image omits core files and is not treated as a complete distribution.
+The archive includes the Next Licence, which must be checked alongside each
+constituent licence before any redistribution. Preserve the complete archive
+and all its notices unchanged; do not assume its top-level terms override a
+component licence or authorize redistribution of extracted ROMs, a partial
+archive, or a derived SD image. The setup script fetches user assets and does
+not package or redistribute them.
 
-The official distribution is published at
-[specnext.com/latestdistro](https://www.specnext.com/latestdistro/). Before
-packaging any version, verify the downloaded archive is the complete official
-Distribution and preserve its original contents and notices. Do not commit its
-bytes to Git; release packaging details and version pinning remain part of
-[#191](https://github.com/mward-sudo/spec_chum/issues/191). This applies only
-to no-fee releases; if a Spec Chum release is ever sold or charges a
-duplication fee, do not include the Distribution without a fresh rights review.
+The pinned complete archive is 56,371,963 bytes with SHA-256
+`cbf5d4c8bb6dc552a4e68317a7315e06609b14028e1f04dd0afd2189be65ce6b`. It is
+available from [the official latest distribution page](https://www.specnext.com/latestdistro/)
+at `https://www.specnext.com/distro/24.11/sn-complete-24.11.zip`. Key entries
+validated by `scripts/system_next_assets.py` include root `TBBLUE.FW`,
+`machines/next/enNextZX.rom`, `machines/next/enNxtmmc.rom`,
+`machines/next/enNextMf.rom`, `machines/next/menu.def`, `LICENSE.md`, and
+`docs/licenses/`. The exact archive hash also pins the complete constituent
+inventory. User downloads live under ignored `roms/system-next/`; no archive,
+ROM or disk-image bytes are committed.
 
-The Distribution includes Sinclair/Amstrad ROM images. Their separate emulator
-permission still applies: retain the copyright strings inside the images and
-include the Lawson attribution from
+The separate Next FPGA IPL archive is linked from the
+[SpecNext MAME installation guide](https://wiki.specnext.dev/MAME:Installing)
+and hosted at `https://www.specnext.com/forum/download/file.php?id=1164`. The
+pinned archive SHA-256 is
+`845b6567cbb531a550aff6e762bf0b6aa5ea2855bd23be24925ed6202fdc3d03`. Its
+README states that `boot-30204.bin` is GPL-3.0-or-later, with `GPL3-LICENSE`
+included; the selected 8 KiB file SHA-256 is
+`33f04fd104eb428eff1afe18854e3fc232019a20948ce8efed01f04f1196d815`. Older
+IPL binaries in the same archive contain the Sinclair ROM font and have a
+narrower non-commercial desktop emulator permission, so the setup script does
+not install them. The current official distribution page lists core 3.02.01,
+while this GPL IPL is 3.02.04; their boot compatibility is not yet verified.
+
+The complete Distribution includes Sinclair/Amstrad ROM images. Retain their
+copyright strings and include the Lawson attribution from
 [Official Sinclair / Amstrad Spectrum ROMs](#official-sinclair--amstrad-spectrum-roms)
-in the release. Keep Spec Chum's own name and UI; do not use the Next logo screen
-or identify Spec Chum as a SpecNext Ltd hardware product. This policy is based
-on the [Next Licence text as reproduced with attribution by the Retrogamecoders
-IDE](https://ide.retrogamecoders.com/zxnext-about.html); recheck the exact
-licence files and component inventory in the selected official archive before
-the first release that bundles it.
+where those images are distributed separately. Keep Spec Chum's own name and
+UI; do not use the Next logo screen or identify Spec Chum as a SpecNext Ltd
+hardware product. Any release packaging must preserve the exact complete
+archive and its notices, remain no-fee, and pass a fresh inventory review of
+constituent restrictions first; see [#525](https://github.com/mward-sudo/spec_chum/issues/525)
+and the [#523 roadmap](https://github.com/mward-sudo/spec_chum/issues/523).
 
 ## User-provided only — not auto-fetched
 
