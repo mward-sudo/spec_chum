@@ -22,16 +22,40 @@
 //! - `SPEC_CHUM_ROOM_HIDE_CRT=1` — hide phosphor / glass only.
 
 use bevy::asset::RenderAssetUsages;
+use bevy::camera::{visibility::RenderLayers, Hdr, NormalizedRenderTarget, RenderTarget};
+use bevy::core_pipeline::{
+    mip_generation::{
+        generate_mips_for_phase, MipGenerationJobs, MipGenerationPhaseId, MipGenerationPipelines,
+    },
+    schedule::Core2d,
+    upscaling::upscaling,
+};
 use bevy::image::{ImageSampler, ImageSamplerDescriptor};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, Extent3d, TextureDimension, TextureFormat};
+use bevy::render::{
+    camera::ExtractedCamera,
+    render_asset::RenderAssets,
+    render_resource::{
+        AsBindGroup, Extent3d, PipelineCache, TextureDimension, TextureFormat, TextureUsages,
+    },
+    renderer::{CurrentView, RenderContext},
+    texture::GpuImage,
+    Extract, ExtractSchedule, RenderApp,
+};
 use bevy::shader::ShaderRef;
+use bevy::sprite_render::{Material2d, Material2dPlugin};
 
 use crate::room::{TelevisionCabinet, TV_STAND_POS};
 
 pub const SCREEN_W: u32 = 352;
 pub const SCREEN_H: u32 = 296;
+pub const TUBE_W: u32 = 1280;
+pub const TUBE_H: u32 = 960;
+const TUBE_MIP_COUNT: u32 = 32 - TUBE_W.leading_zeros();
+const TUBE_LAYER: RenderLayers = RenderLayers::layer(31);
+// "CRT1" in ASCII; phase IDs are shared by all render plugins.
+const TUBE_MIP_PHASE: MipGenerationPhaseId = MipGenerationPhaseId(0x4352_5401);
 
 /// Visible glass opening = punched painted-glass XY AABB (matches hole in mesh).
 pub const APERTURE_W: f32 = 0.3165;
@@ -82,9 +106,24 @@ const PHOSPHOR_Z_BEHIND: f32 = 0.005;
 pub const TEX_OVERSCAN: f32 = 1.012;
 
 const SHADER_PATH: &str = "shaders/crt_phosphor.wgsl";
+const TUBE_SHADER_PATH: &str = "shaders/crt_tube.wgsl";
 
 #[derive(Resource, Clone, Debug)]
 pub struct CrtScreenTexture(pub Handle<Image>);
+
+/// Fixed-resolution, linear HDR phosphor image. The curved screen samples its
+/// generated mip chain while the window-sized room target remains independent.
+#[derive(Resource, Clone, Debug)]
+pub struct CrtTubeTexture(pub Handle<Image>);
+
+#[derive(Resource, Clone, Debug)]
+struct CrtTubeCanvas(Handle<Image>);
+
+#[derive(Resource)]
+struct ExtractedTubeImages {
+    canvas: Handle<Image>,
+    tube: Handle<Image>,
+}
 
 #[derive(Component, Debug)]
 pub struct CrtPhosphor;
@@ -98,19 +137,12 @@ pub struct ApertureDebugMarker;
 #[derive(Component, Debug)]
 struct CrtAttachedToTv;
 
-/// CRT material uniforms packed into one bind-0 buffer (matches `crt_phosphor.wgsl`).
+/// Samples the completed tube image on the curved CRT surface.
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct CrtPhosphorMaterial {
-    #[uniform(0)]
-    pub params0: Vec4,
-    #[uniform(0)]
-    pub params1: Vec4,
-    /// params2.x selects stronger phosphor-local halation when global Bloom is off.
-    #[uniform(0)]
-    pub params2: Vec4,
-    #[texture(2)]
-    #[sampler(3)]
-    pub screen: Handle<Image>,
+    #[texture(0)]
+    #[sampler(1)]
+    pub tube: Handle<Image>,
 }
 
 impl Material for CrtPhosphorMaterial {
@@ -119,15 +151,138 @@ impl Material for CrtPhosphorMaterial {
     }
 }
 
+/// The raster is reconstructed once in tube coordinates before the 3D room
+/// camera renders the curved mesh. Uniform packing matches `crt_tube.wgsl`.
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct CrtTubeMaterial {
+    #[uniform(0)]
+    pub params0: Vec4,
+    #[uniform(0)]
+    pub params1: Vec4,
+    #[uniform(0)]
+    pub params2: Vec4,
+    #[texture(2)]
+    #[sampler(3)]
+    pub screen: Handle<Image>,
+}
+
+impl Material2d for CrtTubeMaterial {
+    fn fragment_shader() -> ShaderRef {
+        TUBE_SHADER_PATH.into()
+    }
+}
+
+#[derive(Component, Debug)]
+struct CrtTubeQuad;
+
 #[derive(Debug, Default)]
 pub struct CrtPlugin;
 
 impl Plugin for CrtPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<CrtPhosphorMaterial>::default())
-            .add_systems(Startup, setup_crt_resources)
-            .add_systems(Update, (attach_crt_to_television, animate_crt_params));
+        app.add_plugins((
+            MaterialPlugin::<CrtPhosphorMaterial>::default(),
+            Material2dPlugin::<CrtTubeMaterial>::default(),
+        ))
+        .add_systems(Startup, setup_crt_resources)
+        .add_systems(Update, (attach_crt_to_television, animate_crt_params));
+
+        let render_app = app.sub_app_mut(RenderApp);
+        render_app
+            .add_systems(ExtractSchedule, schedule_tube_mips)
+            // The tube camera has order -1. Its Core2d output must be complete
+            // before mips are generated and the order-0 room camera samples them.
+            .add_systems(
+                Core2d,
+                (copy_tube_canvas, generate_tube_mips)
+                    .chain()
+                    .after(upscaling),
+            );
     }
+}
+
+fn schedule_tube_mips(
+    mut commands: Commands,
+    canvas: Extract<Res<CrtTubeCanvas>>,
+    tube: Extract<Res<CrtTubeTexture>>,
+    mut jobs: ResMut<MipGenerationJobs>,
+) {
+    commands.insert_resource(ExtractedTubeImages {
+        canvas: canvas.0.clone(),
+        tube: tube.0.clone(),
+    });
+    jobs.add(TUBE_MIP_PHASE, tube.0.id());
+}
+
+fn tube_view_is_current(
+    current_view: CurrentView,
+    cameras: &Query<&ExtractedCamera>,
+    images: &ExtractedTubeImages,
+) -> bool {
+    cameras
+        .get(*current_view)
+        .ok()
+        .and_then(|camera| camera.target.as_ref())
+        .is_some_and(|target| {
+            matches!(target, NormalizedRenderTarget::Image(image) if image.handle == images.canvas)
+        })
+}
+
+fn copy_tube_canvas(
+    images: Option<Res<ExtractedTubeImages>>,
+    current_view: Res<CurrentView>,
+    cameras: Query<&ExtractedCamera>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
+    mut ctx: RenderContext,
+) {
+    let Some(images) = images else {
+        return;
+    };
+    if !tube_view_is_current(*current_view, &cameras, &images) {
+        return;
+    }
+    let (Some(canvas), Some(tube)) = (gpu_images.get(&images.canvas), gpu_images.get(&images.tube))
+    else {
+        return;
+    };
+    ctx.command_encoder().copy_texture_to_texture(
+        canvas.texture.as_image_copy(),
+        tube.texture.as_image_copy(),
+        Extent3d {
+            width: TUBE_W,
+            height: TUBE_H,
+            depth_or_array_layers: 1,
+        },
+    );
+}
+
+fn generate_tube_mips(
+    images: Option<Res<ExtractedTubeImages>>,
+    current_view: Res<CurrentView>,
+    cameras: Query<&ExtractedCamera>,
+    jobs: Res<MipGenerationJobs>,
+    pipeline_cache: Res<PipelineCache>,
+    pipelines: Option<Res<MipGenerationPipelines>>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
+    mut ctx: RenderContext,
+) {
+    let Some(images) = images else {
+        return;
+    };
+    if !tube_view_is_current(*current_view, &cameras, &images) {
+        return;
+    }
+    let Some(pipelines) = pipelines else {
+        return;
+    };
+    generate_mips_for_phase(
+        TUBE_MIP_PHASE,
+        &jobs,
+        &pipeline_cache,
+        &pipelines,
+        &gpu_images,
+        &mut ctx,
+    );
 }
 
 #[must_use]
@@ -188,6 +343,7 @@ fn setup_crt_resources(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut phosphor_mats: ResMut<Assets<CrtPhosphorMaterial>>,
+    mut tube_mats: ResMut<Assets<CrtTubeMaterial>>,
     mut std_mats: ResMut<Assets<StandardMaterial>>,
 ) {
     let mut image = Image::new_fill(
@@ -205,16 +361,38 @@ fn setup_crt_resources(
     let handle = images.add(image);
     commands.insert_resource(CrtScreenTexture(handle.clone()));
 
-    let phosphor_mesh = meshes.add(bulging_screen_mesh(
-        PHOSPHOR_W,
-        PHOSPHOR_MESH_H,
-        PHOSPHOR_BULGE,
-        176,
-        148,
-    ));
-    let phosphor_mat = phosphor_mats.add(CrtPhosphorMaterial {
+    let mut canvas = Image::new_uninit(
+        Extent3d {
+            width: TUBE_W,
+            height: TUBE_H,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        TextureFormat::Rgba16Float,
+        RenderAssetUsages::all(),
+    );
+    canvas.texture_descriptor.usage |= TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT;
+    let canvas_handle = images.add(canvas);
+    commands.insert_resource(CrtTubeCanvas(canvas_handle.clone()));
+
+    let mut tube = Image::new_uninit(
+        Extent3d {
+            width: TUBE_W,
+            height: TUBE_H,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        TextureFormat::Rgba16Float,
+        RenderAssetUsages::all(),
+    );
+    tube.texture_descriptor.mip_level_count = TUBE_MIP_COUNT;
+    tube.texture_descriptor.usage |= TextureUsages::STORAGE_BINDING;
+    tube.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor::linear());
+    let tube_handle = images.add(tube);
+    commands.insert_resource(CrtTubeTexture(tube_handle.clone()));
+
+    let tube_mat = tube_mats.add(CrtTubeMaterial {
         params0: Vec4::new(0.0, 0.18, 0.10, 1.85),
-        // params1.x = soft mix; params1.y = mesh aspect (4:3 content fit).
         params1: Vec4::new(0.08, PHOSPHOR_W / PHOSPHOR_MESH_H, 0.0, 0.0),
         params2: Vec4::new(
             if crate::quality::material_halation_enabled() {
@@ -226,8 +404,38 @@ fn setup_crt_resources(
             0.0,
             0.0,
         ),
-        screen: handle.clone(),
+        screen: handle,
     });
+    commands.spawn((
+        Camera2d,
+        Hdr,
+        Msaa::Off,
+        Camera {
+            order: -1,
+            clear_color: ClearColorConfig::Custom(Color::BLACK),
+            ..default()
+        },
+        RenderTarget::Image(canvas_handle.into()),
+        TUBE_LAYER,
+        Name::new("crt_tube_camera"),
+    ));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::new(TUBE_W as f32, TUBE_H as f32))),
+        MeshMaterial2d(tube_mat),
+        Transform::default(),
+        TUBE_LAYER,
+        CrtTubeQuad,
+        Name::new("crt_tube_quad"),
+    ));
+
+    let phosphor_mesh = meshes.add(bulging_screen_mesh(
+        PHOSPHOR_W,
+        PHOSPHOR_MESH_H,
+        PHOSPHOR_BULGE,
+        176,
+        148,
+    ));
+    let phosphor_mat = phosphor_mats.add(CrtPhosphorMaterial { tube: tube_handle });
     let glass_mesh = meshes.add(bulging_screen_mesh(
         PHOSPHOR_W * 1.002,
         PHOSPHOR_MESH_H * 1.002,
@@ -335,8 +543,8 @@ fn animate_crt_params(
     time: Res<Time>,
     look: Option<Res<crate::camera::CrtLookBlend>>,
     opening: Option<Res<crate::camera::OpeningSequence>>,
-    mut materials: ResMut<Assets<CrtPhosphorMaterial>>,
-    query: Query<&MeshMaterial3d<CrtPhosphorMaterial>, With<CrtPhosphor>>,
+    mut materials: ResMut<Assets<CrtTubeMaterial>>,
+    query: Query<&MeshMaterial2d<CrtTubeMaterial>, With<CrtTubeQuad>>,
 ) {
     let t = look.map_or(0.0, |l| l.0.clamp(0.0, 1.0));
     // Close: keep glyphs readable. Far: sofa-distance Trinitron (scan/grille/soft).
