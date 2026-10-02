@@ -1,7 +1,7 @@
 # Graph Report - spec_chum  (2026-10-02)
 
 ## Corpus Check
-- 314 files · ~1,260,827 words
+- 314 files · ~1,260,854 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 53 file(s) not represented in the graph (top: .tap 10, .mdc 8, (none) 6)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ed1f02ec`
+- Built from commit: `13d80720`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1381,9 +1381,9 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `HostBridge` connect `HostBridge` to `Model`, `LivingRoomNSView`, `PrefModelSlug`, `ContentView`, `RomSetupSlot`, `.refreshInspector`, `LoadKeyScript`, `MachineConfigEditorView`, `IOSurface`, `SpectrumNSView`, `TapeAudioPlayer`, `Error`, `.enqueueLivingRoomPresentBind`, `InputLatencyProbe`, `.body`, `NSEvent`?**
   _High betweenness centrality (0.184) - this node is a cross-community bridge._
 - **Why does `CatalogError` connect `Error` to `HostBridge`?**
-  _High betweenness centrality (0.122) - this node is a cross-community bridge._
+  _High betweenness centrality (0.123) - this node is a cross-community bridge._
 - **Why does `LivingRoomThread` connect `MachineConfigEditorView` to `HostBridge`, `agent_server/src/main.rs`?**
-  _High betweenness centrality (0.054) - this node is a cross-community bridge._
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
 - **Are the 7 inferred relationships involving `HostBridge` (e.g. with `.livingRoomToolbar` and `.statusFooterMessageIsError`) actually correct?**
   _`HostBridge` has 7 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `PackageDescription`, `Notification.Name`, `.statusFooter` to the rest of the system?**

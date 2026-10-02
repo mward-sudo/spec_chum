@@ -52,7 +52,10 @@ pub(crate) struct FuseEvent {
 pub enum CpuProfile {
     #[default]
     Z80,
-    Z80N,
+    /// Enable the Z80N NEXTREG instructions currently supported by this emulator.
+    /// Other Z80N-only opcodes retain classic Z80 decoding, including the
+    /// existing unknown-ED behavior where applicable.
+    Z80NNextReg,
 }
 
 /// Z80 CPU with cycle-counted instruction execution.
@@ -417,7 +420,7 @@ mod tests {
     }
 
     fn next_cpu() -> Cpu {
-        let mut cpu = Cpu::with_profile(CpuProfile::Z80N);
+        let mut cpu = Cpu::with_profile(CpuProfile::Z80NNextReg);
         cpu.regs = Registers {
             a: 0x5a,
             f: 0xd7,
@@ -515,7 +518,7 @@ mod tests {
     fn reset_keeps_the_instruction_profile() {
         let mut cpu = next_cpu();
         cpu.reset();
-        assert_eq!(cpu.profile(), CpuProfile::Z80N);
+        assert_eq!(cpu.profile(), CpuProfile::Z80NNextReg);
     }
 
     #[test]

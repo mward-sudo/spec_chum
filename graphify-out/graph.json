@@ -5689,7 +5689,7 @@
       "file_type": "code",
       "norm_label": "nextbus",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L375"
+      "source_location": "L378"
     },
     {
       "id": "crates_formats_src_fdc_mod_phase",
@@ -8245,7 +8245,7 @@
       "file_type": "code",
       "norm_label": "cpu",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L60"
+      "source_location": "L63"
     },
     {
       "id": "crates_z80_src_opcodes_idx",
@@ -11898,7 +11898,7 @@
       "file_type": "code",
       "norm_label": ".add_t()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L185"
+      "source_location": "L188"
     },
     {
       "id": "crates_z80_src_cpu_cpu_contend_cycles",
@@ -11909,7 +11909,7 @@
       "file_type": "code",
       "norm_label": ".contend_cycles()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L210"
+      "source_location": "L213"
     },
     {
       "id": "crates_z80_src_cpu_cpu_contend_read_timing",
@@ -11920,7 +11920,7 @@
       "file_type": "code",
       "norm_label": ".contend_read_timing()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L225"
+      "source_location": "L228"
     },
     {
       "id": "crates_z80_src_cpu_cpu_fetch16",
@@ -11931,7 +11931,7 @@
       "file_type": "code",
       "norm_label": ".fetch16()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L283"
+      "source_location": "L286"
     },
     {
       "id": "crates_z80_src_cpu_cpu_fetch8",
@@ -11942,7 +11942,7 @@
       "file_type": "code",
       "norm_label": ".fetch8()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L275"
+      "source_location": "L278"
     },
     {
       "id": "crates_z80_src_cpu_cpu_fetch_opcode",
@@ -11953,7 +11953,7 @@
       "file_type": "code",
       "norm_label": ".fetch_opcode()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L256"
+      "source_location": "L259"
     },
     {
       "id": "crates_z80_src_cpu_cpu_fuse_port_postio",
@@ -11964,7 +11964,7 @@
       "file_type": "code",
       "norm_label": ".fuse_port_postio()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L350"
+      "source_location": "L353"
     },
     {
       "id": "crates_z80_src_cpu_cpu_fuse_port_preio",
@@ -11975,7 +11975,7 @@
       "file_type": "code",
       "norm_label": ".fuse_port_preio()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L341"
+      "source_location": "L344"
     },
     {
       "id": "crates_z80_src_cpu_cpu_fuse_push",
@@ -11986,7 +11986,7 @@
       "file_type": "code",
       "norm_label": ".fuse_push()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L197"
+      "source_location": "L200"
     },
     {
       "id": "crates_z80_src_cpu_cpu_in_port",
@@ -11997,7 +11997,7 @@
       "file_type": "code",
       "norm_label": ".in_port()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L307"
+      "source_location": "L310"
     },
     {
       "id": "crates_z80_src_cpu_cpu_interrupt",
@@ -12008,7 +12008,7 @@
       "file_type": "code",
       "norm_label": ".interrupt()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L116"
+      "source_location": "L119"
     },
     {
       "id": "crates_z80_src_cpu_cpu_nmi",
@@ -12019,7 +12019,7 @@
       "file_type": "code",
       "norm_label": ".nmi()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L164"
+      "source_location": "L167"
     },
     {
       "id": "crates_z80_src_cpu_cpu_out_port",
@@ -12030,7 +12030,7 @@
       "file_type": "code",
       "norm_label": ".out_port()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L325"
+      "source_location": "L328"
     },
     {
       "id": "crates_z80_src_cpu_cpu_pop",
@@ -12041,7 +12041,7 @@
       "file_type": "code",
       "norm_label": ".pop()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L298"
+      "source_location": "L301"
     },
     {
       "id": "crates_z80_src_cpu_cpu_push",
@@ -12052,7 +12052,7 @@
       "file_type": "code",
       "norm_label": ".push()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L290"
+      "source_location": "L293"
     },
     {
       "id": "crates_z80_src_cpu_cpu_read_mem",
@@ -12063,7 +12063,7 @@
       "file_type": "code",
       "norm_label": ".read_mem()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L239"
+      "source_location": "L242"
     },
     {
       "id": "crates_z80_src_cpu_cpu_write_mem",
@@ -12074,7 +12074,7 @@
       "file_type": "code",
       "norm_label": ".write_mem()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L248"
+      "source_location": "L251"
     },
     {
       "id": "crates_z80_src_cpu_nextbus_in_port",
@@ -12085,7 +12085,7 @@
       "file_type": "code",
       "norm_label": ".in_port()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L406"
+      "source_location": "L409"
     },
     {
       "id": "crates_z80_src_cpu_nextbus_nextreg_write",
@@ -12096,7 +12096,7 @@
       "file_type": "code",
       "norm_label": ".nextreg_write()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L414"
+      "source_location": "L417"
     },
     {
       "id": "crates_z80_src_cpu_nextbus_out_port",
@@ -12107,7 +12107,7 @@
       "file_type": "code",
       "norm_label": ".out_port()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L410"
+      "source_location": "L413"
     },
     {
       "id": "crates_z80_src_cpu_nextbus_read",
@@ -12118,7 +12118,7 @@
       "file_type": "code",
       "norm_label": ".read()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L394"
+      "source_location": "L397"
     },
     {
       "id": "crates_z80_src_cpu_nextbus_write",
@@ -12129,7 +12129,7 @@
       "file_type": "code",
       "norm_label": ".write()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L399"
+      "source_location": "L402"
     },
     {
       "id": "crates_z80_src_cpu_rs_box",
@@ -41392,7 +41392,7 @@
       "file_type": "code",
       "norm_label": "classic_ed_91_and_92_remain_unknown_eight_t_instructions()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L497"
+      "source_location": "L500"
     },
     {
       "id": "crates_z80_src_cpu_contend_read_timing_adds_wait_without_mr",
@@ -41403,7 +41403,7 @@
       "file_type": "code",
       "norm_label": "contend_read_timing_adds_wait_without_mr()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L681"
+      "source_location": "L684"
     },
     {
       "id": "crates_z80_src_cpu_cpu_new",
@@ -41414,7 +41414,7 @@
       "file_type": "code",
       "norm_label": ".new()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L73"
+      "source_location": "L76"
     },
     {
       "id": "crates_z80_src_cpu_cpu_profile",
@@ -41425,7 +41425,7 @@
       "file_type": "code",
       "norm_label": ".profile()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L87"
+      "source_location": "L90"
     },
     {
       "id": "crates_z80_src_cpu_cpu_reset",
@@ -41436,7 +41436,7 @@
       "file_type": "code",
       "norm_label": ".reset()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L91"
+      "source_location": "L94"
     },
     {
       "id": "crates_z80_src_cpu_cpu_step",
@@ -41447,7 +41447,7 @@
       "file_type": "code",
       "norm_label": ".step()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L98"
+      "source_location": "L101"
     },
     {
       "id": "crates_z80_src_cpu_cpu_with_profile",
@@ -41458,7 +41458,7 @@
       "file_type": "code",
       "norm_label": ".with_profile()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L79"
+      "source_location": "L82"
     },
     {
       "id": "crates_z80_src_cpu_fuseeventkind_as_str",
@@ -41480,7 +41480,7 @@
       "file_type": "code",
       "norm_label": "interrupt_clears_q_before_scf()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L582"
+      "source_location": "L585"
     },
     {
       "id": "crates_z80_src_cpu_interrupt_im2_uncontended_is_19_t",
@@ -41491,7 +41491,7 @@
       "file_type": "code",
       "norm_label": "interrupt_im2_uncontended_is_19_t()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L643"
+      "source_location": "L646"
     },
     {
       "id": "crates_z80_src_cpu_interrupt_while_halted_does_not_skip_redirected_pc",
@@ -41502,7 +41502,7 @@
       "file_type": "code",
       "norm_label": "interrupt_while_halted_does_not_skip_redirected_pc()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L660"
+      "source_location": "L663"
     },
     {
       "id": "crates_z80_src_cpu_interrupt_while_halted_resumes_after_halt",
@@ -41513,7 +41513,7 @@
       "file_type": "code",
       "norm_label": "interrupt_while_halted_resumes_after_halt()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L603"
+      "source_location": "L606"
     },
     {
       "id": "crates_z80_src_cpu_next_cpu",
@@ -41524,7 +41524,7 @@
       "file_type": "code",
       "norm_label": "next_cpu()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L419"
+      "source_location": "L422"
     },
     {
       "id": "crates_z80_src_cpu_nextbus_program",
@@ -41535,7 +41535,7 @@
       "file_type": "code",
       "norm_label": ".program()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L382"
+      "source_location": "L385"
     },
     {
       "id": "crates_z80_src_cpu_nextreg_accumulator_writes_a_with_17_timing",
@@ -41546,7 +41546,7 @@
       "file_type": "code",
       "norm_label": "nextreg_accumulator_writes_a_with_17_timing()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L459"
+      "source_location": "L462"
     },
     {
       "id": "crates_z80_src_cpu_nextreg_immediate_writes_register_with_20_timing",
@@ -41557,7 +41557,7 @@
       "file_type": "code",
       "norm_label": "nextreg_immediate_writes_register_with_20_timing()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L435"
+      "source_location": "L438"
     },
     {
       "id": "crates_z80_src_cpu_nmi_vectors_to_0066_and_preserves_iff2",
@@ -41568,7 +41568,7 @@
       "file_type": "code",
       "norm_label": "nmi_vectors_to_0066_and_preserves_iff2()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L625"
+      "source_location": "L628"
     },
     {
       "id": "crates_z80_src_cpu_reset_keeps_the_instruction_profile",
@@ -41579,7 +41579,7 @@
       "file_type": "code",
       "norm_label": "reset_keeps_the_instruction_profile()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L515"
+      "source_location": "L518"
     },
     {
       "id": "crates_z80_src_cpu_rs_b",
@@ -41612,7 +41612,7 @@
       "file_type": "code",
       "norm_label": "scf_ccf_use_q_for_undocumented_xy()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L522"
+      "source_location": "L525"
     },
     {
       "id": "crates_z80_src_cpu_z80n_nextreg_accepts_ignored_index_prefixes",
@@ -41623,7 +41623,7 @@
       "file_type": "code",
       "norm_label": "z80n_nextreg_accepts_ignored_index_prefixes()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L480"
+      "source_location": "L483"
     },
     {
       "id": "crates_agent_server_src_routes_health",
@@ -50941,7 +50941,7 @@
       "file_type": "code",
       "norm_label": ".contend_ir_cycles()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L233"
+      "source_location": "L236"
     },
     {
       "id": "crates_z80_src_cpu_cpu_ir",
@@ -50952,7 +50952,7 @@
       "file_type": "code",
       "norm_label": ".ir()",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L192"
+      "source_location": "L195"
     },
     {
       "id": "crates_z80_src_opcodes",
@@ -114062,7 +114062,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L500",
+      "source_location": "L503",
       "weight": 1.0
     },
     {
@@ -114074,7 +114074,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L502",
+      "source_location": "L505",
       "weight": 1.0
     },
     {
@@ -114086,7 +114086,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L705",
+      "source_location": "L708",
       "weight": 1.0
     },
     {
@@ -114098,7 +114098,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L707",
+      "source_location": "L710",
       "weight": 1.0
     },
     {
@@ -114110,7 +114110,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L213",
+      "source_location": "L216",
       "weight": 1.0
     },
     {
@@ -114122,7 +114122,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L217",
+      "source_location": "L220",
       "weight": 1.0
     },
     {
@@ -114134,7 +114134,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L234",
+      "source_location": "L237",
       "weight": 1.0
     },
     {
@@ -114146,7 +114146,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L235",
+      "source_location": "L238",
       "weight": 1.0
     },
     {
@@ -114158,7 +114158,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L226",
+      "source_location": "L229",
       "weight": 1.0
     },
     {
@@ -114170,7 +114170,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L227",
+      "source_location": "L230",
       "weight": 1.0
     },
     {
@@ -114182,7 +114182,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L228",
+      "source_location": "L231",
       "weight": 1.0
     },
     {
@@ -114194,7 +114194,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L284",
+      "source_location": "L287",
       "weight": 1.0
     },
     {
@@ -114206,7 +114206,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L277",
+      "source_location": "L280",
       "weight": 1.0
     },
     {
@@ -114218,7 +114218,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L258",
+      "source_location": "L261",
       "weight": 1.0
     },
     {
@@ -114230,7 +114230,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L259",
+      "source_location": "L262",
       "weight": 1.0
     },
     {
@@ -114242,7 +114242,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L269",
+      "source_location": "L272",
       "weight": 1.0
     },
     {
@@ -114254,7 +114254,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L355",
+      "source_location": "L358",
       "weight": 1.0
     },
     {
@@ -114266,7 +114266,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L356",
+      "source_location": "L359",
       "weight": 1.0
     },
     {
@@ -114278,7 +114278,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L343",
+      "source_location": "L346",
       "weight": 1.0
     },
     {
@@ -114290,7 +114290,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L345",
+      "source_location": "L348",
       "weight": 1.0
     },
     {
@@ -114302,48 +114302,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L199",
+      "source_location": "L202",
       "weight": 1.0
     },
     {
       "source": "crates_z80_src_cpu_cpu_in_port",
       "target": "crates_z80_src_cpu_cpu_fuse_port_preio",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L310",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu_cpu_in_port",
-      "target": "crates_z80_src_cpu_nextbus_in_port",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L311",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu_cpu_in_port",
-      "target": "crates_z80_src_cpu_cpu_fuse_push",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L312",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu_cpu_in_port",
-      "target": "crates_z80_src_cpu_cpu_fuse_port_postio",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -114355,6 +114319,42 @@
     },
     {
       "source": "crates_z80_src_cpu_cpu_in_port",
+      "target": "crates_z80_src_cpu_nextbus_in_port",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L314",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu_cpu_in_port",
+      "target": "crates_z80_src_cpu_cpu_fuse_push",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L315",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu_cpu_in_port",
+      "target": "crates_z80_src_cpu_cpu_fuse_port_postio",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L316",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu_cpu_in_port",
       "target": "crates_z80_src_cpu_cpu_add_t",
       "relation": "calls",
       "_origin": "ast",
@@ -114362,7 +114362,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L318",
+      "source_location": "L321",
       "weight": 1.0
     },
     {
@@ -114374,24 +114374,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L127",
+      "source_location": "L130",
       "weight": 1.0
     },
     {
       "source": "crates_z80_src_cpu_cpu_interrupt",
       "target": "crates_z80_src_cpu_cpu_push",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L142",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu_cpu_interrupt",
-      "target": "crates_z80_src_cpu_cpu_add_t",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -114403,6 +114391,18 @@
     },
     {
       "source": "crates_z80_src_cpu_cpu_interrupt",
+      "target": "crates_z80_src_cpu_cpu_add_t",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L148",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu_cpu_interrupt",
       "target": "crates_z80_src_cpu_cpu_read_mem",
       "relation": "calls",
       "_origin": "ast",
@@ -114410,7 +114410,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L150",
+      "source_location": "L153",
       "weight": 1.0
     },
     {
@@ -114422,7 +114422,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L168",
+      "source_location": "L171",
       "weight": 1.0
     },
     {
@@ -114434,7 +114434,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L177",
+      "source_location": "L180",
       "weight": 1.0
     },
     {
@@ -114446,7 +114446,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L180",
+      "source_location": "L183",
       "weight": 1.0
     },
     {
@@ -114458,7 +114458,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L327",
+      "source_location": "L330",
       "weight": 1.0
     },
     {
@@ -114470,7 +114470,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L328",
+      "source_location": "L331",
       "weight": 1.0
     },
     {
@@ -114482,7 +114482,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L329",
+      "source_location": "L332",
       "weight": 1.0
     },
     {
@@ -114494,7 +114494,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L330",
+      "source_location": "L333",
       "weight": 1.0
     },
     {
@@ -114506,7 +114506,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L334",
+      "source_location": "L337",
       "weight": 1.0
     },
     {
@@ -114518,7 +114518,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L299",
+      "source_location": "L302",
       "weight": 1.0
     },
     {
@@ -114530,7 +114530,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L292",
+      "source_location": "L295",
       "weight": 1.0
     },
     {
@@ -114542,7 +114542,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L240",
+      "source_location": "L243",
       "weight": 1.0
     },
     {
@@ -114554,7 +114554,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L241",
+      "source_location": "L244",
       "weight": 1.0
     },
     {
@@ -114566,7 +114566,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L242",
+      "source_location": "L245",
       "weight": 1.0
     },
     {
@@ -114578,7 +114578,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L105",
+      "source_location": "L108",
       "weight": 1.0
     },
     {
@@ -114590,7 +114590,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L249",
+      "source_location": "L252",
       "weight": 1.0
     },
     {
@@ -114602,7 +114602,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L250",
+      "source_location": "L253",
       "weight": 1.0
     },
     {
@@ -114614,7 +114614,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L251",
+      "source_location": "L254",
       "weight": 1.0
     },
     {
@@ -114626,24 +114626,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L584",
+      "source_location": "L587",
       "weight": 1.0
     },
     {
       "source": "crates_z80_src_cpu_interrupt_clears_q_before_scf",
       "target": "crates_z80_src_cpu_cpu_interrupt",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L594",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu_interrupt_clears_q_before_scf",
-      "target": "crates_z80_src_cpu_cpu_step",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -114654,6 +114642,18 @@
       "weight": 1.0
     },
     {
+      "source": "crates_z80_src_cpu_interrupt_clears_q_before_scf",
+      "target": "crates_z80_src_cpu_cpu_step",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L600",
+      "weight": 1.0
+    },
+    {
       "source": "crates_z80_src_cpu_interrupt_im2_uncontended_is_19_t",
       "target": "crates_z80_src_cpu_cpu_new",
       "relation": "calls",
@@ -114662,7 +114662,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L644",
+      "source_location": "L647",
       "weight": 1.0
     },
     {
@@ -114674,7 +114674,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L654",
+      "source_location": "L657",
       "weight": 1.0
     },
     {
@@ -114686,7 +114686,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L661",
+      "source_location": "L664",
       "weight": 1.0
     },
     {
@@ -114698,7 +114698,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L669",
+      "source_location": "L672",
       "weight": 1.0
     },
     {
@@ -114710,7 +114710,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L673",
+      "source_location": "L676",
       "weight": 1.0
     },
     {
@@ -114722,24 +114722,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L604",
+      "source_location": "L607",
       "weight": 1.0
     },
     {
       "source": "crates_z80_src_cpu_interrupt_while_halted_resumes_after_halt",
       "target": "crates_z80_src_cpu_cpu_step",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L612",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu_interrupt_while_halted_resumes_after_halt",
-      "target": "crates_z80_src_cpu_cpu_interrupt",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -114747,6 +114735,18 @@
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
       "source_location": "L615",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu_interrupt_while_halted_resumes_after_halt",
+      "target": "crates_z80_src_cpu_cpu_interrupt",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L618",
       "weight": 1.0
     },
     {
@@ -114758,7 +114758,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L420",
+      "source_location": "L423",
       "weight": 1.0
     },
     {
@@ -114770,7 +114770,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L415",
+      "source_location": "L418",
       "weight": 1.0
     },
     {
@@ -114782,7 +114782,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L383",
+      "source_location": "L386",
       "weight": 1.0
     },
     {
@@ -114794,7 +114794,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L395",
+      "source_location": "L398",
       "weight": 1.0
     },
     {
@@ -114806,7 +114806,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L460",
+      "source_location": "L463",
       "weight": 1.0
     },
     {
@@ -114818,7 +114818,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L462",
+      "source_location": "L465",
       "weight": 1.0
     },
     {
@@ -114830,7 +114830,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L436",
+      "source_location": "L439",
       "weight": 1.0
     },
     {
@@ -114842,7 +114842,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L438",
+      "source_location": "L441",
       "weight": 1.0
     },
     {
@@ -114854,7 +114854,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L626",
+      "source_location": "L629",
       "weight": 1.0
     },
     {
@@ -114866,7 +114866,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L632",
+      "source_location": "L635",
       "weight": 1.0
     },
     {
@@ -114878,7 +114878,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L516",
+      "source_location": "L519",
       "weight": 1.0
     },
     {
@@ -114890,7 +114890,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L517",
+      "source_location": "L520",
       "weight": 1.0
     },
     {
@@ -114902,7 +114902,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L524",
+      "source_location": "L527",
       "weight": 1.0
     },
     {
@@ -114914,7 +114914,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L532",
+      "source_location": "L535",
       "weight": 1.0
     },
     {
@@ -114926,7 +114926,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L485",
+      "source_location": "L488",
       "weight": 1.0
     },
     {
@@ -114938,7 +114938,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L486",
+      "source_location": "L489",
       "weight": 1.0
     },
     {
@@ -124202,7 +124202,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L61",
+      "source_location": "L64",
       "weight": 1.0
     },
     {
@@ -124214,7 +124214,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L62",
+      "source_location": "L65",
       "weight": 1.0
     },
     {
@@ -124226,7 +124226,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L68",
+      "source_location": "L71",
       "weight": 1.0
     },
     {
@@ -124262,7 +124262,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L376",
+      "source_location": "L379",
       "weight": 1.0
     },
     {
@@ -124274,7 +124274,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L378",
+      "source_location": "L381",
       "weight": 1.0
     },
     {
@@ -139538,7 +139538,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L68",
+      "source_location": "L71",
       "weight": 1.0
     },
     {
@@ -139550,7 +139550,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L68",
+      "source_location": "L71",
       "weight": 1.0
     },
     {
@@ -151214,7 +151214,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L371",
+      "source_location": "L374",
       "weight": 1.0
     },
     {
@@ -151226,7 +151226,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L372",
+      "source_location": "L375",
       "weight": 1.0
     },
     {
@@ -151238,7 +151238,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L373",
+      "source_location": "L376",
       "weight": 1.0
     },
     {
@@ -168218,7 +168218,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L225",
+      "source_location": "L228",
       "weight": 1.0
     },
     {
@@ -168230,7 +168230,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L283",
+      "source_location": "L286",
       "weight": 1.0
     },
     {
@@ -168242,7 +168242,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L275",
+      "source_location": "L278",
       "weight": 1.0
     },
     {
@@ -168254,7 +168254,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L256",
+      "source_location": "L259",
       "weight": 1.0
     },
     {
@@ -168266,7 +168266,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L197",
+      "source_location": "L200",
       "weight": 1.0
     },
     {
@@ -168278,7 +168278,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L197",
+      "source_location": "L200",
       "weight": 1.0
     },
     {
@@ -168290,7 +168290,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L307",
+      "source_location": "L310",
       "weight": 1.0
     },
     {
@@ -168302,7 +168302,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L116",
+      "source_location": "L119",
       "weight": 1.0
     },
     {
@@ -168314,7 +168314,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L164",
+      "source_location": "L167",
       "weight": 1.0
     },
     {
@@ -168326,7 +168326,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L325",
+      "source_location": "L328",
       "weight": 1.0
     },
     {
@@ -168338,7 +168338,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L298",
+      "source_location": "L301",
       "weight": 1.0
     },
     {
@@ -168350,7 +168350,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L290",
+      "source_location": "L293",
       "weight": 1.0
     },
     {
@@ -168362,7 +168362,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L239",
+      "source_location": "L242",
       "weight": 1.0
     },
     {
@@ -168374,7 +168374,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L98",
+      "source_location": "L101",
       "weight": 1.0
     },
     {
@@ -168386,7 +168386,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L79",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -168398,7 +168398,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L248",
+      "source_location": "L251",
       "weight": 1.0
     },
     {
@@ -183395,7 +183395,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L73",
+      "source_location": "L76",
       "weight": 1.0
     },
     {
@@ -183407,7 +183407,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L87",
+      "source_location": "L90",
       "weight": 1.0
     },
     {
@@ -183419,7 +183419,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L79",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -183431,7 +183431,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L419",
+      "source_location": "L422",
       "weight": 1.0
     },
     {
@@ -183443,7 +183443,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L382",
+      "source_location": "L385",
       "weight": 1.0
     },
     {
@@ -212051,18 +212051,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L375",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu",
-      "target": "crates_z80_src_cpu_next_cpu",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L419",
+      "source_location": "L378",
       "weight": 1.0
     },
     {
@@ -212078,13 +212067,24 @@
     },
     {
       "source": "crates_z80_src_cpu",
+      "target": "crates_z80_src_cpu_next_cpu",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L422",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu",
       "target": "crates_z80_src_cpu_nextreg_immediate_writes_register_with_20_timing",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L435",
+      "source_location": "L438",
       "weight": 1.0
     },
     {
@@ -212095,7 +212095,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L459",
+      "source_location": "L462",
       "weight": 1.0
     },
     {
@@ -212106,7 +212106,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L480",
+      "source_location": "L483",
       "weight": 1.0
     },
     {
@@ -212117,7 +212117,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L497",
+      "source_location": "L500",
       "weight": 1.0
     },
     {
@@ -212128,7 +212128,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L515",
+      "source_location": "L518",
       "weight": 1.0
     },
     {
@@ -212150,7 +212150,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L522",
+      "source_location": "L525",
       "weight": 1.0
     },
     {
@@ -212161,18 +212161,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L582",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu",
-      "target": "crates_z80_src_cpu_cpu",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L60",
+      "source_location": "L585",
       "weight": 1.0
     },
     {
@@ -212183,7 +212172,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L603",
+      "source_location": "L606",
       "weight": 1.0
     },
     {
@@ -212194,7 +212183,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L625",
+      "source_location": "L628",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu",
+      "target": "crates_z80_src_cpu_cpu",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L63",
       "weight": 1.0
     },
     {
@@ -212205,7 +212205,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L643",
+      "source_location": "L646",
       "weight": 1.0
     },
     {
@@ -212216,7 +212216,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L660",
+      "source_location": "L663",
       "weight": 1.0
     },
     {
@@ -212227,7 +212227,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L681",
+      "source_location": "L684",
       "weight": 1.0
     },
     {
@@ -216847,7 +216847,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L393",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -216858,7 +216858,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L405",
+      "source_location": "L408",
       "weight": 1.0
     },
     {
@@ -234650,13 +234650,24 @@
     },
     {
       "source": "crates_z80_src_cpu_cpu",
+      "target": "crates_z80_src_cpu_cpu_step",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/z80/src/cpu.rs",
+      "source_location": "L101",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_z80_src_cpu_cpu",
       "target": "crates_z80_src_cpu_cpu_interrupt",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L116",
+      "source_location": "L119",
       "weight": 1.0
     },
     {
@@ -234667,7 +234678,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L164",
+      "source_location": "L167",
       "weight": 1.0
     },
     {
@@ -234678,7 +234689,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L185",
+      "source_location": "L188",
       "weight": 1.0
     },
     {
@@ -234689,7 +234700,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L192",
+      "source_location": "L195",
       "weight": 1.0
     },
     {
@@ -234700,7 +234711,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L197",
+      "source_location": "L200",
       "weight": 1.0
     },
     {
@@ -234711,7 +234722,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L210",
+      "source_location": "L213",
       "weight": 1.0
     },
     {
@@ -234722,7 +234733,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L225",
+      "source_location": "L228",
       "weight": 1.0
     },
     {
@@ -234733,7 +234744,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L233",
+      "source_location": "L236",
       "weight": 1.0
     },
     {
@@ -234744,7 +234755,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L239",
+      "source_location": "L242",
       "weight": 1.0
     },
     {
@@ -234755,7 +234766,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L248",
+      "source_location": "L251",
       "weight": 1.0
     },
     {
@@ -234766,7 +234777,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L256",
+      "source_location": "L259",
       "weight": 1.0
     },
     {
@@ -234777,7 +234788,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L275",
+      "source_location": "L278",
       "weight": 1.0
     },
     {
@@ -234788,7 +234799,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L283",
+      "source_location": "L286",
       "weight": 1.0
     },
     {
@@ -234799,7 +234810,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L290",
+      "source_location": "L293",
       "weight": 1.0
     },
     {
@@ -234810,7 +234821,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L298",
+      "source_location": "L301",
       "weight": 1.0
     },
     {
@@ -234821,7 +234832,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L307",
+      "source_location": "L310",
       "weight": 1.0
     },
     {
@@ -234832,7 +234843,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L325",
+      "source_location": "L328",
       "weight": 1.0
     },
     {
@@ -234843,7 +234854,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L341",
+      "source_location": "L344",
       "weight": 1.0
     },
     {
@@ -234854,7 +234865,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L350",
+      "source_location": "L353",
       "weight": 1.0
     },
     {
@@ -234865,7 +234876,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L73",
+      "source_location": "L76",
       "weight": 1.0
     },
     {
@@ -234876,7 +234887,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L79",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -234887,7 +234898,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L87",
+      "source_location": "L90",
       "weight": 1.0
     },
     {
@@ -234898,18 +234909,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L91",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_z80_src_cpu_cpu",
-      "target": "crates_z80_src_cpu_cpu_step",
-      "relation": "method",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L98",
+      "source_location": "L94",
       "weight": 1.0
     },
     {
@@ -234931,7 +234931,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L382",
+      "source_location": "L385",
       "weight": 1.0
     },
     {
@@ -234942,7 +234942,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L394",
+      "source_location": "L397",
       "weight": 1.0
     },
     {
@@ -234953,7 +234953,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L399",
+      "source_location": "L402",
       "weight": 1.0
     },
     {
@@ -234964,7 +234964,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L406",
+      "source_location": "L409",
       "weight": 1.0
     },
     {
@@ -234975,7 +234975,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L410",
+      "source_location": "L413",
       "weight": 1.0
     },
     {
@@ -234986,7 +234986,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/z80/src/cpu.rs",
-      "source_location": "L414",
+      "source_location": "L417",
       "weight": 1.0
     },
     {
@@ -247435,5 +247435,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "ed1f02ec67f9532797da807f19dce74f7cf7883c"
+  "built_at_commit": "13d807201610c8dc44751623f2334093c17612b8"
 }

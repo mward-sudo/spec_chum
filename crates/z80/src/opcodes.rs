@@ -911,13 +911,13 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
         }
         0x67 => rrd(cpu, bus),
         0x6f => rld(cpu, bus),
-        0x91 if cpu.profile == CpuProfile::Z80N => {
+        0x91 if cpu.profile == CpuProfile::Z80NNextReg => {
             let register = cpu.fetch8(bus);
             let value = cpu.fetch8(bus);
             cpu.add_t(6);
             bus.nextreg_write(register, value, cpu.t);
         }
-        0x92 if cpu.profile == CpuProfile::Z80N => {
+        0x92 if cpu.profile == CpuProfile::Z80NNextReg => {
             let register = cpu.fetch8(bus);
             cpu.add_t(6);
             bus.nextreg_write(register, cpu.regs.a, cpu.t);
