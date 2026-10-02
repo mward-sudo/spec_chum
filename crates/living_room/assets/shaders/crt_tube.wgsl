@@ -162,11 +162,8 @@ fn grille_channel_coverage(stripe_x: f32, footprint: f32, channel: f32) -> f32 {
 
 /// Analytic RGB aperture grille in visible-picture coordinates. The 0.82 / 1.12
 /// levels retain the previous mask's strength and mean luminance.
-fn aperture_grille(content_x: f32, strength: f32) -> vec3<f32> {
+fn aperture_grille(content_x: f32, footprint: f32, strength: f32) -> vec3<f32> {
     let stripe_x = content_x * APERTURE_TRIADS * 3.0;
-    // WGSL derivatives are fragment-stage operations; fwidth tracks the actual
-    // pixel footprint and avoids hard transitions when a stripe approaches Nyquist.
-    let footprint = max(fwidth(stripe_x), 0.0001);
     let coverage = vec3(
         grille_channel_coverage(stripe_x, footprint, 0.0),
         grille_channel_coverage(stripe_x, footprint, 1.0),
@@ -178,6 +175,8 @@ fn aperture_grille(content_x: f32, strength: f32) -> vec3<f32> {
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+    // Evaluate derivatives before the non-uniform content-rectangle returns.
+    let grille_footprint = max(fwidth(in.uv.x * APERTURE_TRIADS * 3.0), 0.0001);
     // Tube-space UV across the flat reconstruction quad. The curved mesh and
     // physical bezel apply their geometry after this pass.
     let tube_uv = in.uv;
@@ -220,7 +219,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = scanline_reconstruction(uv, soft_mix, scan_str);
 
     color = max(color, vec3(BLACK_LIFT));
-    color *= aperture_grille(content_uv.x, grille_str);
+    color *= aperture_grille(content_uv.x, grille_footprint, grille_str);
 
     // Retain the historical feed for the selectable Bloom baseline. In material mode,
     // broaden the source on the phosphor and put the primary halo into the CRT surface.
