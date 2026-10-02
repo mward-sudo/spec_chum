@@ -13,12 +13,14 @@ mod debugger;
 mod inspect;
 mod joystick;
 mod memory;
+mod next;
 mod rom;
 mod tape_state;
 
 pub use debugger::{BreakReason, Debugger, PcBreakpointHit, Watch};
 pub use inspect::{BetaInspect, Inspect, Paging, TapeInspect};
 pub use joystick::{apply_joystick, clear_joystick_matrix, JoystickMode, JoystickState};
+pub use next::NextMachine;
 pub use rom::{
     expected_main_rom_bytes, exrom_available, exrom_available_in, exrom_candidates,
     install_rom_slot, main_rom_available, main_rom_available_in, model_label, model_title,
