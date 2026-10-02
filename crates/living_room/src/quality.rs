@@ -80,11 +80,6 @@ pub fn msaa_samples() -> Msaa {
     }
 }
 
-/// Post-process FXAA (TV bezel edges). Default **on**; `SPEC_CHUM_ROOM_FXAA=0` disables.
-pub fn fxaa_enabled() -> bool {
-    env_truthy("SPEC_CHUM_ROOM_FXAA").unwrap_or(true)
-}
-
 /// The old camera-space bake plates stay hard-off for #149. They do not parallax
 /// while zooming and can blank the background during a bake frame.
 pub fn hybrid_enabled() -> bool {
@@ -131,14 +126,13 @@ pub fn light_preset() -> LightPreset {
 /// One-line label for perf logs.
 pub fn preset_label() -> String {
     format!(
-        "scene={} hybrid={} halation={:?} bloom={} mips={} msaa={:?} fxaa={} lights={:?}",
+        "scene={} hybrid={} halation={:?} bloom={} mips={} msaa={:?} lights={:?}",
         scene_variant().label(),
         hybrid_enabled(),
         halation_mode(),
         bloom_enabled(),
         bloom_max_mip_dimension(),
         msaa_samples(),
-        fxaa_enabled(),
         light_preset()
     )
 }

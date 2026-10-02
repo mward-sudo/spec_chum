@@ -541,26 +541,24 @@ fn attach_crt_to_television(
 
 fn animate_crt_params(
     time: Res<Time>,
-    look: Option<Res<crate::camera::CrtLookBlend>>,
     opening: Option<Res<crate::camera::OpeningSequence>>,
     mut materials: ResMut<Assets<CrtTubeMaterial>>,
     query: Query<&MeshMaterial2d<CrtTubeMaterial>, With<CrtTubeQuad>>,
 ) {
-    let t = look.map_or(0.0, |l| l.0.clamp(0.0, 1.0));
-    // Close: keep glyphs readable. Far: sofa-distance Trinitron (scan/grille/soft).
-    let near = (1.0 - t).powf(1.5);
-    let scan = 0.06 * near + t * 0.48;
-    let grille = 0.025 * near + t * 0.28;
-    let soft = 0.02 * near + t * 0.38;
-    let bright = 1.60 + t * 0.70;
+    // Keep phosphor reconstruction independent of camera zoom. Geometry and
+    // camera bloom provide the room-scale change in appearance.
+    const SCAN_STRENGTH: f32 = 0.48;
+    const GRILLE_STRENGTH: f32 = 0.28;
+    const HORIZONTAL_SOFT_MIX: f32 = 0.38;
+    const BRIGHTNESS: f32 = 2.30;
     let power = opening.map_or(1.0, |sequence| sequence.crt_power());
     for handle in &query {
         if let Some(mut mat) = materials.get_mut(handle) {
             mat.params0.x = time.elapsed_secs();
-            mat.params0.y = scan;
-            mat.params0.z = grille;
-            mat.params0.w = bright;
-            mat.params1.x = soft;
+            mat.params0.y = SCAN_STRENGTH;
+            mat.params0.z = GRILLE_STRENGTH;
+            mat.params0.w = BRIGHTNESS;
+            mat.params1.x = HORIZONTAL_SOFT_MIX;
             mat.params1.y = PHOSPHOR_W / PHOSPHOR_MESH_H;
             mat.params2.y = power;
         }
