@@ -649,7 +649,8 @@ Bevy tonemapping/output conversion. **Completed and remaining work:**
 3. Keep scan/grille/brightness fixed across zoom. Room-camera FXAA is removed because
    it post-processes the tube too; MSAA only smooths room geometry, not phosphor sampling.
 
-Do **not** start tier 3 until tier-2 lighting/perf baseline is stable.
+Tier-2 prerequisites (#149 and #150) are complete. The remaining #148 work is
+the offline visual comparison against the v0.4.0 baseline.
 
 ## Quality gate
 

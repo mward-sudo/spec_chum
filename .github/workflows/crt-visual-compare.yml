@@ -89,14 +89,14 @@ jobs:
           CANDIDATE_REF: ${{ inputs.candidate_ref }}
         run: |
           {
-            echo "## Headless CRT visual comparison"
-            echo
-            echo "- Baseline: `$BASELINE_REF`"
-            echo "- Candidate: `$CANDIDATE_REF`"
-            echo "- Capture: 1280×720, CRT test pattern, zoom preset 0"
-            echo "- Both captures use `HeadlessRoom`; no window is created or focused."
-            echo "- PPM readback may look darker or harsher than the live IOSurface path."
-            echo "- Artifact: `side_by_side.ppm` (baseline left, candidate right)."
+            printf '%s\n' '## Headless CRT visual comparison'
+            printf '\n'
+            printf -- '- Baseline: `%s`\n' "$BASELINE_REF"
+            printf -- '- Candidate: `%s`\n' "$CANDIDATE_REF"
+            printf '%s\n' '- Capture: 1280×720, CRT test pattern, zoom preset 0'
+            printf '%s\n' '- Both captures use `HeadlessRoom`; no window is created or focused.'
+            printf '%s\n' '- PPM readback may look darker or harsher than the live IOSurface path.'
+            printf '%s\n' '- Artifact: `side_by_side.ppm` (baseline left, candidate right).'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
