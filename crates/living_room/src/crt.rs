@@ -214,8 +214,8 @@ fn setup_crt_resources(
     ));
     let phosphor_mat = phosphor_mats.add(CrtPhosphorMaterial {
         params0: Vec4::new(0.0, 0.18, 0.10, 1.85),
-        // params1.w = mesh aspect (4:3 content fit); TEX_OVERSCAN is a shader constant.
-        params1: Vec4::new(2.2, 2.2, 0.08, PHOSPHOR_W / PHOSPHOR_MESH_H),
+        // params1.x = soft mix; params1.y = mesh aspect (4:3 content fit).
+        params1: Vec4::new(0.08, PHOSPHOR_W / PHOSPHOR_MESH_H, 0.0, 0.0),
         params2: Vec4::new(
             if crate::quality::material_halation_enabled() {
                 1.0
@@ -352,8 +352,8 @@ fn animate_crt_params(
             mat.params0.y = scan;
             mat.params0.z = grille;
             mat.params0.w = bright;
-            mat.params1.z = soft;
-            mat.params1.w = PHOSPHOR_W / PHOSPHOR_MESH_H;
+            mat.params1.x = soft;
+            mat.params1.y = PHOSPHOR_W / PHOSPHOR_MESH_H;
             mat.params2.y = power;
         }
     }

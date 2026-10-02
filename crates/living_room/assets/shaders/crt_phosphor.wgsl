@@ -7,7 +7,7 @@
 
 struct CrtPhosphorMaterial {
     params0: vec4<f32>, // time, scan_str, grille_str, brightness
-    params1: vec4<f32>, // gamma_in, gamma_out, soft_mix, mesh_aspect
+    params1: vec4<f32>, // soft_mix, mesh_aspect, reserved, reserved
     params2: vec4<f32>, // material_halation (0 = Bloom baseline, 1 = local halo)
 }
 
@@ -44,16 +44,9 @@ fn vignette(uv: vec2<f32>) -> f32 {
     return 1.0 + 0.0 * uv.x;
 }
 
-fn to_linear(c: vec3<f32>, gamma_in: f32) -> vec3<f32> {
-    return pow(max(c, vec3(0.0)), vec3(gamma_in));
-}
-
-fn to_display(c: vec3<f32>, gamma_out: f32) -> vec3<f32> {
-    return pow(max(c, vec3(0.0)), vec3(1.0 / gamma_out));
-}
-
 // Soft horizontal 3-tap (composite-ish H blur); vertical stays sharp.
 fn sample_nearest(uv: vec2<f32>) -> vec3<f32> {
+    // The Rgba8UnormSrgb source is decoded to linear values by the texture format.
     // Snap to texel centres so Spectrum 8×8 glyphs don't drop columns/rows when
     // the tube fills the view (interpolated sample + scanlines ate thin strokes).
     let px = clamp(i32(floor(uv.x * SRC_W + 0.0)), 0, i32(SRC_W) - 1);
@@ -126,13 +119,11 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let scan_str = material.params0.y;
     let grille_str = material.params0.z;
     let brightness = material.params0.w;
-    let gamma_in = material.params1.x;
-    let gamma_out = material.params1.y;
-    let soft_mix = material.params1.z;
+    let soft_mix = material.params1.x;
     let material_halation = material.params2.x > 0.5;
     let power = clamp(material.params2.y, 0.0, 1.0);
     // params1.w = mesh aspect (W/H of phosphor quad).
-    let mesh_aspect = max(material.params1.w, 0.01);
+    let mesh_aspect = max(material.params1.y, 0.01);
 
     // Fit a 4:3 content rect into the mesh (pillar/letter if mesh aspect differs).
     var content_uv = tube_uv;
@@ -166,19 +157,16 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = mix(sharp, soft_sharp, soft_mix);
 
     color = max(color, vec3(BLACK_LIFT));
-    color = to_linear(color, gamma_in);
-
-    let soft_lin = to_linear(max(soft_h, vec3(BLACK_LIFT)), gamma_in);
-    let scan = scanline_weight(uv.y, soft_lin, scan_str);
+    let scan = scanline_weight(uv.y, color, scan_str);
     color *= scan;
     color *= aperture_grille(uv.x, grille_str);
 
     // Retain the historical feed for the selectable Bloom baseline. In material mode,
     // broaden the source on the phosphor and put the primary halo into the CRT surface.
-    let glow = to_linear(max(sample_glow_h(uv), vec3(BLACK_LIFT)), gamma_in);
+    let glow = max(sample_glow_h(uv), vec3(BLACK_LIFT));
     let halo = max(glow - color, vec3(0.0));
     if material_halation {
-        let wide = to_linear(max(sample_halation_h(uv), vec3(BLACK_LIFT)), gamma_in);
+        let wide = max(sample_halation_h(uv), vec3(BLACK_LIFT));
         color += halo * 0.28;
         color += max(wide - color, vec3(0.0)) * 0.18;
         color += glow * 0.035;
@@ -204,6 +192,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let flicker = 1.0 + FLICKER_AMP * sin(t * 50.0 * 2.0 * PI);
     color *= flicker * vignette(tube_uv) * brightness;
 
-    color = to_display(color, gamma_out);
+    // The sRGB source texture is decoded by textureLoad, and the HDR camera's
+    // tonemapping pass performs the single output transfer to the sRGB target.
     return vec4(color, 1.0);
 }

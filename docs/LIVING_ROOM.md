@@ -628,11 +628,15 @@ Solari / TAA / DLSS are **not viable** on this stack.
 ### Tier 3 — CRT fidelity refactor
 
 Separate large task (see CRT research). Root causes: mask/scanlines past Nyquist,
-non-energy-conserving beam reconstruction, double gamma. **Suggested order:**
+non-energy-conserving beam reconstruction, and window-space sampling. The colour
+path now uses the sRGB source texture, an HDR room-camera intermediate, and one
+Bevy tonemapping/output conversion; the shader no longer applies manual gamma powers.
+**Suggested order:**
 
-1. **Tube-space RT** at 1280×960 + mip chain; energy-conserving beam reconstruction;
-   colour space fix (`hdr: true`, linear output, single gamma).
-2. Analytic aperture grille (~280 triads); tube-space halation; horizontal filter fix.
+1. **Tube-space RT** at 1280×960 + explicitly generated mip chain; keep the room-sized
+   present target separate and preserve the curved CRT mesh/bezel occlusion.
+2. Energy-conserving multi-line beam reconstruction and analytic aperture grille
+   (~280 triads); then tube-space halation and horizontal filter fix.
 3. Delete zoom ramps for scan/grille/bright (wrong direction); remove FXAA on tube;
    MSAA does not help inside the phosphor shader.
 
@@ -670,7 +674,8 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
 - Curvature is **mesh geometry**, not a 2D barrel warp.
 - Phosphor WGSL (`crt_phosphor.wgsl`): luminance-adaptive beams (scan floor **0.58**),
   aperture-grille triad (~0.30), soft-H / sharp-V sampling (`soft_mix` ≈ 0.40),
-  gamma 2.2/2.2, brightness ≈ 2.4, black lift, vignette, PAL flicker ≤1%; tiny
+  sRGB texture input and linear HDR shader output, brightness ≈ 2.4, black lift,
+  vignette, PAL flicker ≤1%; tiny
   in-shader halation/diffusion only.
 - Bevy `Bloom` is the main room halation at pull-back zoom in the `bloom` baseline
   (intensity ramps with `CrtLookBlend` in `camera.rs`). The selectable `material`
@@ -682,8 +687,8 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
 - Soft CRT spill (~1.1k–4.0k lm) tints walls from the framebuffer; TV-wall
   sconces ~14.4k lm tungsten; warm `GlobalAmbientLight` keeps sofa / wallpaper
   readable. Pull-back bloom stays mild so the tube face stays legible.
-- **Fidelity gaps** (tier 3): Nyquist-limited mask/scanlines, energy-conserving
-  beam rebuild, single gamma path — see **Roadmap → Tier 3**.
+- **Fidelity gaps** (tier 3): tube-space target/mips, Nyquist-limited mask/scanlines,
+  energy-conserving beam rebuild, and tube-space halation — see **Roadmap → Tier 3**.
   Lightmaps / `EnvironmentMapLight` remain [#149](https://github.com/mward-sudo/spec_chum/issues/149).
 
 ## Out of scope (v1)
