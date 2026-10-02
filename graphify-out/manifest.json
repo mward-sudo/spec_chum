@@ -696,9 +696,9 @@
     "semantic_hash": "a02187a6296efcd2d11ff17081ed59b8"
   },
   "scripts/check.sh": {
-    "mtime": 1790876171.0974624,
-    "seen": 1790913062.9087548,
-    "ast_hash": "662f5d05924940fd31ea8d16728e4bd2",
+    "mtime": 1790983129.201856,
+    "seen": 1790983377.782397,
+    "ast_hash": "73cc698a941528fc165d9e34b9a3833d",
     "semantic_hash": ""
   },
   "scripts/check_crates.sh": {
@@ -894,9 +894,9 @@
     "semantic_hash": ""
   },
   "docs/ROMS.md": {
-    "mtime": 1790966426.8742743,
-    "seen": 1790979226.805683,
-    "ast_hash": "26de6a16f99030201ea3ad8d5be8b04c",
+    "mtime": 1790983406.188802,
+    "seen": 1790983415.474653,
+    "ast_hash": "04991f5d2ecb0ae65e92b4c2bf0dcb7f",
     "semantic_hash": ""
   },
   "docs/TIMEX.md": {
@@ -2313,6 +2313,18 @@
     "mtime": 1790981605.376478,
     "seen": 1790981760.813278,
     "ast_hash": "e90fef3c62500096c28e8efac319cbd5",
+    "semantic_hash": ""
+  },
+  "scripts/system_next_assets.py": {
+    "mtime": 1790983172.67014,
+    "seen": 1790983377.786026,
+    "ast_hash": "307eb0cd0a50d59252c0a9f624502dd6",
+    "semantic_hash": ""
+  },
+  "scripts/tests/test_system_next_assets.py": {
+    "mtime": 1790983092.7444637,
+    "seen": 1790983377.786106,
+    "ast_hash": "6b796e06257144abe667e76c71e7f95e",
     "semantic_hash": ""
   }
 }
