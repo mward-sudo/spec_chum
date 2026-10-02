@@ -182,9 +182,11 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let powered = smoothstep(0.0, 1.0, power);
     let radial = length((tube_uv - vec2(0.5)) * vec2(1.0, 0.75));
     let glow_radius = mix(0.32, 0.90, powered);
-    let startup_glow = exp(-pow(radial / glow_radius, 2.0));
+    let glow_distance = radial / glow_radius;
+    let startup_glow = exp(-glow_distance * glow_distance);
     let central_warmth = smoothstep(0.0, 0.22, power) * (1.0 - powered) * startup_glow * 0.12;
-    let phosphor_settle = 1.0 + 0.025 * exp(-pow((powered - 0.86) / 0.13, 2.0));
+    let settle_distance = (powered - 0.86) / 0.13;
+    let phosphor_settle = 1.0 + 0.025 * exp(-settle_distance * settle_distance);
     color *= powered;
     color += vec3(1.0, 0.62, 0.34) * central_warmth;
     color *= phosphor_settle;
