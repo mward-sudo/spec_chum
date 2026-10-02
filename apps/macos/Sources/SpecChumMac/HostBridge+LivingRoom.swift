@@ -151,6 +151,10 @@ extension HostBridge {
                     self.roomPresentWidth = width
                     self.roomPresentHeight = height
                 }
+                self.livingRoomPresentView?.presentBindDidComplete(
+                    surface: retained,
+                    success: ok
+                )
                 self.roomPresentBindInFlight = false
                 self.roomPresentBindStartedUptime = 0
                 guard let pending = self.roomPresentBindPending else { return }

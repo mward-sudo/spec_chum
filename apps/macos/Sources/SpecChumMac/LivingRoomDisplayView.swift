@@ -39,6 +39,9 @@ final class LivingRoomNSView: NSView {
                 startDisplayLinkIfNeeded()
             } else {
                 stopDisplayLink()
+                presentBindRetryWorkItem?.cancel()
+                presentBindRetryWorkItem = nil
+                presentBindInFlight = false
                 presentBound = false
                 presentSurface = nil
                 layer?.contents = nil
@@ -53,6 +56,9 @@ final class LivingRoomNSView: NSView {
     private var menuEndTrackingObserver: NSObjectProtocol?
     private var presentSurface: IOSurface?
     private var presentBound = false
+    private var presentBindInFlight = false
+    private var presentBindRetryDelay: TimeInterval = 0.5
+    private var presentBindRetryWorkItem: DispatchWorkItem?
     private var presentWidth = 1920
     private var presentHeight = 1080
     private var displayLink: CADisplayLink?
@@ -154,8 +160,12 @@ final class LivingRoomNSView: NSView {
     /// Bind IOSurface at current stepped size (or after living-room toggle).
     func syncPresentTargetIfNeeded() {
         guard host?.livingRoomMode == true else { return }
-        if presentBound, presentSurface != nil {
-            refreshLayerContents()
+        if let presentSurface {
+            if presentBound {
+                refreshLayerContents()
+            } else if !presentBindInFlight, host?.livingRoomReady == true {
+                bindPresentSurface(presentSurface)
+            }
             startDisplayLinkIfNeeded()
             return
         }
@@ -190,16 +200,56 @@ final class LivingRoomNSView: NSView {
     private func rebindPresentSurface(width: Int, height: Int) {
         guard host?.livingRoomMode == true else { return }
         guard let surface = Self.makeIOSurface(width: width, height: height) else { return }
+        presentBindRetryWorkItem?.cancel()
+        presentBindRetryWorkItem = nil
+        presentBindRetryDelay = 0.5
         presentWidth = width
         presentHeight = height
         presentSurface = surface
-        presentBound = true
-        host?.bindLivingRoomPresent(surface: surface, width: UInt32(width), height: UInt32(height))
+        presentBound = false
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer?.contents = surface
         layer?.contentsScale = 1
         CATransaction.commit()
+        if host?.livingRoomReady == true {
+            bindPresentSurface(surface, queueWhileInFlight: true)
+        }
+    }
+
+    func presentBindDidComplete(surface: IOSurface, success: Bool) {
+        guard presentSurface === surface else { return }
+        presentBindInFlight = false
+        presentBound = success
+        if success {
+            presentBindRetryDelay = 0.5
+            presentBindRetryWorkItem?.cancel()
+            presentBindRetryWorkItem = nil
+            refreshLayerContents()
+            return
+        }
+        schedulePresentBindRetry(surface)
+    }
+
+    private func bindPresentSurface(_ surface: IOSurface, queueWhileInFlight: Bool = false) {
+        guard host?.livingRoomReady == true else { return }
+        guard !presentBindInFlight || queueWhileInFlight else { return }
+        presentBindInFlight = true
+        host?.bindLivingRoomPresent(surface: surface, width: UInt32(presentWidth), height: UInt32(presentHeight))
+    }
+
+    private func schedulePresentBindRetry(_ surface: IOSurface) {
+        guard host?.livingRoomMode == true else { return }
+        presentBindRetryWorkItem?.cancel()
+        let delay = presentBindRetryDelay
+        presentBindRetryDelay = min(presentBindRetryDelay * 2, 30)
+        let retry = DispatchWorkItem { [weak self, weak surface] in
+            guard let self, let surface, self.presentSurface === surface else { return }
+            self.presentBindRetryWorkItem = nil
+            self.bindPresentSurface(surface)
+        }
+        presentBindRetryWorkItem = retry
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: retry)
     }
 
     /// Stepped long-edge budget, aspect matched to the view (no 16:9 letterboxing).
