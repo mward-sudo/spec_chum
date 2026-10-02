@@ -95,6 +95,36 @@ Sparse checkout **excludes** `peripherals/Interface1` and `zx80-81` (see
 | --- | --- | --- |
 | `roms/peripherals/speccyboot/speccyboot-1.4.rom` | MIT (Patrick Persson) | `LICENSE` in same directory; only if SpeccyBoot is emulated |
 
+### ZX Spectrum Next — System/Next distribution (#191)
+
+The current plan is to bundle an **exact, complete copy** of the official
+System/Next Distribution with Spec Chum releases. The Next Licence permits
+copying and distributing exact copies of the complete Distribution without
+charge; it prohibits selling the Distribution or charging a duplication fee.
+The Next Licence and **every constituent licence** must accompany the copy.
+Individual component licences take precedence over the Next Licence, so do not
+extract, modify, or redistribute a partial SD image under the umbrella grant.
+
+The official distribution is published at
+[specnext.com/latestdistro](https://www.specnext.com/latestdistro/). Before
+packaging any version, verify the downloaded archive is the complete official
+Distribution and preserve its original contents and notices. Do not commit its
+bytes to Git; release packaging details and version pinning remain part of
+[#191](https://github.com/mward-sudo/spec_chum/issues/191). This applies only
+to no-fee releases; if a Spec Chum release is ever sold or charges a
+duplication fee, do not include the Distribution without a fresh rights review.
+
+The Distribution includes Sinclair/Amstrad ROM images. Their separate emulator
+permission still applies: retain the copyright strings inside the images and
+include the Lawson attribution from
+[Official Sinclair / Amstrad Spectrum ROMs](#official-sinclair--amstrad-spectrum-roms)
+in the release. Keep Spec Chum's own name and UI; do not use the Next logo screen
+or identify Spec Chum as a SpecNext Ltd hardware product. This policy is based
+on the [Next Licence text as reproduced with attribution by the Retrogamecoders
+IDE](https://ide.retrogamecoders.com/zxnext-about.html); recheck the exact
+licence files and component inventory in the selected official archive before
+the first release that bundles it.
+
 ## User-provided only — not auto-fetched
 
 Supply your own images (or wait for a new written grant). **Do not** extend
@@ -110,7 +140,6 @@ Supply your own images (or wait for a new written grant). **Do not** extend
 | Opus Discovery | No clear grant (Fuse dropped) |
 | TK90X / Didaktik / Inves clones | No public grant found ([#195](https://github.com/mward-sudo/spec_chum/issues/195)) |
 | ZX80 / ZX81 | Nine Tiles rights; zx-roms “kind permission” unverified ([#188](https://github.com/mward-sudo/spec_chum/issues/188)) |
-| Spectrum Next firmware | Separate Next licence ([#191](https://github.com/mward-sudo/spec_chum/issues/191)) |
 
 ### Pentagon 128 — user-provided paths (#188 Phase B)
 
