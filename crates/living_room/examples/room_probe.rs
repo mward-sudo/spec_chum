@@ -15,6 +15,7 @@ use std::io::Write;
 use std::thread;
 use std::time::Duration;
 
+use spec_chum_room::camera::ZOOM_PRESET_COUNT;
 use spec_chum_room::crt::{SCREEN_H, SCREEN_W};
 use spec_chum_room::HeadlessRoom;
 
@@ -47,7 +48,10 @@ fn main() {
     }
     if zoom_steps != 0 {
         let direction = zoom_steps.signum();
-        for _ in 0..zoom_steps.unsigned_abs() {
+        let step_count = zoom_steps
+            .unsigned_abs()
+            .min(u32::from(ZOOM_PRESET_COUNT.saturating_sub(1)));
+        for _ in 0..step_count {
             room.nudge_zoom(direction);
             thread::sleep(Duration::from_millis(110));
             for _ in 0..12 {
