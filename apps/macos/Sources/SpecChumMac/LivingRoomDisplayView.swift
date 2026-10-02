@@ -2,7 +2,6 @@ import AppKit
 import CSpecChumHost
 import CoreVideo
 import IOSurface
-import Metal
 import QuartzCore
 import SwiftUI
 
@@ -40,6 +39,9 @@ final class LivingRoomNSView: NSView {
                 startDisplayLinkIfNeeded()
             } else {
                 stopDisplayLink()
+                presentBindRetryWorkItem?.cancel()
+                presentBindRetryWorkItem = nil
+                presentBindInFlight = false
                 presentBound = false
                 presentSurface = nil
                 layer?.contents = nil
@@ -54,8 +56,9 @@ final class LivingRoomNSView: NSView {
     private var menuEndTrackingObserver: NSObjectProtocol?
     private var presentSurface: IOSurface?
     private var presentBound = false
-    private var metalLayer: CAMetalLayer?
-    private var usesMetalFX = false
+    private var presentBindInFlight = false
+    private var presentBindRetryDelay: TimeInterval = 0.5
+    private var presentBindRetryWorkItem: DispatchWorkItem?
     private var presentWidth = 1920
     private var presentHeight = 1080
     private var displayLink: CADisplayLink?
@@ -144,7 +147,6 @@ final class LivingRoomNSView: NSView {
     override var focusRingMaskBounds: NSRect { .zero }
 
     func refreshLayerContents() {
-        guard !usesMetalFX else { return }
         guard let presentSurface else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -158,54 +160,17 @@ final class LivingRoomNSView: NSView {
     /// Bind IOSurface at current stepped size (or after living-room toggle).
     func syncPresentTargetIfNeeded() {
         guard host?.livingRoomMode == true else { return }
-        if presentBound, presentSurface != nil {
-            refreshLayerContents()
-            startDisplayLinkIfNeeded()
-            return
-        }
-        if presentBound, usesMetalFX {
+        if let presentSurface {
+            if presentBound {
+                refreshLayerContents()
+            } else if !presentBindInFlight, host?.livingRoomReady == true {
+                bindPresentSurface(presentSurface)
+            }
             startDisplayLinkIfNeeded()
             return
         }
         rebindPresentSurface(width: presentWidth, height: presentHeight)
         startDisplayLinkIfNeeded()
-    }
-
-    /// Switch only after Rust confirms that MetalFX can create a scaler for this device and size.
-    func configureMetalFX(_ enabled: Bool) {
-        guard enabled != usesMetalFX else { return }
-        if enabled {
-            guard let device = MTLCreateSystemDefaultDevice() else {
-                host?.setLivingRoomRenderScale(1.0)
-                return
-            }
-            let metalLayer = CAMetalLayer()
-            metalLayer.device = device
-            metalLayer.pixelFormat = .bgra8Unorm_srgb
-            metalLayer.framebufferOnly = false
-            // nextDrawable() runs on AppKit main; let it time out so GPU stalls cannot freeze the UI.
-            metalLayer.allowsNextDrawableTimeout = true
-            metalLayer.contentsScale = 1
-            self.metalLayer = metalLayer
-            layer = metalLayer
-            usesMetalFX = true
-            presentSurface = nil
-            presentBound = false
-            updateMetalDrawableSize()
-        } else {
-            usesMetalFX = false
-            metalLayer = nil
-            let coreLayer = CALayer()
-            configureContentsLayer(coreLayer)
-            layer = coreLayer
-            presentBound = false
-        }
-    }
-
-    func nextMetalDrawable() -> CAMetalDrawable? {
-        guard usesMetalFX else { return nil }
-        updateMetalDrawableSize()
-        return metalLayer?.nextDrawable()
     }
 
     /// Debounced stepped resize from view backing pixels.
@@ -234,37 +199,57 @@ final class LivingRoomNSView: NSView {
 
     private func rebindPresentSurface(width: Int, height: Int) {
         guard host?.livingRoomMode == true else { return }
-        if usesMetalFX {
-            presentWidth = width
-            presentHeight = height
-            presentSurface = nil
-            presentBound = true
-            updateMetalDrawableSize()
-            host?.bindLivingRoomDrawableSize(width: UInt32(width), height: UInt32(height))
-            return
-        }
         guard let surface = Self.makeIOSurface(width: width, height: height) else { return }
+        presentBindRetryWorkItem?.cancel()
+        presentBindRetryWorkItem = nil
+        presentBindRetryDelay = 0.5
         presentWidth = width
         presentHeight = height
         presentSurface = surface
-        presentBound = true
-        host?.bindLivingRoomPresent(surface: surface, width: UInt32(width), height: UInt32(height))
+        presentBound = false
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer?.contents = surface
         layer?.contentsScale = 1
         CATransaction.commit()
+        if host?.livingRoomReady == true {
+            bindPresentSurface(surface, queueWhileInFlight: true)
+        }
     }
 
-    private func configureContentsLayer(_ layer: CALayer) {
-        layer.contentsGravity = .resizeAspect
-        layer.magnificationFilter = .linear
-        layer.minificationFilter = .linear
-        layer.backgroundColor = NSColor.black.cgColor
+    func presentBindDidComplete(surface: IOSurface, success: Bool) {
+        guard presentSurface === surface else { return }
+        presentBindInFlight = false
+        presentBound = success
+        if success {
+            presentBindRetryDelay = 0.5
+            presentBindRetryWorkItem?.cancel()
+            presentBindRetryWorkItem = nil
+            refreshLayerContents()
+            return
+        }
+        schedulePresentBindRetry(surface)
     }
 
-    private func updateMetalDrawableSize() {
-        metalLayer?.drawableSize = CGSize(width: presentWidth, height: presentHeight)
+    private func bindPresentSurface(_ surface: IOSurface, queueWhileInFlight: Bool = false) {
+        guard host?.livingRoomReady == true else { return }
+        guard !presentBindInFlight || queueWhileInFlight else { return }
+        presentBindInFlight = true
+        host?.bindLivingRoomPresent(surface: surface, width: UInt32(presentWidth), height: UInt32(presentHeight))
+    }
+
+    private func schedulePresentBindRetry(_ surface: IOSurface) {
+        guard host?.livingRoomMode == true else { return }
+        presentBindRetryWorkItem?.cancel()
+        let delay = presentBindRetryDelay
+        presentBindRetryDelay = min(presentBindRetryDelay * 2, 30)
+        let retry = DispatchWorkItem { [weak self, weak surface] in
+            guard let self, let surface, self.presentSurface === surface else { return }
+            self.presentBindRetryWorkItem = nil
+            self.bindPresentSurface(surface)
+        }
+        presentBindRetryWorkItem = retry
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: retry)
     }
 
     /// Stepped long-edge budget, aspect matched to the view (no 16:9 letterboxing).

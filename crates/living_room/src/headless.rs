@@ -47,13 +47,6 @@ pub enum HeadlessRoomError {
     Present(#[from] crate::present_metal::PresentIosurfaceError),
     #[error("IOSurface present is only supported on macOS")]
     UnsupportedPlatform,
-    #[error("render scale must be between 0.5 and 1.0")]
-    InvalidRenderScale,
-    #[error("MetalFX spatial scaling is unavailable for this device or resolution")]
-    MetalFxUnsupported,
-    #[cfg(target_os = "macos")]
-    #[error("drawable presentation failed: {0}")]
-    PresentDrawable(String),
     /// Poly Haven tree incomplete / missing — do not start Bevy with a black void (#368).
     #[error("{0}")]
     MissingAssets(String),
@@ -66,13 +59,8 @@ pub struct HeadlessRenderTargetHandle(pub Handle<Image>);
 /// Manually pumped Bevy room for SpecChumMac.
 pub struct HeadlessRoom {
     apps: SubApps,
-    /// Camera render target dimensions.
     width: u32,
     height: u32,
-    /// Native present dimensions supplied by the host.
-    present_width: u32,
-    present_height: u32,
-    render_scale: f32,
     perf: RoomPerf,
 }
 
@@ -81,9 +69,6 @@ impl std::fmt::Debug for HeadlessRoom {
         f.debug_struct("HeadlessRoom")
             .field("width", &self.width)
             .field("height", &self.height)
-            .field("present_width", &self.present_width)
-            .field("present_height", &self.present_height)
-            .field("render_scale", &self.render_scale)
             .finish_non_exhaustive()
     }
 }
@@ -164,9 +149,6 @@ impl HeadlessRoom {
             apps,
             width,
             height,
-            present_width: width,
-            present_height: height,
-            render_scale: 1.0,
             perf: RoomPerf::default(),
         })
     }
@@ -182,56 +164,6 @@ impl HeadlessRoom {
 
     pub fn height(&self) -> u32 {
         self.height
-    }
-
-    pub fn present_width(&self) -> u32 {
-        self.present_width
-    }
-
-    pub fn present_height(&self) -> u32 {
-        self.present_height
-    }
-
-    /// Lower the Bevy camera target resolution while keeping the host output size.
-    pub fn set_render_scale(&mut self, scale: f32) -> Result<(), HeadlessRoomError> {
-        if !scale.is_finite() || !(0.5..=1.0).contains(&scale) {
-            return Err(HeadlessRoomError::InvalidRenderScale);
-        }
-        if scale == self.render_scale {
-            return Ok(());
-        }
-        let (width, height) = scaled_render_size(self.present_width, self.present_height, scale);
-        if scale < 1.0 {
-            #[cfg(target_os = "macos")]
-            {
-                let render_device = self.apps.main.world().resource::<RenderDevice>();
-                if !crate::present_drawable::supports_metalfx(
-                    render_device,
-                    (width, height),
-                    (self.present_width, self.present_height),
-                ) {
-                    return Err(HeadlessRoomError::MetalFxUnsupported);
-                }
-            }
-            #[cfg(not(target_os = "macos"))]
-            return Err(HeadlessRoomError::UnsupportedPlatform);
-        }
-        rebuild_headless_render_target(&mut self.apps, width, height);
-        self.width = width;
-        self.height = height;
-        self.render_scale = scale;
-        self.apps.update();
-        let _ = self
-            .apps
-            .main
-            .world()
-            .resource::<RenderDevice>()
-            .wgpu_device()
-            .poll(PollType::Wait {
-                submission_index: None,
-                timeout: Some(Duration::from_millis(500)),
-            });
-        Ok(())
     }
 
     pub fn has_present_target(&self) -> bool {
@@ -366,57 +298,6 @@ impl HeadlessRoom {
         self.perf.record_tick(us);
     }
 
-    /// Pump a frame into a host-owned CAMetalDrawable and present it on Bevy's Metal queue.
-    ///
-    /// # Safety
-    ///
-    /// `drawable` must be a live CAMetalDrawable retained by the caller until this method
-    /// returns. The present system encodes and commits presentation before the synchronous
-    /// render update returns.
-    #[cfg(target_os = "macos")]
-    #[allow(unsafe_code)]
-    pub unsafe fn tick_with_drawable(
-        &mut self,
-        drawable: *mut c_void,
-        width: u32,
-        height: u32,
-    ) -> Result<(), HeadlessRoomError> {
-        if drawable.is_null() {
-            self.tick();
-            return Err(HeadlessRoomError::MetalFxUnsupported);
-        }
-        if (width, height) != (self.present_width, self.present_height) {
-            self.resize(width, height)?;
-        }
-        if let Some(mut present) = self
-            .apps
-            .main
-            .world_mut()
-            .get_resource_mut::<PresentTarget>()
-        {
-            present.drawable_ptr = Some(drawable as usize);
-            present.width = width.max(1);
-            present.height = height.max(1);
-        }
-        self.tick();
-        let error = self
-            .apps
-            .main
-            .world()
-            .resource::<crate::present::PresentBlitError>()
-            .take()
-            .map(HeadlessRoomError::PresentDrawable);
-        if let Some(mut present) = self
-            .apps
-            .main
-            .world_mut()
-            .get_resource_mut::<PresentTarget>()
-        {
-            present.drawable_ptr = None;
-        }
-        error.map_or(Ok(()), Err)
-    }
-
     pub fn perf(&self) -> &RoomPerf {
         &self.perf
     }
@@ -437,17 +318,14 @@ impl HeadlessRoom {
     /// Avoids a full `HeadlessRoom::try_new` / GPU pipeline recompile on stepped window resizes
     /// (was freezing SpecChumMac for seconds when the living-room queue blocked).
     pub fn resize(&mut self, width: u32, height: u32) -> Result<(), HeadlessRoomError> {
-        let present_width = width.max(64);
-        let present_height = height.max(64);
-        if present_width == self.present_width && present_height == self.present_height {
+        let width = width.max(64);
+        let height = height.max(64);
+        if width == self.width && height == self.height {
             return Ok(());
         }
-        let (width, height) = scaled_render_size(present_width, present_height, self.render_scale);
         rebuild_headless_render_target(&mut self.apps, width, height);
         self.width = width;
         self.height = height;
-        self.present_width = present_width;
-        self.present_height = present_height;
         self.apps.update();
         let _ = self
             .apps
@@ -505,22 +383,6 @@ impl HeadlessRoom {
     }
 }
 
-fn scaled_render_size(present_width: u32, present_height: u32, scale: f32) -> (u32, u32) {
-    fn scaled_dimension(pixels: u32, scale: f32) -> u32 {
-        let maximum = pixels.max(64);
-        if scale == 1.0 {
-            return maximum;
-        }
-        let even = ((pixels as f32 * scale / 2.0).round() as u32).saturating_mul(2);
-        even.max(64).min(maximum)
-    }
-
-    (
-        scaled_dimension(present_width, scale),
-        scaled_dimension(present_height, scale),
-    )
-}
-
 #[derive(Resource, Clone, Copy, Debug)]
 struct HeadlessSize {
     width: u32,
@@ -559,8 +421,7 @@ fn create_headless_render_image(images: &mut Assets<Image>, w: u32, h: u32) -> H
         TextureFormat::Bgra8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     );
-    image.texture_descriptor.usage |=
-        TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::TEXTURE_BINDING;
+    image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
     images.add(image)
 }
 
@@ -631,7 +492,7 @@ fn bind_hybrid_headless_targets(
 
 #[cfg(test)]
 mod tests {
-    use super::{scaled_render_size, HeadlessRoomError};
+    use super::HeadlessRoomError;
 
     #[test]
     fn unsupported_platform_display_matches_legacy_string() {
@@ -639,16 +500,5 @@ mod tests {
             HeadlessRoomError::UnsupportedPlatform.to_string(),
             "IOSurface present is only supported on macOS"
         );
-    }
-
-    #[test]
-    fn scaled_render_size_preserves_aspect_and_even_dimensions() {
-        assert_eq!(scaled_render_size(1920, 1080, 2.0 / 3.0), (1280, 720));
-        assert_eq!(scaled_render_size(853, 480, 2.0 / 3.0), (568, 320));
-    }
-
-    #[test]
-    fn scaled_render_size_keeps_minimum_room_target() {
-        assert_eq!(scaled_render_size(64, 64, 0.5), (64, 64));
     }
 }

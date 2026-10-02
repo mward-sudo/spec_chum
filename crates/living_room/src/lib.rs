@@ -25,8 +25,6 @@ pub mod keymap;
 pub mod perf;
 pub mod present;
 #[cfg(target_os = "macos")]
-pub mod present_drawable;
-#[cfg(target_os = "macos")]
 pub mod present_metal;
 pub mod quality;
 pub mod room;
