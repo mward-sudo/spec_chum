@@ -626,21 +626,20 @@ Solari / TAA / DLSS are **not viable** on this stack.
 
 ### Tier 3 — CRT fidelity refactor
 
-Separate large task (see CRT research). Root causes: mask/scanlines past Nyquist,
-non-energy-conserving beam reconstruction, and window-space sampling. The colour
-path now uses the sRGB source texture, an HDR room-camera intermediate, and one
-Bevy tonemapping/output conversion; the shader no longer applies manual gamma powers.
-**Suggested order:**
+Separate task tracked by #148. The original fidelity gaps—window-space phosphor
+processing, a non-energy-normalized beam, and a raster-locked grille—are resolved.
+The colour path uses an sRGB source texture, an HDR room-camera intermediate, and one
+Bevy tonemapping/output conversion. **Completed and remaining work:**
 
 1. **Tube-space RT**: the 352×296 sRGB framebuffer is reconstructed by an isolated
    2D camera into a fixed 1280×960 linear HDR canvas. Its mip 0 is copied to a
    separate 11-level tube image, then Bevy generates the remaining mips before
    the room camera samples the curved CRT mesh. The bezel and room-sized present
    target remain separate.
-2. Energy-conserving multi-line beam reconstruction and analytic aperture grille
-   (~280 triads); then tube-space horizontal-filter refinement. The tube-space
-   reconstruction and optional material-halation target are implemented in
-   `crt_tube.wgsl`; the curved-mesh sampling path remains in `crt_phosphor.wgsl`.
+2. Energy-normalized multi-line beam reconstruction, analytic aperture grille
+   (~280 triads), and linear-light horizontal filtering with a normalized 3-tap
+   kernel. Tube-space reconstruction and optional material halation are implemented
+   in `crt_tube.wgsl`; curved-mesh sampling remains in `crt_phosphor.wgsl`.
 3. Keep scan/grille/brightness fixed across zoom. Room-camera FXAA is removed because
    it post-processes the tube too; MSAA only smooths room geometry, not phosphor sampling.
 
@@ -692,9 +691,7 @@ Models and PBR textures are **Poly Haven CC0** (1k). Shaders are Spec Chum MIT.
 - Soft CRT spill (~1.1k–4.0k lm) tints walls from the framebuffer; TV-wall
   sconces ~14.4k lm tungsten; warm `GlobalAmbientLight` keeps sofa / wallpaper
   readable. Pull-back bloom stays mild so the tube face stays legible.
-- **Fidelity gaps** (tier 3): horizontal-filter refinement and final baseline comparison —
-  see **Roadmap → Tier 3**.
-  Lightmaps / `EnvironmentMapLight` remain [#149](https://github.com/mward-sudo/spec_chum/issues/149).
+- **Fidelity gaps** (tier 3): final baseline comparison — see **Roadmap → Tier 3**.
 
 ## Out of scope (v1)
 

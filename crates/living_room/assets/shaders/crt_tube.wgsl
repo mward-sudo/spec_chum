@@ -102,8 +102,9 @@ fn beam_core(distance: f32, radius: f32) -> f32 {
 fn raster_color(uv: vec2<f32>, soft_mix: f32) -> vec3<f32> {
     let sharp = sample_nearest(uv);
     let soft_h = sample_soft_h(uv);
-    let soft_sharp = sqrt(max(sharp * soft_h, vec3(0.0)));
-    return mix(sharp, soft_sharp, soft_mix);
+    // Both inputs are linear-light signals with preserved average energy;
+    // arithmetic interpolation retains that invariant for every blend value.
+    return mix(sharp, soft_h, soft_mix);
 }
 
 // Reconstruct each source row as an emitted beam. Normalizing each shaped beam
