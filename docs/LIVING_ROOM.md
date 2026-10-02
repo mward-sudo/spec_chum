@@ -181,15 +181,11 @@ Build/run the native shell ([MACOS_NATIVE.md](MACOS_NATIVE.md)):
   The macOS shell **always links** living_room for the host ABI; living-room is opt-in only
   as a *display mode*. A separate `cdylib` next to `host_api` panics / paints black — do not resurrect it.
 - Living room display is **opt-in** (`livingRoomMode` defaults false). Flat Spectrum blit remains the default.
-- Default present path: Bevy renders offscreen → GPU blit into a shared **IOSurface** →
-  `CALayer.contents` (no per-frame CPU `CGImage` readback). Default render size is
-  **1920×1080** (`DEFAULT_ROOM_W/H`); Swift steps the long edge up to a **2560** backing-pixel cap.
+- Present path: Bevy renders offscreen → GPU blit into a shared **IOSurface** →
+  `CALayer.contents` (no per-frame CPU `CGImage` readback). Default render size is **1920×1080**
+  (`DEFAULT_ROOM_W/H`); Swift steps the long edge up to a **2560** backing-pixel cap,
+  aspect-matched to the view.
   Layer filters are **linear** (phosphor texels stay nearest).
-- Optional macOS MetalFX experiment: set `SPEC_CHUM_ROOM_METALFX_SCALE` to a value from `0.5`
-  through less than `1.0` (for example `0.67`). The room renders below drawable resolution,
-  applies MetalFX spatial scaling, then presents through `CAMetalLayer`. It is off by default.
-  Device/scaler/output allocation failures leave full-resolution IOSurface presentation active;
-  drawable errors switch back to that path. The HUD reports effective render and present sizes.
 - **Dual clocks:** Spectrum `DispatchSourceTimer` ~50 Hz on AppKit main publishes RGBA;
   **`CADisplayLink`** paces `sc_room_tick` on `dev.specchum.living-room` at monitor refresh
   (coalesce if a tick is in flight). Zoom/skip are cheap mutations (no forced Bevy frame).
@@ -203,15 +199,8 @@ Build/run the native shell ([MACOS_NATIVE.md](MACOS_NATIVE.md)):
 SPEC_CHUM_ROOM_PERF=1 SPEC_CHUM_LIVING_ROOM=1 ./scripts/run_macos_app.sh
 ```
 
-For the opt-in spatial-scaling path, combine the flags:
-
-```bash
-SPEC_CHUM_ROOM_METALFX_SCALE=0.67 SPEC_CHUM_ROOM_PERF=1 ./scripts/run_macos_app.sh
-```
-
 - Rust: rolling Bevy tick µs (`sc_room_perf_snapshot`); stderr ~1 Hz when env set.
-- Swift HUD: host ms, **roomHz** / **specHz**, skip-busy, output size, and Bevy render/present
-  dimensions with last/avg/max tick time.
+- Swift HUD: host ms, **roomHz** / **specHz**, skip-busy, present WxH, Bevy last/avg/max tick time.
   `thread_hint` 1=AppKit main, 2=room queue. Expect roomHz ≫ 50 on ProMotion when healthy.
 
 ### Embed architecture (notes)
@@ -629,7 +618,7 @@ if a GPU trace shows Bevy overhead **after** lightmaps and tier-2 wins land.
 
 | Item | Notes |
 | --- | --- |
-| **MetalFX spatial upscaling (#462)** | Opt-in implementation available with `SPEC_CHUM_ROOM_METALFX_SCALE` on macOS; full-resolution IOSurface remains the default and automatic fallback. A minimal probe established that Metal requires IOSurface `bytesPerRow` alignment to 16 bytes: an 854-pixel BGRA row at 3416 bytes aborted, while padded 3424-byte rows imported. The native allocator validates the actual stride. The scaler uses Bevy's Metal device/queue, a private MetalFX output texture, and presents the drawable from the same command buffer. Rust release check, Clippy, 44 living-room tests, and the native app build pass. A basic M4 runtime check rendered at 1716×1074 into a 2560×1604 drawable at about 49 Hz; the checkout had no system ROM, so the TV signal was blank and image-quality/net-performance parity against a nonblank full-resolution source is still unverified. Keep disabled by default and do not close #462 until that comparison passes. |
+| **MetalFX spatial upscaling (#462)** | Evaluated and not retained: on an Apple M4, the same 48K boot screen and 2560×2244 present target rendered at 1716×1504 (0.67) or 1280×1122 (0.5); the captured splash remained intact at both scales, but neither reduced scale showed a repeatable tick-time or frame-rate benefit over full resolution in equal-duration samples. The optional `CAMetalLayer`/MetalFX path was removed; the stable IOSurface path remains. Keep the 16-byte IOSurface row-stride validation, which independently prevents Metal texture-import aborts at unaligned widths. |
 | **Pipelined rendering spike** | Deferred: thread affinity fixed the native black screen, but headless A/B showed no material perf gain. Keep disabled pending a measured benefit and completion/lifecycle validation. |
 | **Blender lightmaps** | Replace dynamic PBR fill with baked `Lightmap` + `EnvironmentMapLight`; drop hybrid plates. SpecChumMac temporary Current/New A/B toggle documents verification until this lands. Opt-in **Skein** (`--features skein`) helps tag Bevy markers / lights from Blender while lightmaps land — see [Scene editing with Skein](#scene-editing-with-skein-opt-in-standalone-only). |
 | **Halation in CRT material** | Move main glow from separate bloom pass into phosphor shader (tier-2 structural). |

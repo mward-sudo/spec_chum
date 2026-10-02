@@ -2,7 +2,6 @@ import AppKit
 import CSpecChumHost
 import CoreVideo
 import IOSurface
-import Metal
 import QuartzCore
 import SwiftUI
 
@@ -54,8 +53,6 @@ final class LivingRoomNSView: NSView {
     private var menuEndTrackingObserver: NSObjectProtocol?
     private var presentSurface: IOSurface?
     private var presentBound = false
-    private var metalLayer: CAMetalLayer?
-    private var usesMetalFX = false
     private var presentWidth = 1920
     private var presentHeight = 1080
     private var displayLink: CADisplayLink?
@@ -144,7 +141,6 @@ final class LivingRoomNSView: NSView {
     override var focusRingMaskBounds: NSRect { .zero }
 
     func refreshLayerContents() {
-        guard !usesMetalFX else { return }
         guard let presentSurface else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -163,49 +159,8 @@ final class LivingRoomNSView: NSView {
             startDisplayLinkIfNeeded()
             return
         }
-        if presentBound, usesMetalFX {
-            startDisplayLinkIfNeeded()
-            return
-        }
         rebindPresentSurface(width: presentWidth, height: presentHeight)
         startDisplayLinkIfNeeded()
-    }
-
-    /// Switch only after Rust confirms that MetalFX can create a scaler for this device and size.
-    func configureMetalFX(_ enabled: Bool) {
-        guard enabled != usesMetalFX else { return }
-        if enabled {
-            guard let device = MTLCreateSystemDefaultDevice() else {
-                host?.setLivingRoomRenderScale(1.0)
-                return
-            }
-            let metalLayer = CAMetalLayer()
-            metalLayer.device = device
-            metalLayer.pixelFormat = .bgra8Unorm_srgb
-            metalLayer.framebufferOnly = false
-            // nextDrawable() runs on AppKit main; let it time out so GPU stalls cannot freeze the UI.
-            metalLayer.allowsNextDrawableTimeout = true
-            metalLayer.contentsScale = 1
-            self.metalLayer = metalLayer
-            layer = metalLayer
-            usesMetalFX = true
-            presentSurface = nil
-            presentBound = false
-            updateMetalDrawableSize()
-        } else {
-            usesMetalFX = false
-            metalLayer = nil
-            let coreLayer = CALayer()
-            configureContentsLayer(coreLayer)
-            layer = coreLayer
-            presentBound = false
-        }
-    }
-
-    func nextMetalDrawable() -> CAMetalDrawable? {
-        guard usesMetalFX else { return nil }
-        updateMetalDrawableSize()
-        return metalLayer?.nextDrawable()
     }
 
     /// Debounced stepped resize from view backing pixels.
@@ -234,15 +189,6 @@ final class LivingRoomNSView: NSView {
 
     private func rebindPresentSurface(width: Int, height: Int) {
         guard host?.livingRoomMode == true else { return }
-        if usesMetalFX {
-            presentWidth = width
-            presentHeight = height
-            presentSurface = nil
-            presentBound = true
-            updateMetalDrawableSize()
-            host?.bindLivingRoomDrawableSize(width: UInt32(width), height: UInt32(height))
-            return
-        }
         guard let surface = Self.makeIOSurface(width: width, height: height) else { return }
         presentWidth = width
         presentHeight = height
@@ -254,17 +200,6 @@ final class LivingRoomNSView: NSView {
         layer?.contents = surface
         layer?.contentsScale = 1
         CATransaction.commit()
-    }
-
-    private func configureContentsLayer(_ layer: CALayer) {
-        layer.contentsGravity = .resizeAspect
-        layer.magnificationFilter = .linear
-        layer.minificationFilter = .linear
-        layer.backgroundColor = NSColor.black.cgColor
-    }
-
-    private func updateMetalDrawableSize() {
-        metalLayer?.drawableSize = CGSize(width: presentWidth, height: presentHeight)
     }
 
     /// Stepped long-edge budget, aspect matched to the view (no 16:9 letterboxing).

@@ -61,9 +61,6 @@ fi
 if [[ -n "${SPEC_CHUM_ROOM_PERF:-}" ]]; then
   printf 'export SPEC_CHUM_ROOM_PERF=%q\n' "$SPEC_CHUM_ROOM_PERF" >> "$MACOS_DIR/SpecChumMac"
 fi
-if [[ -n "${SPEC_CHUM_ROOM_METALFX_SCALE:-}" ]]; then
-  printf 'export SPEC_CHUM_ROOM_METALFX_SCALE=%q\n' "$SPEC_CHUM_ROOM_METALFX_SCALE" >> "$MACOS_DIR/SpecChumMac"
-fi
 if [[ -n "${SPEC_CHUM_ROOM_APERTURE_DEBUG:-}" ]]; then
   printf 'export SPEC_CHUM_ROOM_APERTURE_DEBUG=%q\n' "$SPEC_CHUM_ROOM_APERTURE_DEBUG" >> "$MACOS_DIR/SpecChumMac"
 fi
