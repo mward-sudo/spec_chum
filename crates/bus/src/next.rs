@@ -13,10 +13,12 @@ const PAGE_SIZE: usize = 0x2000;
 const CONFIG_BANK_SIZE: usize = 0x4000;
 // The first 256 KiB of SRAM holds ROM and firmware storage, before RAM page 0.
 const CONFIG_RESERVED_BANKS: usize = 16;
-const TSTATES_PER_LINE: u64 = 224;
-const LINES_PER_FRAME: u64 = 312;
-const TSTATES_PER_LINE_128: u64 = 228;
-const LINES_PER_FRAME_128: u64 = 311;
+const TSTATES_PER_LINE: u64 = ula::T_LINE_48 as u64;
+const LINES_PER_FRAME: u64 = ula::LINES_48 as u64;
+const TSTATES_PER_LINE_128: u64 = ula::T_LINE_128 as u64;
+const LINES_PER_FRAME_128: u64 = ula::LINES_128 as u64;
+const TSTATES_PER_LINE_PENTAGON: u64 = ula::T_LINE_PENTAGON as u64;
+const LINES_PER_FRAME_PENTAGON: u64 = ula::LINES_PENTAGON as u64;
 pub const NEXT_ROM_SIZE: usize = 0x10000;
 pub const NEXT_RAM_PAGE_COUNT: usize = 224;
 const NEXT_MACHINE_ID: u8 = 0x0a;
@@ -28,7 +30,7 @@ const PORT_NEXTREG_SELECT: u16 = 0x243b;
 const PORT_NEXTREG_ACCESS: u16 = 0x253b;
 /// CPU-visible Spectrum Next memory and the subset of `NextRegs` implemented by
 /// this core slice. Unimplemented registers read as an undriven data bus.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct NextBus {
     rom: Box<[u8; NEXT_ROM_SIZE]>,
     ram: Vec<u8>,
@@ -357,11 +359,7 @@ impl NextBus {
     #[must_use]
     pub fn read_nextreg_at(&self, register: u8, t: u64) -> u8 {
         if matches!(register, 0x1e | 0x1f) {
-            let (tstates_per_line, lines_per_frame) = if matches!(self.display_timing, 2 | 3) {
-                (TSTATES_PER_LINE_128, LINES_PER_FRAME_128)
-            } else {
-                (TSTATES_PER_LINE, LINES_PER_FRAME)
-            };
+            let (tstates_per_line, lines_per_frame, _) = self.display_geometry();
             let line = ((t / tstates_per_line) % lines_per_frame) as u16;
             return if register == 0x1e {
                 (line >> 8) as u8 & 0x01
@@ -448,6 +446,35 @@ impl NextBus {
     #[must_use]
     pub fn display_timing(&self) -> u8 {
         self.display_timing
+    }
+
+    fn display_geometry(&self) -> (u64, u64, u64) {
+        match self.display_timing {
+            2 | 3 => (
+                TSTATES_PER_LINE_128,
+                LINES_PER_FRAME_128,
+                u64::from(ula::INT_LENGTH_128),
+            ),
+            4 => (
+                TSTATES_PER_LINE_PENTAGON,
+                LINES_PER_FRAME_PENTAGON,
+                u64::from(ula::INT_LENGTH_PENTAGON),
+            ),
+            // Timing 0 is internal; 5–7 are reserved. Keep the existing 48K
+            // fallback until those modes have defined raster behavior.
+            _ => (
+                TSTATES_PER_LINE,
+                LINES_PER_FRAME,
+                u64::from(ula::INT_LENGTH_48),
+            ),
+        }
+    }
+
+    /// Frame period and active ULA interrupt pulse in 3.5 MHz CPU T-states.
+    #[must_use]
+    pub fn frame_interrupt_timing(&self) -> (u64, u64) {
+        let (tstates_per_line, lines_per_frame, interrupt_tstates) = self.display_geometry();
+        (tstates_per_line * lines_per_frame, interrupt_tstates)
     }
 
     fn config_window_active(&self) -> bool {
@@ -945,6 +972,40 @@ mod tests {
             bus.in_port_at(PORT_NEXTREG_ACCESS, 256 * TSTATES_PER_LINE),
             1
         );
+    }
+
+    #[test]
+    fn display_timing_selects_frame_and_scanline_geometry() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        for (timing, line_tstates, lines, interrupt_tstates) in [
+            (0, 224, 312, 32),
+            (1, 224, 312, 32),
+            (2, 228, 311, 36),
+            (3, 228, 311, 36),
+            (4, 224, 320, 32),
+            (5, 224, 312, 32),
+            (6, 224, 312, 32),
+            (7, 224, 312, 32),
+        ] {
+            bus.hard_reset();
+            bus.write_nextreg(0x03, 0x80 | timing << 4 | 3);
+            let frame_tstates = line_tstates * lines;
+            assert_eq!(
+                bus.frame_interrupt_timing(),
+                (frame_tstates, interrupt_tstates),
+                "timing {timing}"
+            );
+            assert_eq!(
+                bus.read_nextreg_at(0x1f, frame_tstates),
+                0,
+                "timing {timing}"
+            );
+            assert_eq!(
+                bus.read_nextreg_at(0x1f, (lines - 1) * line_tstates),
+                (lines - 1) as u8,
+                "timing {timing}"
+            );
+        }
     }
 
     #[test]

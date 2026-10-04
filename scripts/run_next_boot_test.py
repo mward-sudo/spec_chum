@@ -150,6 +150,8 @@ def main() -> int:
         raw_image = Path(f"{raw_base}.dmg")
         if not raw_image.is_file():
             raise SystemExit(f"hdiutil did not produce the raw card image: {raw_image}")
+        control_image = temp / "control-card.dmg"
+        shutil.copyfile(raw_image, control_image)
 
         attached = False
         device = ""
@@ -199,6 +201,7 @@ def main() -> int:
 
         environment = os.environ.copy()
         environment["SPEC_CHUM_NEXT_BOOT_CARD"] = str(raw_image)
+        environment["SPEC_CHUM_NEXT_BOOT_CONTROL_CARD"] = str(control_image)
         environment["SPEC_CHUM_NEXT_BOOT_ERROR_CARD"] = str(error_raw_image)
         environment["SPEC_CHUM_NEXT_BOOT_ROM"] = str(main_rom)
         environment["SPEC_CHUM_NEXT_BOOT_DIVMMC_ROM"] = str(divmmc_rom)

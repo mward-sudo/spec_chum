@@ -3,7 +3,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
@@ -99,9 +98,9 @@ pub enum NextSdError {
     Io(#[from] std::io::Error),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(super) struct SdSpi {
-    file: Arc<Mutex<File>>,
+    file: File,
     len: u64,
     selected: bool,
     idle: bool,
@@ -137,7 +136,7 @@ impl SdSpi {
             });
         }
         Ok(Self {
-            file: Arc::new(Mutex::new(file)),
+            file,
             len,
             selected: false,
             idle: true,
@@ -565,24 +564,16 @@ impl SdSpi {
         output: &mut [u8; SECTOR_SIZE],
     ) -> Result<(), NextSdError> {
         let end = self.sector_end(lba)?;
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|_| std::io::Error::other("Next SD file lock poisoned"))?;
-        file.seek(SeekFrom::Start(end - SECTOR_SIZE as u64))?;
-        file.read_exact(output)?;
+        self.file.seek(SeekFrom::Start(end - SECTOR_SIZE as u64))?;
+        self.file.read_exact(output)?;
         Ok(())
     }
 
     fn write_sector(&mut self, lba: u32) -> Result<(), NextSdError> {
         let end = self.sector_end(lba)?;
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|_| std::io::Error::other("Next SD file lock poisoned"))?;
-        file.seek(SeekFrom::Start(end - SECTOR_SIZE as u64))?;
-        file.write_all(&self.write_buffer[..])?;
-        file.flush()?;
+        self.file.seek(SeekFrom::Start(end - SECTOR_SIZE as u64))?;
+        self.file.write_all(&self.write_buffer[..])?;
+        self.file.flush()?;
         Ok(())
     }
 

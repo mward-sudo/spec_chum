@@ -7,12 +7,9 @@ use z80::{Cpu, CpuProfile, Io, Memory};
 
 use crate::MachineBuildError;
 
-const NEXT_PLUS3_FRAME_TSTATES: u64 = 228 * 311;
-const NEXT_PLUS3_INT_TSTATES: u64 = 36;
-
 /// Core-constructible Spectrum Next with Z80N instructions and an eight-slot
 /// 8 KiB MMU. It remains outside [`crate::Machine`] until a complete boot path exists.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct NextMachine {
     pub cpu: Cpu,
     pub bus: NextBus,
@@ -58,13 +55,12 @@ impl NextMachine {
 
     /// Execute one guest instruction through the Next-specific bus.
     pub fn step_once(&mut self) -> u32 {
+        let (frame_tstates, interrupt_tstates) = self.bus.frame_interrupt_timing();
         let cycles = {
             let mut io = NextMemIo(&mut self.bus, self.video_t.saturating_sub(self.cpu.t));
             if io.0.take_divmmc_nmi() {
                 self.cpu.nmi(&mut io)
-            } else if io.0.display_timing() == 3
-                && self.video_t % NEXT_PLUS3_FRAME_TSTATES < NEXT_PLUS3_INT_TSTATES
-            {
+            } else if self.video_t % frame_tstates < interrupt_tstates {
                 let interrupt_cycles = self.cpu.interrupt(&mut io);
                 if interrupt_cycles > 0 {
                     interrupt_cycles
@@ -131,6 +127,37 @@ mod tests {
 
     fn test_rom() -> Vec<u8> {
         vec![0; NEXT_ROM_SIZE]
+    }
+
+    #[test]
+    fn frame_interrupt_uses_selected_display_timing() {
+        // The core currently treats internal/reserved timing IDs as 48K timing.
+        for (timing, frame_tstates, interrupt_tstates) in [
+            (0, 224 * 312, 32),
+            (1, 224 * 312, 32),
+            (2, 228 * 311, 36),
+            (3, 228 * 311, 36),
+            (4, 224 * 320, 32),
+            (5, 224 * 312, 32),
+            (6, 224 * 312, 32),
+            (7, 224 * 312, 32),
+        ] {
+            let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+            machine.bus.write_nextreg(0x03, 0x80 | timing << 4 | 3);
+            machine.cpu.regs.pc = 0x4000;
+            machine.cpu.regs.sp = 0xc000;
+            machine.cpu.regs.iff1 = true;
+
+            machine.video_t = frame_tstates + interrupt_tstates;
+            assert_eq!(machine.step_once(), 4, "timing {timing}: INT window ended");
+            assert_eq!(machine.cpu.regs.pc, 0x4001, "timing {timing}");
+            assert!(machine.cpu.regs.iff1, "timing {timing}");
+
+            machine.video_t = frame_tstates * 2;
+            assert_eq!(machine.step_once(), 13, "timing {timing}: frame INT");
+            assert_eq!(machine.cpu.regs.pc, 0x0038, "timing {timing}");
+            assert!(!machine.cpu.regs.iff1, "timing {timing}");
+        }
     }
 
     #[test]

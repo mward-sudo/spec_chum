@@ -84,6 +84,8 @@ fn next_official_full_card_executes_sd_loaded_rom_reset_entry() {
         eprintln!("skip: run ./scripts/run_next_boot_test.py for the full-card Next boot check");
         return;
     };
+    let control_card = std::env::var_os("SPEC_CHUM_NEXT_BOOT_CONTROL_CARD")
+        .expect("full-card harness supplies an independent control card image");
     let Some(main_rom) = std::env::var_os("SPEC_CHUM_NEXT_BOOT_ROM") else {
         eprintln!("skip: SPEC_CHUM_NEXT_BOOT_ROM is not set");
         return;
@@ -164,7 +166,14 @@ fn next_official_full_card_executes_sd_loaded_rom_reset_entry() {
         screen_text
     );
 
-    let mut without_key = machine.clone();
+    let mut without_key = machine_at_ipl(&PathBuf::from(control_card), &ipl);
+    while without_key.video_t() < machine.video_t() {
+        without_key.step_once();
+    }
+    assert!(
+        displayed_ula_text(&without_key.bus, &rom).contains("Welcome to NextZXOS"),
+        "independent control card must reach the same welcome screen"
+    );
     machine.bus.keyboard.set_key(7, 0, true);
     assert_eq!(
         machine.bus.in_port(0x7ffe),
