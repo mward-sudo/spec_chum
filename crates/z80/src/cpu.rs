@@ -632,6 +632,19 @@ mod tests {
     }
 
     #[test]
+    fn z80n_bsra_sign_extends_large_shift_counts() {
+        for (shift, expected) in [(16, 0xffff), (31, 0xffff)] {
+            let mut cpu = next_cpu();
+            cpu.regs.set_de(0x8001);
+            cpu.regs.b = shift;
+            let mut bus = NextBus::program(&[0xed, 0x29]);
+
+            assert_eq!(cpu.step(&mut bus), 8);
+            assert_eq!(cpu.regs.de(), expected, "BSRA B={shift}");
+        }
+    }
+
+    #[test]
     fn z80n_bsrl_is_logical_masks_shift_count_and_is_profile_gated() {
         for (value, shift, expected) in [
             (0x8001, 1, 0x4000),
@@ -681,6 +694,16 @@ mod tests {
             assert_eq!(cpu.step(&mut bus), 7);
             assert_eq!(cpu.regs.a, 0x44);
         }
+
+        let mut cpu = next_cpu();
+        cpu.regs.set_hl(0xffff);
+        let mut bus = NextBus::program(&[0xed, 0x93]);
+        assert_eq!(cpu.step(&mut bus), 8);
+        assert_eq!(
+            cpu.regs.hl(),
+            0x001f,
+            "PIXELDN must wrap at the u16 boundary"
+        );
 
         let mut cpu = next_cpu();
         cpu.regs.set_hl(0x4700);

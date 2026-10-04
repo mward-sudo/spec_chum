@@ -922,7 +922,7 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
         }
         0x29 if cpu.profile == CpuProfile::Z80N => {
             let shift = cpu.regs.b & 0x1f;
-            let value = (cpu.regs.de() as i16) >> shift;
+            let value = i32::from(cpu.regs.de() as i16) >> shift;
             cpu.regs.set_de(value as u16);
         }
         0x2a if cpu.profile == CpuProfile::Z80N => {
@@ -937,7 +937,7 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
             } else if hl & 0x00e0 != 0x00e0 {
                 (hl & 0xf8ff) + 0x0020
             } else {
-                (hl & 0xf81f) + 0x0800
+                (hl & 0xf81f).wrapping_add(0x0800)
             };
             cpu.regs.set_hl(next);
         }
