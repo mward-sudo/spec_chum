@@ -317,7 +317,7 @@ impl NextBus {
             self.write_config_window(usize::from(addr), value);
             return;
         }
-        if self.alternate_rom_writes() && addr < 0x4000 {
+        if self.alternate_rom_writes() && addr < 0x4000 && self.rom_slot_selected(addr) {
             self.alternate_roms[self.alternate_rom_bank()][usize::from(addr)] = value;
             return;
         }
@@ -873,6 +873,18 @@ mod tests {
         bus.write_nextreg(0x8c, 0x90); // Switch to Alt-ROM 0 read redirect.
         assert_eq!(bus.read(1), 0x99);
         assert_eq!(bus.read_nextreg(0x8c), 0x90);
+    }
+
+    #[test]
+    fn alternate_rom_write_redirect_leaves_ram_mapped_slots_writable() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x03, 3);
+        bus.write_nextreg(0x50, 20);
+        bus.write_nextreg(0x8c, 0xd0); // Alt-ROM enabled for writes only.
+
+        bus.write(1, 0x99);
+
+        assert_eq!(bus.read_ram_page(20, 1), Some(0x99));
     }
 
     #[test]
