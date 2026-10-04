@@ -8,6 +8,9 @@ mod z80test;
 #[cfg(all(test, feature = "system-tests"))]
 mod system_tests;
 
+#[cfg(all(test, feature = "system-tests"))]
+mod next_boot_system_tests;
+
 mod construction;
 mod debugger;
 mod inspect;

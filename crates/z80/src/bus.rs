@@ -6,6 +6,12 @@ pub trait Memory {
     fn read(&mut self, addr: u16, t: u64) -> (u8, u32);
     fn write(&mut self, addr: u16, value: u8, t: u64) -> u32;
 
+    /// Opcode fetch hook. Buses with instruction-fetch-triggered hardware may
+    /// distinguish M1 cycles from ordinary memory reads.
+    fn read_opcode(&mut self, addr: u16, t: u64) -> (u8, u32) {
+        self.read(addr, t)
+    }
+
     /// M1 refresh at T4 of opcode fetch (48K ULA snow hook).
     fn m1_refresh(&mut self, _refresh_addr: u16, _t: u64, _m1_contended: bool) {}
 }

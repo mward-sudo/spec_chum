@@ -128,8 +128,24 @@ included; the selected 8 KiB file SHA-256 is
 `33f04fd104eb428eff1afe18854e3fc232019a20948ce8efed01f04f1196d815`. Older
 IPL binaries in the same archive contain the Sinclair ROM font and have a
 narrower non-commercial desktop emulator permission, so the setup script does
-not install them. The current official distribution page lists core 3.02.01,
-while this GPL IPL is 3.02.04; their boot compatibility is not yet verified.
+not install them. The 24.11 distribution lists core 3.02.01, while this GPL IPL
+is 3.02.04. FPGA-core compatibility remains outside this emulator test. The
+full-card headless check seeds the documented video timing choice and verifies
+that the Spectrum CPU executes the reset entry bytes loaded through SD and
+reaches a stable `Welcome to NextZXOS` marker. The control comparison verifies
+that holding Space dismisses the marker while the unpressed control remains on
+the welcome screen. A second fixture
+removes `machines/next/menu.def` and checks the firmware's readable file error.
+
+Run `python3 scripts/run_next_boot_test.py` on macOS for the opt-in full-card
+headless boot check. It verifies the pinned assets, creates a temporary 256 MiB
+MBR/FAT16 card from the complete archive, extracts the main system ROM to a
+temporary file, creates a minimal video timing config, starts with a sentinel
+ROM, then checks the firmware soft-reset handoff, execution of the reset entry
+from the ROM loaded from SD, a stable welcome marker and keyboard response. It
+also boots a second card missing `machines/next/menu.def` and checks the
+firmware's readable error. Both derived cards and extracted ROMs are deleted
+after the test; no binary assets are tracked.
 
 The complete Distribution includes Sinclair/Amstrad ROM images. Retain their
 copyright strings and include the Lawson attribution from

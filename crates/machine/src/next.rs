@@ -1,49 +1,101 @@
 //! Standalone Spectrum Next CPU/MMU core. Host model selection remains gated
-//! until firmware and media integration can boot a real distribution (#523).
+//! until firmware, media and display integration can boot a real distribution (#523).
 
 use bus::NextBus;
+use std::path::Path;
 use z80::{Cpu, CpuProfile, Io, Memory};
 
 use crate::MachineBuildError;
 
-/// Core-constructible Spectrum Next with Z80N `NEXTREG` instructions and an
-/// eight-slot 8 KiB MMU. Video, media and the rest of Next hardware follow in
-/// later issue slices; this type is intentionally outside [`crate::Machine`].
-#[derive(Clone, Debug)]
+/// Core-constructible Spectrum Next with Z80N instructions and an eight-slot
+/// 8 KiB MMU. It remains outside [`crate::Machine`] until a complete boot path exists.
+#[derive(Debug)]
 pub struct NextMachine {
     pub cpu: Cpu,
     pub bus: NextBus,
+    video_t: u64,
 }
 
 impl NextMachine {
     /// Supply the 64 KiB system ROM image explicitly; firmware acquisition is
-    /// handled by the later boot-path slice, not by core construction.
+    /// handled by the host, not by core construction.
     pub fn new(rom: &[u8]) -> Result<Self, MachineBuildError> {
         Ok(Self {
-            cpu: Cpu::with_profile(CpuProfile::Z80NNextReg),
+            cpu: Cpu::with_profile(CpuProfile::Z80N),
             bus: NextBus::new(rom)?,
+            video_t: 0,
         })
     }
 
-    /// Soft reset the CPU and MMU without erasing physical RAM or ROM.
+    /// Install the FPGA IPL image that overlays address `$0000` until config
+    /// mode is left through `NextReg` `$03`.
+    pub fn install_ipl(&mut self, bytes: &[u8]) -> Result<(), MachineBuildError> {
+        self.bus.install_boot_rom(bytes)?;
+        self.cpu.reset();
+        self.video_t = 0;
+        Ok(())
+    }
+
+    /// Attach a file-backed Next SD card image without loading it into memory.
+    pub fn attach_sd_image(&mut self, path: &Path) -> Result<(), bus::NextSdError> {
+        self.bus.attach_sd_file(path)
+    }
+
+    /// Soft reset the CPU and MMU without erasing RAM, ROM or machine selection.
     pub fn reset(&mut self) {
         self.cpu.reset();
-        self.bus.reset();
+        self.bus.soft_reset();
+    }
+
+    /// Uninterrupted video clock, including across CPU soft resets.
+    #[must_use]
+    pub fn video_t(&self) -> u64 {
+        self.video_t
     }
 
     /// Execute one guest instruction through the Next-specific bus.
     pub fn step_once(&mut self) -> u32 {
-        let mut io = NextMemIo(&mut self.bus);
-        self.cpu.step(&mut io)
+        let (frame_tstates, interrupt_tstates) = self.bus.frame_interrupt_timing();
+        let cycles = {
+            let mut io = NextMemIo(&mut self.bus, self.video_t.saturating_sub(self.cpu.t));
+            if io.0.take_divmmc_nmi() {
+                self.cpu.nmi(&mut io)
+            } else if self.video_t % frame_tstates < interrupt_tstates {
+                let interrupt_cycles = self.cpu.interrupt(&mut io);
+                if interrupt_cycles > 0 {
+                    interrupt_cycles
+                } else {
+                    self.cpu.step(&mut io)
+                }
+            } else {
+                self.cpu.step(&mut io)
+            }
+        };
+        self.video_t = self.video_t.wrapping_add(u64::from(cycles));
+        if let Some(status) = self.bus.take_reset_request() {
+            self.cpu.reset();
+            if status == 0x01 {
+                self.bus.soft_reset();
+            } else {
+                self.bus.hard_reset();
+                self.video_t = 0;
+            }
+            self.bus.set_reset_status(status);
+        }
+        cycles
     }
 }
 
 /// Trait adapter keeps the lower-level bus crate independent of the CPU crate.
-struct NextMemIo<'a>(&'a mut NextBus);
+struct NextMemIo<'a>(&'a mut NextBus, u64);
 
 impl Memory for NextMemIo<'_> {
     fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
         (self.0.read(addr), 0)
+    }
+
+    fn read_opcode(&mut self, addr: u16, _t: u64) -> (u8, u32) {
+        (self.0.read_opcode(addr), 0)
     }
 
     fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
@@ -53,12 +105,12 @@ impl Memory for NextMemIo<'_> {
 }
 
 impl Io for NextMemIo<'_> {
-    fn in_port(&mut self, port: u16, _t: u64) -> (u8, u32) {
-        (self.0.in_port(port), 0)
+    fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
+        (self.0.in_port_at(port, self.1.wrapping_add(t)), 0)
     }
 
-    fn out_port(&mut self, port: u16, value: u8, _t: u64) -> u32 {
-        self.0.out_port(port, value);
+    fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
+        self.0.out_port_at(port, value, self.1.wrapping_add(t));
         0
     }
 
@@ -78,6 +130,37 @@ mod tests {
     }
 
     #[test]
+    fn frame_interrupt_uses_selected_display_timing() {
+        // The core currently treats internal/reserved timing IDs as 48K timing.
+        for (timing, frame_tstates, interrupt_tstates) in [
+            (0, 224 * 312, 32),
+            (1, 224 * 312, 32),
+            (2, 228 * 311, 36),
+            (3, 228 * 311, 36),
+            (4, 224 * 320, 32),
+            (5, 224 * 312, 32),
+            (6, 224 * 312, 32),
+            (7, 224 * 312, 32),
+        ] {
+            let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+            machine.bus.write_nextreg(0x03, 0x80 | timing << 4 | 3);
+            machine.cpu.regs.pc = 0x4000;
+            machine.cpu.regs.sp = 0xc000;
+            machine.cpu.regs.iff1 = true;
+
+            machine.video_t = frame_tstates + interrupt_tstates;
+            assert_eq!(machine.step_once(), 4, "timing {timing}: INT window ended");
+            assert_eq!(machine.cpu.regs.pc, 0x4001, "timing {timing}");
+            assert!(machine.cpu.regs.iff1, "timing {timing}");
+
+            machine.video_t = frame_tstates * 2;
+            assert_eq!(machine.step_once(), 13, "timing {timing}: frame INT");
+            assert_eq!(machine.cpu.regs.pc, 0x0038, "timing {timing}");
+            assert!(!machine.cpu.regs.iff1, "timing {timing}");
+        }
+    }
+
+    #[test]
     fn reset_map_and_slot_boundaries_match_next_defaults() {
         let mut rom = test_rom();
         rom[0] = 0x40;
@@ -85,7 +168,7 @@ mod tests {
         rom[0x2000] = 0x42;
         rom[0x3fff] = 0x43;
         let mut machine = NextMachine::new(&rom).expect("test ROM has the required size");
-        assert_eq!(machine.cpu.profile(), CpuProfile::Z80NNextReg);
+        assert_eq!(machine.cpu.profile(), CpuProfile::Z80N);
 
         let pages = [0xff, 0xff, 10, 11, 4, 5, 0, 1];
         for (slot, page) in pages.into_iter().enumerate() {
@@ -174,5 +257,132 @@ mod tests {
         assert_eq!(machine.bus.read_nextreg(0x54), 0x23);
         assert_eq!(machine.cpu.regs.a, 0x23);
         assert_eq!(machine.bus.in_port(0x253b), 0x23);
+    }
+
+    #[test]
+    fn ipl_can_leave_config_mode_and_fetch_from_main_rom() {
+        let mut rom = test_rom();
+        rom[5] = 0x76;
+        let mut ipl = vec![0; 8192];
+        ipl[..4].copy_from_slice(&[0x3e, 0x03, 0xed, 0x92]);
+        ipl[4] = 0x03;
+        let mut machine = NextMachine::new(&rom).expect("test ROM has the required size");
+        machine
+            .install_ipl(&ipl)
+            .expect("test IPL has the required size");
+        machine.step_once(); // LD A,03
+        machine.step_once(); // NEXTREG 03,A disables the IPL
+        machine.step_once(); // HALT from the main ROM
+        assert_eq!(machine.cpu.regs.pc, 5);
+        assert!(machine.cpu.regs.halted);
+        assert_eq!(machine.bus.read_nextreg(0x03), 3);
+    }
+
+    #[test]
+    fn divmmc_automap_uses_the_opcode_fetch_bus_hook() {
+        let mut rom = test_rom();
+        rom[0x66] = 0x00; // The delayed trigger fetches this main-ROM NOP.
+        let mut machine = NextMachine::new(&rom).expect("test ROM has the required size");
+        machine
+            .install_ipl(&vec![0; 8192])
+            .expect("test IPL has the required size");
+        machine.bus.write_nextreg(0x03, 0);
+        machine.bus.write_nextreg(0x04, 4);
+        machine.bus.write(0x0067, 0x3e); // LD A,55 from the DivMMC ROM.
+        machine.bus.write(0x0068, 0x55);
+        machine.bus.write_nextreg(0x03, 3);
+        machine.bus.write_nextreg(0x0a, 0x11);
+        machine.cpu.regs.pc = 0x0066;
+
+        assert_eq!(machine.step_once(), 4);
+        assert_eq!(machine.cpu.regs.pc, 0x0067);
+        assert_eq!(machine.step_once(), 7);
+        assert_eq!(machine.cpu.regs.pc, 0x0069);
+        assert_eq!(machine.cpu.regs.a, 0x55);
+    }
+
+    #[test]
+    fn reset_register_divmmc_request_delivers_nmi_and_automaps_rom() {
+        let mut rom = test_rom();
+        rom[0x66] = 0x00;
+        let mut machine = NextMachine::new(&rom).expect("test ROM has the required size");
+        machine
+            .install_ipl(&vec![0; 8192])
+            .expect("test IPL has the required size");
+        machine.bus.write_nextreg(0x03, 0);
+        machine.bus.write_nextreg(0x04, 4);
+        machine.bus.write(0x0066, 0x00); // Delayed mapping leaves this main-ROM NOP visible.
+        machine.bus.write(0x0067, 0xed); // RETN from DivMMC ROM.
+        machine.bus.write(0x0068, 0x45);
+        machine.bus.write_nextreg(0x03, 3);
+        machine.bus.write_nextreg(0x0a, 0x11); // SD0 select + DivMMC automap.
+        assert_eq!(machine.bus.read_nextreg(0x0a), 0x11);
+        assert_eq!(machine.bus.read_nextreg(0xbb), 0xcd);
+        assert_eq!(machine.bus.read(0x0067), 0);
+        machine.cpu.regs.pc = 0x1234;
+        machine.cpu.regs.sp = 0xfffd;
+        machine.cpu.regs.iff1 = true;
+        machine.cpu.regs.iff2 = true;
+
+        machine.bus.write_nextreg(0x02, 0x04);
+        assert_eq!(machine.bus.read_nextreg(0x02) & 0x04, 0x04);
+        assert_eq!(machine.step_once(), 11, "NextReg request delivers NMI");
+        assert_eq!(machine.cpu.regs.pc, 0x0066);
+        assert_eq!(
+            machine.step_once(),
+            4,
+            "main-ROM NOP executes at the NMI vector"
+        );
+        assert_eq!(
+            machine.bus.read(0x0067),
+            0xed,
+            "delayed automapping takes effect after the trigger fetch"
+        );
+        assert_eq!(
+            machine.step_once(),
+            14,
+            "automapped DivMMC ROM executes RETN"
+        );
+        assert_eq!(machine.cpu.regs.pc, 0x1234);
+        assert!(machine.cpu.regs.iff1);
+    }
+
+    #[test]
+    fn hard_reset_restarts_the_ipl() {
+        let mut ipl = vec![0; 8192];
+        ipl[..5].copy_from_slice(&[0x3e, 0x02, 0xed, 0x92, 0x02]);
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        machine.install_ipl(&ipl).expect("valid test IPL");
+        assert_eq!(machine.step_once(), 7);
+        assert_eq!(machine.step_once(), 17);
+        assert_eq!(machine.cpu.regs.pc, 0);
+        assert_eq!(machine.bus.read(0), 0x3e);
+        assert_eq!(machine.bus.read_nextreg(0x02) & 0x03, 2);
+    }
+
+    #[test]
+    fn soft_reset_enters_the_selected_machine_rom() {
+        let mut rom = test_rom();
+        rom[..10].copy_from_slice(&[0x3e, 0x03, 0xed, 0x92, 0x03, 0x3e, 0x01, 0xed, 0x92, 0x02]);
+        let mut ipl = vec![0; 8192];
+        ipl[..5].copy_from_slice(&[0x3e, 0x03, 0xed, 0x92, 0x03]);
+        let mut machine = NextMachine::new(&rom).expect("valid test ROM");
+        machine.install_ipl(&ipl).expect("valid test IPL");
+
+        assert_eq!(machine.step_once(), 7, "select Next machine ROM");
+        assert_eq!(machine.step_once(), 17, "leave IPL mapping");
+        assert!(!machine.bus.is_boot_rom_enabled());
+        assert_eq!(machine.cpu.regs.pc, 5);
+        assert_eq!(machine.step_once(), 7, "select soft reset");
+        assert_eq!(machine.step_once(), 17, "request soft reset");
+
+        assert_eq!(machine.cpu.regs.pc, 0);
+        assert_eq!(machine.bus.read_nextreg(0x03), 3);
+        assert!(!machine.bus.is_boot_rom_enabled());
+        assert_eq!(machine.bus.read(0), rom[0]);
+        assert_eq!(machine.bus.read_nextreg(0x02) & 0x03, 1);
+        assert_eq!(machine.step_once(), 7, "execute from the selected ROM");
+        assert_eq!(machine.cpu.regs.pc, 2);
+        assert_eq!(machine.cpu.regs.a, 3);
     }
 }

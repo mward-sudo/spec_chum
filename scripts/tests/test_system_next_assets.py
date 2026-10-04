@@ -65,6 +65,36 @@ class SystemNextAssetTests(unittest.TestCase):
         with self.assertRaisesRegex(assets.AssetError, "size or SHA-256 mismatch"):
             self.verify(manifest, boot_rom, license_text)
 
+    def test_missing_firmware_archive_member_names_the_file(self):
+        archive_path = self.asset_dir / "system.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr("LICENSE.md", b"distribution notice")
+        manifest = assets.ArchiveManifest(
+            filename=archive_path.name,
+            size=archive_path.stat().st_size,
+            sha256=assets._sha256(archive_path),
+            url="https://example.invalid/system.zip",
+            members={"TBBLUE.FW": (4, self.digest(b"firmware"))},
+        )
+        with self.assertRaisesRegex(assets.AssetError, "system.zip is missing TBBLUE.FW"):
+            assets.verify_archive(archive_path, manifest)
+
+    def test_corrupt_firmware_archive_member_is_reported(self):
+        archive_path = self.asset_dir / "system.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr("TBBLUE.FW", b"bad!")
+        manifest = assets.ArchiveManifest(
+            filename=archive_path.name,
+            size=archive_path.stat().st_size,
+            sha256=assets._sha256(archive_path),
+            url="https://example.invalid/system.zip",
+            members={"TBBLUE.FW": (8, self.digest(b"firmware"))},
+        )
+        with self.assertRaisesRegex(
+            assets.AssetError, "system.zip member hash mismatch: TBBLUE.FW"
+        ):
+            assets.verify_archive(archive_path, manifest)
+
     def test_complete_pinned_asset_set_passes_without_network(self):
         manifest, boot_rom, license_text = self.make_asset_set()
         self.verify(manifest, boot_rom, license_text)
