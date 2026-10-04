@@ -911,16 +911,87 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
         }
         0x67 => rrd(cpu, bus),
         0x6f => rld(cpu, bus),
-        0x91 if cpu.profile == CpuProfile::Z80NNextReg => {
+        0x91 if cpu.profile == CpuProfile::Z80N => {
             let register = cpu.fetch8(bus);
             let value = cpu.fetch8(bus);
             cpu.add_t(6);
             bus.nextreg_write(register, value, cpu.t);
         }
-        0x92 if cpu.profile == CpuProfile::Z80NNextReg => {
+        0x23 if cpu.profile == CpuProfile::Z80N => {
+            cpu.regs.a = cpu.regs.a.rotate_right(4);
+        }
+        0x29 if cpu.profile == CpuProfile::Z80N => {
+            let shift = cpu.regs.b & 0x1f;
+            let value = (cpu.regs.de() as i16) >> shift;
+            cpu.regs.set_de(value as u16);
+        }
+        0x2a if cpu.profile == CpuProfile::Z80N => {
+            let shift = cpu.regs.b & 0x1f;
+            let value = u32::from(cpu.regs.de()) >> shift;
+            cpu.regs.set_de(value as u16);
+        }
+        0x93 if cpu.profile == CpuProfile::Z80N => {
+            let hl = cpu.regs.hl();
+            let next = if hl & 0x0700 != 0x0700 {
+                hl.wrapping_add(0x0100)
+            } else if hl & 0x00e0 != 0x00e0 {
+                (hl & 0xf8ff) + 0x0020
+            } else {
+                (hl & 0xf81f) + 0x0800
+            };
+            cpu.regs.set_hl(next);
+        }
+        0x94 if cpu.profile == CpuProfile::Z80N => {
+            let y = cpu.regs.d;
+            let x = cpu.regs.e;
+            let address = 0x4000
+                + (u16::from(y & 0xc0) << 5)
+                + (u16::from(y & 0x07) << 8)
+                + (u16::from(y & 0x38) << 2)
+                + u16::from(x >> 3);
+            cpu.regs.set_hl(address);
+        }
+        0x30 if cpu.profile == CpuProfile::Z80N => {
+            cpu.regs
+                .set_de(u16::from(cpu.regs.d) * u16::from(cpu.regs.e));
+        }
+        0x31 if cpu.profile == CpuProfile::Z80N => {
+            cpu.regs
+                .set_hl(cpu.regs.hl().wrapping_add(u16::from(cpu.regs.a)));
+            cpu.regs.f &= !flag::C;
+            cpu.regs.q = cpu.regs.f;
+        }
+        0x32 if cpu.profile == CpuProfile::Z80N => {
+            cpu.regs
+                .set_de(cpu.regs.de().wrapping_add(u16::from(cpu.regs.a)));
+            cpu.regs.f &= !flag::C;
+            cpu.regs.q = cpu.regs.f;
+        }
+        0x33 if cpu.profile == CpuProfile::Z80N => {
+            cpu.regs
+                .set_bc(cpu.regs.bc().wrapping_add(u16::from(cpu.regs.a)));
+            cpu.regs.f &= !flag::C;
+            cpu.regs.q = cpu.regs.f;
+        }
+        0x34..=0x36 if cpu.profile == CpuProfile::Z80N => {
+            let immediate = cpu.fetch16(bus);
+            match op {
+                0x34 => cpu.regs.set_hl(cpu.regs.hl().wrapping_add(immediate)),
+                0x35 => cpu.regs.set_de(cpu.regs.de().wrapping_add(immediate)),
+                0x36 => cpu.regs.set_bc(cpu.regs.bc().wrapping_add(immediate)),
+                _ => unreachable!(),
+            }
+            cpu.add_t(2);
+        }
+        0x92 if cpu.profile == CpuProfile::Z80N => {
             let register = cpu.fetch8(bus);
             cpu.add_t(6);
             bus.nextreg_write(register, cpu.regs.a, cpu.t);
+        }
+        0x8a if cpu.profile == CpuProfile::Z80N => {
+            let value = u16::from(cpu.fetch8(bus)) << 8 | u16::from(cpu.fetch8(bus));
+            cpu.push(bus, value);
+            cpu.add_t(3);
         }
         0xa0 => block_ld(cpu, bus, true, false),
         0xa8 => block_ld(cpu, bus, false, false),

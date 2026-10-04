@@ -3,15 +3,29 @@
 //! This bus is deliberately separate from the classic 128K buses: each CPU
 //! address range has its own 8 KiB page register, including the ROM slots.
 
-use crate::{require_rom_size, RomLoadError};
+use std::path::Path;
+
+pub use crate::next_sd::NextSdError;
+use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
+use crate::{require_rom_size, Keyboard, RomLoadError};
 
 const PAGE_SIZE: usize = 0x2000;
+const CONFIG_BANK_SIZE: usize = 0x4000;
+// The first 256 KiB of SRAM holds ROM and firmware storage, before RAM page 0.
+const CONFIG_RESERVED_BANKS: usize = 16;
+const TSTATES_PER_LINE: u64 = 224;
+const LINES_PER_FRAME: u64 = 312;
+const TSTATES_PER_LINE_128: u64 = 228;
+const LINES_PER_FRAME_128: u64 = 311;
 pub const NEXT_ROM_SIZE: usize = 0x10000;
 pub const NEXT_RAM_PAGE_COUNT: usize = 224;
+const NEXT_MACHINE_ID: u8 = 0x0a;
+const NEXT_CORE_VERSION: u8 = 0x32;
+const NEXT_CORE_SUBMINOR: u8 = 0x04;
+const NEXT_BOARD_ID: u8 = 0x00;
 const RESET_PAGES: [u8; 8] = [0xff, 0xff, 10, 11, 4, 5, 0, 1];
 const PORT_NEXTREG_SELECT: u16 = 0x243b;
 const PORT_NEXTREG_ACCESS: u16 = 0x253b;
-
 /// CPU-visible Spectrum Next memory and the subset of `NextRegs` implemented by
 /// this core slice. Unimplemented registers read as an undriven data bus.
 #[derive(Clone, Debug)]
@@ -20,35 +34,196 @@ pub struct NextBus {
     ram: Vec<u8>,
     mmu: [u8; 8],
     selected_nextreg: u8,
+    zx128_mapping: u8,
+    zx128_rom_low: u8,
+    zx128_allram_low: u8,
+    zx128_locked: bool,
+    zx128_bank_high: u8,
+    boot_rom: Option<Box<[u8; 8192]>>,
+    boot_enabled: bool,
+    machine_type: u8,
+    display_timing: u8,
+    display_screen_bank: u8,
+    config_mapping: u8,
+    layer2_page: u8,
+    peripheral3: u8,
+    reset_register: u8,
+    reset_pending: u8,
+    divmmc_nmi_pending: bool,
+    divmmc_conmem: bool,
+    divmmc_automapped: bool,
+    divmmc_unmap_pending: bool,
+    divmmc_control: u8,
+    divmmc_automap_pending: bool,
+    divmmc_entry_points: u8,
+    divmmc_entry_points_valid: u8,
+    divmmc_entry_timing: u8,
+    divmmc_entry_points_1: u8,
+    config_reserved_sram: Vec<u8>,
+    alternate_roms: [Box<[u8; CONFIG_BANK_SIZE]>; 2],
+    alternate_rom_register: u8,
+    peripheral5: u8,
+    sd_spi: Option<SdSpi>,
+    sd_cs: u8,
+    /// Host-driven Spectrum keyboard matrix, used by ULA port `$FE`.
+    pub keyboard: Keyboard,
 }
 
 impl NextBus {
+    fn sd_selected(cs: u8) -> bool {
+        matches!(cs & 0x8f, 0x8e | 0x8d)
+    }
+
     /// Construct a fully expanded 2 MiB Next memory map with a 64 KiB ROM image.
     pub fn new(rom: &[u8]) -> Result<Self, RomLoadError> {
         require_rom_size(rom, "Spectrum Next ROM", NEXT_ROM_SIZE)?;
         let mut rom_bytes = Box::new([0; NEXT_ROM_SIZE]);
         rom_bytes.copy_from_slice(rom);
-        Ok(Self {
+        let mut bus = Self {
             rom: rom_bytes,
             ram: vec![0; NEXT_RAM_PAGE_COUNT * PAGE_SIZE],
-            mmu: RESET_PAGES,
+            mmu: [0; 8],
             selected_nextreg: 0,
-        })
+            zx128_mapping: 0,
+            zx128_rom_low: 0,
+            zx128_allram_low: 0,
+            zx128_locked: false,
+            zx128_bank_high: 0,
+            boot_rom: None,
+            boot_enabled: false,
+            machine_type: 0,
+            display_timing: 0,
+            display_screen_bank: 0,
+            config_mapping: 0,
+            layer2_page: 0,
+            peripheral3: 0,
+            reset_register: 0,
+            reset_pending: 0,
+            divmmc_nmi_pending: false,
+            divmmc_conmem: false,
+            divmmc_automapped: false,
+            divmmc_unmap_pending: false,
+            divmmc_control: 0,
+            divmmc_automap_pending: false,
+            divmmc_entry_points: 0,
+            divmmc_entry_points_valid: 0,
+            divmmc_entry_timing: 0,
+            divmmc_entry_points_1: 0,
+            config_reserved_sram: vec![0; CONFIG_RESERVED_BANKS * CONFIG_BANK_SIZE - NEXT_ROM_SIZE],
+            alternate_roms: [
+                Box::new([0; CONFIG_BANK_SIZE]),
+                Box::new([0; CONFIG_BANK_SIZE]),
+            ],
+            alternate_rom_register: 0,
+            peripheral5: 0,
+            sd_spi: None,
+            sd_cs: 0,
+            keyboard: Keyboard::new(),
+        };
+        bus.hard_reset();
+        Ok(bus)
     }
 
-    /// Restore soft-reset MMU registers while retaining physical RAM and ROM.
-    pub fn reset(&mut self) {
+    /// Return hardware to its hard-reset IPL/configuration state.
+    pub fn hard_reset(&mut self) {
         self.mmu = RESET_PAGES;
         self.selected_nextreg = 0;
+        self.zx128_mapping = 0x08;
+        self.zx128_rom_low = 0;
+        self.zx128_allram_low = 0;
+        self.zx128_locked = false;
+        self.zx128_bank_high = 0;
+        self.machine_type = 0;
+        self.display_timing = 0;
+        self.display_screen_bank = 5;
+        self.config_mapping = 0;
+        self.alternate_rom_register = 0;
+        self.layer2_page = 8;
+        self.peripheral3 = 0x10;
+        self.reset_register = 2;
+        self.reset_pending = 0;
+        self.divmmc_nmi_pending = false;
+        self.divmmc_conmem = false;
+        self.divmmc_automapped = false;
+        self.divmmc_unmap_pending = false;
+        self.divmmc_control = 0;
+        self.divmmc_automap_pending = false;
+        self.divmmc_entry_points = 0x83;
+        self.divmmc_entry_points_valid = 0x01;
+        self.divmmc_entry_timing = 0;
+        self.divmmc_entry_points_1 = 0xcd;
+        self.peripheral5 = 0x01;
+        self.boot_enabled = self.boot_rom.is_some();
+        self.sd_cs = 0xff;
+        if let Some(sd) = &mut self.sd_spi {
+            sd.reset();
+        }
+    }
+
+    /// Reset transient hardware state while preserving the selected machine.
+    pub fn soft_reset(&mut self) {
+        let machine_type = self.machine_type;
+        let display_timing = self.display_timing;
+        let boot_enabled = self.boot_enabled;
+        let peripheral3 = self.peripheral3;
+        let peripheral5 = self.peripheral5;
+        let alternate_rom_reset = (self.alternate_rom_register & 0x0f) * 0x11;
+        self.hard_reset();
+        self.machine_type = machine_type;
+        self.display_timing = display_timing;
+        self.boot_enabled = boot_enabled;
+        self.peripheral3 = peripheral3 & !0x40;
+        self.peripheral5 = peripheral5;
+        self.alternate_rom_register = alternate_rom_reset;
+        self.reset_register = 0x01;
+    }
+
+    /// Enable an 8 KiB IPL ROM over address 0 after reset.
+    pub fn install_boot_rom(&mut self, bytes: &[u8]) -> Result<(), RomLoadError> {
+        require_rom_size(bytes, "Spectrum Next IPL ROM", 8192)?;
+        let mut rom = Box::new([0; 8192]);
+        rom.copy_from_slice(bytes);
+        self.hard_reset();
+        self.boot_rom = Some(rom);
+        self.machine_type = 0;
+        self.config_mapping = 0;
+        self.peripheral5 = 0x01;
+        self.boot_enabled = true;
+        self.reset_register = 0x02;
+        Ok(())
+    }
+
+    /// Attach a mutable file-backed SD card image, read a sector at a time.
+    pub fn attach_sd_file(&mut self, path: &Path) -> Result<(), NextSdError> {
+        self.sd_spi = Some(SdSpi::open(path)?);
+        self.sd_cs = 0xff;
+        Ok(())
     }
 
     /// Read a CPU-visible address through the current 8 KiB mapping.
     #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
+        if self.boot_enabled && addr < 0x2000 {
+            if let Some(boot_rom) = &self.boot_rom {
+                return boot_rom[usize::from(addr)];
+            }
+        }
+        if self.divmmc_mapped() && addr < 0x4000 {
+            return self.read_divmmc(usize::from(addr));
+        }
+        if self.alternate_rom_reads() && addr < 0x4000 && self.rom_slot_selected(addr) {
+            return self.alternate_roms[self.alternate_rom_bank()][usize::from(addr)];
+        }
+        if self.config_window_active() && addr < 0x4000 {
+            return self.read_config_window(usize::from(addr));
+        }
         let slot = usize::from(addr) / PAGE_SIZE;
         let offset = usize::from(addr) % PAGE_SIZE;
-        match self.mmu[slot] {
-            0xff if slot < 2 => self.rom[slot * PAGE_SIZE + offset],
+        match self.mmu_page(slot) {
+            0xff if slot < 2 => {
+                let rom_bank = usize::from(self.zx128_mapping & 0x03);
+                self.rom[rom_bank * CONFIG_BANK_SIZE + slot * PAGE_SIZE + offset]
+            }
             page if usize::from(page) < NEXT_RAM_PAGE_COUNT => {
                 self.ram[usize::from(page) * PAGE_SIZE + offset]
             }
@@ -56,10 +231,96 @@ impl NextBus {
         }
     }
 
+    /// Read the opcode bus, including Next automap triggers on M1 fetches.
+    #[must_use]
+    pub fn read_opcode(&mut self, addr: u16) -> u8 {
+        self.update_divmmc_mapping_on_fetch(addr);
+        let opcode = self.read(addr);
+        if self.divmmc_automap_pending {
+            self.divmmc_automapped = true;
+            self.divmmc_automap_pending = false;
+        }
+        if self.divmmc_unmap_pending {
+            self.divmmc_automapped = false;
+            self.divmmc_unmap_pending = false;
+        }
+        opcode
+    }
+
+    fn update_divmmc_mapping_on_fetch(&mut self, addr: u16) {
+        let entries = self.divmmc_entry_points_1;
+        if entries & 0x40 != 0 && (0x1ff8..=0x1fff).contains(&addr) {
+            self.divmmc_unmap_pending = true;
+            return;
+        }
+        if self.peripheral5 & 0x10 == 0 {
+            return;
+        }
+
+        let (enabled, instant) = if addr <= 0x38 && addr & 0x07 == 0 {
+            let entry = (addr / 8) as u8;
+            let mask = 1 << entry;
+            if self.divmmc_entry_points & mask == 0 {
+                return;
+            }
+            let requires_rom3 = self.divmmc_entry_points_valid & mask == 0;
+            if requires_rom3 && !self.rom3_selected() {
+                return;
+            }
+            (true, self.divmmc_entry_timing & mask != 0)
+        } else if (0x3d00..=0x3dff).contains(&addr) && entries & 0x80 != 0 {
+            (self.rom3_selected(), true)
+        } else {
+            let (address, mask) = match addr {
+                0x0066 if entries & 0x02 != 0 => (true, 0x02),
+                0x0066 if entries & 0x01 != 0 => (true, 0x01),
+                0x056a if entries & 0x20 != 0 => (true, 0x20),
+                0x04d7 if entries & 0x10 != 0 => (true, 0x10),
+                0x0562 if entries & 0x08 != 0 => (true, 0x08),
+                0x04c6 if entries & 0x04 != 0 => (true, 0x04),
+                _ => (false, 0),
+            };
+            if !address || (mask != 0x01 && mask != 0x02 && !self.rom3_selected()) {
+                return;
+            }
+            let instant = mask == 0x02;
+            (true, instant)
+        };
+
+        if enabled {
+            if instant {
+                self.divmmc_automapped = true;
+            } else {
+                self.divmmc_automap_pending = true;
+            }
+        }
+    }
+
+    fn rom3_selected(&self) -> bool {
+        !self.boot_enabled
+            && !self.config_window_active()
+            && !self.divmmc_mapped()
+            && self.mmu_page(0) == 0xff
+            && self.mmu_page(1) == 0xff
+            && self.zx128_mapping & 0x03 == 0x03
+    }
+
     /// Write a CPU-visible address. ROM and absent pages are not writable.
     pub fn write(&mut self, addr: u16, value: u8) {
+        if self.divmmc_mapped() && addr < 0x4000 {
+            self.write_divmmc(usize::from(addr), value);
+            return;
+        }
+        if self.config_window_active() && addr < 0x4000 {
+            self.write_config_window(usize::from(addr), value);
+            return;
+        }
+        if self.alternate_rom_writes() && addr < 0x4000 {
+            self.alternate_roms[self.alternate_rom_bank()][usize::from(addr)] = value;
+            return;
+        }
         let slot = usize::from(addr) / PAGE_SIZE;
-        let page = usize::from(self.mmu[slot]);
+        let page = usize::from(self.mmu_page(slot));
         if page < NEXT_RAM_PAGE_COUNT {
             let offset = usize::from(addr) % PAGE_SIZE;
             self.ram[page * PAGE_SIZE + offset] = value;
@@ -69,17 +330,104 @@ impl NextBus {
     /// Read one implemented `NextReg`; unimplemented registers float high.
     #[must_use]
     pub fn read_nextreg(&self, register: u8) -> u8 {
-        if (0x50..=0x57).contains(&register) {
-            self.mmu[usize::from(register - 0x50)]
-        } else {
-            0xff
+        match register {
+            0x00 => NEXT_MACHINE_ID,
+            0x01 => NEXT_CORE_VERSION,
+            0x02 => self.reset_register,
+            0x03 => (self.display_timing << 4) | self.machine_type,
+            0x08 => (self.peripheral3 & 0x7f) | (u8::from(!self.zx128_locked) << 7),
+            0x1e | 0x1f => 0,
+            0x09 => 0,
+            0x0a => self.peripheral5,
+            0x0e => NEXT_CORE_SUBMINOR,
+            0x0f => NEXT_BOARD_ID,
+            0x12 => self.layer2_page,
+            0x8c => self.alternate_rom_register,
+            0xb8 => self.divmmc_entry_points,
+            0xb9 => self.divmmc_entry_points_valid,
+            0xba => self.divmmc_entry_timing,
+            0xbb => self.divmmc_entry_points_1,
+            0x50..=0x57 => self.mmu[usize::from(register - 0x50)],
+            0x8e => self.zx128_mapping,
+            _ => 0xff,
         }
     }
 
-    /// Update the MMU `NextRegs`. Other registers are reserved for later slices.
+    /// Read time-dependent Next registers at the CPU's absolute T-state.
+    #[must_use]
+    pub fn read_nextreg_at(&self, register: u8, t: u64) -> u8 {
+        if matches!(register, 0x1e | 0x1f) {
+            let (tstates_per_line, lines_per_frame) = if matches!(self.display_timing, 2 | 3) {
+                (TSTATES_PER_LINE_128, LINES_PER_FRAME_128)
+            } else {
+                (TSTATES_PER_LINE, LINES_PER_FRAME)
+            };
+            let line = ((t / tstates_per_line) % lines_per_frame) as u16;
+            return if register == 0x1e {
+                (line >> 8) as u8 & 0x01
+            } else {
+                line as u8
+            };
+        }
+        self.read_nextreg(register)
+    }
+
+    /// Update implemented boot, display-bank, peripheral, and MMU registers.
     pub fn write_nextreg(&mut self, register: u8, value: u8) {
-        if (0x50..=0x57).contains(&register) {
-            self.mmu[usize::from(register - 0x50)] = value;
+        match register {
+            0x02 => {
+                self.reset_pending = value & 0x03;
+                if value & 0x04 != 0 {
+                    self.reset_register |= 0x04;
+                    self.divmmc_nmi_pending = true;
+                }
+                if value & 0x04 == 0 {
+                    self.reset_register &= !0x04;
+                }
+            }
+            0x08 => {
+                self.peripheral3 = value & 0x7f;
+                if value & 0x80 != 0 {
+                    self.zx128_locked = false;
+                }
+            }
+            0x09 if value & 0x08 != 0 => self.divmmc_control &= !0x40,
+            0x03 if self.machine_type == 0 => {
+                self.boot_enabled = false;
+                if value & 0x80 != 0 {
+                    self.display_timing = (value >> 4) & 0x07;
+                }
+                self.machine_type = value & 0x07;
+            }
+            0x04 if self.machine_type == 0 && !self.boot_enabled => {
+                self.config_mapping = value & 0x7f;
+            }
+            0x12 => self.layer2_page = value & 0x7f,
+            0xb8 => self.divmmc_entry_points = value,
+            0xb9 => self.divmmc_entry_points_valid = value,
+            0xba => self.divmmc_entry_timing = value,
+            0xbb => self.divmmc_entry_points_1 = value,
+            0x8e => {
+                self.write_128_mapping(value, value & 0x08 != 0);
+            }
+            0x0a => {
+                self.peripheral5 = if self.machine_type == 0 {
+                    value & 0xfb
+                } else {
+                    (self.peripheral5 & 0xe0) | (value & 0x1b)
+                };
+                if self.peripheral5 & 0x10 == 0 {
+                    self.divmmc_automapped = false;
+                    self.divmmc_automap_pending = false;
+                    self.divmmc_unmap_pending = false;
+                }
+                if let Some(sd) = &mut self.sd_spi {
+                    sd.select(Self::sd_selected(self.sd_cs));
+                }
+            }
+            0x8c => self.alternate_rom_register = value,
+            0x50..=0x57 => self.mmu[usize::from(register - 0x50)] = value,
+            _ => {}
         }
     }
 
@@ -88,6 +436,226 @@ impl NextBus {
     pub fn read_ram_page(&self, page: u8, offset: usize) -> Option<u8> {
         (usize::from(page) < NEXT_RAM_PAGE_COUNT && offset < PAGE_SIZE)
             .then(|| self.ram[usize::from(page) * PAGE_SIZE + offset])
+    }
+
+    /// Physical ULA screen bank selected by the `$7FFD` display latch.
+    #[must_use]
+    pub fn display_screen_bank(&self) -> u8 {
+        self.display_screen_bank
+    }
+
+    /// Spectrum display timing selected through `NextReg` `$03`.
+    #[must_use]
+    pub fn display_timing(&self) -> u8 {
+        self.display_timing
+    }
+
+    fn config_window_active(&self) -> bool {
+        self.boot_rom.is_some() && !self.boot_enabled && self.machine_type == 0
+    }
+
+    fn read_divmmc(&self, offset: usize) -> u8 {
+        if offset < PAGE_SIZE {
+            if self.divmmc_control & 0x40 != 0 {
+                self.config_reserved_sram[0x10000 + 3 * PAGE_SIZE + offset]
+            } else {
+                self.config_reserved_sram[offset]
+            }
+        } else {
+            self.config_reserved_sram[Self::divmmc_ram_index(
+                usize::from(self.divmmc_control & 0x0f),
+                offset - PAGE_SIZE,
+            )]
+        }
+    }
+
+    fn write_divmmc(&mut self, offset: usize, value: u8) {
+        if offset < PAGE_SIZE {
+            return;
+        }
+        let bank = usize::from(self.divmmc_control & 0x0f);
+        if self.divmmc_control & 0x40 != 0 && bank == 3 {
+            return;
+        }
+        let index = Self::divmmc_ram_index(bank, offset - PAGE_SIZE);
+        self.config_reserved_sram[index] = value;
+    }
+
+    fn divmmc_ram_index(bank: usize, offset: usize) -> usize {
+        0x10000 + bank * PAGE_SIZE + offset
+    }
+
+    fn divmmc_mapped(&self) -> bool {
+        self.divmmc_conmem || self.divmmc_automapped
+    }
+
+    fn write_128_paging(&mut self, port: u16, value: u8) {
+        let port = if port & 0xf003 == 0xd001 {
+            0xdffd
+        } else if port & 0xf003 == 0x1001 {
+            0x1ffd
+        } else if port & 0x8003 == 0x0001 {
+            0x7ffd
+        } else {
+            return;
+        };
+        match port {
+            0x7ffd => {
+                if self.zx128_locked {
+                    return;
+                }
+                self.display_screen_bank = if value & 0x08 != 0 { 7 } else { 5 };
+                if self.zx128_mapping & 0x04 == 0 {
+                    self.zx128_rom_low = (value & 0x10) >> 4;
+                }
+                let rom_or_allram_low = if self.zx128_mapping & 0x04 == 0 {
+                    self.zx128_rom_low
+                } else {
+                    self.zx128_allram_low
+                };
+                let mapping =
+                    (self.zx128_mapping & 0x8e) | 0x08 | ((value & 0x07) << 4) | rom_or_allram_low;
+                self.write_128_mapping(mapping, true);
+                if value & 0x20 != 0 {
+                    self.zx128_locked = true;
+                }
+            }
+            0xdffd => {
+                if self.zx128_locked {
+                    return;
+                }
+                self.zx128_bank_high = (value & 0x0e) << 3;
+                let mapping = (self.zx128_mapping & 0x7f) | (value & 0x01) << 7;
+                self.write_128_mapping(mapping, true);
+            }
+            0x1ffd => {
+                let mode = (value & 0x01) << 2;
+                if mode != 0 {
+                    self.zx128_allram_low = (value & 0x02) >> 1;
+                }
+                let low_select = if mode == 0 {
+                    self.zx128_rom_low
+                } else {
+                    self.zx128_allram_low
+                };
+                let mapping =
+                    (self.zx128_mapping & !0x07) | 0x08 | mode | (value & 0x04) >> 1 | low_select;
+                self.write_128_mapping(mapping, true);
+            }
+            _ => {}
+        }
+    }
+
+    fn write_128_mapping(&mut self, value: u8, update_ram_bank: bool) {
+        let was_special = self.zx128_mapping & 0x04 != 0;
+        let is_special = value & 0x04 != 0;
+        if is_special {
+            self.zx128_allram_low = value & 0x01;
+        } else {
+            self.zx128_rom_low = value & 0x01;
+        }
+        let ram_bank = if value & 0x08 != 0 {
+            value & 0xf0
+        } else {
+            self.zx128_mapping & 0xf0
+        };
+        let low_select = if is_special {
+            self.zx128_allram_low
+        } else {
+            self.zx128_rom_low
+        };
+        self.zx128_mapping = ram_bank | (value & 0x06) | low_select | 0x08;
+        if !is_special {
+            if was_special {
+                self.mmu[2] = 10;
+                self.mmu[3] = 11;
+                self.mmu[4] = 4;
+                self.mmu[5] = 5;
+            }
+            self.mmu[0] = 0xff;
+            self.mmu[1] = 0xff;
+            if update_ram_bank {
+                self.update_128_ram_bank();
+            }
+        }
+    }
+
+    fn update_128_ram_bank(&mut self) {
+        if self.zx128_mapping & 0x04 == 0 {
+            let bank = ((self.zx128_mapping >> 4) & 0x07)
+                | ((self.zx128_mapping & 0x80) >> 4)
+                | self.zx128_bank_high;
+            self.mmu[6] = bank * 2;
+            self.mmu[7] = bank * 2 + 1;
+        }
+    }
+
+    fn mmu_page(&self, slot: usize) -> u8 {
+        if self.zx128_mapping & 0x04 != 0 {
+            let banks = match self.zx128_mapping & 0x03 {
+                0 => [0, 1, 2, 3],
+                1 => [4, 5, 6, 7],
+                2 => [4, 5, 6, 3],
+                _ => [4, 7, 6, 3],
+            };
+            banks[slot / 2] * 2 + (slot % 2) as u8
+        } else {
+            self.mmu[slot]
+        }
+    }
+
+    // Config mapping uses raw SRAM bank numbers; MMU RAM pages begin at bank 16.
+    fn read_config_window(&self, offset: usize) -> u8 {
+        let bank = usize::from(self.config_mapping);
+        if bank < 4 {
+            self.rom[bank * CONFIG_BANK_SIZE + offset]
+        } else if bank == 6 || bank == 7 {
+            self.alternate_roms[bank - 6][offset]
+        } else if bank < CONFIG_RESERVED_BANKS {
+            self.config_reserved_sram[(bank - 4) * CONFIG_BANK_SIZE + offset]
+        } else {
+            let first_page = (bank - CONFIG_RESERVED_BANKS) * 2;
+            let page = first_page + offset / PAGE_SIZE;
+            self.ram[page * PAGE_SIZE + offset % PAGE_SIZE]
+        }
+    }
+
+    fn write_config_window(&mut self, offset: usize, value: u8) {
+        let bank = usize::from(self.config_mapping);
+        if bank < 4 {
+            self.rom[bank * CONFIG_BANK_SIZE + offset] = value;
+        } else if bank == 6 || bank == 7 {
+            self.alternate_roms[bank - 6][offset] = value;
+        } else if bank < CONFIG_RESERVED_BANKS {
+            self.config_reserved_sram[(bank - 4) * CONFIG_BANK_SIZE + offset] = value;
+        } else {
+            let first_page = (bank - CONFIG_RESERVED_BANKS) * 2;
+            let page = first_page + offset / PAGE_SIZE;
+            self.ram[page * PAGE_SIZE + offset % PAGE_SIZE] = value;
+        }
+    }
+
+    fn alternate_rom_reads(&self) -> bool {
+        self.alternate_rom_register & 0xc0 == 0x80
+    }
+
+    fn alternate_rom_writes(&self) -> bool {
+        self.alternate_rom_register & 0xc0 == 0xc0
+    }
+
+    fn alternate_rom_bank(&self) -> usize {
+        if self.alternate_rom_register & 0x20 != 0 {
+            1
+        } else if self.alternate_rom_register & 0x10 != 0 {
+            0
+        } else {
+            usize::from(self.zx128_rom_low != 0)
+        }
+    }
+
+    fn rom_slot_selected(&self, addr: u16) -> bool {
+        let slot = usize::from(addr) / PAGE_SIZE;
+        self.mmu_page(slot) == 0xff
     }
 
     /// Load guest bytes into a physical RAM page for core boot tests or media.
@@ -110,22 +678,846 @@ impl NextBus {
         self.selected_nextreg
     }
 
+    /// Whether the FPGA IPL currently overlays the low 8 KiB.
+    #[must_use]
+    pub fn is_boot_rom_enabled(&self) -> bool {
+        self.boot_enabled
+    }
+
+    /// Consume a pending `DivMMC` NMI generated through `NextReg` `$02`.
+    pub fn take_divmmc_nmi(&mut self) -> bool {
+        std::mem::take(&mut self.divmmc_nmi_pending)
+    }
+
+    /// Consume a hard- or soft-reset request from `NextReg` `$02`.
+    pub fn take_reset_request(&mut self) -> Option<u8> {
+        let request = std::mem::take(&mut self.reset_pending);
+        (request != 0).then_some(if request & 0x02 != 0 { 0x02 } else { 0x01 })
+    }
+
+    /// Record the hard/soft reset cause after restoring the hardware state.
+    pub fn set_reset_status(&mut self, status: u8) {
+        self.reset_register = status & 0x03;
+    }
+
     /// CPU port read, including the Next register select/access ports.
     #[must_use]
-    pub fn in_port(&self, port: u16) -> u8 {
+    pub fn in_port(&mut self, port: u16) -> u8 {
+        self.in_port_at(port, 0)
+    }
+
+    /// CPU port read with its absolute T-state, for timed devices such as SD SPI.
+    pub fn in_port_at(&mut self, port: u16, t: u64) -> u8 {
         match port {
             PORT_NEXTREG_SELECT => self.selected_nextreg,
-            PORT_NEXTREG_ACCESS => self.read_nextreg(self.selected_nextreg),
+            PORT_NEXTREG_ACCESS => self.read_nextreg_at(self.selected_nextreg, t),
+            _ if port & 0xff == 0xe3 => {
+                (self.divmmc_control & 0x7f) | (u8::from(self.divmmc_conmem) << 7)
+            }
+            _ if Self::is_128_paging_port(port) => 0xff,
+            _ if port & 0xff == PORT_NEXT_SD_CS => self.sd_cs,
+            _ if port & 0xff == PORT_NEXT_SD_DATA => self
+                .sd_spi
+                .as_mut()
+                .map_or(0xff, |sd| sd.exchange_at(0xff, t)),
+            _ if port & 1 == 0 => 0xa0 | self.keyboard.read((port >> 8) as u8),
             _ => 0xff,
         }
     }
 
     /// CPU port write, including the Next register select/access ports.
     pub fn out_port(&mut self, port: u16, value: u8) {
+        self.out_port_at(port, value, 0);
+    }
+
+    /// CPU port write with its absolute T-state, for timed devices such as SD SPI.
+    pub fn out_port_at(&mut self, port: u16, value: u8, t: u64) {
         match port {
-            PORT_NEXTREG_SELECT => self.selected_nextreg = value,
+            PORT_NEXTREG_SELECT => {
+                self.selected_nextreg = value;
+            }
             PORT_NEXTREG_ACCESS => self.write_nextreg(self.selected_nextreg, value),
+            _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
+            _ if port & 0xff == 0xe3 => {
+                self.divmmc_control = (value & 0x8f) | (self.divmmc_control & 0x40);
+                if value & 0x40 != 0 {
+                    self.divmmc_control |= 0x40;
+                }
+                self.divmmc_conmem = value & 0x80 != 0;
+            }
+            _ if port & 0xff == PORT_NEXT_SD_CS => {
+                self.sd_cs = value;
+                if let Some(sd) = &mut self.sd_spi {
+                    sd.select(Self::sd_selected(value));
+                }
+            }
+            _ if port & 0xff == PORT_NEXT_SD_DATA => {
+                if let Some(sd) = &mut self.sd_spi {
+                    let _ = sd.exchange_at(value, t);
+                }
+            }
             _ => {}
         }
+    }
+
+    fn is_128_paging_port(port: u16) -> bool {
+        port & 0x8003 == 0x0001 || port & 0xf003 == 0xd001 || port & 0xf003 == 0x1001
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::next_sd::SECTOR_SIZE;
+
+    #[test]
+    fn boot_rom_overlays_slot_zero_until_nextreg_configuration_write() {
+        let main_rom = vec![0x33; NEXT_ROM_SIZE];
+        let boot_rom = vec![0x11; 8192];
+        let mut bus = NextBus::new(&main_rom).expect("valid main ROM");
+        bus.install_boot_rom(&boot_rom).expect("valid IPL ROM");
+        assert_eq!(bus.read(0), 0x11);
+        assert_eq!(bus.read_nextreg(0x02) & 0x03, 0x02);
+        assert_eq!(bus.read(0x1fff), 0x11);
+        assert_eq!(bus.read(0x2000), 0x33);
+        assert_eq!(bus.read_nextreg(0x03), 0);
+        assert_eq!(bus.read_nextreg(0x04), 0xff);
+        bus.write_nextreg(0x03, 0x03);
+        assert_eq!(bus.read(0), 0x33);
+        assert_eq!(bus.read_nextreg(0x03), 3);
+        bus.hard_reset();
+        assert_eq!(bus.read(0), 0x11);
+    }
+
+    #[test]
+    fn config_mapping_uses_raw_sram_banks_without_rewiring_the_mmu() {
+        let mut rom = vec![0; NEXT_ROM_SIZE];
+        rom[0x8000] = 0x42;
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+        let mut boot_rom = vec![0; 8192];
+        boot_rom[0] = 0x42;
+        bus.install_boot_rom(&boot_rom).expect("valid IPL ROM");
+        bus.write_nextreg(0x04, 2);
+        assert_eq!(bus.read(0), 0x42);
+        bus.write_nextreg(0x03, 0);
+        bus.write_nextreg(0x04, 2);
+        assert!(bus.load_ram_page(4, 0, &[0x11]));
+        assert!(bus.load_ram_page(5, 0, &[0x22]));
+        assert_eq!(bus.read(0), 0x42);
+        assert_eq!(bus.read(0x2000), 0);
+        assert_eq!(bus.read_nextreg(0x50), 0xff);
+        assert_eq!(bus.read_nextreg(0x51), 0xff);
+        bus.write(3, 0x99);
+        assert_eq!(bus.read(3), 0x99);
+        assert_eq!(bus.read_ram_page(4, 0), Some(0x11));
+
+        bus.write_nextreg(0x04, 18);
+        assert_eq!(bus.read(0), 0x11);
+        assert_eq!(bus.read(0x2000), 0x22);
+    }
+
+    #[test]
+    fn config_mapping_pages_six_and_seven_are_alternate_roms() {
+        for (page, marker, bank) in [(6, 0x61, 0x90), (7, 0x72, 0xa0)] {
+            let mut bus = NextBus::new(&vec![0x33; NEXT_ROM_SIZE]).expect("valid ROM");
+            bus.install_boot_rom(&vec![0; 8192]).expect("valid IPL ROM");
+            bus.write_nextreg(0x03, 0); // Leave the IPL in config mode.
+            bus.write_nextreg(0x04, page);
+            bus.write(0x0048, marker);
+            bus.write_nextreg(0x03, 3); // Exit config mode.
+            bus.write_nextreg(0x8c, bank);
+            assert_eq!(bus.read(0x0048), marker);
+        }
+    }
+
+    #[test]
+    fn alternate_rom_write_and_read_redirect_roundtrip() {
+        let mut rom = vec![0; NEXT_ROM_SIZE];
+        rom[0] = 0x33;
+        rom[1] = 0x44;
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+        bus.write_nextreg(0x03, 3);
+        bus.write_nextreg(0x8c, 0xd0); // Enable write redirect, lock Alt-ROM 0.
+        bus.write(1, 0x99);
+        assert_eq!(bus.read(1), 0x44, "write mode leaves normal ROM visible");
+        bus.write_nextreg(0x8c, 0x90); // Switch to Alt-ROM 0 read redirect.
+        assert_eq!(bus.read(1), 0x99);
+        assert_eq!(bus.read_nextreg(0x8c), 0x90);
+    }
+
+    #[test]
+    fn spectrum_128_rom_mapping_register_selects_each_16k_rom_bank() {
+        let mut rom = vec![0; NEXT_ROM_SIZE];
+        for bank in 0..4 {
+            let base = bank * CONFIG_BANK_SIZE;
+            rom[base] = 0x10 + bank as u8;
+            rom[base + 0x2000] = 0x20 + bank as u8;
+        }
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+
+        for bank in 0..4u8 {
+            let mapping = 0x08 | (bank & 0x03);
+            bus.write_nextreg(0x8e, mapping);
+            assert_eq!(bus.read_nextreg(0x8e), mapping);
+            assert_eq!(bus.read(0x0000), 0x10 + bank);
+            assert_eq!(bus.read(0x2000), 0x20 + bank);
+        }
+    }
+
+    #[test]
+    fn spectrum_128_mapping_register_updates_or_preserves_ram_bank_by_write_bit() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(bus.read_nextreg(0x56), 0);
+        assert_eq!(bus.read_nextreg(0x57), 1);
+        assert!(bus.load_ram_page(18, 0, &[0x98]));
+        assert!(bus.load_ram_page(19, 0, &[0x99]));
+        bus.write_nextreg(0x50, 20);
+        bus.write_nextreg(0x51, 21);
+
+        bus.write_nextreg(0x8e, 0x98); // Update 128K bank to 9.
+        assert_eq!(bus.read_nextreg(0x50), 0xff);
+        assert_eq!(bus.read_nextreg(0x51), 0xff);
+        assert_eq!(bus.read_nextreg(0x56), 18);
+        assert_eq!(bus.read_nextreg(0x57), 19);
+        assert_eq!(bus.read(0xc000), 0x98);
+        assert_eq!(bus.read(0xe000), 0x99);
+
+        bus.write_nextreg(0x8e, 0x10); // Bit 3 clear: don't change RAM bank.
+        assert_eq!(bus.read_nextreg(0x8e), 0x98); // Read bit 3 is always set.
+        assert_eq!(bus.read_nextreg(0x56), 18);
+        assert_eq!(bus.read_nextreg(0x57), 19);
+        assert_eq!(bus.read(0xc000), 0x98);
+        assert_eq!(bus.read(0xe000), 0x99);
+    }
+
+    #[test]
+    fn spectrum_128_special_mapping_selects_the_four_all_ram_layouts() {
+        let layouts = [[0, 1, 2, 3], [4, 5, 6, 7], [4, 5, 6, 3], [4, 7, 6, 3]];
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        for bank in 0..8u8 {
+            for half in 0..2u8 {
+                let page = bank * 2 + half;
+                assert!(bus.load_ram_page(page, 0, &[bank]));
+            }
+        }
+
+        for (selection, banks) in layouts.into_iter().enumerate() {
+            bus.write_nextreg(0x8e, 0x0c | selection as u8);
+            for (slot, bank) in banks.into_iter().enumerate() {
+                assert_eq!(bus.read((slot * 0x4000) as u16), bank);
+                assert_eq!(bus.read((slot * 0x4000 + 0x2000) as u16), bank);
+            }
+        }
+    }
+
+    #[test]
+    fn even_ports_read_the_active_low_keyboard_matrix() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.keyboard.set_key(6, 0, true);
+        assert_eq!(bus.in_port(0xfefe), 0xbf);
+        assert_eq!(bus.in_port(0xbffe), 0xbe);
+        assert_eq!(bus.in_port(0xfdfe), 0xbf);
+        assert_eq!(bus.in_port(0xfdff), 0xff);
+    }
+
+    #[test]
+    fn spectrum_space_key_uses_row_seven_bit_zero() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.keyboard.set_key(7, 0, true);
+        assert_eq!(bus.in_port(0x7ffe), 0xbe);
+        assert_eq!(bus.in_port(0xfefe), 0xbf);
+    }
+
+    #[test]
+    fn active_video_line_registers_follow_the_312_line_raster() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_NEXTREG_SELECT, 0x1f);
+        assert_eq!(
+            bus.in_port_at(PORT_NEXTREG_ACCESS, 230 * TSTATES_PER_LINE),
+            230
+        );
+        assert_eq!(
+            bus.in_port_at(PORT_NEXTREG_ACCESS, 312 * TSTATES_PER_LINE),
+            0
+        );
+        bus.out_port(PORT_NEXTREG_SELECT, 0x1e);
+        assert_eq!(
+            bus.in_port_at(PORT_NEXTREG_ACCESS, 256 * TSTATES_PER_LINE),
+            1
+        );
+    }
+
+    #[test]
+    fn layer2_active_ram_bank_is_readable_and_resets_to_bank_eight() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(bus.read_nextreg(0x12), 8);
+        bus.write_nextreg(0x12, 0x88);
+        assert_eq!(bus.read_nextreg(0x12), 8);
+        bus.write_nextreg(0x12, 9);
+        assert_eq!(bus.read_nextreg(0x12), 9);
+        bus.hard_reset();
+        assert_eq!(bus.read_nextreg(0x12), 8);
+    }
+
+    #[test]
+    fn divmmc_rom_automaps_on_configured_delayed_and_instant_m1_triggers() {
+        let configured_bus = || {
+            let mut rom = vec![0; NEXT_ROM_SIZE];
+            rom[0x67] = 0x76;
+            let mut bus = NextBus::new(&rom).expect("valid ROM");
+            bus.install_boot_rom(&vec![0; 8192]).expect("valid IPL");
+            bus.write_nextreg(0x03, 0);
+            bus.write_nextreg(0x04, 4);
+            for (offset, byte) in [0x00, 0x3e, 0x55, 0x76].into_iter().enumerate() {
+                bus.write(offset as u16 + 0x66, byte);
+            }
+            bus.write_nextreg(0x03, 3);
+            bus.write_nextreg(0x0a, 0x11);
+            bus
+        };
+
+        let mut delayed = configured_bus();
+        assert_eq!(
+            delayed.read_opcode(0x66),
+            0x00,
+            "delayed trigger uses main ROM"
+        );
+        assert_eq!(
+            delayed.read(0x67),
+            0x3e,
+            "delayed mapping takes effect after the trigger M1 fetch"
+        );
+        assert_eq!(
+            delayed.read_opcode(0x67),
+            0x3e,
+            "next M1 fetch uses DivMMC ROM"
+        );
+        assert_eq!(delayed.read(0x68), 0x55);
+
+        let mut instant = configured_bus();
+        instant.write_nextreg(0xbb, 0x02);
+        assert_eq!(
+            instant.read_opcode(0x66),
+            0x00,
+            "instant trigger still fetches main ROM"
+        );
+        assert_eq!(instant.read_opcode(0x67), 0x3e);
+    }
+
+    #[test]
+    fn divmmc_rst_automap_and_return_window_follow_nextreg_controls() {
+        let mut rom = vec![0x22; NEXT_ROM_SIZE];
+        rom[3 * CONFIG_BANK_SIZE + 0x08] = 0xcf; // ROM 3 RST $08.
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+        bus.config_reserved_sram[..PAGE_SIZE].fill(0x33);
+        bus.write_nextreg(0x8e, 0x0b); // ROM 3 selected.
+        bus.write_nextreg(0x0a, 0x10); // Enable DivMMC automapping.
+        bus.write_nextreg(0xb8, 0x02); // RST $08 entry point.
+        bus.write_nextreg(0xb9, 0x02); // RST $08 valid outside ROM 3.
+        bus.write_nextreg(0xba, 0x02); // RST $08 maps instantly.
+        assert_eq!(bus.read_opcode(0x0008), 0x33);
+        assert_eq!(bus.read_opcode(0x0009), 0x33);
+        assert_eq!(bus.in_port(0x00e3) & 0x80, 0);
+
+        bus.write_nextreg(0xbb, 0x40); // Delayed unmap on $1FF8-$1FFF.
+        assert_eq!(bus.read_opcode(0x1ff8), 0x33);
+        assert_eq!(bus.read_opcode(0x1fff), 0x22);
+    }
+
+    #[test]
+    fn rom3_only_rst_automapping_requires_rom3_to_be_visible() {
+        let mut rom = vec![0x22; NEXT_ROM_SIZE];
+        rom[3 * CONFIG_BANK_SIZE + 0x38] = 0xff; // ROM 3 RST $38.
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+        bus.config_reserved_sram[..PAGE_SIZE].fill(0x33);
+        bus.write_nextreg(0x03, 3); // +3 personality alone does not mean ROM3 is present.
+        bus.write_nextreg(0x0a, 0x10);
+        bus.write_nextreg(0xb8, 0x80); // RST $38.
+        bus.write_nextreg(0xb9, 0x00); // RST $38 only automaps in ROM3.
+        bus.write_nextreg(0x50, 2); // Hide ROM with MMU RAM.
+        assert_eq!(bus.read_opcode(0x38), 0x00);
+        assert_eq!(bus.read_opcode(0x39), 0x00);
+
+        bus.write_nextreg(0x8e, 0x0b); // Expose ROM3.
+        assert_eq!(bus.read_opcode(0x38), 0xff);
+        assert_eq!(bus.read_opcode(0x39), 0x33);
+    }
+
+    #[test]
+    fn rst_automap_uses_fetch_address_even_when_opcode_is_not_rst() {
+        let mut rom = vec![0x22; NEXT_ROM_SIZE];
+        rom[3 * CONFIG_BANK_SIZE] = 0xf3; // The official Next ROM starts with DI.
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+        bus.config_reserved_sram[..PAGE_SIZE].fill(0x33);
+        bus.write_nextreg(0x8e, 0x0b); // ROM 3 selected.
+        assert_eq!(bus.read_opcode(0x0000), 0xf3);
+        assert_eq!(bus.read(0x0001), 0x22, "automap is disabled at reset");
+        bus.write_nextreg(0x0a, 0x10); // Enable DivMMC automapping.
+        assert_eq!(bus.read_opcode(0x0000), 0xf3);
+        assert_eq!(bus.read(0x0001), 0x33, "delayed mapping follows M1");
+    }
+
+    #[test]
+    fn divmmc_control_maps_rom_and_selected_ram_bank() {
+        let mut rom = vec![0x33; NEXT_ROM_SIZE];
+        rom[0x2000] = 0x44;
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+        bus.install_boot_rom(&vec![0; 8192]).expect("valid IPL");
+        bus.write_nextreg(0x03, 0); // Leave IPL; enter configuration mapping.
+        bus.write_nextreg(0x04, 4); // DivMMC ROM is raw SRAM bank four.
+        bus.write(0, 0xaa);
+        bus.write_nextreg(0x03, 3);
+
+        bus.out_port(0x00e3, 0x85); // CONMEM, RAM bank five.
+        assert_eq!(bus.in_port(0x00e3), 0x85);
+        assert_eq!(bus.read(0), 0xaa);
+        assert_eq!(bus.read(0x2000), 0);
+        bus.write(0x2000, 0x55);
+        assert_eq!(bus.read(0x2000), 0x55);
+
+        bus.out_port(0x00e3, 0x82); // Change the selected RAM bank.
+        assert_eq!(bus.read(0), 0xaa);
+        assert_eq!(bus.read(0x2000), 0);
+        bus.out_port(0x00e3, 0);
+        assert_eq!(bus.read(0), 0x33);
+        assert_eq!(bus.read(0x2000), 0x44);
+    }
+
+    #[test]
+    fn divmmc_ram_aliases_config_sram_banks_eight_through_fifteen() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.install_boot_rom(&vec![0; 8192]).expect("valid IPL");
+        bus.write_nextreg(0x03, 0);
+        bus.write_nextreg(0x04, 8); // Physical $020000: DivMMC RAM bank zero.
+        bus.write(0, 0x61);
+        bus.write_nextreg(0x04, 4); // DivMMC ROM mapping leaves config mode.
+        bus.write_nextreg(0x03, 3);
+        bus.out_port(0x00e3, 0x80);
+        assert_eq!(bus.read(0x2000), 0x61);
+        bus.write(0x2001, 0x62);
+        bus.hard_reset();
+        bus.write_nextreg(0x03, 0);
+        bus.write_nextreg(0x04, 8);
+        assert_eq!(bus.read(1), 0x62);
+    }
+
+    #[test]
+    fn divmmc_conmem_readback_is_independent_of_automapping() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.divmmc_automapped = true;
+        assert_eq!(bus.in_port(0x00e3) & 0x80, 0);
+        bus.out_port(0x00e3, 0x81);
+        assert_eq!(bus.in_port(0x00e3) & 0x80, 0x80);
+        bus.out_port(0x00e3, 0x01);
+        assert_eq!(bus.in_port(0x00e3) & 0x80, 0);
+        assert!(bus.divmmc_mapped());
+    }
+
+    #[test]
+    fn legacy_paging_ports_sync_with_nextreg_and_preserve_full_dffd_bank() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(0x5ffd, 0x05); // Decoded alias of $7ffd.
+        assert_eq!(bus.read_nextreg(0x8e), 0x58);
+        bus.out_port(0xd001, 0x06); // Decoded alias of $dffd.
+        assert_eq!(bus.read_nextreg(0x8e), 0x58);
+        assert_eq!(bus.read_nextreg(0x56), 106);
+        assert_eq!(bus.read_nextreg(0x57), 107);
+        bus.out_port(0xdffd, 0x0e);
+        assert_eq!(bus.read_nextreg(0x56), 234);
+        assert_eq!(bus.read_nextreg(0x57), 235);
+        assert_eq!(bus.read(0xc000), 0xff); // Absent bank stays absent, not clamped.
+    }
+
+    #[test]
+    fn rom_and_all_ram_low_selectors_survive_mode_changes_independently() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(0x7ffd, 0x10);
+        bus.out_port(0x1ffd, 0x00);
+        assert_eq!(bus.read_nextreg(0x8e) & 0x03, 0x01);
+
+        for bank in 4..8u8 {
+            assert!(bus.load_ram_page(bank * 2, 0, &[bank]));
+        }
+        bus.out_port(0x1ffd, 0x03);
+        assert_eq!(bus.read(0), 4);
+        bus.out_port(0x7ffd, 0x00);
+        assert_eq!(bus.read(0), 4);
+        bus.out_port(0x1ffd, 0x00);
+        assert_eq!(bus.read_nextreg(0x8e) & 0x03, 0x01);
+    }
+
+    #[test]
+    fn paging_lock_is_reported_and_unlocked_through_peripheral_three() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(0x7ffd, 0x25);
+        assert_eq!(bus.read_nextreg(0x08) & 0x80, 0);
+        let locked_bank = bus.read_nextreg(0x8e) & 0xf0;
+        bus.out_port(0x7ffd, 0x03);
+        bus.out_port(0xdffd, 0x06);
+        assert_eq!(bus.read_nextreg(0x8e) & 0xf0, locked_bank);
+        bus.write_nextreg(0x08, 0x80);
+        assert_ne!(bus.read_nextreg(0x08) & 0x80, 0);
+        bus.out_port(0x7ffd, 0x03);
+        bus.out_port(0xdffd, 0x06);
+        assert_eq!(bus.read_nextreg(0x56), 102);
+    }
+
+    #[test]
+    fn all_ram_overlay_keeps_mmu_registers_and_restores_middle_slots() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x52, 30);
+        bus.write_nextreg(0x53, 31);
+        bus.write_nextreg(0x54, 32);
+        bus.write_nextreg(0x55, 33);
+        bus.out_port(0x1ffd, 0x01); // Special layout 0.
+        assert_eq!(bus.read_nextreg(0x52), 30);
+        assert_eq!(bus.read_nextreg(0x54), 32);
+        assert_eq!(bus.read_nextreg(0x50), 0xff);
+        bus.out_port(0x1ffd, 0x00);
+        assert_eq!(bus.read_nextreg(0x52), 10);
+        assert_eq!(bus.read_nextreg(0x53), 11);
+        assert_eq!(bus.read_nextreg(0x54), 4);
+        assert_eq!(bus.read_nextreg(0x55), 5);
+    }
+
+    #[test]
+    fn divmmc_mapram_is_sticky_until_nextreg_nine_clears_it() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(0x00e3, 0xc5); // CONMEM, MAPRAM and bank five.
+        assert_eq!(bus.read(0), 0);
+        bus.write(0x0100, 0x6a);
+        assert_eq!(bus.read(0x0100), 0);
+
+        bus.out_port(0x00e3, 0x80); // MAPRAM cannot be cleared through $E3.
+        assert_eq!(bus.in_port(0x00e3), 0xc0);
+        bus.config_reserved_sram[0x10000 + 3 * PAGE_SIZE] = 0x71;
+        bus.out_port(0x00e3, 0xc3);
+        bus.write(0x2000, 0x72);
+        assert_eq!(bus.read(0x2000), 0x71);
+        bus.out_port(0x00e3, 0xc0);
+        bus.write(0, 0x73);
+        assert_eq!(bus.read(0), 0x71);
+        bus.write_nextreg(0x09, 0x08);
+        assert_eq!(bus.read_nextreg(0x09), 0);
+        assert_eq!(bus.in_port(0x00e3), 0x80);
+        bus.out_port(0x00e3, 0x80);
+        assert_eq!(bus.read(0x0100), 0);
+    }
+
+    #[test]
+    fn divmmc_mapram_clears_on_bus_reset() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(0x00e3, 0x40);
+        bus.hard_reset();
+        assert_eq!(bus.in_port(0x00e3), 0);
+        bus.out_port(0x00e3, 0x40);
+        bus.soft_reset();
+        assert_eq!(bus.in_port(0x00e3), 0);
+    }
+
+    #[test]
+    fn disabling_divmmc_automap_clears_current_mapping() {
+        let rom = vec![0x22; NEXT_ROM_SIZE];
+        let mut bus = NextBus::new(&rom).expect("valid ROM");
+        bus.config_reserved_sram[..PAGE_SIZE].fill(0x33);
+        bus.write_nextreg(0x0a, 0x10);
+        assert_eq!(bus.read_opcode(0), 0x22);
+        assert_eq!(bus.read(1), 0x33);
+        bus.write_nextreg(0x0a, 0);
+        assert_eq!(bus.read(1), 0x22, "config-mode disable releases automap");
+
+        bus.write_nextreg(0x03, 3);
+        bus.write_nextreg(0x0a, 0x10);
+        assert_eq!(bus.read_opcode(0), 0x22);
+        assert_eq!(bus.read(1), 0x33);
+        bus.write_nextreg(0x0a, 0);
+        assert_eq!(bus.read(1), 0x22, "machine-mode disable releases automap");
+    }
+
+    #[test]
+    fn boot_register_profile_and_peripheral_defaults_match_the_pinned_core() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(bus.read_nextreg(0x00), NEXT_MACHINE_ID);
+        assert_eq!(bus.read_nextreg(0x01), NEXT_CORE_VERSION);
+        assert_eq!(bus.read_nextreg(0x0e), NEXT_CORE_SUBMINOR);
+        assert_eq!(bus.read_nextreg(0x0f), NEXT_BOARD_ID);
+        assert_eq!(bus.read_nextreg(0x0a), 0x01);
+        bus.write_nextreg(0x0a, 0xff);
+        assert_eq!(bus.read_nextreg(0x0a), 0xfb);
+        bus.write_nextreg(0x03, 0x03);
+        bus.write_nextreg(0x0a, 0);
+        assert_eq!(bus.read_nextreg(0x0a), 0xe0);
+    }
+
+    #[test]
+    fn next_sd_reads_bounded_sectors_from_file() {
+        let path =
+            std::env::temp_dir().join(format!("spec-chum-next-sd-{}.img", std::process::id()));
+        std::fs::write(&path, [0x5a; SECTOR_SIZE]).expect("create SD fixture");
+        let mut sd = SdSpi::open(&path).expect("open sector-aligned image");
+        let mut read = [0; SECTOR_SIZE];
+        sd.read_sector(0, &mut read).expect("read sector 0");
+        assert_eq!(read, [0x5a; SECTOR_SIZE]);
+        assert!(sd.read_sector(1, &mut read).is_err());
+        std::fs::remove_file(path).expect("remove SD fixture");
+    }
+
+    #[test]
+    fn next_sd_spi_matches_ipl_initialization_and_reads_a_block() {
+        let path =
+            std::env::temp_dir().join(format!("spec-chum-next-spi-{}.img", std::process::id()));
+        let mut first_block = vec![0x5a; SECTOR_SIZE];
+        first_block[73] = 0x4c;
+        let mut image = first_block.clone();
+        image.extend([0xa5; SECTOR_SIZE]);
+        std::fs::write(&path, image).expect("create SD fixture");
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.attach_sd_file(&path).expect("attach SD image");
+        assert_eq!(bus.in_port(0x20e7), 0xff);
+        bus.out_port(0x30e7, 0xfc); // Both cards selected: no SPI device responds.
+        assert_eq!(bus.in_port(0x10e7), 0xfc);
+        bus.out_port(0x12eb, 0x40);
+        assert_eq!(bus.in_port(0x34eb), 0xff);
+        bus.out_port(0x10e7, 0xfd);
+        assert_eq!(bus.in_port(0x10e7), 0xfd);
+        let command = |bus: &mut NextBus, index: u8, argument: u32| {
+            for byte in [
+                0x40 | index,
+                (argument >> 24) as u8,
+                (argument >> 16) as u8,
+                (argument >> 8) as u8,
+                argument as u8,
+                0x95,
+            ] {
+                bus.out_port(0x12eb, byte);
+            }
+            for _ in 0..4 {
+                let response = bus.in_port(0x34eb);
+                if response != 0xff {
+                    return response;
+                }
+            }
+            0xff
+        };
+        assert_eq!(command(&mut bus, 0, 0), 1);
+        assert_eq!(command(&mut bus, 8, 0x1aa), 1);
+        assert_eq!(
+            (0..4)
+                .map(|_| bus.in_port(PORT_NEXT_SD_DATA))
+                .collect::<Vec<_>>(),
+            [0, 0, 1, 0xaa]
+        );
+        assert_eq!(command(&mut bus, 55, 0), 1);
+        assert_eq!(command(&mut bus, 41, 0x4000_0000), 0);
+        assert_eq!(command(&mut bus, 58, 0), 0);
+        assert_eq!(
+            (0..4)
+                .map(|_| bus.in_port(PORT_NEXT_SD_DATA))
+                .collect::<Vec<_>>(),
+            [0xc0, 0xff, 0x80, 0]
+        );
+        assert_eq!(command(&mut bus, 9, 0), 0);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xfe);
+        let csd = (0..18)
+            .map(|_| bus.in_port(PORT_NEXT_SD_DATA))
+            .collect::<Vec<_>>();
+        assert_eq!(csd[0], 0x40, "CMD9 must return an SDHC CSD v2 register");
+        assert_eq!(csd[5] & 0x0f, 9, "CSD must describe 512-byte sectors");
+        assert_eq!(&csd[7..10], &[0, 0, 0], "2 sectors round to C_SIZE 0");
+        assert_eq!(csd[15] & 1, 1, "CSD end bit must be set");
+        assert_eq!(command(&mut bus, 17, 0), 0);
+        let mut token = 0xff;
+        for _ in 0..4 {
+            token = bus.in_port(PORT_NEXT_SD_DATA);
+            if token != 0xff {
+                break;
+            }
+        }
+        assert_eq!(token, 0xfe);
+        for byte in first_block {
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), byte);
+        }
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+
+        // MMC_Read consumes exactly 512 data bytes and two CRC bytes, then
+        // issues another CMD17 without deselecting the card.
+        assert_eq!(command(&mut bus, 17, 1), 0);
+        let mut token = 0xff;
+        for _ in 0..4 {
+            token = bus.in_port(PORT_NEXT_SD_DATA);
+            if token != 0xff {
+                break;
+            }
+        }
+        assert_eq!(token, 0xfe);
+        for _ in 0..SECTOR_SIZE {
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xa5);
+        }
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        std::fs::remove_file(path).expect("remove SD fixture");
+    }
+
+    #[test]
+    fn next_sd_spi_streams_multiple_blocks_until_stop_transmission() {
+        let path = std::env::temp_dir().join(format!(
+            "spec-chum-next-multiblock-{}.img",
+            std::process::id()
+        ));
+        let mut image = vec![0x5a; SECTOR_SIZE];
+        image.extend([0xa5; SECTOR_SIZE]);
+        std::fs::write(&path, image).expect("create SD fixture");
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.attach_sd_file(&path).expect("attach SD image");
+        bus.out_port(PORT_NEXT_SD_CS, 0xfd);
+
+        let command = |bus: &mut NextBus, index: u8, argument: u32| {
+            for byte in [
+                0x40 | index,
+                (argument >> 24) as u8,
+                (argument >> 16) as u8,
+                (argument >> 8) as u8,
+                argument as u8,
+                0x95,
+            ] {
+                bus.out_port(PORT_NEXT_SD_DATA, byte);
+            }
+            for _ in 0..4 {
+                let response = bus.in_port(PORT_NEXT_SD_DATA);
+                if response != 0xff {
+                    return response;
+                }
+            }
+            0xff
+        };
+
+        assert_eq!(command(&mut bus, 0, 0), 1);
+        assert_eq!(command(&mut bus, 55, 0), 1);
+        assert_eq!(command(&mut bus, 41, 0x4000_0000), 0);
+        assert_eq!(command(&mut bus, 18, 0), 0);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xfe);
+        for _ in 0..SECTOR_SIZE {
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0x5a);
+        }
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        for byte in [0x4c, 0, 0, 0, 0, 0x01] {
+            bus.out_port(PORT_NEXT_SD_DATA, byte);
+        }
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        for _ in 1..8 {
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        }
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0);
+        assert_eq!(command(&mut bus, 17, 1), 0);
+        let _ = bus.in_port(PORT_NEXT_SD_DATA);
+        let mut token = 0xff;
+        for _ in 0..4 {
+            token = bus.in_port(PORT_NEXT_SD_DATA);
+            if token != 0xff {
+                break;
+            }
+        }
+        assert_eq!(token, 0xfe);
+        for _ in 0..SECTOR_SIZE {
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xa5);
+        }
+
+        std::fs::remove_file(path).expect("remove SD fixture");
+    }
+
+    #[test]
+    fn next_sd_spi_persists_single_and_multiple_block_writes() {
+        let path =
+            std::env::temp_dir().join(format!("spec-chum-next-write-{}.img", std::process::id()));
+        std::fs::write(&path, [0; SECTOR_SIZE * 3]).expect("create SD fixture");
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.attach_sd_file(&path).expect("attach SD image");
+        bus.out_port(PORT_NEXT_SD_CS, 0xfd);
+
+        let command = |bus: &mut NextBus, index: u8, argument: u32| {
+            for byte in [
+                0x40 | index,
+                (argument >> 24) as u8,
+                (argument >> 16) as u8,
+                (argument >> 8) as u8,
+                argument as u8,
+                0x95,
+            ] {
+                bus.out_port(PORT_NEXT_SD_DATA, byte);
+            }
+            for _ in 0..4 {
+                let response = bus.in_port(PORT_NEXT_SD_DATA);
+                if response != 0xff {
+                    return response;
+                }
+            }
+            0xff
+        };
+        assert_eq!(command(&mut bus, 0, 0), 1);
+        assert_eq!(command(&mut bus, 55, 0), 1);
+        assert_eq!(command(&mut bus, 41, 0x4000_0000), 0);
+
+        let write_block = |bus: &mut NextBus, token: u8, bytes: &[u8; SECTOR_SIZE]| {
+            bus.out_port(PORT_NEXT_SD_DATA, token);
+            for byte in bytes {
+                bus.out_port(PORT_NEXT_SD_DATA, *byte);
+            }
+            bus.out_port(PORT_NEXT_SD_DATA, 0xff);
+            bus.out_port(PORT_NEXT_SD_DATA, 0xff);
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0x05);
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0x00);
+            assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0xff);
+        };
+        assert_eq!(command(&mut bus, 24, 2), 0);
+        write_block(&mut bus, 0xfe, &[0x5a; SECTOR_SIZE]);
+        assert_eq!(command(&mut bus, 13, 0), 0);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0);
+
+        assert_eq!(command(&mut bus, 25, 0), 0);
+        write_block(&mut bus, 0xfc, &[0xa5; SECTOR_SIZE]);
+        write_block(&mut bus, 0xfc, &[0x3c; SECTOR_SIZE]);
+        bus.out_port(PORT_NEXT_SD_DATA, 0xfd);
+        assert_eq!(bus.in_port(PORT_NEXT_SD_DATA), 0x00);
+
+        let image = std::fs::read(&path).expect("read back SD image");
+        assert_eq!(&image[0..SECTOR_SIZE], &[0xa5; SECTOR_SIZE]);
+        assert_eq!(&image[SECTOR_SIZE..SECTOR_SIZE * 2], &[0x3c; SECTOR_SIZE]);
+        assert_eq!(&image[SECTOR_SIZE * 2..], &[0x5a; SECTOR_SIZE]);
+        std::fs::remove_file(path).expect("remove SD fixture");
+    }
+
+    #[test]
+    fn next_sd_card_responds_to_either_available_sd_select_line() {
+        let path =
+            std::env::temp_dir().join(format!("spec-chum-next-sd-swap-{}.img", std::process::id()));
+        std::fs::write(&path, [0x5a; SECTOR_SIZE]).expect("create SD fixture");
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.attach_sd_file(&path).expect("attach SD image");
+
+        let command = |bus: &mut NextBus| {
+            for byte in [0x40, 0, 0, 0, 0, 0x95] {
+                bus.out_port(PORT_NEXT_SD_DATA, byte);
+            }
+            for _ in 0..4 {
+                let response = bus.in_port(PORT_NEXT_SD_DATA);
+                if response != 0xff {
+                    return response;
+                }
+            }
+            0xff
+        };
+
+        bus.out_port(PORT_NEXT_SD_CS, 0xfe);
+        assert_eq!(command(&mut bus), 1);
+        bus.out_port(PORT_NEXT_SD_CS, 0xff);
+        bus.out_port(PORT_NEXT_SD_CS, 0xfd);
+        assert_eq!(command(&mut bus), 1);
+        bus.out_port(PORT_NEXT_SD_CS, 0xfc);
+        assert_eq!(command(&mut bus), 0xff);
+
+        std::fs::remove_file(path).expect("remove SD fixture");
     }
 }

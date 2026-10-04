@@ -52,10 +52,10 @@ pub(crate) struct FuseEvent {
 pub enum CpuProfile {
     #[default]
     Z80,
-    /// Enable the Z80N NEXTREG instructions currently supported by this emulator.
+    /// Enable the Z80N instructions currently supported by this emulator.
     /// Other Z80N-only opcodes retain classic Z80 decoding, including the
     /// existing unknown-ED behavior where applicable.
-    Z80NNextReg,
+    Z80N,
 }
 
 /// Z80 CPU with cycle-counted instruction execution.
@@ -259,7 +259,7 @@ impl Cpu {
     pub(crate) fn fetch_opcode<M: Memory>(&mut self, mem: &mut M) -> u8 {
         let pc = self.regs.pc;
         self.fuse_push(FuseEventKind::Mc, pc, None);
-        let (v, wait) = mem.read(pc, self.t);
+        let (v, wait) = mem.read_opcode(pc, self.t);
         self.regs.pc = pc.wrapping_add(1);
         self.regs.inc_r();
         // Refresh at M1 T4 — 48K ULA snow when I=$40–$7F overlaps video fetch.
@@ -420,7 +420,7 @@ mod tests {
     }
 
     fn next_cpu() -> Cpu {
-        let mut cpu = Cpu::with_profile(CpuProfile::Z80NNextReg);
+        let mut cpu = Cpu::with_profile(CpuProfile::Z80N);
         cpu.regs = Registers {
             a: 0x5a,
             f: 0xd7,
@@ -480,6 +480,265 @@ mod tests {
     }
 
     #[test]
+    fn z80n_add_bc_a_is_eight_t_states_and_profile_gated() {
+        let mut cpu = next_cpu();
+        cpu.regs.set_bc(0xfff0);
+        let flags = cpu.regs.f;
+        let mut bus = NextBus::program(&[0xed, 0x33, 0x3e, 0x44]);
+
+        assert_eq!(cpu.step(&mut bus), 8);
+        assert_eq!(cpu.regs.bc(), 0x004a);
+        assert_eq!(cpu.regs.f, flags & !flag::C);
+        assert_eq!(cpu.regs.q, flags & !flag::C);
+        assert_eq!(cpu.regs.pc, 0x1202);
+        assert_eq!(cpu.step(&mut bus), 7, "following LD A,n must remain intact");
+        assert_eq!(cpu.regs.a, 0x44);
+
+        let mut classic = Cpu::new();
+        classic.regs.a = 0x22;
+        classic.regs.set_bc(0xc000);
+        classic.regs.pc = 0x1200;
+        let mut classic_bus = NextBus::program(&[0xed, 0x33, 0x3e, 0x55]);
+        assert_eq!(classic.step(&mut classic_bus), 8);
+        assert_eq!(classic.regs.bc(), 0xc000);
+        assert_eq!(classic.regs.pc, 0x1202);
+        assert_eq!(classic.step(&mut classic_bus), 7);
+        assert_eq!(classic.regs.a, 0x55);
+    }
+
+    #[test]
+    fn z80n_add_pair_immediates_preserve_flags_and_use_little_endian_operands() {
+        for (opcode, initial, expected) in [
+            (0x31, 0x1234, 0x128e),
+            (0x32, 0x2345, 0x239f),
+            (0x33, 0x3456, 0x34b0),
+        ] {
+            let mut cpu = next_cpu();
+            cpu.regs.set_hl(0x1234);
+            cpu.regs.set_de(0x2345);
+            cpu.regs.set_bc(0x3456);
+            let flags = cpu.regs.f;
+            let pair = match opcode {
+                0x31 => cpu.regs.hl(),
+                0x32 => cpu.regs.de(),
+                _ => cpu.regs.bc(),
+            };
+            assert_eq!(pair, initial);
+            let mut bus = NextBus::program(&[0xed, opcode]);
+
+            assert_eq!(cpu.step(&mut bus), 8);
+            let result = match opcode {
+                0x31 => cpu.regs.hl(),
+                0x32 => cpu.regs.de(),
+                _ => cpu.regs.bc(),
+            };
+            assert_eq!(result, initial + u16::from(cpu.regs.a));
+            assert_eq!(result, expected);
+            assert_eq!(cpu.regs.f, flags & !flag::C);
+        }
+
+        for (opcode, expected) in [(0x34, 0x1234), (0x35, 0x2234), (0x36, 0x3234)] {
+            let mut cpu = next_cpu();
+            cpu.regs.set_hl(0x1000);
+            cpu.regs.set_de(0x2000);
+            cpu.regs.set_bc(0x3000);
+            let flags = cpu.regs.f;
+            let mut bus = NextBus::program(&[0xed, opcode, 0x34, 0x02]);
+
+            assert_eq!(cpu.step(&mut bus), 16);
+            let result = match opcode {
+                0x34 => cpu.regs.hl(),
+                0x35 => cpu.regs.de(),
+                _ => cpu.regs.bc(),
+            };
+            assert_eq!(result, expected);
+            assert_eq!(cpu.regs.f, flags);
+            assert_eq!(cpu.regs.pc, 0x1204);
+        }
+    }
+
+    #[test]
+    fn z80n_push_immediate_uses_big_endian_operand_and_is_profile_gated() {
+        let mut cpu = next_cpu();
+        cpu.regs.sp = 0x9000;
+        let mut bus = NextBus::program(&[0xed, 0x8a, 0x00, 0x01, 0xc3, 0xa0, 0x1e]);
+
+        assert_eq!(cpu.step(&mut bus), 23);
+        assert_eq!(cpu.regs.sp, 0x8ffe);
+        assert_eq!(bus.data[0x8ffe], 0x01);
+        assert_eq!(bus.data[0x8fff], 0x00);
+        assert_eq!(cpu.regs.pc, 0x1204);
+        assert_eq!(cpu.step(&mut bus), 10, "following JP must remain aligned");
+        assert_eq!(cpu.regs.pc, 0x1ea0);
+
+        let mut classic = Cpu::new();
+        classic.regs.pc = 0x1200;
+        classic.regs.sp = 0x9000;
+        let mut classic_bus = NextBus::program(&[0xed, 0x8a, 0x3e, 0x55]);
+        assert_eq!(classic.step(&mut classic_bus), 8);
+        assert_eq!(classic.regs.sp, 0x9000);
+        assert_eq!(classic.regs.pc, 0x1202);
+        assert_eq!(classic.step(&mut classic_bus), 7);
+        assert_eq!(classic.regs.a, 0x55);
+    }
+
+    #[test]
+    fn z80n_swapnib_bsra_and_mul_preserve_flags_and_are_profile_gated() {
+        for (opcode, expected_a, expected_de) in [
+            (0x23, 0xc3, 0x1234),
+            (0x29, 0x5a, 0xff00),
+            (0x30, 0x5a, 0x00fc),
+        ] {
+            let mut cpu = next_cpu();
+            cpu.regs.set_de(0x1234);
+            match opcode {
+                0x23 => cpu.regs.a = 0x3c,
+                0x29 => {
+                    cpu.regs.set_de(0xf000);
+                    cpu.regs.b = 4;
+                }
+                0x30 => {
+                    cpu.regs.d = 12;
+                    cpu.regs.e = 21;
+                }
+                _ => unreachable!(),
+            }
+            let flags = cpu.regs.f;
+            let mut bus = NextBus::program(&[0xed, opcode, 0x3e, 0x44]);
+
+            assert_eq!(cpu.step(&mut bus), 8);
+            assert_eq!(cpu.regs.a, expected_a);
+            assert_eq!(cpu.regs.de(), expected_de);
+            assert_eq!(cpu.regs.f, flags);
+            assert_eq!(cpu.regs.pc, 0x1202);
+            assert_eq!(cpu.step(&mut bus), 7, "following LD A,n must remain intact");
+            assert_eq!(cpu.regs.a, 0x44);
+        }
+
+        let mut classic = Cpu::new();
+        classic.regs.a = 0x3c;
+        classic.regs.set_de(0x1234);
+        classic.regs.b = 4;
+        classic.regs.pc = 0x1200;
+        let mut bus = NextBus::program(&[0xed, 0x23, 0xed, 0x29, 0xed, 0x30, 0x3e, 0x55]);
+        for index in 0..3 {
+            assert_eq!(classic.step(&mut bus), 8);
+            assert_eq!(classic.regs.pc, 0x1202 + index as u16 * 2);
+        }
+        assert_eq!(classic.regs.a, 0x3c);
+        assert_eq!(classic.regs.de(), 0x1234);
+        assert_eq!(classic.step(&mut bus), 7);
+        assert_eq!(classic.regs.a, 0x55);
+    }
+
+    #[test]
+    fn z80n_bsrl_is_logical_masks_shift_count_and_is_profile_gated() {
+        for (value, shift, expected) in [
+            (0x8001, 1, 0x4000),
+            (0x8001, 0, 0x8001),
+            (0x8001, 16, 0),
+            (0x8001, 31, 0),
+            (0x8001, 32, 0x8001),
+        ] {
+            let mut cpu = next_cpu();
+            cpu.regs.set_de(value);
+            cpu.regs.b = shift;
+            cpu.regs.f = 0xd7;
+            let mut bus = NextBus::program(&[0xed, 0x2a, 0x3e, 0x44]);
+
+            assert_eq!(cpu.step(&mut bus), 8);
+            assert_eq!(cpu.regs.de(), expected);
+            assert_eq!(cpu.regs.f, 0xd7);
+            assert_eq!(cpu.regs.pc, 0x1202);
+            assert_eq!(cpu.step(&mut bus), 7, "following LD A,n must remain intact");
+            assert_eq!(cpu.regs.a, 0x44);
+        }
+
+        let mut classic = Cpu::new();
+        classic.regs.set_de(0x8001);
+        classic.regs.b = 1;
+        classic.regs.pc = 0x1200;
+        let mut bus = NextBus::program(&[0xed, 0x2a, 0x3e, 0x55]);
+        assert_eq!(classic.step(&mut bus), 8);
+        assert_eq!(classic.regs.de(), 0x8001);
+        assert_eq!(classic.regs.pc, 0x1202);
+        assert_eq!(classic.step(&mut bus), 7);
+        assert_eq!(classic.regs.a, 0x55);
+    }
+
+    #[test]
+    fn z80n_ula_pixel_opcodes_calculate_screen_addresses_and_are_profile_gated() {
+        for (y, x, expected) in [(0, 0, 0x4000), (191, 255, 0x57ff), (8, 16, 0x4022)] {
+            let mut cpu = next_cpu();
+            cpu.regs.d = y;
+            cpu.regs.e = x;
+            cpu.regs.f = 0xd7;
+            let mut bus = NextBus::program(&[0xed, 0x94, 0x3e, 0x44]);
+
+            assert_eq!(cpu.step(&mut bus), 8);
+            assert_eq!(cpu.regs.hl(), expected);
+            assert_eq!(cpu.regs.f, 0xd7);
+            assert_eq!(cpu.step(&mut bus), 7);
+            assert_eq!(cpu.regs.a, 0x44);
+        }
+
+        let mut cpu = next_cpu();
+        cpu.regs.set_hl(0x4700);
+        cpu.regs.f = 0xa5;
+        let mut bus = NextBus::program(&[0xed, 0x93, 0xed, 0x93, 0x3e, 0x44]);
+        assert_eq!(cpu.step(&mut bus), 8);
+        assert_eq!(cpu.regs.hl(), 0x4020);
+        assert_eq!(cpu.regs.f, 0xa5);
+        assert_eq!(cpu.step(&mut bus), 8);
+        assert_eq!(cpu.regs.hl(), 0x4120);
+        assert_eq!(cpu.step(&mut bus), 7);
+        assert_eq!(cpu.regs.a, 0x44);
+
+        let mut classic = Cpu::new();
+        classic.regs.d = 191;
+        classic.regs.e = 255;
+        classic.regs.set_hl(0x1234);
+        classic.regs.a = 0x55;
+        classic.regs.pc = 0x1200;
+        let mut bus = NextBus::program(&[0xed, 0x94, 0xed, 0x93, 0xed, 0x95, 0x3e, 0x66]);
+        for expected_pc in [0x1202, 0x1204, 0x1206] {
+            assert_eq!(classic.step(&mut bus), 8);
+            assert_eq!(classic.regs.pc, expected_pc);
+        }
+        assert_eq!(classic.regs.hl(), 0x1234);
+        assert_eq!(classic.regs.a, 0x55);
+        assert_eq!(classic.step(&mut bus), 7);
+        assert_eq!(classic.regs.a, 0x66);
+    }
+
+    #[test]
+    fn indexed_displacement_loads_into_plain_h_and_l() {
+        for prefix in [0xdd, 0xfd] {
+            let mut cpu = Cpu::new();
+            if prefix == 0xdd {
+                cpu.regs.set_ix(0x2000);
+                cpu.regs.set_iy(0x5678);
+            } else {
+                cpu.regs.set_ix(0x1234);
+                cpu.regs.set_iy(0x2000);
+            }
+            cpu.regs.set_hl(0xabcd);
+            cpu.regs.pc = 0x1200;
+            let mut bus = NextBus::program(&[prefix, 0x66, 0x01, prefix, 0x6e, 0x02]);
+            bus.data[0x2001] = 0x91;
+            bus.data[0x2002] = 0x27;
+
+            assert_eq!(cpu.step(&mut bus), 19);
+            assert_eq!(cpu.regs.h, 0x91);
+            assert_eq!(cpu.regs.ix(), if prefix == 0xdd { 0x2000 } else { 0x1234 });
+            assert_eq!(cpu.regs.iy(), if prefix == 0xfd { 0x2000 } else { 0x5678 });
+            assert_eq!(cpu.step(&mut bus), 19);
+            assert_eq!(cpu.regs.l, 0x27);
+            assert_eq!(cpu.regs.hl(), 0x9127);
+        }
+    }
+
+    #[test]
     fn z80n_nextreg_accepts_ignored_index_prefixes() {
         for (bytes, expected_t, expected_len, expected_value) in [
             (&[0xdd, 0xed, 0x91, 0x50, 0xa7, 0x3e, 0x44][..], 24, 5, 0xa7),
@@ -518,7 +777,7 @@ mod tests {
     fn reset_keeps_the_instruction_profile() {
         let mut cpu = next_cpu();
         cpu.reset();
-        assert_eq!(cpu.profile(), CpuProfile::Z80NNextReg);
+        assert_eq!(cpu.profile(), CpuProfile::Z80N);
     }
 
     #[test]
