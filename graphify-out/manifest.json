@@ -2304,9 +2304,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791089953.1296859,
-    "seen": 1791090080.750745,
-    "ast_hash": "60b7c251daf43862ac797df10068e2c9",
+    "mtime": 1791090442.8261414,
+    "seen": 1791090454.188185,
+    "ast_hash": "e4f6e800e9f55cc5d882876dd03e68cb",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {

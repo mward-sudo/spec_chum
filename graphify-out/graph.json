@@ -15750,7 +15750,7 @@
       "file_type": "code",
       "norm_label": ".alternate_rom_bank()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L673"
+      "source_location": "L676"
     },
     {
       "id": "crates_bus_src_next_nextbus_alternate_rom_reads",
@@ -15761,7 +15761,7 @@
       "file_type": "code",
       "norm_label": ".alternate_rom_reads()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L665"
+      "source_location": "L668"
     },
     {
       "id": "crates_bus_src_next_nextbus_config_window_active",
@@ -15849,7 +15849,7 @@
       "file_type": "code",
       "norm_label": ".in_port_at()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L737"
+      "source_location": "L740"
     },
     {
       "id": "crates_bus_src_next_nextbus_is_128_paging_port",
@@ -15860,7 +15860,7 @@
       "file_type": "code",
       "norm_label": ".is_128_paging_port()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L790"
+      "source_location": "L793"
     },
     {
       "id": "crates_bus_src_next_nextbus_is_boot_rom_enabled",
@@ -15871,7 +15871,7 @@
       "file_type": "code",
       "norm_label": ".is_boot_rom_enabled()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L710"
+      "source_location": "L713"
     },
     {
       "id": "crates_bus_src_next_nextbus_load_ram_page",
@@ -15882,7 +15882,7 @@
       "file_type": "code",
       "norm_label": ".load_ram_page()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L690"
+      "source_location": "L693"
     },
     {
       "id": "crates_bus_src_next_nextbus_mmu_page",
@@ -15893,7 +15893,7 @@
       "file_type": "code",
       "norm_label": ".mmu_page()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L620"
+      "source_location": "L623"
     },
     {
       "id": "crates_bus_src_next_nextbus_out_port_at",
@@ -15904,7 +15904,7 @@
       "file_type": "code",
       "norm_label": ".out_port_at()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L761"
+      "source_location": "L764"
     },
     {
       "id": "crates_bus_src_next_nextbus_read",
@@ -15926,7 +15926,7 @@
       "file_type": "code",
       "norm_label": ".read_config_window()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L635"
+      "source_location": "L638"
     },
     {
       "id": "crates_bus_src_next_nextbus_read_divmmc",
@@ -15992,7 +15992,7 @@
       "file_type": "code",
       "norm_label": ".rom_slot_selected()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L683"
+      "source_location": "L686"
     },
     {
       "id": "crates_bus_src_next_nextbus_sd_selected",
@@ -16014,7 +16014,7 @@
       "file_type": "code",
       "norm_label": ".selected_nextreg()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L704"
+      "source_location": "L707"
     },
     {
       "id": "crates_bus_src_next_nextbus_set_reset_status",
@@ -16025,7 +16025,7 @@
       "file_type": "code",
       "norm_label": ".set_reset_status()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L726"
+      "source_location": "L729"
     },
     {
       "id": "crates_bus_src_next_nextbus_take_divmmc_nmi",
@@ -16036,7 +16036,7 @@
       "file_type": "code",
       "norm_label": ".take_divmmc_nmi()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L715"
+      "source_location": "L718"
     },
     {
       "id": "crates_bus_src_next_nextbus_take_reset_request",
@@ -16047,7 +16047,7 @@
       "file_type": "code",
       "norm_label": ".take_reset_request()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L720"
+      "source_location": "L723"
     },
     {
       "id": "crates_bus_src_next_nextbus_update_128_ram_bank",
@@ -16058,7 +16058,7 @@
       "file_type": "code",
       "norm_label": ".update_128_ram_bank()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L610"
+      "source_location": "L613"
     },
     {
       "id": "crates_bus_src_next_nextbus_update_divmmc_mapping_on_fetch",
@@ -16080,7 +16080,7 @@
       "file_type": "code",
       "norm_label": ".write_128_mapping()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L576"
+      "source_location": "L579"
     },
     {
       "id": "crates_bus_src_next_nextbus_write_128_paging",
@@ -31916,7 +31916,7 @@
       "file_type": "code",
       "norm_label": "boot_register_profile_and_peripheral_defaults_match_the_pinned_core()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1299"
+      "source_location": "L1305"
     },
     {
       "id": "crates_bus_src_next_boot_rom_overlays_slot_zero_until_nextreg_configuration_write",
@@ -31927,7 +31927,7 @@
       "file_type": "code",
       "norm_label": "boot_rom_overlays_slot_zero_until_nextreg_configuration_write()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L801"
+      "source_location": "L804"
     },
     {
       "id": "crates_bus_src_next_config_mapping_pages_six_and_seven_are_alternate_roms",
@@ -31938,7 +31938,7 @@
       "file_type": "code",
       "norm_label": "config_mapping_pages_six_and_seven_are_alternate_roms()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L847"
+      "source_location": "L850"
     },
     {
       "id": "crates_bus_src_next_config_mapping_uses_raw_sram_banks_without_rewiring_the_mmu",
@@ -31949,7 +31949,7 @@
       "file_type": "code",
       "norm_label": "config_mapping_uses_raw_sram_banks_without_rewiring_the_mmu()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L820"
+      "source_location": "L823"
     },
     {
       "id": "crates_bus_src_next_disabling_divmmc_automap_clears_current_mapping",
@@ -31960,7 +31960,7 @@
       "file_type": "code",
       "norm_label": "disabling_divmmc_automap_clears_current_mapping()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1280"
+      "source_location": "L1286"
     },
     {
       "id": "crates_bus_src_next_display_timing_selects_frame_and_scanline_geometry",
@@ -31971,7 +31971,7 @@
       "file_type": "code",
       "norm_label": "display_timing_selects_frame_and_scanline_geometry()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L978"
+      "source_location": "L981"
     },
     {
       "id": "crates_bus_src_next_divmmc_control_maps_rom_and_selected_ram_bank",
@@ -31982,7 +31982,7 @@
       "file_type": "code",
       "norm_label": "divmmc_control_maps_rom_and_selected_ram_bank()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1122"
+      "source_location": "L1125"
     },
     {
       "id": "crates_bus_src_next_divmmc_mapram_clears_on_bus_reset",
@@ -31993,7 +31993,7 @@
       "file_type": "code",
       "norm_label": "divmmc_mapram_clears_on_bus_reset()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1269"
+      "source_location": "L1275"
     },
     {
       "id": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
@@ -32004,7 +32004,7 @@
       "file_type": "code",
       "norm_label": "divmmc_ram_aliases_config_sram_banks_eight_through_fifteen()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1148"
+      "source_location": "L1151"
     },
     {
       "id": "crates_bus_src_next_divmmc_rom_automaps_on_configured_delayed_and_instant_m1_triggers",
@@ -32015,7 +32015,7 @@
       "file_type": "code",
       "norm_label": "divmmc_rom_automaps_on_configured_delayed_and_instant_m1_triggers()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1024"
+      "source_location": "L1027"
     },
     {
       "id": "crates_bus_src_next_divmmc_rst_automap_and_return_window_follow_nextreg_controls",
@@ -32026,7 +32026,7 @@
       "file_type": "code",
       "norm_label": "divmmc_rst_automap_and_return_window_follow_nextreg_controls()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1069"
+      "source_location": "L1072"
     },
     {
       "id": "crates_bus_src_next_layer2_active_ram_bank_is_readable_and_resets_to_bank_eight",
@@ -32037,7 +32037,7 @@
       "file_type": "code",
       "norm_label": "layer2_active_ram_bank_is_readable_and_resets_to_bank_eight()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1012"
+      "source_location": "L1015"
     },
     {
       "id": "crates_bus_src_next_nextbus_hard_reset",
@@ -32103,7 +32103,7 @@
       "file_type": "code",
       "norm_label": "rom3_only_rst_automapping_requires_rom3_to_be_visible()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1089"
+      "source_location": "L1092"
     },
     {
       "id": "crates_bus_src_next_rs_result",
@@ -32136,7 +32136,7 @@
       "file_type": "code",
       "norm_label": "rst_automap_uses_fetch_address_even_when_opcode_is_not_rst()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1108"
+      "source_location": "L1111"
     },
     {
       "id": "crates_bus_src_next_spectrum_128_mapping_register_updates_or_preserves_ram_bank_by_write_bit",
@@ -32147,7 +32147,7 @@
       "file_type": "code",
       "norm_label": "spectrum_128_mapping_register_updates_or_preserves_ram_bank_by_write_bit()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L895"
+      "source_location": "L898"
     },
     {
       "id": "crates_bus_src_next_spectrum_128_rom_mapping_register_selects_each_16k_rom_bank",
@@ -32158,7 +32158,7 @@
       "file_type": "code",
       "norm_label": "spectrum_128_rom_mapping_register_selects_each_16k_rom_bank()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L876"
+      "source_location": "L879"
     },
     {
       "id": "crates_bus_src_next_spectrum_128_special_mapping_selects_the_four_all_ram_layouts",
@@ -32169,7 +32169,7 @@
       "file_type": "code",
       "norm_label": "spectrum_128_special_mapping_selects_the_four_all_ram_layouts()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L921"
+      "source_location": "L924"
     },
     {
       "id": "crates_machine_src_z80test_code_block",
@@ -44661,7 +44661,7 @@
       "file_type": "code",
       "norm_label": "alternate_rom_write_and_read_redirect_roundtrip()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L861"
+      "source_location": "L864"
     },
     {
       "id": "crates_bus_src_next_divmmc_mapram_is_sticky_until_nextreg_nine_clears_it",
@@ -44672,7 +44672,7 @@
       "file_type": "code",
       "norm_label": "divmmc_mapram_is_sticky_until_nextreg_nine_clears_it()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1245"
+      "source_location": "L1251"
     },
     {
       "id": "crates_bus_src_next_next_sd_reads_bounded_sectors_from_file",
@@ -44683,7 +44683,7 @@
       "file_type": "code",
       "norm_label": "next_sd_reads_bounded_sectors_from_file()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1314"
+      "source_location": "L1320"
     },
     {
       "id": "crates_bus_src_next_nextbus_alternate_rom_writes",
@@ -44694,7 +44694,7 @@
       "file_type": "code",
       "norm_label": ".alternate_rom_writes()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L669"
+      "source_location": "L672"
     },
     {
       "id": "crates_bus_src_next_nextbus_write",
@@ -44716,7 +44716,7 @@
       "file_type": "code",
       "norm_label": ".write_config_window()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L650"
+      "source_location": "L653"
     },
     {
       "id": "crates_machine_src_lib_machine_model",
@@ -45068,7 +45068,7 @@
       "file_type": "code",
       "norm_label": "paging_lock_is_reported_and_unlocked_through_peripheral_three()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1211"
+      "source_location": "L1214"
     },
     {
       "id": "crates_living_room_src_present_metal",
@@ -48063,7 +48063,7 @@
       "file_type": "code",
       "norm_label": "active_video_line_registers_follow_the_312_line_raster()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L959"
+      "source_location": "L962"
     },
     {
       "id": "crates_bus_src_next_all_ram_overlay_keeps_mmu_registers_and_restores_middle_slots",
@@ -48074,7 +48074,7 @@
       "file_type": "code",
       "norm_label": "all_ram_overlay_keeps_mmu_registers_and_restores_middle_slots()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1227"
+      "source_location": "L1233"
     },
     {
       "id": "crates_bus_src_next_config_bank_size",
@@ -48107,7 +48107,7 @@
       "file_type": "code",
       "norm_label": "divmmc_conmem_readback_is_independent_of_automapping()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1166"
+      "source_location": "L1169"
     },
     {
       "id": "crates_bus_src_next_even_ports_read_the_active_low_keyboard_matrix",
@@ -48118,7 +48118,7 @@
       "file_type": "code",
       "norm_label": "even_ports_read_the_active_low_keyboard_matrix()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L941"
+      "source_location": "L944"
     },
     {
       "id": "crates_bus_src_next_legacy_paging_ports_sync_with_nextreg_and_preserve_full_dffd_bank",
@@ -48129,7 +48129,7 @@
       "file_type": "code",
       "norm_label": "legacy_paging_ports_sync_with_nextreg_and_preserve_full_dffd_bank()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1178"
+      "source_location": "L1181"
     },
     {
       "id": "crates_bus_src_next_lines_per_frame",
@@ -48239,7 +48239,7 @@
       "file_type": "code",
       "norm_label": "next_sd_card_responds_to_either_available_sd_select_line()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1554"
+      "source_location": "L1560"
     },
     {
       "id": "crates_bus_src_next_next_sd_spi_matches_ipl_initialization_and_reads_a_block",
@@ -48250,7 +48250,7 @@
       "file_type": "code",
       "norm_label": "next_sd_spi_matches_ipl_initialization_and_reads_a_block()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1327"
+      "source_location": "L1333"
     },
     {
       "id": "crates_bus_src_next_next_sd_spi_persists_single_and_multiple_block_writes",
@@ -48261,7 +48261,7 @@
       "file_type": "code",
       "norm_label": "next_sd_spi_persists_single_and_multiple_block_writes()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1493"
+      "source_location": "L1499"
     },
     {
       "id": "crates_bus_src_next_next_sd_spi_streams_multiple_blocks_until_stop_transmission",
@@ -48272,7 +48272,7 @@
       "file_type": "code",
       "norm_label": "next_sd_spi_streams_multiple_blocks_until_stop_transmission()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1424"
+      "source_location": "L1430"
     },
     {
       "id": "crates_bus_src_next_nextbus_attach_sd_file",
@@ -48294,7 +48294,7 @@
       "file_type": "code",
       "norm_label": ".in_port()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L732"
+      "source_location": "L735"
     },
     {
       "id": "crates_bus_src_next_nextbus_out_port",
@@ -48305,7 +48305,7 @@
       "file_type": "code",
       "norm_label": ".out_port()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L756"
+      "source_location": "L759"
     },
     {
       "id": "crates_bus_src_next_page_size",
@@ -48360,7 +48360,7 @@
       "file_type": "code",
       "norm_label": "rom_and_all_ram_low_selectors_survive_mode_changes_independently()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1193"
+      "source_location": "L1196"
     },
     {
       "id": "crates_bus_src_next_rs_path",
@@ -48382,7 +48382,7 @@
       "file_type": "code",
       "norm_label": "spectrum_space_key_uses_row_seven_bit_zero()",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L951"
+      "source_location": "L954"
     },
     {
       "id": "crates_bus_src_next_tstates_per_line",
@@ -91400,7 +91400,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L960",
+      "source_location": "L963",
       "weight": 1.0
     },
     {
@@ -91412,7 +91412,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L961",
+      "source_location": "L964",
       "weight": 1.0
     },
     {
@@ -91424,7 +91424,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1228",
+      "source_location": "L1234",
       "weight": 1.0
     },
     {
@@ -91436,7 +91436,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1229",
+      "source_location": "L1235",
       "weight": 1.0
     },
     {
@@ -91448,7 +91448,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1233",
+      "source_location": "L1239",
       "weight": 1.0
     },
     {
@@ -91460,7 +91460,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L865",
+      "source_location": "L868",
       "weight": 1.0
     },
     {
@@ -91472,7 +91472,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L866",
+      "source_location": "L869",
       "weight": 1.0
     },
     {
@@ -91484,7 +91484,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L868",
+      "source_location": "L871",
       "weight": 1.0
     },
     {
@@ -91496,7 +91496,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1300",
+      "source_location": "L1306",
       "weight": 1.0
     },
     {
@@ -91508,7 +91508,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1306",
+      "source_location": "L1312",
       "weight": 1.0
     },
     {
@@ -91520,7 +91520,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L804",
+      "source_location": "L807",
       "weight": 1.0
     },
     {
@@ -91532,7 +91532,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L805",
+      "source_location": "L808",
       "weight": 1.0
     },
     {
@@ -91544,7 +91544,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L812",
+      "source_location": "L815",
       "weight": 1.0
     },
     {
@@ -91556,7 +91556,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L815",
+      "source_location": "L818",
       "weight": 1.0
     },
     {
@@ -91568,7 +91568,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L849",
+      "source_location": "L852",
       "weight": 1.0
     },
     {
@@ -91580,7 +91580,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L850",
+      "source_location": "L853",
       "weight": 1.0
     },
     {
@@ -91592,7 +91592,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L851",
+      "source_location": "L854",
       "weight": 1.0
     },
     {
@@ -91604,24 +91604,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L853",
+      "source_location": "L856",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_next_config_mapping_uses_raw_sram_banks_without_rewiring_the_mmu",
       "target": "crates_bus_src_next_nextbus_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L823",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_config_mapping_uses_raw_sram_banks_without_rewiring_the_mmu",
-      "target": "crates_bus_src_next_nextbus_install_boot_rom",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -91633,6 +91621,18 @@
     },
     {
       "source": "crates_bus_src_next_config_mapping_uses_raw_sram_banks_without_rewiring_the_mmu",
+      "target": "crates_bus_src_next_nextbus_install_boot_rom",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L829",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_config_mapping_uses_raw_sram_banks_without_rewiring_the_mmu",
       "target": "crates_bus_src_next_nextbus_write_nextreg",
       "relation": "calls",
       "_origin": "ast",
@@ -91640,7 +91640,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L827",
+      "source_location": "L830",
       "weight": 1.0
     },
     {
@@ -91652,7 +91652,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L837",
+      "source_location": "L840",
       "weight": 1.0
     },
     {
@@ -91664,7 +91664,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1282",
+      "source_location": "L1288",
       "weight": 1.0
     },
     {
@@ -91676,7 +91676,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1284",
+      "source_location": "L1290",
       "weight": 1.0
     },
     {
@@ -91688,7 +91688,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L979",
+      "source_location": "L982",
       "weight": 1.0
     },
     {
@@ -91700,7 +91700,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L990",
+      "source_location": "L993",
       "weight": 1.0
     },
     {
@@ -91712,7 +91712,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L991",
+      "source_location": "L994",
       "weight": 1.0
     },
     {
@@ -91724,7 +91724,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1167",
+      "source_location": "L1170",
       "weight": 1.0
     },
     {
@@ -91736,7 +91736,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1170",
+      "source_location": "L1173",
       "weight": 1.0
     },
     {
@@ -91748,36 +91748,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1125",
+      "source_location": "L1128",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_next_divmmc_control_maps_rom_and_selected_ram_bank",
       "target": "crates_bus_src_next_nextbus_install_boot_rom",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1126",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_divmmc_control_maps_rom_and_selected_ram_bank",
-      "target": "crates_bus_src_next_nextbus_write_nextreg",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1127",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_divmmc_control_maps_rom_and_selected_ram_bank",
-      "target": "crates_bus_src_next_nextbus_write",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -91789,7 +91765,19 @@
     },
     {
       "source": "crates_bus_src_next_divmmc_control_maps_rom_and_selected_ram_bank",
-      "target": "crates_bus_src_next_nextbus_out_port",
+      "target": "crates_bus_src_next_nextbus_write_nextreg",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1130",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_divmmc_control_maps_rom_and_selected_ram_bank",
+      "target": "crates_bus_src_next_nextbus_write",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -91797,6 +91785,18 @@
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
       "source_location": "L1132",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_divmmc_control_maps_rom_and_selected_ram_bank",
+      "target": "crates_bus_src_next_nextbus_out_port",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1135",
       "weight": 1.0
     },
     {
@@ -91808,7 +91808,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1270",
+      "source_location": "L1276",
       "weight": 1.0
     },
     {
@@ -91820,7 +91820,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1271",
+      "source_location": "L1277",
       "weight": 1.0
     },
     {
@@ -91832,7 +91832,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1272",
+      "source_location": "L1278",
       "weight": 1.0
     },
     {
@@ -91844,7 +91844,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1275",
+      "source_location": "L1281",
       "weight": 1.0
     },
     {
@@ -91856,7 +91856,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1246",
+      "source_location": "L1252",
       "weight": 1.0
     },
     {
@@ -91868,7 +91868,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1247",
+      "source_location": "L1253",
       "weight": 1.0
     },
     {
@@ -91880,7 +91880,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1249",
+      "source_location": "L1255",
       "weight": 1.0
     },
     {
@@ -91892,7 +91892,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1261",
+      "source_location": "L1267",
       "weight": 1.0
     },
     {
@@ -91904,36 +91904,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1149",
+      "source_location": "L1152",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
       "target": "crates_bus_src_next_nextbus_install_boot_rom",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1150",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
-      "target": "crates_bus_src_next_nextbus_write_nextreg",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1151",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
-      "target": "crates_bus_src_next_nextbus_write",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -91945,7 +91921,19 @@
     },
     {
       "source": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
-      "target": "crates_bus_src_next_nextbus_out_port",
+      "target": "crates_bus_src_next_nextbus_write_nextreg",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1154",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
+      "target": "crates_bus_src_next_nextbus_write",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -91957,7 +91945,7 @@
     },
     {
       "source": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
-      "target": "crates_bus_src_next_nextbus_hard_reset",
+      "target": "crates_bus_src_next_nextbus_out_port",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -91965,6 +91953,18 @@
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
       "source_location": "L1159",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_divmmc_ram_aliases_config_sram_banks_eight_through_fifteen",
+      "target": "crates_bus_src_next_nextbus_hard_reset",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1162",
       "weight": 1.0
     },
     {
@@ -91976,7 +91976,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1028",
+      "source_location": "L1031",
       "weight": 1.0
     },
     {
@@ -91988,7 +91988,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1029",
+      "source_location": "L1032",
       "weight": 1.0
     },
     {
@@ -92000,7 +92000,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1030",
+      "source_location": "L1033",
       "weight": 1.0
     },
     {
@@ -92012,7 +92012,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1033",
+      "source_location": "L1036",
       "weight": 1.0
     },
     {
@@ -92024,7 +92024,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1072",
+      "source_location": "L1075",
       "weight": 1.0
     },
     {
@@ -92036,7 +92036,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1074",
+      "source_location": "L1077",
       "weight": 1.0
     },
     {
@@ -92048,7 +92048,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L942",
+      "source_location": "L945",
       "weight": 1.0
     },
     {
@@ -92060,7 +92060,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1013",
+      "source_location": "L1016",
       "weight": 1.0
     },
     {
@@ -92072,7 +92072,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1015",
+      "source_location": "L1018",
       "weight": 1.0
     },
     {
@@ -92084,7 +92084,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1019",
+      "source_location": "L1022",
       "weight": 1.0
     },
     {
@@ -92096,7 +92096,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1179",
+      "source_location": "L1182",
       "weight": 1.0
     },
     {
@@ -92108,48 +92108,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1180",
+      "source_location": "L1183",
       "weight": 1.0
     },
     {
       "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
       "target": "crates_bus_src_next_nextbus_write",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1557",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
-      "target": "crates_bus_src_next_nextbus_new",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1558",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
-      "target": "crates_bus_src_next_nextbus_attach_sd_file",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1559",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
-      "target": "crates_bus_src_next_nextbus_out_port",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -92161,6 +92125,42 @@
     },
     {
       "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
+      "target": "crates_bus_src_next_nextbus_new",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1564",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
+      "target": "crates_bus_src_next_nextbus_attach_sd_file",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1565",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
+      "target": "crates_bus_src_next_nextbus_out_port",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1569",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next_next_sd_card_responds_to_either_available_sd_select_line",
       "target": "crates_bus_src_next_nextbus_in_port",
       "relation": "calls",
       "_origin": "ast",
@@ -92168,7 +92168,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1566",
+      "source_location": "L1572",
       "weight": 1.0
     },
     {
@@ -92180,7 +92180,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1317",
+      "source_location": "L1323",
       "weight": 1.0
     },
     {
@@ -92192,7 +92192,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1334",
+      "source_location": "L1340",
       "weight": 1.0
     },
     {
@@ -92204,7 +92204,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1335",
+      "source_location": "L1341",
       "weight": 1.0
     },
     {
@@ -92216,7 +92216,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1336",
+      "source_location": "L1342",
       "weight": 1.0
     },
     {
@@ -92228,7 +92228,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1338",
+      "source_location": "L1344",
       "weight": 1.0
     },
     {
@@ -92240,7 +92240,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1356",
+      "source_location": "L1362",
       "weight": 1.0
     },
     {
@@ -92252,7 +92252,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1496",
+      "source_location": "L1502",
       "weight": 1.0
     },
     {
@@ -92264,7 +92264,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1497",
+      "source_location": "L1503",
       "weight": 1.0
     },
     {
@@ -92276,7 +92276,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1498",
+      "source_location": "L1504",
       "weight": 1.0
     },
     {
@@ -92288,7 +92288,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1499",
+      "source_location": "L1505",
       "weight": 1.0
     },
     {
@@ -92300,7 +92300,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1513",
+      "source_location": "L1519",
       "weight": 1.0
     },
     {
@@ -92312,7 +92312,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1546",
+      "source_location": "L1552",
       "weight": 1.0
     },
     {
@@ -92324,7 +92324,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1431",
+      "source_location": "L1437",
       "weight": 1.0
     },
     {
@@ -92336,7 +92336,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1432",
+      "source_location": "L1438",
       "weight": 1.0
     },
     {
@@ -92348,7 +92348,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1433",
+      "source_location": "L1439",
       "weight": 1.0
     },
     {
@@ -92360,7 +92360,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1434",
+      "source_location": "L1440",
       "weight": 1.0
     },
     {
@@ -92372,7 +92372,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1448",
+      "source_location": "L1454",
       "weight": 1.0
     },
     {
@@ -92396,7 +92396,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L733",
+      "source_location": "L736",
       "weight": 1.0
     },
     {
@@ -92408,7 +92408,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L740",
+      "source_location": "L743",
       "weight": 1.0
     },
     {
@@ -92420,7 +92420,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L744",
+      "source_location": "L747",
       "weight": 1.0
     },
     {
@@ -92432,7 +92432,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L750",
+      "source_location": "L753",
       "weight": 1.0
     },
     {
@@ -92480,7 +92480,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L757",
+      "source_location": "L760",
       "weight": 1.0
     },
     {
@@ -92492,7 +92492,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L766",
+      "source_location": "L769",
       "weight": 1.0
     },
     {
@@ -92504,7 +92504,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L767",
+      "source_location": "L770",
       "weight": 1.0
     },
     {
@@ -92516,7 +92516,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L767",
+      "source_location": "L770",
       "weight": 1.0
     },
     {
@@ -92528,7 +92528,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L778",
+      "source_location": "L781",
       "weight": 1.0
     },
     {
@@ -92732,7 +92732,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L685",
+      "source_location": "L688",
       "weight": 1.0
     },
     {
@@ -92852,7 +92852,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L605",
+      "source_location": "L608",
       "weight": 1.0
     },
     {
@@ -92912,7 +92912,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1212",
+      "source_location": "L1215",
       "weight": 1.0
     },
     {
@@ -92924,7 +92924,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1213",
+      "source_location": "L1216",
       "weight": 1.0
     },
     {
@@ -92936,7 +92936,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1215",
+      "source_location": "L1218",
       "weight": 1.0
     },
     {
@@ -92948,7 +92948,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1219",
+      "source_location": "L1225",
       "weight": 1.0
     },
     {
@@ -92960,7 +92960,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1092",
+      "source_location": "L1095",
       "weight": 1.0
     },
     {
@@ -92972,7 +92972,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1094",
+      "source_location": "L1097",
       "weight": 1.0
     },
     {
@@ -92984,7 +92984,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1194",
+      "source_location": "L1197",
       "weight": 1.0
     },
     {
@@ -92996,7 +92996,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1195",
+      "source_location": "L1198",
       "weight": 1.0
     },
     {
@@ -93008,7 +93008,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1111",
+      "source_location": "L1114",
       "weight": 1.0
     },
     {
@@ -93020,7 +93020,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1113",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -93128,7 +93128,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L896",
+      "source_location": "L899",
       "weight": 1.0
     },
     {
@@ -93140,7 +93140,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L901",
+      "source_location": "L904",
       "weight": 1.0
     },
     {
@@ -93152,7 +93152,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L883",
+      "source_location": "L886",
       "weight": 1.0
     },
     {
@@ -93164,7 +93164,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L887",
+      "source_location": "L890",
       "weight": 1.0
     },
     {
@@ -93176,7 +93176,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L923",
+      "source_location": "L926",
       "weight": 1.0
     },
     {
@@ -93188,7 +93188,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L932",
+      "source_location": "L935",
       "weight": 1.0
     },
     {
@@ -93200,7 +93200,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L952",
+      "source_location": "L955",
       "weight": 1.0
     },
     {
@@ -149389,6 +149389,18 @@
     },
     {
       "source": "crates_bus_src_next",
+      "target": "crates_bus_src_next_sd_nextsderror",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next",
       "target": "super",
       "relation": "imports_from",
       "_origin": "ast",
@@ -149396,7 +149408,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L797",
+      "source_location": "L800",
       "weight": 1.0
     },
     {
@@ -149408,19 +149420,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L798",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next",
-      "target": "crates_bus_src_next_sd_nextsderror",
-      "relation": "imports_from",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L8",
+      "source_location": "L801",
       "weight": 1.0
     },
     {
@@ -180017,7 +180017,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L720",
+      "source_location": "L723",
       "weight": 1.0
     },
     {
@@ -197267,7 +197267,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1012",
+      "source_location": "L1015",
       "weight": 1.0
     },
     {
@@ -197278,7 +197278,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1024",
+      "source_location": "L1027",
       "weight": 1.0
     },
     {
@@ -197289,7 +197289,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1069",
+      "source_location": "L1072",
       "weight": 1.0
     },
     {
@@ -197300,7 +197300,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1089",
+      "source_location": "L1092",
       "weight": 1.0
     },
     {
@@ -197311,7 +197311,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1108",
+      "source_location": "L1111",
       "weight": 1.0
     },
     {
@@ -197322,7 +197322,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1122",
+      "source_location": "L1125",
       "weight": 1.0
     },
     {
@@ -197333,7 +197333,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1148",
+      "source_location": "L1151",
       "weight": 1.0
     },
     {
@@ -197344,7 +197344,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1166",
+      "source_location": "L1169",
       "weight": 1.0
     },
     {
@@ -197355,7 +197355,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1178",
+      "source_location": "L1181",
       "weight": 1.0
     },
     {
@@ -197366,7 +197366,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1193",
+      "source_location": "L1196",
       "weight": 1.0
     },
     {
@@ -197388,7 +197388,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1211",
+      "source_location": "L1214",
       "weight": 1.0
     },
     {
@@ -197399,7 +197399,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1227",
+      "source_location": "L1233",
       "weight": 1.0
     },
     {
@@ -197410,7 +197410,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1245",
+      "source_location": "L1251",
       "weight": 1.0
     },
     {
@@ -197421,7 +197421,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1269",
+      "source_location": "L1275",
       "weight": 1.0
     },
     {
@@ -197432,18 +197432,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1280",
-      "weight": 1.0
-    },
-    {
-      "source": "crates_bus_src_next",
-      "target": "crates_bus_src_next_boot_register_profile_and_peripheral_defaults_match_the_pinned_core",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1299",
+      "source_location": "L1286",
       "weight": 1.0
     },
     {
@@ -197459,13 +197448,24 @@
     },
     {
       "source": "crates_bus_src_next",
+      "target": "crates_bus_src_next_boot_register_profile_and_peripheral_defaults_match_the_pinned_core",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "crates/bus/src/next.rs",
+      "source_location": "L1305",
+      "weight": 1.0
+    },
+    {
+      "source": "crates_bus_src_next",
       "target": "crates_bus_src_next_next_sd_reads_bounded_sectors_from_file",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1314",
+      "source_location": "L1320",
       "weight": 1.0
     },
     {
@@ -197476,7 +197476,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1327",
+      "source_location": "L1333",
       "weight": 1.0
     },
     {
@@ -197487,7 +197487,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1424",
+      "source_location": "L1430",
       "weight": 1.0
     },
     {
@@ -197498,7 +197498,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1493",
+      "source_location": "L1499",
       "weight": 1.0
     },
     {
@@ -197520,7 +197520,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L1554",
+      "source_location": "L1560",
       "weight": 1.0
     },
     {
@@ -197707,7 +197707,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L801",
+      "source_location": "L804",
       "weight": 1.0
     },
     {
@@ -197718,7 +197718,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L820",
+      "source_location": "L823",
       "weight": 1.0
     },
     {
@@ -197729,7 +197729,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L847",
+      "source_location": "L850",
       "weight": 1.0
     },
     {
@@ -197740,7 +197740,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L861",
+      "source_location": "L864",
       "weight": 1.0
     },
     {
@@ -197751,7 +197751,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L876",
+      "source_location": "L879",
       "weight": 1.0
     },
     {
@@ -197762,7 +197762,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L895",
+      "source_location": "L898",
       "weight": 1.0
     },
     {
@@ -197773,7 +197773,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L921",
+      "source_location": "L924",
       "weight": 1.0
     },
     {
@@ -197784,7 +197784,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L941",
+      "source_location": "L944",
       "weight": 1.0
     },
     {
@@ -197795,7 +197795,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L951",
+      "source_location": "L954",
       "weight": 1.0
     },
     {
@@ -197806,7 +197806,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L959",
+      "source_location": "L962",
       "weight": 1.0
     },
     {
@@ -197817,7 +197817,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L978",
+      "source_location": "L981",
       "weight": 1.0
     },
     {
@@ -233402,7 +233402,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L576",
+      "source_location": "L579",
       "weight": 1.0
     },
     {
@@ -233413,7 +233413,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L610",
+      "source_location": "L613",
       "weight": 1.0
     },
     {
@@ -233424,7 +233424,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L620",
+      "source_location": "L623",
       "weight": 1.0
     },
     {
@@ -233435,7 +233435,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L635",
+      "source_location": "L638",
       "weight": 1.0
     },
     {
@@ -233446,7 +233446,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L650",
+      "source_location": "L653",
       "weight": 1.0
     },
     {
@@ -233457,7 +233457,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L665",
+      "source_location": "L668",
       "weight": 1.0
     },
     {
@@ -233468,7 +233468,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L669",
+      "source_location": "L672",
       "weight": 1.0
     },
     {
@@ -233479,7 +233479,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L673",
+      "source_location": "L676",
       "weight": 1.0
     },
     {
@@ -233490,7 +233490,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L683",
+      "source_location": "L686",
       "weight": 1.0
     },
     {
@@ -233501,7 +233501,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L690",
+      "source_location": "L693",
       "weight": 1.0
     },
     {
@@ -233512,7 +233512,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L704",
+      "source_location": "L707",
       "weight": 1.0
     },
     {
@@ -233523,7 +233523,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L710",
+      "source_location": "L713",
       "weight": 1.0
     },
     {
@@ -233534,7 +233534,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L715",
+      "source_location": "L718",
       "weight": 1.0
     },
     {
@@ -233545,7 +233545,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L720",
+      "source_location": "L723",
       "weight": 1.0
     },
     {
@@ -233556,7 +233556,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L726",
+      "source_location": "L729",
       "weight": 1.0
     },
     {
@@ -233567,7 +233567,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L732",
+      "source_location": "L735",
       "weight": 1.0
     },
     {
@@ -233578,7 +233578,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L737",
+      "source_location": "L740",
       "weight": 1.0
     },
     {
@@ -233600,7 +233600,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L756",
+      "source_location": "L759",
       "weight": 1.0
     },
     {
@@ -233611,7 +233611,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L761",
+      "source_location": "L764",
       "weight": 1.0
     },
     {
@@ -233622,7 +233622,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next.rs",
-      "source_location": "L790",
+      "source_location": "L793",
       "weight": 1.0
     },
     {
@@ -256444,5 +256444,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "969b4c9b11dabf08296244b2c6a970bde65ea558"
+  "built_at_commit": "5e6edbe86bcbaf75ff087d8dd726bf0d40c04b7d"
 }

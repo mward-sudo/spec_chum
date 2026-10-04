@@ -556,6 +556,9 @@ impl NextBus {
                 self.write_128_mapping(mapping, true);
             }
             0x1ffd => {
+                if self.zx128_locked {
+                    return;
+                }
                 let mode = (value & 0x01) << 2;
                 if mode != 0 {
                     self.zx128_allram_low = (value & 0x02) >> 1;
@@ -1216,6 +1219,9 @@ mod tests {
         bus.out_port(0x7ffd, 0x03);
         bus.out_port(0xdffd, 0x06);
         assert_eq!(bus.read_nextreg(0x8e) & 0xf0, locked_bank);
+        let locked_mapping = bus.read_nextreg(0x8e);
+        bus.out_port(0x1ffd, 0x01);
+        assert_eq!(bus.read_nextreg(0x8e), locked_mapping);
         bus.write_nextreg(0x08, 0x80);
         assert_ne!(bus.read_nextreg(0x08) & 0x80, 0);
         bus.out_port(0x7ffd, 0x03);
