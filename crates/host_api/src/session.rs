@@ -148,8 +148,8 @@ pub enum HostError {
 /// Exactly one active hardware runtime belongs to a host session.
 #[derive(Debug)]
 pub(crate) enum HostRuntime {
-    Classic(Machine),
-    Next(NextMachine),
+    Classic(Box<Machine>),
+    Next(Box<NextMachine>),
 }
 
 impl HostRuntime {
@@ -374,7 +374,7 @@ impl HostSession {
     /// Install a booted machine into this session.
     pub fn set_machine(&mut self, machine: Machine) {
         self.model = ModelId::from_model(machine.model());
-        self.machine = Some(HostRuntime::Classic(machine));
+        self.machine = Some(HostRuntime::Classic(Box::new(machine)));
         self.reapply_host_keys();
         self.last_speaker_level = false;
         if !self.has_tape() {
@@ -491,7 +491,7 @@ impl HostSession {
         let applied = crate::machine_config::apply_user_config(config, &roots)?;
         self.model = ModelId::from_model(applied.model);
         self.joystick_mode = applied.joystick_mode;
-        self.machine = Some(HostRuntime::Classic(applied.machine));
+        self.machine = Some(HostRuntime::Classic(Box::new(applied.machine)));
         self.reapply_host_keys();
         self.last_speaker_level = false;
         self.status = applied.status;
@@ -791,7 +791,7 @@ impl HostSession {
             .map_err(|error| HostError::Message(error.to_string()))?;
         next.attach_sd_image(card)
             .map_err(|error| HostError::Message(error.to_string()))?;
-        self.machine = Some(HostRuntime::Next(next));
+        self.machine = Some(HostRuntime::Next(Box::new(next)));
         self.reapply_host_keys();
         self.last_speaker_level = false;
         self.clear_media_identity();
@@ -835,7 +835,7 @@ impl HostSession {
             }
         }
         .map_err(|e| HostError::Message(e.to_string()))?;
-        self.machine = Some(HostRuntime::Classic(machine));
+        self.machine = Some(HostRuntime::Classic(Box::new(machine)));
         self.reapply_host_keys();
         self.last_speaker_level = false;
         self.status = "ROM loaded".into();

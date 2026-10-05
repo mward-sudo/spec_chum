@@ -372,9 +372,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1791175163.1935964,
-    "seen": 1791175222.630966,
-    "ast_hash": "eada7b2b774db29139cb3cfc265e86ee",
+    "mtime": 1791227469.4191089,
+    "seen": 1791228008.732909,
+    "ast_hash": "7965481336c017532ed4d011af7c7f19",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -2076,9 +2076,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session_tests.rs": {
-    "mtime": 1791175163.1944244,
-    "seen": 1791175222.630997,
-    "ast_hash": "ef490c6078b5614bb26cb5ee9a2fac8f",
+    "mtime": 1791227430.5533497,
+    "seen": 1791228008.732969,
+    "ast_hash": "ffed3d06309f15c39b9eb7058fa1040d",
     "semantic_hash": ""
   },
   "crates/machine/src/memory.rs": {
