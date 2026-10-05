@@ -1,17 +1,17 @@
 # Graph Report - spec_chum  (2026-10-05)
 
 ## Corpus Check
-- 322 files · ~1,278,862 words
+- 322 files · ~1,278,993 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 53 file(s) not represented in the graph (top: .tap 10, .mdc 8, (none) 6)
 
 ## Summary
-- 6724 nodes · 15826 edges · 324 communities (260 shown, 64 thin omitted)
+- 6726 nodes · 15835 edges · 328 communities (263 shown, 65 thin omitted)
 - Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 899 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `62bb512b`
+- Built from commit: `68ed6e54`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -57,7 +57,7 @@
 - libretro_core/src/lib.rs
 - PrefModelSlug
 - machine/src/next.rs
-- ModelId
+- rom_setup.rs
 - Cpu
 - RomSetupSlot
 - DskImage
@@ -68,7 +68,7 @@
 - snow.rs
 - bus/src/lib.rs
 - cpu.rs
-- .with_session_ref
+- String
 - MemIo128
 - HeadlessRoom
 - .takeLastError
@@ -93,14 +93,14 @@
 - control_plane/src/window_capture.rs
 - service.rs
 - .from_rom_with_overrides
-- auth_empty
+- api_error
 - RomLoadError
 - IOSurface
 - machine/src/lib.rs
-- disasm.rs
+- ModelId
 - Option
 - room.rs
-- egui
+- Multiface1
 - embedded.rs
 - .syncMatrix
 - prelude
@@ -112,19 +112,19 @@
 - tests/trdos.rs
 - KempstonMouse
 - rzx.rs
-- .begin_frame
+- .new
 - Tape identity (content hash)
-- ffi/debug.rs
+- set_last_error
 - perf.rs
 - living_room/src/keymap.rs
 - quality.rs
 - machine
 - machine crate
 - ContentView
-- inspect.rs
+- disasm.rs
 - Plus3Fdc
 - living_room/src/lib.rs
-- routes/media.rs
+- auth_empty_blocking
 - spec-chum-debugging skill
 - Full slow test suite
 - headless.rs
@@ -133,18 +133,18 @@
 - Kempston
 - agent_embed.rs
 - append_flushes_events_to_trace_file
-- HostViewState
+- spec_chum_host
 - check_pr_reviews.sh
 - Spec Chum
 - agent_server/src/main.rs
 - baked_room.rs
 - win32.rs
-- set_last_error
+- ffi/hardware.rs
 - build_tape_fixtures.py
 - CodeRabbit merge gate
 - session_mut
-- HostSession
-- BreakpointEventHub
+- .with_machine_load
+- events.rs
 - slots.rs
 - fetch_roms.sh
 - AppState
@@ -154,8 +154,8 @@
 - room_perf_matrix.sh
 - trace.rs
 - Category
-- events.rs
-- spec_chum_host
+- AudioOut
+- FramebufferMeta
 - Testing and quality gates
 - crt.rs
 - AgentClient
@@ -174,7 +174,7 @@
 - ./scripts/build_macos_app.sh
 - graphify_update.sh
 - fetch_z80test.sh
-- app/src/main.rs
+- image_copy_extract
 - run_slow_tests.sh
 - run_system_tests.sh
 - stage_living_room_assets.sh
@@ -202,8 +202,8 @@
 - routes/input.rs
 - build-linux-appimage.sh
 - rom/tests.rs
-- gtk_ui.rs
-- auth_empty_blocking
+- Keyboard
+- auth_empty
 - src/interface1.rs
 - peripherals.rs
 - joystick.rs
@@ -224,7 +224,7 @@
 - flags.rs
 - read.rs
 - summarize_input_latency.py
-- .new
+- palette_rgb
 - ffi/media.rs
 - raw
 - skein.rs
@@ -234,7 +234,7 @@
 - SdSpi
 - Native Linux shell (GTK4 + Rust host_api)
 - Native Windows shell (Win32 + Rust host_api)
-- .apply_to_host_session
+- PrefAyStereo
 - .refreshInspector
 - fdc/mod.rs
 - main
@@ -258,19 +258,19 @@
 - Chord
 - Spec Chum documentation
 - control_plane shared backend
-- Vec
+- .with_session_ref
 - rom_slot_descriptors
 - Loopback HTTP 127.0.0.1:17384
 - types.rs
 - trdos/README.md
 - spec-chum-agent
-- routes/mod.rs
+- http_smoke.rs
 - agent_client/src/lib.rs
 - Bus48
 - .finishRomSetup
 - Large-module responsibility map (#446)
 - media_identity.rs
-- Option
+- .inspect
 - televisioncabinet
 - ApiError
 - NSEvent
@@ -284,7 +284,7 @@
 - Option
 - host_api crate
 - room_probe.rs
-- theme.rs
+- ImageCopier
 - BeeperState
 - deathchase_probe.rs
 - bake_living_room_lightmaps.sh
@@ -295,12 +295,14 @@
 - EmulatorHost
 - run_z80test_tap
 - present_metal.rs
-- HWND
+- OwnWindowCapturer
+- model_rom_path_key
 - KEYMAP_CONTRACT.md
-- .refresh_input
+- wnd_proc
+- tick_emulator
 - fb_scale.rs
 - snapshots.rs
-- aperture_debug_enabled
+- attach_crt_to_television
 - models.rs
 - code-reducer.md
 - .body
@@ -309,14 +311,17 @@
 - Bus128
 - super
 - recordings.rs
-- host_cmd_shortcuts
-- attach_crt_to_television
+- chrome_buttons
+- ffi/video.rs
+- SessionAccess
+- animate_crt_params
 - .fmt
 - image_copy.rs
 - LivingRoomThread
+- chrome_button
 - RetroArch / libretro core
 - pipelinedrenderingplugin
-- BakedRoomPlugin
+- display.rs
 - require_machine
 - bus/src/next.rs
 - objc2_metal_fx
@@ -324,11 +329,10 @@
 - crt_phosphor_local
 - .installTrackingArea
 - CameraPlugin
-- GlowPlugin
+- EmbedState
 - HybridPlugin
-- RoomPlugin
+- PresentBlitPlugin
 - SceneVariantPlugin
-- NextAssetDownload
 - .fmt
 
 ## God Nodes (most connected - your core abstractions)
@@ -362,11 +366,11 @@
 - 2-file cycle: `crates/bus/src/divmmc.rs -> crates/bus/src/lib.rs -> crates/bus/src/divmmc.rs`
 - 2-file cycle: `crates/bus/src/lib.rs -> crates/bus/src/multiface.rs -> crates/bus/src/lib.rs`
 
-## Communities (324 total, 64 thin omitted)
+## Communities (328 total, 65 thin omitted)
 
 ### Community 0 - "SpecChumApp"
-Cohesion: 0.10
-Nodes (16): Context, SpecChumApp, Context, Option, String, SpecChumApp, Context, SpecChumApp (+8 more)
+Cohesion: 0.09
+Nodes (18): Context, SpecChumApp, Context, Option, String, SpecChumApp, Context, SpecChumApp (+10 more)
 
 ### Community 1 - "synthetic.rs"
 Cohesion: 0.11
@@ -377,12 +381,12 @@ Cohesion: 0.15
 Nodes (26): AsRef, BufWriter, APPEND, append_text_events(), AppendSink, describe_categories(), dump_filtered(), dump_json() (+18 more)
 
 ### Community 3 - "trace/src/lib.rs"
-Cohesion: 0.10
-Nodes (20): categories(), clear(), CPU_COUNTER, CPU_EVERY, DEFAULT_CAPACITY, enable_add(), ENABLED, ENV_INIT (+12 more)
+Cohesion: 0.09
+Nodes (24): categories(), clear(), CPU_COUNTER, CPU_EVERY, DEFAULT_CAPACITY, enable(), enable_add(), ENABLED (+16 more)
 
 ### Community 4 - "resolve.rs"
-Cohesion: 0.26
-Nodes (22): exrom_available(), exrom_available_in(), main_rom_available(), main_rom_available_in(), resolve_first_in(), resolve_rom_path(), resolve_rom_path_in(), resolve_trdos_rom_path() (+14 more)
+Cohesion: 0.21
+Nodes (26): exrom_available(), exrom_available_in(), main_rom_available(), main_rom_available_in(), resolve_first_in(), resolve_rom_path(), resolve_rom_path_in(), resolve_trdos_rom_path() (+18 more)
 
 ### Community 5 - "HostBridge"
 Cohesion: 0.03
@@ -397,8 +401,8 @@ Cohesion: 0.15
 Nodes (4): HostError, require_machine_mut(), Path, Result
 
 ### Community 8 - "ui_overlay.rs"
-Cohesion: 0.10
-Nodes (33): BackgroundColor, Button, Changed, ChildSpawnerCommands, CameraIntro, BTN_BG, BTN_HOVER, BTN_PRESS (+25 more)
+Cohesion: 0.17
+Nodes (19): CameraIntro, BTN_BG, BTN_HOVER, BTN_PRESS, FG, FG_DIM, GLASS_BG, GLASS_BORDER (+11 more)
 
 ### Community 9 - "mdr.rs"
 Cohesion: 0.10
@@ -417,8 +421,8 @@ Cohesion: 0.09
 Nodes (5): NextBus, Box, Option, Vec, SdSpi
 
 ### Community 13 - "ControlPlane"
-Cohesion: 0.09
-Nodes (6): ControlPlane, ApiResult, Mutex, Path, SharedHostView, UserMachineConfig
+Cohesion: 0.10
+Nodes (5): ControlPlane, ApiResult, Mutex, Path, SharedHostView
 
 ### Community 14 - "beta_disk.rs"
 Cohesion: 0.05
@@ -449,8 +453,8 @@ Cohesion: 0.05
 Nodes (47): clusterconfig, CAMERA_MOVE_DELAY_SECS, CAMERA_MOVE_SECS, clamp01(), CRT_POWER_DELAY_SECS, CRT_POWER_SECS, DEFAULT_VIEWPORT_ASPECT, distance_for_crt_fill() (+39 more)
 
 ### Community 21 - "HostSession"
-Cohesion: 0.19
-Nodes (7): arc, HostSession, PendingMediaTitle, Option, Path, String, hostsession
+Cohesion: 0.23
+Nodes (5): HostSession, PendingMediaTitle, Option, Path, String
 
 ### Community 22 - "ffi.rs"
 Cohesion: 0.16
@@ -458,7 +462,7 @@ Nodes (42): catch_const_u8(), catch_int(), catch_ptr(), catch_uint(), clear_last
 
 ### Community 23 - "hybrid.rs"
 Cohesion: 0.13
-Nodes (46): LivingRoomCamera, apply_hybrid_display(), bind_present_target(), ensure_plate_image(), hybrid_state_machine(), HybridBakeCamera, HybridPhase, HybridPlateMesh (+38 more)
+Nodes (47): LivingRoomCamera, apply_hybrid_display(), bind_present_target(), ensure_plate_image(), hybrid_state_machine(), HybridBakeCamera, HybridPhase, HybridPlateMesh (+39 more)
 
 ### Community 24 - "rom48"
 Cohesion: 0.12
@@ -466,7 +470,7 @@ Nodes (30): cpu_step_appears_in_trace(), port_read_watch_fires_on_in_a_c(), unti
 
 ### Community 25 - "next_assets.rs"
 Cohesion: 0.06
-Nodes (57): AssetStamp, ASSET_INFO, asset_metadata_is_valid(), AVAILABILITY, CARD_BYTES, card_directory(), CARD_MARKER, CARD_NAME (+49 more)
+Nodes (59): AssetStamp, ASSET_INFO, asset_metadata_is_valid(), AVAILABILITY, cached_file_validation_removes_invalid_files_and_keeps_valid_ones(), CARD_BYTES, card_directory(), CARD_MARKER (+51 more)
 
 ### Community 26 - "media_title_lookup.rs"
 Cohesion: 0.18
@@ -486,11 +490,11 @@ Nodes (21): AudioCaptureFile, AudioLog, Stats, Bool, Double, Float, Int, String 
 
 ### Community 30 - "machine_config.rs"
 Cohesion: 0.10
-Nodes (38): AppliedConfig, apply_builtin_rom_when_no_override(), apply_diagrom_succeeds_on_128k_class_models(), apply_diagrom_succeeds_on_16k_class_models(), apply_diagrom_succeeds_on_plus3_with_16k_rom(), apply_rejects_bad_custom_rom_size(), apply_user_config(), build_machine() (+30 more)
+Nodes (39): AppliedConfig, apply_builtin_rom_when_no_override(), apply_diagrom_succeeds_on_128k_class_models(), apply_diagrom_succeeds_on_16k_class_models(), apply_diagrom_succeeds_on_plus3_with_16k_rom(), apply_rejects_bad_custom_rom_size(), apply_user_config(), build_machine() (+31 more)
 
 ### Community 31 - "TraceEvent"
-Cohesion: 0.17
-Nodes (13): maybe_append(), EventKind, FlashSkipReason, RegSnap, Display, FmtResult, Formatter, Option (+5 more)
+Cohesion: 0.19
+Nodes (12): maybe_append(), EventKind, FlashSkipReason, RegSnap, Display, FmtResult, Formatter, Option (+4 more)
 
 ### Community 32 - "Model"
 Cohesion: 0.08
@@ -501,20 +505,20 @@ Cohesion: 0.27
 Nodes (17): default_png(), framebuffer(), FramebufferQuery, host_display(), host_window(), HostDisplayQuery, insert_meta_headers(), insert_present_headers() (+9 more)
 
 ### Community 34 - ".run_one_frame"
-Cohesion: 0.15
-Nodes (12): advance_frame_t(), peek_opcode(), reg_snap(), Fn, FnMut, Option, ExperiencePendingFlash, flash_load_block() (+4 more)
+Cohesion: 0.13
+Nodes (13): advance_frame_t(), peek_opcode(), reg_snap(), Fn, FnMut, Option, ExperiencePendingFlash, flash_load_block() (+5 more)
 
 ### Community 35 - "LivingRoomNSView"
 Cohesion: 0.08
 Nodes (19): LivingRoomNSView, .acceptsFirstResponder, .canBecomeKeyView, .focusRingMaskBounds, .host, .isFlipped, Any, Bool (+11 more)
 
 ### Community 36 - "clear_last_error"
-Cohesion: 0.20
-Nodes (20): sc_inspect_json(), clear_last_error(), heap_cstring(), model_catalog_ffi_json_preserves_order_and_stable_identifiers(), c_char, c_char, sc_model_catalog_json(), c_char (+12 more)
+Cohesion: 0.21
+Nodes (19): clear_last_error(), heap_cstring(), model_catalog_ffi_json_preserves_order_and_stable_identifiers(), c_char, c_char, sc_model_catalog_json(), c_char, c_int (+11 more)
 
 ### Community 37 - "setup_crt_resources"
-Cohesion: 0.19
-Nodes (17): bulge_mesh_has_expected_vertex_count(), bulging_screen_mesh(), CrtPhosphorMaterial, CrtScreenTexture, CrtSpawnKit, CrtTubeCanvas, CrtTubeMaterial, CrtTubeTexture (+9 more)
+Cohesion: 0.20
+Nodes (18): bulge_mesh_has_expected_vertex_count(), bulging_screen_mesh(), CrtPhosphorMaterial, CrtScreenTexture, CrtSpawnKit, CrtTubeCanvas, CrtTubeTexture, Commands (+10 more)
 
 ### Community 38 - "libretro_core/src/lib.rs"
 Cohesion: 0.07
@@ -528,9 +532,9 @@ Nodes (46): JoystickMode, cursor, .id, kempston, sinclairLeft, sinclairRight, .t
 Cohesion: 0.20
 Nodes (17): FrameAudio, divmmc_automap_uses_the_opcode_fetch_bus_hook(), frame_audio_contains_next_beeper_edges(), frame_interrupt_uses_selected_display_timing(), guest_fetches_and_reads_writes_after_nextreg_remaps_pages(), hard_reset_preserves_the_frame_clock(), hard_reset_restarts_the_ipl(), ipl_can_leave_config_mode_and_fetch_from_main_rom() (+9 more)
 
-### Community 41 - "ModelId"
-Cohesion: 0.12
-Nodes (31): acquire_next_assets(), canonical_persist_path(), install_model_rom(), model_requires_user_rom(), model_rom_available(), MODEL_ROM_PATHS, model_rom_paths_snapshot(), next_setup_requires_the_complete_official_archive_name() (+23 more)
+### Community 41 - "rom_setup.rs"
+Cohesion: 0.17
+Nodes (28): acquire_next_assets(), canonical_persist_path(), install_model_rom(), model_rom_available(), MODEL_ROM_PATHS, model_rom_paths_snapshot(), next_setup_requires_the_complete_official_archive_name(), pentagon_rom_setup_has_user_slots() (+20 more)
 
 ### Community 42 - "Cpu"
 Cohesion: 0.20
@@ -545,16 +549,16 @@ Cohesion: 0.27
 Nodes (9): DskImage, parse_track(), Option, Path, Result, Self, Vec, Sector (+1 more)
 
 ### Community 45 - "multiface.rs"
-Cohesion: 0.08
-Nodes (22): button_pages_on_nmi_vector(), in_9f_pages_in_in_1f_pages_out(), load_rom_size_check(), mf128_in_bf_returns_screen_bit_and_in_3f_pages_out(), mf128_out_while_paged_sets_software_enable(), mf128_power_up_stealth_blocks_page_in_until_nmi(), mf128_reset_clears_enable_keeps_ram(), Multiface1 (+14 more)
+Cohesion: 0.12
+Nodes (17): button_pages_on_nmi_vector(), in_9f_pages_in_in_1f_pages_out(), load_rom_size_check(), mf128_in_bf_returns_screen_bit_and_in_3f_pages_out(), mf128_out_while_paged_sets_software_enable(), mf128_power_up_stealth_blocks_page_in_until_nmi(), mf128_reset_clears_enable_keeps_ram(), Multiface128 (+9 more)
 
 ### Community 46 - "src/commands.rs"
 Cohesion: 0.04
 Nodes (56): ear_speed_from_menu_id(), IDM_DBG_BREAK_PC, IDM_DBG_CLEAR_BREAKS, IDM_DBG_CONTINUE, IDM_DBG_PAUSE, IDM_DBG_REFRESH, IDM_DBG_STEP, IDM_DBG_TOGGLE (+48 more)
 
 ### Community 47 - "app/src/lib.rs"
-Cohesion: 0.10
-Nodes (6): load_snapshot48_switches_from_128k(), load_snapshot48_switches_from_plus3(), prefs_restore_model_tape_volume_on_launch(), Vec, synthetic_sna48_bytes(), mapping_doc
+Cohesion: 0.05
+Nodes (31): load_snapshot48_switches_from_128k(), load_snapshot48_switches_from_plus3(), prefs_restore_model_tape_volume_on_launch(), Vec, synthetic_sna48_bytes(), app_icon(), app_icon_decodes_rgba(), as_strings() (+23 more)
 
 ### Community 48 - "Registers"
 Cohesion: 0.14
@@ -565,16 +569,16 @@ Cohesion: 0.12
 Nodes (16): corrupt_128_uses_alternate_bank_source(), corrupt_row32_col0_r_zero_not_skipped(), corrupt_skipped_when_r_matches_addr_lo(), corrupt_uses_refresh_low_byte_not_display(), double_duplicates_previous_column(), i_pointed_bank_128(), pattern_at_phase(), Option (+8 more)
 
 ### Community 50 - "bus/src/lib.rs"
-Cohesion: 0.10
-Nodes (37): beta_ports_when_trdos_paged_via_bus48(), beta_trdos_rom_overlays_when_paged(), bus128_m1_pages_trdos_at_3d00_not_3c00(), bus128_multiface_nmi_overlay_and_bf_3f(), contend_128_differs_from_48_at_paper_start(), divmmc_automap_via_notify_m1(), divmmc_conmem_overlays_via_bus48(), divmmc_control_beats_interface1_on_shared_e3() (+29 more)
+Cohesion: 0.11
+Nodes (33): beta_ports_when_trdos_paged_via_bus48(), beta_trdos_rom_overlays_when_paged(), bus128_m1_pages_trdos_at_3d00_not_3c00(), bus128_multiface_nmi_overlay_and_bf_3f(), contend_128_differs_from_48_at_paper_start(), divmmc_automap_via_notify_m1(), divmmc_conmem_overlays_via_bus48(), divmmc_control_beats_interface1_on_shared_e3() (+25 more)
 
 ### Community 51 - "cpu.rs"
 Cohesion: 0.15
 Nodes (24): classic_ed_91_and_92_remain_unknown_eight_t_instructions(), contend_read_timing_adds_wait_without_mr(), CpuProfile, indexed_displacement_loads_into_plain_h_and_l(), interrupt_clears_q_before_scf(), interrupt_im2_uncontended_is_19_t(), interrupt_while_halted_does_not_skip_redirected_pc(), interrupt_while_halted_resumes_after_halt() (+16 more)
 
-### Community 52 - ".with_session_ref"
-Cohesion: 0.10
-Nodes (15): model_slug(), String, format_break_reason(), HardwareStatusResponse, HealthResponse, LastBreakResponse, MemoryMapResponse, MemoryRegion (+7 more)
+### Community 52 - "String"
+Cohesion: 0.12
+Nodes (8): format_break_reason(), LastBreakResponse, String, RunResponse, RunUntilResponse, ServerConfig, TraceFormat, TypeLoadResponse
 
 ### Community 53 - "MemIo128"
 Cohesion: 0.18
@@ -613,12 +617,12 @@ Cohesion: 0.15
 Nodes (7): NextBus, nmi_vectors_to_0066_and_preserves_iff2(), Box, I, Option, Vec, M
 
 ### Community 62 - "glow.rs"
-Cohesion: 0.09
-Nodes (27): BakedRoomEnabled, CrtPhosphor, crt_fill_offset(), CrtFillLight, framebuffer_spill_gain(), FrameGlow, GlowDriven, IncandescentLamp (+19 more)
+Cohesion: 0.08
+Nodes (28): CrtPhosphor, crt_fill_offset(), CrtFillLight, framebuffer_spill_gain(), GlowDriven, GlowPlugin, IncandescentLamp, procedural_ambient_brightness() (+20 more)
 
 ### Community 63 - "PresentTarget"
-Cohesion: 0.09
-Nodes (24): bevy, blit_to_present(), extract_present_target(), ExtractedPresent, PresentBlitPlugin, PresentTarget, App, Arc (+16 more)
+Cohesion: 0.11
+Nodes (19): blit_to_present(), extract_present_target(), ExtractedPresent, PresentTarget, Arc, Commands, Debug, Extract (+11 more)
 
 ### Community 64 - "Debugger"
 Cohesion: 0.08
@@ -629,8 +633,8 @@ Cohesion: 0.06
 Nodes (51): arkanoid_ear_leaves_sampler_when_present(), arkanoid_instant_falls_back_to_ear_turbo_when_present(), arkanoid_speedlock_completes_at_realtime_when_present(), attach_beta_on_48k_and_reject_plus3(), cursor_left_via_joystick_applies_caps_five(), joystick_kempston_mask_reaches_port(), kempston_arrow_left_does_not_pollute_matrix(), kempston_mouse_ports_after_synthetic_deltas() (+43 more)
 
 ### Community 66 - "Ula48"
-Cohesion: 0.12
-Nodes (8): BeamShadow, Default, Self, Vec, TimexLoresMode, .ALTDFILE, Ula48, write_pixel_rgba()
+Cohesion: 0.11
+Nodes (10): bank_switch_between_bitmap_and_attr_fetch(), BeamShadow, mid_frame_screen_bank_switch_splits_paper(), mid_line_border_128_uses_228_pitch(), Default, Self, Vec, TimexLoresMode (+2 more)
 
 ### Community 68 - "fuse.rs"
 Cohesion: 0.16
@@ -657,48 +661,48 @@ Cohesion: 0.07
 Nodes (13): attr_mark_code_ok, FlatMem, Io, Memory, NullIo, Box, Default, Self (+5 more)
 
 ### Community 74 - "control_plane/src/window_capture.rs"
-Cohesion: 0.09
-Nodes (28): anyobject, cfnumber, CGImage, fit_size(), letterboxes_wide_window(), pillarboxes_tall_window(), Vec2, refresh_window_id_from_frame() (+20 more)
+Cohesion: 0.17
+Nodes (18): anyobject, cfnumber, CGImage, capture_own_window_png(), capture_window_png(), cg_window_id_from_ns_view(), cgimage_to_png(), MAX_WINDOW_RGBA_BYTES (+10 more)
 
 ### Community 75 - "service.rs"
-Cohesion: 0.10
-Nodes (23): apply_prefs_to_session(), capture_framebuffer_border_override_restores(), capture_framebuffer_restores_border_when_run_fails(), continue_and_eject_require_machine(), health_and_inspect_after_rom_load(), last_error_records_failures(), LastErrorRecord, mouse_requires_kempston_pref_then_accepts_input() (+15 more)
+Cohesion: 0.14
+Nodes (18): capture_framebuffer_border_override_restores(), capture_framebuffer_restores_border_when_run_fails(), continue_and_eject_require_machine(), health_and_inspect_after_rom_load(), last_error_records_failures(), LastErrorRecord, MemoryMapResponse, MemoryRegion (+10 more)
 
 ### Community 76 - ".from_rom_with_overrides"
 Cohesion: 0.30
 Nodes (9): Machine, BTreeMap, Model, PathBuf, Result, Self, String, MachineBuildError (+1 more)
 
-### Community 77 - "auth_empty"
-Cohesion: 0.16
-Nodes (43): add_breakpoint(), add_port_watch(), add_watch(), BreakpointBody, disasm(), DisasmQuery, last_break(), list_breakpoints() (+35 more)
+### Community 77 - "api_error"
+Cohesion: 0.20
+Nodes (33): add_breakpoint(), add_port_watch(), add_watch(), BreakpointBody, disasm(), DisasmQuery, last_break(), list_breakpoints() (+25 more)
 
 ### Community 78 - "RomLoadError"
-Cohesion: 0.24
-Nodes (8): require_rom_size(), RomLoadError, Error, Result, load_multiface_rom(), Path, Result, Result
+Cohesion: 0.32
+Nodes (6): multiface_kempston_on_in_1f_while_attached(), require_rom_size(), RomLoadError, Result, scorpion_rom_load_requires_48k(), Result
 
 ### Community 79 - "IOSurface"
 Cohesion: 0.14
 Nodes (18): AppKit, WindowBackground, .body, GlassBarBackground, View, RomSetupView, SpecChumSettingsView, .body (+10 more)
 
 ### Community 80 - "machine/src/lib.rs"
-Cohesion: 0.13
-Nodes (14): BetaDiskError, DivMmcError, InsertDiskError, Interface1Error, MultifaceError, next_frame_n(), push_ay_frame_sample(), DskImage (+6 more)
+Cohesion: 0.09
+Nodes (16): apply_rzx_input(), BetaDiskError, DivMmcError, InsertDiskError, Interface1Error, Model, MultifaceError, next_frame_n() (+8 more)
 
-### Community 81 - "disasm.rs"
-Cohesion: 0.24
-Nodes (24): abs_ed(), abs_mem(), alu_imm(), Disasm, disasm_cb(), disasm_ddcb(), disasm_ed(), disasm_index() (+16 more)
+### Community 81 - "ModelId"
+Cohesion: 0.11
+Nodes (9): dims(), ModelId, .ALL, rom_search_roots(), BTreeMap, Model, PathBuf, Self (+1 more)
 
 ### Community 82 - "Option"
 Cohesion: 0.23
 Nodes (15): compose_nearest_letterbox(), encode_rgba_png(), fit_letterboxes_wide(), fit_size(), host_display_rgba_len_checked(), MAX_HOST_DISPLAY_RGBA_BYTES, nearest_scale2_doubles(), PresentMeta (+7 more)
 
 ### Community 83 - "room.rs"
-Cohesion: 0.16
-Nodes (27): affine2, OpeningSconceBulb, OpeningSconceLight, OpeningTvAccent, pbr_material(), ROOM_D, ROOM_H, ROOM_W (+19 more)
+Cohesion: 0.13
+Nodes (30): affine2, OpeningSconceBulb, OpeningSconceLight, OpeningTvAccent, pbr_material(), ROOM_D, ROOM_H, ROOM_W (+22 more)
 
-### Community 84 - "egui"
-Cohesion: 0.40
-Nodes (3): egui, mpsc, specchumapp
+### Community 84 - "Multiface1"
+Cohesion: 0.14
+Nodes (8): load_multiface_rom(), Multiface1, multiface1_port_match(), read_overlay(), Default, Option, Path, Result
 
 ### Community 85 - "embedded.rs"
 Cohesion: 0.21
@@ -713,7 +717,7 @@ Cohesion: 0.12
 Nodes (14): ExternalFramebuffer, ExternalFramebufferPlugin, App, Assets, Default, Image, Option, Plugin (+6 more)
 
 ### Community 88 - "Machine"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (3): TimexDockError, Machine, Box
 
 ### Community 89 - "TimexDock"
@@ -725,8 +729,8 @@ Cohesion: 0.09
 Nodes (22): CodingKeys, id, label, preferenceSlug, title, CodingKeys, attachBeta, attachDivmmc (+14 more)
 
 ### Community 91 - "skip_intro"
-Cohesion: 0.10
-Nodes (39): Bloom, advance_opening_sequence(), animate_loading_spinner(), animate_tv_spotlight(), apply_zoom_camera(), camera_aspect(), IntroSkipRequest, OpeningLoadingSpinner (+31 more)
+Cohesion: 0.08
+Nodes (45): Bloom, advance_opening_sequence(), anim_eases_toward_target(), animate_loading_spinner(), animate_tv_spotlight(), apply_zoom_camera(), camera_aspect(), CameraZoom (+37 more)
 
 ### Community 92 - "process_smoke.rs"
 Cohesion: 0.13
@@ -734,7 +738,7 @@ Nodes (22): Child, client(), executable_starts_serves_inspect_and_is_cleaned_up(
 
 ### Community 93 - "tests/trdos.rs"
 Cohesion: 0.13
-Nodes (46): trdos_rom_08d2_is_vg93_port_stub(), trdos_rom_fills_0800_hole(), trdos_rom_has_native_file_services(), rom_pentagon(), apply_trdos_find_boot_native_abi(), apply_trdos_run_native_abi(), beta_reads_synthetic_boot_basic_into_ram(), beta_trdos_rom_loop_reads_trd_sector_into_ram() (+38 more)
+Nodes (45): trdos_rom_08d2_is_vg93_port_stub(), trdos_rom_fills_0800_hole(), trdos_rom_has_native_file_services(), rom_pentagon(), apply_trdos_find_boot_native_abi(), apply_trdos_run_native_abi(), beta_reads_synthetic_boot_basic_into_ram(), beta_trdos_rom_loop_reads_trd_sector_into_ram() (+37 more)
 
 ### Community 94 - "KempstonMouse"
 Cohesion: 0.17
@@ -744,17 +748,17 @@ Nodes (9): buttons_active_low(), delta_wraps_axes(), KempstonMouse, PORT_BUTTONS
 Cohesion: 0.10
 Nodes (37): apply_input_byte(), apply_matrix_and_kempston(), decompress_zlib(), input_block(), INPUT_BLOCK_HEADER_LEN, MAX_FRAMES, MAX_INPUT_BLOCK_BYTES, MAX_RETAINED_INPUT_BYTES (+29 more)
 
-### Community 96 - ".begin_frame"
-Cohesion: 0.39
-Nodes (9): attr_rewrite_splits_char_row_at_the_beam(), beam_shadow_follows_the_physical_screen_bank(), beam_shadow_self_invalidates_on_frame_wrap(), begin_frame_drops_previous_beam_shadow(), bitmap_erased_after_beam_still_renders_this_frame(), bitmap_written_before_beam_renders_new_value(), frame_wrap_clears_history_for_both_screen_banks(), render_smoke() (+1 more)
+### Community 96 - ".new"
+Cohesion: 0.36
+Nodes (11): attr_rewrite_splits_char_row_at_the_beam(), beam_shadow_follows_the_physical_screen_bank(), beam_shadow_self_invalidates_on_frame_wrap(), begin_frame_drops_previous_beam_shadow(), bitmap_erased_after_beam_still_renders_this_frame(), bitmap_written_before_beam_renders_new_value(), frame_wrap_clears_history_for_both_screen_banks(), mid_line_border_change_splits_scanline() (+3 more)
 
 ### Community 97 - "Tape identity (content hash)"
 Cohesion: 0.18
 Nodes (11): Cache location, Extending the catalogue, Hash algorithm, Host surfaces, HTTP, Lookup order, Non-goals, Online ZXInfo (#373) (+3 more)
 
-### Community 98 - "ffi/debug.rs"
-Cohesion: 0.20
-Nodes (19): break_reason_code(), require_u16(), c_char, c_int, c_uint, c_void, Option, sc_add_breakpoint() (+11 more)
+### Community 98 - "set_last_error"
+Cohesion: 0.18
+Nodes (24): break_reason_code(), require_u16(), c_char, c_int, c_uint, c_void, Option, sc_add_breakpoint() (+16 more)
 
 ### Community 99 - "perf.rs"
 Cohesion: 0.12
@@ -780,21 +784,21 @@ Nodes (11): bus crate, formats crate, Hardware-faithful cycle-accurate accuracy,
 Cohesion: 0.06
 Nodes (36): activateSpecChum(), AppDelegate, Notification.Name, ContentView, .body, .flatSpectrumChrome, .livingRoomChrome, .livingRoomToolbar (+28 more)
 
-### Community 105 - "inspect.rs"
+### Community 105 - "disasm.rs"
 Cohesion: 0.09
-Nodes (21): beta_inspect_from_128(), beta_inspect_from_48(), beta_json(), beta_json_includes_fdc_counters(), BetaInspect, Inspect, Machine, opt_u8() (+13 more)
+Nodes (44): beta_inspect_from_128(), beta_inspect_from_48(), beta_json(), beta_json_includes_fdc_counters(), BetaInspect, Inspect, Machine, opt_u8() (+36 more)
 
 ### Community 106 - "Plus3Fdc"
 Cohesion: 0.11
 Nodes (7): Phase, Plus3Fdc, Default, DskImage, Option, Self, Vec
 
 ### Community 107 - "living_room/src/lib.rs"
-Cohesion: 0.09
-Nodes (27): asset_plugin, AssetPlugin, audioplugin, bakedroomplugin, cameraplugin, asset_plugin(), empty_temp_root_reports_actionable_error(), FORCE_LINK (+19 more)
+Cohesion: 0.10
+Nodes (25): asset_plugin, AssetPlugin, audioplugin, bakedroomplugin, cameraplugin, asset_plugin(), empty_temp_root_reports_actionable_error(), FORCE_LINK (+17 more)
 
-### Community 108 - "routes/media.rs"
-Cohesion: 0.27
-Nodes (19): load_dsk(), load_rom(), load_rzx(), load_snapshot(), load_trd(), AppState, HeaderMap, Json (+11 more)
+### Community 108 - "auth_empty_blocking"
+Cohesion: 0.17
+Nodes (38): attach_beta(), attach_divmmc(), attach_interface1(), attach_multiface(), eject_dck(), hardware_status(), insert_dck(), insert_mdr() (+30 more)
 
 ### Community 109 - "spec-chum-debugging skill"
 Cohesion: 0.20
@@ -806,31 +810,31 @@ Nodes (11): ./scripts/run_slow_tests.sh, TDD expectations, Full slow test suite,
 
 ### Community 111 - "headless.rs"
 Cohesion: 0.10
-Nodes (28): bind_hybrid_headless_targets(), create_headless_render_image(), DEFAULT_ROOM_H, DEFAULT_ROOM_W, HeadlessRenderTargetHandle, HeadlessSize, rebuild_headless_render_target(), Assets (+20 more)
+Nodes (27): bind_hybrid_headless_targets(), create_headless_render_image(), DEFAULT_ROOM_H, DEFAULT_ROOM_W, HeadlessRenderTargetHandle, HeadlessSize, rebuild_headless_render_target(), Assets (+19 more)
 
 ### Community 112 - "apply_scene_variant"
 Cohesion: 0.08
-Nodes (35): scene_variant(), ambient_baseline_refreshes_when_bake_activates(), animate_opening_lighting(), apply_scene_variant(), DynamicRoomFillLight, NEW_ENVIRONMENT_MAP_INTENSITY, NewVariantEnvironmentMap, prepare_new_environment_map() (+27 more)
+Nodes (35): BakedRoomEnabled, scene_variant(), ambient_baseline_refreshes_when_bake_activates(), animate_opening_lighting(), apply_scene_variant(), NEW_ENVIRONMENT_MAP_INTENSITY, NewVariantEnvironmentMap, prepare_new_environment_map() (+27 more)
 
 ### Community 113 - "routes/session.rs"
-Cohesion: 0.22
-Nodes (21): apply_config(), BorderBody, continue_execution(), ModelBody, reset(), AppState, HeaderMap, Json (+13 more)
+Cohesion: 0.20
+Nodes (22): apply_config(), BorderBody, continue_execution(), ModelBody, reset(), AppState, HeaderMap, Json (+14 more)
 
 ### Community 114 - "Kempston"
-Cohesion: 0.22
-Nodes (4): bits_active_high(), Kempston, Self, apply_rzx_input()
+Cohesion: 0.28
+Nodes (3): bits_active_high(), Kempston, Self
 
 ### Community 115 - "agent_embed.rs"
-Cohesion: 0.17
-Nodes (16): embed_start_skips_without_auth_config(), EMBEDDED, EmbedState, Arc, c_int, c_void, Mutex, Option (+8 more)
+Cohesion: 0.27
+Nodes (10): embed_start_skips_without_auth_config(), c_int, c_void, Option, sc_agent_embed_start(), sc_agent_embed_stop(), sc_agent_set_display_panel_size(), sc_agent_set_host_window_id() (+2 more)
 
 ### Community 116 - "append_flushes_events_to_trace_file"
-Cohesion: 0.27
-Nodes (11): configure_append_file_for_tests(), reset_append_sink_for_tests(), disable(), enable(), init_from_env(), MutexGuard, test_lock(), append_flushes_events_to_trace_file() (+3 more)
+Cohesion: 0.31
+Nodes (9): configure_append_file_for_tests(), reset_append_sink_for_tests(), disable(), MutexGuard, test_lock(), append_flushes_events_to_trace_file(), disabled_emit_is_noop(), dump_contains_flash_skip() (+1 more)
 
-### Community 117 - "HostViewState"
-Cohesion: 0.17
-Nodes (11): HostViewState, HostWindowCapture, ApiResult, Arc, Debug, Formatter, Option, Result (+3 more)
+### Community 117 - "spec_chum_host"
+Cohesion: 0.08
+Nodes (25): CatalogError, invalidModel, cg_window_id_from_ns_view, encode_framebuffer_png(), parse_model_slug(), ApiResult, Vec, HostViewState (+17 more)
 
 ### Community 118 - "check_pr_reviews.sh"
 Cohesion: 0.39
@@ -845,16 +849,16 @@ Cohesion: 0.20
 Nodes (11): context, control_plane, Cli, main(), parse_model(), Option, PathBuf, Result (+3 more)
 
 ### Community 121 - "baked_room.rs"
-Cohesion: 0.09
-Nodes (31): all_baked_meshes_bound, BakedMeshPrimitiveQuery, all_baked_meshes_bound(), animate_baked_lighting(), BAKED_MESH_NAME, BakedMeshInvalid, BakedRoomSurface, bind_baked_lightmap() (+23 more)
+Cohesion: 0.07
+Nodes (34): all_baked_meshes_bound, BakedMeshPrimitiveQuery, all_baked_meshes_bound(), animate_baked_lighting(), BAKED_MESH_NAME, BakedMeshInvalid, BakedRoomPlugin, BakedRoomSurface (+26 more)
 
 ### Community 122 - "win32.rs"
-Cohesion: 0.08
-Nodes (35): commands, append_menu(), append_popup(), append_sep(), build_menu(), CLASS_NAME, DEBUG_CLASS, direct_48k_failure_is_returned_without_retry() (+27 more)
+Cohesion: 0.07
+Nodes (40): commands, model_menu_label(), AfterNextAssets, append_menu(), append_popup(), append_sep(), build_menu(), CLASS_NAME (+32 more)
 
-### Community 123 - "set_last_error"
-Cohesion: 0.26
-Nodes (23): c_char, c_int, c_void, sc_attach_beta(), sc_attach_divmmc(), sc_attach_interface1(), sc_attach_multiface(), sc_eject_dck() (+15 more)
+### Community 123 - "ffi/hardware.rs"
+Cohesion: 0.28
+Nodes (20): c_char, c_int, c_void, sc_attach_beta(), sc_attach_divmmc(), sc_attach_interface1(), sc_attach_multiface(), sc_eject_dck() (+12 more)
 
 ### Community 124 - "build_tape_fixtures.py"
 Cohesion: 0.57
@@ -868,25 +872,25 @@ Nodes (6): ./scripts/check_pr_reviews.sh, auto_review.enabled false, coderabbit-
 Cohesion: 0.25
 Nodes (23): c_void, Option, session_mut(), c_char, c_int, c_uint, c_void, sc_effective_speed_multiplier() (+15 more)
 
-### Community 127 - "HostSession"
-Cohesion: 0.22
-Nodes (7): new_shared_host_view(), SharedHostView, Arc, FnOnce, HostSession, ParkingMutex, R
+### Community 127 - ".with_machine_load"
+Cohesion: 0.12
+Nodes (13): apply_prefs_to_session(), prefs_patch_round_trip(), PrefsPatch, Arc, Default, FnOnce, HostSession, ParkingMutex (+5 more)
 
-### Community 128 - "BreakpointEventHub"
-Cohesion: 0.19
-Nodes (16): BreakpointEvent, BreakpointEventHub, event_for(), EventState, HubMessage, monitor_skips_observation_when_no_subscribers_remain(), Arc, AtomicBool (+8 more)
+### Community 128 - "events.rs"
+Cohesion: 0.11
+Nodes (32): broadcast, controlplane, BREAKPOINT_EVENT_VERSION, BreakpointEvent, BreakpointEventHub, close_with_error(), EVENT_CHANNEL_CAPACITY, event_for() (+24 more)
 
 ### Community 129 - "slots.rs"
-Cohesion: 0.29
-Nodes (21): install_rom_slot(), resolve_exrom_path(), resolve_exrom_path_in(), resolve_exrom_path_in_with_overrides(), resolve_rom_path_in_with_overrides(), resolve_trdos_rom_path_in_with_overrides(), rom_available_in_with_overrides(), rom_slot_state() (+13 more)
+Cohesion: 0.25
+Nodes (24): install_rom_slot(), resolve_exrom_path(), resolve_exrom_path_in(), resolve_exrom_path_in_with_overrides(), resolve_rom_path_in_with_overrides(), resolve_trdos_rom_path_in_with_overrides(), rom_available_in_with_overrides(), rom_slot_state() (+16 more)
 
 ### Community 130 - "fetch_roms.sh"
 Cohesion: 0.67
 Nodes (5): checkout_sparse_repo(), copy_dir_roms(), copy_rom(), count_managed_roms(), fetch_roms.sh script
 
 ### Community 131 - "AppState"
-Cohesion: 0.16
-Nodes (6): AppState, FnOnce, Instant, OutputStream, R, Vec
+Cohesion: 0.11
+Nodes (13): AppState, HostSlot, key_down(), Arc, Box, FnOnce, HostSession, Instant (+5 more)
 
 ### Community 132 - "Flash-load at LD-BYTES 0x056C"
 Cohesion: 0.40
@@ -905,20 +909,20 @@ Cohesion: 0.50
 Nodes (4): run_one(), RUST_LOG, room_perf_matrix.sh script, SPEC_CHUM_ROOM_PERF_SOFT
 
 ### Community 136 - "trace.rs"
-Cohesion: 0.25
-Nodes (14): AppState, HeaderMap, Json, Option, Query, Response, String, set_trace_categories() (+6 more)
+Cohesion: 0.27
+Nodes (13): AppState, HeaderMap, Json, Option, Query, Response, String, set_trace_categories() (+5 more)
 
 ### Community 137 - "Category"
 Cohesion: 0.16
 Nodes (15): BitOr, BitOrAssign, Category, .ALL, .AY, .BUS, .CPU, .DEFAULT (+7 more)
 
-### Community 138 - "events.rs"
-Cohesion: 0.18
-Nodes (16): broadcast, controlplane, BREAKPOINT_EVENT_VERSION, close_with_error(), EVENT_CHANNEL_CAPACITY, AppState, Duration, HeaderMap (+8 more)
+### Community 138 - "AudioOut"
+Cohesion: 0.22
+Nodes (10): AtomicUsize, AudioOut, DcBlock, fill_output(), Arc, AtomicBool, Mutex, Vec (+2 more)
 
-### Community 139 - "spec_chum_host"
-Cohesion: 0.11
-Nodes (16): CatalogError, invalidModel, cg_window_id_from_ns_view, encode_framebuffer_png(), FramebufferMeta, parse_model_slug(), ApiResult, HostSession (+8 more)
+### Community 139 - "FramebufferMeta"
+Cohesion: 0.18
+Nodes (8): FramebufferMeta, model_slug(), HostSession, Option, Self, String, HealthResponse, StatusResponse
 
 ### Community 140 - "Testing and quality gates"
 Cohesion: 0.17
@@ -926,7 +930,7 @@ Nodes (12): Hardware-faithful vs convenience, Known non-blocking noise, Lint and
 
 ### Community 141 - "crt.rs"
 Cohesion: 0.05
-Nodes (34): core_pipeline, APERTURE_H, APERTURE_W, APERTURE_Z_FRONT, ApertureDebugMarker, BOTTOM_Y_ADJUST, CONTENT_ASPECT, GLASS_AABB_H (+26 more)
+Nodes (36): core_pipeline, APERTURE_H, APERTURE_W, APERTURE_Z_FRONT, ApertureDebugMarker, BOTTOM_Y_ADJUST, CONTENT_ASPECT, GLASS_AABB_H (+28 more)
 
 ### Community 142 - "AgentClient"
 Cohesion: 0.18
@@ -940,9 +944,9 @@ Nodes (3): infer_crates(), RUSTFLAGS, check_crates.sh script
 Cohesion: 0.19
 Nodes (10): CFLAGS, CXXFLAGS, MACOSX_DEPLOYMENT_TARGET, build_macos_app.sh script, SPEC_CHUM_ROOT, dev_env.sh script, _spec_chum_path_on_ssd(), _spec_chum_ssd_usable() (+2 more)
 
-### Community 158 - "app/src/main.rs"
-Cohesion: 0.19
-Nodes (17): app_icon(), app_icon_decodes_rgba(), as_strings(), debug_subcommand_strips_token(), main(), os(), rewrite_headless_args(), Option (+9 more)
+### Community 158 - "image_copy_extract"
+Cohesion: 0.21
+Nodes (13): image_copy_driver(), image_copy_extract(), receive_image_from_buffer(), Extract, GpuImage, Option, Query, RenderAssets (+5 more)
 
 ### Community 162 - "generate_app_icons.py"
 Cohesion: 0.12
@@ -950,19 +954,19 @@ Nodes (23): hashlib, os, pathlib, pil, plistlib, load_icon(), main(), Image (+15
 
 ### Community 164 - "tap.rs"
 Cohesion: 0.05
-Nodes (55): experience_multi_block_load_within_wall_clock_budget(), advance_does_not_consume_while_paused(), advances_to_next_block_after_pause(), BIT0_T, BIT1_T, data_pilot_pulse_count_matches_rom(), ear_toggles_during_pilot(), evaluate_ld_bytes_trap() (+47 more)
+Nodes (54): experience_multi_block_load_within_wall_clock_budget(), advance_does_not_consume_while_paused(), advances_to_next_block_after_pause(), BIT0_T, BIT1_T, data_pilot_pulse_count_matches_rom(), ear_toggles_during_pilot(), evaluate_ld_bytes_trap() (+46 more)
 
 ### Community 168 - "Interface1"
 Cohesion: 0.14
 Nodes (5): Drive, Interface1, Default, Option, Vec
 
 ### Community 169 - "AppState"
-Cohesion: 0.10
-Nodes (23): Application, ApplicationWindow, sync_model_rom_paths(), AppState, build_ui(), install_actions(), install_keys(), install_menubar() (+15 more)
+Cohesion: 0.06
+Nodes (46): Application, ApplicationWindow, clone, AfterNextAssets, APP_ID, AppState, build_ui(), does_not_retry_48k_selection_after_failure() (+38 more)
 
 ### Community 171 - "HostSession"
-Cohesion: 0.07
-Nodes (7): HostSession, rom_search_roots(), BTreeMap, Into, JoystickMode, PathBuf, UserMachineConfig
+Cohesion: 0.09
+Nodes (3): HostSession, Into, JoystickMode
 
 ### Community 172 - ".setFlashLoad"
 Cohesion: 0.20
@@ -981,12 +985,12 @@ Cohesion: 0.17
 Nodes (7): .livingRoomSceneNew, Bool, Int, String, UInt32, UInt64, String
 
 ### Community 176 - "openapi_contract.rs"
-Cohesion: 0.11
-Nodes (34): BTreeSet, collections, assert_matches_schema(), assert_value_matches_schema(), collect_http_methods(), documented_health_and_error_shapes_match_responses(), extractor_types(), implementation_routes() (+26 more)
+Cohesion: 0.12
+Nodes (33): BTreeSet, collections, assert_matches_schema(), assert_value_matches_schema(), collect_http_methods(), documented_health_and_error_shapes_match_responses(), extractor_types(), implementation_routes() (+25 more)
 
 ### Community 177 - "registers.rs"
-Cohesion: 0.20
-Nodes (9): C, H, N, PV, S, X, Y, Z (+1 more)
+Cohesion: 0.22
+Nodes (8): C, H, N, PV, S, X, Y, Z
 
 ### Community 178 - "tag_living_room_skein_gltf.py"
 Cohesion: 0.14
@@ -994,7 +998,7 @@ Nodes (16): json, ensure_extensions_used(), main(), Any, Path, Inject BEVY_skein
 
 ### Community 179 - "linux_shell/src/keymap.rs"
 Cohesion: 0.06
-Nodes (48): ALT_L, ALT_R, APOSTROPHE, apply_chord(), apply_modifiers(), BACKSLASH, BACKSPACE, BRACKETLEFT (+40 more)
+Nodes (47): ALT_L, ALT_R, APOSTROPHE, apply_chord(), apply_modifiers(), BACKSLASH, BACKSPACE, BRACKETLEFT (+39 more)
 
 ### Community 180 - "app/src/keymap.rs"
 Cohesion: 0.22
@@ -1005,8 +1009,8 @@ Cohesion: 0.27
 Nodes (8): crate, Arc, Option, catalog_covers_picker_order_stable_ids_slugs_titles_and_rom_slots(), host_model_catalog(), HostModelDescriptor, HostRomSlotDescriptor, Vec
 
 ### Community 183 - "UiPreferences"
-Cohesion: 0.15
-Nodes (19): custom_configs_round_trip(), load_prefs(), load_prefs_unlocked(), model_rom_paths_round_trip(), recent_files_most_recent_first_deduped(), round_trip_preserves_fields(), Default, Option (+11 more)
+Cohesion: 0.18
+Nodes (15): custom_configs_round_trip(), load_prefs(), load_prefs_unlocked(), Default, FnOnce, HostSession, Option, Path (+7 more)
 
 ### Community 184 - "generate_living_room_edit.py"
 Cohesion: 0.11
@@ -1021,16 +1025,16 @@ Cohesion: 0.40
 Nodes (3): APPIMAGE_EXTRACT_AND_RUN, ARCH, build-linux-appimage.sh script
 
 ### Community 187 - "rom/tests.rs"
+Cohesion: 0.13
+Nodes (5): pentagon_has_two_rom_slots(), read_trdos_not_applicable_is_typed(), resolve_trdos_prefers_complete_over_hole(), timex_ts2068_requires_home_and_exrom_slots(), model
+
+### Community 188 - "Keyboard"
+Cohesion: 0.20
+Nodes (4): Keyboard, keyboard_row(), Default, Self
+
+### Community 189 - "auth_empty"
 Cohesion: 0.12
-Nodes (6): install_rom_slot_validates_size(), pentagon_has_two_rom_slots(), read_trdos_not_applicable_is_typed(), resolve_trdos_prefers_complete_over_hole(), timex_ts2068_requires_home_and_exrom_slots(), model
-
-### Community 188 - "gtk_ui.rs"
-Cohesion: 0.11
-Nodes (23): clone, AfterNextAssets, APP_ID, does_not_retry_48k_selection_after_failure(), falls_back_to_48k_when_preferred_model_fails(), HostSlot, keyval_from_gdk(), NextAssetDownload (+15 more)
-
-### Community 189 - "auth_empty_blocking"
-Cohesion: 0.34
-Nodes (20): attach_beta(), attach_divmmc(), attach_interface1(), attach_multiface(), eject_dck(), hardware_status(), insert_dck(), insert_mdr() (+12 more)
+Nodes (25): body, AppState, auth_empty(), auth_json(), auth_json_blocking(), DivmmcSdBody, health_endpoint_ok(), model_post_parses_json() (+17 more)
 
 ### Community 190 - "src/interface1.rs"
 Cohesion: 0.21
@@ -1045,20 +1049,20 @@ Cohesion: 0.18
 Nodes (14): apply_joystick(), clear_joystick_matrix(), cursor_uses_caps_and_5678(), JoystickMode, JoystickState, kempston_mask_roundtrip(), kempston_mode_sets_port_bits(), release_clears_previous_matrix() (+6 more)
 
 ### Community 194 - "living_room/src/audio.rs"
-Cohesion: 0.09
-Nodes (31): AtomicUsize, audio_sample_rate, audio_capture_enabled(), AudioMuted, AudioOut, AudioPlugin, AudioStream, DcBlock (+23 more)
+Cohesion: 0.13
+Nodes (20): audio_sample_rate, audio_capture_enabled(), AudioMuted, AudioPlugin, AudioStream, gate_audio_on_lock(), output_rate_supported(), RECORD_SAMPLES (+12 more)
 
 ### Community 196 - "prefs.rs"
-Cohesion: 0.10
-Nodes (21): corrupt_file_falls_back_to_defaults(), default_prefs_path(), DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, MAX_RECENT_FILES, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, missing_file_falls_back_to_defaults() (+13 more)
+Cohesion: 0.11
+Nodes (19): apply_to_machine_less_session_updates_host_preferences(), corrupt_file_falls_back_to_defaults(), DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, host_preferences_apply_without_machine(), MAX_RECENT_FILES, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH (+11 more)
 
 ### Community 207 - "next_boot_system_tests.rs"
 Cohesion: 0.20
 Nodes (14): assets_dir(), displayed_ula_screen(), displayed_ula_text(), machine_at_ipl(), next_official_firmware_reports_a_missing_card_file(), next_official_full_card_executes_sd_loaded_rom_reset_entry(), NEXT_PLUS3_FRAME_TSTATES, NEXT_ROM_RESET_ENTRY (+6 more)
 
 ### Community 208 - "OpeningSequence"
-Cohesion: 0.12
-Nodes (11): anim_eases_toward_target(), CameraZoom, CrtLookBlend, ease_in_out_smoother(), nudge_clamps(), opening_waits_for_scene_or_bounded_timeout(), OpeningSequence, Default (+3 more)
+Cohesion: 0.23
+Nodes (5): CrtLookBlend, ease_in_out_smoother(), OpeningSequence, Default, Self
 
 ### Community 209 - "flags.rs"
 Cohesion: 0.30
@@ -1072,17 +1076,17 @@ Nodes (15): model_title(), read_exrom(), read_exrom_with_overrides(), read_rom()
 Cohesion: 0.29
 Nodes (7): argparse, math, re, main(), percentile95(), Summarize SPEC_CHUM_INPUT_LATENCY probe output by mode and stage., statistics
 
-### Community 212 - ".new"
-Cohesion: 0.22
-Nodes (13): bank_switch_between_bitmap_and_attr_fetch(), framebuffer_dims(), mid_frame_screen_bank_switch_splits_paper(), mid_line_border_128_uses_228_pitch(), mid_line_border_change_splits_scanline(), palette_rgb(), stable_bank7_frame_uses_secondary_without_new_out(), timex_alt_file_uses_second_display() (+5 more)
+### Community 212 - "palette_rgb"
+Cohesion: 0.17
+Nodes (12): framebuffer_dims(), palette_rgb(), timex_alt_file_uses_second_display(), timex_ext_colour_uses_8x1_attrs_from_alt(), timex_hires_attr_alt_reads_both_halves_from_alt(), timex_hires_double_col_uses_alt_only(), timex_hires_ink_paper(), timex_hires_interleaves_primary_and_alt_bitmaps() (+4 more)
 
 ### Community 213 - "ffi/media.rs"
-Cohesion: 0.41
+Cohesion: 0.36
 Nodes (11): c_char, c_int, c_void, sc_load_dsk(), sc_load_rzx(), sc_load_snapshot(), sc_load_trd(), sc_load_trdos_rom() (+3 more)
 
 ### Community 214 - "raw"
-Cohesion: 0.14
-Nodes (19): c_uint, c_void, sc_audio_frames(), sc_audio_ptr(), sc_audio_sample_rate(), c_char, c_int, c_void (+11 more)
+Cohesion: 0.19
+Nodes (11): c_uint, c_void, sc_audio_frames(), sc_audio_ptr(), sc_audio_sample_rate(), c_char, c_int, c_void (+3 more)
 
 ### Community 215 - "skein.rs"
 Cohesion: 0.15
@@ -1093,8 +1097,8 @@ Cohesion: 0.23
 Nodes (5): Plus3Fdc, Plus3Fdc, Option, RwParams, transfer_len()
 
 ### Community 218 - "native_shell_common/src/audio.rs"
-Cohesion: 0.16
-Nodes (17): cpal, build_stream(), fill_output_samples(), fills_f32_i16_and_u16_output_without_audio_device(), PcmRing, Arc, Device, Mutex (+9 more)
+Cohesion: 0.15
+Nodes (18): cpal, build_stream(), fill_output_samples(), fills_f32_i16_and_u16_output_without_audio_device(), PcmRing, Arc, Device, Mutex (+10 more)
 
 ### Community 219 - "SdSpi"
 Cohesion: 0.13
@@ -1108,9 +1112,9 @@ Nodes (9): Agent Debug HTTP, Build & run, Capability matrix, CI, Feature parity 
 Cohesion: 0.22
 Nodes (9): Agent Debug HTTP, Build & run, Capability matrix, CI, Feature parity vs platform HIG, Native Windows shell (Win32 + Rust host_api), Non-goals (for now), Requirements (+1 more)
 
-### Community 222 - ".apply_to_host_session"
-Cohesion: 0.15
-Nodes (8): apply_to_machine_less_session_updates_host_preferences(), host_preferences_apply_without_machine(), native_host_session_preferences_apply_guest_settings(), PrefAyStereo, AyStereoMode, FnOnce, HostSession, JoystickMode
+### Community 222 - "PrefAyStereo"
+Cohesion: 0.27
+Nodes (3): PrefAyStereo, AyStereoMode, JoystickMode
 
 ### Community 223 - ".refreshInspector"
 Cohesion: 0.18
@@ -1125,12 +1129,12 @@ Cohesion: 0.21
 Nodes (19): rom128(), rom_plus2(), rom_plus2a_only(), rom_plus3(), rom_plus3e_only(), rom_timex_tc2048(), Option, Vec (+11 more)
 
 ### Community 227 - "TapeLoadOptions"
-Cohesion: 0.16
+Cohesion: 0.15
 Nodes (5): INSTANT_EAR_FALLBACK_SPEED, Default, Self, TapeLoadOptions, TapeProgress
 
 ### Community 234 - "host_api/src/session.rs"
-Cohesion: 0.10
-Nodes (15): AUDIO_SAMPLE_RATE, AUDIO_SAMPLES_PER_FRAME, dims(), HostRegs, KEYBOARD_BIT_MAX, KEYBOARD_BITS_PER_ROW, KEYBOARD_KEY_RANGE_ERROR, KEYBOARD_ROWS (+7 more)
+Cohesion: 0.13
+Nodes (12): AUDIO_SAMPLE_RATE, AUDIO_SAMPLES_PER_FRAME, HostRegs, KEYBOARD_BIT_MAX, KEYBOARD_BITS_PER_ROW, KEYBOARD_KEY_RANGE_ERROR, KEYBOARD_ROWS, PcBreakpointObservation (+4 more)
 
 ### Community 235 - "UiOverlayPlugin"
 Cohesion: 0.50
@@ -1145,8 +1149,8 @@ Cohesion: 0.35
 Nodes (11): bpy, bake(), export_static(), is_static_mesh(), main(), make_atlas_mesh(), parse_args(), Object (+3 more)
 
 ### Community 239 - "handle.rs"
-Cohesion: 0.16
-Nodes (19): cell, handle_mut(), Arc, c_void, Deref, DerefMut, HostSession, MutexGuard (+11 more)
+Cohesion: 0.27
+Nodes (13): cell, handle_mut(), Arc, c_void, HostSession, Option, ParkingMutex, RefCell (+5 more)
 
 ### Community 240 - "tape_loading.rs"
 Cohesion: 0.22
@@ -1166,11 +1170,11 @@ Nodes (7): Interface1RomError, rom_paging_hooks_at_classic_addresses(), Error, P
 
 ### Community 246 - "generate_tube_mips"
 Cohesion: 0.29
-Nodes (13): copy_tube_canvas(), ExtractedTubeImages, generate_tube_mips(), GpuImage, Query, RenderAssets, RenderContext, tube_view_is_current() (+5 more)
+Nodes (14): copy_tube_canvas(), ExtractedTubeImages, generate_tube_mips(), GpuImage, Option, Query, RenderAssets, RenderContext (+6 more)
 
 ### Community 247 - "PrefModel"
-Cohesion: 0.22
-Nodes (6): expected_rom_bytes(), pref_model_slug(), PrefModel, .ALL, Model, Self
+Cohesion: 0.24
+Nodes (5): pref_model_slug(), PrefModel, .ALL, Model, Self
 
 ### Community 248 - "Chord"
 Cohesion: 0.27
@@ -1184,9 +1188,9 @@ Nodes (5): Automation surface (product feature), Developers / contributors, LLM 
 Cohesion: 0.50
 Nodes (4): control_plane crate, control_plane shared backend, HostSession, Single source of truth backend
 
-### Community 251 - "Vec"
+### Community 251 - ".with_session_ref"
 Cohesion: 0.20
-Nodes (5): map_host_model_error(), From, Vec, WatchesResponse, WatchSpec
+Nodes (6): HardwareStatusResponse, map_host_model_error(), From, Vec, WatchesResponse, WatchSpec
 
 ### Community 252 - "rom_slot_descriptors"
 Cohesion: 0.30
@@ -1197,20 +1201,20 @@ Cohesion: 0.67
 Nodes (3): SPEC_CHUM_AGENT_URL remote mode, Loopback HTTP 127.0.0.1:17384, sc_agent_embed_start
 
 ### Community 254 - "types.rs"
-Cohesion: 0.21
-Nodes (11): rom_path_status(), Path, RomSlotDescriptor, RomSlotKind, RomSlotState, RomSlotStatus, Error, Option (+3 more)
+Cohesion: 0.29
+Nodes (6): RomSlotDescriptor, RomSlotKind, Error, PathBuf, Read, trdos
 
-### Community 258 - "routes/mod.rs"
-Cohesion: 0.11
-Nodes (32): body, DivmmcSdBody, health_endpoint_ok(), model_post_parses_json(), openapi(), ReadyError, router(), Error (+24 more)
+### Community 258 - "http_smoke.rs"
+Cohesion: 0.23
+Nodes (19): router(), agent_api_dsk_rejects_non_plus3(), agent_api_hardware_attach_multiface_and_divmmc(), agent_api_host_display_and_window_unavailable(), agent_api_joystick_kempston_mask(), agent_api_keys_and_last_break(), agent_api_load_rom_by_path(), agent_api_media_insert_requires_machine() (+11 more)
 
 ### Community 259 - "agent_client/src/lib.rs"
 Cohesion: 0.16
 Nodes (11): anyhow, BreakpointEvent, BreakpointEvents, Duration, url_encode(), futures_util, MaybeTlsStream, serde (+3 more)
 
 ### Community 260 - "Bus48"
-Cohesion: 0.09
-Nodes (5): Bus48, Keyboard, Default, Option, Self
+Cohesion: 0.10
+Nodes (5): Bus48, emit_floating_sampled(), multiface_in_9f_pages_back_in(), Option, Vec
 
 ### Community 261 - ".finishRomSetup"
 Cohesion: 0.17
@@ -1224,9 +1228,9 @@ Nodes (4): `host_api` boundary (#445), Large-module responsibility map (#446), R
 Cohesion: 0.22
 Nodes (17): all_fixture_catalogue_entries_match_disk(), catalogue_title(), filename_fallback(), fixture(), identify_bytes(), identify_path(), LOCAL_CATALOGUE, MediaIdentity (+9 more)
 
-### Community 264 - "Option"
-Cohesion: 0.27
-Nodes (8): floating_bus_byte(), floating_bus_byte_128(), floating_bus_byte_48(), floating_bus_params(), Option, TimexHiresMode, .ALTDFILE, .MIN_SCREEN_LEN
+### Community 264 - ".inspect"
+Cohesion: 0.60
+Nodes (5): floating_bus_byte(), floating_bus_byte_128(), floating_bus_byte_48(), floating_bus_params(), Option
 
 ### Community 266 - "ApiError"
 Cohesion: 0.39
@@ -1257,12 +1261,12 @@ Cohesion: 0.20
 Nodes (10): ./scripts/check.sh, host_api crate, living_room crate, C ABI FFI-only policy, Guest framebuffer PNG export, Bevy 3D CRT living-room host, spec-chum-room, SCLD 512x192 hi-res modes (+2 more)
 
 ### Community 277 - "room_probe.rs"
-Cohesion: 0.29
-Nodes (7): crt_test_pattern(), main(), Vec, duration, Thread, write, zoom_preset_count
+Cohesion: 0.20
+Nodes (9): arc, crt_test_pattern(), main(), Vec, duration, hostsession, Thread, write (+1 more)
 
-### Community 278 - "theme.rs"
-Cohesion: 0.43
-Nodes (5): apply(), apply_does_not_panic_on_default_context(), clear_color(), panel_fill_is_opaque(), Context
+### Community 278 - "ImageCopier"
+Cohesion: 0.22
+Nodes (10): Buffer, ImageCopier, Arc, AtomicBool, Commands, Handle, Image, Mutex (+2 more)
 
 ### Community 279 - "BeeperState"
 Cohesion: 0.18
@@ -1278,11 +1282,11 @@ Nodes (19): active_video_line_registers_follow_the_312_line_raster(), all_ram_ov
 
 ### Community 285 - "ffi/mod.rs"
 Cohesion: 0.11
-Nodes (33): sc_debug_dump_json(), clear_output_snapshots(), ffi_bad_model_returns_null(), ffi_create_destroy_and_run(), ffi_debug_dump_json_and_peek_null(), ffi_joystick_mode_rejects_truncated_overflow(), ffi_mouse_delta_and_buttons_smoke(), PathBuf (+25 more)
+Nodes (35): clear_output_snapshots(), ffi_bad_model_returns_null(), ffi_create_destroy_and_run(), ffi_debug_dump_json_and_peek_null(), ffi_joystick_mode_rejects_truncated_overflow(), ffi_mouse_delta_and_buttons_smoke(), PathBuf, workspace_root() (+27 more)
 
 ### Community 286 - "EmulatorHost"
-Cohesion: 0.09
-Nodes (26): EmulatorHost, FRAME_PERIOD, host_hotkeys(), HostPlugin, model_label(), App, Assets, ButtonInput (+18 more)
+Cohesion: 0.10
+Nodes (18): FrameGlow, LinearRgba, EmulatorHost, FRAME_PERIOD, HostPlugin, model_label(), App, Debug (+10 more)
 
 ### Community 287 - "run_z80test_tap"
 Cohesion: 0.24
@@ -1292,13 +1296,21 @@ Nodes (10): code_block(), Duration, Error, Path, Result, String, run_z80test_tap
 Cohesion: 0.16
 Nodes (12): copyextent, import_iosurface_texture(), PresentIosurfaceError, c_void, RenderDevice, Result, Texture, validate_iosurface_row_stride() (+4 more)
 
-### Community 289 - "HWND"
-Cohesion: 0.27
-Nodes (6): create_debug_window(), message_box(), message_box_confirm(), Option, set_window_title(), HWND
+### Community 289 - "OwnWindowCapturer"
+Cohesion: 0.22
+Nodes (6): refresh_window_id_from_frame(), Frame, OwnWindowCapturer, Arc, AtomicU32, Self
 
-### Community 292 - ".refresh_input"
-Cohesion: 0.27
-Nodes (6): debug_wnd_proc(), key_down(), wnd_proc(), LPARAM, LRESULT, WPARAM
+### Community 290 - "model_rom_path_key"
+Cohesion: 0.29
+Nodes (8): model_rom_path_key(), pref_model_slug_matches_json_snake_case(), PrefsLock, BTreeMap, Drop, PathBuf, String, slot_rom_overrides()
+
+### Community 292 - "wnd_proc"
+Cohesion: 0.39
+Nodes (6): debug_wnd_proc(), wnd_proc(), HWND, LPARAM, LRESULT, WPARAM
+
+### Community 293 - "tick_emulator"
+Cohesion: 0.29
+Nodes (10): host_hotkeys(), Assets, ButtonInput, Image, KeyCode, Option, Res, ResMut (+2 more)
 
 ### Community 294 - "fb_scale.rs"
 Cohesion: 0.40
@@ -1308,9 +1320,9 @@ Nodes (4): blit_to_crt(), dims_from_rgba_len(), Option, scale_hires_paper_to_crt
 Cohesion: 0.27
 Nodes (10): apply_sna48_sets_pc_ram_and_border(), apply_snapshot128_plus3_applies_1ffd(), apply_snapshot128_z80_pages_and_7ffd(), apply_z80_snapshot48_sets_pc_ram_and_border(), inspect_128k_paging(), inspect_after_boot_steps(), Vec, synthetic_z80_v1_for_machine() (+2 more)
 
-### Community 296 - "aperture_debug_enabled"
-Cohesion: 0.83
-Nodes (4): aperture_debug_enabled(), bright_debug_enabled(), env_flag(), hide_crt_enabled()
+### Community 296 - "attach_crt_to_television"
+Cohesion: 0.31
+Nodes (9): aperture_debug_enabled(), attach_crt_to_television(), bright_debug_enabled(), CrtAttachedToTv, env_flag(), hide_crt_enabled(), Entity, Without (+1 more)
 
 ### Community 297 - "models.rs"
 Cohesion: 0.15
@@ -1332,10 +1344,6 @@ Nodes (4): NextMachine, NextMemIo, NextBus, Vec
 Cohesion: 0.50
 Nodes (3): CrtPlugin, App, Plugin
 
-### Community 302 - "Bus128"
-Cohesion: 0.15
-Nodes (3): Bus128, out_7ffd_screen_switch_spills_into_next_frame(), Vec
-
 ### Community 303 - "super"
 Cohesion: 0.13
 Nodes (11): command_len(), Option, plus3_loader_dos_boot_runs_titled_marker(), plus3_loader_load_disk_runs_basic_marker(), plus3_loader_talks_to_fdc_on_data_disk(), rom_plus3_only(), interface1_real_rom_cat_formatted_mdr_skips_when_missing(), interface1_real_rom_format_mdr_skips_when_missing() (+3 more)
@@ -1344,32 +1352,44 @@ Nodes (11): command_len(), Option, plus3_loader_dos_boot_runs_titled_marker(), p
 Cohesion: 0.53
 Nodes (5): minimal_rzx(), minimal_tzx_turbo_machine(), Vec, rzx_replay_applies_keyboard_and_kempston(), turbo_tzx_ear_advances_without_flash_path()
 
-### Community 305 - "host_cmd_shortcuts"
-Cohesion: 0.17
-Nodes (11): FileDialogPlugin, OpenMediaDialog, App, Plugin, ResMut, run_open_dialog(), host_cmd_shortcuts(), ButtonInput (+3 more)
+### Community 305 - "chrome_buttons"
+Cohesion: 0.12
+Nodes (18): Button, Changed, FileDialogPlugin, OpenMediaDialog, App, Plugin, ResMut, run_open_dialog() (+10 more)
 
-### Community 308 - "attach_crt_to_television"
-Cohesion: 0.15
-Nodes (17): animate_crt_params(), attach_crt_to_television(), CrtAttachedToTv, CrtTubeQuad, Assets, Commands, Entity, Extract (+9 more)
+### Community 306 - "ffi/video.rs"
+Cohesion: 0.50
+Nodes (7): c_uint, c_void, Option, sc_framebuffer_height(), sc_framebuffer_ptr(), sc_framebuffer_width(), snapshotted_fb_dims()
+
+### Community 307 - "SessionAccess"
+Cohesion: 0.29
+Nodes (6): Deref, DerefMut, MutexGuard, SessionAccess, RefMut, Target
+
+### Community 308 - "animate_crt_params"
+Cohesion: 0.17
+Nodes (10): animate_crt_params(), CrtTubeMaterial, CrtTubeQuad, Assets, Time, With, Material2d, MeshMaterial2d (+2 more)
 
 ### Community 310 - "image_copy.rs"
-Cohesion: 0.09
-Nodes (37): Buffer, despawn_image_copiers(), drain_copied_frames(), image_copy_driver(), image_copy_extract(), ImageCopier, ImageCopiers, ImageCopyPlugin (+29 more)
+Cohesion: 0.15
+Nodes (16): bevy, despawn_image_copiers(), drain_copied_frames(), ImageCopiers, ImageCopyPlugin, LatestRoomFrame, MainWorldReceiver, RenderWorldSender (+8 more)
 
 ### Community 311 - "LivingRoomThread"
 Cohesion: 0.46
 Nodes (3): LivingRoomThread, State, Void
 
+### Community 312 - "chrome_button"
+Cohesion: 0.43
+Nodes (7): BackgroundColor, ChildSpawnerCommands, chrome_button(), ChromeAction, Commands, setup_ui(), spacer()
+
 ### Community 313 - "RetroArch / libretro core"
 Cohesion: 0.67
 Nodes (3): Build, Content and controls, RetroArch / libretro core
 
-### Community 315 - "BakedRoomPlugin"
-Cohesion: 0.50
-Nodes (3): BakedRoomPlugin, App, Plugin
+### Community 315 - "display.rs"
+Cohesion: 0.47
+Nodes (4): fit_size(), letterboxes_wide_window(), pillarboxes_tall_window(), Vec2
 
 ### Community 316 - "require_machine"
-Cohesion: 0.22
+Cohesion: 0.27
 Nodes (4): render_frame_pcm(), require_machine(), String, Vec
 
 ### Community 317 - "bus/src/next.rs"
@@ -1384,45 +1404,41 @@ Nodes (5): APERTURE_CENTER_LOCAL, bottom_adjust_keeps_top_edge(), crt_phosphor_l
 Cohesion: 0.50
 Nodes (3): CameraPlugin, App, Plugin
 
-### Community 323 - "GlowPlugin"
-Cohesion: 0.50
-Nodes (3): GlowPlugin, App, Plugin
+### Community 323 - "EmbedState"
+Cohesion: 0.33
+Nodes (6): EMBEDDED, EmbedState, Arc, Mutex, HashMap, LazyLock
 
 ### Community 324 - "HybridPlugin"
 Cohesion: 0.50
 Nodes (3): HybridPlugin, App, Plugin
 
-### Community 325 - "RoomPlugin"
+### Community 325 - "PresentBlitPlugin"
 Cohesion: 0.50
-Nodes (3): RoomPlugin, App, Plugin
+Nodes (3): PresentBlitPlugin, App, Plugin
 
 ### Community 326 - "SceneVariantPlugin"
 Cohesion: 0.50
 Nodes (3): App, Plugin, SceneVariantPlugin
 
-### Community 327 - "NextAssetDownload"
-Cohesion: 0.40
-Nodes (5): AfterNextAssets, NextAssetDownload, PathBuf, Receiver, String
-
 ## Knowledge Gaps
 - **641 isolated node(s):** `PackageDescription`, `Notification.Name`, `.statusFooter`, `.statusFooterTapeName`, `.statusFooterProgress` (+636 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1766 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **64 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **65 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `HostBridge` connect `HostBridge` to `Model`, `LivingRoomNSView`, `.finishRomSetup`, `PrefModelSlug`, `ContentView`, `spec_chum_host`, `.body`, `NSEvent`, `.setFlashLoad`, `IOSurface`, `.enqueueLivingRoomPresentBind`, `RomSetupSlot`, `SpectrumNSView`, `TapeAudioPlayer`, `.takeLastError`, `InputLatencyProbe`, `LivingRoomThread`, `.refreshInspector`?**
-  _High betweenness centrality (0.182) - this node is a cross-community bridge._
+- **Why does `HostBridge` connect `HostBridge` to `Model`, `LivingRoomNSView`, `.finishRomSetup`, `PrefModelSlug`, `ContentView`, `.body`, `NSEvent`, `.setFlashLoad`, `RomSetupSlot`, `IOSurface`, `.enqueueLivingRoomPresentBind`, `SpectrumNSView`, `TapeAudioPlayer`, `spec_chum_host`, `.takeLastError`, `InputLatencyProbe`, `LivingRoomThread`, `.refreshInspector`?**
+  _High betweenness centrality (0.184) - this node is a cross-community bridge._
 - **Why does `CatalogError` connect `spec_chum_host` to `HostBridge`?**
   _High betweenness centrality (0.131) - this node is a cross-community bridge._
 - **Why does `LivingRoomThread` connect `LivingRoomThread` to `room_probe.rs`, `HostBridge`?**
-  _High betweenness centrality (0.043) - this node is a cross-community bridge._
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
 - **Are the 7 inferred relationships involving `HostBridge` (e.g. with `.livingRoomToolbar` and `.statusFooterMessageIsError`) actually correct?**
   _`HostBridge` has 7 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `PackageDescription`, `Notification.Name`, `.statusFooter` to the rest of the system?**
   _641 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpecChumApp` be split into smaller, more focused modules?**
-  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09413067552602436 - nodes in this community are weakly interconnected._
 - **Should `synthetic.rs` be split into smaller, more focused modules?**
   _Cohesion score 0.10887096774193548 - nodes in this community are weakly interconnected._
