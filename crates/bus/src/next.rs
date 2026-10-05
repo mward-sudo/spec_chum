@@ -1111,6 +1111,16 @@ mod tests {
         assert_eq!(bus.in_port(PORT_LAYER2_CONTROL), 0x02);
         bus.write_nextreg(0x69, 0);
         assert_eq!(bus.in_port(PORT_LAYER2_CONTROL), 0);
+
+        bus.out_port(PORT_LAYER2_CONTROL, 0x12);
+        assert_eq!(bus.read_nextreg(0x69), 0);
+        bus.out_port(PORT_LAYER2_CONTROL, 0x10);
+        assert_eq!(bus.read_nextreg(0x69), 0);
+
+        bus.out_port(PORT_LAYER2_CONTROL, 0x02);
+        assert_eq!(bus.read_nextreg(0x69), 0x80);
+        bus.out_port(PORT_LAYER2_CONTROL, 0x17);
+        assert_eq!(bus.read_nextreg(0x69), 0x80);
     }
 
     #[test]

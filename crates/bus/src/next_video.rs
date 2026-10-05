@@ -124,7 +124,9 @@ impl NextVideo {
 
     /// Keep the visibility bit mirrored by the Layer 2 control I/O port.
     pub(super) fn write_visibility_port(&mut self, value: u8) {
-        self.visible = value & 0x02 != 0;
+        if value & 0x10 == 0 {
+            self.visible = value & 0x02 != 0;
+        }
     }
 
     pub(super) fn standard_mode(&self) -> bool {
