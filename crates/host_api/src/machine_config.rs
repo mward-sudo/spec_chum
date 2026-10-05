@@ -19,6 +19,8 @@ pub enum MachineConfigError {
     NameRequired,
     #[error("ZX Spectrum Next uses the verified System/Next boot path and cannot be a classic custom configuration base")]
     UnsupportedNextBase,
+    #[error("ZX Spectrum Next uses verified System/Next assets, not a classic main-ROM image")]
+    NextUsesVerifiedAssets,
     #[error("ROM for {model} must be {expected} bytes, got {actual}")]
     RomSize {
         model: String,
@@ -64,6 +66,9 @@ const ROM_BANK_BYTES: usize = 16 * 1024;
 /// that support DiagROM-style substitution (not Scorpion — service ROM must be
 /// present as a real 48 KiB dump).
 pub fn validate_main_rom(data: &[u8], model: PrefModel) -> Result<(), MachineConfigError> {
+    if model == PrefModel::SpectrumNext {
+        return Err(MachineConfigError::NextUsesVerifiedAssets);
+    }
     let expected = expected_rom_bytes(model);
     if data.len() == expected {
         return Ok(());
@@ -580,6 +585,14 @@ mod tests {
     fn validate_main_rom_rejects_wrong_size() {
         assert!(validate_main_rom(&[0u8; 100], PrefModel::Spectrum48).is_err());
         assert!(validate_main_rom(&[0u8; 16384], PrefModel::Spectrum48).is_ok());
+    }
+
+    #[test]
+    fn validate_main_rom_rejects_16k_for_spectrum_next() {
+        assert!(matches!(
+            validate_main_rom(&[0u8; 16 * 1024], PrefModel::SpectrumNext),
+            Err(MachineConfigError::NextUsesVerifiedAssets)
+        ));
     }
 
     #[test]

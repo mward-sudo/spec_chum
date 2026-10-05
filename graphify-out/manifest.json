@@ -354,9 +354,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/machine_config.rs": {
-    "mtime": 1791169723.9867115,
-    "seen": 1791171266.1099641,
-    "ast_hash": "b4f8afa3e7e82400fc66c2c4dd29210d",
+    "mtime": 1791174367.3266923,
+    "seen": 1791174452.2215528,
+    "ast_hash": "d6e5c69d967d48fa32eed7a43ef0edf4",
     "semantic_hash": ""
   },
   "crates/host_api/src/prefs.rs": {
@@ -2346,9 +2346,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/next_assets.rs": {
-    "mtime": 1791173332.307167,
-    "seen": 1791173745.622638,
-    "ast_hash": "62b4476a8d954674916ca084de95c2cd",
+    "mtime": 1791174414.9917238,
+    "seen": 1791174452.221604,
+    "ast_hash": "ddd45a882b1949a41f8c7b352870b47a",
     "semantic_hash": ""
   }
 }

@@ -29,6 +29,16 @@ const CARD_MARKER: &str = "next-card.source";
 const CARD_BYTES: u64 = 256 * 1024 * 1024;
 const PARTITION_LBA: u32 = 2048;
 const SECTOR_BYTES: u64 = 512;
+const LEGACY_ASSET_INFO: &str = concat!(
+    "Source: official SpecNext System/Next Distribution 24.11\n",
+    "Archive: https://www.specnext.com/distro/24.11/sn-complete-24.11.zip\n",
+    "SHA-256: cbf5d4c8bb6dc552a4e68317a7315e06609b14028e1f04dd0afd2189be65ce6b\n",
+    "IPL source: https://www.specnext.com/forum/download/file.php?id=1164\n",
+    "IPL archive SHA-256: 845b6567cbb531a550aff6e762bf0b6aa5ea2855bd23be24925ed6202fdc3d03\n",
+    "Selected IPL: boot-30204.bin\n",
+    "IPL SHA-256: 33f04fd104eb428eff1afe18854e3fc232019a20948ce8efed01f04f1196d815\n",
+    "IPL license: GPL-3.0-or-later (GPL3-LICENSE included)\n",
+);
 const ASSET_INFO: &str = concat!(
     "Source: official SpecNext System/Next Distribution 24.11\n",
     "Archive: https://www.specnext.com/distro/24.11/sn-complete-24.11.zip\n",
@@ -108,6 +118,10 @@ fn verify_file(path: &Path, size: u64, sha256: &str) -> Result<(), NextAssetErro
         )));
     }
     Ok(())
+}
+
+fn asset_metadata_is_valid(metadata: &str) -> bool {
+    metadata == ASSET_INFO || metadata == LEGACY_ASSET_INFO
 }
 
 fn download_verified(
@@ -281,7 +295,7 @@ impl NextAssets {
         let metadata = fs::read_to_string(directory.join("ASSET-INFO.txt")).map_err(|_| {
             NextAssetError::Invalid("asset source and license notices are missing".into())
         })?;
-        if metadata != ASSET_INFO {
+        if !asset_metadata_is_valid(&metadata) {
             return Err(NextAssetError::Invalid(
                 "asset source and license notices differ".into(),
             ));
@@ -479,6 +493,13 @@ mod tests {
     use std::io::Cursor;
 
     use zip::write::SimpleFileOptions;
+
+    #[test]
+    fn metadata_validation_accepts_current_and_legacy_notices() {
+        assert!(asset_metadata_is_valid(ASSET_INFO));
+        assert!(asset_metadata_is_valid(LEGACY_ASSET_INFO));
+        assert!(!asset_metadata_is_valid("unrelated metadata\n"));
+    }
 
     #[test]
     fn invalid_extracted_asset_does_not_replace_existing_file() {
