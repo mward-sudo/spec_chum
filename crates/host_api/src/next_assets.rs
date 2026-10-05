@@ -124,6 +124,24 @@ fn asset_metadata_is_valid(metadata: &str) -> bool {
     metadata == ASSET_INFO || metadata == LEGACY_ASSET_INFO
 }
 
+fn validate_cached_file_or_remove(
+    path: &Path,
+    size: u64,
+    sha256: &str,
+) -> Result<bool, NextAssetError> {
+    if !path.exists() {
+        return Ok(false);
+    }
+    match verify_file(path, size, sha256) {
+        Ok(()) => Ok(true),
+        Err(NextAssetError::Invalid(_)) => {
+            fs::remove_file(path)?;
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn download_verified(
     url: &str,
     destination: &Path,
@@ -194,7 +212,7 @@ impl NextAssets {
         let directory = card_directory(Path::new(VERSION_DIR));
         fs::create_dir_all(&directory)?;
         let archive = directory.join(SYSTEM_ARCHIVE);
-        if !archive.exists() {
+        if !validate_cached_file_or_remove(&archive, SYSTEM_SIZE, SYSTEM_SHA256)? {
             let packaged = machine::search_roots()
                 .into_iter()
                 .map(|root| root.join(VERSION_DIR).join(SYSTEM_ARCHIVE))
@@ -212,7 +230,7 @@ impl NextAssets {
         let license = directory.join(LICENSE_NAME);
         if !ipl.exists() || !license.exists() {
             let temporary = directory.join(IPL_ARCHIVE);
-            if !temporary.exists() {
+            if !validate_cached_file_or_remove(&temporary, IPL_ARCHIVE_BYTES, IPL_ARCHIVE_SHA256)? {
                 download_verified(
                     IPL_ARCHIVE_URL,
                     &temporary,
@@ -220,7 +238,6 @@ impl NextAssets {
                     IPL_ARCHIVE_SHA256,
                 )?;
             }
-            verify_file(&temporary, IPL_ARCHIVE_BYTES, IPL_ARCHIVE_SHA256)?;
             let mut source = ZipArchive::new(File::open(&temporary)?)?;
             for (name, size, sha256) in [
                 (IPL_NAME, 8192, IPL_SHA256),
@@ -499,6 +516,39 @@ mod tests {
         assert!(asset_metadata_is_valid(ASSET_INFO));
         assert!(asset_metadata_is_valid(LEGACY_ASSET_INFO));
         assert!(!asset_metadata_is_valid("unrelated metadata\n"));
+    }
+
+    #[test]
+    fn cached_file_validation_removes_invalid_files_and_keeps_valid_ones() {
+        let directory = std::env::temp_dir().join(format!(
+            "spec-chum-next-cache-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock follows Unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).expect("create isolated cache directory");
+        let cached = directory.join("archive.zip");
+        let valid = b"verified archive";
+        let valid_hash = format!("{:x}", Sha256::digest(valid));
+
+        fs::write(&cached, valid).expect("write valid archive");
+        assert!(
+            validate_cached_file_or_remove(&cached, valid.len() as u64, &valid_hash)
+                .expect("validate valid archive")
+        );
+
+        fs::write(&cached, vec![0; valid.len()]).expect("replace with corrupt archive");
+        assert!(
+            !validate_cached_file_or_remove(&cached, valid.len() as u64, &valid_hash)
+                .expect("remove corrupt archive")
+        );
+        assert!(
+            !cached.exists(),
+            "corrupt archive should be removed for retry"
+        );
+        fs::remove_dir_all(directory).expect("remove isolated cache directory");
     }
 
     #[test]

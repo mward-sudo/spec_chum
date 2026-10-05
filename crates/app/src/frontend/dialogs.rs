@@ -34,6 +34,11 @@ impl SpecChumApp {
                     .host_mut()
                     .set_status(format!("Verified {}", archive.display()));
                 self.refresh_rom_setup();
+                if self.session.model() == machine::Model::SpectrumNext
+                    && self.rom_setup.as_ref().is_some_and(|setup| setup.complete)
+                {
+                    self.finish_rom_setup();
+                }
             }
             Err(error) => self.rom_setup_error = Some(error),
         }
