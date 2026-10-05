@@ -1124,6 +1124,25 @@ mod tests {
     }
 
     #[test]
+    fn layer2_palettes_reset_to_identity_rgb332_with_auto_increment_enabled() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(bus.read_nextreg(0x43), 0);
+
+        for palette_control in [0x10, 0x14] {
+            bus.write_nextreg(0x43, palette_control);
+            for index in 0..=u8::MAX {
+                bus.write_nextreg(0x40, index);
+                assert_eq!(bus.read_nextreg(0x41), index);
+                assert_eq!(
+                    bus.read_nextreg(0x44),
+                    u8::from(index & 0x03 != 0),
+                    "palette control {palette_control:#04x}, index {index:#04x}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn standard_layer2_pixels_cross_the_three_physical_bank_boundaries() {
         let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
         bus.write_nextreg(0x12, 8);

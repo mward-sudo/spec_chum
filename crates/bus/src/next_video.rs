@@ -7,13 +7,24 @@ fn expand_rgb3(value: u8) -> u8 {
     ((u16::from(value & 0x07) * 255) / 7) as u8
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 struct PaletteEntry {
     rrr_ggg_bb: u8,
     priority_and_blue: u8,
 }
 
 impl PaletteEntry {
+    fn rgb332(index: u8) -> Self {
+        Self {
+            rrr_ggg_bb: index,
+            priority_and_blue: u8::from(index & 0x03 != 0),
+        }
+    }
+
+    fn default_layer2_palette() -> [Self; 256] {
+        std::array::from_fn(|index| Self::rgb332(index as u8))
+    }
+
     fn rgb(self) -> [u8; 3] {
         let blue = (self.rrr_ggg_bb & 0x03) | ((self.priority_and_blue & 0x01) << 2);
         [
@@ -61,11 +72,14 @@ impl NextVideo {
             visible: false,
             priority: 0,
             transparency: 0xe3,
-            palette_control: 0x80,
+            palette_control: 0,
             palette_index: 0,
             palette_write_9bit: false,
             palette_pending_first_byte: 0,
-            palettes: [[PaletteEntry::default(); 256]; 2],
+            palettes: [
+                PaletteEntry::default_layer2_palette(),
+                PaletteEntry::default_layer2_palette(),
+            ],
         }
     }
 
