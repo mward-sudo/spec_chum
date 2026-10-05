@@ -80,6 +80,9 @@ cp "$LICENSE" "$README" "$APPDIR/usr/share/doc/spec-chum/"
 if [[ -f "$STAGE_DIR/ROMS-NOTICE.txt" ]]; then
   cp "$STAGE_DIR/ROMS-NOTICE.txt" "$APPDIR/usr/share/doc/spec-chum/"
 fi
+if [[ -f "$STAGE_DIR/NEXT-NOTICE.txt" ]]; then
+  cp "$STAGE_DIR/NEXT-NOTICE.txt" "$APPDIR/usr/share/doc/spec-chum/"
+fi
 # Bundled redistributable ROMs — AppRun sets SPEC_CHUM_ROOT to this prefix.
 cp -a "$ROMS" "$APPDIR/usr/share/spec-chum/roms"
 cp "$DESKTOP" "$APPDIR/usr/share/applications/spec-chum.desktop"

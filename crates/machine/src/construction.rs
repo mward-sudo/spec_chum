@@ -157,6 +157,9 @@ impl Machine {
                 let exrom = read_exrom_with_overrides(model, overrides)?;
                 Self::new_timex_ts2068(rom, &exrom)
             }
+            Model::SpectrumNext => Err(MachineBuildError::Message(
+                "ZX Spectrum Next boots from the verified SD distribution".into(),
+            )),
         }
     }
 

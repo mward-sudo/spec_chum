@@ -30,8 +30,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use control_plane::ControlPlane;
 use spec_chum_host::{
-    default_prefs_path, install_model_rom, load_prefs, rom_setup_json, save_prefs,
-    sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel, UiPreferences,
+    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, rom_setup_json,
+    save_prefs, sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel,
+    UiPreferences,
 };
 
 use native_shell_common::audio::{self, PcmRing};
@@ -417,6 +418,23 @@ impl AppState {
         if setup.complete {
             return true;
         }
+        if model == ModelId::SpectrumNext && message_box_confirm(
+            self.main_hwnd,
+            "ZX Spectrum Next assets",
+            "Get the pinned official System/Next 24.11 distribution and separate GPL boot code? Choose Cancel to select the verified archive from its companion asset folder. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.",
+        ) {
+            match acquire_next_assets(&mut paths) {
+                Ok(_) => {
+                    self.prefs.model_rom_paths = paths;
+                    self.persist_prefs();
+                    return true;
+                }
+                Err(error) => {
+                    self.report_err("Next asset setup", &HostError::Message(error.to_string()));
+                    return false;
+                }
+            }
+        }
         for slot in setup.slots.iter().filter(|slot| slot.status != "found") {
             let prompt = format!(
                 "{} ROM Setup\n{} — {}\nExpected size: {} bytes\n{}\n\nSelect OK to choose an image, or Cancel to keep the current model.",
@@ -425,8 +443,13 @@ impl AppState {
             if !message_box_confirm(self.main_hwnd, "ROM Setup", &prompt) {
                 return false;
             }
+            let extensions: &[&str] = if model == ModelId::SpectrumNext {
+                &["zip"]
+            } else {
+                &["rom", "bin"]
+            };
             let path = rfd::FileDialog::new()
-                .add_filter(&slot.label, &["rom", "bin"])
+                .add_filter(&slot.label, extensions)
                 .set_title(format!("Choose {} ROM", slot.label))
                 .pick_file();
             let Some(path) = path else { return false };

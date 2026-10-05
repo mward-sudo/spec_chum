@@ -173,6 +173,7 @@ fn load_program_tap(machine: &mut Machine, tap: &Path) {
                 let _ = machine.run_frame();
             }
         }
+        Model::SpectrumNext => unreachable!("Next is not a classic Machine"),
     }
     machine.type_load_quotes(false);
     machine.set_tape_playing(true);
@@ -314,7 +315,8 @@ fn new_model(model: Model) -> Option<Machine> {
         | Model::Pentagon128
         | Model::ScorpionZs256
         | Model::TimexTC2048
-        | Model::TimexTS2068 => None,
+        | Model::TimexTS2068
+        | Model::SpectrumNext => None,
     }
 }
 

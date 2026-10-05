@@ -17,6 +17,8 @@ use crate::prefs::{PrefAyStereo, PrefJoystick, PrefModel};
 pub enum MachineConfigError {
     #[error("configuration name is required")]
     NameRequired,
+    #[error("ZX Spectrum Next uses the verified System/Next boot path and cannot be a classic custom configuration base")]
+    UnsupportedNextBase,
     #[error("ROM for {model} must be {expected} bytes, got {actual}")]
     RomSize {
         model: String,
@@ -287,6 +289,9 @@ impl UserMachineConfig {
     /// Validate name, compatibility, and ROM paths before save/apply.
     pub fn validate(&self) -> Result<(), MachineConfigError> {
         let c = self.clone().sanitized();
+        if c.base == PrefModel::SpectrumNext {
+            return Err(MachineConfigError::UnsupportedNextBase);
+        }
         if c.name.is_empty() {
             return Err(MachineConfigError::NameRequired);
         }

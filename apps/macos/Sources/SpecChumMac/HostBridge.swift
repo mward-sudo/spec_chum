@@ -65,6 +65,7 @@ final class HostBridge: ObservableObject {
         case timexTS2068 = 8
         case spectrumPlus3e = 9
         case scorpionZs256 = 10
+        case spectrumNext = 11
 
         /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
         static let pickerOrder: [Model] = (try? HostBridge.modelCatalog.map { descriptor in

@@ -6,9 +6,20 @@ use std::sync::Mutex;
 
 use machine::{Model, RomSlotStatus};
 use serde::Serialize;
+use thiserror::Error;
 
 use crate::prefs::{model_rom_path_key, slot_rom_overrides, PrefModel};
 use crate::session::ModelId;
+
+#[derive(Debug, Error)]
+pub enum RomSetupError {
+    #[error(transparent)]
+    Rom(#[from] machine::RomReadError),
+    #[error(transparent)]
+    NextAssets(#[from] crate::next_assets::NextAssetError),
+    #[error("Choose the official sn-complete-24.11.zip beside boot-30204.bin, GPL3-LICENSE and ASSET-INFO.txt")]
+    WrongNextArchive,
+}
 
 #[derive(Clone, Debug, Serialize)]
 pub struct RomSetupSlot {
@@ -98,6 +109,29 @@ pub fn slot_rom_overrides_for_model(model: ModelId) -> BTreeMap<String, PathBuf>
 /// JSON payload for macOS / egui ROM setup dialogs.
 #[must_use]
 pub fn rom_setup_json(model: ModelId, rom_paths: &BTreeMap<String, String>) -> RomSetupJson {
+    if model == ModelId::SpectrumNext {
+        let checked = crate::next_assets::NextAssets::discover();
+        let hint = checked.as_ref().err().map_or_else(
+            || "Official System/Next 24.11 and IPL verified. The local SD card is prepared on first launch.".to_string(),
+            ToString::to_string,
+        );
+        return RomSetupJson {
+            model_title: "ZX Spectrum Next".into(),
+            complete: checked.is_ok(),
+            fetchable: false,
+            slots: vec![RomSetupSlot {
+                id: "next_assets".into(),
+                label: "Official System/Next 24.11 assets".into(),
+                install_path: "roms/system-next/24.11".into(),
+                alternate_paths: Vec::new(),
+                expected_bytes: 56_371_963,
+                user_provided: true,
+                status: if checked.is_ok() { "found" } else { "missing" }.into(),
+                resolved_path: checked.ok().map(|assets| assets.directory.display().to_string()),
+                hint: format!("{hint} Use Get official assets, or select a previously verified archive with its IPL and notices. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md."),
+            }],
+        };
+    }
     let m = model.to_model();
     let roots = machine::search_roots();
     let overrides = slot_overrides(model, rom_paths);
@@ -137,10 +171,26 @@ pub fn model_requires_user_rom(model: ModelId) -> bool {
 /// True when required ROM slots are present (persisted paths or workspace search).
 #[must_use]
 pub fn model_rom_available(model: ModelId, rom_paths: &BTreeMap<String, String>) -> bool {
+    if model == ModelId::SpectrumNext {
+        return crate::next_assets::NextAssets::available_cached();
+    }
     let m = model.to_model();
     let roots = machine::search_roots();
     let overrides = slot_overrides(model, rom_paths);
     machine::rom_available_in_with_overrides(m, &roots, &overrides)
+}
+
+/// Explicit user action: acquire the pinned official set and remember its local path.
+pub fn acquire_next_assets(
+    rom_paths: &mut BTreeMap<String, String>,
+) -> Result<PathBuf, RomSetupError> {
+    let assets = crate::next_assets::NextAssets::acquire_official()?;
+    rom_paths.insert(
+        model_rom_path_key(PrefModel::SpectrumNext, "next_assets"),
+        assets.archive.display().to_string(),
+    );
+    sync_model_rom_paths(rom_paths.clone());
+    Ok(assets.archive)
 }
 
 /// Validate `source`, persist its absolute path, and best-effort copy into `roms/`.
@@ -149,7 +199,29 @@ pub fn install_model_rom(
     slot_id: &str,
     source: &Path,
     rom_paths: &mut BTreeMap<String, String>,
-) -> Result<PathBuf, machine::RomReadError> {
+) -> Result<PathBuf, RomSetupError> {
+    if model == ModelId::SpectrumNext {
+        if slot_id != "next_assets" {
+            return Err(machine::RomReadError::UnknownSlot(slot_id.to_string()).into());
+        }
+        if source
+            .file_name()
+            .is_none_or(|name| name != "sn-complete-24.11.zip")
+        {
+            return Err(RomSetupError::WrongNextArchive);
+        }
+        let directory = source.parent().ok_or(RomSetupError::WrongNextArchive)?;
+        let assets = crate::next_assets::NextAssets::discover_in(directory.to_path_buf())?;
+        let key = model_rom_path_key(PrefModel::SpectrumNext, slot_id);
+        rom_paths.insert(
+            key,
+            canonical_persist_path(&assets.archive)
+                .display()
+                .to_string(),
+        );
+        sync_model_rom_paths(rom_paths.clone());
+        return Ok(assets.archive);
+    }
     let descriptor = machine::rom_slot_descriptors(model.to_model())
         .into_iter()
         .find(|d| d.id == slot_id)
@@ -165,7 +237,8 @@ pub fn install_model_rom(
             expected: descriptor.expected_bytes,
             got: data.len(),
             path: source.display().to_string(),
-        });
+        }
+        .into());
     }
     let persisted = canonical_persist_path(source);
     let key = model_rom_path_key(PrefModel::from_model(model.to_model()), slot_id);
@@ -183,6 +256,20 @@ pub fn install_model_rom(
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn next_setup_requires_the_complete_official_archive_name() {
+        let mut paths = BTreeMap::new();
+        let error = install_model_rom(
+            ModelId::SpectrumNext,
+            "next_assets",
+            Path::new("some-firmware.bin"),
+            &mut paths,
+        )
+        .expect_err("arbitrary firmware cannot enable Next");
+        assert!(matches!(error, RomSetupError::WrongNextArchive));
+        assert!(paths.is_empty());
+    }
 
     #[test]
     fn pentagon_requires_user_rom() {

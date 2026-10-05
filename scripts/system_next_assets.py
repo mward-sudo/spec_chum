@@ -59,6 +59,7 @@ SYSTEM_MEMBERS = {
 
 IPL_ARCHIVE = "tbblue.zip"
 IPL_URL = "https://www.specnext.com/forum/download/file.php?id=1164"
+IPL_SOURCE_REFERENCE = "https://gitlab.com/SpectrumNext/ZX_Spectrum_Next_FPGA/-/tree/master/cores/zxnext/src/rom?ref_type=heads"
 IPL_SHA256 = "845b6567cbb531a550aff6e762bf0b6aa5ea2855bd23be24925ed6202fdc3d03"
 IPL_SIZE = 45_246
 IPL_ROM = "boot-30204.bin"
@@ -278,7 +279,13 @@ def _asset_metadata() -> str:
         f"IPL source: {IPL_URL}\nIPL archive SHA-256: {IPL_SHA256}\n"
         f"Selected IPL: {IPL_ROM}\nIPL SHA-256: {IPL_ROM_SHA256}\n"
         "IPL license: GPL-3.0-or-later (GPL3-LICENSE included)\n"
+        f"IPL upstream source reference (from archive README): {IPL_SOURCE_REFERENCE}\n"
+        "Exact source correspondence for boot-30204.bin is unverified.\n"
     )
+
+
+def _legacy_asset_metadata() -> str:
+    return _asset_metadata().split("IPL upstream source reference")[0]
 
 
 def install_assets() -> None:
@@ -312,7 +319,7 @@ def install_assets() -> None:
 
     metadata = _asset_metadata()
     metadata_path = ASSET_DIR / "ASSET-INFO.txt"
-    if metadata_path.exists() and metadata_path.read_text() != metadata:
+    if metadata_path.exists() and metadata_path.read_text() not in (metadata, _legacy_asset_metadata()):
         raise AssetError("ASSET-INFO.txt differs from the pinned asset metadata")
     metadata_path.write_text(metadata)
     verify_installed_assets(ASSET_DIR)

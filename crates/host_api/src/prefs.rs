@@ -139,6 +139,7 @@ pub fn pref_model_slug(model: PrefModel) -> &'static str {
         PrefModel::ScorpionZs256 => "scorpion_zs256",
         PrefModel::TimexTC2048 => "timex_tc2048",
         PrefModel::TimexTS2068 => "timex_ts2068",
+        PrefModel::SpectrumNext => "spectrum_next",
     }
 }
 
@@ -391,11 +392,12 @@ pub enum PrefModel {
     ScorpionZs256,
     TimexTC2048,
     TimexTS2068,
+    SpectrumNext,
 }
 
 impl PrefModel {
     /// Canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
@@ -407,6 +409,7 @@ impl PrefModel {
         Self::ScorpionZs256,
         Self::TimexTC2048,
         Self::TimexTS2068,
+        Self::SpectrumNext,
     ];
 
     /// Stable persisted preference slug used by host configuration adapters.
@@ -429,6 +432,7 @@ impl PrefModel {
             Model::ScorpionZs256 => Self::ScorpionZs256,
             Model::TimexTC2048 => Self::TimexTC2048,
             Model::TimexTS2068 => Self::TimexTS2068,
+            Model::SpectrumNext => Self::SpectrumNext,
         }
     }
 
@@ -451,6 +455,7 @@ impl PrefModel {
             Self::ScorpionZs256 => Model::ScorpionZs256,
             Self::TimexTC2048 => Model::TimexTC2048,
             Self::TimexTS2068 => Model::TimexTS2068,
+            Self::SpectrumNext => Model::SpectrumNext,
         }
     }
 
@@ -468,6 +473,7 @@ impl PrefModel {
             Self::ScorpionZs256 => ModelId::ScorpionZs256,
             Self::TimexTC2048 => ModelId::TimexTC2048,
             Self::TimexTS2068 => ModelId::TimexTS2068,
+            Self::SpectrumNext => ModelId::SpectrumNext,
         }
     }
 

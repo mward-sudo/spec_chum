@@ -1,19 +1,22 @@
-//! Standalone Spectrum Next CPU/MMU core. Host model selection remains gated
-//! until firmware, media and display integration can boot a real distribution (#523).
+//! Spectrum Next CPU/MMU and classic ULA display for the verified boot path.
 
 use bus::NextBus;
 use std::path::Path;
 use z80::{Cpu, CpuProfile, Io, Memory};
 
+use crate::FrameAudio;
 use crate::MachineBuildError;
+use crate::{apply_joystick, JoystickMode, JoystickState};
+use ula::Ula48;
 
 /// Core-constructible Spectrum Next with Z80N instructions and an eight-slot
-/// 8 KiB MMU. It remains outside [`crate::Machine`] until a complete boot path exists.
+/// 8 KiB MMU. The host owns its verified SD boot path separately from classic machines.
 #[derive(Debug)]
 pub struct NextMachine {
     pub cpu: Cpu,
     pub bus: NextBus,
     video_t: u64,
+    ula: Ula48,
 }
 
 impl NextMachine {
@@ -24,6 +27,7 @@ impl NextMachine {
             cpu: Cpu::with_profile(CpuProfile::Z80N),
             bus: NextBus::new(rom)?,
             video_t: 0,
+            ula: Ula48::new(),
         })
     }
 
@@ -83,6 +87,42 @@ impl NextMachine {
             self.bus.set_reset_status(status);
         }
         cycles
+    }
+
+    /// Run to the next selected video-frame boundary.
+    pub fn run_frame(&mut self) -> FrameAudio {
+        let frame_len = self.bus.frame_interrupt_timing().0;
+        let boundary = (self.video_t / frame_len + 1) * frame_len;
+        while self.video_t < boundary {
+            self.step_once();
+        }
+        FrameAudio::default()
+    }
+
+    /// Render the firmware's ULA screen from the physical bank selected by $7FFD.
+    pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
+        let first_page = self.bus.display_screen_bank() * 2;
+        let mut screen = [0u8; 6912];
+        for (offset, byte) in screen.iter_mut().enumerate() {
+            *byte = self
+                .bus
+                .read_ram_page(first_page + (offset / 8192) as u8, offset % 8192)
+                .expect("Next ULA bank is within installed physical RAM");
+        }
+        let mut ula = self.ula.clone();
+        ula.border = self.bus.border();
+        ula.render_rgba(&screen, out, with_border);
+    }
+
+    #[must_use]
+    pub fn framebuffer_dims(with_border: bool) -> (usize, usize) {
+        ula::framebuffer_dims(with_border, false)
+    }
+
+    pub fn apply_joystick_state(&mut self, mode: JoystickMode, state: JoystickState) {
+        self.bus.keyboard.reset();
+        self.bus.kempston.reset();
+        apply_joystick(mode, state, &mut self.bus.kempston, &mut self.bus.keyboard);
     }
 }
 

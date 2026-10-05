@@ -205,6 +205,8 @@ pub enum Model {
     TimexTC2048,
     /// Timex TS2068 / TC2068 (#192 Phase 2a): home + EX-ROM, horizontal MMU, AY.
     TimexTS2068,
+    /// Official ZX Spectrum Next firmware and SD distribution.
+    SpectrumNext,
 }
 
 impl Model {
@@ -3099,6 +3101,7 @@ impl Machine {
             Model::SpectrumPlus2A => self.type_load_quotes_plus2a(with_code),
             Model::SpectrumPlus3 | Model::SpectrumPlus3e => self.type_load_quotes_plus3(with_code),
             Model::Pentagon128 | Model::ScorpionZs256 => self.type_load_quotes_128k(with_code),
+            Model::SpectrumNext => {}
         }
     }
 

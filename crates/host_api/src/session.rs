@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use formats::MediaTitleSource;
-use machine::{JoystickMode, JoystickState, Machine, Model, Watch};
+use machine::{JoystickMode, JoystickState, Machine, Model, NextMachine, Watch};
 use parking_lot::Mutex;
 use thiserror::Error;
 
@@ -39,6 +39,7 @@ pub enum ModelId {
     SpectrumPlus3e = 9,
     /// Scorpion ZS-256 clone (#193).
     ScorpionZs256 = 10,
+    SpectrumNext = 11,
 }
 
 impl ModelId {
@@ -56,6 +57,7 @@ impl ModelId {
             8 => Some(Self::TimexTS2068),
             9 => Some(Self::SpectrumPlus3e),
             10 => Some(Self::ScorpionZs256),
+            11 => Some(Self::SpectrumNext),
             _ => None,
         }
     }
@@ -74,6 +76,7 @@ impl ModelId {
             Self::ScorpionZs256 => Model::ScorpionZs256,
             Self::TimexTC2048 => Model::TimexTC2048,
             Self::TimexTS2068 => Model::TimexTS2068,
+            Self::SpectrumNext => Model::SpectrumNext,
         }
     }
 
@@ -91,11 +94,12 @@ impl ModelId {
             Model::ScorpionZs256 => Self::ScorpionZs256,
             Model::TimexTC2048 => Self::TimexTC2048,
             Model::TimexTS2068 => Self::TimexTS2068,
+            Model::SpectrumNext => Self::SpectrumNext,
         }
     }
 
     /// All models in canonical UI order (matches [`machine::ALL_MODELS`]).
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Spectrum16K,
         Self::Spectrum48,
         Self::Spectrum128,
@@ -107,6 +111,7 @@ impl ModelId {
         Self::ScorpionZs256,
         Self::TimexTC2048,
         Self::TimexTS2068,
+        Self::SpectrumNext,
     ];
 
     /// Stable numeric ABI id. Do not derive this from [`Self::ALL`] order.
@@ -134,8 +139,47 @@ pub enum HostError {
     NoMachine,
     #[error("invalid model id")]
     BadModel,
+    #[error("{0} is unavailable on ZX Spectrum Next")]
+    UnsupportedNext(&'static str),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+}
+
+/// Exactly one active hardware runtime belongs to a host session.
+#[derive(Debug)]
+pub(crate) enum HostRuntime {
+    Classic(Machine),
+    Next(NextMachine),
+}
+
+impl HostRuntime {
+    fn classic(&self) -> Option<&Machine> {
+        match self {
+            Self::Classic(machine) => Some(machine),
+            Self::Next(_) => None,
+        }
+    }
+
+    fn classic_mut(&mut self) -> Option<&mut Machine> {
+        match self {
+            Self::Classic(machine) => Some(machine),
+            Self::Next(_) => None,
+        }
+    }
+
+    fn framebuffer_dims(&self, with_border: bool) -> (usize, usize) {
+        match self {
+            Self::Classic(machine) => machine.framebuffer_dims(with_border),
+            Self::Next(_) => NextMachine::framebuffer_dims(with_border),
+        }
+    }
+
+    fn render_rgba(&self, out: &mut [u8], with_border: bool) {
+        match self {
+            Self::Classic(machine) => machine.render_rgba(out, with_border),
+            Self::Next(machine) => machine.render_rgba(out, with_border),
+        }
+    }
 }
 
 /// Core registers exposed through `sc_regs`.
@@ -180,7 +224,7 @@ pub struct PcBreakpointObservation {
 /// (`machine` / `machine_mut`, `framebuffer`, `set_status`, `set_border`, …).
 #[derive(Debug)]
 pub struct HostSession {
-    machine: Option<Machine>,
+    machine: Option<HostRuntime>,
     model: ModelId,
     with_border: bool,
     framebuffer: Vec<u8>,
@@ -212,12 +256,20 @@ pub struct HostSession {
     host_keys: [[bool; 5]; 8],
 }
 
-fn require_machine(machine: Option<&Machine>) -> Result<&Machine, HostError> {
-    machine.ok_or(HostError::NoMachine)
+fn require_machine(machine: Option<&HostRuntime>) -> Result<&Machine, HostError> {
+    match machine {
+        Some(HostRuntime::Classic(machine)) => Ok(machine),
+        Some(HostRuntime::Next(_)) => Err(HostError::UnsupportedNext("classic machine operation")),
+        None => Err(HostError::NoMachine),
+    }
 }
 
-fn require_machine_mut(machine: Option<&mut Machine>) -> Result<&mut Machine, HostError> {
-    machine.ok_or(HostError::NoMachine)
+fn require_machine_mut(machine: &mut Option<HostRuntime>) -> Result<&mut Machine, HostError> {
+    match machine.as_mut() {
+        Some(HostRuntime::Classic(machine)) => Ok(machine),
+        Some(HostRuntime::Next(_)) => Err(HostError::UnsupportedNext("classic machine operation")),
+        None => Err(HostError::NoMachine),
+    }
 }
 
 impl HostSession {
@@ -311,18 +363,18 @@ impl HostSession {
     /// Borrow the live machine (egui / in-process hosts).
     #[must_use]
     pub fn machine(&self) -> Option<&Machine> {
-        self.machine.as_ref()
+        self.machine.as_ref().and_then(HostRuntime::classic)
     }
 
     /// Mutable borrow of the live machine (egui / in-process hosts).
     pub fn machine_mut(&mut self) -> Option<&mut Machine> {
-        self.machine.as_mut()
+        self.machine.as_mut().and_then(HostRuntime::classic_mut)
     }
 
     /// Install a booted machine into this session.
     pub fn set_machine(&mut self, machine: Machine) {
         self.model = ModelId::from_model(machine.model());
-        self.machine = Some(machine);
+        self.machine = Some(HostRuntime::Classic(machine));
         self.reapply_host_keys();
         self.last_speaker_level = false;
         if !self.has_tape() {
@@ -345,18 +397,27 @@ impl HostSession {
 
     #[must_use]
     pub fn tape_playing(&self) -> bool {
-        self.machine.as_ref().is_some_and(Machine::tape_playing)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(Machine::tape_playing)
     }
 
     #[must_use]
     pub fn has_tape(&self) -> bool {
-        self.machine.as_ref().is_some_and(Machine::has_tape)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(Machine::has_tape)
     }
 
     /// Tape progress for UI, if a deck is inserted.
     #[must_use]
     pub fn tape_progress(&self) -> Option<machine::TapeProgress> {
-        self.machine.as_ref().and_then(Machine::tape_progress)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .and_then(Machine::tape_progress)
     }
 
     /// Mono PCM samples from the last [`Self::run_frame`] (empty if no machine).
@@ -379,6 +440,9 @@ impl HostSession {
     /// loaded [`Machine`] matches too; on ROM miss the machine stays unloaded.
     pub fn select_model(&mut self, model: ModelId) -> Result<(), HostError> {
         self.set_model(model);
+        if model == ModelId::SpectrumNext {
+            return self.boot_next();
+        }
         self.try_autoload_rom();
         if self.has_machine() {
             Ok(())
@@ -393,6 +457,11 @@ impl HostSession {
     ///
     /// Returns a host error if the ROM or any required model-specific ROM is invalid or missing.
     pub fn load_rom_bytes(&mut self, rom: &[u8]) -> Result<(), HostError> {
+        if self.model == ModelId::SpectrumNext {
+            return Err(HostError::Message(
+                "ZX Spectrum Next boots only from verified System/Next assets".into(),
+            ));
+        }
         let overrides = crate::rom_setup::slot_rom_overrides_for_model(self.model);
         self.load_rom_bytes_with_overrides(rom, &overrides)
     }
@@ -401,6 +470,9 @@ impl HostSession {
     ///
     /// File I/O and machine-construction failures are returned as [`HostError`].
     pub fn load_rom_path(&mut self, path: &Path) -> Result<(), HostError> {
+        if self.model == ModelId::SpectrumNext {
+            return Err(HostError::UnsupportedNext("direct ROM loading"));
+        }
         let data = std::fs::read(path)?;
         self.load_rom_bytes(&data)?;
         self.status = format!("Loaded {}", path.display());
@@ -419,7 +491,7 @@ impl HostSession {
         let applied = crate::machine_config::apply_user_config(config, &roots)?;
         self.model = ModelId::from_model(applied.model);
         self.joystick_mode = applied.joystick_mode;
-        self.machine = Some(applied.machine);
+        self.machine = Some(HostRuntime::Classic(applied.machine));
         self.reapply_host_keys();
         self.last_speaker_level = false;
         self.status = applied.status;
@@ -430,7 +502,13 @@ impl HostSession {
     ///
     /// An inserted tape remains present and paused. Returns [`HostError::NoMachine`] if unloaded.
     pub fn reset(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        if let Some(HostRuntime::Next(next)) = self.machine.as_mut() {
+            next.reset();
+            self.reapply_host_keys();
+            self.status = "Reset ZX Spectrum Next".into();
+            return Ok(());
+        }
+        let m = require_machine_mut(&mut self.machine)?;
         let mode = self.joystick_mode;
         let state = self.joystick_state;
         let keys = self.host_keys;
@@ -452,6 +530,9 @@ impl HostSession {
         if self.machine.is_none() {
             return Err(HostError::NoMachine);
         }
+        if matches!(self.machine, Some(HostRuntime::Next(_))) {
+            return Err(HostError::UnsupportedNext("tape loading"));
+        }
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
@@ -462,7 +543,7 @@ impl HostSession {
                 let data = std::fs::read(path)?;
                 let img =
                     tape::TapImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
-                if let Some(m) = self.machine.as_mut() {
+                if let Some(m) = self.machine.as_mut().and_then(HostRuntime::classic_mut) {
                     m.insert_tape(tape::TapPlayer::new(img));
                 }
                 self.set_media_identity_from_bytes(&data, path);
@@ -479,7 +560,9 @@ impl HostSession {
                         Ok(player) if player.image.blocks.is_empty() => {}
                         Ok(player) => {
                             let n = player.image.blocks.len();
-                            if let Some(m) = self.machine.as_mut() {
+                            if let Some(m) =
+                                self.machine.as_mut().and_then(HostRuntime::classic_mut)
+                            {
                                 m.insert_tape(player);
                             }
                             self.set_media_identity_from_bytes(&data, path);
@@ -496,7 +579,7 @@ impl HostSession {
                 }
                 let player =
                     tape::TzxPlayer::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
-                if let Some(m) = self.machine.as_mut() {
+                if let Some(m) = self.machine.as_mut().and_then(HostRuntime::classic_mut) {
                     m.insert_tzx(player);
                 }
                 self.set_media_identity_from_bytes(&data, path);
@@ -563,7 +646,7 @@ impl HostSession {
                     )));
                 }
             }
-            let machine = require_machine_mut(self.machine.as_mut())?;
+            let machine = require_machine_mut(&mut self.machine)?;
             machine.apply_snapshot128(&snapshot);
             machine.apply_joystick_state(self.joystick_mode, self.joystick_state);
             self.reapply_host_keys();
@@ -593,7 +676,7 @@ impl HostSession {
                 ));
             }
         }
-        let machine = require_machine_mut(self.machine.as_mut())?;
+        let machine = require_machine_mut(&mut self.machine)?;
         machine.apply_snapshot48(&snapshot48);
         machine.apply_joystick_state(self.joystick_mode, self.joystick_state);
         self.reapply_host_keys();
@@ -615,7 +698,7 @@ impl HostSession {
         if let Some(snapshot) = rec.snapshot.take() {
             self.apply_snapshot_bytes(&snapshot.data, Some(&snapshot.extension))?;
         }
-        require_machine_mut(self.machine.as_mut())?.insert_rzx(rec);
+        require_machine_mut(&mut self.machine)?.insert_rzx(rec);
         self.status = format!("Loaded RZX {}", path.display());
         Ok(())
     }
@@ -624,7 +707,7 @@ impl HostSession {
     ///
     /// Missing-machine, I/O, unsupported-model, and format errors are returned as [`HostError`].
     pub fn load_dsk(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let img = formats::DskImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
         m.insert_disk(img)
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -636,7 +719,7 @@ impl HostSession {
     ///
     /// Missing-machine, I/O, unsupported-model, and format errors are returned as [`HostError`].
     pub fn load_trd(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let img = formats::TrdImage::load(path).map_err(|e| HostError::Message(e.to_string()))?;
         m.insert_trd(img)
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -646,7 +729,7 @@ impl HostSession {
 
     /// Load a 16 KiB TR-DOS ROM (attaches Beta on 48K/128K).
     pub fn load_trdos_rom(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let data = std::fs::read(path)?;
         m.load_trdos_rom(&data)
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -656,7 +739,7 @@ impl HostSession {
 
     /// Attach Beta Disk / TR-DOS with no media (48K/128K).
     pub fn attach_beta(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.attach_beta()
             .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = "Beta Disk attached".into();
@@ -665,11 +748,20 @@ impl HostSession {
 
     #[must_use]
     pub fn has_beta(&self) -> bool {
-        self.machine.as_ref().is_some_and(Machine::has_beta)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(Machine::has_beta)
     }
 
     /// Best-effort ROM load for the current model (persisted paths, then workspace search).
     fn try_autoload_rom(&mut self) {
+        if self.model == ModelId::SpectrumNext {
+            if let Err(error) = self.boot_next() {
+                self.status = error.to_string();
+            }
+            return;
+        }
         let model = self.model.to_model();
         let roots = rom_search_roots();
         let slot_overrides = crate::rom_setup::slot_rom_overrides_for_model(self.model);
@@ -685,6 +777,26 @@ impl HostSession {
                 }
             }
         }
+    }
+
+    fn boot_next(&mut self) -> Result<(), HostError> {
+        let assets = crate::next_assets::NextAssets::discover()
+            .map_err(|error| HostError::Message(error.to_string()))?;
+        let card = assets
+            .prepare_card()
+            .map_err(|error| HostError::Message(error.to_string()))?;
+        let mut next = NextMachine::new(&vec![0xff; 0x10000])
+            .map_err(|error| HostError::Message(error.to_string()))?;
+        next.install_ipl(&std::fs::read(&assets.ipl)?)
+            .map_err(|error| HostError::Message(error.to_string()))?;
+        next.attach_sd_image(card)
+            .map_err(|error| HostError::Message(error.to_string()))?;
+        self.machine = Some(HostRuntime::Next(next));
+        self.reapply_host_keys();
+        self.last_speaker_level = false;
+        self.clear_media_identity();
+        self.status = "Booting ZX Spectrum Next from verified System/Next 24.11".into();
+        Ok(())
     }
 
     fn load_rom_bytes_with_overrides(
@@ -716,9 +828,14 @@ impl HostSession {
                     .map_err(|e| HostError::Message(e.to_string()))?;
                 Machine::new_timex_ts2068(rom, &exrom)
             }
+            ModelId::SpectrumNext => {
+                return Err(HostError::Message(
+                    "ZX Spectrum Next requires the verified SD boot path".into(),
+                ))
+            }
         }
         .map_err(|e| HostError::Message(e.to_string()))?;
-        self.machine = Some(machine);
+        self.machine = Some(HostRuntime::Classic(machine));
         self.reapply_host_keys();
         self.last_speaker_level = false;
         self.status = "ROM loaded".into();
@@ -727,7 +844,7 @@ impl HostSession {
 
     /// Start the inserted tape deck. Returns an error when no machine or tape is present.
     pub fn play_tape(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         if !m.has_tape() {
             self.status = "No tape inserted".into();
             return Err(HostError::Message("no tape".into()));
@@ -739,7 +856,7 @@ impl HostSession {
 
     /// Pause the tape deck; requires a loaded machine but succeeds if no tape is inserted.
     pub fn pause_tape(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.set_tape_playing(false);
         self.status = "Tape paused".into();
         Ok(())
@@ -747,7 +864,7 @@ impl HostSession {
 
     /// Rewind the tape deck and leave it paused; requires a loaded machine.
     pub fn rewind_tape(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.rewind_tape();
         self.status = "Tape rewound (paused)".into();
         Ok(())
@@ -755,7 +872,7 @@ impl HostSession {
 
     /// Clear the inserted tape deck (no-op-ish success when empty).
     pub fn eject_tape(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.eject_tape();
         self.clear_media_identity();
         self.status = "Tape ejected".into();
@@ -764,7 +881,10 @@ impl HostSession {
 
     #[must_use]
     pub fn tape_load_options(&self) -> Option<machine::TapeLoadOptions> {
-        self.machine.as_ref().map(Machine::tape_load_options)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .map(Machine::tape_load_options)
     }
 
     /// Set tape loading behavior and update status with the effective mode and speed.
@@ -774,7 +894,7 @@ impl HostSession {
         &mut self,
         opts: machine::TapeLoadOptions,
     ) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.set_tape_load_options(opts);
         let effective = m.tape_load_options();
         let mode = if effective.flash_load {
@@ -793,17 +913,21 @@ impl HostSession {
         if row >= KEYBOARD_ROWS || bit > KEYBOARD_BIT_MAX {
             return Err(HostError::Message(KEYBOARD_KEY_RANGE_ERROR.into()));
         }
-        let m = require_machine_mut(self.machine.as_mut())?;
+        if self.machine.is_none() {
+            return Err(HostError::NoMachine);
+        }
         self.host_keys[row][bit as usize] = pressed;
-        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        self.reapply_host_keys();
         Ok(())
     }
 
     /// Release all host-held Spectrum matrix keys while preserving joystick input.
     pub fn clear_keys(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        if self.machine.is_none() {
+            return Err(HostError::NoMachine);
+        }
         self.host_keys = [[false; 5]; 8];
-        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        self.reapply_host_keys();
         Ok(())
     }
 
@@ -811,29 +935,31 @@ impl HostSession {
     /// otherwise stores the preference for the next boot (egui prefs / pre-ROM).
     pub fn set_joystick_mode(&mut self, mode: JoystickMode) {
         self.joystick_mode = mode;
-        if let Some(m) = self.machine.as_mut() {
-            Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
-        }
+        self.reapply_host_keys();
     }
 
     pub fn set_joystick(&mut self, mask: u8) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        if self.machine.is_none() {
+            return Err(HostError::NoMachine);
+        }
         self.joystick_state = JoystickState::from_mask(mask);
-        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        self.reapply_host_keys();
         Ok(())
     }
 
     /// Clear host joystick buttons and recompose the effective keyboard input.
     pub fn clear_joystick(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        if self.machine.is_none() {
+            return Err(HostError::NoMachine);
+        }
         self.joystick_state = JoystickState::empty();
-        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        self.reapply_host_keys();
         Ok(())
     }
 
     /// Accumulate host pointer motion into the Kempston mouse (positive `dy` = down).
     pub fn set_mouse_delta(&mut self, dx: i8, dy: i8) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         if dx != 0 || dy != 0 {
             m.mouse_mut().set_delta(dx, dy);
         }
@@ -847,23 +973,40 @@ impl HostSession {
         right: bool,
         middle: bool,
     ) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.mouse_mut().set_buttons(left, right, middle);
         Ok(())
     }
 
     /// Reset Kempston mouse axes and buttons to defaults.
     pub fn clear_mouse(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.mouse_mut().reset();
         Ok(())
     }
 
     fn reapply_host_keys(&mut self) {
-        let Some(m) = self.machine.as_mut() else {
+        let Some(runtime) = self.machine.as_mut() else {
             return;
         };
-        Self::recompose_input(m, self.joystick_mode, self.joystick_state, &self.host_keys);
+        match runtime {
+            HostRuntime::Classic(machine) => Self::recompose_input(
+                machine,
+                self.joystick_mode,
+                self.joystick_state,
+                &self.host_keys,
+            ),
+            HostRuntime::Next(machine) => {
+                machine.apply_joystick_state(self.joystick_mode, self.joystick_state);
+                for (row, bits) in self.host_keys.iter().enumerate() {
+                    for (bit, pressed) in bits.iter().enumerate() {
+                        if *pressed {
+                            machine.bus.keyboard.set_key(row, bit as u8, true);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Reset matrix, apply joystick routing, then overlay retained host keys.
@@ -887,7 +1030,7 @@ impl HostSession {
 
     /// Attach Multiface 1 (48K-class) or Multiface 128 (128K/+2) from an 8 KiB ROM path.
     pub fn attach_multiface(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let data = std::fs::read(path)?;
         m.attach_multiface(&data)
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -904,7 +1047,7 @@ impl HostSession {
 
     /// Raise Multiface NMI if attached.
     pub fn multiface_nmi(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         match m.multiface_nmi() {
             Some(_) => {
                 self.status = "Multiface NMI".into();
@@ -918,12 +1061,15 @@ impl HostSession {
 
     #[must_use]
     pub fn has_multiface(&self) -> bool {
-        self.machine.as_ref().is_some_and(Machine::has_multiface)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(Machine::has_multiface)
     }
 
     /// Attach Interface 1 on 48K/128K (optionally load `roms/if1.rom` if present).
     pub fn attach_interface1(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let if1 = m
             .attach_interface1()
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -953,7 +1099,7 @@ impl HostSession {
 
     /// Load an 8 KiB Interface 1 ROM image from `path`.
     pub fn load_interface1_rom(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let data = std::fs::read(path)?;
         m.load_interface1_rom(&data)
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -963,7 +1109,7 @@ impl HostSession {
 
     /// Insert a Microdrive `.mdr` cartridge (attaches IF1 if needed).
     pub fn insert_mdr(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let data = std::fs::read(path)?;
         let cart =
             formats::MdrImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
@@ -977,7 +1123,7 @@ impl HostSession {
 
     /// Insert a Timex `.dck` dock cartridge (TS2068 only). Soft-resets the machine.
     pub fn insert_dck(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let data = std::fs::read(path)?;
         let image =
             formats::DckImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
@@ -989,7 +1135,7 @@ impl HostSession {
 
     /// Eject Timex dock cartridge (TS2068 only). Soft-resets the machine.
     pub fn eject_dck(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.eject_timex_dock()
             .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = "Ejected Timex dock".into();
@@ -998,17 +1144,23 @@ impl HostSession {
 
     #[must_use]
     pub fn has_timex_dock(&self) -> bool {
-        self.machine.as_ref().is_some_and(Machine::has_timex_dock)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(Machine::has_timex_dock)
     }
 
     #[must_use]
     pub fn has_interface1(&self) -> bool {
-        self.machine.as_ref().is_some_and(Machine::has_interface1)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(Machine::has_interface1)
     }
 
     /// Attach `DivMMC` on 48K/128K (no media).
     pub fn attach_divmmc(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.attach_divmmc()
             .map_err(|e| HostError::Message(e.to_string()))?;
         self.status = "DivMMC attached".into();
@@ -1022,7 +1174,7 @@ impl HostSession {
 
     /// Attach `DivMMC` and load a flat SD/MMC image into slot `0` or `1`.
     pub fn load_divmmc_sd_slot(&mut self, path: &Path, slot: u8) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let data = std::fs::read(path)?;
         m.attach_divmmc_sd_slot(slot, data)
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -1032,7 +1184,7 @@ impl HostSession {
 
     /// Attach `DivMMC` and load an ESXDOS EEPROM (8 KiB or larger prefix).
     pub fn load_divmmc_eeprom(&mut self, path: &Path) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let data = std::fs::read(path)?;
         m.attach_divmmc_eeprom(&data)
             .map_err(|e| HostError::Message(e.to_string()))?;
@@ -1042,7 +1194,10 @@ impl HostSession {
 
     #[must_use]
     pub fn has_divmmc(&self) -> bool {
-        self.machine.as_ref().is_some_and(Machine::has_divmmc)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(Machine::has_divmmc)
     }
 
     #[must_use]
@@ -1058,7 +1213,7 @@ impl HostSession {
 
     /// Poke one byte of machine memory.
     pub fn poke(&mut self, addr: u16, value: u8) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.write_mem(addr, value);
         Ok(())
     }
@@ -1098,7 +1253,7 @@ impl HostSession {
                 "regs patch requires at least one of pc, sp, af".into(),
             ));
         }
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let r = &mut m.cpu_mut().regs;
         if let Some(pc) = patch.pc {
             r.pc = pc;
@@ -1124,7 +1279,7 @@ impl HostSession {
 
     /// One CPU/machine instruction (`step_once`).
     pub fn step(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.step_once();
         Ok(())
     }
@@ -1132,7 +1287,7 @@ impl HostSession {
     /// Debugger UI step: clear a PC re-hit, execute one instruction, leave paused, refresh pixels.
     pub fn debug_step(&mut self) -> Result<(), HostError> {
         {
-            let m = require_machine_mut(self.machine.as_mut())?;
+            let m = require_machine_mut(&mut self.machine)?;
             let pc = m.cpu().regs.pc;
             if m.debugger().paused {
                 m.debugger_mut().continue_from_pc(pc);
@@ -1147,7 +1302,7 @@ impl HostSession {
 
     /// Set the debugger paused flag (no-op without a machine).
     pub fn set_paused(&mut self, paused: bool) {
-        if let Some(m) = self.machine.as_mut() {
+        if let Some(m) = self.machine.as_mut().and_then(HostRuntime::classic_mut) {
             m.debugger_mut().paused = paused;
         }
     }
@@ -1159,14 +1314,17 @@ impl HostSession {
 
     #[must_use]
     pub fn paused(&self) -> bool {
-        self.machine.as_ref().is_some_and(|m| m.debugger().paused)
+        self.machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(|m| m.debugger().paused)
     }
 
     /// Resume after a debugger stop, allowing the breakpoint at the current PC to be passed once.
     ///
     /// This clears the debugger pause state but does not change the host `running` flag.
     pub fn continue_execution(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         let pc = m.cpu().regs.pc;
         m.debugger_mut().continue_from_pc(pc);
         Ok(())
@@ -1181,34 +1339,34 @@ impl HostSession {
 
     /// Add a PC breakpoint.
     pub fn add_breakpoint(&mut self, pc: u16) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.debugger_mut().add_pc_break(pc);
         Ok(())
     }
 
     /// Add a memory access watch (read and/or write).
     pub fn add_mem_watch(&mut self, watch: Watch) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.debugger_mut().add_mem_watch(watch);
         Ok(())
     }
 
     /// Add an I/O port access watch (read and/or write).
     pub fn add_port_watch(&mut self, watch: Watch) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.debugger_mut().add_port_watch(watch);
         Ok(())
     }
 
     /// Remove a memory watch at `addr`. Returns `false` when none matched.
     pub fn remove_mem_watch(&mut self, addr: u16) -> Result<bool, HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         Ok(m.debugger_mut().remove_mem_watch(addr))
     }
 
     /// Remove a port watch at `addr`. Returns `false` when none matched.
     pub fn remove_port_watch(&mut self, addr: u16) -> Result<bool, HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         Ok(m.debugger_mut().remove_port_watch(addr))
     }
 
@@ -1216,7 +1374,7 @@ impl HostSession {
     ///
     /// Requires a loaded machine; the returned reason also reports an exhausted budget.
     pub fn run_until_break(&mut self, max_insns: u32) -> Result<machine::BreakReason, HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         Ok(m.run_until_break(u64::from(max_insns)))
     }
 
@@ -1231,7 +1389,7 @@ impl HostSession {
         &self,
         since: u64,
     ) -> Result<PcBreakpointObservation, HostError> {
-        let Some(m) = self.machine.as_ref() else {
+        let Some(m) = self.machine.as_ref().and_then(HostRuntime::classic) else {
             return Err(HostError::NoMachine);
         };
         let debugger = m.debugger();
@@ -1254,12 +1412,28 @@ impl HostSession {
         if !self.running || self.machine.is_none() {
             return machine::FrameAudio::default();
         }
-        if self.machine.as_ref().is_some_and(|m| m.debugger().paused) {
+        if let Some(HostRuntime::Next(next)) = self.machine.as_mut() {
+            let audio = next.run_frame();
+            self.audio_pcm.clear();
+            self.sync_framebuffer_dims();
+            self.refresh_framebuffer();
+            return audio;
+        }
+        if self
+            .machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .is_some_and(|m| m.debugger().paused)
+        {
             self.refresh_framebuffer();
             return machine::FrameAudio::default();
         }
         let (audio, frame_t, w, h) = {
-            let m = self.machine.as_mut().expect("machine checked above");
+            let m = self
+                .machine
+                .as_mut()
+                .and_then(HostRuntime::classic_mut)
+                .expect("machine checked above");
             let audio = m.run_frame();
             let frame_t = match m.model() {
                 machine::Model::Spectrum16K
@@ -1272,6 +1446,7 @@ impl HostSession {
                 | machine::Model::SpectrumPlus3
                 | machine::Model::SpectrumPlus3e => 70_908,
                 machine::Model::Pentagon128 | machine::Model::ScorpionZs256 => 71_680,
+                machine::Model::SpectrumNext => unreachable!("classic runtime has no Next model"),
             };
             let (w, h) = m.framebuffer_dims(self.with_border);
             (audio, frame_t, w, h)
@@ -1355,14 +1530,14 @@ impl HostSession {
         }
         let mut last = machine::BreakReason::None;
         for _ in 0..frames {
-            if let Some(m) = self.machine.as_ref() {
+            if let Some(m) = self.machine.as_ref().and_then(HostRuntime::classic) {
                 if m.debugger().paused {
                     last = m.debugger().last_hit;
                     break;
                 }
             }
             self.run_frame();
-            if let Some(m) = self.machine.as_ref() {
+            if let Some(m) = self.machine.as_ref().and_then(HostRuntime::classic) {
                 last = m.debugger().last_hit;
                 if m.debugger().paused {
                     break;
@@ -1384,7 +1559,7 @@ impl HostSession {
         max: u32,
     ) -> Result<TypeLoadResult, HostError> {
         {
-            let m = require_machine_mut(self.machine.as_mut())?;
+            let m = require_machine_mut(&mut self.machine)?;
             if !m.has_tape() {
                 return Err(HostError::Message("no tape inserted".into()));
             }
@@ -1394,13 +1569,14 @@ impl HostSession {
             self.run_frame();
         }
         {
-            let m = require_machine_mut(self.machine.as_mut())?;
+            let m = require_machine_mut(&mut self.machine)?;
             m.type_load_quotes(with_code);
             m.set_tape_playing(true);
         }
         let ear = self
             .machine
             .as_ref()
+            .and_then(HostRuntime::classic)
             .is_some_and(|m| !m.tape_load_options().flash_load);
         let limit = if max > 0 {
             max
@@ -1412,7 +1588,7 @@ impl HostSession {
         let mut loaded = false;
         for _ in 0..limit {
             self.run_frame();
-            if let Some(m) = self.machine.as_ref() {
+            if let Some(m) = self.machine.as_ref().and_then(HostRuntime::classic) {
                 loaded = if with_code {
                     Self::attr_mark_code_loaded(m)
                 } else {
@@ -1423,7 +1599,11 @@ impl HostSession {
                 }
             }
         }
-        let m = self.machine.as_ref().expect("machine");
+        let m = self
+            .machine
+            .as_ref()
+            .and_then(HostRuntime::classic)
+            .expect("machine");
         Ok(TypeLoadResult {
             load_ok: loaded,
             attr_mark: if with_code {
@@ -1435,7 +1615,7 @@ impl HostSession {
     }
 
     pub fn clear_breakpoints(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.debugger_mut().clear_breaks();
         Ok(())
     }
@@ -1452,7 +1632,7 @@ impl HostSession {
     }
 
     pub fn remove_breakpoint(&mut self, pc: u16) -> Result<(), HostError> {
-        let m = require_machine_mut(self.machine.as_mut())?;
+        let m = require_machine_mut(&mut self.machine)?;
         m.debugger_mut().remove_pc_break(pc);
         Ok(())
     }
@@ -1461,6 +1641,7 @@ impl HostSession {
     pub fn framebuffer_hires(&self) -> bool {
         self.machine
             .as_ref()
+            .and_then(HostRuntime::classic)
             .is_some_and(machine::Machine::framebuffer_hires)
     }
 
@@ -1468,6 +1649,7 @@ impl HostSession {
     pub fn timex_scld_mode(&self) -> Option<u8> {
         self.machine
             .as_ref()
+            .and_then(HostRuntime::classic)
             .and_then(machine::Machine::timex_scld_mode)
     }
 

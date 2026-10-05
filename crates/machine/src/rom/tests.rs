@@ -26,6 +26,7 @@ fn all_models_ui_order() {
             Model::ScorpionZs256,
             Model::TimexTC2048,
             Model::TimexTS2068,
+            Model::SpectrumNext,
         ]
     );
 }

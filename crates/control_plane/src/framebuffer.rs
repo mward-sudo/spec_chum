@@ -42,6 +42,7 @@ pub fn model_slug(model: ModelId) -> String {
         ModelId::ScorpionZs256 => "scorpion_zs256".into(),
         ModelId::TimexTC2048 => "timex_tc2048".into(),
         ModelId::TimexTS2068 => "timex_ts2068".into(),
+        ModelId::SpectrumNext => "spectrum_next".into(),
     }
 }
 
@@ -58,6 +59,7 @@ pub fn parse_model_slug(s: &str) -> ApiResult<ModelId> {
         "scorpion" | "scorpion_zs256" | "zs256" | "256s" => ModelId::ScorpionZs256,
         "timex" | "tc2048" | "timex2048" | "timex_tc2048" => ModelId::TimexTC2048,
         "ts2068" | "tc2068" | "timex2068" | "timex_ts2068" => ModelId::TimexTS2068,
+        "spectrum_next" | "next" => ModelId::SpectrumNext,
         other => {
             return Err(ApiError::BadRequest(format!("unknown model {other}")));
         }

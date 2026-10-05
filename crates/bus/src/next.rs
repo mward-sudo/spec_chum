@@ -7,7 +7,7 @@ use std::path::Path;
 
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
-use crate::{require_rom_size, Keyboard, RomLoadError};
+use crate::{require_rom_size, Kempston, Keyboard, RomLoadError};
 
 const PAGE_SIZE: usize = 0x2000;
 const CONFIG_BANK_SIZE: usize = 0x4000;
@@ -46,6 +46,7 @@ pub struct NextBus {
     machine_type: u8,
     display_timing: u8,
     display_screen_bank: u8,
+    border: u8,
     config_mapping: u8,
     layer2_page: u8,
     peripheral3: u8,
@@ -69,6 +70,7 @@ pub struct NextBus {
     sd_cs: u8,
     /// Host-driven Spectrum keyboard matrix, used by ULA port `$FE`.
     pub keyboard: Keyboard,
+    pub kempston: Kempston,
 }
 
 impl NextBus {
@@ -96,6 +98,7 @@ impl NextBus {
             machine_type: 0,
             display_timing: 0,
             display_screen_bank: 0,
+            border: 0,
             config_mapping: 0,
             layer2_page: 0,
             peripheral3: 0,
@@ -121,6 +124,7 @@ impl NextBus {
             sd_spi: None,
             sd_cs: 0,
             keyboard: Keyboard::new(),
+            kempston: Kempston::new(),
         };
         bus.hard_reset();
         Ok(bus)
@@ -442,6 +446,11 @@ impl NextBus {
         self.display_screen_bank
     }
 
+    #[must_use]
+    pub fn border(&self) -> u8 {
+        self.border
+    }
+
     /// Spectrum display timing selected through `NextReg` `$03`.
     #[must_use]
     pub fn display_timing(&self) -> u8 {
@@ -750,6 +759,7 @@ impl NextBus {
                 .sd_spi
                 .as_mut()
                 .map_or(0xff, |sd| sd.exchange_at(0xff, t)),
+            _ if port & 0xff == 0x1f => self.kempston.read(),
             _ if port & 1 == 0 => 0xa0 | self.keyboard.read((port >> 8) as u8),
             _ => 0xff,
         }
@@ -786,6 +796,7 @@ impl NextBus {
                     let _ = sd.exchange_at(value, t);
                 }
             }
+            _ if port & 1 == 0 => self.border = value & 0x07,
             _ => {}
         }
     }

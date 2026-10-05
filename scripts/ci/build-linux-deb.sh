@@ -90,6 +90,9 @@ cp "$README" "$ROOT/usr/share/doc/spec-chum/README.txt"
 if [[ -f "$STAGE_DIR/ROMS-NOTICE.txt" ]]; then
   cp "$STAGE_DIR/ROMS-NOTICE.txt" "$ROOT/usr/share/doc/spec-chum/ROMS-NOTICE.txt"
 fi
+if [[ -f "$STAGE_DIR/NEXT-NOTICE.txt" ]]; then
+  cp "$STAGE_DIR/NEXT-NOTICE.txt" "$ROOT/usr/share/doc/spec-chum/NEXT-NOTICE.txt"
+fi
 gzip -9n -c "$README" >"$ROOT/usr/share/doc/spec-chum/README.txt.gz"
 rm -f "$ROOT/usr/share/doc/spec-chum/README.txt"
 

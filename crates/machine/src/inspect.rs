@@ -392,6 +392,7 @@ impl Inspect {
             Model::ScorpionZs256 => "scorpion_zs256",
             Model::TimexTC2048 => "timex_tc2048",
             Model::TimexTS2068 => "timex_ts2068",
+            Model::SpectrumNext => "spectrum_next",
         };
         let tape = self.tape.as_ref().map_or("null".into(), tape_json);
         let ay = self.ay_regs.map_or("null".into(), |regs| {

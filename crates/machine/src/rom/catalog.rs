@@ -16,6 +16,7 @@ pub fn rom_candidates(model: Model) -> &'static [&'static str] {
         Model::SpectrumPlus3e => &["roms/plus3e/plus3e.rom"],
         Model::Pentagon128 => &["roms/pentagon/pentagon.rom", "roms/pentagon/128p.rom"],
         Model::ScorpionZs256 => &["roms/scorpion/scorpion.rom", "roms/scorpion/256s.rom"],
+        Model::SpectrumNext => &["roms/system-next/24.11/sn-complete-24.11.zip"],
     }
 }
 
@@ -73,13 +74,17 @@ pub fn expected_main_rom_bytes(model: Model) -> usize {
         Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 => 32 * 1024,
         Model::ScorpionZs256 => 48 * 1024,
         Model::SpectrumPlus2A | Model::SpectrumPlus3 | Model::SpectrumPlus3e => 64 * 1024,
+        Model::SpectrumNext => 56_371_963,
     }
 }
 
 /// Models whose main ROM is never auto-fetched (user dumps / clone firmware).
 #[must_use]
 pub fn requires_user_rom(model: Model) -> bool {
-    matches!(model, Model::Pentagon128 | Model::ScorpionZs256)
+    matches!(
+        model,
+        Model::Pentagon128 | Model::ScorpionZs256 | Model::SpectrumNext
+    )
 }
 
 /// True when the model needs a separate TR-DOS ROM on disk before boot.
@@ -109,6 +114,7 @@ pub fn model_label(model: Model) -> &'static str {
         Model::ScorpionZs256 => "Scorpion",
         Model::TimexTC2048 => "TC2048",
         Model::TimexTS2068 => "TS2068",
+        Model::SpectrumNext => "ZX Spectrum Next",
     }
 }
 
@@ -127,11 +133,12 @@ pub fn model_title(model: Model) -> &'static str {
         Model::ScorpionZs256 => "Scorpion ZS-256",
         Model::TimexTC2048 => "Timex TC2048",
         Model::TimexTS2068 => "Timex TS2068",
+        Model::SpectrumNext => "ZX Spectrum Next",
     }
 }
 
 /// Canonical UI order for every host picker / menu.
-pub const ALL_MODELS: [Model; 11] = [
+pub const ALL_MODELS: [Model; 12] = [
     Model::Spectrum16K,
     Model::Spectrum48,
     Model::Spectrum128,
@@ -143,4 +150,5 @@ pub const ALL_MODELS: [Model; 11] = [
     Model::ScorpionZs256,
     Model::TimexTC2048,
     Model::TimexTS2068,
+    Model::SpectrumNext,
 ];

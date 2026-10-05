@@ -19,8 +19,9 @@ use gtk4::{
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use spec_chum_host::{
-    default_prefs_path, install_model_rom, load_prefs, rom_setup_json, save_prefs,
-    sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel, UiPreferences,
+    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, rom_setup_json,
+    save_prefs, sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel,
+    UiPreferences,
 };
 
 use linux_shell::keymap::{
@@ -275,6 +276,26 @@ impl AppState {
         if setup.complete {
             return true;
         }
+        if model == ModelId::SpectrumNext {
+            let get = rfd::MessageDialog::new()
+                .set_title("ZX Spectrum Next assets")
+                .set_description("Get the pinned official System/Next 24.11 distribution and separate GPL boot code? Choose No to select the verified archive from its companion asset folder. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.")
+                .set_buttons(rfd::MessageButtons::YesNo)
+                .show() == rfd::MessageDialogResult::Yes;
+            if get {
+                match acquire_next_assets(&mut paths) {
+                    Ok(_) => {
+                        self.prefs.model_rom_paths = paths;
+                        self.persist_prefs();
+                        return true;
+                    }
+                    Err(error) => {
+                        self.report_err("Next asset setup", &HostError::Message(error.to_string()));
+                        return false;
+                    }
+                }
+            }
+        }
         let details = setup
             .slots
             .iter()
@@ -298,8 +319,13 @@ impl AppState {
             return false;
         }
         for slot in setup.slots.iter().filter(|slot| slot.status != "found") {
+            let extensions: &[&str] = if model == ModelId::SpectrumNext {
+                &["zip"]
+            } else {
+                &["rom", "bin"]
+            };
             let path = rfd::FileDialog::new()
-                .add_filter(&slot.label, &["rom", "bin"])
+                .add_filter(&slot.label, extensions)
                 .set_title(format!("Choose {} ROM", slot.label))
                 .pick_file();
             let Some(path) = path else { return false };

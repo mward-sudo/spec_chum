@@ -195,6 +195,9 @@ pub fn resolve_trdos_rom_preferring_file_services(
 /// Hint shown when a model is disabled in the picker.
 #[must_use]
 pub fn unavailable_reason(model: Model) -> &'static str {
+    if model == Model::SpectrumNext {
+        return "Install the official System/Next asset set; see docs/ROMS.md";
+    }
     if requires_trdos_rom(model) {
         if !main_rom_available(model) {
             return match model {

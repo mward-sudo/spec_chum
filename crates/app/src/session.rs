@@ -217,6 +217,13 @@ impl EmulatorSession {
     pub fn try_autoload_rom(&mut self) {
         let root = Self::workspace_root();
         let model = self.model();
+        if model == Model::SpectrumNext {
+            let result = self.host_mut().select_model(ModelId::SpectrumNext);
+            if let Err(error) = result {
+                self.host_mut().set_status(error.to_string());
+            }
+            return;
+        }
         let overrides = slot_rom_overrides_for_model(PrefModel::from_model(model).to_model_id());
         if let Some(path) = machine::resolve_rom_path_in_with_overrides(
             model,
@@ -301,6 +308,11 @@ impl EmulatorSession {
     }
 
     pub fn load_tap(&mut self, path: &Path) {
+        if self.model() == Model::SpectrumNext {
+            self.host_mut()
+                .set_status("Tape loading is unavailable on ZX Spectrum Next");
+            return;
+        }
         let data = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
@@ -333,6 +345,11 @@ impl EmulatorSession {
     }
 
     pub fn load_tzx(&mut self, path: &Path) {
+        if self.model() == Model::SpectrumNext {
+            self.host_mut()
+                .set_status("Tape loading is unavailable on ZX Spectrum Next");
+            return;
+        }
         let data = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {

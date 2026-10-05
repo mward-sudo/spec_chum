@@ -22,6 +22,9 @@ serde_json = { workspace = true }
 directories = { workspace = true }
 parking_lot = { workspace = true }
 ureq = { workspace = true }
+sha2 = { workspace = true }
+fatfs = { version = "0.3.6", default-features = false, features = ["std", "alloc"] }
+zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 
 # Crate-local lints (#171): pedantic warn with endemic cast/name allows.
 # Cannot mix `workspace = true` with overrides — keep in sync with root Cargo.toml.
