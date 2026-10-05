@@ -1414,7 +1414,12 @@ impl HostSession {
         }
         if let Some(HostRuntime::Next(next)) = self.machine.as_mut() {
             let audio = next.run_frame();
-            self.audio_pcm.clear();
+            self.last_speaker_level = render_frame_pcm(
+                &audio,
+                next.frame_tstates(),
+                self.last_speaker_level,
+                &mut self.audio_pcm,
+            );
             self.sync_framebuffer_dims();
             self.refresh_framebuffer();
             return audio;

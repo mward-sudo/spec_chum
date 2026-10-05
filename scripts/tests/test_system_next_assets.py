@@ -65,6 +65,20 @@ class SystemNextAssetTests(unittest.TestCase):
         with self.assertRaisesRegex(assets.AssetError, "size or SHA-256 mismatch"):
             self.verify(manifest, boot_rom, license_text)
 
+    def test_verify_accepts_legacy_metadata_without_reinstalling(self):
+        manifest, boot_rom, license_text = self.make_asset_set()
+        (self.asset_dir / "ASSET-INFO.txt").write_text(assets._legacy_asset_metadata())
+
+        assets.verify_installed_assets(
+            self.asset_dir,
+            system_manifest=manifest,
+            boot_name="boot.bin",
+            boot_size=len(boot_rom),
+            boot_hash=self.digest(boot_rom),
+            license_size=len(license_text),
+            license_hash=self.digest(license_text),
+        )
+
     def test_missing_firmware_archive_member_names_the_file(self):
         archive_path = self.asset_dir / "system.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:

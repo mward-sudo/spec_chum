@@ -205,6 +205,44 @@ fn set_key_holds_across_run_frames() {
 }
 
 #[test]
+fn next_host_key_release_clears_the_keyboard_matrix() {
+    let rom = vec![0; 0x1_0000];
+    let next = machine::NextMachine::new(&rom).expect("valid Next ROM");
+    let mut session = HostSession::new(ModelId::SpectrumNext, false);
+    session.machine = Some(HostRuntime::Next(next));
+
+    session.set_key(6, 3, true).expect("Next key down");
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert_eq!(next.bus.keyboard.rows[6] & (1 << 3), 0);
+
+    session.set_key(6, 3, false).expect("Next key up");
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert_ne!(next.bus.keyboard.rows[6] & (1 << 3), 0);
+}
+
+#[test]
+fn next_beeper_audio_reaches_host_pcm() {
+    let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
+    let program = [0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xc3, 0x00, 0xc0];
+    for (offset, byte) in program.into_iter().enumerate() {
+        next.bus.write(0xc000 + offset as u16, byte);
+    }
+    next.cpu.regs.pc = 0xc000;
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session.machine = Some(HostRuntime::Next(next));
+
+    session.run_frame();
+
+    assert_eq!(session.audio_pcm().len(), AUDIO_SAMPLES_PER_FRAME);
+    assert!(session.audio_pcm().iter().any(|sample| *sample > 0.0));
+    assert!(session.audio_pcm().iter().any(|sample| *sample < 0.0));
+}
+
+#[test]
 fn kempston_mouse_ports_after_synthetic_deltas() {
     let Some(rom) = rom48() else {
         eprintln!("skip: roms/spec48.rom missing");

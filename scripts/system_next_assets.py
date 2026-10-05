@@ -261,7 +261,8 @@ def verify_installed_assets(
     verify_file(asset_dir / license_name, license_size, license_hash)
     metadata_path = asset_dir / "ASSET-INFO.txt"
     expected_metadata = _asset_metadata() if metadata is None else metadata
-    if not metadata_path.is_file() or metadata_path.read_text() != expected_metadata:
+    accepted_metadata = (expected_metadata, _legacy_asset_metadata()) if metadata is None else (metadata,)
+    if not metadata_path.is_file() or metadata_path.read_text() not in accepted_metadata:
         raise AssetError("missing or mismatched ASSET-INFO.txt")
 
 

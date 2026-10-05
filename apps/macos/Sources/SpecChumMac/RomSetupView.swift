@@ -131,6 +131,10 @@ struct RomSetupView: View {
                         Button("Get official assets…") {
                             host.acquireNextAssets()
                         }
+                        .disabled(host.nextAssetsAcquiring)
+                        if host.nextAssetsAcquiring {
+                            ProgressView("Downloading and verifying official assets…")
+                        }
                     } else if payload.fetchable {
                         Text(
                             "System ROMs are not shipped with Spec Chum. Fetch official images with ./scripts/fetch_roms.sh, or choose files below — paths are remembered across restarts."

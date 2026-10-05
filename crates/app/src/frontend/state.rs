@@ -150,6 +150,7 @@ impl SpecChumApp {
             show_rom_setup: false,
             rom_setup: None,
             rom_setup_error: None,
+            next_assets_download: None,
         };
         app.refresh_rom_setup();
         app.maybe_auto_present_rom_setup();

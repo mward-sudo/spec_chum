@@ -130,8 +130,7 @@ pub extern "C" fn sc_install_model_rom(
 #[no_mangle]
 pub extern "C" fn sc_acquire_next_assets() -> c_int {
     clear_last_error();
-    let mut paths = crate::rom_setup::model_rom_paths_snapshot();
-    match crate::rom_setup::acquire_next_assets(&mut paths) {
+    match crate::rom_setup::acquire_next_assets() {
         Ok(_) => 0,
         Err(error) => {
             set_last_error(error.to_string());

@@ -159,15 +159,30 @@ extension HostBridge {
     }
 
     func acquireNextAssets() {
+        guard !nextAssetsAcquiring else { return }
+        nextAssetsAcquiring = true
+        romSetupError = nil
         status = "Acquiring official System/Next assets…"
-        guard sc_acquire_next_assets() == 0 else {
-            romSetupError = HostBridge.takeLastError() ?? "Official asset setup failed"
-            return
-        }
-        pullModelRomPathsFromHost()
-        refreshRomSetup()
-        if romSetupModel == model, romSetupPayload?.complete == true {
-            finishRomSetup(loadMachine: true)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            // The C API's last error is thread-local; read it on the download worker.
+            let error = sc_acquire_next_assets() == 0
+                ? nil : HostBridge.takeLastError() ?? "Official asset setup failed"
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.nextAssetsAcquiring = false
+                if let error {
+                    self.romSetupError = error
+                    self.status = error
+                    return
+                }
+                self.pullModelRomPathsFromHost(only: "spectrum_next_next_assets")
+                self.refreshRomSetup()
+                if self.romSetupModel == .spectrumNext,
+                   self.model == .spectrumNext,
+                   self.romSetupPayload?.complete == true {
+                    self.finishRomSetup(loadMachine: true)
+                }
+            }
         }
     }
 
@@ -354,7 +369,7 @@ extension HostBridge {
         _ = text.withCString { sc_sync_model_rom_paths_json($0) }
     }
 
-    func pullModelRomPathsFromHost() {
+    func pullModelRomPathsFromHost(only slotKey: String? = nil) {
         guard let cstr = sc_model_rom_paths_json() else { return }
         defer { sc_string_free(cstr) }
         let text = String(cString: cstr)
@@ -363,7 +378,13 @@ extension HostBridge {
         else {
             return
         }
-        modelRomPaths = decoded
+        if let slotKey {
+            guard let path = decoded[slotKey] else { return }
+            modelRomPaths[slotKey] = path
+            syncModelRomPathsToHost()
+        } else {
+            modelRomPaths = decoded
+        }
         persistModelRomPaths()
     }
 

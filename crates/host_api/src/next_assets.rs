@@ -140,6 +140,34 @@ fn download_verified(
     Ok(())
 }
 
+fn extract_verified_member<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    directory: &Path,
+    name: &str,
+    size: u64,
+    sha256: &str,
+) -> Result<(), NextAssetError> {
+    let mut member = archive.by_name(name)?;
+    let target = directory.join(name);
+    let temporary = target.with_extension("verified-part");
+    let extraction = (|| {
+        let mut file = File::create(&temporary)?;
+        io::copy(&mut member, &mut file)?;
+        file.sync_all()?;
+        drop(file);
+        verify_file(&temporary, size, sha256)
+    })();
+    if let Err(error) = extraction {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+    if target.exists() {
+        fs::remove_file(&target)?;
+    }
+    fs::rename(temporary, target)?;
+    Ok(())
+}
+
 impl NextAssets {
     /// Availability for an explicit source directory; the same validation gates boot.
     pub(crate) fn available_in(directory: &Path) -> bool {
@@ -184,12 +212,7 @@ impl NextAssets {
                 (IPL_NAME, 8192, IPL_SHA256),
                 (LICENSE_NAME, 35_176, LICENSE_SHA256),
             ] {
-                let mut member = source.by_name(name)?;
-                let target = directory.join(name);
-                let mut file = File::create(&target)?;
-                io::copy(&mut member, &mut file)?;
-                drop(file);
-                verify_file(&target, size, sha256)?;
+                extract_verified_member(&mut source, &directory, name, size, sha256)?;
             }
         }
         fs::write(directory.join("ASSET-INFO.txt"), ASSET_INFO)?;
@@ -301,8 +324,8 @@ impl NextAssets {
             let _ = fs::remove_file(&temporary);
             return Err(error);
         }
-        fs::rename(temporary, &self.card)?;
         fs::write(marker, SYSTEM_SHA256)?;
+        fs::rename(temporary, &self.card)?;
         Ok(&self.card)
     }
 
@@ -453,6 +476,46 @@ impl Seek for Partition {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
+
+    use zip::write::SimpleFileOptions;
+
+    #[test]
+    fn invalid_extracted_asset_does_not_replace_existing_file() {
+        let directory = std::env::temp_dir().join(format!(
+            "spec-chum-next-asset-extract-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock follows Unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).expect("create isolated asset directory");
+        let destination = directory.join(IPL_NAME);
+        fs::write(&destination, b"user file").expect("write existing asset");
+
+        let mut bytes = Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut bytes);
+            writer
+                .start_file(IPL_NAME, SimpleFileOptions::default())
+                .expect("start IPL archive member");
+            writer.write_all(b"invalid IPL").expect("write IPL member");
+            writer.finish().expect("finish IPL archive");
+        }
+        bytes.set_position(0);
+        let mut archive = ZipArchive::new(bytes).expect("read test archive");
+
+        assert!(
+            extract_verified_member(&mut archive, &directory, IPL_NAME, 8192, IPL_SHA256).is_err()
+        );
+        assert_eq!(
+            fs::read(&destination).expect("existing asset preserved"),
+            b"user file"
+        );
+        assert!(!destination.with_extension("verified-part").exists());
+        fs::remove_dir_all(directory).expect("remove isolated asset directory");
+    }
 
     #[test]
     fn missing_or_invalid_set_is_unavailable_with_setup_guidance() {

@@ -181,15 +181,14 @@ pub fn model_rom_available(model: ModelId, rom_paths: &BTreeMap<String, String>)
 }
 
 /// Explicit user action: acquire the pinned official set and remember its local path.
-pub fn acquire_next_assets(
-    rom_paths: &mut BTreeMap<String, String>,
-) -> Result<PathBuf, RomSetupError> {
+pub fn acquire_next_assets() -> Result<PathBuf, RomSetupError> {
     let assets = crate::next_assets::NextAssets::acquire_official()?;
-    rom_paths.insert(
-        model_rom_path_key(PrefModel::SpectrumNext, "next_assets"),
-        assets.archive.display().to_string(),
-    );
-    sync_model_rom_paths(rom_paths.clone());
+    if let Ok(mut paths) = MODEL_ROM_PATHS.lock() {
+        paths.insert(
+            model_rom_path_key(PrefModel::SpectrumNext, "next_assets"),
+            assets.archive.display().to_string(),
+        );
+    }
     Ok(assets.archive)
 }
 

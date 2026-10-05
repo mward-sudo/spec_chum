@@ -313,6 +313,7 @@ final class HostBridge: ObservableObject {
     @Published var showRomSetup = false
     @Published var romSetupPayload: RomSetupPayload?
     @Published var romSetupError: String?
+    @Published var nextAssetsAcquiring = false
     /// Model the ROM dialog is configuring (may differ while picking from menu).
     @Published var romSetupModel: Model = .spectrum48
 

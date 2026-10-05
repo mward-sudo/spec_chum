@@ -5,6 +5,7 @@ use super::{
     Machine, Model, TapeLoadOptions, UiPreferences, UserMachineConfig, MAPPING_DOC,
 };
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -46,6 +47,7 @@ pub struct SpecChumApp {
     show_rom_setup: bool,
     rom_setup: Option<RomSetupJson>,
     rom_setup_error: Option<String>,
+    next_assets_download: Option<mpsc::Receiver<Result<PathBuf, String>>>,
 }
 
 impl std::fmt::Debug for SpecChumApp {
@@ -171,6 +173,10 @@ impl eframe::App for SpecChumApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.poll_next_assets_download();
+        if self.next_assets_download.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
         if let Some(cap) = self.window_capturer.as_ref() {
             window_capture::refresh_window_id_from_frame(cap, frame);
         }
