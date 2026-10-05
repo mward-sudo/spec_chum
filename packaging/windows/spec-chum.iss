@@ -65,6 +65,7 @@ Source: "{#StageDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\ROMS-NOTICE.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#StageDir}\NEXT-NOTICE.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#StageDir}\roms\*"; DestDir: "{app}\roms"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

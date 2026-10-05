@@ -126,6 +126,19 @@ pub extern "C" fn sc_install_model_rom(
     }
 }
 
+/// Explicitly acquire and verify official Spectrum Next assets in per-user storage.
+#[no_mangle]
+pub extern "C" fn sc_acquire_next_assets() -> c_int {
+    clear_last_error();
+    match crate::rom_setup::acquire_next_assets() {
+        Ok(_) => 0,
+        Err(error) => {
+            set_last_error(error.to_string());
+            -1
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn sc_load_rom(handle: *mut c_void, path: *const c_char) -> c_int {
     clear_last_error();

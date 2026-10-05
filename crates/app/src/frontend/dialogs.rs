@@ -3,11 +3,47 @@
 use super::SpecChumApp;
 use eframe::egui;
 use spec_chum_host::{
-    hardware_compat, install_model_rom, model_requires_user_rom, model_rom_available,
-    rom_setup_json, sync_model_rom_paths, PrefAyStereo, PrefJoystick, PrefModel,
+    acquire_next_assets, hardware_compat, install_model_rom, model_requires_user_rom,
+    model_rom_available, model_rom_path_key, rom_setup_json, sync_model_rom_paths, PrefAyStereo,
+    PrefJoystick, PrefModel,
 };
+use std::sync::mpsc::{self, TryRecvError};
 
 impl SpecChumApp {
+    pub(super) fn poll_next_assets_download(&mut self) {
+        let Some(receiver) = self.next_assets_download.as_ref() else {
+            return;
+        };
+        let result = match receiver.try_recv() {
+            Ok(result) => result,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                Err("Official asset download stopped unexpectedly".into())
+            }
+        };
+        self.next_assets_download = None;
+        match result {
+            Ok(archive) => {
+                self.prefs.model_rom_paths.insert(
+                    model_rom_path_key(PrefModel::SpectrumNext, "next_assets"),
+                    archive.display().to_string(),
+                );
+                sync_model_rom_paths(self.prefs.model_rom_paths.clone());
+                self.mark_prefs_dirty();
+                self.session
+                    .host_mut()
+                    .set_status(format!("Verified {}", archive.display()));
+                self.refresh_rom_setup();
+                if self.session.model() == machine::Model::SpectrumNext
+                    && self.rom_setup.as_ref().is_some_and(|setup| setup.complete)
+                {
+                    self.finish_rom_setup();
+                }
+            }
+            Err(error) => self.rom_setup_error = Some(error),
+        }
+    }
+
     fn needs_rom_setup(&self) -> bool {
         if self.prefs.active_config_id.is_some() {
             return false;
@@ -99,7 +135,23 @@ impl SpecChumApp {
                 };
                 ui.label(&doc.model_title);
                 ui.separator();
-                if doc.fetchable {
+                if self.session.model() == machine::Model::SpectrumNext {
+                    ui.weak("Get the pinned official System/Next 24.11 distribution and separate GPL boot code, or select the verified archive from its companion asset folder below. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.");
+                    if ui.add_enabled(self.next_assets_download.is_none(), egui::Button::new("Get official System/Next assets…")).clicked() {
+                        self.rom_setup_error = None;
+                        self.session.host_mut().set_status("Acquiring official System/Next assets…".to_owned());
+                        let (sender, receiver) = mpsc::channel();
+                        std::thread::spawn(move || {
+                            let result = acquire_next_assets().map_err(|error| error.to_string());
+                            let _ = sender.send(result);
+                        });
+                        self.next_assets_download = Some(receiver);
+                    }
+                    if self.next_assets_download.is_some() {
+                        ui.spinner();
+                        ui.label("Downloading and verifying official assets…");
+                    }
+                } else if doc.fetchable {
                     ui.weak(
                         "System ROMs are not shipped — run ./scripts/fetch_roms.sh or choose files below (path remembered across restarts).",
                     );
@@ -130,8 +182,13 @@ impl SpecChumApp {
                         }
                         ui.weak(&slot.hint);
                         if ui.button(format!("Choose {}…", slot.label)).clicked() {
+                            let filter = if self.session.model() == machine::Model::SpectrumNext {
+                                ("Official System/Next archive", &["zip"][..])
+                            } else {
+                                ("ROM", &["rom", "bin"][..])
+                            };
                             if let Some(picked) = rfd::FileDialog::new()
-                                .add_filter("ROM", &["rom", "bin"])
+                                .add_filter(filter.0, filter.1)
                                 .pick_file()
                             {
                                 let model =
@@ -208,6 +265,9 @@ impl SpecChumApp {
                     ui.separator();
                     ui.label("Base model");
                     for pick in machine::ALL_MODELS {
+                        if pick == machine::Model::SpectrumNext {
+                            continue;
+                        }
                         let pref = PrefModel::from_model(pick);
                         let title = machine::model_title(pick);
                         let mut selected = draft.base == pref;

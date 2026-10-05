@@ -9,6 +9,7 @@ pub mod keymap;
 pub mod machine_config;
 pub mod media_title_lookup;
 pub mod model_catalog;
+pub mod next_assets;
 pub mod prefs;
 pub mod rom_setup;
 pub mod session;
@@ -27,8 +28,9 @@ pub use prefs::{
     MIN_WINDOW_WIDTH, PREFS_VERSION,
 };
 pub use rom_setup::{
-    install_model_rom, model_requires_user_rom, model_rom_available, model_rom_paths_snapshot,
-    rom_setup_json, slot_rom_overrides_for_model, sync_model_rom_paths, RomSetupJson, RomSetupSlot,
+    acquire_next_assets, install_model_rom, model_requires_user_rom, model_rom_available,
+    model_rom_paths_snapshot, rom_setup_json, slot_rom_overrides_for_model, sync_model_rom_paths,
+    RomSetupJson, RomSetupSlot,
 };
 pub use session::{
     HostError, HostRegs, HostSession, ModelId, RegsPatch, TypeLoadResult, AUDIO_SAMPLE_RATE,

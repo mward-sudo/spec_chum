@@ -68,9 +68,12 @@ enum PrefModelSlug: String, Codable, CaseIterable {
     case scorpionZs256 = "scorpion_zs256"
     case timexTC2048 = "timex_tc2048"
     case timexTS2068 = "timex_ts2068"
+    case spectrumNext = "spectrum_next"
 
     /// Canonical UI order (matches `machine::ALL_MODELS` / `HostBridge.Model.pickerOrder`).
-    static let pickerOrder: [PrefModelSlug] = HostBridge.Model.pickerOrder.map { from($0) }
+    static let pickerOrder: [PrefModelSlug] = HostBridge.Model.pickerOrder
+        .filter { $0 != .spectrumNext }
+        .map { from($0) }
 
     var hostModel: HostBridge.Model {
         switch self {
@@ -85,6 +88,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
         case .scorpionZs256: .scorpionZs256
         case .timexTC2048: .timexTC2048
         case .timexTS2068: .timexTS2068
+        case .spectrumNext: .spectrumNext
         }
     }
 
@@ -103,6 +107,7 @@ enum PrefModelSlug: String, Codable, CaseIterable {
         case .scorpionZs256: .scorpionZs256
         case .timexTC2048: .timexTC2048
         case .timexTS2068: .timexTS2068
+        case .spectrumNext: .spectrumNext
         }
     }
 }
@@ -163,6 +168,10 @@ struct HardwareCompatFlags {
         case .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e:
             return HardwareCompatFlags(
                 multiface: false, divmmc: false, interface1: false, beta: false, ayStereo: true
+            )
+        case .spectrumNext:
+            return HardwareCompatFlags(
+                multiface: false, divmmc: false, interface1: false, beta: false, ayStereo: false
             )
         }
     }

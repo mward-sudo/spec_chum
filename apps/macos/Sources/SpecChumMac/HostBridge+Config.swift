@@ -150,13 +150,40 @@ extension HostBridge {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "rom") ?? .data,
-            UTType(filenameExtension: "bin") ?? .data,
-        ]
-        panel.title = "Choose ROM file"
+        panel.allowedContentTypes = slotId == "next_assets"
+            ? [UTType(filenameExtension: "zip") ?? .data]
+            : [UTType(filenameExtension: "rom") ?? .data, UTType(filenameExtension: "bin") ?? .data]
+        panel.title = slotId == "next_assets" ? "Choose official System/Next archive" : "Choose ROM file"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         installRomSlot(slotId: slotId, from: url)
+    }
+
+    func acquireNextAssets() {
+        guard !nextAssetsAcquiring else { return }
+        nextAssetsAcquiring = true
+        romSetupError = nil
+        status = "Acquiring official System/Next assets…"
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            // The C API's last error is thread-local; read it on the download worker.
+            let error = sc_acquire_next_assets() == 0
+                ? nil : HostBridge.takeLastError() ?? "Official asset setup failed"
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.nextAssetsAcquiring = false
+                if let error {
+                    self.romSetupError = error
+                    self.status = error
+                    return
+                }
+                self.pullModelRomPathsFromHost(only: "spectrum_next_next_assets")
+                self.refreshRomSetup()
+                if self.romSetupModel == .spectrumNext,
+                   self.model == .spectrumNext,
+                   self.romSetupPayload?.complete == true {
+                    self.finishRomSetup(loadMachine: true)
+                }
+            }
+        }
     }
 
     func installRomSlot(slotId: String, from url: URL) {
@@ -201,7 +228,8 @@ extension HostBridge {
     }
 
     func beginNewConfiguration() {
-        let base = activeConfigId == nil ? model : (customConfigs.first { $0.id == activeConfigId }?.base.hostModel ?? model)
+        let selected = activeConfigId == nil ? model : (customConfigs.first { $0.id == activeConfigId }?.base.hostModel ?? model)
+        let base: Model = selected == .spectrumNext ? .spectrum48 : selected
         var draft = UserMachineConfig.newNamed("My Spectrum", base: base)
         draft.joystickMode = PrefJoystickSlug.from(joystickMode)
         draft.kempstonMouse = kempstonMouse
@@ -341,7 +369,7 @@ extension HostBridge {
         _ = text.withCString { sc_sync_model_rom_paths_json($0) }
     }
 
-    func pullModelRomPathsFromHost() {
+    func pullModelRomPathsFromHost(only slotKey: String? = nil) {
         guard let cstr = sc_model_rom_paths_json() else { return }
         defer { sc_string_free(cstr) }
         let text = String(cString: cstr)
@@ -350,7 +378,13 @@ extension HostBridge {
         else {
             return
         }
-        modelRomPaths = decoded
+        if let slotKey {
+            guard let path = decoded[slotKey] else { return }
+            modelRomPaths[slotKey] = path
+            syncModelRomPathsToHost()
+        } else {
+            modelRomPaths = decoded
+        }
         persistModelRomPaths()
     }
 
@@ -365,6 +399,13 @@ extension HostBridge {
 
     func tryAutoloadRom() {
         syncModelRomPathsToHost()
+        if model == .spectrumNext {
+            guard let handle else { return }
+            if sc_select_model(handle, model.rawValue) != 0 {
+                status = HostBridge.takeLastError() ?? "Official System/Next assets are unavailable; see docs/ROMS.md"
+            }
+            return
+        }
         if let main = modelRomPath(model: model, slot: "main"),
            FileManager.default.isReadableFile(atPath: main)
         {
@@ -393,6 +434,8 @@ extension HostBridge {
                 return ["roms/timex/tc2048.rom"]
             case .timexTS2068:
                 return ["roms/timex/tc2068-0.rom"]
+            case .spectrumNext:
+                return []
             }
         }()
         for root in romSearchRoots {

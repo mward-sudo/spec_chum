@@ -104,8 +104,18 @@ The archive includes the Next Licence, which must be checked alongside each
 constituent licence before any redistribution. Preserve the complete archive
 and all its notices unchanged; do not assume its top-level terms override a
 component licence or authorize redistribution of extracted ROMs, a partial
-archive, or a derived SD image. The setup script fetches user assets and does
-not package or redistribute them.
+archive, or a derived SD image. No-fee release packages include only the exact
+complete System/Next archive with its unchanged notices. The separate GPL IPL
+is fetched from its official source only after the user selects **Get official
+assets** in ROM Setup; it is not included in release packages.
+
+Each host's ROM setup dialog can acquire the verified set or remember an existing one:
+select `sn-complete-24.11.zip` from a folder that also contains the pinned
+`boot-30204.bin`, `GPL3-LICENSE`, and `ASSET-INFO.txt` installed by the setup
+script. Spec Chum validates the complete set before enabling the machine and
+builds a persistent SD card in its per-user data directory on first boot; the
+selected source folder remains unchanged. The UI uses Spec Chum
+branding and does not imply affiliation with SpecNext Ltd.
 
 The pinned complete archive is 56,371,963 bytes with SHA-256
 `cbf5d4c8bb6dc552a4e68317a7315e06609b14028e1f04dd0afd2189be65ce6b`. It is
@@ -125,8 +135,12 @@ pinned archive SHA-256 is
 `845b6567cbb531a550aff6e762bf0b6aa5ea2855bd23be24925ed6202fdc3d03`. Its
 README states that `boot-30204.bin` is GPL-3.0-or-later, with `GPL3-LICENSE`
 included; the selected 8 KiB file SHA-256 is
-`33f04fd104eb428eff1afe18854e3fc232019a20948ce8efed01f04f1196d815`. Older
-IPL binaries in the same archive contain the Sinclair ROM font and have a
+`33f04fd104eb428eff1afe18854e3fc232019a20948ce8efed01f04f1196d815`.
+The IPL archive README links an [upstream source reference](https://gitlab.com/SpectrumNext/ZX_Spectrum_Next_FPGA/-/tree/master/cores/zxnext/src/rom?ref_type=heads),
+but exact source correspondence for `boot-30204.bin` is unverified. Spec Chum
+does not redistribute this separate GPL binary.
+
+Older IPL binaries in the same archive contain the Sinclair ROM font and have a
 narrower non-commercial desktop emulator permission, so the setup script does
 not install them. The 24.11 distribution lists core 3.02.01, while this GPL IPL
 is 3.02.04. FPGA-core compatibility remains outside this emulator test. The

@@ -163,6 +163,13 @@ jobs:
         # Never commit ROM bytes; embed into packages at release time (#363).
         run: ./scripts/fetch_roms.sh
 
+      - name: Fetch exact System/Next distribution for no-fee bundle
+        shell: bash
+        run: |
+          if [[ -f scripts/system_next_assets.py ]]; then
+            python3 scripts/system_next_assets.py
+          fi
+
       - name: Fetch living-room assets
         if: runner.os == 'macOS'
         shell: bash
@@ -234,6 +241,9 @@ jobs:
             .trusted-ci/scripts/ci/bundle-release-roms.sh "$PWD" "dist/$OUT"
           fi
           cp LICENSE "dist/$OUT/"
+          if [[ -f "dist/$OUT/Spec Chum.app/Contents/Resources/NEXT-NOTICE.txt" ]]; then
+            cp "dist/$OUT/Spec Chum.app/Contents/Resources/NEXT-NOTICE.txt" "dist/$OUT/"
+          fi
           # Require managed ROMs inside the package; reject empty / missing tree.
           if [[ "$TARGET" == *apple-darwin* ]]; then
             ROM_PROBE="dist/$OUT/Spec Chum.app/Contents/Resources/roms/spec48.rom"
@@ -243,6 +253,14 @@ jobs:
           if [[ ! -f "$ROM_PROBE" ]]; then
             echo "error: redistributable ROMs missing from package ($ROM_PROBE)" >&2
             exit 1
+          fi
+          if [[ -f scripts/system_next_assets.py ]]; then
+            NEXT_PROBE="${ROM_PROBE%/spec48.rom}/system-next/24.11/sn-complete-24.11.zip"
+            test -f "$NEXT_PROBE"
+            test -f "dist/$OUT/NEXT-NOTICE.txt"
+            NEXT_SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$NEXT_PROBE")"
+            test "$NEXT_SHA" = "cbf5d4c8bb6dc552a4e68317a7315e06609b14028e1f04dd0afd2189be65ce6b"
+            test ! -e "${NEXT_PROBE%/*}/boot-30204.bin"
           fi
           {
             echo "Spec Chum ${VERSION} (${TARGET})"
@@ -286,6 +304,10 @@ jobs:
             echo "and other grants in docs/ROMS.md / ROMS-NOTICE.txt). User-provided-only"
             echo "firmware (IF1, Multiface, TR-DOS, …) is not included."
             echo "Do not strip copyright strings inside .rom files."
+            if [[ -f "dist/$OUT/NEXT-NOTICE.txt" ]]; then
+              echo "The exact complete System/Next 24.11 archive is included (see NEXT-NOTICE.txt)."
+              echo "The separate GPL boot code is acquired from its official source on request."
+            fi
           } > "dist/$OUT/README.txt"
           echo "dir=dist/$OUT" >> "$GITHUB_OUTPUT"
 
@@ -318,6 +340,9 @@ jobs:
           extras=("${STAGE_DIR}/LICENSE" "${STAGE_DIR}/README.txt")
           if [[ -f "${STAGE_DIR}/ROMS-NOTICE.txt" ]]; then
             extras+=("${STAGE_DIR}/ROMS-NOTICE.txt")
+          fi
+          if [[ -f "${STAGE_DIR}/NEXT-NOTICE.txt" ]]; then
+            extras+=("${STAGE_DIR}/NEXT-NOTICE.txt")
           fi
           .trusted-ci/scripts/ci/create-macos-dmg.sh \
             "$VERSION" \
@@ -587,6 +612,9 @@ jobs:
             Redistributable Spectrum ROMs are **bundled inside** each app package
             (Amstrad Lawson 1999 grant + grants in docs/ROMS.md). User-provided-only
             firmware is not included. ROM bytes are still not committed to git.
+            The no-fee packages also include the exact complete System/Next 24.11
+            archive with its unchanged notices. The separate GPL IPL is acquired
+            only when you select **Get official assets** in ROM Setup; see NEXT-NOTICE.txt.
 
             Verify downloads with `SHA256SUMS` (and `SHA256SUMS.asc` when GPG signing is configured).
             GitHub Artifact Attestations are attached to this workflow run.

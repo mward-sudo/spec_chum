@@ -4,6 +4,7 @@
 
 use std::mem::{size_of, zeroed};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -30,8 +31,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use control_plane::ControlPlane;
 use spec_chum_host::{
-    default_prefs_path, install_model_rom, load_prefs, rom_setup_json, save_prefs,
-    sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel, UiPreferences,
+    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, rom_setup_json,
+    save_prefs, sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel,
+    UiPreferences,
 };
 
 use native_shell_common::audio::{self, PcmRing};
@@ -69,6 +71,18 @@ enum HostSlot {
     Shared(Arc<Mutex<HostSession>>),
 }
 
+#[derive(Clone, Copy, Debug)]
+enum AfterNextAssets {
+    Select(ModelId),
+    ReloadCurrent(ModelId),
+}
+
+#[derive(Debug)]
+struct NextAssetDownload {
+    receiver: Receiver<Result<PathBuf, String>>,
+    after: Option<AfterNextAssets>,
+}
+
 impl HostSlot {
     fn with_mut<R>(&mut self, f: impl FnOnce(&mut HostSession) -> R) -> R {
         match self {
@@ -99,6 +113,7 @@ struct AppState {
     main_hwnd: Option<HWND>,
     /// Last time the debugger EDIT control was rewritten from `tick_frame`.
     last_debug_refresh: Instant,
+    next_assets_download: Option<NextAssetDownload>,
 }
 
 impl AppState {
@@ -176,6 +191,7 @@ impl AppState {
             debug_edit: None,
             main_hwnd: None,
             last_debug_refresh: Instant::now(),
+            next_assets_download: None,
         })
     }
 
@@ -195,6 +211,7 @@ impl AppState {
     }
 
     fn tick_frame(&mut self, hwnd: HWND) {
+        self.poll_next_assets_download();
         let min_dt = if self.prefs.throttle {
             Duration::from_millis(20)
         } else {
@@ -410,12 +427,39 @@ impl AppState {
     }
 
     /// Offer the shared per-slot ROM setup flow. Returns false when the user
-    /// cancels or a selected image fails validation.
-    fn setup_roms_for_model(&mut self, model: ModelId) -> bool {
+    /// cancels, validation fails, or a background download is pending.
+    fn setup_roms_for_model(&mut self, model: ModelId, after: AfterNextAssets) -> bool {
+        if model == ModelId::SpectrumNext && self.next_assets_download.is_some() {
+            self.host.with_mut(|session| {
+                session.set_status("Official System/Next assets are still downloading…".to_owned())
+            });
+            return false;
+        }
         let mut paths = self.prefs.model_rom_paths.clone();
         let setup = rom_setup_json(model, &paths);
         if setup.complete {
             return true;
+        }
+        if model == ModelId::SpectrumNext && message_box_confirm(
+            self.main_hwnd,
+            "ZX Spectrum Next assets",
+            "Get the pinned official System/Next 24.11 distribution and separate GPL boot code? Choose Cancel to select the verified archive from its companion asset folder. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.",
+        ) {
+            if self.next_assets_download.is_none() {
+                let (sender, receiver) = mpsc::channel();
+                std::thread::spawn(move || {
+                    let result = acquire_next_assets().map_err(|error| error.to_string());
+                    let _ = sender.send(result);
+                });
+                self.next_assets_download = Some(NextAssetDownload {
+                    receiver,
+                    after: Some(after),
+                });
+                self.host.with_mut(|session| {
+                    session.set_status("Acquiring official System/Next assets…".to_owned())
+                });
+            }
+            return false;
         }
         for slot in setup.slots.iter().filter(|slot| slot.status != "found") {
             let prompt = format!(
@@ -425,8 +469,13 @@ impl AppState {
             if !message_box_confirm(self.main_hwnd, "ROM Setup", &prompt) {
                 return false;
             }
+            let extensions: &[&str] = if model == ModelId::SpectrumNext {
+                &["zip"]
+            } else {
+                &["rom", "bin"]
+            };
             let path = rfd::FileDialog::new()
-                .add_filter(&slot.label, &["rom", "bin"])
+                .add_filter(&slot.label, extensions)
                 .set_title(format!("Choose {} ROM", slot.label))
                 .pick_file();
             let Some(path) = path else { return false };
@@ -447,7 +496,51 @@ impl AppState {
         true
     }
 
+    fn poll_next_assets_download(&mut self) {
+        let Some(download) = self.next_assets_download.as_ref() else {
+            return;
+        };
+        let result = match download.receiver.try_recv() {
+            Ok(result) => result,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                Err("Official asset download stopped unexpectedly".into())
+            }
+        };
+        let after = self
+            .next_assets_download
+            .take()
+            .and_then(|download| download.after);
+        match result {
+            Ok(archive) => {
+                self.prefs.model_rom_paths.insert(
+                    spec_chum_host::model_rom_path_key(PrefModel::SpectrumNext, "next_assets"),
+                    archive.display().to_string(),
+                );
+                sync_model_rom_paths(self.prefs.model_rom_paths.clone());
+                self.persist_prefs();
+                self.host.with_mut(|session| {
+                    session.set_status(format!("Verified {}", archive.display()))
+                });
+                match after {
+                    Some(AfterNextAssets::Select(model)) => self.select_model(model),
+                    Some(AfterNextAssets::ReloadCurrent(model))
+                        if self.prefs.model.to_model_id() == model =>
+                    {
+                        self.select_model(model);
+                    }
+                    _ => {}
+                }
+            }
+            Err(error) => self.report_err("Next asset setup", &HostError::Message(error)),
+        }
+    }
+
     fn select_model(&mut self, model: ModelId) {
+        if let Some(download) = self.next_assets_download.as_mut() {
+            download.after =
+                (model == ModelId::SpectrumNext).then_some(AfterNextAssets::Select(model));
+        }
         let mut next = self.prefs.clone();
         next.select_builtin_model(PrefModel::from_model_id(model));
         sync_model_rom_paths(next.model_rom_paths.clone());
@@ -477,7 +570,9 @@ impl AppState {
                     );
                     return;
                 }
-                if !setup.complete && self.setup_roms_for_model(model) {
+                if !setup.complete
+                    && self.setup_roms_for_model(model, AfterNextAssets::Select(model))
+                {
                     let mut retry = self.prefs.clone();
                     retry.select_builtin_model(PrefModel::from_model_id(model));
                     sync_model_rom_paths(retry.model_rom_paths.clone());
@@ -491,7 +586,7 @@ impl AppState {
                         }
                         Err(retry_error) => self.report_err("Select model", &retry_error),
                     }
-                } else {
+                } else if self.next_assets_download.is_none() {
                     self.report_err("Select model", &e);
                 }
             }
@@ -501,7 +596,9 @@ impl AppState {
     fn open_rom_setup(&mut self) {
         let model = self.prefs.model.to_model_id();
         let already_complete = rom_setup_json(model, &self.prefs.model_rom_paths).complete;
-        if !self.setup_roms_for_model(model) || already_complete {
+        if !self.setup_roms_for_model(model, AfterNextAssets::ReloadCurrent(model))
+            || already_complete
+        {
             return;
         }
         if let Err(e) = self.host.with_mut(|s| s.select_model(model)) {

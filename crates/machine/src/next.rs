@@ -1,19 +1,25 @@
-//! Standalone Spectrum Next CPU/MMU core. Host model selection remains gated
-//! until firmware, media and display integration can boot a real distribution (#523).
+//! Spectrum Next CPU/MMU and classic ULA display for the verified boot path.
 
 use bus::NextBus;
 use std::path::Path;
 use z80::{Cpu, CpuProfile, Io, Memory};
 
+use crate::FrameAudio;
 use crate::MachineBuildError;
+use crate::{apply_joystick, JoystickMode, JoystickState};
+use ula::Ula48;
 
 /// Core-constructible Spectrum Next with Z80N instructions and an eight-slot
-/// 8 KiB MMU. It remains outside [`crate::Machine`] until a complete boot path exists.
+/// 8 KiB MMU. The host owns its verified SD boot path separately from classic machines.
 #[derive(Debug)]
 pub struct NextMachine {
     pub cpu: Cpu,
     pub bus: NextBus,
     video_t: u64,
+    ula: Ula48,
+    debugger_paused: bool,
+    beeper_level: bool,
+    beeper_edges: Vec<(u64, bool)>,
 }
 
 impl NextMachine {
@@ -24,6 +30,10 @@ impl NextMachine {
             cpu: Cpu::with_profile(CpuProfile::Z80N),
             bus: NextBus::new(rom)?,
             video_t: 0,
+            ula: Ula48::new(),
+            debugger_paused: false,
+            beeper_level: false,
+            beeper_edges: Vec::new(),
         })
     }
 
@@ -33,6 +43,8 @@ impl NextMachine {
         self.bus.install_boot_rom(bytes)?;
         self.cpu.reset();
         self.video_t = 0;
+        self.beeper_level = false;
+        self.beeper_edges.clear();
         Ok(())
     }
 
@@ -53,12 +65,33 @@ impl NextMachine {
         self.video_t
     }
 
+    /// T-states per frame for the selected Next display timing.
+    #[must_use]
+    pub fn frame_tstates(&self) -> u32 {
+        self.bus.frame_interrupt_timing().0 as u32
+    }
+
+    /// Pause host-driven frame advancement without changing the guest machine state.
+    pub fn set_paused(&mut self, paused: bool) {
+        self.debugger_paused = paused;
+    }
+
+    #[must_use]
+    pub fn paused(&self) -> bool {
+        self.debugger_paused
+    }
+
     /// Execute one guest instruction through the Next-specific bus.
     pub fn step_once(&mut self) -> u32 {
         let (frame_tstates, interrupt_tstates) = self.bus.frame_interrupt_timing();
         let cycles = {
-            let mut io = NextMemIo(&mut self.bus, self.video_t.saturating_sub(self.cpu.t));
-            if io.0.take_divmmc_nmi() {
+            let mut io = NextMemIo {
+                bus: &mut self.bus,
+                time_base: self.video_t.saturating_sub(self.cpu.t),
+                beeper_level: &mut self.beeper_level,
+                beeper_edges: &mut self.beeper_edges,
+            };
+            if io.bus.take_divmmc_nmi() {
                 self.cpu.nmi(&mut io)
             } else if self.video_t % frame_tstates < interrupt_tstates {
                 let interrupt_cycles = self.cpu.interrupt(&mut io);
@@ -78,44 +111,112 @@ impl NextMachine {
                 self.bus.soft_reset();
             } else {
                 self.bus.hard_reset();
-                self.video_t = 0;
+                if self.beeper_level {
+                    self.beeper_level = false;
+                    self.beeper_edges.push((self.video_t, false));
+                }
             }
             self.bus.set_reset_status(status);
         }
         cycles
     }
+
+    /// Run to the next selected video-frame boundary.
+    pub fn run_frame(&mut self) -> FrameAudio {
+        if self.debugger_paused {
+            return FrameAudio::default();
+        }
+        let frame_len = self.bus.frame_interrupt_timing().0;
+        let frame_start = self.video_t;
+        let boundary = (frame_start / frame_len + 1) * frame_len;
+        while self.video_t < boundary {
+            self.step_once();
+        }
+        let mut frame_audio = FrameAudio::default();
+        let mut future_edges = Vec::new();
+        for (edge_t, level) in self.beeper_edges.drain(..) {
+            if edge_t < boundary {
+                frame_audio
+                    .beeper_edges
+                    .push((edge_t.saturating_sub(frame_start) as u32, level));
+            } else {
+                future_edges.push((edge_t, level));
+            }
+        }
+        self.beeper_edges = future_edges;
+        frame_audio
+    }
+
+    /// Render the firmware's ULA screen from the physical bank selected by $7FFD.
+    pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
+        let first_page = self.bus.display_screen_bank() * 2;
+        let mut screen = [0u8; 6912];
+        for (offset, byte) in screen.iter_mut().enumerate() {
+            *byte = self
+                .bus
+                .read_ram_page(first_page + (offset / 8192) as u8, offset % 8192)
+                .expect("Next ULA bank is within installed physical RAM");
+        }
+        let mut ula = self.ula.clone();
+        ula.border = self.bus.border();
+        ula.render_rgba(&screen, out, with_border);
+    }
+
+    #[must_use]
+    pub fn framebuffer_dims(with_border: bool) -> (usize, usize) {
+        ula::framebuffer_dims(with_border, false)
+    }
+
+    pub fn apply_joystick_state(&mut self, mode: JoystickMode, state: JoystickState) {
+        self.bus.keyboard.reset();
+        self.bus.kempston.reset();
+        apply_joystick(mode, state, &mut self.bus.kempston, &mut self.bus.keyboard);
+    }
 }
 
 /// Trait adapter keeps the lower-level bus crate independent of the CPU crate.
-struct NextMemIo<'a>(&'a mut NextBus, u64);
+struct NextMemIo<'a> {
+    bus: &'a mut NextBus,
+    time_base: u64,
+    beeper_level: &'a mut bool,
+    beeper_edges: &'a mut Vec<(u64, bool)>,
+}
 
 impl Memory for NextMemIo<'_> {
     fn read(&mut self, addr: u16, _t: u64) -> (u8, u32) {
-        (self.0.read(addr), 0)
+        (self.bus.read(addr), 0)
     }
 
     fn read_opcode(&mut self, addr: u16, _t: u64) -> (u8, u32) {
-        (self.0.read_opcode(addr), 0)
+        (self.bus.read_opcode(addr), 0)
     }
 
     fn write(&mut self, addr: u16, value: u8, _t: u64) -> u32 {
-        self.0.write(addr, value);
+        self.bus.write(addr, value);
         0
     }
 }
 
 impl Io for NextMemIo<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        (self.0.in_port_at(port, self.1.wrapping_add(t)), 0)
+        (self.bus.in_port_at(port, self.time_base.wrapping_add(t)), 0)
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        self.0.out_port_at(port, value, self.1.wrapping_add(t));
+        let absolute_t = self.time_base.wrapping_add(t);
+        if port & 1 == 0 {
+            let level = value & 0x10 != 0;
+            if level != *self.beeper_level {
+                *self.beeper_level = level;
+                self.beeper_edges.push((absolute_t, level));
+            }
+        }
+        self.bus.out_port_at(port, value, absolute_t);
         0
     }
 
     fn nextreg_write(&mut self, register: u8, value: u8, _t: u64) {
-        self.0.write_nextreg(register, value);
+        self.bus.write_nextreg(register, value);
     }
 }
 
@@ -358,6 +459,33 @@ mod tests {
         assert_eq!(machine.cpu.regs.pc, 0);
         assert_eq!(machine.bus.read(0), 0x3e);
         assert_eq!(machine.bus.read_nextreg(0x02) & 0x03, 2);
+    }
+
+    #[test]
+    fn hard_reset_preserves_the_frame_clock() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        let frame_tstates = machine.frame_tstates() as u64;
+        machine.video_t = frame_tstates - 4;
+        machine.bus.write_nextreg(0x02, 0x02);
+
+        assert_eq!(machine.step_once(), 4);
+        assert_eq!(machine.video_t(), frame_tstates);
+        assert_eq!(machine.cpu.regs.pc, 0);
+    }
+
+    #[test]
+    fn frame_audio_contains_next_beeper_edges() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        let program = [0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xc3, 0x00, 0xc0];
+        for (offset, byte) in program.into_iter().enumerate() {
+            machine.bus.write(0xc000 + offset as u16, byte);
+        }
+        machine.cpu.regs.pc = 0xc000;
+
+        let audio = machine.run_frame();
+
+        assert!(audio.beeper_edges.iter().any(|(_, level)| *level));
+        assert!(audio.beeper_edges.iter().any(|(_, level)| !*level));
     }
 
     #[test]

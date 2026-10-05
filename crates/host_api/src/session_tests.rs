@@ -11,6 +11,54 @@ fn rom48() -> Option<Vec<u8>> {
 }
 
 #[test]
+#[ignore = "requires user-installed official System/Next 24.11 assets"]
+fn verified_next_assets_select_and_render_through_host() {
+    let assets = crate::next_assets::NextAssets::discover().expect("verified Next asset set");
+    assert!(crate::next_assets::NextAssets::available_in(
+        &assets.directory
+    ));
+    assert!(crate::rom_setup::model_rom_available(
+        ModelId::SpectrumNext,
+        &crate::rom_setup::model_rom_paths_snapshot()
+    ));
+    let next_descriptor = crate::host_model_catalog()
+        .into_iter()
+        .find(|entry| entry.id == ModelId::SpectrumNext.numeric_id())
+        .expect("Next in shared model catalog");
+    assert!(
+        next_descriptor.available,
+        "verified Next should be selectable"
+    );
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session
+        .select_model(ModelId::SpectrumNext)
+        .expect("verified Next boot");
+    assert!(session.has_machine());
+    assert_eq!(session.model(), ModelId::SpectrumNext);
+    let first_visible_frame = (0..1_500).find(|_| {
+        session.run_frame();
+        session
+            .framebuffer()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[..3].iter().any(|channel| *channel != 0))
+    });
+    assert_eq!(
+        session.framebuffer().len(),
+        session.width() * session.height() * 4
+    );
+    assert!(
+        first_visible_frame.is_some(),
+        "Next boot produced no visible pixels in 1,500 frames"
+    );
+    session.set_key(3, 0, true).expect("Next key down");
+    session.set_key(3, 0, false).expect("Next key up");
+    session.reset().expect("Next reset");
+    assert!(session.has_machine());
+}
+
+#[test]
 fn new_session_has_empty_framebuffer_dims() {
     let s = HostSession::new(ModelId::Spectrum48, true);
     assert_eq!(s.width(), 352);
@@ -36,11 +84,7 @@ fn load_divmmc_sd_slot_attaches_both_images() {
     s.load_divmmc_sd(&slot0).expect("slot 0 via legacy");
     s.load_divmmc_sd_slot(&slot1, 1).expect("slot 1");
     assert!(s.has_divmmc());
-    let div = s
-        .machine
-        .as_mut()
-        .and_then(Machine::divmmc_mut)
-        .expect("div");
+    let div = s.machine_mut().and_then(Machine::divmmc_mut).expect("div");
     assert_eq!(div.sd.first().copied(), Some(0x10));
     assert_eq!(div.sd1.first().copied(), Some(0x11));
     let err = s
@@ -115,19 +159,19 @@ fn set_key_injects_and_clear_resets_matrix() {
     // J = row 6 bit 3 (LOAD keyword); matrix bits are active-low.
     s.set_key(6, 3, true).expect("J down");
     {
-        let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+        let rows = s.machine_mut().expect("machine").keyboard_mut().rows;
         assert_eq!(rows[6] & (1 << 3), 0, "J bit should be pressed (cleared)");
     }
 
     s.set_key(7, 1, true).expect("Symbol Shift");
     {
-        let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+        let rows = s.machine_mut().expect("machine").keyboard_mut().rows;
         assert_eq!(rows[7] & (1 << 1), 0, "Sym bit pressed");
     }
 
     s.clear_keys().expect("clear");
     {
-        let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+        let rows = s.machine_mut().expect("machine").keyboard_mut().rows;
         assert!(rows.iter().all(|&r| r == 0x1f), "all rows idle after clear");
     }
 }
@@ -146,7 +190,7 @@ fn set_key_holds_across_run_frames() {
     s.set_key(6, 3, true).expect("J down");
     for i in 0..16 {
         s.run_frame();
-        let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+        let rows = s.machine_mut().expect("machine").keyboard_mut().rows;
         assert_eq!(
             rows[6] & (1 << 3),
             0,
@@ -155,9 +199,75 @@ fn set_key_holds_across_run_frames() {
     }
     s.set_key(6, 3, false).expect("J up");
     {
-        let rows = s.machine.as_mut().expect("machine").keyboard_mut().rows;
+        let rows = s.machine_mut().expect("machine").keyboard_mut().rows;
         assert_ne!(rows[6] & (1 << 3), 0, "J released");
     }
+}
+
+#[test]
+fn next_host_key_release_clears_the_keyboard_matrix() {
+    let rom = vec![0; 0x1_0000];
+    let next = machine::NextMachine::new(&rom).expect("valid Next ROM");
+    let mut session = HostSession::new(ModelId::SpectrumNext, false);
+    session.machine = Some(HostRuntime::Next(next));
+
+    session.set_key(6, 3, true).expect("Next key down");
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert_eq!(next.bus.keyboard.rows[6] & (1 << 3), 0);
+
+    session.set_key(6, 3, false).expect("Next key up");
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert_ne!(next.bus.keyboard.rows[6] & (1 << 3), 0);
+}
+
+#[test]
+fn debug_pause_stops_next_frames_until_continue() {
+    let next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session.machine = Some(HostRuntime::Next(next));
+
+    session.debug_pause();
+    assert!(session.paused());
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    let paused_t = next.video_t();
+    session.run_frame();
+    session.run_frames(10).expect("paused frames");
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert_eq!(next.video_t(), paused_t, "paused Next must not advance");
+
+    session.debug_continue().expect("continue Next");
+    assert!(!session.paused());
+    session.run_frame();
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert!(next.video_t() > paused_t, "continued Next should advance");
+}
+
+#[test]
+fn next_beeper_audio_reaches_host_pcm() {
+    let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
+    let program = [0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xc3, 0x00, 0xc0];
+    for (offset, byte) in program.into_iter().enumerate() {
+        next.bus.write(0xc000 + offset as u16, byte);
+    }
+    next.cpu.regs.pc = 0xc000;
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session.machine = Some(HostRuntime::Next(next));
+
+    session.run_frame();
+
+    assert_eq!(session.audio_pcm().len(), AUDIO_SAMPLES_PER_FRAME);
+    assert!(session.audio_pcm().iter().any(|sample| *sample > 0.0));
+    assert!(session.audio_pcm().iter().any(|sample| *sample < 0.0));
 }
 
 #[test]
@@ -170,15 +280,15 @@ fn kempston_mouse_ports_after_synthetic_deltas() {
     s.load_rom_bytes(&rom).expect("rom");
     s.set_mouse_delta(20, -4).unwrap();
     s.set_mouse_buttons(true, true, false).unwrap();
-    let mouse = s.machine.as_mut().unwrap().mouse_mut();
+    let mouse = s.machine_mut().unwrap().mouse_mut();
     assert_eq!(mouse.x, 20);
     assert_eq!(mouse.y, 4);
     assert_eq!(mouse.buttons_byte(), 0xfc); // D0+D1 clear
     s.set_mouse_buttons(false, false, false).unwrap();
-    assert_eq!(s.machine.as_mut().unwrap().mouse_mut().buttons_byte(), 0xff);
+    assert_eq!(s.machine_mut().unwrap().mouse_mut().buttons_byte(), 0xff);
     s.set_mouse_delta(5, 0).unwrap();
     s.clear_mouse().unwrap();
-    let mouse = s.machine.as_mut().unwrap().mouse_mut();
+    let mouse = s.machine_mut().unwrap().mouse_mut();
     assert_eq!(mouse.x, 0);
     assert_eq!(mouse.y, 0);
     assert_eq!(mouse.buttons_byte(), 0xff);
@@ -194,9 +304,9 @@ fn joystick_kempston_mask_reaches_port() {
     s.load_rom_bytes(&rom).expect("rom");
     s.set_joystick_mode(JoystickMode::Kempston);
     s.set_joystick(0x11).unwrap();
-    assert_eq!(s.machine.as_mut().unwrap().kempston_mut().read(), 0x11);
+    assert_eq!(s.machine_mut().unwrap().kempston_mut().read(), 0x11);
     s.clear_joystick().unwrap();
-    assert_eq!(s.machine.as_mut().unwrap().kempston_mut().read(), 0);
+    assert_eq!(s.machine_mut().unwrap().kempston_mut().read(), 0);
 }
 
 #[test]
@@ -211,7 +321,7 @@ fn physical_num1_survives_sinclair_left_joystick_update() {
     // Num1 = row 3 bit 0 (also Sinclair-left left).
     s.set_key(3, 0, true).unwrap();
     s.set_joystick(0).unwrap(); // would clear Sinclair matrix without reapply
-    let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+    let rows = s.machine_mut().unwrap().keyboard_mut().rows;
     assert_eq!(rows[3] & (1 << 0), 0, "Num1 must stay pressed");
 }
 
@@ -227,7 +337,7 @@ fn physical_num5_survives_cursor_joystick_update() {
     // Num5 = row 3 bit 4 (also Cursor left).
     s.set_key(3, 4, true).unwrap();
     s.set_joystick(0).unwrap();
-    let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+    let rows = s.machine_mut().unwrap().keyboard_mut().rows;
     assert_eq!(rows[3] & (1 << 4), 0, "Num5 must stay pressed");
 }
 
@@ -241,7 +351,7 @@ fn kempston_arrow_left_does_not_pollute_matrix() {
     s.load_rom_bytes(&rom).expect("rom");
     s.set_joystick_mode(JoystickMode::Kempston);
     s.set_joystick(0x02).unwrap(); // left
-    let m = s.machine.as_mut().unwrap();
+    let m = s.machine_mut().unwrap();
     assert!(m.kempston_mut().left);
     let rows = m.keyboard_mut().rows;
     assert_ne!(
@@ -266,7 +376,7 @@ fn cursor_left_via_joystick_applies_caps_five() {
     s.load_rom_bytes(&rom).expect("rom");
     s.set_joystick_mode(JoystickMode::Cursor);
     s.set_joystick(0x02).unwrap(); // left
-    let rows = s.machine.as_mut().unwrap().keyboard_mut().rows;
+    let rows = s.machine_mut().unwrap().keyboard_mut().rows;
     assert_eq!(rows[0] & 1, 0, "Caps down for Cursor left");
     assert_eq!(rows[3] & (1 << 4), 0, "5 down for Cursor left");
 }
@@ -721,7 +831,7 @@ fn open_local_arkanoid_tzx_when_present() {
 /// boundaries walks straight past it (#390).
 fn step_until_iff1(s: &mut HostSession, budget_frames: u64) -> Option<f64> {
     const T_PER_FRAME: u64 = 69_888;
-    let m = s.machine.as_mut().expect("machine");
+    let m = s.machine_mut().expect("machine");
     let t0 = m.cpu().t;
     while m.cpu().t.saturating_sub(t0) < budget_frames * T_PER_FRAME {
         m.step_once();
@@ -757,7 +867,7 @@ fn arkanoid_speedlock_completes_at_realtime_when_present() {
     s.load_rom_bytes(&rom).expect("rom");
     s.open_tape(&arkanoid).expect("open");
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         m.set_tape_load_options(machine::TapeLoadOptions {
             flash_load: false,
             speed: 64,
@@ -766,22 +876,22 @@ fn arkanoid_speedlock_completes_at_realtime_when_present() {
         m.set_tape_playing(false);
     }
     for _ in 0..200 {
-        let _ = s.machine.as_mut().expect("machine").run_frame();
+        let _ = s.machine_mut().expect("machine").run_frame();
     }
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         m.type_load_quotes(false);
         m.set_tape_playing(true);
     }
     for _ in 0..30_000u32 {
-        let _ = s.machine.as_mut().expect("machine").run_frame();
-        let m = s.machine.as_ref().expect("machine");
+        let _ = s.machine_mut().expect("machine").run_frame();
+        let m = s.machine().expect("machine");
         if m.tape_finished() || !m.tape_playing() {
             break;
         }
     }
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         assert!(m.tape_finished() || !m.tape_playing(), "deck should finish");
         assert_ne!(m.cpu().regs.pc, 0xFD2A, "still in the EAR edge sampler");
         assert_eq!(
@@ -809,7 +919,7 @@ fn arkanoid_speedlock_completes_at_realtime_when_present() {
     let ei_at = step_until_iff1(&mut s, 2_000).expect("protection did not EI within 40s at 1×");
     eprintln!("protection completed after {ei_at:.1}s of Spectrum time at 1×");
     assert_ne!(
-        s.machine.as_ref().expect("machine").cpu().regs.pc,
+        s.machine().expect("machine").cpu().regs.pc,
         0xFD2A,
         "returned to the EAR sampler"
     );
@@ -839,7 +949,7 @@ fn arkanoid_instant_falls_back_to_ear_turbo_when_present() {
     s.load_rom_bytes(&rom).expect("rom");
     s.open_tape(&arkanoid).expect("open");
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         assert!(
             !m.tape_supports_flash_load(),
             "Speedlock TZX has no TAP blocks to flash"
@@ -853,10 +963,10 @@ fn arkanoid_instant_falls_back_to_ear_turbo_when_present() {
         m.set_tape_playing(false);
     }
     for _ in 0..200 {
-        let _ = s.machine.as_mut().expect("machine").run_frame();
+        let _ = s.machine_mut().expect("machine").run_frame();
     }
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         m.type_load_quotes(false);
         m.set_tape_playing(true);
         assert_eq!(
@@ -869,8 +979,8 @@ fn arkanoid_instant_falls_back_to_ear_turbo_when_present() {
     const TICK_BUDGET: u32 = 2_000;
     let mut ticks = None;
     for i in 0..TICK_BUDGET {
-        let _ = s.machine.as_mut().expect("machine").run_frame();
-        let m = s.machine.as_ref().expect("machine");
+        let _ = s.machine_mut().expect("machine").run_frame();
+        let m = s.machine().expect("machine");
         if m.tape_finished() || !m.tape_playing() {
             ticks = Some(i);
             break;
@@ -879,7 +989,7 @@ fn arkanoid_instant_falls_back_to_ear_turbo_when_present() {
     let ticks = ticks.expect("Instant fallback did not finish the deck in budget");
     eprintln!("Instant EAR fallback finished the deck in {ticks} host ticks");
     {
-        let m = s.machine.as_ref().expect("machine");
+        let m = s.machine().expect("machine");
         assert_ne!(m.cpu().regs.pc, 0xFD2A, "still in the EAR edge sampler");
         assert_eq!(
             m.effective_speed_multiplier(),
@@ -915,7 +1025,7 @@ fn arkanoid_ear_leaves_sampler_when_present() {
     s.load_rom_bytes(&rom).expect("rom");
     s.open_tape(&arkanoid).expect("open");
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         m.set_tape_load_options(machine::TapeLoadOptions {
             flash_load: false,
             speed: 64,
@@ -924,28 +1034,28 @@ fn arkanoid_ear_leaves_sampler_when_present() {
         m.set_tape_playing(false);
     }
     for _ in 0..200 {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         let _ = m.run_frame();
     }
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         m.type_load_quotes(false);
         m.set_tape_playing(true);
     }
     let mut finished = false;
     for _ in 0..20_000 {
         {
-            let m = s.machine.as_mut().expect("machine");
+            let m = s.machine_mut().expect("machine");
             let _ = m.run_frame();
         }
-        let m = s.machine.as_ref().expect("machine");
+        let m = s.machine().expect("machine");
         if m.tape_finished() || !m.tape_playing() {
             finished = true;
             break;
         }
     }
     assert!(finished, "EAR deck did not finish");
-    let m = s.machine.as_ref().expect("machine");
+    let m = s.machine().expect("machine");
     let pc = m.cpu().regs.pc;
     let bc = m.cpu().regs.bc();
     let bytes: Vec<u8> = (0u16..16).map(|i| m.read_mem(pc.wrapping_add(i))).collect();
@@ -978,14 +1088,14 @@ fn arkanoid_ear_leaves_sampler_when_present() {
         "finished deck must report 1× while the loaded program runs"
     );
     let t0 = {
-        let m = s.machine.as_ref().expect("machine");
+        let m = s.machine().expect("machine");
         m.cpu().t
     };
     {
-        let m = s.machine.as_mut().expect("machine");
+        let m = s.machine_mut().expect("machine");
         let _ = m.run_frame();
     }
-    let m = s.machine.as_ref().expect("machine");
+    let m = s.machine().expect("machine");
     let dt = m.cpu().t.saturating_sub(t0);
     eprintln!("post-tape dt={dt}");
     assert!(dt < 150_000, "expected ~1 frame after tape end, dt={dt}");
@@ -1004,7 +1114,8 @@ fn model_id_roundtrip() {
     assert_eq!(ModelId::from_u32(8), Some(ModelId::TimexTS2068));
     assert_eq!(ModelId::from_u32(9), Some(ModelId::SpectrumPlus3e));
     assert_eq!(ModelId::from_u32(10), Some(ModelId::ScorpionZs256));
-    assert_eq!(ModelId::from_u32(11), None);
+    assert_eq!(ModelId::from_u32(11), Some(ModelId::SpectrumNext));
+    assert_eq!(ModelId::from_u32(12), None);
     assert_eq!(ModelId::Spectrum48.to_model(), Model::Spectrum48);
     assert_eq!(ModelId::SpectrumPlus2.to_model(), Model::SpectrumPlus2);
     assert_eq!(ModelId::Spectrum16K.to_model(), Model::Spectrum16K);
@@ -1035,7 +1146,7 @@ fn select_model_keeps_session_model_in_sync() {
             Ok(()) => {
                 assert!(s.has_machine(), "autoload should install a machine");
                 assert_eq!(
-                    s.machine.as_ref().expect("machine").model(),
+                    s.machine().expect("machine").model(),
                     model.to_model(),
                     "loaded Machine must match selected ModelId"
                 );
@@ -1086,15 +1197,15 @@ fn run_frame_skips_when_debugger_paused() {
     let mut s = HostSession::new(ModelId::Spectrum48, false);
     s.load_rom_bytes(&rom).expect("rom");
     s.run_frame();
-    let t0 = s.machine.as_ref().expect("machine").cpu().t;
+    let t0 = s.machine().expect("machine").cpu().t;
     s.set_paused(true);
     assert!(s.paused());
     s.run_frame();
-    let t1 = s.machine.as_ref().expect("machine").cpu().t;
+    let t1 = s.machine().expect("machine").cpu().t;
     assert_eq!(t0, t1, "paused debugger must not advance the machine");
     s.set_paused(false);
     s.run_frame();
-    let t2 = s.machine.as_ref().expect("machine").cpu().t;
+    let t2 = s.machine().expect("machine").cpu().t;
     assert!(t2 > t1, "unpaused run_frame should advance T-states");
 }
 
@@ -1222,12 +1333,12 @@ fn load_snapshot48_switches_from_128k() {
     s.load_snapshot(&path).expect("48k sna on 128");
     assert_eq!(s.model(), ModelId::Spectrum48);
     assert_eq!(
-        s.machine.as_ref().map(machine::Machine::model),
+        s.machine().map(machine::Machine::model),
         Some(Model::Spectrum48)
     );
     assert_eq!(s.regs().expect("regs").pc, 0x8000);
     assert_eq!(
-        s.machine.as_mut().unwrap().kempston_mut().read(),
+        s.machine_mut().unwrap().kempston_mut().read(),
         0x11,
         "held joystick must survive model-switching snapshot load"
     );
@@ -1251,7 +1362,7 @@ fn load_snapshot48_switches_from_plus3() {
     s.load_snapshot(&path).expect("48k sna on +3");
     assert_eq!(s.model(), ModelId::Spectrum48);
     assert_eq!(
-        s.machine.as_ref().map(machine::Machine::model),
+        s.machine().map(machine::Machine::model),
         Some(Model::Spectrum48)
     );
     assert_eq!(s.regs().expect("regs").pc, 0x8000);
@@ -1347,14 +1458,12 @@ fn load_rzx_embedded_snapshot_initializes_machine_and_replays_input() {
     assert_eq!(session.regs().expect("regs").pc, 0x8000);
     assert_eq!(session.peek(0x8000).expect("snapshot RAM"), 0xaa);
     session
-        .machine
-        .as_mut()
+        .machine_mut()
         .expect("machine initialized from snapshot")
         .run_frame();
     assert_eq!(
         session
-            .machine
-            .as_mut()
+            .machine_mut()
             .expect("machine remains loaded")
             .keyboard_mut()
             .rows[1],

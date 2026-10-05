@@ -30,6 +30,7 @@ fn test_machine(model: Model, rom: &[u8]) -> Machine {
             let exrom = read_exrom(model).expect("TS2068 EX-ROM");
             Machine::new_timex_ts2068(rom, &exrom).expect("TS2068 machine")
         }
+        Model::SpectrumNext => unreachable!("Next is not a classic tape machine"),
     }
 }
 

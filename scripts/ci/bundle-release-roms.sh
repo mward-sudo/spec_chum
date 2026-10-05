@@ -8,8 +8,9 @@
 # ROMS-NOTICE.txt with the Lawson 1999 attribution. Never commits ROM bytes —
 # release CI fetches first, then embeds into app bundles / installers.
 #
-# See docs/ROMS.md. Refuses to copy user-provided-only firmware trees
-# (IF1, Multiface, TR-DOS, Pentagon, …).
+# See docs/ROMS.md. Copies only the exact complete Spectrum Next distribution
+# archive; the separate GPL IPL is acquired from its official source on user
+# request. Other user-provided-only firmware trees remain excluded.
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
@@ -56,6 +57,33 @@ for d in alternate 128 plus2 plus2a plus3 fuse-16k timex opense plus3e \
   peripherals/datel peripherals/speccyboot; do
   copy_tree "$d"
 done
+
+if [[ -f "$ROOT/scripts/system_next_assets.py" ]]; then
+  python3 "$ROOT/scripts/system_next_assets.py" --verify
+  NEXT_SOURCE="$SRC/system-next/24.11/sn-complete-24.11.zip"
+  NEXT_DEST="$DEST/system-next/24.11"
+  mkdir -p "$NEXT_DEST"
+  cp -f "$NEXT_SOURCE" "$NEXT_DEST/sn-complete-24.11.zip"
+  cat > "$DEST_PARENT/NEXT-NOTICE.txt" <<'EOF'
+ZX Spectrum Next assets in Spec Chum
+=====================================
+
+This no-fee package includes an exact copy of the complete official System/Next
+Distribution 24.11 archive at roms/system-next/24.11/sn-complete-24.11.zip.
+Its unmodified LICENSE.md and docs/licenses/ notices remain inside the archive.
+Source: https://www.specnext.com/distro/24.11/sn-complete-24.11.zip
+SHA-256: cbf5d4c8bb6dc552a4e68317a7315e06609b14028e1f04dd0afd2189be65ce6b
+
+The separate GPL-3.0-or-later boot code is not bundled. Selecting "Get official
+assets" in Spec Chum fetches the pinned boot archive from
+https://www.specnext.com/forum/download/file.php?id=1164, verifies its hash,
+and stores boot-30204.bin, GPL3-LICENSE, and source details in per-user data.
+The archive README links upstream source reference
+https://gitlab.com/SpectrumNext/ZX_Spectrum_Next_FPGA/-/tree/master/cores/zxnext/src/rom?ref_type=heads;
+exact source correspondence for boot-30204.bin is unverified.
+Spec Chum is unaffiliated with SpecNext Ltd and uses its own branding.
+EOF
+fi
 
 # Refs help verify the pinned fetch set inside the artifact.
 if [[ -f "$SRC/.zx-roms-ref" ]]; then

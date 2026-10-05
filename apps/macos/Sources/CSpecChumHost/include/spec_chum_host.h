@@ -20,13 +20,16 @@ enum {
     SC_MODEL_TIMEX_TC2048 = 7,
     SC_MODEL_TIMEX_TS2068 = 8,
     SC_MODEL_PLUS3E = 9,
-    SC_MODEL_SCORPION = 10
+    SC_MODEL_SCORPION = 10,
+    SC_MODEL_SPECTRUM_NEXT = 11
 };
 
 void *sc_create(unsigned int model, int with_border);
 void sc_destroy(void *handle);
 
 int sc_set_model(void *handle, unsigned int model);
+/* Select and boot a verified model; returns -1 with sc_last_error on failure. */
+int sc_select_model(void *handle, unsigned int model);
 /* Active model id (SC_MODEL_*). Returns UINT_MAX on null handle. */
 unsigned int sc_get_model(void *handle);
 /* 1 when the model's ROM dumps are never auto-fetched (user must supply paths). */
@@ -43,6 +46,8 @@ char *sc_model_rom_paths_json(void);
 int sc_sync_model_rom_paths_json(const char *json);
 /* Validate source, persist path, best-effort copy into roms/. Returns 0 ok, -1 error. */
 int sc_install_model_rom(unsigned int model, const char *slot_id, const char *source_path);
+/* User-triggered download/verification of the official Next asset set. */
+int sc_acquire_next_assets(void);
 int sc_load_rom(void *handle, const char *path);
 int sc_load_rom_bytes(void *handle, const uint8_t *data, size_t len);
 int sc_reset(void *handle);

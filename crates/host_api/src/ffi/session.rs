@@ -61,6 +61,27 @@ pub extern "C" fn sc_set_model(handle: *mut c_void, model: c_uint) -> c_int {
     0
 }
 
+/// Select and boot a verified model through the shared host path.
+#[no_mangle]
+pub extern "C" fn sc_select_model(handle: *mut c_void, model: c_uint) -> c_int {
+    clear_last_error();
+    let Some(mut session) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    let Some(model) = ModelId::from_u32(model) else {
+        set_last_error("invalid model id");
+        return -1;
+    };
+    match session.select_model(model) {
+        Ok(()) => 0,
+        Err(error) => {
+            set_last_error(error.to_string());
+            -1
+        }
+    }
+}
+
 /// Active model id (`SC_MODEL_*`). Returns `UINT_MAX` on a null handle.
 #[no_mangle]
 pub extern "C" fn sc_get_model(handle: *mut c_void) -> c_uint {

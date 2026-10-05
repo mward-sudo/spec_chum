@@ -123,7 +123,19 @@ struct RomSetupView: View {
                     Text("No ROM slots reported for this model.")
                         .foregroundStyle(.secondary)
                 } else {
-                    if payload.fetchable {
+                    if host.romSetupModel == .spectrumNext {
+                        Text("Get the pinned official System/Next 24.11 distribution and separate GPL boot code, or choose the verified archive from its companion asset folder below. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Get official assets…") {
+                            host.acquireNextAssets()
+                        }
+                        .disabled(host.nextAssetsAcquiring)
+                        if host.nextAssetsAcquiring {
+                            ProgressView("Downloading and verifying official assets…")
+                        }
+                    } else if payload.fetchable {
                         Text(
                             "System ROMs are not shipped with Spec Chum. Fetch official images with ./scripts/fetch_roms.sh, or choose files below — paths are remembered across restarts."
                         )

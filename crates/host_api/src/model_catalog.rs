@@ -11,6 +11,8 @@ pub struct HostModelDescriptor {
     pub preference_slug: &'static str,
     pub label: &'static str,
     pub title: &'static str,
+    /// Current verified asset availability; selection still revalidates at boot.
+    pub available: bool,
     pub expected_main_rom_bytes: usize,
     pub requires_user_rom: bool,
     pub requires_trdos_rom: bool,
@@ -30,6 +32,7 @@ pub struct HostRomSlotDescriptor {
 
 #[must_use]
 pub fn host_model_catalog() -> Vec<HostModelDescriptor> {
+    let rom_paths = crate::rom_setup::model_rom_paths_snapshot();
     ModelId::ALL
         .into_iter()
         .map(|id| {
@@ -40,6 +43,7 @@ pub fn host_model_catalog() -> Vec<HostModelDescriptor> {
                 preference_slug: PrefModel::from_model_id(id).slug(),
                 label: machine::model_label(model),
                 title: machine::model_title(model),
+                available: crate::rom_setup::model_rom_available(id, &rom_paths),
                 expected_main_rom_bytes: machine::expected_main_rom_bytes(model),
                 requires_user_rom: machine::requires_user_rom(model),
                 requires_trdos_rom: machine::requires_trdos_rom(model),
@@ -110,7 +114,7 @@ mod tests {
 
         assert_eq!(
             ModelId::ALL.map(ModelId::numeric_id),
-            [5, 0, 1, 4, 3, 2, 9, 6, 10, 7, 8]
+            [5, 0, 1, 4, 3, 2, 9, 6, 10, 7, 8, 11]
         );
     }
 }

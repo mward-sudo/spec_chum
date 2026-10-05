@@ -191,6 +191,9 @@ extension HostBridge {
             status = withCode
                 ? "Typing 48 BASIC LOAD \"\" CODE — press Tape → Play when border goes red/cyan"
                 : "Typing 48 BASIC LOAD \"\" — press Tape → Play when the border goes red/cyan"
+        case .spectrumNext:
+            pendingInstantPlay = false
+            status = "Tape loading is unavailable on ZX Spectrum Next"
         }
     }
 
