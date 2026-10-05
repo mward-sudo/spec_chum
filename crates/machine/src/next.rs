@@ -147,7 +147,7 @@ impl NextMachine {
         frame_audio
     }
 
-    /// Render the firmware's ULA screen from the physical bank selected by $7FFD.
+    /// Render the ULA screen and the supported 256×192 Next Layer 2 mode.
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
         let first_page = self.bus.display_screen_bank() * 2;
         let mut screen = [0u8; 6912];
@@ -160,6 +160,26 @@ impl NextMachine {
         let mut ula = self.ula.clone();
         ula.border = self.bus.border();
         ula.render_rgba(&screen, out, with_border);
+        if !self.bus.layer2_visible() || !self.bus.layer2_standard_mode() {
+            return;
+        }
+
+        let (width, _height) = Self::framebuffer_dims(with_border);
+        let (origin_x, origin_y) = if with_border { (48, 48) } else { (0, 0) };
+        let Some(layer2_above) = self.bus.layer2_above_ula() else {
+            return;
+        };
+        for y in 0..192 {
+            for x in 0..256 {
+                let pixel = self.bus.layer2_pixel(x, y);
+                let color = self.bus.layer2_color(self.bus.layer2_palette_index(pixel));
+                if !color.transparent && (layer2_above || color.priority) {
+                    let offset = ((origin_y + y) * width + origin_x + x) * 4;
+                    out[offset..offset + 3].copy_from_slice(&color.rgb);
+                    out[offset + 3] = 0xff;
+                }
+            }
+        }
     }
 
     #[must_use]
@@ -486,6 +506,103 @@ mod tests {
 
         assert!(audio.beeper_edges.iter().any(|(_, level)| *level));
         assert!(audio.beeper_edges.iter().any(|(_, level)| !*level));
+    }
+
+    #[test]
+    fn layer2_composes_only_for_next_and_honors_priority_and_layer_order() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        machine.bus.load_ram_page(16, 0, &[1, 2]);
+        machine.bus.write_nextreg(0x43, 0x10); // Layer 2 palette 1.
+        machine.bus.write_nextreg(0x40, 1);
+        machine.bus.write_nextreg(0x44, 0b1110_0000); // Red, no priority.
+        machine.bus.write_nextreg(0x44, 0x00);
+        machine.bus.write_nextreg(0x40, 2);
+        machine.bus.write_nextreg(0x44, 0b0000_0011); // Blue, priority.
+        machine.bus.write_nextreg(0x44, 0x81);
+
+        let (width, height) = NextMachine::framebuffer_dims(false);
+        let mut framebuffer = vec![0; width * height * 4];
+        machine.render_rgba(&mut framebuffer, false);
+        let ula_before = framebuffer[..4].to_vec();
+
+        machine.bus.write_nextreg(0x69, 0x80); // Layer 2 visible.
+        machine.bus.write_nextreg(0x15, 0x08); // ULA over Layer 2.
+        machine.render_rgba(&mut framebuffer, false);
+        assert_eq!(
+            &framebuffer[..4],
+            &ula_before,
+            "lower Layer 2 stays behind ULA"
+        );
+        assert_eq!(
+            &framebuffer[4..8],
+            &[0, 0, 255, 255],
+            "priority color is above ULA"
+        );
+
+        machine.bus.write_nextreg(0x15, 0x00); // Layer 2 over ULA.
+        machine.render_rgba(&mut framebuffer, false);
+        assert_eq!(&framebuffer[..4], &[255, 0, 0, 255]);
+        assert_eq!(&framebuffer[4..8], &[0, 0, 255, 255]);
+
+        machine.bus.write_nextreg(0x14, 0b1110_0000); // Red is globally transparent.
+        machine.render_rgba(&mut framebuffer, false);
+        assert_eq!(
+            &framebuffer[..4],
+            &ula_before,
+            "transparent Layer 2 reveals ULA"
+        );
+
+        machine.bus.write_nextreg(0x15, 0x18); // Blending order is outside this slice.
+        machine.bus.write_nextreg(0x14, 0xe3);
+        machine.render_rgba(&mut framebuffer, false);
+        assert_eq!(
+            &framebuffer[..4],
+            &ula_before,
+            "unsupported blending mode preserves the ULA framebuffer"
+        );
+
+        machine.bus.write_nextreg(0x15, 0x00);
+        machine.bus.write_nextreg(0x70, 0x10); // Deferred 320x256 mode.
+        machine.render_rgba(&mut framebuffer, false);
+        assert_eq!(
+            &framebuffer[..4],
+            &ula_before,
+            "unimplemented resolutions preserve the ULA framebuffer"
+        );
+
+        machine.bus.write_nextreg(0x69, 0x00);
+        machine.bus.write_nextreg(0x70, 0x00);
+        machine.bus.write_nextreg(0x15, 0x00);
+        machine.render_rgba(&mut framebuffer, false);
+        assert_eq!(
+            &framebuffer[..4],
+            &ula_before,
+            "disabled Layer 2 preserves ULA output"
+        );
+    }
+
+    #[test]
+    fn layer2_with_border_composes_at_the_ula_paper_origin() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        machine.bus.load_ram_page(16, 0, &[1]);
+        machine.bus.write_nextreg(0x43, 0x10);
+        machine.bus.write_nextreg(0x40, 1);
+        machine.bus.write_nextreg(0x41, 0b1110_0000);
+        machine.bus.write_nextreg(0x69, 0x80);
+        let (width, height) = NextMachine::framebuffer_dims(true);
+        let mut framebuffer = vec![0; width * height * 4];
+        machine.render_rgba(&mut framebuffer, true);
+
+        let paper_pixel = (48 * width + 48) * 4;
+        assert_eq!(
+            &framebuffer[paper_pixel..paper_pixel + 4],
+            &[255, 0, 0, 255]
+        );
+        assert_eq!(
+            &framebuffer[..4],
+            &[0, 0, 0, 255],
+            "border remains ULA-rendered"
+        );
     }
 
     #[test]

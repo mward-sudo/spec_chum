@@ -7,7 +7,8 @@ use std::path::Path;
 
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
-use crate::{require_rom_size, Kempston, Keyboard, RomLoadError};
+use crate::next_video::NextVideo;
+use crate::{require_rom_size, Kempston, Keyboard, Layer2Color, RomLoadError};
 
 const PAGE_SIZE: usize = 0x2000;
 const CONFIG_BANK_SIZE: usize = 0x4000;
@@ -28,6 +29,8 @@ const NEXT_BOARD_ID: u8 = 0x00;
 const RESET_PAGES: [u8; 8] = [0xff, 0xff, 10, 11, 4, 5, 0, 1];
 const PORT_NEXTREG_SELECT: u16 = 0x243b;
 const PORT_NEXTREG_ACCESS: u16 = 0x253b;
+const PORT_LAYER2_CONTROL: u16 = 0x123b;
+
 /// CPU-visible Spectrum Next memory and the subset of `NextRegs` implemented by
 /// this core slice. Unimplemented registers read as an undriven data bus.
 #[derive(Debug)]
@@ -48,7 +51,7 @@ pub struct NextBus {
     display_screen_bank: u8,
     border: u8,
     config_mapping: u8,
-    layer2_page: u8,
+    next_video: NextVideo,
     peripheral3: u8,
     reset_register: u8,
     reset_pending: u8,
@@ -100,7 +103,7 @@ impl NextBus {
             display_screen_bank: 0,
             border: 0,
             config_mapping: 0,
-            layer2_page: 0,
+            next_video: NextVideo::new(),
             peripheral3: 0,
             reset_register: 0,
             reset_pending: 0,
@@ -144,7 +147,7 @@ impl NextBus {
         self.display_screen_bank = 5;
         self.config_mapping = 0;
         self.alternate_rom_register = 0;
-        self.layer2_page = 8;
+        self.next_video.reset();
         self.peripheral3 = 0x10;
         self.reset_register = 2;
         self.reset_pending = 0;
@@ -174,7 +177,10 @@ impl NextBus {
         let peripheral3 = self.peripheral3;
         let peripheral5 = self.peripheral5;
         let alternate_rom_reset = (self.alternate_rom_register & 0x0f) * 0x11;
+        let mut next_video = self.next_video.clone();
+        next_video.reset_preserving_palette();
         self.hard_reset();
+        self.next_video = next_video;
         self.machine_type = machine_type;
         self.display_timing = display_timing;
         self.boot_enabled = boot_enabled;
@@ -336,18 +342,24 @@ impl NextBus {
     /// Read one implemented `NextReg`; unimplemented registers float high.
     #[must_use]
     pub fn read_nextreg(&self, register: u8) -> u8 {
+        if let Some(value) = self.next_video.read_register(register) {
+            return value;
+        }
         match register {
             0x00 => NEXT_MACHINE_ID,
             0x01 => NEXT_CORE_VERSION,
             0x02 => self.reset_register,
-            0x03 => (self.display_timing << 4) | self.machine_type,
+            0x03 => {
+                (u8::from(self.next_video.palette_second_write_pending()) << 7)
+                    | (self.display_timing << 4)
+                    | self.machine_type
+            }
             0x08 => (self.peripheral3 & 0x7f) | (u8::from(!self.zx128_locked) << 7),
             0x1e | 0x1f => 0,
             0x09 => 0,
             0x0a => self.peripheral5,
             0x0e => NEXT_CORE_SUBMINOR,
             0x0f => NEXT_BOARD_ID,
-            0x12 => self.layer2_page,
             0x8c => self.alternate_rom_register,
             0xb8 => self.divmmc_entry_points,
             0xb9 => self.divmmc_entry_points_valid,
@@ -376,6 +388,9 @@ impl NextBus {
 
     /// Update implemented boot, display-bank, peripheral, and MMU registers.
     pub fn write_nextreg(&mut self, register: u8, value: u8) {
+        if self.next_video.write_register(register, value) {
+            return;
+        }
         match register {
             0x02 => {
                 self.reset_pending = value & 0x03;
@@ -404,7 +419,6 @@ impl NextBus {
             0x04 if self.machine_type == 0 && !self.boot_enabled => {
                 self.config_mapping = value & 0x7f;
             }
-            0x12 => self.layer2_page = value & 0x7f,
             0xb8 => self.divmmc_entry_points = value,
             0xb9 => self.divmmc_entry_points_valid = value,
             0xba => self.divmmc_entry_timing = value,
@@ -438,6 +452,38 @@ impl NextBus {
     pub fn read_ram_page(&self, page: u8, offset: usize) -> Option<u8> {
         (usize::from(page) < NEXT_RAM_PAGE_COUNT && offset < PAGE_SIZE)
             .then(|| self.ram[usize::from(page) * PAGE_SIZE + offset])
+    }
+
+    /// Read a standard-mode Layer 2 pixel from physical RAM.
+    #[must_use]
+    pub fn layer2_pixel(&self, x: usize, y: usize) -> u8 {
+        self.next_video.layer2_pixel(&self.ram, x, y)
+    }
+
+    #[must_use]
+    pub fn layer2_palette_index(&self, pixel: u8) -> u8 {
+        self.next_video.palette_index(pixel)
+    }
+
+    /// RGB color, priority, and transparency for the active Layer 2 palette entry.
+    #[must_use]
+    pub fn layer2_color(&self, index: u8) -> Layer2Color {
+        self.next_video.layer2_color(index)
+    }
+
+    #[must_use]
+    pub fn layer2_standard_mode(&self) -> bool {
+        self.next_video.standard_mode()
+    }
+
+    #[must_use]
+    pub fn layer2_visible(&self) -> bool {
+        self.next_video.visible()
+    }
+
+    #[must_use]
+    pub fn layer2_above_ula(&self) -> Option<bool> {
+        self.next_video.above_ula()
     }
 
     /// Physical ULA screen bank selected by the `$7FFD` display latch.
@@ -750,6 +796,7 @@ impl NextBus {
         match port {
             PORT_NEXTREG_SELECT => self.selected_nextreg,
             PORT_NEXTREG_ACCESS => self.read_nextreg_at(self.selected_nextreg, t),
+            PORT_LAYER2_CONTROL => u8::from(self.next_video.visible()) << 1,
             _ if port & 0xff == 0xe3 => {
                 (self.divmmc_control & 0x7f) | (u8::from(self.divmmc_conmem) << 7)
             }
@@ -777,6 +824,7 @@ impl NextBus {
                 self.selected_nextreg = value;
             }
             PORT_NEXTREG_ACCESS => self.write_nextreg(self.selected_nextreg, value),
+            PORT_LAYER2_CONTROL => self.next_video.write_visibility_port(value),
             _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
             _ if port & 0xff == 0xe3 => {
                 self.divmmc_control = (value & 0x8f) | (self.divmmc_control & 0x40);
@@ -810,6 +858,10 @@ impl NextBus {
 mod tests {
     use super::*;
     use crate::next_sd::SECTOR_SIZE;
+
+    fn rgb3(value: u8) -> u8 {
+        (u16::from(value) * 255 / 7) as u8
+    }
 
     #[test]
     fn boot_rom_overlays_slot_zero_until_nextreg_configuration_write() {
@@ -1044,6 +1096,125 @@ mod tests {
         assert_eq!(bus.read_nextreg(0x12), 9);
         bus.hard_reset();
         assert_eq!(bus.read_nextreg(0x12), 8);
+    }
+
+    #[test]
+    fn layer2_visibility_is_mirrored_between_register_and_control_port() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_LAYER2_CONTROL, 0x02);
+        assert_eq!(bus.read_nextreg(0x69), 0x80);
+        assert_eq!(bus.in_port(PORT_LAYER2_CONTROL), 0x02);
+
+        bus.write_nextreg(0x69, 0x02);
+        assert_eq!(bus.in_port(PORT_LAYER2_CONTROL), 0);
+        bus.write_nextreg(0x69, 0x80);
+        assert_eq!(bus.in_port(PORT_LAYER2_CONTROL), 0x02);
+        bus.write_nextreg(0x69, 0);
+        assert_eq!(bus.in_port(PORT_LAYER2_CONTROL), 0);
+    }
+
+    #[test]
+    fn standard_layer2_pixels_cross_the_three_physical_bank_boundaries() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x12, 8);
+        for (offset, value) in [
+            (0, 0x11),
+            (16_383, 0x22),
+            (16_384, 0x33),
+            (32_768, 0x44),
+            (49_151, 0x55),
+        ] {
+            let page = 16 + offset / PAGE_SIZE;
+            let page_offset = offset % PAGE_SIZE;
+            assert!(bus.load_ram_page(page as u8, page_offset, &[value]));
+            assert_eq!(bus.layer2_pixel(offset % 256, offset / 256), value);
+        }
+    }
+
+    #[test]
+    fn layer2_palette_selection_increment_and_nine_bit_readback() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x43, 0x10); // Layer 2 palette 1, auto-increment.
+        bus.write_nextreg(0x40, 7);
+        bus.write_nextreg(0x44, 0b1010_1110); // R=5, G=3, B low=2.
+        assert_eq!(bus.read_nextreg(0x03) & 0x80, 0x80);
+        bus.write_nextreg(0x44, 0x81); // Priority plus blue MSB.
+        assert_eq!(bus.read_nextreg(0x03) & 0x80, 0);
+        assert_eq!(bus.read_nextreg(0x40), 8);
+        bus.write_nextreg(0x40, 7);
+        assert_eq!(bus.read_nextreg(0x44), 0x81);
+        assert_eq!(bus.read_nextreg(0x40), 7, "9-bit reads do not increment");
+        assert_eq!(bus.read_nextreg(0x41), 0b1010_1110);
+        assert_eq!(
+            bus.layer2_color(7),
+            Layer2Color {
+                rgb: [rgb3(5), rgb3(3), rgb3(6)],
+                priority: true,
+                transparent: false,
+            }
+        );
+        bus.soft_reset();
+        assert_eq!(
+            bus.layer2_color(7),
+            Layer2Color {
+                rgb: [rgb3(5), rgb3(3), rgb3(6)],
+                priority: true,
+                transparent: false,
+            }
+        );
+
+        bus.write_nextreg(0x70, 3);
+        assert_eq!(bus.layer2_palette_index(0x1a), 0x4a);
+
+        bus.write_nextreg(0x43, 0x00); // ULA palette family is not implemented here.
+        assert_eq!(bus.read_nextreg(0x41), 0xff);
+
+        bus.write_nextreg(0x43, 0x50); // Write the second Layer 2 palette.
+        bus.write_nextreg(0x40, 7);
+        bus.write_nextreg(0x41, 0b0011_1001);
+        bus.write_nextreg(0x43, 0x54); // Select and display second Layer 2 palette.
+        bus.write_nextreg(0x40, 7);
+        assert_eq!(
+            bus.read_nextreg(0x44),
+            0x01,
+            "8-bit blue extension reads back"
+        );
+        assert_eq!(
+            bus.layer2_color(7),
+            Layer2Color {
+                rgb: [rgb3(1), rgb3(6), rgb3(5)],
+                priority: false,
+                transparent: false,
+            }
+        );
+
+        bus.write_nextreg(0x43, 0x10); // Display first palette again.
+        assert_eq!(
+            bus.layer2_color(7),
+            Layer2Color {
+                rgb: [rgb3(5), rgb3(3), rgb3(6)],
+                priority: true,
+                transparent: false,
+            }
+        );
+    }
+
+    #[test]
+    fn eight_bit_palette_read_uses_selected_index_without_incrementing() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x43, 0x10); // Layer 2 palette 1, auto-increment enabled.
+        bus.write_nextreg(0x40, 3);
+        bus.write_nextreg(0x41, 0b1010_1110);
+        assert_eq!(bus.read_nextreg(0x40), 4, "write auto-increments");
+
+        bus.write_nextreg(0x40, 3);
+        assert_eq!(bus.read_nextreg(0x41), 0b1010_1110);
+        assert_eq!(bus.read_nextreg(0x40), 3, "$41 read does not increment");
+
+        bus.write_nextreg(0x40, 4);
+        bus.write_nextreg(0x41, 0b0011_1001);
+        bus.write_nextreg(0x40, 3);
+        assert_eq!(bus.read_nextreg(0x41), 0b1010_1110);
     }
 
     #[test]
