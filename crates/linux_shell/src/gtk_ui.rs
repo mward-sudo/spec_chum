@@ -307,8 +307,7 @@ impl AppState {
                 if self.next_assets_download.is_none() {
                     let (sender, receiver) = mpsc::channel();
                     std::thread::spawn(move || {
-                        let result =
-                            acquire_next_assets(&mut paths).map_err(|error| error.to_string());
+                        let result = acquire_next_assets().map_err(|error| error.to_string());
                         let _ = sender.send(result);
                     });
                     self.next_assets_download = Some(NextAssetDownload {
