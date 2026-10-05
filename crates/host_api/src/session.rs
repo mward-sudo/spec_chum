@@ -1302,8 +1302,10 @@ impl HostSession {
 
     /// Set the debugger paused flag (no-op without a machine).
     pub fn set_paused(&mut self, paused: bool) {
-        if let Some(m) = self.machine.as_mut().and_then(HostRuntime::classic_mut) {
-            m.debugger_mut().paused = paused;
+        match self.machine.as_mut() {
+            Some(HostRuntime::Classic(machine)) => machine.debugger_mut().paused = paused,
+            Some(HostRuntime::Next(machine)) => machine.set_paused(paused),
+            None => {}
         }
     }
 
@@ -1314,19 +1316,25 @@ impl HostSession {
 
     #[must_use]
     pub fn paused(&self) -> bool {
-        self.machine
-            .as_ref()
-            .and_then(HostRuntime::classic)
-            .is_some_and(|m| m.debugger().paused)
+        match self.machine.as_ref() {
+            Some(HostRuntime::Classic(machine)) => machine.debugger().paused,
+            Some(HostRuntime::Next(machine)) => machine.paused(),
+            None => false,
+        }
     }
 
     /// Resume after a debugger stop, allowing the breakpoint at the current PC to be passed once.
     ///
     /// This clears the debugger pause state but does not change the host `running` flag.
     pub fn continue_execution(&mut self) -> Result<(), HostError> {
-        let m = require_machine_mut(&mut self.machine)?;
-        let pc = m.cpu().regs.pc;
-        m.debugger_mut().continue_from_pc(pc);
+        match self.machine.as_mut() {
+            Some(HostRuntime::Classic(machine)) => {
+                let pc = machine.cpu().regs.pc;
+                machine.debugger_mut().continue_from_pc(pc);
+            }
+            Some(HostRuntime::Next(machine)) => machine.set_paused(false),
+            None => return Err(HostError::NoMachine),
+        }
         Ok(())
     }
 
@@ -1535,18 +1543,22 @@ impl HostSession {
         }
         let mut last = machine::BreakReason::None;
         for _ in 0..frames {
-            if let Some(m) = self.machine.as_ref().and_then(HostRuntime::classic) {
-                if m.debugger().paused {
-                    last = m.debugger().last_hit;
-                    break;
-                }
+            if self.paused() {
+                last = self
+                    .machine
+                    .as_ref()
+                    .and_then(HostRuntime::classic)
+                    .map_or(machine::BreakReason::None, |m| m.debugger().last_hit);
+                break;
             }
             self.run_frame();
-            if let Some(m) = self.machine.as_ref().and_then(HostRuntime::classic) {
-                last = m.debugger().last_hit;
-                if m.debugger().paused {
-                    break;
-                }
+            if self.paused() {
+                last = self
+                    .machine
+                    .as_ref()
+                    .and_then(HostRuntime::classic)
+                    .map_or(machine::BreakReason::None, |m| m.debugger().last_hit);
+                break;
             }
         }
         Ok(last)

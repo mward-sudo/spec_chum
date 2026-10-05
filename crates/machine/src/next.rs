@@ -17,6 +17,7 @@ pub struct NextMachine {
     pub bus: NextBus,
     video_t: u64,
     ula: Ula48,
+    debugger_paused: bool,
     beeper_level: bool,
     beeper_edges: Vec<(u64, bool)>,
 }
@@ -30,6 +31,7 @@ impl NextMachine {
             bus: NextBus::new(rom)?,
             video_t: 0,
             ula: Ula48::new(),
+            debugger_paused: false,
             beeper_level: false,
             beeper_edges: Vec::new(),
         })
@@ -67,6 +69,16 @@ impl NextMachine {
     #[must_use]
     pub fn frame_tstates(&self) -> u32 {
         self.bus.frame_interrupt_timing().0 as u32
+    }
+
+    /// Pause host-driven frame advancement without changing the guest machine state.
+    pub fn set_paused(&mut self, paused: bool) {
+        self.debugger_paused = paused;
+    }
+
+    #[must_use]
+    pub fn paused(&self) -> bool {
+        self.debugger_paused
     }
 
     /// Execute one guest instruction through the Next-specific bus.
@@ -111,6 +123,9 @@ impl NextMachine {
 
     /// Run to the next selected video-frame boundary.
     pub fn run_frame(&mut self) -> FrameAudio {
+        if self.debugger_paused {
+            return FrameAudio::default();
+        }
         let frame_len = self.bus.frame_interrupt_timing().0;
         let frame_start = self.video_t;
         let boundary = (frame_start / frame_len + 1) * frame_len;

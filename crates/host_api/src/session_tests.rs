@@ -225,6 +225,34 @@ fn next_host_key_release_clears_the_keyboard_matrix() {
 }
 
 #[test]
+fn debug_pause_stops_next_frames_until_continue() {
+    let next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session.machine = Some(HostRuntime::Next(next));
+
+    session.debug_pause();
+    assert!(session.paused());
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    let paused_t = next.video_t();
+    session.run_frame();
+    session.run_frames(10).expect("paused frames");
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert_eq!(next.video_t(), paused_t, "paused Next must not advance");
+
+    session.debug_continue().expect("continue Next");
+    assert!(!session.paused());
+    session.run_frame();
+    let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
+        panic!("expected Next runtime");
+    };
+    assert!(next.video_t() > paused_t, "continued Next should advance");
+}
+
+#[test]
 fn next_beeper_audio_reaches_host_pcm() {
     let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
     let program = [0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xc3, 0x00, 0xc0];
