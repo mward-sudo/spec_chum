@@ -1199,6 +1199,19 @@ mod tests {
     }
 
     #[test]
+    fn timex_display_file_selector_is_aliased_by_nextreg_69_and_port_ff() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+
+        bus.out_port(0x12ff, 0x25);
+        assert_eq!(bus.read_nextreg(0x69), 0x25);
+        assert_eq!(bus.radastan_display_file_offset(), 0x2000);
+
+        bus.write_nextreg(0x69, 0x12);
+        assert_eq!(bus.read_nextreg(0x69), 0x12);
+        assert_eq!(bus.radastan_display_file_offset(), 0);
+    }
+
+    #[test]
     fn layer2_palettes_reset_to_identity_rgb332_with_auto_increment_enabled() {
         let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
         assert_eq!(bus.read_nextreg(0x43), 0);

@@ -727,8 +727,8 @@ mod tests {
             (0x26, 0x03),
             (0x27, 0xe0),
             (0x28, 0x1c),
-            (0x29, 0xe0),
-            (0x2a, 0x1c),
+            (0x29, 0x03),
+            (0x2a, 0xff),
             (0x31, 0xe0),
             (0x32, 0x1c),
             (0x33, 0x03),
@@ -788,6 +788,15 @@ mod tests {
         assert_eq!(rgba_pixel(&frame, width, 0, 0), [0, 0, 255, 0xff]);
         assert_eq!(rgba_pixel(&frame, width, 2, 0), [255, 255, 255, 0xff]);
 
+        machine.bus.write_nextreg(0x69, 0); // NextReg $69 aliases the $xxFF selector.
+        assert_eq!(machine.bus.read_nextreg(0x69), 0);
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
+        machine.bus.write_nextreg(0x69, 1);
+        assert_eq!(machine.bus.read_nextreg(0x69), 1);
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [0, 0, 255, 0xff]);
+
         machine.bus.write_nextreg(0x6a, 0x32); // Register file bit XOR port bit selects file 0.
         machine.render_rgba(&mut frame, false);
         assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
@@ -818,8 +827,8 @@ mod tests {
 
         machine.bus.out_port(0x00ff, 1); // Select bank 7's second display file.
         machine.render_rgba(&mut frame, false);
-        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
-        assert_eq!(rgba_pixel(&frame, width, 2, 0), [0, 255, 0, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [0, 0, 255, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 2, 0), [255, 255, 255, 0xff]);
 
         machine.bus.write_nextreg(0x6a, 0); // 256-colour LoRes is still selected by bit 5 clear.
         assert!(machine.bus.lores_256_color_enabled());
