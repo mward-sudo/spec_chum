@@ -179,9 +179,10 @@ impl NextSprites {
         if extended && attributes[4] & 0xfe != 0 {
             return;
         }
+        let y_high_bit = if extended { attributes[4] & 1 } else { 0 };
 
         let x = usize::from(attributes[0]) | (usize::from(attributes[2] & 0x01) << 8);
-        let y = usize::from(attributes[1]) | (usize::from(attributes[4] & 0x01) << 8);
+        let y = usize::from(attributes[1]) | (usize::from(y_high_bit) << 8);
         let pattern = usize::from(attributes[3] & 0x3f) * PATTERN_BYTES;
         let palette_offset = attributes[2] >> 4;
         let over_border = layer_control & 0x02 != 0;

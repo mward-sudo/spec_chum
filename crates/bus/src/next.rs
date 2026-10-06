@@ -1385,6 +1385,25 @@ mod tests {
     }
 
     #[test]
+    fn four_byte_sprite_attributes_ignore_stale_extended_y_bit() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        bus.out_port(0x005b, 0xe0);
+        for value in [32, 32, 0, 0xc0, 1] {
+            bus.out_port(0x0057, value);
+        }
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        for value in [32, 32, 0, 0x80] {
+            bus.out_port(0x0057, value);
+        }
+        bus.write_nextreg(0x15, 1);
+
+        let surface = bus.render_sprite_surface();
+        assert_eq!(surface[32 * 320 + 32].unwrap().rgb, [255, 0, 0]);
+        assert!(surface[0].is_none());
+    }
+
+    #[test]
     fn sprite_palette_transparency_uses_source_index_and_palette_selection() {
         let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
         bus.write_nextreg(0x43, 0x20); // Sprite palette 1.
