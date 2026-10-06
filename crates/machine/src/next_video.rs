@@ -4,11 +4,58 @@ use bus::{NextBus, VideoColor};
 
 const SPRITE_WIDTH: usize = 320;
 const SPRITE_HEIGHT: usize = 256;
+const LORES_WIDTH: usize = 128;
+const LORES_HEIGHT: usize = 96;
+
+/// Replace the ULA paper with 256-colour `LoRes` pixels when enabled.
+pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border: bool) {
+    if !bus.lores_256_color_enabled() || screen.len() < 0x3800 {
+        return;
+    }
+    let (width, origin_x, origin_y) = if with_border {
+        (352usize, 48usize, 48usize)
+    } else {
+        (256usize, 0usize, 0usize)
+    };
+
+    for y in 0..LORES_HEIGHT {
+        let line_offset = if y < 48 {
+            y * LORES_WIDTH
+        } else {
+            0x2000 + (y - 48) * LORES_WIDTH
+        };
+        for x in 0..LORES_WIDTH {
+            let Some(color) = bus.lores_video_pixel(screen[line_offset + x]) else {
+                for dy in 0..2 {
+                    for dx in 0..2 {
+                        let output_offset =
+                            (((origin_y + y * 2 + dy) * width) + origin_x + x * 2 + dx) * 4;
+                        output[output_offset..output_offset + 4].copy_from_slice(&[0, 0, 0, 0]);
+                    }
+                }
+                continue;
+            };
+            for dy in 0..2 {
+                for dx in 0..2 {
+                    let output_offset =
+                        (((origin_y + y * 2 + dy) * width) + origin_x + x * 2 + dx) * 4;
+                    output[output_offset..output_offset + 3].copy_from_slice(&color.rgb);
+                    output[output_offset + 3] = 0xff;
+                }
+            }
+        }
+    }
+}
 
 /// Composite the implemented sprite, Layer 2, and ULA layers into a Next frame.
 pub(super) fn compose(bus: &NextBus, output: &mut [u8], with_border: bool) {
     let order = bus.video_layer_order();
     if order >= 6 {
+        for offset in (0..output.len()).step_by(4) {
+            if output[offset + 3] == 0 {
+                output[offset..offset + 4].copy_from_slice(&[0, 0, 0, 0xff]);
+            }
+        }
         return;
     }
 
@@ -39,13 +86,16 @@ pub(super) fn compose(bus: &NextBus, output: &mut [u8], with_border: bool) {
             } else {
                 None
             };
+            let output_offset = (y * width + x) * 4;
+            let ula_transparent = output[output_offset + 3] == 0;
             let color = layer2
                 .filter(|pixel| pixel.priority)
-                .or_else(|| top_layer_color(layer_order, sprite, layer2));
+                .or_else(|| top_layer_color(layer_order, sprite, layer2, ula_transparent));
             if let Some(color) = color {
-                let output_offset = (y * width + x) * 4;
                 output[output_offset..output_offset + 3].copy_from_slice(&color.rgb);
                 output[output_offset + 3] = 0xff;
+            } else if ula_transparent {
+                output[output_offset..output_offset + 4].copy_from_slice(&[0, 0, 0, 0xff]);
             }
         }
     }
@@ -74,12 +124,14 @@ fn top_layer_color(
     order: [VideoLayer; 3],
     sprite: Option<VideoColor>,
     layer2: Option<VideoColor>,
+    ula_transparent: bool,
 ) -> Option<VideoColor> {
     for layer in order {
         match layer {
             VideoLayer::Sprite if sprite.is_some() => return sprite,
             VideoLayer::Layer2 if layer2.is_some() => return layer2,
-            VideoLayer::Ula => return None,
+            VideoLayer::Ula if !ula_transparent => return None,
+            VideoLayer::Ula => {}
             _ => {}
         }
     }
