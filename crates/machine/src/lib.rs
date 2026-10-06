@@ -17,6 +17,7 @@ mod inspect;
 mod joystick;
 mod memory;
 mod next;
+mod next_video;
 mod rom;
 mod tape_state;
 

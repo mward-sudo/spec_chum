@@ -7,8 +7,9 @@ use std::path::Path;
 
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
+use crate::next_sprites::NextSprites;
 use crate::next_video::NextVideo;
-use crate::{require_rom_size, Kempston, Keyboard, Layer2Color, RomLoadError};
+use crate::{require_rom_size, Kempston, Keyboard, RomLoadError, VideoColor};
 
 const PAGE_SIZE: usize = 0x2000;
 const CONFIG_BANK_SIZE: usize = 0x4000;
@@ -30,6 +31,7 @@ const RESET_PAGES: [u8; 8] = [0xff, 0xff, 10, 11, 4, 5, 0, 1];
 const PORT_NEXTREG_SELECT: u16 = 0x243b;
 const PORT_NEXTREG_ACCESS: u16 = 0x253b;
 const PORT_LAYER2_CONTROL: u16 = 0x123b;
+const PORT_SPRITE_SELECT: u16 = 0x303b;
 
 /// CPU-visible Spectrum Next memory and the subset of `NextRegs` implemented by
 /// this core slice. Unimplemented registers read as an undriven data bus.
@@ -52,6 +54,8 @@ pub struct NextBus {
     border: u8,
     config_mapping: u8,
     next_video: NextVideo,
+    next_sprites: NextSprites,
+    peripheral2: u8,
     peripheral3: u8,
     reset_register: u8,
     reset_pending: u8,
@@ -104,6 +108,8 @@ impl NextBus {
             border: 0,
             config_mapping: 0,
             next_video: NextVideo::new(),
+            next_sprites: NextSprites::new(),
+            peripheral2: 0,
             peripheral3: 0,
             reset_register: 0,
             reset_pending: 0,
@@ -148,6 +154,8 @@ impl NextBus {
         self.config_mapping = 0;
         self.alternate_rom_register = 0;
         self.next_video.reset();
+        self.next_sprites.reset();
+        self.peripheral2 = 0;
         self.peripheral3 = 0x10;
         self.reset_register = 2;
         self.reset_pending = 0;
@@ -175,12 +183,15 @@ impl NextBus {
         let display_timing = self.display_timing;
         let boot_enabled = self.boot_enabled;
         let peripheral3 = self.peripheral3;
+        let mut next_sprites = self.next_sprites.clone();
+        next_sprites.reset_preserving_memory();
         let peripheral5 = self.peripheral5;
         let alternate_rom_reset = (self.alternate_rom_register & 0x0f) * 0x11;
         let mut next_video = self.next_video.clone();
         next_video.reset_preserving_palette();
         self.hard_reset();
         self.next_video = next_video;
+        self.next_sprites = next_sprites;
         self.machine_type = machine_type;
         self.display_timing = display_timing;
         self.boot_enabled = boot_enabled;
@@ -342,6 +353,12 @@ impl NextBus {
     /// Read one implemented `NextReg`; unimplemented registers float high.
     #[must_use]
     pub fn read_nextreg(&self, register: u8) -> u8 {
+        if let Some(value) = self.next_sprites.read_register(register) {
+            return value;
+        }
+        if let Some(value) = self.next_video.palette_register(register) {
+            return value;
+        }
         if let Some(value) = self.next_video.read_register(register) {
             return value;
         }
@@ -356,7 +373,7 @@ impl NextBus {
             }
             0x08 => (self.peripheral3 & 0x7f) | (u8::from(!self.zx128_locked) << 7),
             0x1e | 0x1f => 0,
-            0x09 => 0,
+            0x09 => self.peripheral2,
             0x0a => self.peripheral5,
             0x0e => NEXT_CORE_SUBMINOR,
             0x0f => NEXT_BOARD_ID,
@@ -388,6 +405,16 @@ impl NextBus {
 
     /// Update implemented boot, display-bank, peripheral, and MMU registers.
     pub fn write_nextreg(&mut self, register: u8, value: u8) {
+        if self.next_video.write_palette_register(register, value) {
+            return;
+        }
+        let sprite_index_lockstep = self.peripheral2 & 0x10 != 0;
+        if self
+            .next_sprites
+            .write_register(register, value, sprite_index_lockstep)
+        {
+            return;
+        }
         if self.next_video.write_register(register, value) {
             return;
         }
@@ -408,7 +435,12 @@ impl NextBus {
                     self.zx128_locked = false;
                 }
             }
-            0x09 if value & 0x08 != 0 => self.divmmc_control &= !0x40,
+            0x09 => {
+                self.peripheral2 = value;
+                if value & 0x08 != 0 {
+                    self.divmmc_control &= !0x40;
+                }
+            }
             0x03 if self.machine_type == 0 => {
                 self.boot_enabled = false;
                 if value & 0x80 != 0 {
@@ -460,30 +492,30 @@ impl NextBus {
         self.next_video.layer2_pixel(&self.ram, x, y)
     }
 
+    /// Return an opaque Layer 2 pixel color when the standard layer is visible.
     #[must_use]
-    pub fn layer2_palette_index(&self, pixel: u8) -> u8 {
-        self.next_video.palette_index(pixel)
+    pub fn layer2_video_pixel(&self, x: usize, y: usize) -> Option<VideoColor> {
+        if !self.next_video.visible() || !self.next_video.standard_mode() || x >= 256 || y >= 192 {
+            return None;
+        }
+        let pixel = self.next_video.layer2_pixel(&self.ram, x, y);
+        let color = self
+            .next_video
+            .layer2_color(self.next_video.palette_index(pixel));
+        (!color.transparent).then_some(color)
     }
 
-    /// RGB color, priority, and transparency for the active Layer 2 palette entry.
+    /// Return the standard sprite layer on its 320×256 display surface.
     #[must_use]
-    pub fn layer2_color(&self, index: u8) -> Layer2Color {
-        self.next_video.layer2_color(index)
+    pub fn render_sprite_surface(&self) -> Vec<Option<VideoColor>> {
+        self.next_sprites
+            .render_surface(&self.next_video, self.next_video.priority())
     }
 
+    /// Three-bit ordering selector from `NextReg` `$15` bits 4–2.
     #[must_use]
-    pub fn layer2_standard_mode(&self) -> bool {
-        self.next_video.standard_mode()
-    }
-
-    #[must_use]
-    pub fn layer2_visible(&self) -> bool {
-        self.next_video.visible()
-    }
-
-    #[must_use]
-    pub fn layer2_above_ula(&self) -> Option<bool> {
-        self.next_video.above_ula()
+    pub fn video_layer_order(&self) -> u8 {
+        self.next_video.priority() >> 2 & 0x07
     }
 
     /// Physical ULA screen bank selected by the `$7FFD` display latch.
@@ -797,6 +829,7 @@ impl NextBus {
             PORT_NEXTREG_SELECT => self.selected_nextreg,
             PORT_NEXTREG_ACCESS => self.read_nextreg_at(self.selected_nextreg, t),
             PORT_LAYER2_CONTROL => u8::from(self.next_video.visible()) << 1,
+            PORT_SPRITE_SELECT => 0,
             _ if port & 0xff == 0xe3 => {
                 (self.divmmc_control & 0x7f) | (u8::from(self.divmmc_conmem) << 7)
             }
@@ -825,6 +858,13 @@ impl NextBus {
             }
             PORT_NEXTREG_ACCESS => self.write_nextreg(self.selected_nextreg, value),
             PORT_LAYER2_CONTROL => self.next_video.write_visibility_port(value),
+            PORT_SPRITE_SELECT => self
+                .next_sprites
+                .select_port(value, self.peripheral2 & 0x10 != 0),
+            _ if port & 0xff == 0x57 => self
+                .next_sprites
+                .write_attribute_port(value, self.peripheral2 & 0x10 != 0),
+            _ if port & 0xff == 0x5b => self.next_sprites.write_pattern_port(value),
             _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
             _ if port & 0xff == 0xe3 => {
                 self.divmmc_control = (value & 0x8f) | (self.divmmc_control & 0x40);
@@ -1175,8 +1215,8 @@ mod tests {
         assert_eq!(bus.read_nextreg(0x40), 7, "9-bit reads do not increment");
         assert_eq!(bus.read_nextreg(0x41), 0b1010_1110);
         assert_eq!(
-            bus.layer2_color(7),
-            Layer2Color {
+            bus.next_video.layer2_color(7),
+            VideoColor {
                 rgb: [rgb3(5), rgb3(3), rgb3(6)],
                 priority: true,
                 transparent: false,
@@ -1184,8 +1224,8 @@ mod tests {
         );
         bus.soft_reset();
         assert_eq!(
-            bus.layer2_color(7),
-            Layer2Color {
+            bus.next_video.layer2_color(7),
+            VideoColor {
                 rgb: [rgb3(5), rgb3(3), rgb3(6)],
                 priority: true,
                 transparent: false,
@@ -1193,7 +1233,7 @@ mod tests {
         );
 
         bus.write_nextreg(0x70, 3);
-        assert_eq!(bus.layer2_palette_index(0x1a), 0x4a);
+        assert_eq!(bus.next_video.palette_index(0x1a), 0x4a);
 
         bus.write_nextreg(0x43, 0x00); // ULA palette family is not implemented here.
         assert_eq!(bus.read_nextreg(0x41), 0xff);
@@ -1209,8 +1249,8 @@ mod tests {
             "8-bit blue extension reads back"
         );
         assert_eq!(
-            bus.layer2_color(7),
-            Layer2Color {
+            bus.next_video.layer2_color(7),
+            VideoColor {
                 rgb: [rgb3(1), rgb3(6), rgb3(5)],
                 priority: false,
                 transparent: false,
@@ -1219,8 +1259,8 @@ mod tests {
 
         bus.write_nextreg(0x43, 0x10); // Display first palette again.
         assert_eq!(
-            bus.layer2_color(7),
-            Layer2Color {
+            bus.next_video.layer2_color(7),
+            VideoColor {
                 rgb: [rgb3(5), rgb3(3), rgb3(6)],
                 priority: true,
                 transparent: false,
@@ -1244,6 +1284,183 @@ mod tests {
         bus.write_nextreg(0x41, 0b0011_1001);
         bus.write_nextreg(0x40, 3);
         assert_eq!(bus.read_nextreg(0x41), 0b1010_1110);
+    }
+
+    #[test]
+    fn sprite_ports_keep_pattern_and_attribute_cursors_independent() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        for _ in 0..128 {
+            bus.out_port(0x005b, 1);
+        }
+        bus.out_port(PORT_SPRITE_SELECT, 0x80);
+        for _ in 0..128 {
+            bus.out_port(0x005b, 2);
+        }
+
+        for attribute in [32, 32, 0, 0x80] {
+            bus.out_port(0x0057, attribute);
+        }
+        bus.write_nextreg(0x15, 1);
+
+        let surface = bus.render_sprite_surface();
+        assert_eq!(surface[32 * 320 + 32].unwrap().rgb, [0, 0, 182]);
+        assert_eq!(surface[40 * 320 + 32].unwrap().rgb, [0, 0, 218]);
+        assert!(surface[48 * 320 + 32].is_none());
+    }
+
+    #[test]
+    fn sprite_ports_wrap_attribute_slots_and_nextreg_lockstep_is_explicit() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        bus.out_port(0x005b, 1);
+        bus.out_port(PORT_SPRITE_SELECT, 127);
+        for value in [32, 32, 0, 0x80, 64, 32, 0, 0x80] {
+            bus.out_port(0x0057, value);
+        }
+        bus.write_nextreg(0x15, 1);
+        let surface = bus.render_sprite_surface();
+        assert!(surface[32 * 320 + 32].is_some());
+        assert!(surface[32 * 320 + 64].is_some());
+
+        bus.write_nextreg(0x34, 5);
+        bus.out_port(PORT_SPRITE_SELECT, 127);
+        for value in [32, 32, 0, 0x80] {
+            bus.out_port(0x0057, value);
+        }
+        assert_eq!(
+            bus.read_nextreg(0x34),
+            5,
+            "interfaces are independent by default"
+        );
+
+        bus.write_nextreg(0x09, 0x10);
+        bus.write_nextreg(0x34, 127);
+        assert_eq!(bus.read_nextreg(0x34), 127);
+        assert_eq!(bus.in_port(PORT_SPRITE_SELECT), 0);
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        assert_eq!(bus.read_nextreg(0x34), 0);
+
+        bus.write_nextreg(0x34, 127);
+        bus.write_nextreg(0x75, 32);
+        assert_eq!(bus.read_nextreg(0x34), 0, "post-increment wraps at 128");
+    }
+
+    #[test]
+    fn sprite_pattern_write_pointer_wraps_at_16_kibibytes() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        bus.out_port(0x005b, 1);
+        for _ in 0..16 * 1024 - 1 {
+            bus.out_port(0x005b, 2);
+        }
+        bus.out_port(0x005b, 3);
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        for value in [32, 32, 0, 0x80] {
+            bus.out_port(0x0057, value);
+        }
+        bus.write_nextreg(0x15, 1);
+        assert_eq!(
+            bus.render_sprite_surface()[32 * 320 + 32].unwrap().rgb,
+            [0, 0, 255]
+        );
+    }
+
+    #[test]
+    fn extended_8bit_sprite_uses_ninth_y_bit_and_wraps_at_512() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        for _ in 0..16 {
+            bus.out_port(0x005b, 0);
+        }
+        bus.out_port(0x005b, 0xe0);
+        for value in [32, 255, 0, 0xc0, 1] {
+            bus.out_port(0x0057, value);
+        }
+        bus.write_nextreg(0x15, 0x03);
+
+        let surface = bus.render_sprite_surface();
+        assert_eq!(surface[32].unwrap().rgb, [255, 0, 0]);
+        assert!(surface[40 * 320 + 32].is_none());
+    }
+
+    #[test]
+    fn four_byte_sprite_attributes_ignore_stale_extended_y_bit() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        bus.out_port(0x005b, 0xe0);
+        for value in [32, 32, 0, 0xc0, 1] {
+            bus.out_port(0x0057, value);
+        }
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        for value in [32, 32, 0, 0x80] {
+            bus.out_port(0x0057, value);
+        }
+        bus.write_nextreg(0x15, 1);
+
+        let surface = bus.render_sprite_surface();
+        assert_eq!(surface[32 * 320 + 32].unwrap().rgb, [255, 0, 0]);
+        assert!(surface[0].is_none());
+    }
+
+    #[test]
+    fn sprite_palette_transparency_uses_source_index_and_palette_selection() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x43, 0x20); // Sprite palette 1.
+        bus.write_nextreg(0x40, 18);
+        bus.write_nextreg(0x41, 0b1110_0000);
+        bus.write_nextreg(0x40, 18);
+        bus.write_nextreg(0x44, 0b1110_0000);
+        bus.write_nextreg(0x44, 0x81); // Sprite palettes ignore the reserved priority bit.
+        bus.write_nextreg(0x40, 18);
+        assert_eq!(bus.read_nextreg(0x44), 0x01);
+        bus.write_nextreg(0x43, 0x60); // Sprite palette 2.
+        bus.write_nextreg(0x40, 18);
+        bus.write_nextreg(0x41, 0);
+        bus.write_nextreg(0x4b, 1);
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        bus.out_port(0x005b, 1);
+        bus.out_port(0x005b, 2);
+        for attribute in [32, 32, 0x10, 0x80] {
+            bus.out_port(0x0057, attribute);
+        }
+        bus.write_nextreg(0x15, 1);
+
+        let surface = bus.render_sprite_surface();
+        assert!(surface[32 * 320 + 32].is_none());
+        assert_eq!(surface[32 * 320 + 33].unwrap().rgb, [255, 0, 145]);
+
+        bus.write_nextreg(0x43, 0x28); // Display the second sprite palette.
+        assert_eq!(
+            bus.render_sprite_surface()[32 * 320 + 33]
+                .expect("visible sprite pixel")
+                .rgb,
+            [0, 0, 0],
+        );
+    }
+
+    #[test]
+    fn sprite_clip_window_and_over_border_gate_follow_nextregs() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        bus.out_port(0x005b, 1);
+        bus.out_port(PORT_SPRITE_SELECT, 0);
+        for attribute in [20, 5, 0, 0x80] {
+            bus.out_port(0x0057, attribute);
+        }
+        bus.write_nextreg(0x15, 1);
+        assert!(bus.render_sprite_surface()[5 * 320 + 20].is_none());
+        bus.write_nextreg(0x19, 10);
+        bus.write_nextreg(0x19, 20);
+        bus.write_nextreg(0x19, 5);
+        bus.write_nextreg(0x19, 9);
+        bus.write_nextreg(0x1c, 0x02);
+        bus.write_nextreg(0x15, 0x23); // Enabled, over border, clipped.
+
+        let surface = bus.render_sprite_surface();
+        assert!(surface[5 * 320 + 19].is_none());
+        assert!(surface[5 * 320 + 20].is_some());
+        assert!(surface[4 * 320 + 20].is_none());
     }
 
     #[test]
@@ -1488,7 +1705,7 @@ mod tests {
         bus.write(0, 0x73);
         assert_eq!(bus.read(0), 0x71);
         bus.write_nextreg(0x09, 0x08);
-        assert_eq!(bus.read_nextreg(0x09), 0);
+        assert_eq!(bus.read_nextreg(0x09), 0x08);
         assert_eq!(bus.in_port(0x00e3), 0x80);
         bus.out_port(0x00e3, 0x80);
         assert_eq!(bus.read(0x0100), 0);
