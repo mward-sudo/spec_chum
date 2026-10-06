@@ -147,7 +147,7 @@ impl NextMachine {
         frame_audio
     }
 
-    /// Render the ULA screen and the supported 256×192 Next Layer 2 mode.
+    /// Render the ULA screen, standard Layer 2, and base Next sprites.
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
         let first_page = self.bus.display_screen_bank() * 2;
         let mut screen = [0u8; 6912];
@@ -160,26 +160,7 @@ impl NextMachine {
         let mut ula = self.ula.clone();
         ula.border = self.bus.border();
         ula.render_rgba(&screen, out, with_border);
-        if !self.bus.layer2_visible() || !self.bus.layer2_standard_mode() {
-            return;
-        }
-
-        let (width, _height) = Self::framebuffer_dims(with_border);
-        let (origin_x, origin_y) = if with_border { (48, 48) } else { (0, 0) };
-        let Some(layer2_above) = self.bus.layer2_above_ula() else {
-            return;
-        };
-        for y in 0..192 {
-            for x in 0..256 {
-                let pixel = self.bus.layer2_pixel(x, y);
-                let color = self.bus.layer2_color(self.bus.layer2_palette_index(pixel));
-                if !color.transparent && (layer2_above || color.priority) {
-                    let offset = ((origin_y + y) * width + origin_x + x) * 4;
-                    out[offset..offset + 3].copy_from_slice(&color.rgb);
-                    out[offset + 3] = 0xff;
-                }
-            }
-        }
+        super::next_video::compose(&self.bus, out, with_border);
     }
 
     #[must_use]
