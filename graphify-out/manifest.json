@@ -12,8 +12,8 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1791173689.0105171,
-    "seen": 1791173745.619566,
+    "mtime": 1791226853.6859925,
+    "seen": 1791227188.0257258,
     "ast_hash": "01438ff4314e9ac0a3dda8e8be5821bb",
     "semantic_hash": ""
   },
@@ -216,9 +216,9 @@
     "semantic_hash": "bcecf352bc883e60b41a725cb598f184"
   },
   "crates/bus/src/lib.rs": {
-    "mtime": 1790985288.6964839,
-    "seen": 1790985379.421133,
-    "ast_hash": "94a8c22665c1f2e6a7bba02193002c50",
+    "mtime": 1791226626.9051857,
+    "seen": 1791227188.027594,
+    "ast_hash": "88971f5c7be7707ef0e949b47e850ed5",
     "semantic_hash": ""
   },
   "crates/bus/src/multiface.rs": {
@@ -372,9 +372,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1791175163.1935964,
-    "seen": 1791175222.630966,
-    "ast_hash": "eada7b2b774db29139cb3cfc265e86ee",
+    "mtime": 1791227469.4191089,
+    "seen": 1791228008.732909,
+    "ast_hash": "7965481336c017532ed4d011af7c7f19",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -2076,9 +2076,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session_tests.rs": {
-    "mtime": 1791175163.1944244,
-    "seen": 1791175222.630997,
-    "ast_hash": "ef490c6078b5614bb26cb5ee9a2fac8f",
+    "mtime": 1791227430.5533497,
+    "seen": 1791228008.732969,
+    "ast_hash": "ffed3d06309f15c39b9eb7058fa1040d",
     "semantic_hash": ""
   },
   "crates/machine/src/memory.rs": {
@@ -2304,15 +2304,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791092517.9459977,
-    "seen": 1791171266.108595,
-    "ast_hash": "9d5ac5e3c8a380d23130004e1e61c821",
+    "mtime": 1791239637.1443815,
+    "seen": 1791239653.364256,
+    "ast_hash": "2a2fc5cdc3683761ba3cf46938677f4c",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791175042.9370306,
-    "seen": 1791175128.562651,
-    "ast_hash": "0045d0925580bfdb589b26c5da173780",
+    "mtime": 1791227105.248873,
+    "seen": 1791227188.030792,
+    "ast_hash": "189b9ce5da7d0da8b90de000c17db867",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {
@@ -2349,6 +2349,12 @@
     "mtime": 1791223795.9763892,
     "seen": 1791223808.383103,
     "ast_hash": "ee05749e68d9c7bb99b2b1a686df7aff",
+    "semantic_hash": ""
+  },
+  "crates/bus/src/next_video.rs": {
+    "mtime": 1791239830.8998919,
+    "seen": 1791239838.3596952,
+    "ast_hash": "e4256f572a94b9db2347eb980c3f3ff9",
     "semantic_hash": ""
   }
 }

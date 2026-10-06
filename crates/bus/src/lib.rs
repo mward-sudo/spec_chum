@@ -9,6 +9,7 @@ mod kempston_mouse;
 mod multiface;
 mod next;
 mod next_sd;
+mod next_video;
 mod plus3;
 mod timex;
 mod timex_dock;
@@ -30,6 +31,7 @@ pub use multiface::{
     MULTIFACE1_SIZE,
 };
 pub use next::{NextBus, NextSdError, NEXT_RAM_PAGE_COUNT, NEXT_ROM_SIZE};
+pub use next_video::Layer2Color;
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 pub use timex::{
     timex_joystick_mask, TimexScld, TimexScreenMode, TIMEX_ALTDFILE_OFFSET, TIMEX_EXROM_SIZE,

@@ -209,7 +209,7 @@ fn next_host_key_release_clears_the_keyboard_matrix() {
     let rom = vec![0; 0x1_0000];
     let next = machine::NextMachine::new(&rom).expect("valid Next ROM");
     let mut session = HostSession::new(ModelId::SpectrumNext, false);
-    session.machine = Some(HostRuntime::Next(next));
+    session.machine = Some(HostRuntime::Next(Box::new(next)));
 
     session.set_key(6, 3, true).expect("Next key down");
     let HostRuntime::Next(next) = session.machine.as_ref().expect("Next runtime") else {
@@ -228,7 +228,7 @@ fn next_host_key_release_clears_the_keyboard_matrix() {
 fn debug_pause_stops_next_frames_until_continue() {
     let next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
     let mut session = HostSession::new(ModelId::SpectrumNext, true);
-    session.machine = Some(HostRuntime::Next(next));
+    session.machine = Some(HostRuntime::Next(Box::new(next)));
 
     session.debug_pause();
     assert!(session.paused());
@@ -261,7 +261,7 @@ fn next_beeper_audio_reaches_host_pcm() {
     }
     next.cpu.regs.pc = 0xc000;
     let mut session = HostSession::new(ModelId::SpectrumNext, true);
-    session.machine = Some(HostRuntime::Next(next));
+    session.machine = Some(HostRuntime::Next(Box::new(next)));
 
     session.run_frame();
 
