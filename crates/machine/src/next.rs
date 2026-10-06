@@ -167,6 +167,7 @@ impl NextMachine {
         ula.border = self.bus.border();
         ula.render_rgba(&screen[..6912], out, with_border);
         super::next_video::render_lores(&self.bus, &screen, out, with_border);
+        super::next_video::render_tilemap(&self.bus, out, with_border);
         super::next_video::compose(&self.bus, out, with_border);
     }
 
