@@ -63,6 +63,10 @@ impl NextSprites {
         }
     }
 
+    pub(super) fn clip_index(&self) -> u8 {
+        self.clip_index
+    }
+
     pub(super) fn write_register(
         &mut self,
         register: u8,

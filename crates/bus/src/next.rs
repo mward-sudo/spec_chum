@@ -353,6 +353,9 @@ impl NextBus {
     /// Read one implemented `NextReg`; unimplemented registers float high.
     #[must_use]
     pub fn read_nextreg(&self, register: u8) -> u8 {
+        if register == 0x1c {
+            return (self.next_video.clip_index() << 6) | (self.next_sprites.clip_index() << 2);
+        }
         if let Some(value) = self.next_sprites.read_register(register) {
             return value;
         }
@@ -405,6 +408,12 @@ impl NextBus {
 
     /// Update implemented boot, display-bank, peripheral, and MMU registers.
     pub fn write_nextreg(&mut self, register: u8, value: u8) {
+        if register == 0x1c {
+            self.next_sprites
+                .write_register(register, value, self.peripheral2 & 0x10 != 0);
+            self.next_video.write_register(register, value);
+            return;
+        }
         if self.next_video.write_palette_register(register, value) {
             return;
         }
@@ -519,6 +528,12 @@ impl NextBus {
         self.radastan_lores_enabled()
             .then(|| self.next_video.radastan_color(pixel))
             .filter(|color| !color.transparent)
+    }
+
+    /// Return a standard 40×32 tilemap pixel and its priority over ULA.
+    #[must_use]
+    pub fn tilemap_video_pixel(&self, x: usize, y: usize) -> Option<(VideoColor, bool)> {
+        self.next_video.tilemap_pixel(&self.ram, x, y)
     }
 
     /// Whether standard 256-colour `LoRes` currently replaces ULA paper.
