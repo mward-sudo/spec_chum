@@ -513,10 +513,30 @@ impl NextBus {
             .filter(|color| !color.transparent)
     }
 
+    /// Return a Radastan `LoRes` pixel using the selected ULA palette and offset.
+    #[must_use]
+    pub fn radastan_video_pixel(&self, pixel: u8) -> Option<VideoColor> {
+        self.radastan_lores_enabled()
+            .then(|| self.next_video.radastan_color(pixel))
+            .filter(|color| !color.transparent)
+    }
+
     /// Whether standard 256-colour `LoRes` currently replaces ULA paper.
     #[must_use]
     pub fn lores_256_color_enabled(&self) -> bool {
         self.next_video.priority() & 0x80 != 0 && self.next_video.lores_256_color_mode()
+    }
+
+    /// Whether Radastan's packed 16-colour `LoRes` replaces ULA paper.
+    #[must_use]
+    pub fn radastan_lores_enabled(&self) -> bool {
+        self.next_video.priority() & 0x80 != 0 && self.next_video.radastan_mode()
+    }
+
+    /// Offset of the selected Radastan display file within the ULA RAM bank.
+    #[must_use]
+    pub fn radastan_display_file_offset(&self) -> usize {
+        self.next_video.radastan_display_file_offset()
     }
 
     /// Return the standard sprite layer on its 320×256 display surface.
@@ -898,6 +918,7 @@ impl NextBus {
                     let _ = sd.exchange_at(value, t);
                 }
             }
+            _ if port & 0xff == 0xff => self.next_video.write_timex_video_port(value),
             _ if port & 1 == 0 => self.border = value & 0x07,
             _ => {}
         }

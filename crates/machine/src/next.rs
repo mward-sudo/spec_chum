@@ -151,7 +151,8 @@ impl NextMachine {
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
         let first_page = self.bus.display_screen_bank() * 2;
         let mut screen = [0u8; 0x3800];
-        let screen_len = if self.bus.lores_256_color_enabled() {
+        let screen_len = if self.bus.lores_256_color_enabled() || self.bus.radastan_lores_enabled()
+        {
             screen.len()
         } else {
             6912
@@ -678,13 +679,12 @@ mod tests {
             "bank 7 data is selected"
         );
 
-        machine.bus.write_nextreg(0x6a, 0xe0); // 16-colour mode is out of scope.
-        assert_eq!(machine.bus.read_nextreg(0x6a), 0x20);
+        machine.bus.write_nextreg(0x6a, 0); // Return to standard 256-colour LoRes.
         machine.render_rgba(&mut frame, true);
         assert_eq!(
             rgba_pixel(&frame, width, 48, 48),
-            [0, 0, 0, 0xff],
-            "unsupported mode uses ULA"
+            [0, 0, 255, 0xff],
+            "standard LoRes remains available"
         );
         machine.bus.write_nextreg(0x6a, 0);
         machine.bus.write_nextreg(0x15, 0);
@@ -694,6 +694,139 @@ mod tests {
             [0, 0, 0, 0xff],
             "disable restores ULA"
         );
+        assert_eq!(frame.len(), width * height * 4);
+    }
+
+    #[test]
+    fn radastan_uses_packed_palette_and_xor_selected_file_in_both_ula_banks() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        for (page, offset, value) in [
+            (10, 0, 0x12),
+            (11, 0, 0x34),
+            (10, 0x17ff, 0x56),
+            (14, 0, 0x78),
+            (15, 0, 0x9a),
+        ] {
+            assert!(machine.bus.load_ram_page(page, offset, &[value]));
+        }
+
+        machine.bus.write_nextreg(0x43, 0);
+        for (index, color) in [
+            (3, 0x03),
+            (4, 0xff),
+            (6, 0x03),
+            (7, 0xe0),
+            (8, 0x1c),
+            (9, 0xe0),
+            (10, 0x1c),
+            (0x21, 0xe0), // Red.
+            (0x22, 0x1c), // Green.
+            (0x23, 0x03), // Blue.
+            (0x24, 0xff), // White.
+            (0x25, 0xe3), // Transparent by default.
+            (0x26, 0x03),
+            (0x27, 0xe0),
+            (0x28, 0x1c),
+            (0x29, 0xe0),
+            (0x2a, 0x1c),
+            (0x31, 0xe0),
+            (0x32, 0x1c),
+            (0x33, 0x03),
+            (0x34, 0xff),
+            (0x35, 0xe3),
+            (0x36, 0x03),
+            (0x37, 0xff),
+            (0x38, 0xe0),
+            (0x39, 0x1c),
+            (0x3a, 0x03),
+            (0x3b, 0xff),
+        ] {
+            machine.bus.write_nextreg(0x40, index);
+            machine.bus.write_nextreg(0x41, color);
+        }
+        machine.bus.write_nextreg(0x43, 0x42); // Write to and display ULA palette 2.
+        machine.bus.write_nextreg(0x40, 0x21);
+        machine.bus.write_nextreg(0x41, 0x03);
+        machine.bus.write_nextreg(0x40, 0x22);
+        machine.bus.write_nextreg(0x41, 0xff);
+        machine.bus.write_nextreg(0x40, 3);
+        machine.bus.write_nextreg(0x41, 0x03);
+        machine.bus.write_nextreg(0x40, 4);
+        machine.bus.write_nextreg(0x41, 0xff);
+        machine.bus.write_nextreg(0x40, 0x23);
+        machine.bus.write_nextreg(0x41, 0xe0);
+        machine.bus.write_nextreg(0x40, 0x31);
+        machine.bus.write_nextreg(0x41, 0x03);
+        machine.bus.write_nextreg(0x40, 0x32);
+        machine.bus.write_nextreg(0x41, 0xff);
+        machine.bus.write_nextreg(0x43, 0x00); // Display ULA palette 1.
+
+        machine.bus.write_nextreg(0x15, 0x80); // Enable LoRes.
+        machine.bus.write_nextreg(0x6a, 0x22); // Enable Radastan, first file, palette offset 2.
+        let (width, height) = NextMachine::framebuffer_dims(false);
+        let mut frame = vec![0; width * height * 4];
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 1, 1), [255, 0, 0, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 2, 0), [0, 255, 0, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 3, 1), [0, 255, 0, 0xff]);
+        let (border_width, border_height) = NextMachine::framebuffer_dims(true);
+        let mut bordered = vec![0; border_width * border_height * 4];
+        machine.render_rgba(&mut bordered, true);
+        assert_eq!(rgba_pixel(&bordered, border_width, 0, 48), [0, 0, 0, 0xff]);
+        assert_eq!(
+            rgba_pixel(&bordered, border_width, 48, 48),
+            [255, 0, 0, 0xff]
+        );
+        assert_eq!(
+            rgba_pixel(&bordered, border_width, 303, 239),
+            [0, 0, 255, 0xff]
+        );
+
+        machine.bus.out_port(0x00ff, 1); // $xxFF bit 0 selects the second file.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [0, 0, 255, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 2, 0), [255, 255, 255, 0xff]);
+
+        machine.bus.write_nextreg(0x6a, 0x32); // Register file bit XOR port bit selects file 0.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
+
+        machine.bus.write_nextreg(0x6a, 0x33); // Offset 3; XOR selects the first file.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
+        machine.bus.write_nextreg(0x43, 0x02); // Select ULA palette 2.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [0, 0, 255, 0xff]);
+        machine.bus.write_nextreg(0x43, 0x00); // Select ULA palette 1.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
+
+        machine.bus.write_nextreg(0x6a, 0x32);
+        machine.bus.write_nextreg(0x14, 0xe0); // Red palette entries are globally transparent.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [0, 0, 0, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 255, 191), [0, 0, 255, 0xff]);
+
+        machine.bus.out_port(0x7ffd, 0x08); // Switch the selected ULA bank to bank 7.
+        machine.bus.write_nextreg(0x6a, 0x22);
+        machine.bus.write_nextreg(0x14, 0xe3);
+        machine.bus.out_port(0x00ff, 0); // Register and port selector bits are both zero.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 2, 0), [0, 255, 0, 0xff]);
+
+        machine.bus.out_port(0x00ff, 1); // Select bank 7's second display file.
+        machine.render_rgba(&mut frame, false);
+        assert_eq!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
+        assert_eq!(rgba_pixel(&frame, width, 2, 0), [0, 255, 0, 0xff]);
+
+        machine.bus.write_nextreg(0x6a, 0); // 256-colour LoRes is still selected by bit 5 clear.
+        assert!(machine.bus.lores_256_color_enabled());
+        assert!(!machine.bus.radastan_lores_enabled());
+        machine.bus.write_nextreg(0x15, 0);
+        machine.render_rgba(&mut frame, false);
+        assert_ne!(rgba_pixel(&frame, width, 0, 0), [255, 0, 0, 0xff]);
         assert_eq!(frame.len(), width * height * 4);
     }
 

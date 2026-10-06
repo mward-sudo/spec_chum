@@ -9,6 +9,10 @@ const LORES_HEIGHT: usize = 96;
 
 /// Replace the ULA paper with 256-colour `LoRes` pixels when enabled.
 pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border: bool) {
+    if bus.radastan_lores_enabled() {
+        render_radastan(bus, screen, output, with_border);
+        return;
+    }
     if !bus.lores_256_color_enabled() || screen.len() < 0x3800 {
         return;
     }
@@ -41,6 +45,45 @@ pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with
                         (((origin_y + y * 2 + dy) * width) + origin_x + x * 2 + dx) * 4;
                     output[output_offset..output_offset + 3].copy_from_slice(&color.rgb);
                     output[output_offset + 3] = 0xff;
+                }
+            }
+        }
+    }
+}
+
+fn render_radastan(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border: bool) {
+    let file_offset = bus.radastan_display_file_offset();
+    if screen.len() < file_offset + 0x1800 {
+        return;
+    }
+    let (width, origin_x, origin_y) = if with_border {
+        (352usize, 48usize, 48usize)
+    } else {
+        (256usize, 0usize, 0usize)
+    };
+
+    for y in 0..LORES_HEIGHT {
+        let line_offset = file_offset + y * (LORES_WIDTH / 2);
+        for x in 0..LORES_WIDTH {
+            let packed = screen[line_offset + x / 2];
+            let pixel = if x & 1 == 0 {
+                packed >> 4
+            } else {
+                packed & 0x0f
+            };
+            let output_offset = (((origin_y + y * 2) * width) + origin_x + x * 2) * 4;
+            if let Some(color) = bus.radastan_video_pixel(pixel) {
+                for row in 0..2 {
+                    let offset = output_offset + row * width * 4;
+                    output[offset..offset + 3].copy_from_slice(&color.rgb);
+                    output[offset + 3] = 0xff;
+                    output[offset + 4..offset + 7].copy_from_slice(&color.rgb);
+                    output[offset + 7] = 0xff;
+                }
+            } else {
+                for row in 0..2 {
+                    let offset = output_offset + row * width * 4;
+                    output[offset..offset + 8].fill(0);
                 }
             }
         }

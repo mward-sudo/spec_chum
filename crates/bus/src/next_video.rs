@@ -61,6 +61,7 @@ pub(super) struct NextVideo {
     visible: bool,
     priority: u8,
     lores_control: u8,
+    timex_display_file: bool,
     transparency: u8,
     palette_control: u8,
     palette_index: u8,
@@ -79,6 +80,7 @@ impl NextVideo {
             visible: false,
             priority: 0,
             lores_control: 0,
+            timex_display_file: false,
             transparency: 0xe3,
             palette_control: 0,
             palette_index: 0,
@@ -170,6 +172,11 @@ impl NextVideo {
         }
     }
 
+    pub(super) fn radastan_color(&self, pixel: u8) -> VideoColor {
+        let index = ((self.lores_control & 0x0f) << 4) | (pixel & 0x0f);
+        self.lores_color(index)
+    }
+
     pub(super) fn sprite_color(
         &self,
         pixel: u8,
@@ -232,6 +239,19 @@ impl NextVideo {
 
     pub(super) fn lores_256_color_mode(&self) -> bool {
         self.lores_control & 0x20 == 0
+    }
+
+    pub(super) fn radastan_mode(&self) -> bool {
+        self.lores_control & 0x20 != 0
+    }
+
+    pub(super) fn write_timex_video_port(&mut self, value: u8) {
+        self.timex_display_file = value & 1 != 0;
+    }
+
+    pub(super) fn radastan_display_file_offset(&self) -> usize {
+        let register_file = self.lores_control & 0x10 != 0;
+        usize::from(register_file ^ self.timex_display_file) * 0x2000
     }
 
     fn active_ula_palette(&self) -> &[PaletteEntry; 256] {

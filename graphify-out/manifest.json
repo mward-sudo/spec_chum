@@ -2304,15 +2304,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791257773.002765,
-    "seen": 1791257909.385281,
-    "ast_hash": "9f8432c42212c9f43f385316318752da",
+    "mtime": 1791259696.8565707,
+    "seen": 1791259752.993951,
+    "ast_hash": "6892bcc864d06fff357dbded0388e297",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791258166.6858678,
-    "seen": 1791258182.1497338,
-    "ast_hash": "0e940deda05c2ab515a7d4762527d2ef",
+    "mtime": 1791259688.636787,
+    "seen": 1791259752.996823,
+    "ast_hash": "3574fe5e572f358bf4bbefef702eb615",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {
@@ -2352,9 +2352,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next_video.rs": {
-    "mtime": 1791258166.6850996,
-    "seen": 1791258182.1438,
-    "ast_hash": "51feed093b00f53d121af33560ae7eb8",
+    "mtime": 1791259329.6122243,
+    "seen": 1791259752.994001,
+    "ast_hash": "bad8112c91bdfa2a5ee8847f6281ba31",
     "semantic_hash": ""
   },
   "crates/bus/src/next_sprites.rs": {
@@ -2364,9 +2364,9 @@
     "semantic_hash": ""
   },
   "crates/machine/src/next_video.rs": {
-    "mtime": 1791257790.8350534,
-    "seen": 1791257909.388015,
-    "ast_hash": "177ef1beee478ae3d6bc953e5b3696a2",
+    "mtime": 1791259517.4084945,
+    "seen": 1791259752.9968529,
+    "ast_hash": "a3f278fa70d70650caafa8c1526f4cc4",
     "semantic_hash": ""
   }
 }
