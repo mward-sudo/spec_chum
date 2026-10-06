@@ -61,6 +61,7 @@ pub(super) struct NextVideo {
     visible: bool,
     priority: u8,
     lores_control: u8,
+    timex_video_control: u8,
     transparency: u8,
     palette_control: u8,
     palette_index: u8,
@@ -79,6 +80,7 @@ impl NextVideo {
             visible: false,
             priority: 0,
             lores_control: 0,
+            timex_video_control: 0,
             transparency: 0xe3,
             palette_control: 0,
             palette_index: 0,
@@ -110,7 +112,7 @@ impl NextVideo {
             0x14 => Some(self.transparency),
             0x15 => Some(self.priority),
             0x6a => Some(self.lores_control),
-            0x69 => Some(u8::from(self.visible) << 7),
+            0x69 => Some((u8::from(self.visible) << 7) | self.timex_video_control),
             0x70 => Some(self.control),
             _ => None,
         }
@@ -122,7 +124,10 @@ impl NextVideo {
             0x14 => self.transparency = value,
             0x15 => self.priority = value,
             0x6a => self.lores_control = value & 0x3f,
-            0x69 => self.visible = value & 0x80 != 0,
+            0x69 => {
+                self.visible = value & 0x80 != 0;
+                self.write_timex_video_port(value);
+            }
             0x70 => self.control = value & 0x3f,
             _ => return false,
         }
@@ -168,6 +173,11 @@ impl NextVideo {
             priority: false,
             transparent: entry.transparent(self.transparency),
         }
+    }
+
+    pub(super) fn radastan_color(&self, pixel: u8) -> VideoColor {
+        let index = ((self.lores_control & 0x0f) << 4) | (pixel & 0x0f);
+        self.lores_color(index)
     }
 
     pub(super) fn sprite_color(
@@ -232,6 +242,20 @@ impl NextVideo {
 
     pub(super) fn lores_256_color_mode(&self) -> bool {
         self.lores_control & 0x20 == 0
+    }
+
+    pub(super) fn radastan_mode(&self) -> bool {
+        self.lores_control & 0x20 != 0
+    }
+
+    pub(super) fn write_timex_video_port(&mut self, value: u8) {
+        self.timex_video_control = value & 0x3f;
+    }
+
+    pub(super) fn radastan_display_file_offset(&self) -> usize {
+        let register_file = self.lores_control & 0x10 != 0;
+        let timex_file = self.timex_video_control & 1 != 0;
+        usize::from(register_file ^ timex_file) * 0x2000
     }
 
     fn active_ula_palette(&self) -> &[PaletteEntry; 256] {
