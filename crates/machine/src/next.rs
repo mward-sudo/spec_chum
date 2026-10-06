@@ -150,8 +150,13 @@ impl NextMachine {
     /// Render the ULA screen, standard Layer 2, and base Next sprites.
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
         let first_page = self.bus.display_screen_bank() * 2;
-        let mut screen = [0u8; 6912];
-        for (offset, byte) in screen.iter_mut().enumerate() {
+        let mut screen = [0u8; 0x3800];
+        let screen_len = if self.bus.lores_256_color_enabled() {
+            screen.len()
+        } else {
+            6912
+        };
+        for (offset, byte) in screen[..screen_len].iter_mut().enumerate() {
             *byte = self
                 .bus
                 .read_ram_page(first_page + (offset / 8192) as u8, offset % 8192)
@@ -159,7 +164,8 @@ impl NextMachine {
         }
         let mut ula = self.ula.clone();
         ula.border = self.bus.border();
-        ula.render_rgba(&screen, out, with_border);
+        ula.render_rgba(&screen[..6912], out, with_border);
+        super::next_video::render_lores(&self.bus, &screen, out, with_border);
         super::next_video::compose(&self.bus, out, with_border);
     }
 
@@ -229,6 +235,13 @@ mod tests {
 
     fn test_rom() -> Vec<u8> {
         vec![0; NEXT_ROM_SIZE]
+    }
+
+    fn rgba_pixel(frame: &[u8], width: usize, x: usize, y: usize) -> [u8; 4] {
+        let offset = (y * width + x) * 4;
+        frame[offset..offset + 4]
+            .try_into()
+            .expect("one RGBA pixel")
     }
 
     #[test]
@@ -560,6 +573,128 @@ mod tests {
             &ula_before,
             "disabled Layer 2 preserves ULA output"
         );
+    }
+
+    #[test]
+    fn standard_lores_replaces_only_paper_with_palette_pixels() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        // LoRes source is the active ULA bank: two contiguous 48-line images
+        // separated by the classic ULA attribute area.
+        assert!(machine.bus.load_ram_page(10, 0, &[1]));
+        assert!(machine.bus.load_ram_page(11, 0, &[3]));
+        assert!(machine.bus.load_ram_page(11, 0x17ff, &[1]));
+        assert!(machine.bus.load_ram_page(14, 0, &[2]));
+        assert!(machine.bus.load_ram_page(19, 0, &[1]));
+
+        machine.bus.write_nextreg(0x43, 0x00); // ULA palette 1.
+        for (index, rgb332) in [(1, 0xe0), (2, 0x1c), (3, 0xe3)] {
+            machine.bus.write_nextreg(0x40, index);
+            machine.bus.write_nextreg(0x41, rgb332);
+        }
+        machine.bus.write_nextreg(0x43, 0x40); // Write ULA palette 2.
+        machine.bus.write_nextreg(0x40, 1);
+        machine.bus.write_nextreg(0x41, 0x1c);
+        machine.bus.write_nextreg(0x40, 2);
+        machine.bus.write_nextreg(0x41, 0x03);
+        machine.bus.write_nextreg(0x40, 3);
+        machine.bus.write_nextreg(0x41, 0xe3);
+        machine.bus.write_nextreg(0x43, 0x02); // Display ULA palette 2.
+        machine.bus.write_nextreg(0x14, 0xe3); // Shared global transparency.
+
+        let (width, height) = NextMachine::framebuffer_dims(true);
+        let mut frame = vec![0; width * height * 4];
+        machine.render_rgba(&mut frame, true);
+        assert_eq!(
+            rgba_pixel(&frame, width, 48, 48),
+            [0, 0, 0, 0xff],
+            "disabled LoRes uses ULA"
+        );
+
+        machine.bus.write_nextreg(0x15, 0x80); // Enable 256-colour LoRes.
+        machine.render_rgba(&mut frame, true);
+        assert_eq!(
+            rgba_pixel(&frame, width, 48, 48),
+            [0, 255, 0, 0xff],
+            "active ULA palette"
+        );
+        assert_eq!(
+            rgba_pixel(&frame, width, 49, 49),
+            [0, 255, 0, 0xff],
+            "2x2 expansion"
+        );
+        assert_eq!(
+            rgba_pixel(&frame, width, 50, 48),
+            [0, 0, 0, 0xff],
+            "adjacent source pixel"
+        );
+        assert_eq!(
+            rgba_pixel(&frame, width, 0, 48),
+            [0, 0, 0, 0xff],
+            "left border unchanged"
+        );
+        assert_eq!(
+            rgba_pixel(&frame, width, 304, 48),
+            [0, 0, 0, 0xff],
+            "right border unchanged"
+        );
+        assert_eq!(
+            rgba_pixel(&frame, width, 48, 144),
+            [0, 0, 0, 0xff],
+            "transparent pixel is skipped"
+        );
+        assert_eq!(
+            rgba_pixel(&frame, width, 303, 239),
+            [0, 255, 0, 0xff],
+            "last LoRes pixel reaches the paper edge"
+        );
+
+        let (paper_width, paper_height) = NextMachine::framebuffer_dims(false);
+        let mut paper = vec![0; paper_width * paper_height * 4];
+        machine.render_rgba(&mut paper, false);
+        assert_eq!(
+            rgba_pixel(&paper, paper_width, 255, 191),
+            [0, 255, 0, 0xff],
+            "paper-only output expands to 256×192"
+        );
+
+        machine.bus.write_nextreg(0x43, 0x12); // Keep ULA palette 2 active; select Layer 2 writes.
+        machine.bus.write_nextreg(0x40, 1);
+        machine.bus.write_nextreg(0x41, 0xe0);
+        machine.bus.write_nextreg(0x44, 0x00);
+        machine.bus.write_nextreg(0x69, 0x80);
+        machine.bus.write_nextreg(0x15, 0x94); // ULA above Layer 2.
+        machine.render_rgba(&mut frame, true);
+        assert_eq!(
+            rgba_pixel(&frame, width, 48, 144),
+            [255, 0, 0, 0xff],
+            "transparent LoRes reveals lower Layer 2"
+        );
+
+        machine.bus.out_port(0x7ffd, 0x08); // Select shadow ULA bank 7.
+        machine.render_rgba(&mut frame, true);
+        assert_eq!(
+            rgba_pixel(&frame, width, 48, 48),
+            [0, 0, 255, 0xff],
+            "bank 7 data is selected"
+        );
+
+        machine.bus.write_nextreg(0x6a, 0xe0); // 16-colour mode is out of scope.
+        assert_eq!(machine.bus.read_nextreg(0x6a), 0x20);
+        machine.render_rgba(&mut frame, true);
+        assert_eq!(
+            rgba_pixel(&frame, width, 48, 48),
+            [0, 0, 0, 0xff],
+            "unsupported mode uses ULA"
+        );
+        machine.bus.write_nextreg(0x6a, 0);
+        machine.bus.write_nextreg(0x15, 0);
+        machine.render_rgba(&mut frame, true);
+        assert_eq!(
+            rgba_pixel(&frame, width, 48, 48),
+            [0, 0, 0, 0xff],
+            "disable restores ULA"
+        );
+        assert_eq!(frame.len(), width * height * 4);
     }
 
     #[test]

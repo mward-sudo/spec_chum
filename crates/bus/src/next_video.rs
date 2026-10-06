@@ -60,12 +60,14 @@ pub(super) struct NextVideo {
     control: u8,
     visible: bool,
     priority: u8,
+    lores_control: u8,
     transparency: u8,
     palette_control: u8,
     palette_index: u8,
     palette_write_9bit: bool,
     palette_pending_first_byte: u8,
-    palettes: [[PaletteEntry; 256]; 2],
+    ula_palettes: [[PaletteEntry; 256]; 2],
+    layer2_palettes: [[PaletteEntry; 256]; 2],
     sprite_palettes: [[PaletteEntry; 256]; 2],
 }
 
@@ -76,12 +78,14 @@ impl NextVideo {
             control: 0,
             visible: false,
             priority: 0,
+            lores_control: 0,
             transparency: 0xe3,
             palette_control: 0,
             palette_index: 0,
             palette_write_9bit: false,
             palette_pending_first_byte: 0,
-            palettes: [PaletteEntry::default_rgb332_palette(); 2],
+            ula_palettes: [PaletteEntry::default_rgb332_palette(); 2],
+            layer2_palettes: [PaletteEntry::default_rgb332_palette(); 2],
             sprite_palettes: [PaletteEntry::default_rgb332_palette(); 2],
         }
     }
@@ -91,10 +95,12 @@ impl NextVideo {
     }
 
     pub(super) fn reset_preserving_palette(&mut self) {
-        let palettes = self.palettes;
+        let ula_palettes = self.ula_palettes;
+        let layer2_palettes = self.layer2_palettes;
         let sprite_palettes = self.sprite_palettes;
         self.reset();
-        self.palettes = palettes;
+        self.ula_palettes = ula_palettes;
+        self.layer2_palettes = layer2_palettes;
         self.sprite_palettes = sprite_palettes;
     }
 
@@ -103,6 +109,7 @@ impl NextVideo {
             0x12 => Some(self.first_bank),
             0x14 => Some(self.transparency),
             0x15 => Some(self.priority),
+            0x6a => Some(self.lores_control),
             0x69 => Some(u8::from(self.visible) << 7),
             0x70 => Some(self.control),
             _ => None,
@@ -114,6 +121,7 @@ impl NextVideo {
             0x12 => self.first_bank = value & 0x7f,
             0x14 => self.transparency = value,
             0x15 => self.priority = value,
+            0x6a => self.lores_control = value & 0x3f,
             0x69 => self.visible = value & 0x80 != 0,
             0x70 => self.control = value & 0x3f,
             _ => return false,
@@ -145,10 +153,19 @@ impl NextVideo {
     }
 
     pub(super) fn layer2_color(&self, index: u8) -> VideoColor {
-        let entry = self.active_palette()[usize::from(index)];
+        let entry = self.active_layer2_palette()[usize::from(index)];
         VideoColor {
             rgb: entry.rgb(),
             priority: entry.priority(),
+            transparent: entry.transparent(self.transparency),
+        }
+    }
+
+    pub(super) fn lores_color(&self, index: u8) -> VideoColor {
+        let entry = self.active_ula_palette()[usize::from(index)];
+        VideoColor {
+            rgb: entry.rgb(),
+            priority: false,
             transparent: entry.transparent(self.transparency),
         }
     }
@@ -213,8 +230,16 @@ impl NextVideo {
         self.priority
     }
 
-    fn active_palette(&self) -> &[PaletteEntry; 256] {
-        &self.palettes[usize::from(self.palette_control & 0x04 != 0)]
+    pub(super) fn lores_256_color_mode(&self) -> bool {
+        self.lores_control & 0x20 == 0
+    }
+
+    fn active_ula_palette(&self) -> &[PaletteEntry; 256] {
+        &self.ula_palettes[usize::from(self.palette_control & 0x02 != 0)]
+    }
+
+    fn active_layer2_palette(&self) -> &[PaletteEntry; 256] {
+        &self.layer2_palettes[usize::from(self.palette_control & 0x04 != 0)]
     }
 
     fn active_sprite_palette(&self) -> &[PaletteEntry; 256] {
@@ -223,11 +248,13 @@ impl NextVideo {
 
     fn read_write_palette(&self) -> &[PaletteEntry; 256] {
         match (self.palette_control >> 4) & 0x07 {
-            1 => &self.palettes[0],
-            5 => &self.palettes[1],
+            0 => &self.ula_palettes[0],
+            4 => &self.ula_palettes[1],
+            1 => &self.layer2_palettes[0],
+            5 => &self.layer2_palettes[1],
             2 => &self.sprite_palettes[0],
             6 => &self.sprite_palettes[1],
-            _ => &self.palettes[0],
+            _ => &self.ula_palettes[0],
         }
     }
 
@@ -242,13 +269,14 @@ impl NextVideo {
     }
 
     fn is_supported_palette_selected(&self) -> bool {
-        matches!((self.palette_control >> 4) & 0x07, 1 | 5 | 2 | 6)
+        matches!((self.palette_control >> 4) & 0x07, 0 | 4 | 1 | 5 | 2 | 6)
     }
 
     fn write_palette_mut(&mut self) -> Option<&mut [PaletteEntry; 256]> {
         let palette = (self.palette_control >> 4) & 0x07;
         match palette {
-            1 | 5 => Some(&mut self.palettes[usize::from(palette == 5)]),
+            0 | 4 => Some(&mut self.ula_palettes[usize::from(palette == 4)]),
+            1 | 5 => Some(&mut self.layer2_palettes[usize::from(palette == 5)]),
             2 | 6 => Some(&mut self.sprite_palettes[usize::from(palette == 6)]),
             _ => None,
         }

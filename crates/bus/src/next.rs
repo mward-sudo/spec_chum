@@ -505,6 +505,20 @@ impl NextBus {
         (!color.transparent).then_some(color)
     }
 
+    /// Return a standard 256-colour `LoRes` pixel when `NextReg` `$15` enables it.
+    #[must_use]
+    pub fn lores_video_pixel(&self, index: u8) -> Option<VideoColor> {
+        self.lores_256_color_enabled()
+            .then(|| self.next_video.lores_color(index))
+            .filter(|color| !color.transparent)
+    }
+
+    /// Whether standard 256-colour `LoRes` currently replaces ULA paper.
+    #[must_use]
+    pub fn lores_256_color_enabled(&self) -> bool {
+        self.next_video.priority() & 0x80 != 0 && self.next_video.lores_256_color_mode()
+    }
+
     /// Return the standard sprite layer on its 320×256 display surface.
     #[must_use]
     pub fn render_sprite_surface(&self) -> Vec<Option<VideoColor>> {
@@ -1235,8 +1249,9 @@ mod tests {
         bus.write_nextreg(0x70, 3);
         assert_eq!(bus.next_video.palette_index(0x1a), 0x4a);
 
-        bus.write_nextreg(0x43, 0x00); // ULA palette family is not implemented here.
-        assert_eq!(bus.read_nextreg(0x41), 0xff);
+        bus.write_nextreg(0x43, 0x00); // ULA palette 1 is independently selected.
+        bus.write_nextreg(0x40, 7);
+        assert_eq!(bus.read_nextreg(0x41), 7);
 
         bus.write_nextreg(0x43, 0x50); // Write the second Layer 2 palette.
         bus.write_nextreg(0x40, 7);
