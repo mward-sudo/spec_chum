@@ -129,6 +129,7 @@ impl NextMachine {
 
     /// Execute one guest instruction through the Next-specific bus.
     pub fn step_once(&mut self) -> u32 {
+        self.bus.set_cpu_interrupt_mode(self.cpu.regs.im);
         let (frame_tstates, interrupt_tstates) = self.bus.frame_interrupt_timing();
         let cycles = {
             let mut io = NextMemIo {
@@ -139,7 +140,9 @@ impl NextMachine {
             };
             if io.bus.take_divmmc_nmi() {
                 self.cpu.nmi(&mut io)
-            } else if self.video_t % frame_tstates < interrupt_tstates {
+            } else if io.bus.ctc_interrupt_pending(self.cpu.regs.im == 2)
+                || self.video_t % frame_tstates < interrupt_tstates
+            {
                 let interrupt_cycles = self.cpu.interrupt(&mut io);
                 if interrupt_cycles > 0 {
                     interrupt_cycles
@@ -153,6 +156,7 @@ impl NextMachine {
         let step_start = self.video_t;
         let phase_start = self.audio_phase;
         self.video_t = self.video_t.wrapping_add(u64::from(cycles));
+        self.bus.advance_ctc(self.video_t);
         self.bus.advance_dma(self.video_t);
         let copper_boundary = (step_start / frame_tstates + 1) * frame_tstates;
         let copper_time = self.video_t.min(copper_boundary.saturating_sub(1));
@@ -449,6 +453,14 @@ impl Io for NextMemIo<'_> {
         self.bus
             .write_nextreg_at(register, value, self.time_base.wrapping_add(t));
     }
+
+    fn interrupt_acknowledge(&mut self, im2: bool) -> Option<u8> {
+        self.bus.ctc_interrupt_acknowledge(im2)
+    }
+
+    fn reti(&mut self) {
+        self.bus.ctc_reti();
+    }
 }
 
 #[cfg(test)]
@@ -497,6 +509,54 @@ mod tests {
             assert_eq!(machine.cpu.regs.pc, 0x0038, "timing {timing}");
             assert!(!machine.cpu.regs.iff1, "timing {timing}");
         }
+    }
+
+    #[test]
+    fn ctc_hardware_im2_interrupt_runs_guest_handler_and_reti_releases_service() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        // Leave the CPU in a loop, with a small handler that writes a marker
+        // and returns using RETI.
+        machine.bus.write(0x4000, 0x18);
+        machine.bus.write(0x4001, 0xfe);
+        for (address, byte) in [
+            (0x4567, 0x3e), // LD A, $42
+            (0x4568, 0x42),
+            (0x4569, 0x32), // LD ($8000), A
+            (0x456a, 0x00),
+            (0x456b, 0x80),
+            (0x456c, 0xfb), // EI
+            (0x456d, 0xed), // RETI
+            (0x456e, 0x4d),
+            (0xd0a6, 0x67), // CTC0 slot 3: vector $A6 -> $4567
+            (0xd0a7, 0x45),
+        ] {
+            machine.bus.write(address, byte);
+        }
+        machine.bus.write_nextreg(0xc0, 0xa1);
+        machine.bus.out_port(0x183b, 0x85);
+        machine.bus.out_port(0x183b, 1);
+        machine.bus.write_nextreg(0xc5, 1);
+        machine.bus.advance_ctc(2);
+
+        machine.cpu.regs.pc = 0x4000;
+        machine.cpu.regs.sp = 0xbffe;
+        machine.cpu.regs.i = 0xd0;
+        machine.cpu.regs.im = 2;
+        machine.cpu.regs.iff1 = true;
+        machine.cpu.regs.iff2 = true;
+        machine.video_t = 100;
+
+        assert!(machine.step_once() > 0);
+        assert_eq!(machine.cpu.regs.pc, 0x4567);
+        machine.step_once();
+        machine.step_once();
+        assert_eq!(machine.bus.read(0x8000), 0x42);
+        machine.step_once();
+        machine.step_once();
+        assert_eq!(machine.cpu.regs.pc, 0x4000);
+        assert!(machine.bus.ctc_interrupt_pending(true));
+        machine.step_once();
+        assert_eq!(machine.cpu.regs.pc, 0x4567);
     }
 
     fn dma_setup_program(prescaler: Option<u8>, destination: u16, io_destination: bool) -> Vec<u8> {

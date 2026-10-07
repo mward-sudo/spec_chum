@@ -875,6 +875,9 @@ fn exec_ed<B: Memory + Io>(cpu: &mut Cpu, bus: &mut B) {
         }
         0x45 | 0x4d | 0x55 | 0x5d | 0x65 | 0x6d | 0x75 | 0x7d => {
             // RETN / RETI
+            if op == 0x4d {
+                bus.reti();
+            }
             cpu.regs.iff1 = cpu.regs.iff2;
             let a = cpu.pop(bus);
             cpu.regs.pc = a;

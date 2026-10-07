@@ -21,6 +21,15 @@ pub trait Io {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32);
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32;
 
+    /// Data driven onto the Z80 data bus during a maskable interrupt acknowledge.
+    /// `None` selects the floating `0xFF` bus value used by classic hosts.
+    fn interrupt_acknowledge(&mut self, _im2: bool) -> Option<u8> {
+        None
+    }
+
+    /// Notify daisy-chain peripherals that the guest executed RETI.
+    fn reti(&mut self) {}
+
     /// Z80N NEXTREG write. Hosts with Next registers override this hook;
     /// classic Z80 bus implementations need no extra behavior.
     fn nextreg_write(&mut self, _register: u8, _value: u8, _t: u64) {}
