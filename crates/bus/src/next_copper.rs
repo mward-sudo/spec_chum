@@ -113,6 +113,7 @@ impl NextCopper {
 
             let offset = usize::from(self.program_counter) * 2;
             let instruction = u16::from_be_bytes([self.memory[offset], self.memory[offset + 1]]);
+            let mut control_mode_changed = false;
             let duration = if instruction == u16::MAX {
                 self.stalled = true;
                 break;
@@ -135,6 +136,16 @@ impl NextCopper {
                 } else {
                     target
                 };
+                // Core-control mode restarts at VBlank even when a WAIT jumps
+                // over the frame boundary. Stop at that boundary so the next
+                // instruction is fetched again from the beginning of the list.
+                let next_frame = (self.clocks / frame_clocks.max(1) + 1) * frame_clocks;
+                if self.control & 0xc0 == 0xc0 && frame_clocks > 0 && target >= next_frame {
+                    self.program_counter = 0;
+                    self.stalled = false;
+                    self.clocks = next_frame;
+                    continue;
+                }
                 if target > self.clocks {
                     self.clocks = target;
                 }
@@ -147,11 +158,16 @@ impl NextCopper {
                         register,
                         instruction as u8,
                     ));
+                    control_mode_changed =
+                        register == 0x62 && (instruction as u8 & 0xc0) != (self.control & 0xc0);
                 }
                 2
             };
             self.program_counter = self.program_counter.wrapping_add(1) & 0x03ff;
             self.clocks = self.clocks.saturating_add(duration);
+            if control_mode_changed {
+                break;
+            }
         }
         self.clocks = self.clocks.max(target_clocks);
         writes
@@ -234,6 +250,21 @@ mod tests {
         assert!(writes.iter().any(|(time, register, value)| {
             *time >= 69_888 && *register == 0x15 && *value == 0x08
         }));
+    }
+
+    #[test]
+    fn core_control_mode_restarts_after_wait_reaches_next_frame() {
+        let mut copper = NextCopper::new();
+        // MOVE $15,$08 followed by WAIT at line zero. The wait targets the
+        // next frame; core-control mode must restart the list at that boundary.
+        copper.memory[0..4].copy_from_slice(&[0x15, 0x08, 0x80, 0x00]);
+        copper.write_control(0xc0, 0);
+
+        let before_vblank = copper.advance(69_887, 69_888, 224, 312);
+        let after_vblank = copper.advance(69_889, 69_888, 224, 312);
+
+        assert_eq!(before_vblank, [(0, 0x15, 0x08)]);
+        assert_eq!(after_vblank, [(69_888, 0x15, 0x08)]);
     }
 
     #[test]

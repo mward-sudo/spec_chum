@@ -2304,9 +2304,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791392592.5442834,
-    "seen": 1791392634.316583,
-    "ast_hash": "09ad7c900498b605593ac60f40849a1a",
+    "mtime": 1791412756.7265675,
+    "seen": 1791412824.95207,
+    "ast_hash": "7c6e2354566c09b3629d618e38c23fb0",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
@@ -2370,9 +2370,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next_copper.rs": {
-    "mtime": 1791392641.8971188,
-    "seen": 1791392719.975355,
-    "ast_hash": "184fae793803c1b1b10c5526d28baaf5",
+    "mtime": 1791412807.6587367,
+    "seen": 1791412824.952071,
+    "ast_hash": "005441efa307dc7b9958d40306a30396",
     "semantic_hash": ""
   },
   "docs/NEXT_COPPER.md": {

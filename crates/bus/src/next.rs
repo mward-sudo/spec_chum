@@ -1410,6 +1410,21 @@ mod tests {
     use crate::next_sd::SECTOR_SIZE;
 
     #[test]
+    fn copper_stops_current_batch_when_move_changes_control_mode() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        for byte in [0x62, 0x00, 0x15, 0x08] {
+            bus.write_nextreg(0x60, byte);
+        }
+        bus.write_nextreg(0x62, 0x40);
+
+        let writes = bus.advance_copper(10);
+        assert_eq!(writes, [(0, 0x62, 0x00)]);
+        bus.write_nextreg_at(0x62, 0x00, writes[0].0);
+
+        assert!(bus.advance_copper(20).is_empty());
+    }
+
+    #[test]
     fn sprite_clip_window_writes_are_tracked_as_video_state() {
         assert!(NextBus::nextreg_affects_video(0x19));
     }
