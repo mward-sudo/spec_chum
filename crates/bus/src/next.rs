@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use crate::ay::PsgModel;
+use crate::next_copper::NextCopper;
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
 use crate::next_sprites::NextSprites;
@@ -59,6 +60,7 @@ pub struct NextBus {
     border: u8,
     config_mapping: u8,
     next_video: NextVideo,
+    copper: NextCopper,
     next_sprites: NextSprites,
     peripheral2: u8,
     peripheral3: u8,
@@ -95,6 +97,101 @@ pub struct NextBus {
     pub kempston: Kempston,
 }
 
+/// Cloneable renderer state used to preserve Copper changes across one frame.
+#[derive(Clone, Debug)]
+pub struct NextBusVideoState {
+    next_video: NextVideo,
+    next_sprites: NextSprites,
+    display_screen_bank: u8,
+    border: u8,
+}
+
+/// Borrowed RAM plus one immutable Next video-register state for rendering.
+#[derive(Debug)]
+pub struct NextBusVideoRenderer<'a> {
+    ram: &'a [u8],
+    next_video: &'a NextVideo,
+    next_sprites: &'a NextSprites,
+    display_screen_bank: u8,
+    border: u8,
+}
+
+impl NextBusVideoRenderer<'_> {
+    #[must_use]
+    pub fn read_ram_page(&self, page: u8, offset: usize) -> Option<u8> {
+        (usize::from(page) < NEXT_RAM_PAGE_COUNT && offset < PAGE_SIZE)
+            .then(|| self.ram[usize::from(page) * PAGE_SIZE + offset])
+    }
+
+    #[must_use]
+    pub fn layer2_video_pixel(&self, x: usize, y: usize) -> Option<VideoColor> {
+        if !self.next_video.visible() || !self.next_video.standard_mode() || x >= 256 || y >= 192 {
+            return None;
+        }
+        let pixel = self.next_video.layer2_pixel(self.ram, x, y);
+        let color = self
+            .next_video
+            .layer2_color(self.next_video.palette_index(pixel));
+        (!color.transparent).then_some(color)
+    }
+
+    #[must_use]
+    pub fn lores_video_pixel(&self, index: u8) -> Option<VideoColor> {
+        (self.next_video.priority() & 0x80 != 0 && self.next_video.lores_256_color_mode())
+            .then(|| self.next_video.lores_color(index))
+            .filter(|color| !color.transparent)
+    }
+
+    #[must_use]
+    pub fn radastan_video_pixel(&self, pixel: u8) -> Option<VideoColor> {
+        (self.next_video.priority() & 0x80 != 0 && self.next_video.radastan_mode())
+            .then(|| self.next_video.radastan_color(pixel))
+            .filter(|color| !color.transparent)
+    }
+
+    #[must_use]
+    pub fn radastan_display_file_offset(&self) -> usize {
+        self.next_video.radastan_display_file_offset()
+    }
+
+    #[must_use]
+    pub fn tilemap_video_pixel(&self, x: usize, y: usize) -> Option<(VideoColor, bool)> {
+        self.next_video.tilemap_pixel(self.ram, x, y)
+    }
+
+    /// Render only the requested rows of the 320×256 sprite surface.
+    #[must_use]
+    pub fn render_sprite_rows(&self, rows: std::ops::Range<usize>) -> Vec<Option<VideoColor>> {
+        self.next_sprites
+            .render_surface_rows(self.next_video, self.next_video.priority(), rows)
+    }
+
+    #[must_use]
+    pub fn video_layer_order(&self) -> u8 {
+        self.next_video.priority() >> 2 & 0x07
+    }
+
+    #[must_use]
+    pub fn lores_256_color_enabled(&self) -> bool {
+        self.next_video.priority() & 0x80 != 0 && self.next_video.lores_256_color_mode()
+    }
+
+    #[must_use]
+    pub fn radastan_lores_enabled(&self) -> bool {
+        self.next_video.priority() & 0x80 != 0 && self.next_video.radastan_mode()
+    }
+
+    #[must_use]
+    pub fn display_screen_bank(&self) -> u8 {
+        self.display_screen_bank
+    }
+
+    #[must_use]
+    pub fn border(&self) -> u8 {
+        self.border
+    }
+}
+
 impl NextBus {
     fn sd_selected(cs: u8) -> bool {
         matches!(cs & 0x8f, 0x8e | 0x8d)
@@ -123,6 +220,7 @@ impl NextBus {
             border: 0,
             config_mapping: 0,
             next_video: NextVideo::new(),
+            copper: NextCopper::new(),
             next_sprites: NextSprites::new(),
             peripheral2: 0,
             peripheral3: 0,
@@ -175,6 +273,7 @@ impl NextBus {
         self.config_mapping = 0;
         self.alternate_rom_register = 0;
         self.next_video.reset();
+        self.copper.reset();
         self.next_sprites.reset();
         self.peripheral2 = 0;
         self.peripheral3 = 0x10;
@@ -407,6 +506,8 @@ impl NextBus {
             }
             0x08 => (self.peripheral3 & 0x7f) | (u8::from(!self.zx128_locked) << 7),
             0x1e | 0x1f => 0,
+            0x61 => self.copper.address_low(),
+            0x62 => self.copper.control(),
             0x06 => self.peripheral6,
             0x09 => self.peripheral2,
             0x0a => self.peripheral5,
@@ -643,6 +744,21 @@ impl NextBus {
     /// Update a `NextReg` while preserving the CPU T-state for timed audio writes.
     pub fn write_nextreg_at(&mut self, register: u8, value: u8, t: u64) {
         match register {
+            0x60 => {
+                self.copper.write_data(value);
+                return;
+            }
+            0x61 => {
+                self.copper.write_address_low(value);
+                return;
+            }
+            0x62 => {
+                self.copper.write_control(value, t);
+                return;
+            }
+            _ => {}
+        }
+        match register {
             0x2c => self.write_dac(1, value, t),
             0x2d => {
                 self.write_dac(0, value, t);
@@ -872,6 +988,79 @@ impl NextBus {
     pub fn frame_interrupt_timing(&self) -> (u64, u64) {
         let (tstates_per_line, lines_per_frame, interrupt_tstates) = self.display_geometry();
         (tstates_per_line * lines_per_frame, interrupt_tstates)
+    }
+
+    /// Advance Copper execution to an absolute CPU T-state.
+    pub fn advance_copper(&mut self, time: u64) -> Vec<(u64, u8, u8)> {
+        let (frame_tstates, _) = self.frame_interrupt_timing();
+        let (tstates_per_line, lines_per_frame, _) = self.display_geometry();
+        self.copper.advance(
+            time,
+            frame_tstates as u32,
+            tstates_per_line as u32,
+            lines_per_frame as u32,
+        )
+    }
+
+    /// Whether a `NextReg` can change a value consumed by the frame renderer.
+    /// `$14` is the global transparency colour, not the ULA border colour.
+    #[must_use]
+    pub fn nextreg_affects_video(register: u8) -> bool {
+        matches!(
+            register,
+            0x12 | 0x14 | 0x15 | 0x19 | 0x1b | 0x1c | 0x2f..=0x31 | 0x34..=0x41
+                | 0x43..=0x44 | 0x4b..=0x4c | 0x69..=0x70 | 0x75..=0x79
+        )
+    }
+
+    /// Capture renderer state after a Copper display-register write.
+    #[must_use]
+    pub fn video_state_snapshot(&self) -> NextBusVideoState {
+        NextBusVideoState {
+            next_video: self.next_video.clone(),
+            next_sprites: self.next_sprites.clone(),
+            display_screen_bank: self.display_screen_bank,
+            border: self.border,
+        }
+    }
+
+    /// Borrow current RAM and render state.
+    pub fn video_renderer(&self) -> NextBusVideoRenderer<'_> {
+        self.video_renderer_with_state_parts(
+            &self.next_video,
+            &self.next_sprites,
+            self.display_screen_bank,
+            self.border,
+        )
+    }
+
+    /// Borrow RAM with a previously captured Copper video state.
+    pub fn video_renderer_with_state<'a>(
+        &'a self,
+        state: &'a NextBusVideoState,
+    ) -> NextBusVideoRenderer<'a> {
+        self.video_renderer_with_state_parts(
+            &state.next_video,
+            &state.next_sprites,
+            state.display_screen_bank,
+            state.border,
+        )
+    }
+
+    fn video_renderer_with_state_parts<'a>(
+        &'a self,
+        next_video: &'a NextVideo,
+        next_sprites: &'a NextSprites,
+        display_screen_bank: u8,
+        border: u8,
+    ) -> NextBusVideoRenderer<'a> {
+        NextBusVideoRenderer {
+            ram: &self.ram,
+            next_video,
+            next_sprites,
+            display_screen_bank,
+            border,
+        }
     }
 
     fn config_window_active(&self) -> bool {
@@ -1219,6 +1408,26 @@ impl NextBus {
 mod tests {
     use super::*;
     use crate::next_sd::SECTOR_SIZE;
+
+    #[test]
+    fn copper_stops_current_batch_when_move_changes_control_mode() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        for byte in [0x62, 0x00, 0x15, 0x08] {
+            bus.write_nextreg(0x60, byte);
+        }
+        bus.write_nextreg(0x62, 0x40);
+
+        let writes = bus.advance_copper(10);
+        assert_eq!(writes, [(0, 0x62, 0x00)]);
+        bus.write_nextreg_at(0x62, 0x00, writes[0].0);
+
+        assert_eq!(bus.advance_copper(20), []);
+    }
+
+    #[test]
+    fn sprite_clip_window_writes_are_tracked_as_video_state() {
+        assert!(NextBus::nextreg_affects_video(0x19));
+    }
 
     fn rgb3(value: u8) -> u8 {
         (u16::from(value) * 255 / 7) as u8
