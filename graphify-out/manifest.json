@@ -2178,9 +2178,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/frontend/audio.rs": {
-    "mtime": 1791344753.9172628,
-    "seen": 1791344821.5246542,
-    "ast_hash": "2e0caa3c440440c6e2948274621d1c62",
+    "mtime": 1791345479.1244168,
+    "seen": 1791345497.4448152,
+    "ast_hash": "5228a7ff15376bcc6c75aabfde780a77",
     "semantic_hash": ""
   },
   "crates/tape/src/waveform.rs": {
