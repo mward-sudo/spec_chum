@@ -255,7 +255,9 @@ fn debug_pause_stops_next_frames_until_continue() {
 #[test]
 fn next_beeper_audio_reaches_host_pcm() {
     let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
-    let program = [0x3e, 0x10, 0xd3, 0xfe, 0xaf, 0xd3, 0xfe, 0xc3, 0x00, 0xc0];
+    let mut program = vec![0x3e, 0x10, 0xd3, 0xfe];
+    program.extend([0x00; 20]); // Keep the high beeper level across a PCM sample.
+    program.extend([0xaf, 0xd3, 0xfe, 0xc3, 0x00, 0xc0]);
     for (offset, byte) in program.into_iter().enumerate() {
         next.bus.write(0xc000 + offset as u16, byte);
     }
@@ -263,11 +265,33 @@ fn next_beeper_audio_reaches_host_pcm() {
     let mut session = HostSession::new(ModelId::SpectrumNext, true);
     session.machine = Some(HostRuntime::Next(Box::new(next)));
 
-    session.run_frame();
+    let audio = session.run_frame();
 
-    assert_eq!(session.audio_pcm().len(), AUDIO_SAMPLES_PER_FRAME);
+    assert_eq!(session.audio_pcm().len(), audio.ay_samples.len());
     assert!(session.audio_pcm().iter().any(|sample| *sample > 0.0));
     assert!(session.audio_pcm().iter().any(|sample| *sample < 0.0));
+}
+
+#[test]
+fn next_ay_audio_reaches_host_pcm() {
+    let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
+    next.bus.write_nextreg(0x03, 0xa3); // Use the 70,908T display timing.
+    next.bus.write_nextreg(0x06, 0x01);
+    next.bus.write_nextreg(0x08, 0x10); // Single-chip AY mode.
+    for (register, value) in [(0, 3), (1, 0), (7, 0x3e), (8, 0x0f)] {
+        next.bus.out_port(0xfffd, register);
+        next.bus.out_port(0xbffd, value);
+    }
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session.machine = Some(HostRuntime::Next(Box::new(next)));
+
+    let audio = session.run_frame();
+
+    assert_eq!(session.audio_pcm().len(), audio.ay_samples.len());
+    assert!(
+        session.audio_pcm().iter().any(|sample| *sample < -0.15),
+        "AY PCM should change the beeper-only baseline"
+    );
 }
 
 #[test]
@@ -1650,6 +1674,7 @@ fn render_frame_pcm_carries_late_edge_into_next_level() {
     let frame_tstates = 69_888u32;
     let audio = machine::FrameAudio {
         beeper_edges: vec![(frame_tstates - 1, true)],
+        frame_tstates: None,
         ay_samples: Vec::new(),
         ay_left: Vec::new(),
         ay_right: Vec::new(),
@@ -1661,4 +1686,16 @@ fn render_frame_pcm_carries_late_edge_into_next_level() {
         "edge near end of frame must update returned speaker level"
     );
     assert_eq!(out.len(), AUDIO_SAMPLES_PER_FRAME);
+}
+
+#[test]
+fn next_host_pcm_preserves_emitted_sample_count_for_selected_video_timing() {
+    let audio = machine::FrameAudio {
+        ay_samples: vec![1.0; 893],
+        ..machine::FrameAudio::default()
+    };
+    let mut out = Vec::new();
+    render_frame_pcm_with_count(&audio, 70_908, false, audio.ay_samples.len(), &mut out);
+    assert_eq!(out.len(), 893);
+    assert!(out.iter().all(|sample| *sample > 0.0));
 }

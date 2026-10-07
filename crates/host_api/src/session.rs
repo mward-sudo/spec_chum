@@ -1422,10 +1422,11 @@ impl HostSession {
         }
         if let Some(HostRuntime::Next(next)) = self.machine.as_mut() {
             let audio = next.run_frame();
-            self.last_speaker_level = render_frame_pcm(
+            self.last_speaker_level = render_frame_pcm_with_count(
                 &audio,
                 next.frame_tstates(),
                 self.last_speaker_level,
+                audio.ay_samples.len(),
                 &mut self.audio_pcm,
             );
             self.sync_framebuffer_dims();
@@ -1709,9 +1710,25 @@ fn render_frame_pcm(
     initial_level: bool,
     out: &mut Vec<f32>,
 ) -> bool {
+    render_frame_pcm_with_count(
+        audio,
+        frame_tstates,
+        initial_level,
+        AUDIO_SAMPLES_PER_FRAME,
+        out,
+    )
+}
+
+fn render_frame_pcm_with_count(
+    audio: &machine::FrameAudio,
+    frame_tstates: u32,
+    initial_level: bool,
+    sample_count: usize,
+    out: &mut Vec<f32>,
+) -> bool {
     out.clear();
-    out.resize(AUDIO_SAMPLES_PER_FRAME, 0.0);
-    let t_per = frame_tstates as f32 / AUDIO_SAMPLES_PER_FRAME as f32;
+    out.resize(sample_count, 0.0);
+    let t_per = frame_tstates as f32 / sample_count as f32;
     let mut edge_i = 0usize;
     let mut level = initial_level;
     let mut t = 0.0f32;

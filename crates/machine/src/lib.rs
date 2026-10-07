@@ -288,6 +288,8 @@ pub enum Machine {
 pub struct FrameAudio {
     /// Beeper edges: (`frame_t`, level).
     pub beeper_edges: Vec<(u32, bool)>,
+    /// CPU T-states in this frame when the host needs its timing profile.
+    pub frame_tstates: Option<u32>,
     /// Mono AY samples for this frame (empty on 48K). Amplitude roughly 0..1.
     pub ay_samples: Vec<f32>,
     /// Left AY channel (same length as `ay_samples`; empty on 48K).
@@ -1385,6 +1387,7 @@ impl Machine {
                 // Keep border_events for render; next run_frame begin_frame clears them.
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
+                    frame_tstates: None,
                     ay_samples,
                     ay_left,
                     ay_right,
@@ -1563,6 +1566,7 @@ impl Machine {
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
+                    frame_tstates: None,
                     ay_samples,
                     ay_left,
                     ay_right,
@@ -1734,6 +1738,7 @@ impl Machine {
                 }
                 FrameAudio {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
+                    frame_tstates: None,
                     ay_samples,
                     ay_left,
                     ay_right,

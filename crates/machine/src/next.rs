@@ -20,6 +20,10 @@ pub struct NextMachine {
     debugger_paused: bool,
     beeper_level: bool,
     beeper_edges: Vec<(u64, bool)>,
+    audio_phase: u64,
+    ay_samples: Vec<f32>,
+    ay_left: Vec<f32>,
+    ay_right: Vec<f32>,
 }
 
 impl NextMachine {
@@ -34,6 +38,10 @@ impl NextMachine {
             debugger_paused: false,
             beeper_level: false,
             beeper_edges: Vec::new(),
+            audio_phase: 0,
+            ay_samples: Vec::new(),
+            ay_left: Vec::new(),
+            ay_right: Vec::new(),
         })
     }
 
@@ -45,6 +53,10 @@ impl NextMachine {
         self.video_t = 0;
         self.beeper_level = false;
         self.beeper_edges.clear();
+        self.audio_phase = 0;
+        self.ay_samples.clear();
+        self.ay_left.clear();
+        self.ay_right.clear();
         Ok(())
     }
 
@@ -57,6 +69,10 @@ impl NextMachine {
     pub fn reset(&mut self) {
         self.cpu.reset();
         self.bus.soft_reset();
+        self.audio_phase = 0;
+        self.ay_samples.clear();
+        self.ay_left.clear();
+        self.ay_right.clear();
     }
 
     /// Uninterrupted video clock, including across CPU soft resets.
@@ -105,6 +121,23 @@ impl NextMachine {
             }
         };
         self.video_t = self.video_t.wrapping_add(u64::from(cycles));
+        self.bus.advance_audio(cycles);
+        self.audio_phase = self
+            .audio_phase
+            .saturating_add(u64::from(cycles).saturating_mul(44_100));
+        while self.audio_phase >= 3_500_000 {
+            self.audio_phase -= 3_500_000;
+            let (mono, left, right) = if self.bus.audio_configured() {
+                self.bus.audio_sample()
+            } else {
+                // Host audio backends center AY silence at 0.5 before mapping
+                // it to signed PCM, so zero here would introduce a DC offset.
+                (0.5, 0.5, 0.5)
+            };
+            self.ay_samples.push(mono);
+            self.ay_left.push(left);
+            self.ay_right.push(right);
+        }
         if let Some(status) = self.bus.take_reset_request() {
             self.cpu.reset();
             if status == 0x01 {
@@ -126,13 +159,20 @@ impl NextMachine {
         if self.debugger_paused {
             return FrameAudio::default();
         }
-        let frame_len = self.bus.frame_interrupt_timing().0;
+        let frame_tstates = self.frame_tstates();
+        let frame_len = u64::from(frame_tstates);
         let frame_start = self.video_t;
         let boundary = (frame_start / frame_len + 1) * frame_len;
         while self.video_t < boundary {
             self.step_once();
         }
-        let mut frame_audio = FrameAudio::default();
+        let mut frame_audio = FrameAudio {
+            frame_tstates: Some(frame_tstates),
+            ay_samples: std::mem::take(&mut self.ay_samples),
+            ay_left: std::mem::take(&mut self.ay_left),
+            ay_right: std::mem::take(&mut self.ay_right),
+            ..FrameAudio::default()
+        };
         let mut future_edges = Vec::new();
         for (edge_t, level) in self.beeper_edges.drain(..) {
             if edge_t < boundary {
@@ -275,6 +315,42 @@ mod tests {
             assert_eq!(machine.cpu.regs.pc, 0x0038, "timing {timing}");
             assert!(!machine.cpu.regs.iff1, "timing {timing}");
         }
+    }
+
+    #[test]
+    fn next_machine_renders_timed_ay_samples_into_frame_audio() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid ROM");
+        machine.bus.write_nextreg(0x06, 0x01); // AY mode.
+        machine.bus.write_nextreg(0x08, 0x10); // Single AY mode, speaker enabled.
+        for (register, value) in [(0, 3), (1, 0), (7, 0x3e), (8, 0x0f)] {
+            machine.bus.out_port(0xfffd, register);
+            machine.bus.out_port(0xbffd, value);
+        }
+
+        let audio = machine.run_frame();
+        assert_eq!(audio.frame_tstates, Some(69_888));
+        assert!((880..=883).contains(&audio.ay_samples.len()));
+        assert_eq!(audio.ay_left.len(), audio.ay_samples.len());
+        assert_eq!(audio.ay_right.len(), audio.ay_samples.len());
+        assert!(
+            audio.ay_samples.iter().any(|sample| *sample > 0.0),
+            "regs={:?} mixed={:?} first={:?}",
+            machine.bus.ay_chip(0).map(|ay| ay.regs),
+            machine.bus.audio_sample(),
+            audio.ay_samples.get(..8)
+        );
+
+        let mut alternate = NextMachine::new(&test_rom()).expect("valid ROM");
+        alternate.bus.write_nextreg(0x03, 0xa3); // Select 70,908T timing.
+        alternate.bus.write_nextreg(0x06, 0x01);
+        alternate.bus.write_nextreg(0x08, 0x10);
+        for (register, value) in [(0, 3), (1, 0), (7, 0x3e), (8, 0x0f)] {
+            alternate.bus.out_port(0xfffd, register);
+            alternate.bus.out_port(0xbffd, value);
+        }
+        let alternate_audio = alternate.run_frame();
+        assert_eq!(alternate_audio.frame_tstates, Some(70_908));
+        assert!((892..=895).contains(&alternate_audio.ay_samples.len()));
     }
 
     #[test]
