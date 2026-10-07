@@ -40,7 +40,7 @@ Example: **Open Tape** is ⌘O on SpecChumMac and **Ctrl+O** here — same actio
 | Open tape / snapshot / RZX / DSK / TRD | yes (`rfd` native dialogs; same formats as egui/macOS/Windows) |
 | Tape Play / Pause / Rewind | yes |
 | Keyboard → Spectrum matrix | yes (GDK keyval map in `linux_shell::keymap`) |
-| Audio (cpal from `HostSession` PCM) | yes |
+| Audio (cpal from interleaved `HostSession` stereo PCM) | yes |
 | Agent Debug HTTP (`SPEC_CHUM_AGENT=1`) | yes (same embed as egui / Windows / SpecChumMac) |
 | Machine model select + Reset | yes (all built-in models) |
 | Hardware attach (Multiface / DivMMC / IF1 / Beta / Timex dock) | yes (GTK **Hardware** menu → `HostSession`) |

@@ -28,8 +28,12 @@ starts with the standard `LOAD ""` command and playback enabled.
 The frontend's keyboard input maps letters, digits, Enter, Space, Shift, Ctrl,
 and Alt to the Spectrum keyboard matrix. Arrow keys and Tab also control the
 Kempston joystick; joypad directions and A map to Kempston directions and fire.
-Video uses XRGB8888-compatible pixels at 50 Hz, with mono emulator audio sent
-to both output channels at the host sample rate.
+Video uses XRGB8888-compatible pixels at 50 Hz. Interleaved stereo emulator
+audio is sent at the host sample rate; classic mono output is duplicated to
+both channels. The core currently selects only classic models, so its libretro
+AV timing remains fixed at 50 Hz. If Next model/content support is added, the
+core must use `HostSession::frame_period_seconds` and renegotiate frontend AV
+timing for the selected Next display mode.
 
 The core requires full-path content access because the shared media loaders
 take file paths. A RetroArch executable is not required to build the workspace,

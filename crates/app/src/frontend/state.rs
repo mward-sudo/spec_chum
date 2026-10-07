@@ -138,6 +138,7 @@ impl SpecChumApp {
             texture: None,
             beeper,
             _stream: stream,
+            next_frame_deadline: None,
             theme_applied: false,
             gilrs,
             prefs,

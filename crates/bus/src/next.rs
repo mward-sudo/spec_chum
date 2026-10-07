@@ -5,11 +5,12 @@
 
 use std::path::Path;
 
+use crate::ay::PsgModel;
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
 use crate::next_sprites::NextSprites;
 use crate::next_video::NextVideo;
-use crate::{require_rom_size, Kempston, Keyboard, RomLoadError, VideoColor};
+use crate::{require_rom_size, Ay8912, Kempston, Keyboard, RomLoadError, StereoMode, VideoColor};
 
 const PAGE_SIZE: usize = 0x2000;
 const CONFIG_BANK_SIZE: usize = 0x4000;
@@ -32,6 +33,10 @@ const PORT_NEXTREG_SELECT: u16 = 0x243b;
 const PORT_NEXTREG_ACCESS: u16 = 0x253b;
 const PORT_LAYER2_CONTROL: u16 = 0x123b;
 const PORT_SPRITE_SELECT: u16 = 0x303b;
+const PORT_AY_DATA_MASK: u16 = 0xc007;
+const PORT_AY_SELECT_MASK: u16 = 0xc007;
+const PORT_AY_SELECT: u16 = 0xc005;
+const PORT_AY_DATA: u16 = 0x8005;
 
 /// CPU-visible Spectrum Next memory and the subset of `NextRegs` implemented by
 /// this core slice. Unimplemented registers read as an undriven data bus.
@@ -57,6 +62,12 @@ pub struct NextBus {
     next_sprites: NextSprites,
     peripheral2: u8,
     peripheral3: u8,
+    peripheral6: u8,
+    ay: [Ay8912; 3],
+    /// Raw Next chip selector: 3 = AY0, 2 = AY1, 1 = AY2, 0 = reserved.
+    ay_chip_select: u8,
+    /// Per-chip output enables: bit 0 = left, bit 1 = right.
+    ay_channel_enable: [u8; 3],
     reset_register: u8,
     reset_pending: u8,
     divmmc_nmi_pending: bool,
@@ -111,6 +122,10 @@ impl NextBus {
             next_sprites: NextSprites::new(),
             peripheral2: 0,
             peripheral3: 0,
+            peripheral6: 0,
+            ay: std::array::from_fn(|_| Ay8912::new()),
+            ay_chip_select: 3,
+            ay_channel_enable: [0x03; 3],
             reset_register: 0,
             reset_pending: 0,
             divmmc_nmi_pending: false,
@@ -157,6 +172,13 @@ impl NextBus {
         self.next_sprites.reset();
         self.peripheral2 = 0;
         self.peripheral3 = 0x10;
+        self.peripheral6 = 0;
+        self.ay = std::array::from_fn(|_| Ay8912::new());
+        for ay in &mut self.ay {
+            ay.set_model(PsgModel::Ym2149);
+        }
+        self.ay_chip_select = 3;
+        self.ay_channel_enable = [0x03; 3];
         self.reset_register = 2;
         self.reset_pending = 0;
         self.divmmc_nmi_pending = false;
@@ -198,6 +220,7 @@ impl NextBus {
         self.peripheral3 = peripheral3 & !0x40;
         self.peripheral5 = peripheral5;
         self.alternate_rom_register = alternate_rom_reset;
+        self.peripheral6 = 0xa0;
         self.reset_register = 0x01;
     }
 
@@ -376,6 +399,7 @@ impl NextBus {
             }
             0x08 => (self.peripheral3 & 0x7f) | (u8::from(!self.zx128_locked) << 7),
             0x1e | 0x1f => 0,
+            0x06 => self.peripheral6,
             0x09 => self.peripheral2,
             0x0a => self.peripheral5,
             0x0e => NEXT_CORE_SUBMINOR,
@@ -388,6 +412,161 @@ impl NextBus {
             0x50..=0x57 => self.mmu[usize::from(register - 0x50)],
             0x8e => self.zx128_mapping,
             _ => 0xff,
+        }
+    }
+
+    /// Advance the enabled Next AY chips by CPU T-states.
+    pub fn advance_audio(&mut self, tstates: u32) {
+        match self.peripheral6 & 0x03 {
+            0 | 1 => {
+                // All AY oscillators keep running. Turbo Sound controls which
+                // chip is selected and which chips reach the output mixer.
+                for ay in &mut self.ay {
+                    ay.advance(tstates);
+                }
+            }
+            // ZXN-8950 is a separate follow-up; mode 2 suspends AY synthesis.
+            2 => {}
+            // Mode 3 holds every AY in reset.
+            _ => {}
+        }
+    }
+
+    /// Current mixed AY sample as mono, left and right amplitudes.
+    #[must_use]
+    pub fn audio_sample(&self) -> (f32, f32, f32) {
+        if matches!(self.peripheral6 & 0x03, 2 | 3) {
+            return (0.0, 0.0, 0.0);
+        }
+        let turbo_sound = self.peripheral3 & 0x02 != 0;
+        let first_chip = if turbo_sound {
+            0
+        } else if let Some(index) = self.selected_ay_index() {
+            index
+        } else {
+            return (0.0, 0.0, 0.0);
+        };
+        let last_chip = if turbo_sound { 3 } else { first_chip + 1 };
+        let chip_count = last_chip - first_chip;
+        let stereo = if self.peripheral3 & 0x20 != 0 {
+            StereoMode::Acb
+        } else {
+            StereoMode::Abc
+        };
+        let mut left = 0.0;
+        let mut right = 0.0;
+        for index in first_chip..last_chip {
+            let ay = &self.ay[index];
+            let mut levels = ay.channel_levels();
+            for (channel, level) in levels.iter_mut().enumerate() {
+                if ay.regs[8 + channel] == 0 {
+                    // Center unused channels because host PCM treats 0.5 as
+                    // silence; zero would introduce a negative DC component.
+                    *level = 0.5;
+                }
+            }
+            let (mut chip_left, mut chip_right) = if self.peripheral2 & (1 << (index + 5)) != 0 {
+                let mono = (levels[0] + levels[1] + levels[2]) / 3.0;
+                (mono, mono)
+            } else {
+                let (left, center, right) = if stereo == StereoMode::Acb {
+                    (levels[0], levels[2], levels[1])
+                } else {
+                    (levels[0], levels[1], levels[2])
+                };
+                ((left + center * 0.5) / 1.5, (right + center * 0.5) / 1.5)
+            };
+            let enabled = self.ay_channel_enable[index];
+            if enabled & 0x01 == 0 {
+                chip_left = 0.5;
+            }
+            if enabled & 0x02 == 0 {
+                chip_right = 0.5;
+            }
+            left += chip_left - 0.5;
+            right += chip_right - 0.5;
+        }
+        // Keep a single-chip tune at the classic AY amplitude while allowing
+        // each enabled chip to contribute equally to Turbo Sound output.
+        left = 0.5 + left / chip_count as f32;
+        right = 0.5 + right / chip_count as f32;
+        (f32::midpoint(left, right), left, right)
+    }
+
+    /// Whether `NextReg` `$09` bit 2 silences the complete HDMI audio mix.
+    #[must_use]
+    pub fn audio_muted(&self) -> bool {
+        self.peripheral2 & 0x04 != 0
+    }
+
+    /// Whether an AY amplitude register is configured to produce audio.
+    #[must_use]
+    pub fn audio_configured(&self) -> bool {
+        if !matches!(self.peripheral6 & 0x03, 0 | 1) {
+            return false;
+        }
+        if self.peripheral3 & 0x02 != 0 {
+            self.ay
+                .iter()
+                .any(|ay| ay.regs[8..11].iter().any(|value| *value != 0))
+        } else {
+            self.selected_ay()
+                .is_some_and(|ay| ay.regs[8..11].iter().any(|value| *value != 0))
+        }
+    }
+
+    /// The AY currently addressed by `$FFFD` / `$BFFD` (0 = AY0, 2 = AY2).
+    #[must_use]
+    pub fn selected_ay(&self) -> Option<&Ay8912> {
+        self.selected_ay_index().map(|index| &self.ay[index])
+    }
+
+    /// Read-only access to an individual AY chip for inspection and tests.
+    #[must_use]
+    pub fn ay_chip(&self, index: usize) -> Option<&Ay8912> {
+        self.ay.get(index)
+    }
+
+    fn selected_ay_index(&self) -> Option<usize> {
+        match self.ay_chip_select {
+            3 => Some(0),
+            2 => Some(1),
+            1 => Some(2),
+            _ => None,
+        }
+    }
+
+    fn read_ay_data(&self) -> u8 {
+        self.selected_ay().map_or(0xff, Ay8912::read_data)
+    }
+
+    fn write_ay_select(&mut self, value: u8) {
+        let turbo_sound = self.peripheral3 & 0x02 != 0;
+        if value & 0xe0 == 0 {
+            if let Some(index) = self.selected_ay_index() {
+                self.ay[index].select(value);
+            }
+            return;
+        }
+        if !turbo_sound || value & 0x80 == 0 || value & 0x1c != 0x1c {
+            return;
+        }
+        let select = value & 0x03;
+        self.ay_chip_select = select;
+        if let Some(index) = self.selected_ay_index() {
+            self.ay_channel_enable[index] = ((value >> 6) & 1) | ((value >> 4) & 2);
+        }
+    }
+
+    fn write_ay_data(&mut self, value: u8) {
+        if self.peripheral6 & 0x03 == 3 {
+            return;
+        }
+        if let Some(index) = self.selected_ay_index() {
+            let ay = &mut self.ay[index];
+            if ay.selected < 14 {
+                ay.write_data(value);
+            }
         }
     }
 
@@ -448,6 +627,22 @@ impl NextBus {
                 self.peripheral2 = value;
                 if value & 0x08 != 0 {
                     self.divmmc_control &= !0x40;
+                }
+            }
+            0x06 => {
+                self.peripheral6 = value;
+                let model = if value & 0x01 == 0 {
+                    PsgModel::Ym2149
+                } else {
+                    PsgModel::Ay8912
+                };
+                for ay in &mut self.ay {
+                    ay.set_model(model);
+                }
+                if value & 0x03 == 0x03 {
+                    for ay in &mut self.ay {
+                        ay.reset();
+                    }
                 }
             }
             0x03 if self.machine_type == 0 => {
@@ -875,6 +1070,12 @@ impl NextBus {
     /// CPU port read with its absolute T-state, for timed devices such as SD SPI.
     pub fn in_port_at(&mut self, port: u16, t: u64) -> u8 {
         match port {
+            _ if Self::is_128_paging_port(port) => 0xff,
+            _ if port & 0xc00f == 0x8005 => {
+                (self.ay_chip_select << 6) | self.selected_ay().map_or(0, |ay| ay.selected & 0x1f)
+            }
+            _ if port & PORT_AY_SELECT_MASK == PORT_AY_SELECT => self.read_ay_data(),
+            _ if port & PORT_AY_DATA_MASK == PORT_AY_DATA => self.read_ay_data(),
             PORT_NEXTREG_SELECT => self.selected_nextreg,
             PORT_NEXTREG_ACCESS => self.read_nextreg_at(self.selected_nextreg, t),
             PORT_LAYER2_CONTROL => u8::from(self.next_video.visible()) << 1,
@@ -882,7 +1083,6 @@ impl NextBus {
             _ if port & 0xff == 0xe3 => {
                 (self.divmmc_control & 0x7f) | (u8::from(self.divmmc_conmem) << 7)
             }
-            _ if Self::is_128_paging_port(port) => 0xff,
             _ if port & 0xff == PORT_NEXT_SD_CS => self.sd_cs,
             _ if port & 0xff == PORT_NEXT_SD_DATA => self
                 .sd_spi
@@ -902,6 +1102,9 @@ impl NextBus {
     /// CPU port write with its absolute T-state, for timed devices such as SD SPI.
     pub fn out_port_at(&mut self, port: u16, value: u8, t: u64) {
         match port {
+            _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
+            _ if port & PORT_AY_SELECT_MASK == PORT_AY_SELECT => self.write_ay_select(value),
+            _ if port & PORT_AY_DATA_MASK == PORT_AY_DATA => self.write_ay_data(value),
             PORT_NEXTREG_SELECT => {
                 self.selected_nextreg = value;
             }
@@ -914,7 +1117,6 @@ impl NextBus {
                 .next_sprites
                 .write_attribute_port(value, self.peripheral2 & 0x10 != 0),
             _ if port & 0xff == 0x5b => self.next_sprites.write_pattern_port(value),
-            _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
             _ if port & 0xff == 0xe3 => {
                 self.divmmc_control = (value & 0x8f) | (self.divmmc_control & 0x40);
                 if value & 0x40 != 0 {
@@ -951,6 +1153,193 @@ mod tests {
 
     fn rgb3(value: u8) -> u8 {
         (u16::from(value) * 255 / 7) as u8
+    }
+
+    #[test]
+    fn turbo_sound_ports_keep_three_independent_chips_and_report_selection() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x08, 0x12); // Enable Turbo Sound.
+
+        for (control, marker, status) in
+            [(0xff, 0x11, 0xc8), (0xfe, 0x22, 0x88), (0xfd, 0x33, 0x48)]
+        {
+            bus.out_port(0xfffd, control);
+            bus.out_port(0xfffd, 8);
+            bus.out_port(0xbffd, marker);
+            assert_eq!(bus.in_port(0xbff5), status);
+            assert_eq!(bus.in_port(0xfffd), marker & 0x1f);
+            assert_eq!(bus.in_port(0xbffd), marker & 0x1f);
+        }
+        for (index, expected) in [0x11, 0x02, 0x13].into_iter().enumerate() {
+            assert_eq!(bus.ay_chip(index).map(|ay| ay.regs[8]), Some(expected));
+        }
+
+        bus.out_port(0x8001, 0x00); // Does not match the documented $BFFD mask.
+        assert_eq!(bus.ay_chip(2).map(|ay| ay.regs[8]), Some(0x13));
+        assert_eq!(bus.in_port(0x8001), 0xff);
+    }
+
+    fn program_tone_b(bus: &mut NextBus, control: u8) {
+        bus.out_port(0xfffd, control);
+        for (register, value) in [(2, 1), (3, 0), (7, 0x3d), (9, 0x0f)] {
+            bus.out_port(0xfffd, register);
+            bus.out_port(0xbffd, value);
+        }
+    }
+
+    #[test]
+    fn turbo_sound_obeys_stereo_mapping_channel_enable_and_chip_mono() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x08, 0x32); // Turbo Sound + ACB.
+        program_tone_b(&mut bus, 0xff); // AY0, both channels enabled.
+        bus.advance_audio(32);
+        let (acb_mono, acb_left, acb_right) = bus.audio_sample();
+        assert!(acb_mono > 0.0);
+        assert!(
+            (acb_left - 0.5).abs() < 1e-6,
+            "ACB routes channel B to the right"
+        );
+        assert!(acb_right > 0.5);
+
+        bus.write_nextreg(0x08, 0x12); // ABC: B is centered.
+        let (_, centered_left, centered_right) = bus.audio_sample();
+        assert!((centered_left - centered_right).abs() < 1e-6);
+
+        bus.out_port(0xfffd, 0xbf); // AY0, right output only.
+        let (_, muted_left, right_only) = bus.audio_sample();
+        assert!((muted_left - 0.5).abs() < 1e-6);
+        assert!(right_only > 0.0);
+
+        bus.out_port(0xfffd, 0xff); // Restore both outputs.
+        bus.write_nextreg(0x09, 0x20); // AY0 mono.
+        let (_, mono_left, mono_right) = bus.audio_sample();
+        assert!((mono_left - mono_right).abs() < 1e-6);
+    }
+
+    #[test]
+    fn three_chip_mix_is_normalized_to_single_chip_amplitude() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x08, 0x12);
+        for control in [0xff, 0xfe, 0xfd] {
+            program_tone_b(&mut bus, control);
+        }
+        bus.advance_audio(32);
+        let three_chip = bus.audio_sample();
+        bus.write_nextreg(0x08, 0x10); // Keep selected AY2 as the single chip.
+        let one_chip = bus.audio_sample();
+        assert!((three_chip.0 - one_chip.0).abs() < 1e-6);
+        assert!((three_chip.1 - one_chip.1).abs() < 1e-6);
+        assert!((three_chip.2 - one_chip.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ay_mode_hold_resets_chips_and_suspends_io_and_synthesis() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(
+            bus.read_nextreg(0x06) & 0x03,
+            0,
+            "hard reset selects YM mode"
+        );
+        bus.write_nextreg(0x08, 0x12);
+        bus.out_port(0xfffd, 0xfe); // AY1.
+        bus.out_port(0xfffd, 8);
+        bus.out_port(0xbffd, 0x0f);
+        assert_eq!(bus.ay_chip(1).map(|ay| ay.regs[8]), Some(0x0f));
+
+        bus.write_nextreg(0x06, 0x03); // Hold every AY in reset.
+        assert_eq!(bus.ay_chip(1).map(|ay| ay.regs[8]), Some(0));
+        bus.out_port(0xfffd, 8);
+        bus.out_port(0xbffd, 0x0f);
+        assert_eq!(bus.ay_chip(1).map(|ay| ay.regs[8]), Some(0));
+        bus.advance_audio(32 * 100);
+        assert_eq!(bus.audio_sample(), (0.0, 0.0, 0.0));
+
+        bus.write_nextreg(0x06, 0x01); // AY mode resumes.
+        bus.out_port(0xbffd, 0x0f);
+        assert_eq!(bus.ay_chip(1).map(|ay| ay.regs[8]), Some(0x0f));
+
+        bus.hard_reset();
+        assert_eq!(bus.read_nextreg(0x06) & 0x03, 0);
+        assert_eq!(bus.read_nextreg(0x06) & 0xa0, 0);
+        bus.soft_reset();
+        assert_eq!(bus.read_nextreg(0x06), 0xa0);
+        assert_eq!(bus.read_nextreg(0x06) & 0x03, 0, "soft reset keeps YM mode");
+    }
+
+    #[test]
+    fn nextreg_audio_mode_selects_the_psg_dac_response() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        program_tone_b(&mut bus, 0xff);
+        bus.out_port(0xfffd, 9);
+        bus.out_port(0xbffd, 1);
+        bus.advance_audio(32);
+        let ym_level = bus.ay_chip(0).expect("selected chip").channel_levels()[1];
+
+        bus.write_nextreg(0x06, 0x01);
+        let ay_level = bus.ay_chip(0).expect("selected chip").channel_levels()[1];
+
+        assert!(
+            (ym_level - ay_level).abs() > 1e-6,
+            "YM and AY modes use distinct DAC curves"
+        );
+    }
+
+    #[test]
+    fn peripheral4_bit_two_reports_hdmi_audio_mute() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert!(!bus.audio_muted());
+        bus.write_nextreg(0x09, 0x04);
+        assert!(bus.audio_muted());
+        bus.write_nextreg(0x09, 0xfb);
+        assert!(!bus.audio_muted());
+    }
+
+    #[test]
+    fn disabling_turbo_sound_freezes_chip_selection_but_keeps_active_chip_running() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x08, 0x12);
+        bus.out_port(0xfffd, 0xfe); // Select AY1.
+        program_tone_b(&mut bus, 0xfe);
+        bus.advance_audio(32);
+        bus.write_nextreg(0x08, 0x10); // Disable Turbo Sound.
+        let held_sample = bus.audio_sample();
+        assert!(held_sample.0 > 0.0);
+        bus.advance_audio(32 * 19);
+        assert_ne!(
+            bus.audio_sample(),
+            held_sample,
+            "selected AY keeps clocking"
+        );
+        assert_eq!(bus.in_port(0xbff5) & 0xc0, 0x80);
+        // Register accesses still address the active chip, while chip switching
+        // commands are ignored with Turbo Sound disabled.
+        bus.out_port(0xfffd, 0xff);
+        bus.out_port(0xfffd, 8);
+        bus.out_port(0xbffd, 0x07);
+        assert_eq!(bus.ay_chip(1).map(|ay| ay.regs[8]), Some(0x07));
+        assert_eq!(bus.in_port(0xbff5) & 0xc0, 0x80);
+    }
+
+    #[test]
+    fn nonselected_ay_oscillators_keep_running_with_turbo_sound_disabled() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0x08, 0x12);
+        program_tone_b(&mut bus, 0xff); // AY0.
+        program_tone_b(&mut bus, 0xfe); // AY1.
+        bus.advance_audio(32);
+        bus.out_port(0xfffd, 0xff); // Select AY0.
+        bus.write_nextreg(0x08, 0x10); // Disable Turbo Sound.
+
+        let other_chip_before = bus.ay_chip(1).map(Ay8912::sample_mono);
+        bus.advance_audio(32);
+        assert_ne!(
+            bus.ay_chip(1).map(Ay8912::sample_mono),
+            other_chip_before,
+            "all chip oscillators keep advancing while Turbo Sound is disabled"
+        );
+        assert_eq!(bus.in_port(0xbff5) & 0xc0, 0xc0);
+        bus.out_port(0xfffd, 0xfe); // Chip-selection commands are frozen.
+        assert_eq!(bus.in_port(0xbff5) & 0xc0, 0xc0);
     }
 
     #[test]

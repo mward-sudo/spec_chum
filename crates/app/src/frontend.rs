@@ -20,6 +20,33 @@ mod state;
 
 use audio::{start_beeper, BeeperState};
 
+const CPU_TSTATES_PER_SECOND: f64 = 3_500_000.0;
+
+fn frame_repaint_delay(frame_tstates: Option<u32>) -> Duration {
+    frame_tstates.map_or(Duration::from_millis(20), |tstates| {
+        Duration::from_secs_f64(f64::from(tstates) / CPU_TSTATES_PER_SECOND)
+    })
+}
+
+fn frame_is_due(next_frame_deadline: Option<Instant>, now: Instant) -> bool {
+    next_frame_deadline.is_none_or(|deadline| now >= deadline)
+}
+
+fn next_frame_deadline(
+    previous: Option<Instant>,
+    frame_started: Instant,
+    frame_delay: Duration,
+) -> Instant {
+    let base = previous
+        .filter(|deadline| frame_started.saturating_duration_since(*deadline) < frame_delay)
+        .unwrap_or(frame_started);
+    base + frame_delay
+}
+
+fn should_step_key_script(advancing: bool, throttled: bool, due: bool) -> bool {
+    advancing && (!throttled || due)
+}
+
 pub struct SpecChumApp {
     pub session: EmulatorSession,
     /// Present when embedded agent HTTP shares the session (#221).
@@ -30,6 +57,7 @@ pub struct SpecChumApp {
     texture: Option<egui::TextureHandle>,
     beeper: Arc<std::sync::Mutex<BeeperState>>,
     _stream: Option<cpal::Stream>,
+    next_frame_deadline: Option<Instant>,
     theme_applied: bool,
     /// Optional gamepad (USB/Bluetooth via gilrs). `None` if init failed.
     gilrs: Option<gilrs::Gilrs>,
@@ -69,12 +97,6 @@ impl SpecChumApp {
         }
         self.menu_bar(ctx);
 
-        if !self.session.tick_key_script() {
-            let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
-            let pad = self.poll_gamepad();
-            self.session.sync_keyboard(&keys_down, modifiers, pad);
-        }
-
         if self.session.kempston_mouse {
             {
                 let host = &mut *self.session.host_mut();
@@ -108,10 +130,46 @@ impl SpecChumApp {
             }
         }
 
-        let audio = self.session.tick_frame();
-        if let Ok(mut b) = self.beeper.lock() {
-            b.queue_frame(audio, self.session.muted, self.session.volume);
+        let paused = self.session.host_mut().paused();
+        let advancing = self.session.host_mut().running() && !paused;
+        let throttled = self.session.throttle && advancing;
+        if !throttled {
+            self.next_frame_deadline = None;
         }
+        let frame_started = Instant::now();
+        let due = frame_is_due(self.next_frame_deadline, frame_started);
+        let repaint_delay = if !throttled || due {
+            let script_consumed_input =
+                should_step_key_script(advancing, throttled, due) && self.session.tick_key_script();
+            if !script_consumed_input {
+                let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
+                let pad = self.poll_gamepad();
+                self.session.sync_keyboard(&keys_down, modifiers, pad);
+            }
+            let audio = self.session.tick_frame();
+            let frame_delay = frame_repaint_delay(audio.frame_tstates);
+            if throttled {
+                self.next_frame_deadline = Some(next_frame_deadline(
+                    self.next_frame_deadline,
+                    frame_started,
+                    frame_delay,
+                ));
+            }
+            if let Ok(mut b) = self.beeper.lock() {
+                b.queue_frame(
+                    &audio,
+                    self.session.muted,
+                    self.session.volume,
+                    self.session.throttle,
+                );
+            }
+            frame_delay
+        } else {
+            self.next_frame_deadline
+                .map_or(Duration::from_millis(20), |deadline| {
+                    deadline.saturating_duration_since(frame_started)
+                })
+        };
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let (image, src) = {
@@ -143,15 +201,9 @@ impl SpecChumApp {
         self.config_editor_window(ctx);
         self.rom_setup_window(ctx);
 
-        let paused = self
-            .session
-            .host_mut()
-            .machine()
-            .is_some_and(|m| m.debugger().paused);
-        let advancing = self.session.host_mut().running() && !paused;
         if advancing {
             if self.session.throttle {
-                ctx.request_repaint_after(std::time::Duration::from_millis(20));
+                ctx.request_repaint_after(repaint_delay);
             } else {
                 ctx.request_repaint();
             }
@@ -207,5 +259,60 @@ impl eframe::App for SpecChumApp {
         self.prefs_size_deadline = None;
         self.prefs_dirty = true;
         self.persist_prefs_if_dirty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{frame_is_due, frame_repaint_delay, next_frame_deadline, should_step_key_script};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn repaint_delay_tracks_next_frame_clock_duration() {
+        assert_eq!(
+            frame_repaint_delay(Some(70_908)),
+            Duration::from_secs_f64(70_908.0 / 3_500_000.0)
+        );
+        assert_eq!(frame_repaint_delay(None), Duration::from_millis(20));
+    }
+
+    #[test]
+    fn throttled_frame_scheduler_skips_early_ui_repaints() {
+        let now = Instant::now();
+        let deadline = now + Duration::from_millis(20);
+        assert!(frame_is_due(None, now));
+        assert!(!frame_is_due(Some(deadline), now));
+        assert!(frame_is_due(Some(deadline), deadline));
+    }
+
+    #[test]
+    fn throttled_frame_deadline_preserves_cadence_and_resynchronizes_after_stalls() {
+        let start = Instant::now();
+        let delay = Duration::from_millis(20);
+        let previous = start + delay;
+        assert_eq!(
+            next_frame_deadline(
+                Some(previous),
+                start + delay + Duration::from_millis(3),
+                delay
+            ),
+            start + delay * 2
+        );
+        assert_eq!(
+            next_frame_deadline(
+                Some(previous),
+                start + delay * 2 + Duration::from_millis(1),
+                delay
+            ),
+            start + delay * 3 + Duration::from_millis(1)
+        );
+    }
+
+    #[test]
+    fn scripted_keys_only_advance_with_guest_frames() {
+        assert!(should_step_key_script(true, false, false));
+        assert!(should_step_key_script(true, true, true));
+        assert!(!should_step_key_script(true, true, false));
+        assert!(!should_step_key_script(false, false, true));
     }
 }

@@ -1,4 +1,4 @@
-//! AY-3-8912 PSG synthesis for Spectrum 128K / +2.
+//! AY-3-8912 and YM2149 PSG synthesis.
 //!
 //! Driven from register writes plus a CPU T-state timebase. On the 128K the chip
 //! is clocked at CPU/2; tone/noise/envelope counters advance every 16 AY clocks
@@ -14,6 +14,27 @@ const VOL_TABLE: [f32; 16] = [
     0.0000, 0.0137, 0.0205, 0.0291, 0.0426, 0.0562, 0.0811, 0.1078, 0.1580, 0.2100, 0.2960, 0.3800,
     0.5400, 0.7000, 0.9100, 1.0000,
 ];
+
+// Relative 1 kOhm-load levels calculated from MAME's YM2149 resistor model
+// (`ym2149_param` and `ym2149_param_env` in sound/ay8910.cpp). The envelope
+// table has the YM's 32 physical steps; fixed volume remains a 4-bit register.
+// These are normalized relative amplitudes, as the host mixer removes DC.
+const YM_FIXED_VOLUME_TABLE: [f32; 16] = [
+    0.0, 0.0090, 0.0157, 0.0226, 0.0336, 0.0453, 0.0655, 0.0875, 0.1254, 0.1676, 0.2372, 0.3125,
+    0.4385, 0.5725, 0.7862, 1.0,
+];
+const YM_ENVELOPE_TABLE: [f32; 32] = [
+    0.0, 0.0027, 0.0064, 0.0117, 0.0148, 0.0184, 0.0216, 0.0252, 0.0303, 0.0362, 0.0417, 0.0479,
+    0.0572, 0.0680, 0.0783, 0.0900, 0.1074, 0.1278, 0.1475, 0.1699, 0.2021, 0.2392, 0.2748, 0.3143,
+    0.3736, 0.4400, 0.5046, 0.5737, 0.6781, 0.7867, 0.8950, 1.0,
+];
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum PsgModel {
+    #[default]
+    Ay8912,
+    Ym2149,
+}
 
 /// AY channel pan layout for stereo output.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -64,6 +85,43 @@ fn envelope_level(shape: u8, step: u8) -> u8 {
     }
 }
 
+/// YM2149 has 32 distinct envelope amplitudes per ramp, versus AY's 16.
+fn ym_envelope_level(shape: u8, step: u8) -> u8 {
+    let shape = shape & 0x0f;
+    let s = u32::from(step & 63);
+    let cont = shape & 8 != 0;
+    let attack = shape & 4 != 0;
+    let alt = shape & 2 != 0;
+    let hold = shape & 1 != 0;
+
+    if !cont {
+        return if s < 32 {
+            (if attack { s } else { 31 - s }) as u8
+        } else {
+            0
+        };
+    }
+
+    let cycle = s / 32;
+    let pos = s % 32;
+    let mut up = attack;
+    if alt && cycle % 2 == 1 {
+        up = !up;
+    }
+    if hold && cycle >= 1 {
+        return if (attack && !alt) || (!attack && alt) {
+            31
+        } else {
+            0
+        };
+    }
+    if up {
+        pos as u8
+    } else {
+        (31 - pos) as u8
+    }
+}
+
 /// Mix left / center / right channel amplitudes into stereo (center split 50/50).
 fn pan_mix(left: f32, center: f32, right: f32) -> (f32, f32) {
     let l = left + center * 0.5;
@@ -76,6 +134,7 @@ pub struct Ay8912 {
     pub regs: [u8; 16],
     pub selected: u8,
     pub stereo_mode: StereoMode,
+    model: PsgModel,
     tone_count: [u16; 3],
     tone_out: [bool; 3],
     noise_count: u16,
@@ -101,6 +160,7 @@ impl Ay8912 {
             regs: [0; 16],
             selected: 0,
             stereo_mode: StereoMode::Mono,
+            model: PsgModel::Ay8912,
             tone_count: [0; 3],
             tone_out: [false; 3],
             noise_count: 0,
@@ -115,8 +175,22 @@ impl Ay8912 {
 
     pub fn reset(&mut self) {
         let mode = self.stereo_mode;
+        let model = self.model;
         *self = Self::new();
         self.stereo_mode = mode;
+        self.model = model;
+    }
+
+    /// Select the chip response while retaining oscillator and register state.
+    pub(crate) fn set_model(&mut self, model: PsgModel) {
+        if self.model == model {
+            return;
+        }
+        self.env_step = match model {
+            PsgModel::Ay8912 => self.env_step / 2,
+            PsgModel::Ym2149 => self.env_step.saturating_mul(2),
+        };
+        self.model = model;
     }
 
     pub fn select(&mut self, reg: u8) {
@@ -166,12 +240,21 @@ impl Ay8912 {
 
     fn channel_volume(&self, ch: usize) -> f32 {
         let amp = self.regs[8 + ch];
-        let level = if amp & 0x10 != 0 {
-            envelope_level(self.regs[13], self.env_step)
-        } else {
-            amp & 0x0f
-        };
-        VOL_TABLE[usize::from(level)]
+        if amp & 0x10 != 0 {
+            return match self.model {
+                PsgModel::Ay8912 => {
+                    VOL_TABLE[usize::from(envelope_level(self.regs[13], self.env_step))]
+                }
+                PsgModel::Ym2149 => {
+                    YM_ENVELOPE_TABLE[usize::from(ym_envelope_level(self.regs[13], self.env_step))]
+                }
+            };
+        }
+        let level = usize::from(amp & 0x0f);
+        match self.model {
+            PsgModel::Ay8912 => VOL_TABLE[level],
+            PsgModel::Ym2149 => YM_FIXED_VOLUME_TABLE[level],
+        }
     }
 
     /// Per-channel instantaneous amplitudes (mixer applied), roughly `0.0..1.0`.
@@ -226,6 +309,13 @@ impl Ay8912 {
             self.noise_out = self.noise_lfsr & 1 != 0;
         }
 
+        let envelope_steps = if self.model == PsgModel::Ym2149 { 2 } else { 1 };
+        for _ in 0..envelope_steps {
+            self.advance_envelope();
+        }
+    }
+
+    fn advance_envelope(&mut self) {
         if self.env_holding {
             return;
         }
@@ -235,19 +325,24 @@ impl Ay8912 {
         }
         self.env_count = 0;
         let shape = self.regs[13] & 0x0f;
+        let levels = if self.model == PsgModel::Ym2149 {
+            32
+        } else {
+            16
+        };
         if shape & 8 == 0 {
-            if self.env_step < 31 {
+            if self.env_step < levels * 2 - 1 {
                 self.env_step += 1;
             }
         } else if shape & 1 != 0 {
-            if self.env_step < 15 {
+            if self.env_step < levels - 1 {
                 self.env_step += 1;
             } else {
                 self.env_holding = true;
-                self.env_step = 16;
+                self.env_step = levels;
             }
         } else {
-            self.env_step = self.env_step.wrapping_add(1) & 31;
+            self.env_step = self.env_step.wrapping_add(1) % (levels * 2);
         }
     }
 
@@ -305,6 +400,45 @@ impl Ay8912 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ym2149_uses_its_dac_curve_and_double_resolution_envelope() {
+        let mut ay = Ay8912::new();
+        ay.regs[8] = 1;
+        let ay_fixed_level = ay.channel_volume(0);
+        ay.set_model(PsgModel::Ym2149);
+        assert!((ay.channel_volume(0) - YM_FIXED_VOLUME_TABLE[1]).abs() < 1e-6);
+        assert!((ay.channel_volume(0) - ay_fixed_level).abs() > 1e-6);
+
+        ay.regs[8] = 0x10;
+        ay.regs[13] = 0x0e;
+        ay.env_step = 15;
+        assert!((ay.channel_volume(0) - YM_ENVELOPE_TABLE[15]).abs() < 1e-6);
+        ay.env_step += 1;
+        assert!((ay.channel_volume(0) - YM_ENVELOPE_TABLE[16]).abs() < 1e-6);
+
+        ay.env_step = 0;
+        ay.env_count = 0;
+        ay.advance(32);
+        assert_eq!(ay.env_step, 2, "YM envelope advances twice per AY tick");
+
+        ay.reset();
+        assert_eq!(
+            ay.model,
+            PsgModel::Ym2149,
+            "chip reset keeps selected model"
+        );
+    }
+
+    #[test]
+    fn switching_psg_model_preserves_envelope_phase() {
+        let mut ay = Ay8912::new();
+        ay.env_step = 12;
+        ay.set_model(PsgModel::Ym2149);
+        assert_eq!(ay.env_step, 24);
+        ay.set_model(PsgModel::Ay8912);
+        assert_eq!(ay.env_step, 12);
+    }
 
     #[test]
     fn tone_period_register_roundtrip() {

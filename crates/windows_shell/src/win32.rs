@@ -213,18 +213,29 @@ impl AppState {
     fn tick_frame(&mut self, hwnd: HWND) {
         self.poll_next_assets_download();
         let min_dt = if self.prefs.throttle {
-            Duration::from_millis(20)
+            self.host
+                .with_mut(|session| Duration::from_secs_f64(session.frame_period_seconds()))
         } else {
             Duration::from_millis(0)
         };
-        if min_dt > Duration::ZERO && self.last_frame.elapsed() < min_dt {
-            return;
+        if min_dt > Duration::ZERO {
+            let now = Instant::now();
+            let elapsed = now.duration_since(self.last_frame);
+            if elapsed < min_dt {
+                return;
+            }
+            self.last_frame = if elapsed > min_dt * 2 {
+                now
+            } else {
+                self.last_frame + min_dt
+            };
+        } else {
+            self.last_frame = Instant::now();
         }
-        self.last_frame = Instant::now();
 
         let (pcm_snap, title, w, h, rgba) = self.host.with_mut(|s| {
             let _ = s.run_frame();
-            let pcm = s.audio_pcm().to_vec();
+            let pcm = s.audio_pcm_stereo().to_vec();
             let status = s.status().to_owned();
             let title = match s.media_title() {
                 Some(t) => format!("Spec Chum — {t}"),
@@ -236,7 +247,7 @@ impl AppState {
             (pcm, title, w, h, rgba)
         });
 
-        self.pcm.lock().push_frame(&pcm_snap);
+        self.pcm.lock().push_stereo_frame(&pcm_snap);
         self.status = title.clone();
         self.sync_bgra(&rgba, w, h);
         set_window_title(hwnd, &title);

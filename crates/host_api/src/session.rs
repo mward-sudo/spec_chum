@@ -246,6 +246,8 @@ pub struct HostSession {
     pending_media_title: Arc<Mutex<Option<PendingMediaTitle>>>,
     /// Mono PCM for the last frame (~882 samples @ 44100 Hz / 50 fps).
     audio_pcm: Vec<f32>,
+    /// Interleaved stereo PCM for the last frame (left, right per sample).
+    audio_pcm_stereo: Vec<f32>,
     /// Mixed speaker level carried across frame boundaries (beeper edges reset each frame).
     last_speaker_level: bool,
     /// Host joystick presentation mode.
@@ -269,6 +271,22 @@ fn require_machine_mut(machine: &mut Option<HostRuntime>) -> Result<&mut Machine
         Some(HostRuntime::Classic(machine)) => Ok(machine),
         Some(HostRuntime::Next(_)) => Err(HostError::UnsupportedNext("classic machine operation")),
         None => Err(HostError::NoMachine),
+    }
+}
+
+fn classic_frame_tstates(model: machine::Model) -> u32 {
+    match model {
+        machine::Model::Spectrum16K
+        | machine::Model::Spectrum48
+        | machine::Model::TimexTC2048
+        | machine::Model::TimexTS2068 => 69_888,
+        machine::Model::Spectrum128
+        | machine::Model::SpectrumPlus2
+        | machine::Model::SpectrumPlus2A
+        | machine::Model::SpectrumPlus3
+        | machine::Model::SpectrumPlus3e => 70_908,
+        machine::Model::Pentagon128 | machine::Model::ScorpionZs256 => 71_680,
+        machine::Model::SpectrumNext => 0,
     }
 }
 
@@ -296,6 +314,7 @@ impl HostSession {
             media_title_generation: 0,
             pending_media_title: Arc::new(Mutex::new(None)),
             audio_pcm: Vec::new(),
+            audio_pcm_stereo: Vec::new(),
             last_speaker_level: false,
             joystick_mode: JoystickMode::Kempston,
             joystick_state: JoystickState::empty(),
@@ -386,6 +405,7 @@ impl HostSession {
     pub fn clear_machine(&mut self) {
         self.machine = None;
         self.audio_pcm.clear();
+        self.audio_pcm_stereo.clear();
         self.last_speaker_level = false;
         self.clear_media_identity();
     }
@@ -424,6 +444,38 @@ impl HostSession {
     #[must_use]
     pub fn audio_pcm(&self) -> &[f32] {
         &self.audio_pcm
+    }
+
+    /// Interleaved stereo PCM samples from the last frame (empty if no frame ran).
+    #[must_use]
+    pub fn audio_pcm_stereo(&self) -> &[f32] {
+        &self.audio_pcm_stereo
+    }
+
+    /// CPU T-states in the selected model's video frame.
+    #[must_use]
+    pub fn frame_tstates(&self) -> u32 {
+        match self.machine.as_ref() {
+            Some(HostRuntime::Next(machine)) => machine.frame_tstates(),
+            Some(HostRuntime::Classic(machine)) => classic_frame_tstates(machine.model()),
+            None => 0,
+        }
+    }
+
+    /// Wall-clock period hosts should use for throttled frame advancement.
+    /// Classic hosts retain their established 50 Hz pacing; Next follows the
+    /// selected raster timing in 3.5 MHz CPU T-states.
+    #[must_use]
+    pub fn frame_period_seconds(&self) -> f64 {
+        if self
+            .machine
+            .as_ref()
+            .is_some_and(|machine| matches!(machine, HostRuntime::Next(_)))
+        {
+            f64::from(self.frame_tstates()) / 3_500_000.0
+        } else {
+            0.020
+        }
     }
 
     /// Select a model and unload the current machine without attempting ROM discovery.
@@ -1422,12 +1474,14 @@ impl HostSession {
         }
         if let Some(HostRuntime::Next(next)) = self.machine.as_mut() {
             let audio = next.run_frame();
-            self.last_speaker_level = render_frame_pcm(
+            self.last_speaker_level = render_frame_pcm_with_count(
                 &audio,
                 next.frame_tstates(),
                 self.last_speaker_level,
+                audio.ay_samples.len(),
                 &mut self.audio_pcm,
             );
+            render_frame_stereo_pcm(&audio, &self.audio_pcm, &mut self.audio_pcm_stereo);
             self.sync_framebuffer_dims();
             self.refresh_framebuffer();
             return audio;
@@ -1448,19 +1502,7 @@ impl HostSession {
                 .and_then(HostRuntime::classic_mut)
                 .expect("machine checked above");
             let audio = m.run_frame();
-            let frame_t = match m.model() {
-                machine::Model::Spectrum16K
-                | machine::Model::Spectrum48
-                | machine::Model::TimexTC2048
-                | machine::Model::TimexTS2068 => 69_888,
-                machine::Model::Spectrum128
-                | machine::Model::SpectrumPlus2
-                | machine::Model::SpectrumPlus2A
-                | machine::Model::SpectrumPlus3
-                | machine::Model::SpectrumPlus3e => 70_908,
-                machine::Model::Pentagon128 | machine::Model::ScorpionZs256 => 71_680,
-                machine::Model::SpectrumNext => unreachable!("classic runtime has no Next model"),
-            };
+            let frame_t = classic_frame_tstates(m.model());
             let (w, h) = m.framebuffer_dims(self.with_border);
             (audio, frame_t, w, h)
         };
@@ -1470,6 +1512,7 @@ impl HostSession {
             self.last_speaker_level,
             &mut self.audio_pcm,
         );
+        render_frame_stereo_pcm(&audio, &self.audio_pcm, &mut self.audio_pcm_stereo);
         if self.width != w || self.height != h || self.framebuffer.len() != w * h * 4 {
             self.width = w;
             self.height = h;
@@ -1709,9 +1752,25 @@ fn render_frame_pcm(
     initial_level: bool,
     out: &mut Vec<f32>,
 ) -> bool {
+    render_frame_pcm_with_count(
+        audio,
+        frame_tstates,
+        initial_level,
+        AUDIO_SAMPLES_PER_FRAME,
+        out,
+    )
+}
+
+fn render_frame_pcm_with_count(
+    audio: &machine::FrameAudio,
+    frame_tstates: u32,
+    initial_level: bool,
+    sample_count: usize,
+    out: &mut Vec<f32>,
+) -> bool {
     out.clear();
-    out.resize(AUDIO_SAMPLES_PER_FRAME, 0.0);
-    let t_per = frame_tstates as f32 / AUDIO_SAMPLES_PER_FRAME as f32;
+    out.resize(sample_count, 0.0);
+    let t_per = frame_tstates as f32 / sample_count as f32;
     let mut edge_i = 0usize;
     let mut level = initial_level;
     let mut t = 0.0f32;
@@ -1750,7 +1809,52 @@ fn render_frame_pcm(
             break;
         }
     }
+    for (index, sample) in out.iter_mut().enumerate() {
+        if audio
+            .audio_muted_samples
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+        {
+            *sample = 0.0;
+        }
+    }
     level
+}
+
+fn render_frame_stereo_pcm(audio: &machine::FrameAudio, mono: &[f32], out: &mut Vec<f32>) {
+    out.clear();
+    out.reserve(mono.len() * 2);
+    for (index, &sample) in mono.iter().enumerate() {
+        if audio
+            .audio_muted_samples
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+        {
+            out.extend_from_slice(&[0.0, 0.0]);
+            continue;
+        }
+        let mono_ay = audio
+            .ay_samples
+            .get(index)
+            .or_else(|| audio.ay_samples.last())
+            .map_or(0.0, |value| (value - 0.5) * 0.5);
+        let left_ay = audio
+            .ay_left
+            .get(index)
+            .or_else(|| audio.ay_left.last())
+            .map_or(mono_ay, |value| (value - 0.5) * 0.5);
+        let right_ay = audio
+            .ay_right
+            .get(index)
+            .or_else(|| audio.ay_right.last())
+            .map_or(mono_ay, |value| (value - 0.5) * 0.5);
+        out.extend_from_slice(&[
+            (sample - mono_ay + left_ay).clamp(-1.0, 1.0),
+            (sample - mono_ay + right_ay).clamp(-1.0, 1.0),
+        ]);
+    }
 }
 
 fn rom_search_roots() -> Vec<std::path::PathBuf> {

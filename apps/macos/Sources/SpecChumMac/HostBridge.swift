@@ -370,7 +370,6 @@ final class HostBridge: ObservableObject {
     let romSearchRoots: [URL]
     /// Wall-clock gate so SwiftUI over-scheduling cannot turbo the Spectrum.
     var lastFrameUptime: TimeInterval = 0
-    static let framePeriod: TimeInterval = 1.0 / 50.0
     /// After a hitch, advance at most this many Spectrum frames per host tick.
     static let maxCatchUpFrames = 2
     /// `SPEC_CHUM_ROOM_PERF=1` — stderr + footer HUD for Bevy/host hitch diagnosis.
@@ -595,8 +594,8 @@ final class HostBridge: ObservableObject {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(
             deadline: .now(),
-            repeating: Self.framePeriod,
-            leeway: .milliseconds(4)
+            repeating: .milliseconds(5),
+            leeway: .milliseconds(1)
         )
         timer.setEventHandler { [weak self] in
             self?.runFrame()
@@ -615,6 +614,7 @@ final class HostBridge: ObservableObject {
     @discardableResult
     func runFrame() -> Bool {
         guard let handle else { return false }
+        let framePeriod = max(0.001, sc_frame_period_seconds(handle))
         let hostT0 = ProcessInfo.processInfo.systemUptime
         defer {
             if roomPerfEnabled {
@@ -642,7 +642,7 @@ final class HostBridge: ObservableObject {
         }
 
         var ran = 0
-        while now - lastFrameUptime >= Self.framePeriod, ran < Self.maxCatchUpFrames {
+        while now - lastFrameUptime >= framePeriod, ran < Self.maxCatchUpFrames {
             pushJoystick()
             pushMouse()
             tickKeyScript()
@@ -652,11 +652,11 @@ final class HostBridge: ObservableObject {
             // Enqueue each frame — sc_run_frame replaces PCM; skipping mid catch-up
             // underruns AudioQueue (especially under living-room hitching).
             enqueueAudio()
-            lastFrameUptime += Self.framePeriod
+            lastFrameUptime += framePeriod
             ran += 1
         }
         // If we stalled longer than the catch-up window, resync to wall clock.
-        if now - lastFrameUptime > Self.framePeriod * Double(Self.maxCatchUpFrames) {
+        if now - lastFrameUptime > framePeriod * Double(Self.maxCatchUpFrames) {
             lastFrameUptime = now
         }
         if ran > 0 {
@@ -673,9 +673,9 @@ final class HostBridge: ObservableObject {
 
     func enqueueAudio() {
         guard let handle else { return }
-        let n = Int(sc_audio_frames(handle))
-        guard n > 0, let ptr = sc_audio_ptr(handle) else { return }
-        audio.schedule(samples: ptr, count: n)
+        let n = Int(sc_audio_stereo_frames(handle))
+        guard n > 0, let ptr = sc_audio_stereo_ptr(handle) else { return }
+        audio.scheduleStereo(samples: ptr, count: n)
     }
 
 
