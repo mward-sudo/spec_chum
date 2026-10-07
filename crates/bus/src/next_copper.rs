@@ -206,7 +206,7 @@ mod tests {
         let mut copper = NextCopper::new();
         copper.memory[0..4].copy_from_slice(&[0, 0, 0xff, 0xff]);
         copper.write_control(0x40, 0);
-        assert!(copper.advance(10, 69_888, 224).is_empty());
+        assert_eq!(copper.advance(10, 69_888, 224), []);
         assert!(copper.stalled);
         copper.write_control(0x00, 10);
         copper.write_control(0x40, 10);
@@ -252,7 +252,7 @@ mod tests {
         bus.write_nextreg(0x61, 0xfe);
         bus.write_nextreg(0x62, 0x07);
         bus.write_nextreg(0x62, 0x47); // START from instruction zero.
-        assert!(bus.advance_copper(1).is_empty());
+        assert_eq!(bus.advance_copper(1), []);
         assert_eq!(bus.read_nextreg(0x62) & 0xc0, 0x40);
     }
 }

@@ -859,10 +859,10 @@ mod tests {
         machine.bus.write_nextreg(0x44, 0xe0); // Red.
         machine.bus.write_nextreg(0x44, 0x80); // Priority over ULA.
 
-        // WAIT for line 80, then enable the otherwise-hidden Layer 2.
+        // Fixture contains WAIT line 80 followed by MOVE `$69, $80`.
         machine.bus.write_nextreg(0x61, 0);
-        for byte in [0x80, 0x50, 0x69, 0x80] {
-            machine.bus.write_nextreg(0x60, byte);
+        for byte in include_bytes!("../tests/fixtures/next/copper_wait_move.bin") {
+            machine.bus.write_nextreg(0x60, *byte);
         }
         machine.bus.write_nextreg(0x62, 0x40);
 

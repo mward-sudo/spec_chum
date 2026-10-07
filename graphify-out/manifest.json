@@ -2310,9 +2310,9 @@
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791390874.3089085,
-    "seen": 1791391002.705718,
-    "ast_hash": "2b7485719f32380313e838701b3cb7a6",
+    "mtime": 1791392138.953082,
+    "seen": 1791392150.375603,
+    "ast_hash": "db8a029d763584204883219fe60ccdb3",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {
@@ -2358,9 +2358,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next_sprites.rs": {
-    "mtime": 1791390874.309019,
-    "seen": 1791391002.7031739,
-    "ast_hash": "737ff56756112e0a9c0bf7ad5ade9428",
+    "mtime": 1791391579.6461678,
+    "seen": 1791392150.3728619,
+    "ast_hash": "2f45056739162ec25af26842cdb78650",
     "semantic_hash": ""
   },
   "crates/machine/src/next_video.rs": {
@@ -2370,9 +2370,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next_copper.rs": {
-    "mtime": 1791351960.4701443,
-    "seen": 1791351976.577833,
-    "ast_hash": "a246b94d392f9b2cec794def058301be",
+    "mtime": 1791392102.6538084,
+    "seen": 1791392150.372837,
+    "ast_hash": "3f8199edb953281fd51c18109d628f86",
     "semantic_hash": ""
   },
   "docs/NEXT_COPPER.md": {

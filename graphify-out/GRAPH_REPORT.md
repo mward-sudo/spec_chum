@@ -1,9 +1,9 @@
 # Graph Report - spec_chum  (2026-10-07)
 
 ## Corpus Check
-- 327 files · ~1,294,302 words
+- 327 files · ~1,294,306 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 53 file(s) not represented in the graph (top: .tap 10, .mdc 8, (none) 6)
+- Unclassified: 54 file(s) not represented in the graph (top: .tap 10, .mdc 8, (none) 6)
 
 ## Summary
 - 7027 nodes · 16572 edges · 332 communities (263 shown, 69 thin omitted)
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1a9642a7`
+- Built from commit: `4e6ca56f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1436,9 +1436,9 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `HostBridge` connect `HostBridge` to `Model`, `LivingRoomNSView`, `.finishRomSetup`, `PrefModelSlug`, `ContentView`, `.body`, `NSEvent`, `.setFlashLoad`, `RomSetupSlot`, `IOSurface`, `SpectrumNSView`, `TapeAudioPlayer`, `Error`, `.takeLastError`, `InputLatencyProbe`, `LivingRoomThread`, `.enqueueLivingRoomPresentBind`, `.refreshInspector`?**
   _High betweenness centrality (0.180) - this node is a cross-community bridge._
 - **Why does `CatalogError` connect `Error` to `HostBridge`?**
-  _High betweenness centrality (0.134) - this node is a cross-community bridge._
+  _High betweenness centrality (0.133) - this node is a cross-community bridge._
 - **Why does `LivingRoomThread` connect `LivingRoomThread` to `embedded.rs`, `HostBridge`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
 - **Are the 7 inferred relationships involving `HostBridge` (e.g. with `.livingRoomToolbar` and `.statusFooterMessageIsError`) actually correct?**
   _`HostBridge` has 7 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `PackageDescription`, `Notification.Name`, `.statusFooter` to the rest of the system?**

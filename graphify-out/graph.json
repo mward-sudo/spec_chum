@@ -70348,7 +70348,7 @@
       "file_type": "code",
       "norm_label": "in_paper()",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L267"
+      "source_location": "L268"
     },
     {
       "id": "crates_bus_src_next_sprites_nextsprites_clip_index",
@@ -70370,7 +70370,7 @@
       "file_type": "code",
       "norm_label": ".draw_sprite()",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L181"
+      "source_location": "L182"
     },
     {
       "id": "crates_bus_src_next_sprites_nextsprites_increment_register_sprite_index",
@@ -70381,7 +70381,7 @@
       "file_type": "code",
       "norm_label": ".increment_register_sprite_index()",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L258"
+      "source_location": "L259"
     },
     {
       "id": "crates_bus_src_next_sprites_nextsprites_new",
@@ -70469,7 +70469,7 @@
       "file_type": "code",
       "norm_label": ".visible_x()",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L227"
+      "source_location": "L228"
     },
     {
       "id": "crates_bus_src_next_sprites_nextsprites_visible_y",
@@ -70480,7 +70480,7 @@
       "file_type": "code",
       "norm_label": ".visible_y()",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L246"
+      "source_location": "L247"
     },
     {
       "id": "crates_bus_src_next_sprites_nextsprites_write_attribute",
@@ -70491,7 +70491,7 @@
       "file_type": "code",
       "norm_label": ".write_attribute()",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L254"
+      "source_location": "L255"
     },
     {
       "id": "crates_bus_src_next_sprites_nextsprites_write_attribute_port",
@@ -99905,7 +99905,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L207",
+      "source_location": "L208",
       "weight": 1.0
     },
     {
@@ -99917,7 +99917,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L213",
+      "source_location": "L214",
       "weight": 1.0
     },
     {
@@ -99929,7 +99929,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L214",
+      "source_location": "L215",
       "weight": 1.0
     },
     {
@@ -99953,7 +99953,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L171",
+      "source_location": "L172",
       "weight": 1.0
     },
     {
@@ -143501,7 +143501,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L181",
+      "source_location": "L182",
       "weight": 1.0
     },
     {
@@ -174929,7 +174929,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L181",
+      "source_location": "L182",
       "weight": 1.0
     },
     {
@@ -174941,7 +174941,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L181",
+      "source_location": "L182",
       "weight": 1.0
     },
     {
@@ -174953,7 +174953,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L181",
+      "source_location": "L182",
       "weight": 1.0
     },
     {
@@ -211505,7 +211505,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L267",
+      "source_location": "L268",
       "weight": 1.0
     },
     {
@@ -249488,7 +249488,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L181",
+      "source_location": "L182",
       "weight": 1.0
     },
     {
@@ -249499,7 +249499,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L227",
+      "source_location": "L228",
       "weight": 1.0
     },
     {
@@ -249510,7 +249510,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L246",
+      "source_location": "L247",
       "weight": 1.0
     },
     {
@@ -249521,7 +249521,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L254",
+      "source_location": "L255",
       "weight": 1.0
     },
     {
@@ -249532,7 +249532,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/bus/src/next_sprites.rs",
-      "source_location": "L258",
+      "source_location": "L259",
       "weight": 1.0
     },
     {
@@ -273594,5 +273594,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1a9642a70a582a546af6ab015df578e60545d3a2"
+  "built_at_commit": "4e6ca56f6d5a90d26799088a1443c8212097e087"
 }
