@@ -1421,7 +1421,7 @@ mod tests {
         assert_eq!(writes, [(0, 0x62, 0x00)]);
         bus.write_nextreg_at(0x62, 0x00, writes[0].0);
 
-        assert!(bus.advance_copper(20).is_empty());
+        assert_eq!(bus.advance_copper(20), []);
     }
 
     #[test]
