@@ -153,6 +153,7 @@ impl NextMachine {
         let step_start = self.video_t;
         let phase_start = self.audio_phase;
         self.video_t = self.video_t.wrapping_add(u64::from(cycles));
+        self.bus.advance_dma(self.video_t);
         let copper_boundary = (step_start / frame_tstates + 1) * frame_tstates;
         let copper_time = self.video_t.min(copper_boundary.saturating_sub(1));
         self.render_frame = None;
@@ -441,8 +442,7 @@ impl Io for NextMemIo<'_> {
                 self.beeper_edges.push((absolute_t, level));
             }
         }
-        self.bus.out_port_at(port, value, absolute_t);
-        0
+        self.bus.out_port_at(port, value, absolute_t)
     }
 
     fn nextreg_write(&mut self, register: u8, value: u8, t: u64) {
@@ -497,6 +497,132 @@ mod tests {
             assert_eq!(machine.cpu.regs.pc, 0x0038, "timing {timing}");
             assert!(!machine.cpu.regs.iff1, "timing {timing}");
         }
+    }
+
+    fn dma_setup_program(prescaler: Option<u8>, destination: u16, io_destination: bool) -> Vec<u8> {
+        let mut program = vec![0x01, 0x6b, 0x00]; // LD BC,$006B
+        let mut writes = vec![
+            0x7d, 0x00, 0x80, 0x03, 0x00, // WR0: A=$8000, length=3, A->B
+            0x54, 0x02, // WR1: memory, increment, 2T
+        ];
+        let timing = if prescaler.is_some() { 0x22 } else { 0x02 };
+        let port_b = if io_destination { 0x68 } else { 0x50 };
+        writes.extend([port_b, timing]); // WR2: endpoint, address mode, variable timing
+        if let Some(prescaler) = prescaler {
+            writes.push(prescaler);
+        }
+        writes.extend([
+            if prescaler.is_some() { 0xcd } else { 0xad },
+            destination as u8,
+            (destination >> 8) as u8, // WR4: selected mode and Port B address
+            0x82,                     // WR5: stop at end of block
+            0xcf,                     // LOAD
+            0x87,                     // ENABLE
+        ]);
+        for value in writes {
+            program.extend([0x3e, value, 0xed, 0x79]); // LD A,n; OUT (C),A
+        }
+        program.push(0x76); // HALT
+        program
+    }
+
+    #[test]
+    fn cpu_programmed_zxn_dma_copies_through_the_mmu() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        assert!(machine.bus.load_ram_page(4, 0, &[0xa1, 0xb2, 0xc3]));
+        assert!(machine
+            .bus
+            .load_ram_page(10, 0, &dma_setup_program(None, 0xa000, false)));
+        machine.cpu.regs.pc = 0x4000;
+        machine.cpu.regs.sp = 0xfffe;
+
+        for _ in 0..128 {
+            machine.step_once();
+            if machine.cpu.regs.halted {
+                break;
+            }
+        }
+
+        assert!(
+            machine.cpu.regs.halted,
+            "guest DMA program should reach HALT"
+        );
+        assert_eq!(machine.bus.read(0xa000), 0xa1);
+        assert_eq!(machine.bus.read(0xa001), 0xb2);
+        assert_eq!(machine.bus.read(0xa002), 0xc3);
+    }
+
+    #[test]
+    fn zxn_dma_burst_prescaler_runs_cpu_while_waiting_between_bytes() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        assert!(machine.bus.load_ram_page(4, 0, &[0x20, 0x40, 0x60]));
+        assert!(machine
+            .bus
+            .load_ram_page(10, 0, &dma_setup_program(Some(40), 0xa000, false)));
+        machine.cpu.regs.pc = 0x4000;
+        machine.cpu.regs.sp = 0xfffe;
+        let program = dma_setup_program(Some(40), 0xa000, false);
+        // ENABLE is the final data byte before HALT; run until that OUT has
+        // completed, then confirm it did not add a block-length CPU stall.
+        let enable_out_pc = 0x4000 + (program.len() - 3) as u16;
+        let mut enable_cycles = None;
+        for _ in 0..64 {
+            let pc = machine.cpu.regs.pc;
+            let cycles = machine.step_once();
+            if pc == enable_out_pc {
+                enable_cycles = Some(cycles);
+                break;
+            }
+        }
+        assert_eq!(enable_cycles, Some(12));
+        assert!(machine.cpu.regs.pc > enable_out_pc);
+        for _ in 0..128 {
+            machine.step_once();
+        }
+        assert_eq!(machine.bus.read(0xa000), 0x20);
+        assert_eq!(machine.bus.read(0xa001), 0x40);
+        assert_eq!(machine.bus.read(0xa002), 0x60);
+    }
+
+    #[test]
+    fn zxn_dma_burst_prescaler_sends_paced_samples_to_the_dac() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        machine.bus.write_nextreg(0x08, 0x08); // Enable the four DAC outputs.
+        assert!(machine.bus.load_ram_page(4, 0, &[0x20, 0x40, 0x60]));
+        let program = dma_setup_program(Some(40), 0x003f, true);
+        assert!(machine.bus.load_ram_page(10, 0, &program));
+        machine.cpu.regs.pc = 0x4000;
+        machine.cpu.regs.sp = 0xfffe;
+        for _ in 0..128 {
+            machine.step_once();
+            if machine.cpu.regs.halted {
+                break;
+            }
+        }
+        assert!(
+            machine.cpu.regs.halted,
+            "guest DMA program should reach HALT"
+        );
+        for _ in 0..128 {
+            machine.step_once();
+        }
+
+        let indices = [0x20_u8, 0x40, 0x60].map(|value| {
+            let expected = f32::from(value) / 256.0;
+            machine
+                .dac_samples
+                .iter()
+                .position(|sample| sample[0] == expected)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "timed DAC samples should include {expected}; samples={:?}",
+                        machine.dac_samples
+                    )
+                })
+        });
+        assert!(indices[0] < indices[1] && indices[1] < indices[2]);
+        assert!((1..=3).contains(&(indices[1] - indices[0])));
+        assert!((1..=3).contains(&(indices[2] - indices[1])));
     }
 
     #[test]

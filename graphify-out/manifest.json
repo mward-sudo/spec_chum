@@ -216,9 +216,9 @@
     "semantic_hash": "bcecf352bc883e60b41a725cb598f184"
   },
   "crates/bus/src/lib.rs": {
-    "mtime": 1791351819.0901885,
-    "seen": 1791351976.577806,
-    "ast_hash": "142f702eebd5b8c8f1c2585b4286dd1f",
+    "mtime": 1791414275.8807244,
+    "seen": 1791414974.1324081,
+    "ast_hash": "3ab1f3663224a384333e531a411278c8",
     "semantic_hash": ""
   },
   "crates/bus/src/multiface.rs": {
@@ -2304,15 +2304,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791413155.1366088,
-    "seen": 1791413211.367688,
-    "ast_hash": "286853c910d1bcb2e769d418081eb4a6",
+    "mtime": 1791414888.847793,
+    "seen": 1791414974.1324759,
+    "ast_hash": "3ee794d9401400a5fa9ca10622b3555e",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791392696.1292984,
-    "seen": 1791392719.978123,
-    "ast_hash": "abc7df6ca20d4604f3e985e4959e1445",
+    "mtime": 1791414632.97959,
+    "seen": 1791414974.14139,
+    "ast_hash": "0638153cdfc68f419984e7770e72f48c",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {
@@ -2379,6 +2379,18 @@
     "mtime": 1791392592.544575,
     "seen": 1791392634.322322,
     "ast_hash": "1e0e77f03fa53dd0332d4748b3b3713e",
+    "semantic_hash": ""
+  },
+  "crates/bus/src/next_dma.rs": {
+    "mtime": 1791414777.393545,
+    "seen": 1791414974.132543,
+    "ast_hash": "cef3e93eb9ba35522c98ea5789f54a75",
+    "semantic_hash": ""
+  },
+  "docs/NEXT_DMA.md": {
+    "mtime": 1791414781.4603393,
+    "seen": 1791414974.155172,
+    "ast_hash": "af18c0f4794b235ce2e732d173b9129a",
     "semantic_hash": ""
   }
 }
