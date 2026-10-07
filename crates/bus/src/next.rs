@@ -121,7 +121,7 @@ impl NextBus {
             next_sprites: NextSprites::new(),
             peripheral2: 0,
             peripheral3: 0,
-            peripheral6: 1,
+            peripheral6: 0,
             ay: std::array::from_fn(|_| Ay8912::new()),
             ay_chip_select: 3,
             ay_channel_enable: [0x03; 3],
@@ -171,7 +171,7 @@ impl NextBus {
         self.next_sprites.reset();
         self.peripheral2 = 0;
         self.peripheral3 = 0x10;
-        self.peripheral6 = 1;
+        self.peripheral6 = 0;
         self.ay = std::array::from_fn(|_| Ay8912::new());
         self.ay_chip_select = 3;
         self.ay_channel_enable = [0x03; 3];
@@ -1216,6 +1216,11 @@ mod tests {
     #[test]
     fn ay_mode_hold_resets_chips_and_suspends_io_and_synthesis() {
         let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(
+            bus.read_nextreg(0x06) & 0x03,
+            0,
+            "hard reset selects YM mode"
+        );
         bus.write_nextreg(0x08, 0x12);
         bus.out_port(0xfffd, 0xfe); // AY1.
         bus.out_port(0xfffd, 8);
@@ -1233,6 +1238,9 @@ mod tests {
         bus.write_nextreg(0x06, 0x01); // AY mode resumes.
         bus.out_port(0xbffd, 0x0f);
         assert_eq!(bus.ay_chip(1).map(|ay| ay.regs[8]), Some(0x0f));
+
+        bus.hard_reset();
+        assert_eq!(bus.read_nextreg(0x06) & 0x03, 0);
     }
 
     #[test]

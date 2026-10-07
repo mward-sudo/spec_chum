@@ -664,18 +664,31 @@ impl AppState {
     fn tick_frame(&mut self, picture: &Picture, status_label: &Label, window: &ApplicationWindow) {
         self.poll_next_assets_download();
         let min_dt = if self.prefs.throttle {
-            Duration::from_millis(20)
+            self.host
+                .with_mut(|session| Duration::from_secs_f64(session.frame_period_seconds()))
         } else {
-            Duration::from_millis(0)
+            // Preserve the existing unthrottled presentation cadence while
+            // the timer polls at a finer interval for dynamic Next timing.
+            Duration::from_millis(16)
         };
-        if min_dt > Duration::ZERO && self.last_frame.elapsed() < min_dt {
-            return;
+        if min_dt > Duration::ZERO {
+            let now = Instant::now();
+            let elapsed = now.duration_since(self.last_frame);
+            if elapsed < min_dt {
+                return;
+            }
+            self.last_frame = if elapsed > min_dt * 2 {
+                now
+            } else {
+                self.last_frame + min_dt
+            };
+        } else {
+            self.last_frame = Instant::now();
         }
-        self.last_frame = Instant::now();
 
         let (pcm_snap, window_title, status_text, w, h, rgba) = self.host.with_mut(|s| {
             let _ = s.run_frame();
-            let pcm = s.audio_pcm().to_vec();
+            let pcm = s.audio_pcm_stereo().to_vec();
             let status = s.status().to_owned();
             let window_title = match s.media_title() {
                 Some(t) => format!("Spec Chum — {t}"),
@@ -687,7 +700,7 @@ impl AppState {
             (pcm, window_title, status, w, h, rgba)
         });
 
-        self.pcm.lock().push_frame(&pcm_snap);
+        self.pcm.lock().push_stereo_frame(&pcm_snap);
         status_label.set_text(&status_text);
         window.set_title(Some(&window_title));
         self.maybe_refresh_debug_text();
@@ -781,13 +794,8 @@ fn build_ui(app: &Application, state: Rc<RefCell<AppState>>) {
     install_menubar(app);
     install_keys(&window, &picture, Rc::clone(&state));
 
-    let period = if state.borrow().prefs.throttle {
-        Duration::from_millis(20)
-    } else {
-        Duration::from_millis(16)
-    };
     glib::timeout_add_local(
-        period,
+        Duration::from_millis(4),
         clone!(
             #[strong]
             state,

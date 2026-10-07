@@ -286,10 +286,19 @@ impl Core for SpecChumCore {
         let height = session.height();
         rgba_to_xrgb(session.framebuffer(), &mut self.pixels);
         self.audio.clear();
-        self.audio.extend(session.audio_pcm().iter().map(|sample| {
-            let value = (sample.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
-            [value, value]
-        }));
+        self.audio
+            .extend(
+                session
+                    .audio_pcm_stereo()
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|[left, right]| {
+                        let quantize =
+                            |sample: f32| (sample.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
+                        [quantize(*left), quantize(*right)]
+                    }),
+            );
 
         runtime.video_refresh_frame(&self.pixels, width as u32, height as u32, width * 4);
         runtime.audio_sample_batch(&self.audio);

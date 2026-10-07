@@ -41,6 +41,7 @@ thread_local! {
     static FB_SNAPSHOT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static FB_META: RefCell<(usize, c_uint, c_uint)> = const { RefCell::new((0, 0, 0)) };
     static AUDIO_SNAPSHOT: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
+    static AUDIO_STEREO_SNAPSHOT: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
 }
 
 pub(super) fn set_last_error(msg: impl Into<String>) {
@@ -73,6 +74,7 @@ pub(super) fn clear_output_snapshots() {
     FB_SNAPSHOT.with(|cell| cell.borrow_mut().clear());
     FB_META.with(|meta| *meta.borrow_mut() = (0, 0, 0));
     AUDIO_SNAPSHOT.with(|cell| cell.borrow_mut().clear());
+    AUDIO_STEREO_SNAPSHOT.with(|cell| cell.borrow_mut().clear());
 }
 
 // Re-export entry points so `host_api::ffi::sc_*` paths stay stable for Rust callers/tests.
@@ -130,6 +132,11 @@ mod tests {
         let path = CString::new(rom_path.to_str().expect("utf8")).expect("cstr");
         assert_eq!(sc_load_rom(h, path.as_ptr()), 0);
         sc_run_frame(h);
+        assert_eq!(sc_audio_frames(h), 882);
+        assert_eq!(sc_audio_stereo_frames(h), 882);
+        assert!(!sc_audio_ptr(h).is_null());
+        assert!(!sc_audio_stereo_ptr(h).is_null());
+        assert!((sc_frame_period_seconds(h) - 0.020).abs() < f64::EPSILON);
         assert_eq!(sc_framebuffer_width(h), 352);
         assert_eq!(sc_framebuffer_height(h), 296);
         assert!(!sc_framebuffer_ptr(h).is_null());

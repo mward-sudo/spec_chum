@@ -108,6 +108,11 @@ int sc_tape_set_load_options_ex(void *handle, int flash_load, unsigned int speed
 const float *sc_audio_ptr(void *handle);
 unsigned int sc_audio_frames(void *handle);
 unsigned int sc_audio_sample_rate(void *handle);
+/* Interleaved left/right f32 PCM; frame count counts stereo pairs. */
+const float *sc_audio_stereo_ptr(void *handle);
+unsigned int sc_audio_stereo_frames(void *handle);
+/* Selected video frame duration in 3.5 MHz CPU T-states; zero if unloaded. */
+double sc_frame_period_seconds(void *handle);
 
 int sc_set_key(void *handle, unsigned int row, unsigned int bit, int pressed);
 int sc_clear_keys(void *handle);

@@ -1,7 +1,7 @@
 import AudioToolbox
 import Foundation
 
-/// Plays mono PCM frames from `host_api` (`sc_audio_*`).
+/// Plays stereo PCM frames from `host_api` (`sc_audio_*`).
 ///
 /// Uses **AudioQueue** (not AVAudioEngine/PlayerNode). On macOS 27 / Tahoe betas,
 /// AVAudioEngine reported `isRunning` and accepted buffers / source-node attaches,
@@ -20,7 +20,7 @@ final class TapeAudioPlayer {
     private var ring: ContiguousArray<Float>
     private var ringHead = 0
     private var ringCount = 0
-    private static let maxRing = 44_100 * 2
+    private static let maxRing = 44_100 * 4
 
     private static let debug =
         ProcessInfo.processInfo.environment["SPEC_CHUM_AUDIO_DEBUG"] == "1"
@@ -64,12 +64,11 @@ final class TapeAudioPlayer {
             mSampleRate: hostSampleRate,
             mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagIsFloat
-                | kAudioFormatFlagIsPacked
-                | kLinearPCMFormatFlagIsNonInterleaved,
-            mBytesPerPacket: UInt32(MemoryLayout<Float>.size),
+                | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: UInt32(MemoryLayout<Float>.size * 2),
             mFramesPerPacket: 1,
-            mBytesPerFrame: UInt32(MemoryLayout<Float>.size),
-            mChannelsPerFrame: 1,
+            mBytesPerFrame: UInt32(MemoryLayout<Float>.size * 2),
+            mChannelsPerFrame: 2,
             mBitsPerChannel: 32,
             mReserved: 0
         )
@@ -97,7 +96,7 @@ final class TapeAudioPlayer {
             var buf: AudioQueueBufferRef?
             let alloc = AudioQueueAllocateBuffer(
                 q,
-                framesPerBuffer * UInt32(MemoryLayout<Float>.size),
+                framesPerBuffer * UInt32(MemoryLayout<Float>.size * 2),
                 &buf
             )
             guard alloc == noErr, let buf else {
@@ -161,11 +160,41 @@ final class TapeAudioPlayer {
         ringLock.unlock()
     }
 
-    /// Enqueue one frame of mono f32 samples (host rate). Engine must already be started.
+    /// Enqueue mono samples, duplicated into the stereo output (host rate).
     func schedule(samples: UnsafePointer<Float>, count: Int) {
         guard count > 0, started else { return }
         if Self.captureEnabled {
             capture?.append(Array(UnsafeBufferPointer(start: samples, count: count)))
+        }
+        ringLock.lock()
+        var idx = ringHead
+        var len = ringCount
+        for i in 0..<count {
+            for _ in 0..<2 {
+                if len == Self.maxRing {
+                    idx = (idx + 1) % Self.maxRing
+                    len -= 1
+                }
+                ring[(idx + len) % Self.maxRing] = samples[i]
+                len += 1
+            }
+        }
+        ringHead = idx
+        ringCount = len
+        let qLen = len
+        let callbacks = callbackCount
+        let enqueueErr = pendingEnqueueError
+        pendingEnqueueError = noErr
+        ringLock.unlock()
+        logSchedule(samples: UnsafeBufferPointer(start: samples, count: count), queued: qLen, callbacks: callbacks, error: enqueueErr)
+    }
+
+    /// Enqueue interleaved stereo samples; `count` is the number of sample frames.
+    func scheduleStereo(samples: UnsafePointer<Float>, count: Int) {
+        guard count > 0, started else { return }
+        if Self.captureEnabled {
+            let mono = (0..<count).map { (samples[$0 * 2] + samples[$0 * 2 + 1]) * 0.5 }
+            capture?.append(mono)
         }
 
         ringLock.lock()
@@ -175,7 +204,7 @@ final class TapeAudioPlayer {
         var idx = ringHead
         var len = ringCount
         var i = 0
-        while i < count {
+        while i < count * 2 {
             if len == cap {
                 idx = (idx + 1) % cap
                 len -= 1
@@ -191,19 +220,22 @@ final class TapeAudioPlayer {
         let callbacks = callbackCount
         ringLock.unlock()
 
+        logSchedule(samples: UnsafeBufferPointer(start: samples, count: count * 2), queued: qLen, callbacks: callbacks, error: enqueueErr)
+    }
+
+    private func logSchedule(samples: UnsafeBufferPointer<Float>, queued qLen: Int, callbacks: UInt64, error enqueueErr: OSStatus) {
         if enqueueErr != noErr {
             errorLog("AudioQueueEnqueueBuffer (callback) failed: \(enqueueErr)")
         }
-
         if Self.debug {
             debugSchedules &+= 1
             if debugSchedules == 1 || debugSchedules % 250 == 0 {
                 var peak: Float = 0
-                for j in 0..<count {
+                for j in 0..<samples.count {
                     peak = max(peak, abs(samples[j]))
                 }
                 debugLog(
-                    "schedule: +\(count) peak=\(peak) ring=\(qLen) callbacks=\(callbacks)"
+                    "schedule: +\(samples.count) peak=\(peak) ring=\(qLen) callbacks=\(callbacks)"
                 )
             }
         }

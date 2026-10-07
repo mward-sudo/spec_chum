@@ -32,6 +32,17 @@ fn frame_is_due(next_frame_deadline: Option<Instant>, now: Instant) -> bool {
     next_frame_deadline.is_none_or(|deadline| now >= deadline)
 }
 
+fn next_frame_deadline(
+    previous: Option<Instant>,
+    frame_started: Instant,
+    frame_delay: Duration,
+) -> Instant {
+    let base = previous
+        .filter(|deadline| frame_started.saturating_duration_since(*deadline) < frame_delay)
+        .unwrap_or(frame_started);
+    base + frame_delay
+}
+
 fn should_step_key_script(advancing: bool, throttled: bool, due: bool) -> bool {
     advancing && (!throttled || due)
 }
@@ -119,11 +130,7 @@ impl SpecChumApp {
             }
         }
 
-        let paused = self
-            .session
-            .host_mut()
-            .machine()
-            .is_some_and(|m| m.debugger().paused);
+        let paused = self.session.host_mut().paused();
         let advancing = self.session.host_mut().running() && !paused;
         let throttled = self.session.throttle && advancing;
         if !throttled {
@@ -142,10 +149,19 @@ impl SpecChumApp {
             let audio = self.session.tick_frame();
             let frame_delay = frame_repaint_delay(audio.frame_tstates);
             if throttled {
-                self.next_frame_deadline = Some(frame_started + frame_delay);
+                self.next_frame_deadline = Some(next_frame_deadline(
+                    self.next_frame_deadline,
+                    frame_started,
+                    frame_delay,
+                ));
             }
             if let Ok(mut b) = self.beeper.lock() {
-                b.queue_frame(audio, self.session.muted, self.session.volume);
+                b.queue_frame(
+                    audio,
+                    self.session.muted,
+                    self.session.volume,
+                    self.session.throttle,
+                );
             }
             frame_delay
         } else {
@@ -248,7 +264,7 @@ impl eframe::App for SpecChumApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{frame_is_due, frame_repaint_delay, should_step_key_script};
+    use super::{frame_is_due, frame_repaint_delay, next_frame_deadline, should_step_key_script};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -267,6 +283,29 @@ mod tests {
         assert!(frame_is_due(None, now));
         assert!(!frame_is_due(Some(deadline), now));
         assert!(frame_is_due(Some(deadline), deadline));
+    }
+
+    #[test]
+    fn throttled_frame_deadline_preserves_cadence_and_resynchronizes_after_stalls() {
+        let start = Instant::now();
+        let delay = Duration::from_millis(20);
+        let previous = start + delay;
+        assert_eq!(
+            next_frame_deadline(
+                Some(previous),
+                start + delay + Duration::from_millis(3),
+                delay
+            ),
+            start + delay * 2
+        );
+        assert_eq!(
+            next_frame_deadline(
+                Some(previous),
+                start + delay * 2 + Duration::from_millis(1),
+                delay
+            ),
+            start + delay * 3 + Duration::from_millis(1)
+        );
     }
 
     #[test]

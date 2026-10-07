@@ -1,4 +1,4 @@
-//! cpal playback of HostSession mono PCM.
+//! cpal playback of HostSession PCM.
 //!
 //! `HostSession` always emits mono f32 @ [`AUDIO_SAMPLE_RATE`] (44100). Opening the
 //! device at its default rate (often 48000 on macOS) without resampling under-produces
@@ -33,9 +33,9 @@ fn audio_capture_enabled() -> bool {
 /// Shared PCM queue; the cpal stream is held as a non-send resource (not Sync).
 #[derive(Resource, Clone, Debug)]
 pub struct AudioOut {
-    buffer: Arc<Mutex<VecDeque<f32>>>,
-    /// Last mono sample delivered while live (held on short underruns).
-    last: Arc<Mutex<f32>>,
+    buffer: Arc<Mutex<VecDeque<[f32; 2]>>>,
+    /// Last stereo frame delivered while live (held on short underruns).
+    last: Arc<Mutex<[f32; 2]>>,
     /// When false, the callback outputs silence (intro / user mute).
     live: Arc<AtomicBool>,
     /// Soft fade-in samples remaining after going live (avoids residual click).
@@ -48,17 +48,17 @@ pub struct AudioOut {
 
 #[derive(Debug, Default, Clone, Copy)]
 struct DcBlock {
-    x1: f32,
-    y1: f32,
+    x1: [f32; 2],
+    y1: [f32; 2],
 }
 
 impl DcBlock {
     /// ~35 Hz high-pass @ 44.1 kHz — kills beeper DC, keeps square edges.
-    fn process(&mut self, x: f32) -> f32 {
+    fn process(&mut self, channel: usize, x: f32) -> f32 {
         const R: f32 = 0.995;
-        let y = x - self.x1 + R * self.y1;
-        self.x1 = x;
-        self.y1 = y;
+        let y = x - self.x1[channel] + R * self.y1[channel];
+        self.x1[channel] = x;
+        self.y1[channel] = y;
         y
     }
 
@@ -78,6 +78,11 @@ struct AudioStream {
 
 impl AudioOut {
     pub fn push_pcm(&self, samples: &[f32]) {
+        let stereo = samples.iter().flat_map(|&s| [s, s]).collect::<Vec<_>>();
+        self.push_stereo_pcm(&stereo);
+    }
+
+    pub fn push_stereo_pcm(&self, samples: &[f32]) {
         if !self.live.load(Ordering::Relaxed) {
             return;
         }
@@ -86,7 +91,7 @@ impl AudioOut {
         };
         // Bound latency: drop oldest — clearing the whole queue causes an audible blip.
         const MAX: usize = AUDIO_SAMPLE_RATE as usize / 2; // ~0.5s
-        buf.extend(samples.iter().copied());
+        buf.extend(samples.as_chunks::<2>().0.iter().copied());
         if buf.len() > MAX {
             let drop_n = buf.len() - MAX;
             buf.drain(0..drop_n);
@@ -103,7 +108,7 @@ impl AudioOut {
                 buf.clear();
             }
             if let Ok(mut last) = self.last.lock() {
-                *last = 0.0;
+                *last = [0.0; 2];
             }
             if let Ok(mut dc) = self.dc.lock() {
                 dc.reset();
@@ -124,7 +129,7 @@ impl AudioOut {
             buf.clear();
         }
         if let Ok(mut last) = self.last.lock() {
-            *last = 0.0;
+            *last = [0.0; 2];
         }
         if let Ok(mut dc) = self.dc.lock() {
             dc.reset();
@@ -160,8 +165,8 @@ fn gate_audio_on_lock(
 }
 
 fn start_audio() -> (AudioOut, AudioStream) {
-    let buffer = Arc::new(Mutex::new(VecDeque::<f32>::new()));
-    let last = Arc::new(Mutex::new(0.0f32));
+    let buffer = Arc::new(Mutex::new(VecDeque::<[f32; 2]>::new()));
+    let last = Arc::new(Mutex::new([0.0f32; 2]));
     let live = Arc::new(AtomicBool::new(false));
     let fade_in = Arc::new(AtomicUsize::new(0));
     let dc = Arc::new(Mutex::new(DcBlock::default()));
@@ -339,8 +344,8 @@ fn output_rate_supported(device: &cpal::Device, rate: u32, channels: u16) -> boo
 fn fill_output(
     data: &mut [f32],
     channels: usize,
-    buffer: &Arc<Mutex<VecDeque<f32>>>,
-    last: &Arc<Mutex<f32>>,
+    buffer: &Arc<Mutex<VecDeque<[f32; 2]>>>,
+    last: &Arc<Mutex<[f32; 2]>>,
     live: &Arc<AtomicBool>,
     fade_in: &Arc<AtomicUsize>,
     dc: &Arc<Mutex<DcBlock>>,
@@ -378,18 +383,25 @@ fn fill_output(
     for frame in data.chunks_mut(channels) {
         // Hold last sample on short underruns — stuffing 0 into beeper DC (±0.15)
         // sounds like hash; matched-rate playback should rarely hit this.
-        let sample = buf.pop_front().unwrap_or(*hold);
-        *hold = sample;
-        let mut out = dc_state.process(sample);
+        let pair = buf.pop_front().unwrap_or(*hold);
+        *hold = pair;
+        let mut output_pair = [dc_state.process(0, pair[0]), dc_state.process(1, pair[1])];
         let fade_left = fade_in.load(Ordering::Relaxed);
         if fade_left > 0 {
             let g = 1.0 - (fade_left as f32 / fade_total as f32);
             fade_in.fetch_sub(1, Ordering::Relaxed);
-            out *= g.clamp(0.0, 1.0);
+            for sample in &mut output_pair {
+                *sample *= g.clamp(0.0, 1.0);
+            }
         }
-        mono_out.push(out);
-        for ch in frame.iter_mut() {
-            *ch = out;
+        let mono = f32::midpoint(output_pair[0], output_pair[1]);
+        mono_out.push(mono);
+        for (index, ch) in frame.iter_mut().enumerate() {
+            *ch = match index {
+                0 => output_pair[0],
+                1 => output_pair[1],
+                _ => mono,
+            };
         }
     }
     if let Ok(mut rec) = record.lock() {
@@ -438,4 +450,39 @@ fn write_wav_mono_f32(path: &PathBuf, sample_rate: u32, samples: &[f32]) -> std:
     }
     file.flush()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fill_output, DcBlock};
+    use std::collections::VecDeque;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn stereo_pcm_keeps_channel_placement() {
+        let buffer = Arc::new(Mutex::new(VecDeque::from([[0.3_f32, -0.7_f32]])));
+        let last = Arc::new(Mutex::new([0.0_f32; 2]));
+        let live = Arc::new(AtomicBool::new(true));
+        let fade = Arc::new(AtomicUsize::new(0));
+        let dc = Arc::new(Mutex::new(DcBlock::default()));
+        let record = Arc::new(Mutex::new(None));
+        let handoff = Arc::new(AtomicBool::new(false));
+        let mut output = [0.0_f32; 2];
+
+        fill_output(
+            &mut output,
+            2,
+            &buffer,
+            &last,
+            &live,
+            &fade,
+            &dc,
+            &record,
+            None,
+            &handoff,
+        );
+
+        assert_eq!(output, [0.3, -0.7]);
+    }
 }

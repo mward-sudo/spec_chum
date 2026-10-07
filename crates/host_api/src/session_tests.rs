@@ -277,7 +277,7 @@ fn next_ay_audio_reaches_host_pcm() {
     let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
     next.bus.write_nextreg(0x03, 0xa3); // Use the 70,908T display timing.
     next.bus.write_nextreg(0x06, 0x01);
-    next.bus.write_nextreg(0x08, 0x10); // Single-chip AY mode.
+    next.bus.write_nextreg(0x08, 0x30); // Single-chip AY mode, ACB stereo.
     for (register, value) in [(0, 3), (1, 0), (7, 0x3e), (8, 0x0f)] {
         next.bus.out_port(0xfffd, register);
         next.bus.out_port(0xbffd, value);
@@ -288,6 +288,18 @@ fn next_ay_audio_reaches_host_pcm() {
     let audio = session.run_frame();
 
     assert_eq!(session.audio_pcm().len(), audio.ay_samples.len());
+    assert_eq!(
+        session.audio_pcm_stereo().len(),
+        session.audio_pcm().len() * 2
+    );
+    assert_eq!(session.frame_tstates(), 70_908);
+    assert!((session.frame_period_seconds() - 70_908.0 / 3_500_000.0).abs() < 1e-9);
+    assert!(session
+        .audio_pcm_stereo()
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .any(|pair| (pair[0] - pair[1]).abs() > 0.01));
     assert!(
         session.audio_pcm().iter().any(|sample| *sample < -0.15),
         "AY PCM should change the beeper-only baseline"

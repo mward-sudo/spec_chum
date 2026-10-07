@@ -13,8 +13,6 @@ use crate::crt::{CrtScreenTexture, SCREEN_H, SCREEN_W};
 use crate::glow::FrameGlow;
 use crate::keymap;
 
-const FRAME_PERIOD: Duration = Duration::from_millis(20);
-
 /// Short label for overlay / status (matches egui Machine menu naming).
 #[must_use]
 pub fn model_label(model: ModelId) -> &'static str {
@@ -199,9 +197,14 @@ fn tick_emulator(
     }
 
     host.accumulator += time.delta();
+    let frame_period = if host.session.frame_tstates() > 0 {
+        Duration::from_secs_f64(host.session.frame_period_seconds())
+    } else {
+        Duration::from_millis(20)
+    };
     let mut frames = 0u32;
-    while host.accumulator >= FRAME_PERIOD && frames < 2 {
-        host.accumulator -= FRAME_PERIOD;
+    while host.accumulator >= frame_period && frames < 2 {
+        host.accumulator -= frame_period;
         frames += 1;
 
         if locked.is_some() {
@@ -223,7 +226,7 @@ fn tick_emulator(
         // Drop PCM during intro (AudioOut is also gated until CameraLocked).
         if locked.is_some() {
             if let Some(audio) = audio.as_ref() {
-                audio.push_pcm(host.session.audio_pcm());
+                audio.push_stereo_pcm(host.session.audio_pcm_stereo());
             }
         }
 
@@ -245,7 +248,7 @@ fn tick_emulator(
     }
     // Cap leftover after max catch-up so a hitch doesn't spiral unbounded debt.
     if frames >= 2 {
-        host.accumulator = host.accumulator.min(FRAME_PERIOD);
+        host.accumulator = host.accumulator.min(frame_period);
     }
 }
 

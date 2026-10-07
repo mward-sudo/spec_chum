@@ -27,7 +27,7 @@ impl ShellPlatform {
 /// Shared ring fed each emulated frame and drained by the audio callback.
 #[derive(Debug, Default)]
 pub struct PcmRing {
-    samples: VecDeque<f32>,
+    samples: VecDeque<[f32; 2]>,
     pub volume: f32,
     pub muted: bool,
 }
@@ -43,21 +43,47 @@ impl PcmRing {
     }
 
     pub fn push_frame(&mut self, pcm: &[f32]) {
-        // Soft cap so a stalled consumer cannot grow unbounded.
-        const MAX: usize = 44_100; // ~1s mono
-        if self.samples.len() > MAX {
-            let drop_n = self.samples.len() - MAX / 2;
-            self.samples.drain(0..drop_n);
-        }
-        self.samples.extend(pcm.iter().copied());
+        self.trim_for(pcm.len());
+        self.samples.extend(
+            pcm.iter()
+                .skip(pcm.len().saturating_sub(44_100))
+                .map(|&sample| [sample, sample]),
+        );
     }
 
-    fn pop_sample(&mut self) -> f32 {
-        let sample = self.samples.pop_front().unwrap_or(0.0);
-        if self.muted {
-            return 0.0;
+    pub fn push_stereo_frame(&mut self, pcm: &[f32]) {
+        let frame_count = pcm.len() / 2;
+        self.trim_for(frame_count);
+        self.samples.extend(
+            pcm.as_chunks::<2>()
+                .0
+                .iter()
+                .skip(frame_count.saturating_sub(44_100))
+                .copied(),
+        );
+    }
+
+    fn trim_for(&mut self, frame_count: usize) {
+        // Soft cap so a stalled consumer cannot grow unbounded.
+        const MAX: usize = 44_100; // ~1s stereo frames
+        if frame_count >= MAX {
+            self.samples.clear();
+        } else if self.samples.len() + frame_count > MAX {
+            let drop_n = self.samples.len() + frame_count - MAX;
+            self.samples.drain(0..drop_n);
         }
-        (sample * self.volume.clamp(0.0, 1.0)).clamp(-1.0, 1.0)
+    }
+
+    fn pop_frame(&mut self) -> [f32; 2] {
+        let pair = self.samples.pop_front().unwrap_or([0.0; 2]);
+        if self.muted {
+            return [0.0; 2];
+        }
+        let gain = self.volume.clamp(0.0, 1.0);
+        [
+            (pair[0] * gain).clamp(-1.0, 1.0),
+            (pair[1] * gain).clamp(-1.0, 1.0),
+        ]
     }
 }
 
@@ -135,10 +161,16 @@ where
     T: SizedSample + FromSample<f32>,
 {
     for frame in data.chunks_mut(channels.max(1)) {
-        let sample = T::from_sample(ring.pop_sample());
-        frame[0] = sample;
-        for channel in frame.iter_mut().skip(1) {
-            *channel = sample;
+        let pair = ring.pop_frame();
+        let mono = f32::midpoint(pair[0], pair[1]);
+        let mono_output = frame.len() == 1;
+        for (channel, output) in frame.iter_mut().enumerate() {
+            let sample = if mono_output {
+                mono
+            } else {
+                pair[channel.min(1)]
+            };
+            *output = T::from_sample(sample);
         }
     }
 }
@@ -166,5 +198,21 @@ mod tests {
         let mut u16_output = [0_u16; 2];
         fill_output_samples(&mut u16_output, 1, &mut ring);
         assert_eq!(u16_output, [49_152, 16_384]);
+    }
+
+    #[test]
+    fn preserves_stereo_channels_and_downmixes_mono_output() {
+        let mut ring = PcmRing::new();
+        ring.volume = 1.0;
+        ring.push_stereo_frame(&[0.25, -0.75, 0.5, 0.0]);
+
+        let mut stereo = [0.0_f32; 4];
+        fill_output_samples(&mut stereo, 2, &mut ring);
+        assert_eq!(stereo, [0.25, -0.75, 0.5, 0.0]);
+
+        ring.push_stereo_frame(&[0.25, -0.75]);
+        let mut mono = [0.0_f32; 1];
+        fill_output_samples(&mut mono, 1, &mut ring);
+        assert_eq!(mono, [-0.25]);
     }
 }
