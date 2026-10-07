@@ -7,6 +7,7 @@ use std::path::Path;
 
 use crate::ay::PsgModel;
 use crate::next_copper::NextCopper;
+use crate::next_dma::{DmaAction, Endpoint, NextDma};
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
 use crate::next_sprites::NextSprites;
@@ -61,6 +62,7 @@ pub struct NextBus {
     config_mapping: u8,
     next_video: NextVideo,
     copper: NextCopper,
+    dma: NextDma,
     next_sprites: NextSprites,
     peripheral2: u8,
     peripheral3: u8,
@@ -221,6 +223,7 @@ impl NextBus {
             config_mapping: 0,
             next_video: NextVideo::new(),
             copper: NextCopper::new(),
+            dma: NextDma::default(),
             next_sprites: NextSprites::new(),
             peripheral2: 0,
             peripheral3: 0,
@@ -274,6 +277,7 @@ impl NextBus {
         self.alternate_rom_register = 0;
         self.next_video.reset();
         self.copper.reset();
+        self.dma.reset();
         self.next_sprites.reset();
         self.peripheral2 = 0;
         self.peripheral3 = 0x10;
@@ -1325,6 +1329,7 @@ impl NextBus {
     /// CPU port read with its absolute T-state, for timed devices such as SD SPI.
     pub fn in_port_at(&mut self, port: u16, t: u64) -> u8 {
         match port {
+            _ if port & 0xff == 0x6b => self.dma.read(),
             _ if Self::is_128_paging_port(port) => 0xff,
             _ if port & 0xc00f == 0x8005 => {
                 (self.ay_chip_select << 6) | self.selected_ay().map_or(0, |ay| ay.selected & 0x1f)
@@ -1355,9 +1360,12 @@ impl NextBus {
     }
 
     /// CPU port write with its absolute T-state, for timed devices such as SD SPI.
-    pub fn out_port_at(&mut self, port: u16, value: u8, t: u64) {
+    pub fn out_port_at(&mut self, port: u16, value: u8, t: u64) -> u32 {
         if self.write_dac_alias(port as u8, value, t) {
-            return;
+            return 0;
+        }
+        if port & 0xff == 0x6b {
+            return self.write_dma(value, t);
         }
         match port {
             _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
@@ -1396,6 +1404,81 @@ impl NextBus {
             _ if port & 0xff == 0xff => self.next_video.write_timex_video_port(value),
             _ if port & 1 == 0 => self.border = value & 0x07,
             _ => {}
+        }
+        0
+    }
+
+    /// Advance burst-mode DMA events through an absolute machine T-state.
+    pub fn advance_dma(&mut self, through_t: u64) {
+        while self.dma.active() && self.dma.uses_burst_wait() {
+            let Some(at) = self.dma.scheduled_t().filter(|at| *at <= through_t) else {
+                break;
+            };
+            self.transfer_dma_byte(at);
+        }
+    }
+
+    fn write_dma(&mut self, value: u8, t: u64) -> u32 {
+        let action = self.dma.write(value);
+        match action {
+            DmaAction::Reset | DmaAction::Disable | DmaAction::None => 0,
+            DmaAction::Load => {
+                self.dma.loaded();
+                0
+            }
+            DmaAction::Continue => {
+                self.dma.continued();
+                0
+            }
+            DmaAction::Enable => {
+                self.dma.enable(t);
+                if self.dma.active() && !self.dma.uses_burst_wait() {
+                    let byte_count = usize::from(self.dma.remaining());
+                    let stall = self.dma.continuous_stall();
+                    let byte_period = self.dma.period(self.dma.byte_cycles());
+                    for index in 0..byte_count {
+                        self.transfer_dma_byte(t.saturating_add(index as u64 * byte_period));
+                    }
+                    stall
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
+    fn transfer_dma_byte(&mut self, t: u64) {
+        let mut dma = std::mem::take(&mut self.dma);
+        if !dma.active() {
+            self.dma = dma;
+            return;
+        }
+        let (port_a, port_b, endpoint_a, endpoint_b, a_to_b) = dma.transfer_ports();
+        let (source, source_endpoint, destination, destination_endpoint) = if a_to_b {
+            (port_a, endpoint_a, port_b, endpoint_b)
+        } else {
+            (port_b, endpoint_b, port_a, endpoint_a)
+        };
+        let value = self.dma_read_endpoint(source, source_endpoint, t);
+        self.dma_write_endpoint(destination, destination_endpoint, value, t);
+        let byte_cycles = dma.byte_cycles();
+        dma.complete_byte(t, byte_cycles);
+        self.dma = dma;
+    }
+
+    fn dma_read_endpoint(&mut self, address: u16, endpoint: Endpoint, t: u64) -> u8 {
+        match endpoint {
+            Endpoint::Memory => self.read(address),
+            Endpoint::Io => self.in_port_at(address, t),
+        }
+    }
+
+    fn dma_write_endpoint(&mut self, address: u16, endpoint: Endpoint, value: u8, t: u64) {
+        match endpoint {
+            Endpoint::Memory => self.write(address, value),
+            Endpoint::Io => {
+                let _ = self.out_port_at(address, value, t);
+            }
         }
     }
 
@@ -2806,5 +2889,13 @@ mod tests {
         assert_eq!(command(&mut bus), 0xff);
 
         std::fs::remove_file(path).expect("remove SD fixture");
+    }
+
+    #[test]
+    fn zxn_dma_uses_partial_decode_on_6b_without_aliasing_0b() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port_at(0x126b, 0xc3, 0);
+        assert_eq!(bus.in_port_at(0xab6b, 0), 0x3a);
+        assert_eq!(bus.in_port_at(0xab0b, 0), 0xff);
     }
 }

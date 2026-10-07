@@ -9,6 +9,7 @@ mod kempston_mouse;
 mod multiface;
 mod next;
 mod next_copper;
+mod next_dma;
 mod next_sd;
 mod next_sprites;
 mod next_video;
