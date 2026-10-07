@@ -63,6 +63,10 @@ pub struct NextBus {
     peripheral2: u8,
     peripheral3: u8,
     peripheral6: u8,
+    /// Held 8-bit DAC outputs in A, B, C, D order.
+    dac_values: [u8; 4],
+    /// Timestamped output snapshots consumed by the machine's audio sampler.
+    dac_writes: Vec<(u64, [u8; 4], bool)>,
     ay: [Ay8912; 3],
     /// Raw Next chip selector: 3 = AY0, 2 = AY1, 1 = AY2, 0 = reserved.
     ay_chip_select: u8,
@@ -123,6 +127,8 @@ impl NextBus {
             peripheral2: 0,
             peripheral3: 0,
             peripheral6: 0,
+            dac_values: [0x80; 4],
+            dac_writes: Vec::new(),
             ay: std::array::from_fn(|_| Ay8912::new()),
             ay_chip_select: 3,
             ay_channel_enable: [0x03; 3],
@@ -173,6 +179,8 @@ impl NextBus {
         self.peripheral2 = 0;
         self.peripheral3 = 0x10;
         self.peripheral6 = 0;
+        self.dac_values = [0x80; 4];
+        self.dac_writes.clear();
         self.ay = std::array::from_fn(|_| Ay8912::new());
         for ay in &mut self.ay {
             ay.set_model(PsgModel::Ym2149);
@@ -499,6 +507,48 @@ impl NextBus {
         self.peripheral2 & 0x04 != 0
     }
 
+    /// Held DAC outputs, in A, B, C, D order.
+    #[must_use]
+    pub fn dac_values(&self) -> [u8; 4] {
+        self.dac_values
+    }
+
+    /// Whether the four Next DAC output pins are enabled by `NextReg` `$08.3`.
+    #[must_use]
+    pub fn dacs_enabled(&self) -> bool {
+        self.peripheral3 & 0x08 != 0
+    }
+
+    /// Append timestamped DAC writes to the machine's pending audio queue.
+    pub fn drain_dac_writes_into(&mut self, pending: &mut Vec<(u64, [u8; 4], bool)>) {
+        pending.append(&mut self.dac_writes);
+    }
+
+    fn write_dac(&mut self, dac: usize, value: u8, t: u64) {
+        self.dac_values[dac] = value;
+        self.dac_writes
+            .push((t, self.dac_values, self.dacs_enabled()));
+    }
+
+    fn write_dac_alias(&mut self, port: u8, value: u8, t: u64) -> bool {
+        let (first, second) = match port {
+            0x1f | 0xf1 | 0x3f => (Some(0), None),
+            0x0f | 0xf3 => (Some(1), None),
+            0xdf | 0xfb => (Some(0), Some(3)),
+            0xb3 => (Some(1), Some(2)),
+            0x4f | 0xf9 => (Some(2), None),
+            0x5f => (Some(3), None),
+            _ => return false,
+        };
+        if let Some(dac) = first {
+            self.write_dac(dac, value, t);
+        }
+        if let Some(dac) = second {
+            self.write_dac(dac, value, t);
+        }
+        true
+    }
+
     /// Whether an AY amplitude register is configured to produce audio.
     #[must_use]
     pub fn audio_configured(&self) -> bool {
@@ -587,6 +637,20 @@ impl NextBus {
 
     /// Update implemented boot, display-bank, peripheral, and MMU registers.
     pub fn write_nextreg(&mut self, register: u8, value: u8) {
+        self.write_nextreg_at(register, value, 0);
+    }
+
+    /// Update a `NextReg` while preserving the CPU T-state for timed audio writes.
+    pub fn write_nextreg_at(&mut self, register: u8, value: u8, t: u64) {
+        match register {
+            0x2c => self.write_dac(1, value, t),
+            0x2d => {
+                self.write_dac(0, value, t);
+                self.write_dac(3, value, t);
+            }
+            0x2e => self.write_dac(2, value, t),
+            _ => {}
+        }
         if register == 0x1c {
             self.next_sprites
                 .write_register(register, value, self.peripheral2 & 0x10 != 0);
@@ -619,6 +683,8 @@ impl NextBus {
             }
             0x08 => {
                 self.peripheral3 = value & 0x7f;
+                self.dac_writes
+                    .push((t, self.dac_values, self.dacs_enabled()));
                 if value & 0x80 != 0 {
                     self.zx128_locked = false;
                 }
@@ -1101,6 +1167,9 @@ impl NextBus {
 
     /// CPU port write with its absolute T-state, for timed devices such as SD SPI.
     pub fn out_port_at(&mut self, port: u16, value: u8, t: u64) {
+        if self.write_dac_alias(port as u8, value, t) {
+            return;
+        }
         match port {
             _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
             _ if port & PORT_AY_SELECT_MASK == PORT_AY_SELECT => self.write_ay_select(value),
@@ -1108,7 +1177,7 @@ impl NextBus {
             PORT_NEXTREG_SELECT => {
                 self.selected_nextreg = value;
             }
-            PORT_NEXTREG_ACCESS => self.write_nextreg(self.selected_nextreg, value),
+            PORT_NEXTREG_ACCESS => self.write_nextreg_at(self.selected_nextreg, value, t),
             PORT_LAYER2_CONTROL => self.next_video.write_visibility_port(value),
             PORT_SPRITE_SELECT => self
                 .next_sprites
@@ -1153,6 +1222,55 @@ mod tests {
 
     fn rgb3(value: u8) -> u8 {
         (u16::from(value) * 255 / 7) as u8
+    }
+
+    #[test]
+    fn specdrum_ports_update_all_dac_aliases_and_keep_values_held() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        for (port, value, expected) in [
+            (0x1fu8, 0x11, [0x11, 0x80, 0x80, 0x80]),
+            (0xf1, 0x12, [0x12, 0x80, 0x80, 0x80]),
+            (0x3f, 0x13, [0x13, 0x80, 0x80, 0x80]),
+            (0x0f, 0x21, [0x13, 0x21, 0x80, 0x80]),
+            (0xf3, 0x22, [0x13, 0x22, 0x80, 0x80]),
+            (0xdf, 0x31, [0x31, 0x22, 0x80, 0x31]),
+            (0xfb, 0x32, [0x32, 0x22, 0x80, 0x32]),
+            (0xb3, 0x41, [0x32, 0x41, 0x41, 0x32]),
+            (0x4f, 0x51, [0x32, 0x41, 0x51, 0x32]),
+            (0xf9, 0x52, [0x32, 0x41, 0x52, 0x32]),
+            (0x5f, 0x61, [0x32, 0x41, 0x52, 0x61]),
+        ] {
+            bus.out_port_at(u16::from(port), value, 1234);
+            assert_eq!(bus.dac_values(), expected, "port ${port:02x}");
+        }
+        assert_eq!(bus.dac_values(), [0x32, 0x41, 0x52, 0x61]);
+    }
+
+    #[test]
+    fn dac_nextreg_mirrors_write_the_documented_channels() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg_at(0x2c, 0x22, 12);
+        bus.write_nextreg_at(0x2d, 0x33, 34);
+        bus.write_nextreg_at(0x2e, 0x44, 56);
+        assert_eq!(bus.dac_values(), [0x33, 0x22, 0x44, 0x33]);
+        let mut pending = Vec::new();
+        let write_capacity = bus.dac_writes.capacity();
+        bus.drain_dac_writes_into(&mut pending);
+        assert_eq!(pending.len(), 4);
+        assert_eq!(bus.dac_writes.capacity(), write_capacity);
+        assert_eq!(bus.read_nextreg(0x2c), 0xff, "Pi I2S read source is absent");
+        assert_eq!(bus.read_nextreg(0x2d), 0xff);
+        assert_eq!(bus.read_nextreg(0x2e), 0xff);
+    }
+
+    #[test]
+    fn dac_output_gate_is_controlled_by_peripheral_three_bit_three() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert!(!bus.dacs_enabled());
+        bus.write_nextreg(0x08, 0x18);
+        assert!(bus.dacs_enabled());
+        bus.write_nextreg(0x08, 0x10);
+        assert!(!bus.dacs_enabled());
     }
 
     #[test]

@@ -137,6 +137,7 @@ impl BeeperState {
             let left = audio.ay_left.get(index).copied().unwrap_or(mono);
             let right = audio.ay_right.get(index).copied().unwrap_or(mono);
             let beep = if self.level { 0.15 } else { -0.15 };
+            let (dac_left, dac_right) = audio.dac_stereo_sample(index);
             let muted = audio
                 .audio_muted_samples
                 .get(index)
@@ -145,7 +146,10 @@ impl BeeperState {
             self.next_samples.push_back(if muted {
                 (0.0, 0.0)
             } else {
-                (beep + (left - 0.5) * 0.5, beep + (right - 0.5) * 0.5)
+                (
+                    beep + (left - 0.5) * 0.5 + dac_left,
+                    beep + (right - 0.5) * 0.5 + dac_right,
+                )
             });
         }
         for &(_, level) in audio.beeper_edges.iter().skip(edge_index) {
@@ -289,6 +293,7 @@ mod tests {
         let frame = FrameAudio {
             frame_tstates: Some(4),
             audio_muted_samples: Vec::new(),
+            dac_samples: Vec::new(),
             beeper_edges: vec![(2, true)],
             ay_samples: vec![0.5; 4],
             ay_left: vec![0.5; 4],
@@ -378,6 +383,37 @@ mod tests {
         assert_eq!(state.next_samples[1], (0.0, 0.0));
         assert_eq!(state.next_samples[2], (0.35, 0.35));
         assert_eq!(state.next_samples[8], (0.0, 0.0));
+    }
+
+    #[test]
+    fn next_dac_samples_are_panned_and_guest_mute_silences_them() {
+        let mut state = BeeperState::default();
+        state.queue_frame(
+            &FrameAudio {
+                frame_tstates: Some(70_908),
+                ay_samples: vec![0.5],
+                dac_samples: vec![[1.0, 1.0, 0.5, 0.5]],
+                ..FrameAudio::default()
+            },
+            false,
+            1.0,
+            true,
+        );
+        assert_eq!(state.next_samples[0], (0.35, -0.15));
+
+        state.queue_frame(
+            &FrameAudio {
+                frame_tstates: Some(70_908),
+                ay_samples: vec![0.5],
+                dac_samples: vec![[1.0, 1.0, 0.5, 0.5]],
+                audio_muted_samples: vec![true],
+                ..FrameAudio::default()
+            },
+            false,
+            1.0,
+            false,
+        );
+        assert_eq!(state.next_samples[0], (0.0, 0.0));
     }
 
     #[test]

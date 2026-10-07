@@ -25,6 +25,10 @@ pub struct NextMachine {
     ay_left: Vec<f32>,
     ay_right: Vec<f32>,
     audio_muted_samples: Vec<bool>,
+    dac_samples: Vec<[f32; 4]>,
+    pending_dac_writes: Vec<(u64, [u8; 4], bool)>,
+    dac_sample_values: [u8; 4],
+    dac_sample_enabled: bool,
 }
 
 impl NextMachine {
@@ -44,6 +48,10 @@ impl NextMachine {
             ay_left: Vec::new(),
             ay_right: Vec::new(),
             audio_muted_samples: Vec::new(),
+            dac_samples: Vec::new(),
+            pending_dac_writes: Vec::new(),
+            dac_sample_values: [0x80; 4],
+            dac_sample_enabled: false,
         })
     }
 
@@ -60,6 +68,10 @@ impl NextMachine {
         self.ay_left.clear();
         self.ay_right.clear();
         self.audio_muted_samples.clear();
+        self.dac_samples.clear();
+        self.pending_dac_writes.clear();
+        self.dac_sample_values = self.bus.dac_values();
+        self.dac_sample_enabled = self.bus.dacs_enabled();
         Ok(())
     }
 
@@ -77,6 +89,10 @@ impl NextMachine {
         self.ay_left.clear();
         self.ay_right.clear();
         self.audio_muted_samples.clear();
+        self.dac_samples.clear();
+        self.pending_dac_writes.clear();
+        self.dac_sample_values = self.bus.dac_values();
+        self.dac_sample_enabled = self.bus.dacs_enabled();
     }
 
     /// Uninterrupted video clock, including across CPU soft resets.
@@ -124,13 +140,28 @@ impl NextMachine {
                 self.cpu.step(&mut io)
             }
         };
+        let step_start = self.video_t;
+        let phase_start = self.audio_phase;
         self.video_t = self.video_t.wrapping_add(u64::from(cycles));
         self.bus.advance_audio(cycles);
+        self.bus.drain_dac_writes_into(&mut self.pending_dac_writes);
+        let mut sample_phase = 3_500_000u64.saturating_sub(phase_start);
         self.audio_phase = self
             .audio_phase
             .saturating_add(u64::from(cycles).saturating_mul(44_100));
         while self.audio_phase >= 3_500_000 {
             self.audio_phase -= 3_500_000;
+            let sample_t = step_start.saturating_add(sample_phase.div_ceil(44_100));
+            sample_phase = sample_phase.saturating_add(3_500_000);
+            while self
+                .pending_dac_writes
+                .first()
+                .is_some_and(|(write_t, _, _)| *write_t <= sample_t)
+            {
+                let (_, values, enabled) = self.pending_dac_writes.remove(0);
+                self.dac_sample_values = values;
+                self.dac_sample_enabled = enabled;
+            }
             let (mono, left, right) = if self.bus.audio_configured() {
                 self.bus.audio_sample()
             } else {
@@ -142,6 +173,11 @@ impl NextMachine {
             self.ay_left.push(left);
             self.ay_right.push(right);
             self.audio_muted_samples.push(self.bus.audio_muted());
+            self.dac_samples.push(if self.dac_sample_enabled {
+                self.dac_sample_values.map(|value| f32::from(value) / 256.0)
+            } else {
+                [0.5; 4]
+            });
         }
         if let Some(status) = self.bus.take_reset_request() {
             self.cpu.reset();
@@ -154,6 +190,9 @@ impl NextMachine {
                     self.beeper_edges.push((self.video_t, false));
                 }
             }
+            self.dac_sample_values = self.bus.dac_values();
+            self.dac_sample_enabled = self.bus.dacs_enabled();
+            self.pending_dac_writes.clear();
             self.bus.set_reset_status(status);
         }
         cycles
@@ -177,6 +216,7 @@ impl NextMachine {
             ay_left: std::mem::take(&mut self.ay_left),
             ay_right: std::mem::take(&mut self.ay_right),
             audio_muted_samples: std::mem::take(&mut self.audio_muted_samples),
+            dac_samples: std::mem::take(&mut self.dac_samples),
             ..FrameAudio::default()
         };
         let mut future_edges = Vec::new();
@@ -270,8 +310,9 @@ impl Io for NextMemIo<'_> {
         0
     }
 
-    fn nextreg_write(&mut self, register: u8, value: u8, _t: u64) {
-        self.bus.write_nextreg(register, value);
+    fn nextreg_write(&mut self, register: u8, value: u8, t: u64) {
+        self.bus
+            .write_nextreg_at(register, value, self.time_base.wrapping_add(t));
     }
 }
 
@@ -358,6 +399,26 @@ mod tests {
         let alternate_audio = alternate.run_frame();
         assert_eq!(alternate_audio.frame_tstates, Some(70_908));
         assert!((892..=895).contains(&alternate_audio.ay_samples.len()));
+    }
+
+    #[test]
+    fn next_machine_samples_held_dac_values_at_their_tstate_and_gates_output() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid ROM");
+        machine.bus.write_nextreg_at(0x08, 0x18, 0);
+        machine.bus.out_port_at(0x001f, 0xff, 100);
+
+        let audio = machine.run_frame();
+        assert_eq!(audio.dac_samples.len(), audio.ay_samples.len());
+        assert_eq!(audio.dac_samples[0], [0.5; 4]);
+        assert_eq!(audio.dac_samples[1], [255.0 / 256.0, 0.5, 0.5, 0.5]);
+        assert!(audio.dac_samples[2..]
+            .iter()
+            .all(|sample| *sample == [255.0 / 256.0, 0.5, 0.5, 0.5]));
+
+        let mut disabled = NextMachine::new(&test_rom()).expect("valid ROM");
+        disabled.bus.out_port_at(0x001f, 0xff, 0);
+        let muted = disabled.run_frame();
+        assert!(muted.dac_samples.iter().all(|sample| *sample == [0.5; 4]));
     }
 
     #[test]
