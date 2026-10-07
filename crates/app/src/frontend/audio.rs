@@ -329,7 +329,7 @@ mod tests {
             ay_right: vec![0.5; 4],
         };
         state.queue_frame(frame, false, 1.0, true);
-        assert!(state.edges.is_empty());
+        assert_eq!(state.edges.len(), 0);
         assert_eq!(
             state.next_samples,
             [(-0.15, -0.15), (-0.15, -0.15), (0.15, 0.15), (0.15, 0.15)]
