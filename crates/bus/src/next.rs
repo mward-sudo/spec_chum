@@ -993,9 +993,13 @@ impl NextBus {
     /// Advance Copper execution to an absolute CPU T-state.
     pub fn advance_copper(&mut self, time: u64) -> Vec<(u64, u8, u8)> {
         let (frame_tstates, _) = self.frame_interrupt_timing();
-        let (tstates_per_line, _, _) = self.display_geometry();
-        self.copper
-            .advance(time, frame_tstates as u32, tstates_per_line as u32)
+        let (tstates_per_line, lines_per_frame, _) = self.display_geometry();
+        self.copper.advance(
+            time,
+            frame_tstates as u32,
+            tstates_per_line as u32,
+            lines_per_frame as u32,
+        )
     }
 
     /// Whether a `NextReg` can change a value consumed by the frame renderer.

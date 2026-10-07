@@ -2304,15 +2304,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791390874.3087192,
-    "seen": 1791391002.703124,
-    "ast_hash": "0cfa4341afb11a18752623f3264d63e1",
+    "mtime": 1791392592.5442834,
+    "seen": 1791392634.316583,
+    "ast_hash": "09ad7c900498b605593ac60f40849a1a",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791392138.953082,
-    "seen": 1791392150.375603,
-    "ast_hash": "db8a029d763584204883219fe60ccdb3",
+    "mtime": 1791392696.1292984,
+    "seen": 1791392719.978123,
+    "ast_hash": "abc7df6ca20d4604f3e985e4959e1445",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {
@@ -2370,15 +2370,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next_copper.rs": {
-    "mtime": 1791392102.6538084,
-    "seen": 1791392150.372837,
-    "ast_hash": "3f8199edb953281fd51c18109d628f86",
+    "mtime": 1791392641.8971188,
+    "seen": 1791392719.975355,
+    "ast_hash": "184fae793803c1b1b10c5526d28baaf5",
     "semantic_hash": ""
   },
   "docs/NEXT_COPPER.md": {
-    "mtime": 1791352143.4398935,
-    "seen": 1791352231.453388,
-    "ast_hash": "bddf744892aba053149b4de55507a199",
+    "mtime": 1791392592.544575,
+    "seen": 1791392634.322322,
+    "ast_hash": "1e0e77f03fa53dd0332d4748b3b3713e",
     "semantic_hash": ""
   }
 }

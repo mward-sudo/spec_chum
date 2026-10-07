@@ -90,6 +90,7 @@ impl NextCopper {
         time: u64,
         frame_tstates: u32,
         tstates_per_line: u32,
+        lines_per_frame: u32,
     ) -> Vec<(u64, u8, u8)> {
         let target_clocks = time.saturating_mul(CLOCKS_PER_CPU_TSTATE);
         let frame_clocks = u64::from(frame_tstates).saturating_mul(CLOCKS_PER_CPU_TSTATE);
@@ -121,7 +122,7 @@ impl NextCopper {
                 let horizontal = u64::from((instruction >> 9) & 0x3f);
                 let vertical =
                     (u64::from((instruction >> 8) & 1) << 8) | u64::from(instruction & 0xff);
-                if vertical > 311 {
+                if vertical >= u64::from(lines_per_frame) {
                     self.stalled = true;
                     break;
                 }
@@ -197,8 +198,19 @@ mod tests {
         let mut copper = NextCopper::new();
         copper.memory[0..4].copy_from_slice(&[0x80, 0x02, 0x15, 0x08]);
         copper.write_control(0x40, 0);
-        let writes = copper.advance(3_000, 69_888, 224);
+        let writes = copper.advance(3_000, 69_888, 224, 312);
         assert_eq!(writes, [(2 * 224 + 1, 0x15, 0x08)]);
+    }
+
+    #[test]
+    fn wait_accepts_last_line_of_selected_pentagon_timing() {
+        let mut copper = NextCopper::new();
+        copper.memory[0..4].copy_from_slice(&[0x81, 0x3f, 0x15, 0x08]);
+        copper.write_control(0x40, 0);
+
+        let writes = copper.advance(319 * 224 + 2, 320 * 224, 224, 320);
+
+        assert_eq!(writes, [(319 * 224 + 1, 0x15, 0x08)]);
     }
 
     #[test]
@@ -206,7 +218,7 @@ mod tests {
         let mut copper = NextCopper::new();
         copper.memory[0..4].copy_from_slice(&[0, 0, 0xff, 0xff]);
         copper.write_control(0x40, 0);
-        assert_eq!(copper.advance(10, 69_888, 224), []);
+        assert_eq!(copper.advance(10, 69_888, 224, 312), []);
         assert!(copper.stalled);
         copper.write_control(0x00, 10);
         copper.write_control(0x40, 10);
@@ -218,7 +230,7 @@ mod tests {
         let mut copper = NextCopper::new();
         copper.memory[0..4].copy_from_slice(&[0x00, 0x00, 0x15, 0x08]);
         copper.write_control(0xc0, 0);
-        let writes = copper.advance(69_889, 69_888, 224);
+        let writes = copper.advance(69_889, 69_888, 224, 312);
         assert!(writes.iter().any(|(time, register, value)| {
             *time >= 69_888 && *register == 0x15 && *value == 0x08
         }));
@@ -229,13 +241,30 @@ mod tests {
         let mut copper = NextCopper::new();
         copper.memory[0..2].copy_from_slice(&[0x15, 0x08]);
         copper.write_control(0x40, 0);
-        copper.advance(1, 69_888, 224);
+        copper.advance(1, 69_888, 224, 312);
         copper.reset();
         assert!(!copper.running);
         assert_eq!(copper.program_counter, 0);
         assert_eq!(copper.address, 0);
         assert_eq!(copper.control(), 0);
         assert_eq!(copper.instruction(0), 0x1508);
+    }
+
+    #[test]
+    fn nextreg_wait_line_limit_follows_selected_display_timing() {
+        let rom = vec![0; crate::NEXT_ROM_SIZE];
+        let mut bus = crate::NextBus::new(&rom).expect("fixed-size test ROM");
+        bus.write_nextreg(0x03, 0xc3); // Pentagon timing, machine type 3.
+        for byte in [0x81, 0x3f, 0x15, 0x08] {
+            // WAIT 319, then MOVE $15, $08.
+            bus.write_nextreg(0x60, byte);
+        }
+        bus.write_nextreg(0x62, 0x40);
+
+        assert_eq!(
+            bus.advance_copper(319 * 224 + 2),
+            [(319 * 224 + 1, 0x15, 0x08)]
+        );
     }
 
     #[test]

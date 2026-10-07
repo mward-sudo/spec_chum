@@ -23,9 +23,10 @@ colour; CPU port writes remain a separate path.
 
 This is a bounded functional implementation, not a complete FPGA timing model.
 Core 3's precise subpixel ordering and interactions among simultaneous CPU,
-DMA, and Copper accesses are not modeled. WAIT lines beyond 311 stall the list;
-the horizontal mapping and supported NextReg side effects should be compared
-with hardware before making cycle-accuracy claims.
+DMA, and Copper accesses are not modeled. WAIT lines must be within the selected
+display timing's frame (up to line 319 for Pentagon timing); out-of-frame waits
+stall the list. The horizontal mapping and supported NextReg side effects should
+be compared with hardware before making cycle-accuracy claims.
 
 References: [Copper instruction and control registers](https://wiki.specnext.dev/Copper)
 and [official NextReg reference](https://gitlab.com/SpectrumNext/ZX_Spectrum_Next_FPGA/-/blob/master/cores/zxnext/nextreg.txt).

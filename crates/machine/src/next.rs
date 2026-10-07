@@ -30,6 +30,7 @@ pub struct NextMachine {
     dac_sample_values: [u8; 4],
     dac_sample_enabled: bool,
     copper_video_frame: Option<u64>,
+    render_frame: Option<u64>,
     copper_video_initial: Option<bus::NextBusVideoState>,
     copper_video_events: Vec<(u32, bus::NextBusVideoState)>,
 }
@@ -56,6 +57,7 @@ impl NextMachine {
             dac_sample_values: [0x80; 4],
             dac_sample_enabled: false,
             copper_video_frame: None,
+            render_frame: None,
             copper_video_initial: None,
             copper_video_events: Vec::new(),
         })
@@ -151,7 +153,10 @@ impl NextMachine {
         let step_start = self.video_t;
         let phase_start = self.audio_phase;
         self.video_t = self.video_t.wrapping_add(u64::from(cycles));
-        for (write_t, register, value) in self.bus.advance_copper(self.video_t) {
+        let copper_boundary = (step_start / frame_tstates + 1) * frame_tstates;
+        let copper_time = self.video_t.min(copper_boundary.saturating_sub(1));
+        self.render_frame = None;
+        for (write_t, register, value) in self.bus.advance_copper(copper_time) {
             self.capture_copper_video_before_write(write_t, register);
             self.bus.write_nextreg_at(register, value, write_t);
             self.capture_copper_video_after_write(write_t, register);
@@ -224,6 +229,7 @@ impl NextMachine {
         while self.video_t < boundary {
             self.step_once();
         }
+        self.render_frame = Some(boundary / frame_len - 1);
         let mut frame_audio = FrameAudio {
             frame_tstates: Some(frame_tstates),
             ay_samples: std::mem::take(&mut self.ay_samples),
@@ -250,7 +256,9 @@ impl NextMachine {
     /// Render the ULA screen, standard Layer 2, and base Next sprites.
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
         let frame_tstates = u64::from(self.frame_tstates().max(1));
-        let displayed_frame = self.video_t.saturating_sub(1) / frame_tstates;
+        let displayed_frame = self
+            .render_frame
+            .unwrap_or_else(|| self.video_t.saturating_sub(1) / frame_tstates);
         if self.copper_video_frame == Some(displayed_frame) {
             if let Some(initial) = &self.copper_video_initial {
                 self.render_rgba_with_copper_history(out, with_border, initial);
@@ -379,6 +387,7 @@ impl NextMachine {
 
     fn clear_copper_video_history(&mut self) {
         self.copper_video_frame = None;
+        self.render_frame = None;
         self.copper_video_initial = None;
         self.copper_video_events.clear();
     }
@@ -881,6 +890,36 @@ mod tests {
         machine.render_rgba(&mut framebuffer, false);
         assert_ne!(rgba_pixel(&framebuffer, width, 0, 0), [255, 0, 0, 255]);
         assert_ne!(rgba_pixel(&framebuffer, width, 0, 16), [255, 0, 0, 255]);
+        assert_eq!(rgba_pixel(&framebuffer, width, 0, 17), [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn copper_move_at_frame_boundary_is_rendered_in_the_next_frame() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        let mut layer2 = vec![0; 17 * 256 + 1];
+        layer2[0] = 1;
+        layer2[17 * 256] = 1;
+        machine.bus.load_ram_page(16, 0, &layer2);
+        machine.bus.write_nextreg(0x43, 0x10); // Layer 2 palette 1.
+        machine.bus.write_nextreg(0x40, 1);
+        machine.bus.write_nextreg(0x44, 0xe0); // Red.
+        machine.bus.write_nextreg(0x44, 0x80); // Priority over ULA.
+
+        // WAIT for the end of line 311, then enable Layer 2 at the next frame.
+        machine.bus.write_nextreg(0x61, 0);
+        for byte in [0xf1, 0x37, 0x69, 0x80] {
+            machine.bus.write_nextreg(0x60, byte);
+        }
+        machine.bus.write_nextreg(0x62, 0x40);
+
+        let (width, height) = NextMachine::framebuffer_dims(false);
+        let mut framebuffer = vec![0; width * height * 4];
+        machine.run_frame();
+        machine.render_rgba(&mut framebuffer, false);
+        assert_ne!(rgba_pixel(&framebuffer, width, 0, 17), [255, 0, 0, 255]);
+
+        machine.run_frame();
+        machine.render_rgba(&mut framebuffer, false);
         assert_eq!(rgba_pixel(&framebuffer, width, 0, 17), [255, 0, 0, 255]);
     }
 
