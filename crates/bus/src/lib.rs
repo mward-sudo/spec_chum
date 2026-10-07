@@ -8,6 +8,7 @@ mod kempston;
 mod kempston_mouse;
 mod multiface;
 mod next;
+mod next_copper;
 mod next_sd;
 mod next_sprites;
 mod next_video;
@@ -31,7 +32,10 @@ pub use multiface::{
     multiface128_port_match, multiface1_port_match, Multiface1, Multiface128, MULTIFACE128_SIZE,
     MULTIFACE1_SIZE,
 };
-pub use next::{NextBus, NextSdError, NEXT_RAM_PAGE_COUNT, NEXT_ROM_SIZE};
+pub use next::{
+    NextBus, NextBusVideoRenderer, NextBusVideoState, NextSdError, NEXT_RAM_PAGE_COUNT,
+    NEXT_ROM_SIZE,
+};
 pub use next_video::VideoColor;
 pub use plus3::{is_contended_bank_plus3, BusPlus3};
 pub use timex::{

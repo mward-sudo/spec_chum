@@ -29,6 +29,9 @@ pub struct NextMachine {
     pending_dac_writes: Vec<(u64, [u8; 4], bool)>,
     dac_sample_values: [u8; 4],
     dac_sample_enabled: bool,
+    copper_video_frame: Option<u64>,
+    copper_video_initial: Option<bus::NextBusVideoState>,
+    copper_video_events: Vec<(u32, bus::NextBusVideoState)>,
 }
 
 impl NextMachine {
@@ -52,6 +55,9 @@ impl NextMachine {
             pending_dac_writes: Vec::new(),
             dac_sample_values: [0x80; 4],
             dac_sample_enabled: false,
+            copper_video_frame: None,
+            copper_video_initial: None,
+            copper_video_events: Vec::new(),
         })
     }
 
@@ -72,6 +78,7 @@ impl NextMachine {
         self.pending_dac_writes.clear();
         self.dac_sample_values = self.bus.dac_values();
         self.dac_sample_enabled = self.bus.dacs_enabled();
+        self.clear_copper_video_history();
         Ok(())
     }
 
@@ -93,6 +100,7 @@ impl NextMachine {
         self.pending_dac_writes.clear();
         self.dac_sample_values = self.bus.dac_values();
         self.dac_sample_enabled = self.bus.dacs_enabled();
+        self.clear_copper_video_history();
     }
 
     /// Uninterrupted video clock, including across CPU soft resets.
@@ -143,6 +151,11 @@ impl NextMachine {
         let step_start = self.video_t;
         let phase_start = self.audio_phase;
         self.video_t = self.video_t.wrapping_add(u64::from(cycles));
+        for (write_t, register, value) in self.bus.advance_copper(self.video_t) {
+            self.capture_copper_video_before_write(write_t, register);
+            self.bus.write_nextreg_at(register, value, write_t);
+            self.capture_copper_video_after_write(write_t, register);
+        }
         self.bus.advance_audio(cycles);
         self.bus.drain_dac_writes_into(&mut self.pending_dac_writes);
         let mut sample_phase = 3_500_000u64.saturating_sub(phase_start);
@@ -180,6 +193,7 @@ impl NextMachine {
             });
         }
         if let Some(status) = self.bus.take_reset_request() {
+            self.clear_copper_video_history();
             self.cpu.reset();
             if status == 0x01 {
                 self.bus.soft_reset();
@@ -235,26 +249,138 @@ impl NextMachine {
 
     /// Render the ULA screen, standard Layer 2, and base Next sprites.
     pub fn render_rgba(&self, out: &mut [u8], with_border: bool) {
-        let first_page = self.bus.display_screen_bank() * 2;
+        let frame_tstates = u64::from(self.frame_tstates().max(1));
+        let displayed_frame = self.video_t.saturating_sub(1) / frame_tstates;
+        if self.copper_video_frame == Some(displayed_frame) {
+            if let Some(initial) = &self.copper_video_initial {
+                self.render_rgba_with_copper_history(out, with_border, initial);
+                return;
+            }
+        }
+        self.render_rgba_with_bus(out, with_border);
+    }
+
+    fn render_rgba_with_bus(&self, out: &mut [u8], with_border: bool) {
+        let renderer = self.bus.video_renderer();
+        let screen = Self::load_ula_screen(&renderer, false);
+        let (width, height) = Self::framebuffer_dims(with_border);
+        let mut ula = self.ula.clone();
+        ula.border = renderer.border();
+        ula.render_rgba(&screen[..6912], out, with_border);
+        Self::render_video_layers(&renderer, &screen, out, with_border, 0..height);
+        debug_assert_eq!(out.len(), width * height * 4);
+    }
+
+    fn load_ula_screen(
+        renderer: &bus::NextBusVideoRenderer<'_>,
+        include_full_page: bool,
+    ) -> [u8; 0x3800] {
+        let first_page = renderer.display_screen_bank() * 2;
         let mut screen = [0u8; 0x3800];
-        let screen_len = if self.bus.lores_256_color_enabled() || self.bus.radastan_lores_enabled()
+        let screen_len = if include_full_page
+            || renderer.lores_256_color_enabled()
+            || renderer.radastan_lores_enabled()
         {
             screen.len()
         } else {
             6912
         };
         for (offset, byte) in screen[..screen_len].iter_mut().enumerate() {
-            *byte = self
-                .bus
+            *byte = renderer
                 .read_ram_page(first_page + (offset / 8192) as u8, offset % 8192)
                 .expect("Next ULA bank is within installed physical RAM");
         }
+        screen
+    }
+
+    fn render_video_layers(
+        renderer: &bus::NextBusVideoRenderer<'_>,
+        screen: &[u8],
+        out: &mut [u8],
+        with_border: bool,
+        rows: std::ops::Range<usize>,
+    ) {
+        super::next_video::render_lores(renderer, screen, out, with_border, rows.clone());
+        super::next_video::render_tilemap(renderer, out, with_border, rows.clone());
+        super::next_video::compose(renderer, out, with_border, rows);
+    }
+
+    fn render_rgba_with_copper_history(
+        &self,
+        out: &mut [u8],
+        with_border: bool,
+        initial: &bus::NextBusVideoState,
+    ) {
+        let (width, height) = Self::framebuffer_dims(with_border);
+        let row_bytes = width * 4;
+        let paper_line = (ula::PAPER_START_48 / ula::T_LINE_48) as i64;
+        let output_origin = paper_line - if with_border { ula::BORDER_Y as i64 } else { 0 };
+        let base_renderer = self.bus.video_renderer();
+        let screen = Self::load_ula_screen(&base_renderer, true);
         let mut ula = self.ula.clone();
-        ula.border = self.bus.border();
+        ula.border = base_renderer.border();
         ula.render_rgba(&screen[..6912], out, with_border);
-        super::next_video::render_lores(&self.bus, &screen, out, with_border);
-        super::next_video::render_tilemap(&self.bus, out, with_border);
-        super::next_video::compose(&self.bus, out, with_border);
+        let mut current_state = initial.clone();
+        let mut first_row = 0usize;
+
+        for (raster_line, state) in &self.copper_video_events {
+            let row = (i64::from(*raster_line) - output_origin).clamp(0, height as i64) as usize;
+            if row > first_row {
+                let renderer = self.bus.video_renderer_with_state(&current_state);
+                Self::render_video_layers(&renderer, &screen, out, with_border, first_row..row);
+                first_row = row;
+            }
+            current_state.clone_from(state);
+        }
+        if first_row < height {
+            let renderer = self.bus.video_renderer();
+            Self::render_video_layers(&renderer, &screen, out, with_border, first_row..height);
+        }
+        debug_assert_eq!(row_bytes * height, out.len());
+    }
+
+    fn capture_copper_video_before_write(&mut self, time: u64, register: u8) {
+        if !NextBus::nextreg_affects_video(register) {
+            return;
+        }
+        let frame_tstates = self.bus.frame_interrupt_timing().0.max(1);
+        let frame = time / frame_tstates;
+        if self.copper_video_frame != Some(frame) {
+            self.copper_video_frame = Some(frame);
+            self.copper_video_initial = Some(self.bus.video_state_snapshot());
+            self.copper_video_events.clear();
+        }
+    }
+
+    fn capture_copper_video_after_write(&mut self, time: u64, register: u8) {
+        if !NextBus::nextreg_affects_video(register) {
+            return;
+        }
+        let frame_tstates = self.bus.frame_interrupt_timing().0.max(1);
+        let line_tstates = match self.bus.display_timing() {
+            2 | 3 => u64::from(ula::T_LINE_128),
+            4 => u64::from(ula::T_LINE_PENTAGON),
+            _ => u64::from(ula::T_LINE_48),
+        };
+        let line = ((time % frame_tstates) / line_tstates) as u32;
+        let snapshot = self.bus.video_state_snapshot();
+        if self
+            .copper_video_events
+            .last()
+            .is_some_and(|(last_line, _)| *last_line == line)
+        {
+            if let Some((_, state)) = self.copper_video_events.last_mut() {
+                state.clone_from(&snapshot);
+            }
+        } else {
+            self.copper_video_events.push((line, snapshot));
+        }
+    }
+
+    fn clear_copper_video_history(&mut self) {
+        self.copper_video_frame = None;
+        self.copper_video_initial = None;
+        self.copper_video_events.clear();
     }
 
     #[must_use]
@@ -719,6 +845,43 @@ mod tests {
             &ula_before,
             "disabled Layer 2 preserves ULA output"
         );
+    }
+
+    #[test]
+    fn copper_wait_move_updates_layer2_in_the_current_frame() {
+        let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
+        let mut layer2 = vec![0; 17 * 256 + 1];
+        layer2[0] = 1;
+        layer2[17 * 256] = 1;
+        machine.bus.load_ram_page(16, 0, &layer2);
+        machine.bus.write_nextreg(0x43, 0x10); // Layer 2 palette 1.
+        machine.bus.write_nextreg(0x40, 1);
+        machine.bus.write_nextreg(0x44, 0xe0); // Red.
+        machine.bus.write_nextreg(0x44, 0x80); // Priority over ULA.
+
+        // WAIT for line 80, then enable the otherwise-hidden Layer 2.
+        machine.bus.write_nextreg(0x61, 0);
+        for byte in [0x80, 0x50, 0x69, 0x80] {
+            machine.bus.write_nextreg(0x60, byte);
+        }
+        machine.bus.write_nextreg(0x62, 0x40);
+
+        let target = 80 * ula::T_LINE_48 + 8;
+        while machine.video_t() < u64::from(target) {
+            machine.step_once();
+        }
+        assert_eq!(machine.bus.read_nextreg(0x69) & 0x80, 0x80);
+        assert_eq!(
+            machine.bus.layer2_video_pixel(0, 17).map(|color| color.rgb),
+            Some([255, 0, 0])
+        );
+
+        let (width, height) = NextMachine::framebuffer_dims(false);
+        let mut framebuffer = vec![0; width * height * 4];
+        machine.render_rgba(&mut framebuffer, false);
+        assert_ne!(rgba_pixel(&framebuffer, width, 0, 0), [255, 0, 0, 255]);
+        assert_ne!(rgba_pixel(&framebuffer, width, 0, 16), [255, 0, 0, 255]);
+        assert_eq!(rgba_pixel(&framebuffer, width, 0, 17), [255, 0, 0, 255]);
     }
 
     #[test]

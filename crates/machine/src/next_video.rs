@@ -1,6 +1,7 @@
 //! Frame-based composition of Spectrum Next video layers.
 
-use bus::{NextBus, VideoColor};
+use bus::{NextBusVideoRenderer, VideoColor};
+use std::ops::Range;
 
 const SPRITE_WIDTH: usize = 320;
 const SPRITE_HEIGHT: usize = 256;
@@ -10,9 +11,15 @@ const TILEMAP_WIDTH: usize = 320;
 const TILEMAP_HEIGHT: usize = 256;
 
 /// Replace the ULA paper with 256-colour `LoRes` pixels when enabled.
-pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border: bool) {
+pub(super) fn render_lores(
+    bus: &NextBusVideoRenderer<'_>,
+    screen: &[u8],
+    output: &mut [u8],
+    with_border: bool,
+    rows: Range<usize>,
+) {
     if bus.radastan_lores_enabled() {
-        render_radastan(bus, screen, output, with_border);
+        render_radastan(bus, screen, output, with_border, rows);
         return;
     }
     if !bus.lores_256_color_enabled() || screen.len() < 0x3800 {
@@ -25,6 +32,10 @@ pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with
     };
 
     for y in 0..LORES_HEIGHT {
+        let output_y = origin_y + y * 2;
+        if output_y + 2 <= rows.start || output_y >= rows.end {
+            continue;
+        }
         let line_offset = if y < 48 {
             y * LORES_WIDTH
         } else {
@@ -34,8 +45,11 @@ pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with
             let Some(color) = bus.lores_video_pixel(screen[line_offset + x]) else {
                 for dy in 0..2 {
                     for dx in 0..2 {
-                        let output_offset =
-                            (((origin_y + y * 2 + dy) * width) + origin_x + x * 2 + dx) * 4;
+                        let row = output_y + dy;
+                        if !rows.contains(&row) {
+                            continue;
+                        }
+                        let output_offset = ((row * width) + origin_x + x * 2 + dx) * 4;
                         output[output_offset..output_offset + 4].copy_from_slice(&[0, 0, 0, 0]);
                     }
                 }
@@ -43,8 +57,11 @@ pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with
             };
             for dy in 0..2 {
                 for dx in 0..2 {
-                    let output_offset =
-                        (((origin_y + y * 2 + dy) * width) + origin_x + x * 2 + dx) * 4;
+                    let row = output_y + dy;
+                    if !rows.contains(&row) {
+                        continue;
+                    }
+                    let output_offset = ((row * width) + origin_x + x * 2 + dx) * 4;
                     output[output_offset..output_offset + 3].copy_from_slice(&color.rgb);
                     output[output_offset + 3] = 0xff;
                 }
@@ -53,7 +70,13 @@ pub(super) fn render_lores(bus: &NextBus, screen: &[u8], output: &mut [u8], with
     }
 }
 
-fn render_radastan(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border: bool) {
+fn render_radastan(
+    bus: &NextBusVideoRenderer<'_>,
+    screen: &[u8],
+    output: &mut [u8],
+    with_border: bool,
+    rows: Range<usize>,
+) {
     let file_offset = bus.radastan_display_file_offset();
     if screen.len() < file_offset + 0x1800 {
         return;
@@ -65,6 +88,10 @@ fn render_radastan(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border:
     };
 
     for y in 0..LORES_HEIGHT {
+        let output_y = origin_y + y * 2;
+        if output_y + 2 <= rows.start || output_y >= rows.end {
+            continue;
+        }
         let line_offset = file_offset + y * (LORES_WIDTH / 2);
         for x in 0..LORES_WIDTH {
             let packed = screen[line_offset + x / 2];
@@ -73,10 +100,13 @@ fn render_radastan(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border:
             } else {
                 packed & 0x0f
             };
-            let output_offset = (((origin_y + y * 2) * width) + origin_x + x * 2) * 4;
             if let Some(color) = bus.radastan_video_pixel(pixel) {
                 for row in 0..2 {
-                    let offset = output_offset + row * width * 4;
+                    let output_row = output_y + row;
+                    if !rows.contains(&output_row) {
+                        continue;
+                    }
+                    let offset = output_row * width * 4 + origin_x * 4 + x * 8;
                     output[offset..offset + 3].copy_from_slice(&color.rgb);
                     output[offset + 3] = 0xff;
                     output[offset + 4..offset + 7].copy_from_slice(&color.rgb);
@@ -84,7 +114,11 @@ fn render_radastan(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border:
                 }
             } else {
                 for row in 0..2 {
-                    let offset = output_offset + row * width * 4;
+                    let output_row = output_y + row;
+                    if !rows.contains(&output_row) {
+                        continue;
+                    }
+                    let offset = output_row * width * 4 + origin_x * 4 + x * 8;
                     output[offset..offset + 8].fill(0);
                 }
             }
@@ -93,7 +127,12 @@ fn render_radastan(bus: &NextBus, screen: &[u8], output: &mut [u8], with_border:
 }
 
 /// Composite the standard tilemap with ULA before the other video layers.
-pub(super) fn render_tilemap(bus: &NextBus, output: &mut [u8], with_border: bool) {
+pub(super) fn render_tilemap(
+    bus: &NextBusVideoRenderer<'_>,
+    output: &mut [u8],
+    with_border: bool,
+    rows: Range<usize>,
+) {
     let (width, height) = if with_border {
         (352usize, 288usize)
     } else {
@@ -108,7 +147,7 @@ pub(super) fn render_tilemap(bus: &NextBus, output: &mut [u8], with_border: bool
         (-32, -32)
     };
 
-    for y in 0..height {
+    for y in rows.start.min(height)..rows.end.min(height) {
         for x in 0..width {
             let tile_x = x as isize - origin.0;
             let tile_y = y as isize - origin.1;
@@ -131,27 +170,44 @@ pub(super) fn render_tilemap(bus: &NextBus, output: &mut [u8], with_border: bool
 }
 
 /// Composite the implemented sprite, Layer 2, and ULA layers into a Next frame.
-pub(super) fn compose(bus: &NextBus, output: &mut [u8], with_border: bool) {
+pub(super) fn compose(
+    bus: &NextBusVideoRenderer<'_>,
+    output: &mut [u8],
+    with_border: bool,
+    rows: Range<usize>,
+) {
     let order = bus.video_layer_order();
     if order >= 6 {
-        for offset in (0..output.len()).step_by(4) {
-            if output[offset + 3] == 0 {
-                output[offset..offset + 4].copy_from_slice(&[0, 0, 0, 0xff]);
+        let (width, height) = if with_border {
+            (352usize, 288usize)
+        } else {
+            (256, 192)
+        };
+        for y in rows.start.min(height)..rows.end.min(height) {
+            for x in 0..width {
+                let offset = (y * width + x) * 4;
+                if output[offset + 3] == 0 {
+                    output[offset..offset + 4].copy_from_slice(&[0, 0, 0, 0xff]);
+                }
             }
         }
         return;
     }
 
-    let sprite_surface = bus.render_sprite_surface();
     let (width, height) = if with_border { (352, 288) } else { (256, 192) };
     let sprite_origin = if with_border {
         (16isize, 16isize)
     } else {
         (-32, -32)
     };
+    let rows = rows.start.min(height)..rows.end.min(height);
+    let sprite_rows = (rows.start as isize - sprite_origin.1).clamp(0, SPRITE_HEIGHT as isize)
+        as usize
+        ..(rows.end as isize - sprite_origin.1).clamp(0, SPRITE_HEIGHT as isize) as usize;
+    let sprite_surface = bus.render_sprite_rows(sprite_rows.clone());
     let layer_order = layer_order(order);
 
-    for y in 0..height {
+    for y in rows.clone() {
         for x in 0..width {
             let sprite_x = x as isize - sprite_origin.0;
             let sprite_y = y as isize - sprite_origin.1;
@@ -163,7 +219,11 @@ pub(super) fn compose(bus: &NextBus, output: &mut [u8], with_border: bool) {
 
             let sprite_x = sprite_x as usize;
             let sprite_y = sprite_y as usize;
-            let sprite = sprite_surface[sprite_y * SPRITE_WIDTH + sprite_x];
+            let sprite = if sprite_rows.contains(&sprite_y) {
+                sprite_surface[(sprite_y - sprite_rows.start) * SPRITE_WIDTH + sprite_x]
+            } else {
+                None
+            };
             let layer2 = if (32..288).contains(&sprite_x) && (32..224).contains(&sprite_y) {
                 bus.layer2_video_pixel(sprite_x - 32, sprite_y - 32)
             } else {

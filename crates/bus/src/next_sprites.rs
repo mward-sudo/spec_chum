@@ -151,18 +151,29 @@ impl NextSprites {
         video: &NextVideo,
         layer_control: u8,
     ) -> Vec<Option<VideoColor>> {
-        let mut surface = vec![None; SURFACE_WIDTH * SURFACE_HEIGHT];
+        self.render_surface_rows(video, layer_control, 0..SURFACE_HEIGHT)
+    }
+
+    pub(super) fn render_surface_rows(
+        &self,
+        video: &NextVideo,
+        layer_control: u8,
+        rows: std::ops::Range<usize>,
+    ) -> Vec<Option<VideoColor>> {
+        let start = rows.start.min(SURFACE_HEIGHT);
+        let rows = start..rows.end.clamp(start, SURFACE_HEIGHT);
+        let mut surface = vec![None; SURFACE_WIDTH * (rows.end - rows.start)];
         if layer_control & 0x01 == 0 {
             return surface;
         }
 
         if layer_control & 0x40 == 0 {
             for sprite_index in 0..SPRITE_COUNT {
-                self.draw_sprite(&mut surface, video, layer_control, sprite_index);
+                self.draw_sprite(&mut surface, video, layer_control, sprite_index, &rows);
             }
         } else {
             for sprite_index in (0..SPRITE_COUNT).rev() {
-                self.draw_sprite(&mut surface, video, layer_control, sprite_index);
+                self.draw_sprite(&mut surface, video, layer_control, sprite_index, &rows);
             }
         }
         surface
@@ -174,6 +185,7 @@ impl NextSprites {
         video: &NextVideo,
         layer_control: u8,
         sprite_index: usize,
+        rows: &std::ops::Range<usize>,
     ) {
         let attributes = self.attributes[sprite_index];
         if attributes[3] & 0x80 == 0 || attributes[2] & 0x0e != 0 {
@@ -191,11 +203,9 @@ impl NextSprites {
         let palette_offset = attributes[2] >> 4;
         let over_border = layer_control & 0x02 != 0;
         let clip_over_border = layer_control & 0x20 != 0;
-        for row in 0..SPRITE_HEIGHT {
-            let screen_y = y.wrapping_add(row) & 0x1ff;
-            if screen_y >= SURFACE_HEIGHT
-                || !self.visible_y(screen_y, over_border, clip_over_border)
-            {
+        for screen_y in rows.clone() {
+            let row = screen_y.wrapping_sub(y) & 0x1ff;
+            if row >= SPRITE_HEIGHT || !self.visible_y(screen_y, over_border, clip_over_border) {
                 continue;
             }
             for column in 0..SPRITE_WIDTH {
@@ -209,7 +219,7 @@ impl NextSprites {
                 let pixel = self.pattern_memory[pattern + row * SPRITE_WIDTH + column];
                 let color = video.sprite_color(pixel, palette_offset, self.transparency);
                 if !color.transparent {
-                    surface[screen_y * SURFACE_WIDTH + screen_x] = Some(color);
+                    surface[(screen_y - rows.start) * SURFACE_WIDTH + screen_x] = Some(color);
                 }
             }
         }
