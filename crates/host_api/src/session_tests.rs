@@ -307,6 +307,46 @@ fn next_ay_audio_reaches_host_pcm() {
 }
 
 #[test]
+fn next_hdmi_audio_mute_silences_ay_and_beeper_pcm() {
+    let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
+    next.bus.write_nextreg(0x06, 0x01);
+    next.bus.write_nextreg(0x08, 0x30);
+    next.bus.write_nextreg(0x09, 0x04);
+    for (register, value) in [(0, 3), (1, 0), (7, 0x3e), (8, 0x0f)] {
+        next.bus.out_port(0xfffd, register);
+        next.bus.out_port(0xbffd, value);
+    }
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session.machine = Some(HostRuntime::Next(Box::new(next)));
+
+    let audio = session.run_frame();
+
+    assert!(audio.audio_muted_samples.iter().all(|muted| *muted));
+    assert!(session.audio_pcm().iter().all(|sample| *sample == 0.0));
+    assert!(session
+        .audio_pcm_stereo()
+        .iter()
+        .all(|sample| *sample == 0.0));
+}
+
+#[test]
+fn next_hdmi_mute_is_applied_at_each_emitted_sample() {
+    let audio = machine::FrameAudio {
+        frame_tstates: Some(3),
+        audio_muted_samples: vec![false, true, false],
+        ay_samples: vec![0.5; 3],
+        ..machine::FrameAudio::default()
+    };
+    let mut pcm = Vec::new();
+
+    render_frame_pcm_with_count(&audio, 3, false, 3, &mut pcm);
+
+    assert!(pcm[0] < 0.0);
+    assert_eq!(pcm[1], 0.0);
+    assert!(pcm[2] < 0.0);
+}
+
+#[test]
 fn kempston_mouse_ports_after_synthetic_deltas() {
     let Some(rom) = rom48() else {
         eprintln!("skip: roms/spec48.rom missing");
@@ -1687,6 +1727,7 @@ fn render_frame_pcm_carries_late_edge_into_next_level() {
     let audio = machine::FrameAudio {
         beeper_edges: vec![(frame_tstates - 1, true)],
         frame_tstates: None,
+        audio_muted_samples: Vec::new(),
         ay_samples: Vec::new(),
         ay_left: Vec::new(),
         ay_right: Vec::new(),

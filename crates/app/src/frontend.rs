@@ -157,7 +157,7 @@ impl SpecChumApp {
             }
             if let Ok(mut b) = self.beeper.lock() {
                 b.queue_frame(
-                    audio,
+                    &audio,
                     self.session.muted,
                     self.session.volume,
                     self.session.throttle,

@@ -56,5 +56,11 @@ pub extern "C" fn sc_audio_stereo_frames(handle: *mut c_void) -> c_uint {
 /// Host pacing interval in seconds (classic 20 ms; Next follows selected timing).
 #[no_mangle]
 pub extern "C" fn sc_frame_period_seconds(handle: *mut c_void) -> c_double {
-    session_mut(handle).map_or(0.020, |s| s.frame_period_seconds())
+    session_mut(handle).map_or(0.0, |s| {
+        if s.frame_tstates() == 0 {
+            0.0
+        } else {
+            s.frame_period_seconds()
+        }
+    })
 }

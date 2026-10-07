@@ -1809,6 +1809,16 @@ fn render_frame_pcm_with_count(
             break;
         }
     }
+    for (index, sample) in out.iter_mut().enumerate() {
+        if audio
+            .audio_muted_samples
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+        {
+            *sample = 0.0;
+        }
+    }
     level
 }
 
@@ -1816,6 +1826,15 @@ fn render_frame_stereo_pcm(audio: &machine::FrameAudio, mono: &[f32], out: &mut 
     out.clear();
     out.reserve(mono.len() * 2);
     for (index, &sample) in mono.iter().enumerate() {
+        if audio
+            .audio_muted_samples
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+        {
+            out.extend_from_slice(&[0.0, 0.0]);
+            continue;
+        }
         let mono_ay = audio
             .ay_samples
             .get(index)

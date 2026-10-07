@@ -25,11 +25,19 @@ impl ShellPlatform {
 }
 
 /// Shared ring fed each emulated frame and drained by the audio callback.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PcmRing {
     samples: VecDeque<[f32; 2]>,
+    output_rate: u32,
+    sample_phase: u64,
     pub volume: f32,
     pub muted: bool,
+}
+
+impl Default for PcmRing {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PcmRing {
@@ -37,6 +45,8 @@ impl PcmRing {
     pub fn new() -> Self {
         Self {
             samples: VecDeque::with_capacity(8192),
+            output_rate: 44_100,
+            sample_phase: 0,
             volume: 0.7,
             muted: false,
         }
@@ -74,8 +84,27 @@ impl PcmRing {
         }
     }
 
+    fn set_output_rate(&mut self, output_rate: u32) {
+        self.output_rate = output_rate.max(1);
+        self.sample_phase = 0;
+    }
+
     fn pop_frame(&mut self) -> [f32; 2] {
-        let pair = self.samples.pop_front().unwrap_or([0.0; 2]);
+        let Some(&first) = self.samples.front() else {
+            return [0.0; 2];
+        };
+        let second = self.samples.get(1).copied().unwrap_or(first);
+        let fraction = self.sample_phase as f32 / self.output_rate as f32;
+        let pair = [
+            first[0] + (second[0] - first[0]) * fraction,
+            first[1] + (second[1] - first[1]) * fraction,
+        ];
+        self.sample_phase += 44_100;
+        let consumed = (self.sample_phase / u64::from(self.output_rate)) as usize;
+        self.sample_phase %= u64::from(self.output_rate);
+        for _ in 0..consumed {
+            self.samples.pop_front();
+        }
         if self.muted {
             return [0.0; 2];
         }
@@ -106,6 +135,7 @@ pub fn start_stream(ring: Arc<Mutex<PcmRing>>, platform: ShellPlatform) -> Optio
         }
     };
     let channel_count = config.channels();
+    ring.lock().set_output_rate(config.sample_rate().0);
     let stream_config = config.config();
     let stream = match config.sample_format() {
         SampleFormat::F32 => {
@@ -214,5 +244,36 @@ mod tests {
         let mut mono = [0.0_f32; 1];
         fill_output_samples(&mut mono, 1, &mut ring);
         assert_eq!(mono, [-0.25]);
+    }
+
+    #[test]
+    fn resamples_source_frames_to_device_rate_and_preserves_stereo() {
+        let mut ring = PcmRing::new();
+        ring.volume = 1.0;
+        ring.set_output_rate(48_000);
+        ring.push_stereo_frame(&[0.0, 0.5, 1.0, -0.5, 0.0, 0.5]);
+
+        let mut output = [0.0_f32; 8];
+        fill_output_samples(&mut output, 2, &mut ring);
+        assert_eq!(output[0..2], [0.0, 0.5]);
+        assert!((output[2] - 0.91875).abs() < 1e-6);
+        assert!((output[3] + 0.41875).abs() < 1e-6);
+        assert!((output[4] - 0.1625).abs() < 1e-6);
+        assert!((output[5] - 0.3375).abs() < 1e-6);
+        assert_eq!(output[6..8], [0.0, 0.5]);
+    }
+
+    #[test]
+    fn resampling_keeps_source_and_device_clocks_in_step() {
+        let mut ring = PcmRing::new();
+        ring.set_output_rate(48_000);
+        ring.samples
+            .extend((0..44_102).map(|index| [index as f32, 0.0]));
+
+        for _ in 0..48_000 {
+            ring.pop_frame();
+        }
+
+        assert_eq!(ring.samples.len(), 2);
     }
 }

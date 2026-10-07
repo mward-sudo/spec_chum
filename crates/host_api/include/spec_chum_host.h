@@ -111,7 +111,7 @@ unsigned int sc_audio_sample_rate(void *handle);
 /* Interleaved left/right f32 PCM; frame count counts stereo pairs. */
 const float *sc_audio_stereo_ptr(void *handle);
 unsigned int sc_audio_stereo_frames(void *handle);
-/* Selected video frame duration in 3.5 MHz CPU T-states; zero if unloaded. */
+/* Selected video frame duration in seconds; zero if unloaded. */
 double sc_frame_period_seconds(void *handle);
 
 int sc_set_key(void *handle, unsigned int row, unsigned int bit, int pressed);

@@ -24,6 +24,7 @@ pub struct NextMachine {
     ay_samples: Vec<f32>,
     ay_left: Vec<f32>,
     ay_right: Vec<f32>,
+    audio_muted_samples: Vec<bool>,
 }
 
 impl NextMachine {
@@ -42,6 +43,7 @@ impl NextMachine {
             ay_samples: Vec::new(),
             ay_left: Vec::new(),
             ay_right: Vec::new(),
+            audio_muted_samples: Vec::new(),
         })
     }
 
@@ -57,6 +59,7 @@ impl NextMachine {
         self.ay_samples.clear();
         self.ay_left.clear();
         self.ay_right.clear();
+        self.audio_muted_samples.clear();
         Ok(())
     }
 
@@ -73,6 +76,7 @@ impl NextMachine {
         self.ay_samples.clear();
         self.ay_left.clear();
         self.ay_right.clear();
+        self.audio_muted_samples.clear();
     }
 
     /// Uninterrupted video clock, including across CPU soft resets.
@@ -137,6 +141,7 @@ impl NextMachine {
             self.ay_samples.push(mono);
             self.ay_left.push(left);
             self.ay_right.push(right);
+            self.audio_muted_samples.push(self.bus.audio_muted());
         }
         if let Some(status) = self.bus.take_reset_request() {
             self.cpu.reset();
@@ -171,6 +176,7 @@ impl NextMachine {
             ay_samples: std::mem::take(&mut self.ay_samples),
             ay_left: std::mem::take(&mut self.ay_left),
             ay_right: std::mem::take(&mut self.ay_right),
+            audio_muted_samples: std::mem::take(&mut self.audio_muted_samples),
             ..FrameAudio::default()
         };
         let mut future_edges = Vec::new();
@@ -332,6 +338,7 @@ mod tests {
         assert!((880..=883).contains(&audio.ay_samples.len()));
         assert_eq!(audio.ay_left.len(), audio.ay_samples.len());
         assert_eq!(audio.ay_right.len(), audio.ay_samples.len());
+        assert_eq!(audio.audio_muted_samples.len(), audio.ay_samples.len());
         assert!(
             audio.ay_samples.iter().any(|sample| *sample > 0.0),
             "regs={:?} mixed={:?} first={:?}",

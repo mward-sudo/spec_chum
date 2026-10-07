@@ -147,6 +147,15 @@ mod tests {
     }
 
     #[test]
+    fn frame_period_is_zero_until_a_runtime_is_loaded() {
+        assert_eq!(sc_frame_period_seconds(std::ptr::null_mut()), 0.0);
+        let handle = sc_create(0, 1);
+        assert!(!handle.is_null());
+        assert_eq!(sc_frame_period_seconds(handle), 0.0);
+        sc_destroy(handle);
+    }
+
+    #[test]
     fn ffi_bad_model_returns_null() {
         let h = sc_create(99, 1);
         assert!(h.is_null());

@@ -5,6 +5,7 @@
 
 use std::path::Path;
 
+use crate::ay::PsgModel;
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
 use crate::next_sprites::NextSprites;
@@ -173,6 +174,9 @@ impl NextBus {
         self.peripheral3 = 0x10;
         self.peripheral6 = 0;
         self.ay = std::array::from_fn(|_| Ay8912::new());
+        for ay in &mut self.ay {
+            ay.set_model(PsgModel::Ym2149);
+        }
         self.ay_chip_select = 3;
         self.ay_channel_enable = [0x03; 3];
         self.reset_register = 2;
@@ -216,6 +220,7 @@ impl NextBus {
         self.peripheral3 = peripheral3 & !0x40;
         self.peripheral5 = peripheral5;
         self.alternate_rom_register = alternate_rom_reset;
+        self.peripheral6 = 0xa0;
         self.reset_register = 0x01;
     }
 
@@ -488,6 +493,12 @@ impl NextBus {
         (f32::midpoint(left, right), left, right)
     }
 
+    /// Whether `NextReg` `$09` bit 2 silences the complete HDMI audio mix.
+    #[must_use]
+    pub fn audio_muted(&self) -> bool {
+        self.peripheral2 & 0x04 != 0
+    }
+
     /// Whether an AY amplitude register is configured to produce audio.
     #[must_use]
     pub fn audio_configured(&self) -> bool {
@@ -620,6 +631,14 @@ impl NextBus {
             }
             0x06 => {
                 self.peripheral6 = value;
+                let model = if value & 0x01 == 0 {
+                    PsgModel::Ym2149
+                } else {
+                    PsgModel::Ay8912
+                };
+                for ay in &mut self.ay {
+                    ay.set_model(model);
+                }
                 if value & 0x03 == 0x03 {
                     for ay in &mut self.ay {
                         ay.reset();
@@ -1241,6 +1260,38 @@ mod tests {
 
         bus.hard_reset();
         assert_eq!(bus.read_nextreg(0x06) & 0x03, 0);
+        assert_eq!(bus.read_nextreg(0x06) & 0xa0, 0);
+        bus.soft_reset();
+        assert_eq!(bus.read_nextreg(0x06), 0xa0);
+        assert_eq!(bus.read_nextreg(0x06) & 0x03, 0, "soft reset keeps YM mode");
+    }
+
+    #[test]
+    fn nextreg_audio_mode_selects_the_psg_dac_response() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        program_tone_b(&mut bus, 0xff);
+        bus.out_port(0xfffd, 9);
+        bus.out_port(0xbffd, 1);
+        bus.advance_audio(32);
+        let ym_level = bus.ay_chip(0).expect("selected chip").channel_levels()[1];
+
+        bus.write_nextreg(0x06, 0x01);
+        let ay_level = bus.ay_chip(0).expect("selected chip").channel_levels()[1];
+
+        assert!(
+            (ym_level - ay_level).abs() > 1e-6,
+            "YM and AY modes use distinct DAC curves"
+        );
+    }
+
+    #[test]
+    fn peripheral4_bit_two_reports_hdmi_audio_mute() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert!(!bus.audio_muted());
+        bus.write_nextreg(0x09, 0x04);
+        assert!(bus.audio_muted());
+        bus.write_nextreg(0x09, 0xfb);
+        assert!(!bus.audio_muted());
     }
 
     #[test]
