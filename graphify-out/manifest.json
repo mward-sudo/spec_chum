@@ -372,9 +372,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1791347039.4909678,
-    "seen": 1791347665.3338282,
-    "ast_hash": "db2c8ec8213adffbc654ee2aa66ef204",
+    "mtime": 1791349078.651251,
+    "seen": 1791349437.483101,
+    "ast_hash": "a5da603bfc5c462a1be9618c03a38d99",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -558,9 +558,9 @@
     "semantic_hash": "42ddbaef98513dc485ae1fdfed9bd053"
   },
   "crates/machine/src/lib.rs": {
-    "mtime": 1791347246.1546211,
-    "seen": 1791347665.334804,
-    "ast_hash": "d4d0eb4b8a9f7d44d9d46f83a5be30a9",
+    "mtime": 1791349069.6598206,
+    "seen": 1791349437.4841301,
+    "ast_hash": "07001a4dac39b5900453e96e2b488cea",
     "semantic_hash": ""
   },
   "crates/machine/src/system_tests.rs": {
@@ -2076,9 +2076,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session_tests.rs": {
-    "mtime": 1791347062.1322196,
-    "seen": 1791347665.333854,
-    "ast_hash": "f5d5a17b4564be993938d6d9aa188c2a",
+    "mtime": 1791349632.1722412,
+    "seen": 1791349646.699195,
+    "ast_hash": "38e4e4c85d4f6853de5839c7df388408",
     "semantic_hash": ""
   },
   "crates/machine/src/memory.rs": {
@@ -2178,9 +2178,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/frontend/audio.rs": {
-    "mtime": 1791347307.086549,
-    "seen": 1791347665.33197,
-    "ast_hash": "932d28dadb29f6f0ad60358d83f9ea62",
+    "mtime": 1791349325.1122143,
+    "seen": 1791349437.481063,
+    "ast_hash": "e4ab9d86842fcf7cffa09049b20ed0ed",
     "semantic_hash": ""
   },
   "crates/tape/src/waveform.rs": {
@@ -2304,15 +2304,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791347233.6376045,
-    "seen": 1791347665.332402,
-    "ast_hash": "4f5ee3c89c0373b545520538a0df9d95",
+    "mtime": 1791349908.0008175,
+    "seen": 1791350012.153888,
+    "ast_hash": "3a6f129e614737269f202e6a74d93663",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791347031.3844244,
-    "seen": 1791347665.334829,
-    "ast_hash": "338f10dc8746d3b2e64bae817c7c99e9",
+    "mtime": 1791349943.3127477,
+    "seen": 1791350012.1565351,
+    "ast_hash": "7a3349f31e56804033afb0a400d08f50",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {

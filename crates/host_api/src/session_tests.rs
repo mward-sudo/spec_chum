@@ -273,6 +273,73 @@ fn next_beeper_audio_reaches_host_pcm() {
 }
 
 #[test]
+fn next_dac_samples_reach_mono_and_panned_stereo_host_pcm() {
+    let audio = machine::FrameAudio {
+        ay_samples: vec![0.5; 4],
+        ay_left: vec![0.5; 4],
+        ay_right: vec![0.5; 4],
+        dac_samples: vec![
+            [1.0, 0.5, 0.5, 0.5], // Left.
+            [0.5, 0.5, 0.5, 1.0], // Right.
+            [1.0, 0.5, 0.5, 1.0], // Center.
+            [0.5; 4],             // Disabled DAC output.
+        ],
+        ..machine::FrameAudio::default()
+    };
+    let mut mono = Vec::new();
+    render_frame_pcm_with_count(&audio, 4, false, 4, &mut mono);
+    let mut stereo = Vec::new();
+    render_frame_stereo_pcm(&audio, &mono, &mut stereo);
+
+    let expected_mono = [-0.025, -0.025, 0.1, -0.15];
+    assert!(mono
+        .iter()
+        .zip(expected_mono)
+        .all(|(sample, expected)| (*sample - expected).abs() < 1e-6));
+    let expected_stereo = [0.1, -0.15, -0.15, 0.1, 0.1, 0.1, -0.15, -0.15];
+    assert!(stereo
+        .iter()
+        .zip(expected_stereo)
+        .all(|(sample, expected)| (*sample - expected).abs() < 1e-6));
+}
+
+#[test]
+fn cpu_programmed_next_dac_write_reaches_timed_host_pcm() {
+    let rom = vec![0; 64 * 1024];
+    let mut machine = machine::NextMachine::new(&rom).expect("valid ROM");
+    let mut program = vec![0x3e, 0xff]; // LD A,$ff
+    program.extend([0x00; 30]); // Let the centered output reach the host first.
+    program.extend([0xd3, 0x1f, 0x76]); // OUT ($1f),A; HALT
+    assert!(machine.bus.load_ram_page(4, 0, &program));
+    machine.cpu.regs.pc = 0x8000;
+    machine.bus.write_nextreg_at(0x08, 0x18, 0); // Enable DACs.
+
+    let audio = machine.run_frame();
+    let changed = audio
+        .dac_samples
+        .iter()
+        .position(|sample| sample[0] > 0.5)
+        .expect("executed DAC write reaches a later audio sample");
+    assert!(changed > 0, "the earlier sample remains centered");
+
+    let mut mono = Vec::new();
+    render_frame_pcm_with_count(
+        &audio,
+        audio.frame_tstates.expect("Next frame timing"),
+        false,
+        audio.dac_samples.len(),
+        &mut mono,
+    );
+    let mut stereo = Vec::new();
+    render_frame_stereo_pcm(&audio, &mono, &mut stereo);
+    let left_dac = f32::midpoint(255.0 / 256.0, 0.5) - 0.5;
+    let mono_dac = left_dac * 0.5;
+    assert!((mono[changed] - (-0.15 + mono_dac)).abs() < 1e-5);
+    assert!((stereo[changed * 2] - (-0.15 + left_dac)).abs() < 1e-5);
+    assert!((stereo[changed * 2 + 1] + 0.15).abs() < 1e-5);
+}
+
+#[test]
 fn next_ay_audio_reaches_host_pcm() {
     let mut next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
     next.bus.write_nextreg(0x03, 0xa3); // Use the 70,908T display timing.
@@ -1728,6 +1795,7 @@ fn render_frame_pcm_carries_late_edge_into_next_level() {
         beeper_edges: vec![(frame_tstates - 1, true)],
         frame_tstates: None,
         audio_muted_samples: Vec::new(),
+        dac_samples: Vec::new(),
         ay_samples: Vec::new(),
         ay_left: Vec::new(),
         ay_right: Vec::new(),

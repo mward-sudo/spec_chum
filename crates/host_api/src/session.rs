@@ -1775,7 +1775,7 @@ fn render_frame_pcm_with_count(
     let mut level = initial_level;
     let mut t = 0.0f32;
     let mut ay_i = 0usize;
-    for sample in out.iter_mut() {
+    for (sample_index, sample) in out.iter_mut().enumerate() {
         while edge_i < audio.beeper_edges.len() {
             let (edge_t, edge_level) = audio.beeper_edges[edge_i];
             if t >= edge_t as f32 {
@@ -1795,7 +1795,9 @@ fn render_frame_pcm_with_count(
         } else {
             0.0
         };
-        *sample = (beep + ay).clamp(-1.0, 1.0);
+        let (dac_left, dac_right) = audio.dac_stereo_sample(sample_index);
+        let dac = f32::midpoint(dac_left, dac_right);
+        *sample = (beep + ay + dac).clamp(-1.0, 1.0);
         t += t_per;
     }
     // Edges in the final sample interval (after the last sample instant) must
@@ -1850,9 +1852,12 @@ fn render_frame_stereo_pcm(audio: &machine::FrameAudio, mono: &[f32], out: &mut 
             .get(index)
             .or_else(|| audio.ay_right.last())
             .map_or(mono_ay, |value| (value - 0.5) * 0.5);
+        let (dac_left, dac_right) = audio.dac_stereo_sample(index);
+        let dac = [dac_left, dac_right];
+        let mono_dac = f32::midpoint(dac[0], dac[1]);
         out.extend_from_slice(&[
-            (sample - mono_ay + left_ay).clamp(-1.0, 1.0),
-            (sample - mono_ay + right_ay).clamp(-1.0, 1.0),
+            (sample - mono_ay - mono_dac + left_ay + dac[0]).clamp(-1.0, 1.0),
+            (sample - mono_ay - mono_dac + right_ay + dac[1]).clamp(-1.0, 1.0),
         ]);
     }
 }

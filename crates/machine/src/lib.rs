@@ -292,12 +292,35 @@ pub struct FrameAudio {
     pub frame_tstates: Option<u32>,
     /// `NextReg` $09 bit 2 at each Next audio sample; empty for classic frames.
     pub audio_muted_samples: Vec<bool>,
+    /// Held Next DAC outputs in A, B, C, D order, normalized to 0..1 per sample.
+    /// Empty for classic frames. A/B feed left and C/D feed right.
+    pub dac_samples: Vec<[f32; 4]>,
     /// Mono AY samples for this frame (empty on 48K). Amplitude roughly 0..1.
     pub ay_samples: Vec<f32>,
     /// Left AY channel (same length as `ay_samples`; empty on 48K).
     pub ay_left: Vec<f32>,
     /// Right AY channel (same length as `ay_samples`; empty on 48K).
     pub ay_right: Vec<f32>,
+}
+
+impl FrameAudio {
+    /// Return the held, centered left/right DAC contributions for one sample.
+    /// Each side averages its two DACs; if the index is past the frame, the
+    /// final held value is used. Frames without Next DAC samples are silent.
+    #[must_use]
+    pub fn dac_stereo_sample(&self, index: usize) -> (f32, f32) {
+        let Some(values) = self
+            .dac_samples
+            .get(index)
+            .or_else(|| self.dac_samples.last())
+        else {
+            return (0.0, 0.0);
+        };
+        (
+            f32::midpoint(values[0], values[1]) - 0.5,
+            f32::midpoint(values[2], values[3]) - 0.5,
+        )
+    }
 }
 
 fn push_ay_frame_sample(
@@ -1391,6 +1414,7 @@ impl Machine {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     frame_tstates: None,
                     audio_muted_samples: Vec::new(),
+                    dac_samples: Vec::new(),
                     ay_samples,
                     ay_left,
                     ay_right,
@@ -1571,6 +1595,7 @@ impl Machine {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     frame_tstates: None,
                     audio_muted_samples: Vec::new(),
+                    dac_samples: Vec::new(),
                     ay_samples,
                     ay_left,
                     ay_right,
@@ -1744,6 +1769,7 @@ impl Machine {
                     beeper_edges: std::mem::take(&mut bus.beeper_edges),
                     frame_tstates: None,
                     audio_muted_samples: Vec::new(),
+                    dac_samples: Vec::new(),
                     ay_samples,
                     ay_left,
                     ay_right,
