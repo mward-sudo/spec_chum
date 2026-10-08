@@ -14,8 +14,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 
 MARKER = 0x2A
@@ -30,6 +32,8 @@ ZRCP_PORT = 10000
 MAME_BOOTROM_SHA1 = "8b3c2a301f486904d1c74929b94845a7731bf230"
 EXPECTED_MUL_TSTATES = 154
 EXPECTED_MUL_RESULT = (0x01, 0xB5)
+VIDEO_LINE_STOP = 0xC03B
+EXPECTED_VIDEO_LINES = (0x20, 0x21)
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,12 @@ class ProbeResult:
     marker: int
     byte1: int
     byte2: int
+
+
+@dataclass(frozen=True)
+class VideoLineResult:
+    first_line: int
+    second_line: int
 
 
 def make_nex(program: bytes) -> bytes:
@@ -89,6 +99,28 @@ def mul_probe_program() -> bytes:
             0x7B, 0x32, 0x02, 0xC1,  # LD A,E; LD ($C102),A
             *([0x01, 0x00, 0x00] * 7),  # Seven LD BC,0 instructions
             *([0x00] * 3),  # Three NOP instructions
+        )
+    )
+
+
+def video_line_probe_program() -> bytes:
+    # Select 3.5 MHz before polling: a video line lasts 224 CPU T-states.
+    # Polling for line $020 establishes raster phase after the NEX loader runs.
+    return bytes(
+        (
+            0xF3,  # DI
+            0x01, 0x3B, 0x24, 0x3E, 0x07, 0xED, 0x79,  # Select NextReg $07
+            0x01, 0x3B, 0x25, 0xAF, 0xED, 0x79,  # Write 0 (3.5 MHz)
+            0x01, 0x3B, 0x24, 0x3E, 0x1E, 0xED, 0x79,  # Select NextReg $1E
+            0x01, 0x3B, 0x25, 0xED, 0x78, 0xE6, 0x01,  # Read active line MSB
+            0x20, 0xF0,  # Ignore lines >= $100
+            0x01, 0x3B, 0x24, 0x3E, 0x1F, 0xED, 0x79,  # Select NextReg $1F
+            0x01, 0x3B, 0x25,  # Read port $253B
+            0xED, 0x78, 0xFE, 0x20, 0x20, 0xE0,  # Wait until active line $020
+            0x32, 0x00, 0xC1,  # Save first line to $C100
+            0x16, 0x0E, 0x15, 0x20, 0xFD,  # Delay with 14 DEC D / JR NZ loops
+            0xED, 0x78, 0x32, 0x01, 0xC1,  # Save second line to $C101
+            0xC3, VIDEO_LINE_STOP & 0xFF, VIDEO_LINE_STOP >> 8,  # Stop at a self-jump
         )
     )
 
@@ -157,9 +189,37 @@ emu.add_machine_frame_notifier(poll)
 '''
 
 
-def mame_result(executable: str, rompath: Path, work: Path, nex: Path) -> ProbeResult:
+def mame_video_lua() -> str:
+    return (
+        r'''local debugger = manager.machine.debugger
+debugger:command('bpset 0xc000,,{bpdisable 1 ; printf "VIDEO_START %d\\n",totalcycles ; g}')
+debugger:command('bpset 0x@VIDEO_LINE_STOP@,,{bpdisable 2 ; printf "VIDEO_STOP %d %d %d\\n",totalcycles,b@0xc100,b@0xc101 ; g}')
+debugger.execution_state = "run"
+local function poll()
+  local start, stop, first, second
+  for i = 1, #debugger.consolelog do
+    local line = debugger.consolelog[i]
+    start = start or string.match(line, "VIDEO_START (%d+)")
+    local cycles, value1, value2 = string.match(line, "VIDEO_STOP (%d+) (%d+) (%d+)")
+    stop = stop or cycles
+    first = first or value1
+    second = second or value2
+  end
+  if start and stop and first and second then
+    print("MAME_VIDEO_RESULT cycles=" .. (tonumber(stop) - tonumber(start)) ..
+      " first=" .. first .. " second=" .. second)
+    manager.machine:exit()
+  end
+end
+emu.add_machine_frame_notifier(poll)
+'''
+        .replace("@VIDEO_LINE_STOP@", f"{VIDEO_LINE_STOP:04X}")
+    )
+
+
+def run_mame(executable: str, rompath: Path, work: Path, nex: Path, lua: str) -> str:
     script = work / "capture.lua"
-    script.write_text(mame_lua(), encoding="utf-8")
+    script.write_text(lua, encoding="utf-8")
     isolated = work / "mame"
     options = [
         "-noreadconfig",
@@ -185,16 +245,32 @@ def mame_result(executable: str, rompath: Path, work: Path, nex: Path) -> ProbeR
         [executable, *options], capture_output=True, text=True, timeout=20, env=env
     )
     output = result.stdout + result.stderr
+    if result.returncode != 0:
+        raise RuntimeError(f"MAME probe failed (exit {result.returncode}):\n{output}")
+    return output
+
+
+def mame_result(executable: str, rompath: Path, work: Path, nex: Path) -> ProbeResult:
+    output = run_mame(executable, rompath, work, nex, mame_lua())
     match = re.search(
         r"MAME_RESULT base=(\d+) tstates=(\d+) marker=(\d+) byte1=(\d+) byte2=(\d+)",
         output,
     )
-    if result.returncode != 0 or not match:
-        raise RuntimeError(f"MAME probe failed (exit {result.returncode}):\n{output}")
+    if not match:
+        raise RuntimeError(f"MAME probe returned no timing result:\n{output}")
     base_tstates, tstates, marker, byte1, byte2 = map(int, match.groups())
     if marker != MARKER:
         raise RuntimeError(f"MAME returned inconsistent probe data:\n{output}")
     return ProbeResult(base_tstates, tstates, marker, byte1, byte2)
+
+
+def mame_video_result(executable: str, rompath: Path, work: Path, nex: Path) -> VideoLineResult:
+    output = run_mame(executable, rompath, work, nex, mame_video_lua())
+    match = re.search(r"MAME_VIDEO_RESULT cycles=(\d+) first=(\d+) second=(\d+)", output)
+    if not match:
+        raise RuntimeError(f"MAME probe returned no video-line result:\n{output}")
+    _cycles, first, second = map(int, match.groups())
+    return VideoLineResult(first, second)
 
 
 def zesarux_command(sock: socket.socket, command: str) -> str:
@@ -216,7 +292,8 @@ def zesarux_command(sock: socket.socket, command: str) -> str:
     return b"".join(chunks).decode("utf-8", errors="replace")
 
 
-def zesarux_result(app: str, nex: Path) -> ProbeResult:
+@contextmanager
+def zesarux_session(app: str, nex: Path) -> Iterator[socket.socket]:
     with socket.socket() as probe:
         probe.settimeout(0.2)
         if probe.connect_ex(("127.0.0.1", ZRCP_PORT)) == 0:
@@ -260,6 +337,29 @@ def zesarux_result(app: str, nex: Path) -> ProbeResult:
         registers = zesarux_command(sock, "get-registers")
         if not re.search(r"PC=c000\b", registers, re.IGNORECASE):
             raise RuntimeError(f"ZEsarUX did not stop at the fixture entry point:\n{registers}")
+        yield sock
+    finally:
+        if sock is not None:
+            try:
+                zesarux_command(sock, "exit-emulator")
+            except OSError:
+                pass
+            finally:
+                sock.close()
+        if process.poll() is None:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+
+
+def zesarux_result(app: str, nex: Path) -> ProbeResult:
+    with zesarux_session(app, nex) as sock:
         zesarux_command(sock, "reset-tstates-partial")
         baseline_steps = [
             zesarux_command(sock, "cpu-step"),
@@ -293,24 +393,21 @@ def zesarux_result(app: str, nex: Path) -> ProbeResult:
             int(probe_tstates[-1]),
             *(int(value.group(1), 16) for value in memory_values),
         )
-    finally:
-        if sock is not None:
-            try:
-                zesarux_command(sock, "exit-emulator")
-            except OSError:
-                pass
-            finally:
-                sock.close()
-        if process.poll() is None:
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
+
+
+def zesarux_video_result(app: str, nex: Path) -> VideoLineResult:
+    with zesarux_session(app, nex) as sock:
+        zesarux_command(sock, "enable-breakpoints")
+        zesarux_command(sock, f"set-breakpoint 1 PC={VIDEO_LINE_STOP:04X}H")
+        run = zesarux_command(sock, "run no-stop-on-data")
+        registers = zesarux_command(sock, "get-registers")
+        if not re.search(rf"PC={VIDEO_LINE_STOP:04x}\b", registers, re.IGNORECASE):
+            raise RuntimeError(f"ZEsarUX did not reach the video probe boundary:\n{run}{registers}")
+        memory = zesarux_command(sock, "read-memory C100H 2")
+        match = re.search(r"^([0-9A-F]{2})([0-9A-F]{2})\b", memory, re.IGNORECASE)
+        if not match:
+            raise RuntimeError(f"ZEsarUX did not return video-line bytes:\n{memory}")
+        return VideoLineResult(*(int(value, 16) for value in match.groups()))
 
 
 def main() -> int:
@@ -362,7 +459,20 @@ def main() -> int:
             if observed_zesarux != expected_zesarux:
                 raise RuntimeError(f"ZEsarUX result differs from expected {name} output")
 
-    print("OBSERVED: both references agree on base instruction timing and Z80N MUL D,E.")
+        video_nex = work / "probe-video-line.nex"
+        video_nex.write_bytes(make_nex(video_line_probe_program()))
+        observed_mame_video = mame_video_result(args.mame, rompath, work, video_nex)
+        observed_zesarux_video = zesarux_video_result(str(zesarux_app), video_nex)
+        print(
+            "active video line: "
+            f"MAME 0x{observed_mame_video.first_line:02X}->0x{observed_mame_video.second_line:02X}; "
+            f"ZEsarUX 0x{observed_zesarux_video.first_line:02X}->0x{observed_zesarux_video.second_line:02X}"
+        )
+        expected_video = VideoLineResult(*EXPECTED_VIDEO_LINES)
+        if observed_mame_video != expected_video or observed_zesarux_video != expected_video:
+            raise RuntimeError("Reference active-video-line result differs from expected output")
+
+    print("OBSERVED: both references agree on base timing, MUL D,E, and active video-line progression.")
     print("CTC status still differs (MAME=0x01, ZEsarUX=0x00); see the capability note.")
     return 0
 
