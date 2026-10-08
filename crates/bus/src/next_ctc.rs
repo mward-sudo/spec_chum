@@ -280,6 +280,12 @@ impl NextCtc {
         Some(channel)
     }
 
+    pub(crate) fn clear_pending_requests(&mut self) {
+        for channel in &mut self.channels {
+            channel.pending = false;
+        }
+    }
+
     pub(crate) fn reti(&mut self) {
         if let Some(channel) = self.channels.iter().position(|channel| channel.in_service) {
             self.channels[channel].in_service = false;

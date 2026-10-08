@@ -629,6 +629,56 @@ mod tests {
         assert_eq!(machine.cpu.regs.pc, 0x4567);
     }
 
+    #[test]
+    fn ctc_pulse_mode_repeats_after_im1_ei_ret_handler() {
+        let mut rom = test_rom();
+        rom[0x38..0x41].copy_from_slice(&[
+            0x3a, 0x00, 0x80, // LD A,($8000)
+            0x3c, // INC A
+            0x32, 0x00, 0x80, // LD ($8000),A
+            0xfb, // EI
+            0xc9, // RET
+        ]);
+        let mut machine = NextMachine::new(&rom).expect("valid test ROM");
+        machine.bus.write(0x4000, 0x18); // JR $4000
+        machine.bus.write(0x4001, 0xfe);
+        machine.bus.write(0x8000, 0);
+        machine.cpu.regs.pc = 0x4000;
+        machine.cpu.regs.sp = 0xbffe;
+        machine.cpu.regs.im = 1;
+        machine.cpu.regs.iff1 = true;
+        machine.cpu.regs.iff2 = true;
+        // Pulse mode is the reset default. Configure and prime the timer,
+        // then align the machine clock with the setup before stepping CPU.
+        machine.bus.out_port_at(0x183b, 0x85, 0);
+        machine.bus.out_port_at(0x183b, 1, 0);
+        machine.bus.write_nextreg(0xc5, 1);
+        machine.bus.advance_ctc_master(16);
+        machine.master_t = 16;
+        machine.cpu.regs.pc = 0x4000;
+
+        // The CTC IRQ enters the normal IM1 vector, and the ROM-style EI/RET
+        // handler does not execute RETI. A later overflow must still interrupt.
+        assert!(machine.step_once() > 0);
+        assert_eq!(machine.cpu.regs.pc, 0x0038);
+        for _ in 0..5 {
+            machine.step_once();
+        }
+        assert_eq!(machine.bus.read(0x8000), 1);
+        assert_eq!(machine.cpu.regs.pc, 0x4000);
+
+        machine.master_t += 16;
+        machine.bus.advance_ctc_master(machine.master_t);
+        assert!(machine.bus.ctc_interrupt_pending(false));
+        assert!(machine.step_once() > 0);
+        assert_eq!(machine.cpu.regs.pc, 0x0038);
+        for _ in 0..5 {
+            machine.step_once();
+        }
+        assert_eq!(machine.bus.read(0x8000), 2);
+        assert_eq!(machine.cpu.regs.pc, 0x4000);
+    }
+
     fn dma_setup_program(prescaler: Option<u8>, destination: u16, io_destination: bool) -> Vec<u8> {
         let mut program = vec![0x01, 0x6b, 0x00]; // LD BC,$006B
         let mut writes = vec![

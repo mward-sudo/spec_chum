@@ -1473,9 +1473,18 @@ impl NextBus {
 
     /// Vector supplied by the highest-priority CTC channel during Z80 IRQ ACK.
     pub fn ctc_interrupt_acknowledge(&mut self, cpu_im2: bool) -> Option<u8> {
+        if self.interrupt_control & 1 == 0 {
+            // Pulse mode has no daisy-chain service state. Drop the request so
+            // the line deasserts; `$C9` retains its overflow history.
+            self.ctc.clear_pending_requests();
+            return None;
+        }
+        if !cpu_im2 {
+            // A hardware vector is consumed only by a CPU in IM2.
+            return None;
+        }
         let channel = self.ctc.acknowledge()?;
-        (self.interrupt_control & 1 != 0 && cpu_im2)
-            .then(|| (self.interrupt_control & 0xe0) | (((3 + channel) as u8) << 1))
+        Some((self.interrupt_control & 0xe0) | (((3 + channel) as u8) << 1))
     }
 
     /// Keep `NextReg` `$C0`'s read-only Z80 mode bits synchronized by the host.
@@ -1600,6 +1609,39 @@ mod tests {
         assert_eq!(bus.ctc_interrupt_acknowledge(true), Some(0xa6));
         bus.ctc_reti();
         assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+    }
+
+    #[test]
+    fn ctc_acknowledge_leaves_hardware_request_pending_outside_im2() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0xc0, 0xa1);
+        bus.out_port(0x183b, 0x85);
+        bus.out_port(0x183b, 1);
+        bus.write_nextreg(0xc5, 1);
+        bus.advance_ctc(2);
+
+        assert!(bus.ctc_interrupt_pending(true));
+        assert!(!bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(bus.ctc_interrupt_pending(true));
+        assert_eq!(bus.ctc_interrupt_acknowledge(true), Some(0xa6));
+    }
+
+    #[test]
+    fn ctc_pulse_acknowledge_clears_request_without_service_state() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(0x183b, 0x85);
+        bus.out_port(0x183b, 1);
+        bus.write_nextreg(0xc5, 1);
+        bus.advance_ctc(2);
+
+        assert!(bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(!bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 1, 1);
+
+        bus.advance_ctc(4);
+        assert!(bus.ctc_interrupt_pending(false));
     }
 
     #[test]
