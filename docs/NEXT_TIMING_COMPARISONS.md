@@ -4,7 +4,7 @@ Issue [#551](https://github.com/mward-sudo/spec_chum/issues/551) tracks differen
 
 ## Run the reference probe
 
-The runner builds a temporary, 17 KiB NEX guest and runs it in both references. It uses a local ZEsarUX remote-command connection and a headless MAME debugger. It requires Python 3, a MAME executable, the upstream `bootrom.vhd` source file, and a ZEsarUX executable (non-macOS) or `.app` bundle (macOS). It extracts the ROM into a temporary MAME ROM path after checking its size and SHA-1.
+The runner builds a temporary, 16,896-byte NEX guest (16.5 KiB) and runs it in both references. It uses a local ZEsarUX remote-command connection and a headless MAME debugger. It requires Python 3, a MAME executable, the upstream `bootrom.vhd` source file, and a ZEsarUX executable (non-macOS) or `.app` bundle (macOS). It extracts the ROM into a temporary MAME ROM path after checking its size and SHA-1.
 
 ```sh
 python3 scripts/next_reference_probe.py \
