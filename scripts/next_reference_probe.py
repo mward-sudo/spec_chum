@@ -34,6 +34,25 @@ EXPECTED_MUL_TSTATES = 154
 EXPECTED_MUL_RESULT = (0x01, 0xB5)
 VIDEO_LINE_STOP = 0xC03B
 EXPECTED_VIDEO_LINES = (0x20, 0x21)
+EXPECTED_FRAME_IRQ_TSTATES = (48_201, 48_113)
+FRAME_IRQ_VECTOR = 0x0038
+FRAME_IRQ_STACK = 0xC1FE
+
+VIDEO_PHASE_PREFIX = bytes(
+    (
+        0xF3,  # DI
+        0x01, 0x3B, 0x24, 0x3E, 0x07, 0xED, 0x79,  # Select NextReg $07
+        0x01, 0x3B, 0x25, 0xAF, 0xED, 0x79,  # Write 0 (3.5 MHz)
+        0x01, 0x3B, 0x24, 0x3E, 0x1E, 0xED, 0x79,  # Select NextReg $1E
+        0x01, 0x3B, 0x25, 0xED, 0x78, 0xE6, 0x01,  # Read active line MSB
+        0x20, 0xF0,  # Ignore lines >= $100
+        0x01, 0x3B, 0x24, 0x3E, 0x1F, 0xED, 0x79,  # Select NextReg $1F
+        0x01, 0x3B, 0x25,  # Read port $253B
+        0xED, 0x78, 0xFE, 0x20, 0x20, 0xE0,  # Wait until active line $020
+    )
+)
+FRAME_IRQ_WAIT_PC = 0xC000 + len(VIDEO_PHASE_PREFIX) + 6 + 3 + 2 + 1
+FRAME_IRQ_RETURN_PC = FRAME_IRQ_WAIT_PC + 1
 
 
 @dataclass(frozen=True)
@@ -49,6 +68,12 @@ class ProbeResult:
 class VideoLineResult:
     first_line: int
     second_line: int
+
+
+@dataclass(frozen=True)
+class FrameInterruptResult:
+    elapsed_tstates: int
+    return_pc: int
 
 
 def make_nex(program: bytes) -> bytes:
@@ -106,21 +131,24 @@ def mul_probe_program() -> bytes:
 def video_line_probe_program() -> bytes:
     # Select 3.5 MHz before polling: a video line lasts 224 CPU T-states.
     # Polling for line $020 establishes raster phase after the NEX loader runs.
-    return bytes(
+    return VIDEO_PHASE_PREFIX + bytes(
         (
-            0xF3,  # DI
-            0x01, 0x3B, 0x24, 0x3E, 0x07, 0xED, 0x79,  # Select NextReg $07
-            0x01, 0x3B, 0x25, 0xAF, 0xED, 0x79,  # Write 0 (3.5 MHz)
-            0x01, 0x3B, 0x24, 0x3E, 0x1E, 0xED, 0x79,  # Select NextReg $1E
-            0x01, 0x3B, 0x25, 0xED, 0x78, 0xE6, 0x01,  # Read active line MSB
-            0x20, 0xF0,  # Ignore lines >= $100
-            0x01, 0x3B, 0x24, 0x3E, 0x1F, 0xED, 0x79,  # Select NextReg $1F
-            0x01, 0x3B, 0x25,  # Read port $253B
-            0xED, 0x78, 0xFE, 0x20, 0x20, 0xE0,  # Wait until active line $020
             0x32, 0x00, 0xC1,  # Save first line to $C100
             0x16, 0x0E, 0x15, 0x20, 0xFD,  # Delay with 14 DEC D / JR NZ loops
             0xED, 0x78, 0x32, 0x01, 0xC1,  # Save second line to $C101
             0xC3, VIDEO_LINE_STOP & 0xFF, VIDEO_LINE_STOP >> 8,  # Stop at a self-jump
+        )
+    )
+
+
+def frame_interrupt_probe_program() -> bytes:
+    # Align to the next raster transition before enabling the frame interrupt.
+    return VIDEO_PHASE_PREFIX + bytes(
+        (
+            0xED, 0x78, 0xFE, 0x21, 0x20, 0xFA,  # Wait for line $021
+            0x31, 0x00, 0xC2,  # Put the interrupt return PC at $C1FE
+            0xED, 0x56, 0xFB, 0x76,  # IM 1; EI; HALT
+            0xC3, FRAME_IRQ_RETURN_PC & 0xFF, FRAME_IRQ_RETURN_PC >> 8,
         )
     )
 
@@ -273,6 +301,43 @@ def mame_video_result(executable: str, rompath: Path, work: Path, nex: Path) -> 
     return VideoLineResult(first, second)
 
 
+def mame_frame_interrupt_lua() -> str:
+    return (
+        r'''local debugger = manager.machine.debugger
+debugger:command('bpset 0x@WAIT_PC@,,{bpdisable 1 ; printf "FRAME_WAIT %d\\n",totalcycles ; g}')
+debugger:command('bpset 0x0038,,{bpdisable 2 ; printf "FRAME_IRQ %d %d %d\\n",totalcycles,b@0xc1fe,b@0xc1ff ; g}')
+debugger.execution_state = "run"
+local function poll()
+  local wait_cycle, irq_cycle, low, high
+  for i = 1, #debugger.consolelog do
+    local line = debugger.consolelog[i]
+    wait_cycle = wait_cycle or string.match(line, "FRAME_WAIT (%d+)")
+    local cycle, byte0, byte1 = string.match(line, "FRAME_IRQ (%d+) (%d+) (%d+)")
+    irq_cycle = irq_cycle or cycle
+    low = low or byte0
+    high = high or byte1
+  end
+  if wait_cycle and irq_cycle and low and high then
+    print("MAME_FRAME_IRQ_RESULT elapsed=" .. (tonumber(irq_cycle) - tonumber(wait_cycle)) ..
+      " low=" .. low .. " high=" .. high)
+    manager.machine:exit()
+  end
+end
+emu.add_machine_frame_notifier(poll)
+'''
+        .replace("@WAIT_PC@", f"{FRAME_IRQ_WAIT_PC:04X}")
+    )
+
+
+def mame_frame_interrupt_result(executable: str, rompath: Path, work: Path, nex: Path) -> FrameInterruptResult:
+    output = run_mame(executable, rompath, work, nex, mame_frame_interrupt_lua())
+    match = re.search(r"MAME_FRAME_IRQ_RESULT elapsed=(\d+) low=(\d+) high=(\d+)", output)
+    if not match:
+        raise RuntimeError(f"MAME probe returned no frame interrupt result:\n{output}")
+    elapsed, low, high = map(int, match.groups())
+    return FrameInterruptResult(elapsed, low | high << 8)
+
+
 def zesarux_command(sock: socket.socket, command: str) -> str:
     sock.sendall(command.encode("utf-8") + b"\n")
     chunks = []
@@ -410,6 +475,33 @@ def zesarux_video_result(app: str, nex: Path) -> VideoLineResult:
         return VideoLineResult(*(int(value, 16) for value in match.groups()))
 
 
+def zesarux_frame_interrupt_result(app: str, nex: Path) -> FrameInterruptResult:
+    with zesarux_session(app, nex) as sock:
+        zesarux_command(sock, "enable-breakpoints")
+        zesarux_command(sock, f"set-breakpoint 1 PC={FRAME_IRQ_WAIT_PC:04X}H")
+        zesarux_command(sock, f"set-breakpoint 2 PC={FRAME_IRQ_VECTOR:04X}H")
+        first_run = zesarux_command(sock, "run no-stop-on-data")
+        waiting = zesarux_command(sock, "get-registers")
+        if not re.search(rf"PC={FRAME_IRQ_WAIT_PC:04x}\b", waiting, re.IGNORECASE):
+            raise RuntimeError(f"ZEsarUX did not reach HALT:\n{first_run}{waiting}")
+        zesarux_command(sock, "reset-tstates-partial")
+        zesarux_command(sock, "disable-breakpoint 1")
+        second_run = zesarux_command(sock, "run no-stop-on-data")
+        interrupted = zesarux_command(sock, "get-registers")
+        if not re.search(rf"PC={FRAME_IRQ_VECTOR:04x}\b", interrupted, re.IGNORECASE) or not re.search(
+            rf"SP={FRAME_IRQ_STACK:04x}\b", interrupted, re.IGNORECASE
+        ):
+            raise RuntimeError(f"ZEsarUX did not enter the IM1 vector:\n{second_run}{interrupted}")
+        cycles = zesarux_command(sock, "get-tstates-partial")
+        stack = zesarux_command(sock, f"read-memory {FRAME_IRQ_STACK:04X}H 2")
+        elapsed = re.search(r"^(\d{9})\b", cycles)
+        return_bytes = re.search(r"^([0-9A-F]{2})([0-9A-F]{2})\b", stack, re.IGNORECASE)
+        if not elapsed or not return_bytes:
+            raise RuntimeError(f"ZEsarUX did not return interrupt timing and stack data:\n{cycles}{stack}")
+        low, high = (int(value, 16) for value in return_bytes.groups())
+        return FrameInterruptResult(int(elapsed.group(1)), low | high << 8)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mame", default="mame", help="MAME executable")
@@ -472,8 +564,23 @@ def main() -> int:
         if observed_mame_video != expected_video or observed_zesarux_video != expected_video:
             raise RuntimeError("Reference active-video-line result differs from expected output")
 
-    print("OBSERVED: both references agree on base timing, MUL D,E, and active video-line progression.")
+        frame_nex = work / "probe-frame-interrupt.nex"
+        frame_nex.write_bytes(make_nex(frame_interrupt_probe_program()))
+        observed_mame_frame = mame_frame_interrupt_result(args.mame, rompath, work, frame_nex)
+        observed_zesarux_frame = zesarux_frame_interrupt_result(str(zesarux_app), frame_nex)
+        print(
+            "frame interrupt: "
+            f"MAME elapsed={observed_mame_frame.elapsed_tstates} return=0x{observed_mame_frame.return_pc:04X}; "
+            f"ZEsarUX elapsed={observed_zesarux_frame.elapsed_tstates} return=0x{observed_zesarux_frame.return_pc:04X}"
+        )
+        expected_mame_frame = FrameInterruptResult(EXPECTED_FRAME_IRQ_TSTATES[0], FRAME_IRQ_RETURN_PC)
+        expected_zesarux_frame = FrameInterruptResult(EXPECTED_FRAME_IRQ_TSTATES[1], FRAME_IRQ_RETURN_PC)
+        if observed_mame_frame != expected_mame_frame or observed_zesarux_frame != expected_zesarux_frame:
+            raise RuntimeError("Reference frame-interrupt result differs from expected output")
+
+    print("OBSERVED: both references agree on base timing, MUL D,E, active video-line progression, and IM1 entry.")
     print("CTC status still differs (MAME=0x01, ZEsarUX=0x00); see the capability note.")
+    print("Frame interrupt arrival differs by 88 T-states between the pinned reference implementations.")
     return 0
 
 

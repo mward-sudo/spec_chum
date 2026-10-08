@@ -79,9 +79,20 @@ MAME's debugger runs to the stop PC. ZEsarUX uses ZRCP `run no-stop-on-data` wit
 
 Fixture SHA-256: `df67b01f7a3e07fa8691e8862ddd7bf123a0d595116cd075ea183aafea3becb7`. This confirms one line increment in each reference for this guest sequence. It does not establish framebuffer output, a complete frame duration, or physical-hardware timing.
 
+## Case: frame interrupt entry from a raster edge
+
+The fourth fixture reuses the full `$020` raster-line check, then polls NextReg `$1F` for the transition to `$021`. It sets `SP=$C200`, enters IM1, executes `EI; HALT` at `$C03A`, and waits for the frame interrupt. Both references stop at the IM1 vector `$0038` with `SP=$C1FE` and `$C03B` saved on the stack as the return PC. MAME measures the CPU-cycle difference between debugger breakpoints at `$C03A` and `$0038`; ZEsarUX resets its independent ZRCP partial T-state counter at the HALT breakpoint and reads it at `$0038`. Three direct hidden runs and the integrated runner produced the same observations:
+
+| Reference | Version | HALT to IM1 vector | Return PC |
+| --- | --- | ---: | ---: |
+| MAME | 0.289 | 48,201 T-states | `$C03B` |
+| ZEsarUX | 13.0 | 48,113 T-states | `$C03B` |
+
+Fixture SHA-256: `ac13743abf0477ef531acd9e5e7a865bd562dddbbb53040f0464cfc060e71a15`. The 88-T-state difference is a reference implementation observation. [MAME 0.289](https://github.com/mamedev/mame/blob/mame0289/src/mame/sinclair/next/specnext.cpp#L2714-L2730) schedules its ULA frame IRQ at the configured vertical and horizontal interrupt position; [ZEsarUX 13.0](https://github.com/chernandezba/zesarux/blob/ZEsarUX-13.0/src/cores/core_spectrum.c#L294-L395) raises the maskable interrupt at frame completion. These source paths could contribute to the difference, but this fixture does not establish the exact cause or which timing matches physical hardware. Spec Chum's `frame_interrupt_uses_selected_display_timing` test remains the local accuracy check; this comparison alone does not justify changing its interrupt timing.
+
 CTC fixture SHA-256: `e5b123c972a3bcb71d312c649a3b3bb985cfb3aef7a3c1b9f78e2cc940edf126`.
 
-These results validate the guest fixtures, capture paths, and selected instruction sequences only. They do not compare complete frame timing, interrupt entry timing, framebuffer output, audio, or DMA. Keep #551 open until its selected timing-sensitive cases have deterministic reference results and actionable differences have follow-up issues.
+These results validate the guest fixtures, capture paths, and selected instruction sequences only. They do not compare complete frame timing, interrupt pulse width, interrupt return, framebuffer output, audio, or DMA. Keep #551 open until its selected timing-sensitive cases have deterministic reference results and actionable differences have follow-up issues.
 
 ## Local baseline
 
