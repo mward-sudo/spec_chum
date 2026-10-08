@@ -2424,15 +2424,15 @@
     "semantic_hash": ""
   },
   "scripts/next_reference_probe.py": {
-    "mtime": 1791470321.8654919,
-    "seen": 1791470552.64737,
-    "ast_hash": "823e8af1e472056f3304db190710e2b3",
+    "mtime": 1791471514.5487263,
+    "seen": 1791471583.9957209,
+    "ast_hash": "6a81f94b71dca0df5ce2c7d15b52e772",
     "semantic_hash": ""
   },
   "docs/NEXT_TIMING_COMPARISONS.md": {
-    "mtime": 1791470548.1358151,
-    "seen": 1791470552.6482089,
-    "ast_hash": "fe0bab421c64d81713617e9a96bd2865",
+    "mtime": 1791471579.5356266,
+    "seen": 1791471583.996508,
+    "ast_hash": "e56bb6fd38c01e9837d1081f8f52c728",
     "semantic_hash": ""
   }
 }

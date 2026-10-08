@@ -68,7 +68,7 @@ The generated NEX is 16,896 bytes; SHA-256: `bfb95ad94e4dd4a191e4fb446ec02b4dd72
 
 ## Case: active video line advances
 
-The third fixture writes `0` to NextReg `$07` to select 3.5 MHz CPU speed, then polls the active video line MSB `$1E` and LSB `$1F` until the full line number is `$020`. Checking the MSB avoids also accepting line `$120`, which has the same low byte. It saves the line to `$C100`, waits about 369 CPU T-states, reads the line again, and saves it to `$C101`. The polling loop establishes a known raster phase after the NEX loader, so the comparison does not assume identical loader timing. The stop PC is `$C03B`.
+The third fixture writes `0` to NextReg `$07` to select 3.5 MHz CPU speed, then polls the active video line MSB `$1E` and LSB `$1F` until the full line number is `$020`. Checking the MSB avoids also accepting line `$120`, which has the same low byte. It saves the line to `$C100`, waits about 265 CPU T-states, reads the line again, and saves it to `$C101`. The polling loop establishes a known raster phase after the NEX loader, so the comparison does not assume identical loader timing. The stop PC is `$C03B`.
 
 MAME's debugger runs to the stop PC. ZEsarUX uses ZRCP `run no-stop-on-data` with a PC breakpoint, which executes its normal remote core loop. The [MAME 0.289 Next driver](https://github.com/mamedev/mame/blob/mame0289/src/mame/sinclair/next/specnext.cpp#L1625-L1630) and [ZEsarUX 13.0 Next implementation](https://github.com/chernandezba/zesarux/blob/ZEsarUX-13.0/src/machines/tbblue.c#L5583-L5598) both serve `$1F` from the raster line. The three direct probe runs and the integrated runner produced the same values:
 
@@ -77,7 +77,7 @@ MAME's debugger runs to the stop PC. ZEsarUX uses ZRCP `run no-stop-on-data` wit
 | MAME | 0.289 | `$20` | `$21` |
 | ZEsarUX | 13.0 | `$20` | `$21` |
 
-Fixture SHA-256: `c9bb794544b9330596651d96eaa39fca5c6608010712b06344d99e1fbab893f4`. This confirms one line increment in each reference for this guest sequence. It does not establish framebuffer output, a complete frame duration, or physical-hardware timing.
+Fixture SHA-256: `df67b01f7a3e07fa8691e8862ddd7bf123a0d595116cd075ea183aafea3becb7`. This confirms one line increment in each reference for this guest sequence. It does not establish framebuffer output, a complete frame duration, or physical-hardware timing.
 
 CTC fixture SHA-256: `e5b123c972a3bcb71d312c649a3b3bb985cfb3aef7a3c1b9f78e2cc940edf126`.
 

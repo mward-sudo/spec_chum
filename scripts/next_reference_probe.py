@@ -105,7 +105,7 @@ def mul_probe_program() -> bytes:
 
 def video_line_probe_program() -> bytes:
     # Select 3.5 MHz before polling: a video line lasts 224 CPU T-states.
-    # Polling $1F to $20 establishes raster phase after the NEX loader runs.
+    # Polling for line $020 establishes raster phase after the NEX loader runs.
     return bytes(
         (
             0xF3,  # DI
@@ -120,7 +120,7 @@ def video_line_probe_program() -> bytes:
             0x32, 0x00, 0xC1,  # Save first line to $C100
             0x16, 0x0E, 0x15, 0x20, 0xFD,  # Delay with 14 DEC D / JR NZ loops
             0xED, 0x78, 0x32, 0x01, 0xC1,  # Save second line to $C101
-            0xC3, 0x2B, 0xC0,  # Stop at a self-jump at $C02B
+            0xC3, VIDEO_LINE_STOP & 0xFF, VIDEO_LINE_STOP >> 8,  # Stop at a self-jump
         )
     )
 
@@ -190,9 +190,10 @@ emu.add_machine_frame_notifier(poll)
 
 
 def mame_video_lua() -> str:
-    return r'''local debugger = manager.machine.debugger
+    return (
+        r'''local debugger = manager.machine.debugger
 debugger:command('bpset 0xc000,,{bpdisable 1 ; printf "VIDEO_START %d\\n",totalcycles ; g}')
-debugger:command('bpset 0xc02b,,{bpdisable 2 ; printf "VIDEO_STOP %d %d %d\\n",totalcycles,b@0xc100,b@0xc101 ; g}')
+debugger:command('bpset 0x@VIDEO_LINE_STOP@,,{bpdisable 2 ; printf "VIDEO_STOP %d %d %d\\n",totalcycles,b@0xc100,b@0xc101 ; g}')
 debugger.execution_state = "run"
 local function poll()
   local start, stop, first, second
@@ -212,6 +213,8 @@ local function poll()
 end
 emu.add_machine_frame_notifier(poll)
 '''
+        .replace("@VIDEO_LINE_STOP@", f"{VIDEO_LINE_STOP:04X}")
+    )
 
 
 def run_mame(executable: str, rompath: Path, work: Path, nex: Path, lua: str) -> str:
