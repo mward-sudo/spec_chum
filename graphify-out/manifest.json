@@ -216,9 +216,9 @@
     "semantic_hash": "bcecf352bc883e60b41a725cb598f184"
   },
   "crates/bus/src/lib.rs": {
-    "mtime": 1791414275.8807244,
-    "seen": 1791414974.1324081,
-    "ast_hash": "3ab1f3663224a384333e531a411278c8",
+    "mtime": 1791416012.9385366,
+    "seen": 1791418188.79262,
+    "ast_hash": "2c2369d5e613ca782ad4193a32e7a025",
     "semantic_hash": ""
   },
   "crates/bus/src/multiface.rs": {
@@ -636,15 +636,15 @@
     "semantic_hash": ""
   },
   "crates/z80/src/bus.rs": {
-    "mtime": 1790999915.0220132,
-    "seen": 1791000391.3203351,
-    "ast_hash": "61b54f9cb21479c25e124eba3ea5c0f9",
+    "mtime": 1791416408.028685,
+    "seen": 1791418188.8110871,
+    "ast_hash": "33023ed748b36ec7e27efe9602387098",
     "semantic_hash": ""
   },
   "crates/z80/src/cpu.rs": {
-    "mtime": 1791088996.8558693,
-    "seen": 1791089115.705517,
-    "ast_hash": "2e436bbf4593d665e87c7a56264b194e",
+    "mtime": 1791416720.6988676,
+    "seen": 1791418188.811091,
+    "ast_hash": "3246d1410afaee5183645efbabc246da",
     "semantic_hash": ""
   },
   "crates/z80/src/disasm.rs": {
@@ -672,9 +672,9 @@
     "semantic_hash": ""
   },
   "crates/z80/src/opcodes.rs": {
-    "mtime": 1791088963.953116,
-    "seen": 1791089115.705606,
-    "ast_hash": "60427523406e20019fd5bd26ceaf32b4",
+    "mtime": 1791415969.425658,
+    "seen": 1791418188.81147,
+    "ast_hash": "14171252a83d9abefd6b58f0847c64b3",
     "semantic_hash": ""
   },
   "crates/z80/src/registers.rs": {
@@ -2304,15 +2304,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791414888.847793,
-    "seen": 1791414974.1324759,
-    "ast_hash": "3ee794d9401400a5fa9ca10622b3555e",
+    "mtime": 1791417879.2539544,
+    "seen": 1791418188.792875,
+    "ast_hash": "6ff475f106ca14ccf962a89235b9776e",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791414632.97959,
-    "seen": 1791414974.14139,
-    "ast_hash": "0638153cdfc68f419984e7770e72f48c",
+    "mtime": 1791417932.9138103,
+    "seen": 1791418188.8031502,
+    "ast_hash": "569d6ac1121815e3c66419c2bddcd281",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {
@@ -2391,6 +2391,24 @@
     "mtime": 1791414781.4603393,
     "seen": 1791414974.155172,
     "ast_hash": "af18c0f4794b235ce2e732d173b9129a",
+    "semantic_hash": ""
+  },
+  "crates/bus/src/next_ctc.rs": {
+    "mtime": 1791416720.4278648,
+    "seen": 1791418188.792966,
+    "ast_hash": "cbf5706b756f1a12e316c2746653b1ee",
+    "semantic_hash": ""
+  },
+  "docs/NEXT_CTC.md": {
+    "mtime": 1791417906.0858033,
+    "seen": 1791418188.82027,
+    "ast_hash": "3e4cdf8e8270b828a8d9a5bb1b57e845",
+    "semantic_hash": ""
+  },
+  "docs/NEXT_HARDWARE_INVENTORY.md": {
+    "mtime": 1791417388.2204726,
+    "seen": 1791418188.820411,
+    "ast_hash": "4deaca7be5d9e15b08b2d1afb7986a03",
     "semantic_hash": ""
   }
 }

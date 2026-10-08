@@ -15,7 +15,8 @@ use ula::Ula48;
 pub struct NextMachine {
     pub cpu: Cpu,
     pub bus: NextBus,
-    video_t: u64,
+    /// One monotonic 28 MHz clock shared by the CPU, CTC, and video timeline.
+    master_t: u64,
     ula: Ula48,
     debugger_paused: bool,
     beeper_level: bool,
@@ -42,7 +43,7 @@ impl NextMachine {
         Ok(Self {
             cpu: Cpu::with_profile(CpuProfile::Z80N),
             bus: NextBus::new(rom)?,
-            video_t: 0,
+            master_t: 0,
             ula: Ula48::new(),
             debugger_paused: false,
             beeper_level: false,
@@ -68,7 +69,7 @@ impl NextMachine {
     pub fn install_ipl(&mut self, bytes: &[u8]) -> Result<(), MachineBuildError> {
         self.bus.install_boot_rom(bytes)?;
         self.cpu.reset();
-        self.video_t = 0;
+        self.master_t = 0;
         self.beeper_level = false;
         self.beeper_edges.clear();
         self.audio_phase = 0;
@@ -93,6 +94,7 @@ impl NextMachine {
     pub fn reset(&mut self) {
         self.cpu.reset();
         self.bus.soft_reset();
+        self.bus.advance_ctc_master(self.master_t);
         self.audio_phase = 0;
         self.ay_samples.clear();
         self.ay_left.clear();
@@ -108,7 +110,7 @@ impl NextMachine {
     /// Uninterrupted video clock, including across CPU soft resets.
     #[must_use]
     pub fn video_t(&self) -> u64 {
-        self.video_t
+        self.master_t / 8
     }
 
     /// T-states per frame for the selected Next display timing.
@@ -129,19 +131,26 @@ impl NextMachine {
 
     /// Execute one guest instruction through the Next-specific bus.
     pub fn step_once(&mut self) -> u32 {
+        self.bus.adopt_cpu_speed();
+        let cpu_t_master_ticks = self.bus.cpu_t_master_ticks();
+        let step_start_master = self.master_t;
+        let cpu_step_start = self.cpu.t;
+        let step_start = self.video_t();
         self.bus.set_cpu_interrupt_mode(self.cpu.regs.im);
         let (frame_tstates, interrupt_tstates) = self.bus.frame_interrupt_timing();
         let cycles = {
             let mut io = NextMemIo {
                 bus: &mut self.bus,
-                time_base: self.video_t.saturating_sub(self.cpu.t),
+                step_start_master,
+                cpu_step_start,
+                cpu_t_master_ticks,
                 beeper_level: &mut self.beeper_level,
                 beeper_edges: &mut self.beeper_edges,
             };
             if io.bus.take_divmmc_nmi() {
                 self.cpu.nmi(&mut io)
             } else if io.bus.ctc_interrupt_pending(self.cpu.regs.im == 2)
-                || self.video_t % frame_tstates < interrupt_tstates
+                || step_start % frame_tstates < interrupt_tstates
             {
                 let interrupt_cycles = self.cpu.interrupt(&mut io);
                 if interrupt_cycles > 0 {
@@ -153,29 +162,30 @@ impl NextMachine {
                 self.cpu.step(&mut io)
             }
         };
-        let step_start = self.video_t;
+        let elapsed_master = u64::from(cycles) * cpu_t_master_ticks;
         let phase_start = self.audio_phase;
-        self.video_t = self.video_t.wrapping_add(u64::from(cycles));
-        self.bus.advance_ctc(self.video_t);
-        self.bus.advance_dma(self.video_t);
+        self.master_t = self.master_t.wrapping_add(elapsed_master);
+        let step_end = self.video_t();
+        self.bus.advance_ctc_master(self.master_t);
+        self.bus.advance_dma(step_end);
         let copper_boundary = (step_start / frame_tstates + 1) * frame_tstates;
-        let copper_time = self.video_t.min(copper_boundary.saturating_sub(1));
+        let copper_time = step_end.min(copper_boundary.saturating_sub(1));
         self.render_frame = None;
         for (write_t, register, value) in self.bus.advance_copper(copper_time) {
             self.capture_copper_video_before_write(write_t, register);
             self.bus.write_nextreg_at(register, value, write_t);
             self.capture_copper_video_after_write(write_t, register);
         }
-        self.bus.advance_audio(cycles);
+        self.bus.advance_audio((step_end - step_start) as u32);
         self.bus.drain_dac_writes_into(&mut self.pending_dac_writes);
-        let mut sample_phase = 3_500_000u64.saturating_sub(phase_start);
+        let mut sample_phase = 28_000_000u64.saturating_sub(phase_start);
         self.audio_phase = self
             .audio_phase
-            .saturating_add(u64::from(cycles).saturating_mul(44_100));
-        while self.audio_phase >= 3_500_000 {
-            self.audio_phase -= 3_500_000;
-            let sample_t = step_start.saturating_add(sample_phase.div_ceil(44_100));
-            sample_phase = sample_phase.saturating_add(3_500_000);
+            .saturating_add(elapsed_master.saturating_mul(44_100));
+        while self.audio_phase >= 28_000_000 {
+            self.audio_phase -= 28_000_000;
+            let sample_t = step_start_master.saturating_add(sample_phase.div_ceil(44_100)) / 8;
+            sample_phase = sample_phase.saturating_add(28_000_000);
             while self
                 .pending_dac_writes
                 .first()
@@ -211,9 +221,10 @@ impl NextMachine {
                 self.bus.hard_reset();
                 if self.beeper_level {
                     self.beeper_level = false;
-                    self.beeper_edges.push((self.video_t, false));
+                    self.beeper_edges.push((self.video_t(), false));
                 }
             }
+            self.bus.advance_ctc_master(self.master_t);
             self.dac_sample_values = self.bus.dac_values();
             self.dac_sample_enabled = self.bus.dacs_enabled();
             self.pending_dac_writes.clear();
@@ -229,9 +240,9 @@ impl NextMachine {
         }
         let frame_tstates = self.frame_tstates();
         let frame_len = u64::from(frame_tstates);
-        let frame_start = self.video_t;
+        let frame_start = self.video_t();
         let boundary = (frame_start / frame_len + 1) * frame_len;
-        while self.video_t < boundary {
+        while self.video_t() < boundary {
             self.step_once();
         }
         self.render_frame = Some(boundary / frame_len - 1);
@@ -263,7 +274,7 @@ impl NextMachine {
         let frame_tstates = u64::from(self.frame_tstates().max(1));
         let displayed_frame = self
             .render_frame
-            .unwrap_or_else(|| self.video_t.saturating_sub(1) / frame_tstates);
+            .unwrap_or_else(|| self.video_t().saturating_sub(1) / frame_tstates);
         if self.copper_video_frame == Some(displayed_frame) {
             if let Some(initial) = &self.copper_video_initial {
                 self.render_rgba_with_copper_history(out, with_border, initial);
@@ -412,9 +423,21 @@ impl NextMachine {
 /// Trait adapter keeps the lower-level bus crate independent of the CPU crate.
 struct NextMemIo<'a> {
     bus: &'a mut NextBus,
-    time_base: u64,
+    step_start_master: u64,
+    cpu_step_start: u64,
+    cpu_t_master_ticks: u64,
     beeper_level: &'a mut bool,
     beeper_edges: &'a mut Vec<(u64, bool)>,
+}
+
+impl NextMemIo<'_> {
+    fn master_t(&self, cpu_t: u64) -> u64 {
+        self.step_start_master.wrapping_add(
+            cpu_t
+                .wrapping_sub(self.cpu_step_start)
+                .saturating_mul(self.cpu_t_master_ticks),
+        )
+    }
 }
 
 impl Memory for NextMemIo<'_> {
@@ -434,11 +457,15 @@ impl Memory for NextMemIo<'_> {
 
 impl Io for NextMemIo<'_> {
     fn in_port(&mut self, port: u16, t: u64) -> (u8, u32) {
-        (self.bus.in_port_at(port, self.time_base.wrapping_add(t)), 0)
+        let master_t = self.master_t(t);
+        self.bus.advance_ctc_master(master_t);
+        (self.bus.in_port_at(port, master_t / 8), 0)
     }
 
     fn out_port(&mut self, port: u16, value: u8, t: u64) -> u32 {
-        let absolute_t = self.time_base.wrapping_add(t);
+        let master_t = self.master_t(t);
+        let absolute_t = master_t / 8;
+        self.bus.advance_ctc_master(master_t);
         if port & 1 == 0 {
             let level = value & 0x10 != 0;
             if level != *self.beeper_level {
@@ -446,12 +473,14 @@ impl Io for NextMemIo<'_> {
                 self.beeper_edges.push((absolute_t, level));
             }
         }
-        self.bus.out_port_at(port, value, absolute_t)
+        let base_t_stall = self.bus.out_port_at(port, value, absolute_t);
+        base_t_stall.saturating_mul(8 / self.cpu_t_master_ticks as u32)
     }
 
     fn nextreg_write(&mut self, register: u8, value: u8, t: u64) {
-        self.bus
-            .write_nextreg_at(register, value, self.time_base.wrapping_add(t));
+        let master_t = self.master_t(t);
+        self.bus.advance_ctc_master(master_t);
+        self.bus.write_nextreg_at(register, value, master_t / 8);
     }
 
     fn interrupt_acknowledge(&mut self, im2: bool) -> Option<u8> {
@@ -499,16 +528,57 @@ mod tests {
             machine.cpu.regs.sp = 0xc000;
             machine.cpu.regs.iff1 = true;
 
-            machine.video_t = frame_tstates + interrupt_tstates;
+            machine.master_t = (frame_tstates + interrupt_tstates) * 8;
             assert_eq!(machine.step_once(), 4, "timing {timing}: INT window ended");
             assert_eq!(machine.cpu.regs.pc, 0x4001, "timing {timing}");
             assert!(machine.cpu.regs.iff1, "timing {timing}");
 
-            machine.video_t = frame_tstates * 2;
+            machine.master_t = frame_tstates * 2 * 8;
             assert_eq!(machine.step_once(), 13, "timing {timing}: frame INT");
             assert_eq!(machine.cpu.regs.pc, 0x0038, "timing {timing}");
             assert!(!machine.cpu.regs.iff1, "timing {timing}");
         }
+    }
+
+    #[test]
+    fn cpu_turbo_runs_more_instructions_per_frame_without_speeding_up_ctc() {
+        let mut elapsed_cpu_tstates = [0; 4];
+        for speed in 0..4u8 {
+            let mut rom = test_rom();
+            rom[..7].copy_from_slice(&[
+                0xed, 0x91, 0x07, speed, // NEXTREG $07,speed
+                0xc3, 0x04, 0x00, // JP $0004
+            ]);
+            let mut machine = NextMachine::new(&rom).expect("valid test ROM");
+            assert_eq!(machine.step_once(), 20);
+            assert_eq!(machine.master_t, 160, "speed changes after its instruction");
+            assert_eq!(machine.bus.read_nextreg(0x07), speed);
+            assert_eq!(machine.step_once(), 10);
+            assert_eq!(machine.bus.read_nextreg(0x07), speed | speed << 4);
+            assert_eq!(machine.bus.cpu_t_master_ticks(), 8u64 >> speed);
+
+            // Start timer channel 0 at the same absolute machine instant in
+            // every case. It decrements once per 16 master clocks.
+            machine.bus.out_port_at(0x183b, 0x05, machine.video_t());
+            machine.bus.out_port_at(0x183b, 240, machine.video_t());
+            let start_cpu_t = machine.cpu.t;
+            let target_master_t = machine.master_t + 9_600;
+            while machine.master_t < target_master_t {
+                assert_eq!(machine.step_once(), 10);
+            }
+            assert_eq!(machine.master_t, target_master_t);
+            assert_eq!(machine.video_t(), target_master_t / 8);
+            assert_eq!(machine.bus.in_port_at(0x183b, machine.video_t()), 120);
+            elapsed_cpu_tstates[usize::from(speed)] = machine.cpu.t - start_cpu_t;
+
+            // The display frame remains on the 3.5 MHz equivalent clock.
+            let frame_master_t = u64::from(machine.frame_tstates()) * 8;
+            machine.run_frame();
+            assert!(machine.master_t >= frame_master_t);
+            assert!(machine.master_t < frame_master_t + 80);
+            assert_eq!(machine.video_t() / u64::from(machine.frame_tstates()), 1);
+        }
+        assert_eq!(elapsed_cpu_tstates, [1_200, 2_400, 4_800, 9_600]);
     }
 
     #[test]
@@ -544,7 +614,7 @@ mod tests {
         machine.cpu.regs.im = 2;
         machine.cpu.regs.iff1 = true;
         machine.cpu.regs.iff2 = true;
-        machine.video_t = 100;
+        machine.master_t = 100 * 8;
 
         assert!(machine.step_once() > 0);
         assert_eq!(machine.cpu.regs.pc, 0x4567);
@@ -946,7 +1016,7 @@ mod tests {
     fn hard_reset_preserves_the_frame_clock() {
         let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
         let frame_tstates = machine.frame_tstates() as u64;
-        machine.video_t = frame_tstates - 4;
+        machine.master_t = (frame_tstates - 4) * 8;
         machine.bus.write_nextreg(0x02, 0x02);
 
         assert_eq!(machine.step_once(), 4);

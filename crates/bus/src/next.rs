@@ -59,6 +59,8 @@ pub struct NextBus {
     boot_enabled: bool,
     machine_type: u8,
     display_timing: u8,
+    cpu_speed: u8,
+    active_cpu_speed: u8,
     display_screen_bank: u8,
     border: u8,
     config_mapping: u8,
@@ -223,6 +225,8 @@ impl NextBus {
             boot_enabled: false,
             machine_type: 0,
             display_timing: 0,
+            cpu_speed: 0,
+            active_cpu_speed: 0,
             display_screen_bank: 0,
             border: 0,
             config_mapping: 0,
@@ -280,6 +284,8 @@ impl NextBus {
         self.zx128_bank_high = 0;
         self.machine_type = 0;
         self.display_timing = 0;
+        self.cpu_speed = 0;
+        self.active_cpu_speed = 0;
         self.display_screen_bank = 5;
         self.config_mapping = 0;
         self.alternate_rom_register = 0;
@@ -344,6 +350,18 @@ impl NextBus {
         self.alternate_rom_register = alternate_rom_reset;
         self.peripheral6 = 0xa0;
         self.reset_register = 0x01;
+    }
+
+    /// Adopt a programmed CPU speed at an instruction boundary. The actual
+    /// speed is exposed separately from the programmed bits in `NextReg` `$07`.
+    pub fn adopt_cpu_speed(&mut self) {
+        self.active_cpu_speed = self.cpu_speed;
+    }
+
+    /// Number of 28 MHz master ticks in one CPU T-state.
+    #[must_use]
+    pub fn cpu_t_master_ticks(&self) -> u64 {
+        CTC_CLOCKS_PER_TSTATE >> self.active_cpu_speed
     }
 
     /// Enable an 8 KiB IPL ROM over address 0 after reset.
@@ -519,6 +537,7 @@ impl NextBus {
                     | (self.display_timing << 4)
                     | self.machine_type
             }
+            0x07 => self.cpu_speed | (self.active_cpu_speed << 4),
             0x08 => (self.peripheral3 & 0x7f) | (u8::from(!self.zx128_locked) << 7),
             0x1e | 0x1f => 0,
             0x61 => self.copper.address_low(),
@@ -808,6 +827,7 @@ impl NextBus {
             0xc0 => self.interrupt_control = value & 0xe1,
             0xc5 => self.ctc.write_interrupt_enable(value),
             0xc9 => self.ctc.clear_interrupt_status(value),
+            0x07 => self.cpu_speed = value & 0x03,
             0x02 => {
                 self.reset_pending = value & 0x03;
                 if value & 0x04 != 0 {
@@ -1436,8 +1456,13 @@ impl NextBus {
 
     /// Advance the CTC from the independent Spectrum Next master-time clock.
     pub fn advance_ctc(&mut self, through_t: u64) {
-        self.ctc
-            .advance_to(through_t.saturating_mul(CTC_CLOCKS_PER_TSTATE));
+        self.advance_ctc_master(through_t.saturating_mul(CTC_CLOCKS_PER_TSTATE));
+    }
+
+    /// Advance the CTC at full master-clock resolution for CPU accesses in
+    /// turbo modes, where several CPU T-states fit inside one video T-state.
+    pub fn advance_ctc_master(&mut self, through_master_t: u64) {
+        self.ctc.advance_to(through_master_t);
     }
 
     /// Whether an enabled CTC source currently asserts the maskable interrupt line.
@@ -2687,6 +2712,22 @@ mod tests {
         bus.write_nextreg(0x03, 0x03);
         bus.write_nextreg(0x0a, 0);
         assert_eq!(bus.read_nextreg(0x0a), 0xe0);
+    }
+
+    #[test]
+    fn cpu_speed_register_separates_programmed_and_actual_rates_and_resets() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(bus.read_nextreg(0x07), 0);
+        for speed in 0..4 {
+            bus.write_nextreg(0x07, 0xfc | speed);
+            assert_eq!(bus.read_nextreg(0x07) & 0x03, speed);
+            bus.adopt_cpu_speed();
+            assert_eq!(bus.read_nextreg(0x07), speed | speed << 4);
+            assert_eq!(bus.cpu_t_master_ticks(), 8u64 >> speed);
+        }
+        bus.soft_reset();
+        assert_eq!(bus.read_nextreg(0x07), 0);
+        assert_eq!(bus.cpu_t_master_ticks(), 8);
     }
 
     #[test]

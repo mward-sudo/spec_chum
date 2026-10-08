@@ -20,8 +20,11 @@ NextReg `$C5` writes the channels' effective interrupt-enable bits (the same
 control D7 state set by a CTC control word). A disabled source remains pollable
 through counter readback and `$C9` status.
 
-CTC time advances on the FPGA's 28 MHz master clock (eight current base
-T-states per CTC clock), so CPU-speed NextReg `$07` does not change its rate.
+CTC time advances on the FPGA's 28 MHz master clock (eight CTC clocks per
+3.5 MHz video T-state). NextReg `$07` changes CPU T-state length at the next
+instruction boundary; the CTC and video frame periods remain on the master
+clock. The machine test programs all four CPU speeds and checks the same CTC
+count after equal elapsed master time.
 In pulse mode, the CTC interrupt acknowledge uses the ordinary `$FF` data-bus
 value. In Hardware IM2 mode (NextReg `$C0` bit 0), the four CTC channels occupy
 source slots 3–6 and the vector is `($C0 & $E0) | ((3 + channel) << 1)`.
