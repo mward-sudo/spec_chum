@@ -1,0 +1,510 @@
+{
+  "sources": {
+    "commit": "dc8d76419a6968d6c93bfa5f62231a40ad8b4221",
+    "nextreg": {
+      "file": "nextreg.txt",
+      "sha256": "1d48eb970b25e2f6b6e2c501902ded6c594649f06ba78758a0b7ed36a05f92d4"
+    },
+    "ports": {
+      "file": "ports.txt",
+      "sha256": "f19e08ae2bc52219ed7afd9511d4354c194c872c1488a044948ac746ba72ec92"
+    }
+  },
+  "nextreg_ids": [
+    "00",
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "0A",
+    "0B",
+    "0E",
+    "0F",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "1A",
+    "1B",
+    "1C",
+    "1E",
+    "1F",
+    "20",
+    "22",
+    "23",
+    "24",
+    "26",
+    "27",
+    "28",
+    "29",
+    "2A",
+    "2B",
+    "2C",
+    "2D",
+    "2E",
+    "2F",
+    "30",
+    "31",
+    "32",
+    "33",
+    "34",
+    "35",
+    "36",
+    "37",
+    "38",
+    "39",
+    "40",
+    "41",
+    "42",
+    "43",
+    "44",
+    "4A",
+    "4B",
+    "4C",
+    "50",
+    "51",
+    "52",
+    "53",
+    "54",
+    "55",
+    "56",
+    "57",
+    "60",
+    "61",
+    "62",
+    "63",
+    "64",
+    "68",
+    "69",
+    "6A",
+    "6B",
+    "6C",
+    "6E",
+    "6F",
+    "70",
+    "71",
+    "75",
+    "76",
+    "77",
+    "78",
+    "79",
+    "7F",
+    "80",
+    "81",
+    "82",
+    "83",
+    "84",
+    "85",
+    "86",
+    "87",
+    "88",
+    "89",
+    "8A",
+    "8C",
+    "8E",
+    "8F",
+    "90",
+    "91",
+    "92",
+    "93",
+    "98",
+    "99",
+    "9A",
+    "9B",
+    "A0",
+    "A2",
+    "A8",
+    "A9",
+    "B0",
+    "B1",
+    "B2",
+    "B8",
+    "B9",
+    "BA",
+    "BB",
+    "C0",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "C8",
+    "C9",
+    "CA",
+    "CB",
+    "CC",
+    "CD",
+    "CE",
+    "CF",
+    "D8",
+    "D9",
+    "DA",
+    "F0",
+    "F8",
+    "F9",
+    "FA",
+    "FF"
+  ],
+  "port_entries": [
+    {
+      "pattern": "XXXX XXXX XXXX XXX0",
+      "address": "0xfe",
+      "description": "ULA",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 1111 1111",
+      "address": "0xff",
+      "description": "Timex video, floating bus",
+      "access": "RW"
+    },
+    {
+      "pattern": "0XXX XXXX XXXX XX01",
+      "address": "0x7ffd",
+      "description": "ZX Spectrum 128 memory",
+      "access": "W"
+    },
+    {
+      "pattern": "01XX XXXX XXXX XX01",
+      "address": "0x7ffd",
+      "description": "ZX Spectrum 128 memory +3 only",
+      "access": "W"
+    },
+    {
+      "pattern": "1101 XXXX XXXX XX01",
+      "address": "0xdffd",
+      "description": "ZX Spectrum 128 memory",
+      "access": "W"
+    },
+    {
+      "pattern": "0001 XXXX XXXX XX01",
+      "address": "0x1ffd",
+      "description": "ZX Spectrum +3 memory",
+      "access": "W"
+    },
+    {
+      "pattern": "0010 XXXX XXXX XX01",
+      "address": "0x2ffd",
+      "description": "ZX Spectrum +3 FDC status",
+      "access": "R"
+    },
+    {
+      "pattern": "0011 XXXX XXXX XX01",
+      "address": "0x3ffd",
+      "description": "ZX Spectrum +3 FDC control",
+      "access": "RW"
+    },
+    {
+      "pattern": "1110 XXXX 1111 0111",
+      "address": "0xeff7",
+      "description": "Pentagon 1024K memory",
+      "access": "W"
+    },
+    {
+      "pattern": "0000 XXXX XXXX XX01",
+      "address": "",
+      "description": "ZX Spectrum +3 floating bus",
+      "access": "R"
+    },
+    {
+      "pattern": "0010 0100 0011 1011",
+      "address": "0x243b",
+      "description": "NextREG Register Select",
+      "access": "RW"
+    },
+    {
+      "pattern": "0010 0101 0011 1011",
+      "address": "0x253b",
+      "description": "NextREG Data",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 0000 0011 1011",
+      "address": "0x103b",
+      "description": "i2c SCL",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 0001 0011 1011",
+      "address": "0x113b",
+      "description": "i2c SDA",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 0010 0011 1011",
+      "address": "0x123b",
+      "description": "Layer 2",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 0011 0011 1011",
+      "address": "0x133b",
+      "description": "UART Tx",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 0100 0011 1011",
+      "address": "0x143b",
+      "description": "UART Rx",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 0101 0011 1011",
+      "address": "0x153b",
+      "description": "UART Select",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 0110 0011 1011",
+      "address": "0x163b",
+      "description": "UART Frame",
+      "access": "RW"
+    },
+    {
+      "pattern": "0001 1XXX 0011 1011",
+      "address": "0x183b",
+      "description": "CTC 8 channels 0x183b - 0x1f3b**",
+      "access": "RW"
+    },
+    {
+      "pattern": "1011 1111 0011 1011",
+      "address": "0xbf3b",
+      "description": "ULA+ Register",
+      "access": "W"
+    },
+    {
+      "pattern": "1111 1111 0011 1011",
+      "address": "0xff3b",
+      "description": "ULA+ Data",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 0000 1011",
+      "address": "0x0b",
+      "description": "z80DMA",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 0110 1011",
+      "address": "0x6b",
+      "description": "zxnDMA",
+      "access": "RW"
+    },
+    {
+      "pattern": "11XX XXXX XXXX X101",
+      "address": "0xfffd",
+      "description": "AY reg",
+      "access": "RW"
+    },
+    {
+      "pattern": "10XX XXXX XXXX X101",
+      "address": "0xbffd",
+      "description": "AY dat (readable on +3 only)",
+      "access": "RW"
+    },
+    {
+      "pattern": "10XX XXXX XXXX 0101",
+      "address": "0xbff5",
+      "description": "AY inf (inside BFFD decoding)",
+      "access": "R"
+    },
+    {
+      "pattern": "XXXX XXXX 0001 1111",
+      "address": "0x1f",
+      "description": "DAC A",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1111 0001",
+      "address": "0xf1",
+      "description": "DAC A",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 0011 1111",
+      "address": "0x3f",
+      "description": "DAC A",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 0000 1111",
+      "address": "0x0f",
+      "description": "DAC B",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1111 0011",
+      "address": "0xf3",
+      "description": "DAC B",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1101 1111",
+      "address": "0xdf",
+      "description": "DAC A,D",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1111 1011",
+      "address": "0xfb",
+      "description": "DAC A,D",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1011 0011",
+      "address": "0xb3",
+      "description": "DAC B,C",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 0100 1111",
+      "address": "0x4f",
+      "description": "DAC C",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1111 1001",
+      "address": "0xf9",
+      "description": "DAC C",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 0101 1111",
+      "address": "0x5f",
+      "description": "DAC D",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1110 0111",
+      "address": "0xe7",
+      "description": "SPI CS (sd card, flash, rpi)",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 1110 1011",
+      "address": "0xeb",
+      "description": "SPI DATA",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 1110 0011",
+      "address": "0xe3",
+      "description": "divMMC Control",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX 1011 1101 1111",
+      "address": "0xfbdf",
+      "description": "Kempston mouse x",
+      "access": "R"
+    },
+    {
+      "pattern": "XXXX 1111 1101 1111",
+      "address": "0xffdf",
+      "description": "Kempston mouse y",
+      "access": "R"
+    },
+    {
+      "pattern": "XXXX 1010 1101 1111",
+      "address": "0xfadf",
+      "description": "Kempston mouse wheel, buttons",
+      "access": "R"
+    },
+    {
+      "pattern": "XXXX XXXX 0001 1111",
+      "address": "0x1f",
+      "description": "Kempston joy 1",
+      "access": "R"
+    },
+    {
+      "pattern": "XXXX XXXX 1101 1111",
+      "address": "0xdf",
+      "description": "Kempston joy 1 alias",
+      "access": "R"
+    },
+    {
+      "pattern": "XXXX XXXX 0011 0111",
+      "address": "0x37",
+      "description": "Kempston joy 2",
+      "access": "R"
+    },
+    {
+      "pattern": "XXXX XXXX 0001 1111",
+      "address": "0x1f",
+      "description": "Multiface 1 disable",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 1001 1111",
+      "address": "0x9f",
+      "description": "Multiface 1 enable",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 0001 1111",
+      "address": "0x1f",
+      "description": "Multiface 128 v87.12 disable",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 1001 1111",
+      "address": "0x9f",
+      "description": "Multiface 128 v87.12 enable",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 0011 1111",
+      "address": "0x3f",
+      "description": "Multiface 128 v87.2 disable",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 1011 1111",
+      "address": "0xbf",
+      "description": "Multiface 128 v87.2 enable",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 1011 1111",
+      "address": "0xbf",
+      "description": "Multiface +3 disable",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 0011 1111",
+      "address": "0x3f",
+      "description": "Multiface +3 enable",
+      "access": "RW"
+    },
+    {
+      "pattern": "0011 0000 0011 1011",
+      "address": "0x303b",
+      "description": "Sprite slot, flags",
+      "access": "RW"
+    },
+    {
+      "pattern": "XXXX XXXX 0101 0111",
+      "address": "0x57",
+      "description": "Sprite attributes",
+      "access": "W"
+    },
+    {
+      "pattern": "XXXX XXXX 0101 1011",
+      "address": "0x5b",
+      "description": "Sprite pattern",
+      "access": "W"
+    }
+  ]
+}
