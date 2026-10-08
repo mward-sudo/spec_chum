@@ -30,9 +30,10 @@ The camera framing contract reserves 1.55 × 1.62 m hero bounds at 78% of the
 viewport. The geometry-only resize cases are 320×900, 450×1000, 800×800,
 1280×720, 2560×1080, and 320×240. Headless Bevy screenshots were captured at
 each size; they show the complete CRT and active test pattern. Human visual
-review against the Spectrum Cabinet concept remains open. On the current
-headless 1920×1080 probe, fixed mode averaged 3.17 ms/tick (p95 3.81 ms) and
-the existing 3D mode averaged 4.51 ms/tick (p95 5.42 ms) over 100 ticks. This
+review against the Spectrum Cabinet concept remains open. On this Mac, the same
+headless 1920×1080 probe measured fixed mode at 3.00 ms/tick average (p95
+3.32 ms) and the existing 3D mode at 4.17 ms/tick average (p95 4.86 ms), each
+over 100 ticks. This
 is a rendering-cost diagnostic, not a display frame-pacing or input-latency
 measurement, and does not predict reference hardware performance. Input
 latency remains unmeasured. Keep the existing 3D room selectable until visual
