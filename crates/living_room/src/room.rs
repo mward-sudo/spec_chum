@@ -45,9 +45,21 @@ fn setup_room(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
     asset_server: Res<AssetServer>,
     #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
+    presentation: Res<crate::cabinet_room::RoomPresentation>,
 ) {
+    if *presentation == crate::cabinet_room::RoomPresentation::FixedCabinet {
+        crate::cabinet_room::spawn_backdrop(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            &mut images,
+        );
+        spawn_live_television(&mut commands, &asset_server);
+        return;
+    }
     #[cfg(feature = "skein")]
     if let Some(mode) = skein_mode.as_deref() {
         if crate::skein::spawn_skein_room_if_active(&mut commands, &asset_server, mode) {
@@ -185,33 +197,7 @@ fn setup_procedural_room(
     ));
 
     // --- Poly Haven glTF furniture ---
-    // Low teak-ish sideboard as an 80s TV stand (replaces ornate ClassicConsole_01).
-    let tv_stand_scale = 0.85;
-    let tv_stand_top = 0.68 * tv_stand_scale;
-    commands.spawn((
-        WorldAssetRoot(
-            asset_server.load(
-                "polyhaven/models/modern_wooden_cabinet/modern_wooden_cabinet_1k.gltf#Scene0",
-            ),
-        ),
-        Transform::from_translation(TV_STAND_POS).with_scale(Vec3::splat(tv_stand_scale)),
-        Name::new("tv_stand"),
-        crate::hybrid::LiveTv,
-    ));
-
-    // Vintage CRT on the console. Painted glass is punched out
-    // (`television_02_aperture` via `scripts/punch_tv_screen_aperture.py`) so both
-    // the outer cabinet bevel and inner screen bezel remain; phosphor sits behind
-    // the inner rim (`crt`).
-    commands.spawn((
-        WorldAssetRoot(
-            asset_server.load("polyhaven/models/television_02/television_02_aperture.gltf#Scene0"),
-        ),
-        Transform::from_translation(TV_STAND_POS + Vec3::new(0.0, tv_stand_top, 0.05)),
-        TelevisionCabinet,
-        Name::new("television_02"),
-        crate::hybrid::LiveTv,
-    ));
+    spawn_live_television(commands, asset_server);
 
     // Sofa faces the TV, leaving a clear walkway along each side of the room.
     commands.spawn((
@@ -273,12 +259,49 @@ fn setup_procedural_room(
         ));
     });
 
+    setup_room_dressing(commands, meshes, materials, asset_server);
+}
+
+fn spawn_live_television(commands: &mut Commands, asset_server: &AssetServer) {
+    // Low teak-ish sideboard as an 80s TV stand (replaces ornate ClassicConsole_01).
+    let tv_stand_scale = 0.85;
+    let tv_stand_top = 0.68 * tv_stand_scale;
+    commands.spawn((
+        WorldAssetRoot(
+            asset_server.load(
+                "polyhaven/models/modern_wooden_cabinet/modern_wooden_cabinet_1k.gltf#Scene0",
+            ),
+        ),
+        Transform::from_translation(TV_STAND_POS).with_scale(Vec3::splat(tv_stand_scale)),
+        Name::new("tv_stand"),
+        crate::hybrid::LiveTv,
+    ));
+
+    // Vintage CRT on the console. Painted glass is punched out
+    // (`television_02_aperture` via `scripts/punch_tv_screen_aperture.py`) so both
+    // the outer cabinet bevel and inner screen bezel remain; phosphor sits behind
+    // the inner rim (`crt`).
+    commands.spawn((
+        WorldAssetRoot(
+            asset_server.load("polyhaven/models/television_02/television_02_aperture.gltf#Scene0"),
+        ),
+        Transform::from_translation(TV_STAND_POS + Vec3::new(0.0, tv_stand_top, 0.05)),
+        TelevisionCabinet,
+        Name::new("television_02"),
+        crate::hybrid::LiveTv,
+    ));
+}
+
+fn setup_room_dressing(
+    commands: &mut Commands,
+    meshes: &mut ResMut<'_, Assets<Mesh>>,
+    materials: &mut ResMut<'_, Assets<StandardMaterial>>,
+    asset_server: &AssetServer,
+) {
     spawn_polyhaven_wall_sconces(commands, meshes, materials, asset_server);
     spawn_video_cassette_deck(commands, meshes, materials);
     spawn_floor_toys(commands, asset_server);
     spawn_spectrum_joystick(commands, meshes, materials);
-
-    let _ = plaster;
 }
 
 /// Detailed 1980s VHS deck on the cabinet top, clear of the sliding doors.

@@ -339,7 +339,10 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
+        let presentation = crate::cabinet_room::RoomPresentation::from_environment();
+        bevy::log::info!("SPEC_CHUM_ROOM_PRESENTATION: {}", presentation.label());
         app.init_resource::<IntroSkipRequest>()
+            .insert_resource(presentation)
             .init_resource::<PostIntroZoom>()
             .init_resource::<OpeningSequence>()
             .init_resource::<CameraZoom>()
@@ -356,6 +359,7 @@ impl Plugin for CameraPlugin {
                     update_intro_camera,
                     zoom_from_scroll,
                     apply_zoom_camera,
+                    apply_fixed_camera_frame,
                 )
                     .chain(),
             );
@@ -440,8 +444,10 @@ fn pose_at_zoom_for_aspect(t: f32, look: Vec3, aspect_ratio: f32) -> Transform {
 pub(crate) fn setup_camera(
     mut commands: Commands,
     post_zoom: Res<PostIntroZoom>,
+    mut opening: ResMut<OpeningSequence>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    presentation: Res<crate::cabinet_room::RoomPresentation>,
 ) {
     let look = screen_look_at();
     let end_preset = post_zoom
@@ -451,12 +457,21 @@ pub(crate) fn setup_camera(
     // Keep the high-angle establishing position inside the room shell. Starting
     // above the ceiling made the TV and its spotlight occluded until the camera
     // passed through the ceiling, which read as a sudden lighting pop.
-    let start_eye = preset_eye(look, ZOOM_PRESETS.len() - 1, DEFAULT_VIEWPORT_ASPECT);
-    let start = Transform::from_translation(start_eye).looking_at(room_wide_look(look), Vec3::Y);
-    commands.insert_resource(CameraIntro {
-        elapsed: 0.0,
-        end_preset,
-    });
+    let fixed_cabinet = *presentation == crate::cabinet_room::RoomPresentation::FixedCabinet;
+    let start = if fixed_cabinet {
+        // Fixed framing has no intro transition, so begin with the room and
+        // CRT fully powered while scene assets continue loading independently.
+        opening.elapsed_secs = INTRO_SECS;
+        commands.insert_resource(CameraLocked);
+        fixed_cabinet_pose(DEFAULT_VIEWPORT_ASPECT)
+    } else {
+        let start_eye = preset_eye(look, ZOOM_PRESETS.len() - 1, DEFAULT_VIEWPORT_ASPECT);
+        commands.insert_resource(CameraIntro {
+            elapsed: 0.0,
+            end_preset,
+        });
+        Transform::from_translation(start_eye).looking_at(room_wide_look(look), Vec3::Y)
+    };
     commands.insert_resource(CameraZoom::default());
     commands.spawn((
         SpotLight {
@@ -679,8 +694,9 @@ fn zoom_from_scroll(
     mut zoom: ResMut<CameraZoom>,
     mut acc: ResMut<ZoomScrollAccum>,
     locked: Option<Res<CameraLocked>>,
+    presentation: Res<crate::cabinet_room::RoomPresentation>,
 ) {
-    if locked.is_none() {
+    if locked.is_none() || *presentation == crate::cabinet_room::RoomPresentation::FixedCabinet {
         return;
     }
     for e in ev.read() {
@@ -721,8 +737,9 @@ pub(crate) fn apply_zoom_camera(
     >,
     mut glass: Query<&mut MeshMaterial3d<StandardMaterial>, With<crate::crt::CrtGlass>>,
     mut std_mats: ResMut<Assets<StandardMaterial>>,
+    presentation: Res<crate::cabinet_room::RoomPresentation>,
 ) {
-    if locked.is_none() {
+    if locked.is_none() || *presentation == crate::cabinet_room::RoomPresentation::FixedCabinet {
         return;
     }
     zoom.tick_animation();
@@ -757,6 +774,30 @@ pub(crate) fn apply_zoom_camera(
         if let Some(mut mat) = std_mats.get_mut(&handle.0) {
             mat.base_color = Color::srgba(0.55, 0.65, 0.75, glass_a);
         }
+    }
+}
+
+fn fixed_cabinet_pose(aspect: f32) -> Transform {
+    let look = Vec3::new(
+        crate::room::TV_STAND_POS.x,
+        crate::cabinet_room::HERO_CENTER_Y,
+        crate::crt::crt_screen_world_center().z,
+    );
+    let distance = crate::cabinet_room::camera_distance(LOCKED_FOV, aspect);
+    Transform::from_translation(look + Vec3::Z * distance).looking_at(look, Vec3::Y)
+}
+
+/// Fixed mode adapts its viewing distance to the resized viewport while
+/// preserving its authored center and direction (there are no user controls).
+fn apply_fixed_camera_frame(
+    presentation: Res<crate::cabinet_room::RoomPresentation>,
+    mut cameras: Query<(&Camera, &mut Transform), With<LivingRoomCamera>>,
+) {
+    if *presentation != crate::cabinet_room::RoomPresentation::FixedCabinet {
+        return;
+    }
+    for (camera, mut transform) in &mut cameras {
+        *transform = fixed_cabinet_pose(camera_aspect(camera));
     }
 }
 

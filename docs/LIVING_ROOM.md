@@ -1,5 +1,41 @@
 # Experimental Bevy living-room CRT host
 
+## Spectrum Cabinet fixed-room comparison (#558)
+
+The standalone room supports a fixed-camera composition experiment alongside the
+existing 3D room. Set `SPEC_CHUM_ROOM_PRESENTATION=fixed-cabinet` before launch
+to select it; unset the variable (or use `3d`) to keep the existing 3D room.
+Switching presentations currently requires a restart. The fixed mode has no
+intro dolly, mouse-look, or zoom stops; viewport changes only adjust camera
+distance to keep the authored hero bounds in frame. The regular egui flat display
+remains available as the close-view alternative.
+
+The prototype uses flat, unlit Bevy rectangle meshes in the same 3D world and
+camera, with depth ordering behind the TV. There is no second render target or
+camera. The composition has a 4.2 × 2.45 m dark wall, inset panel, paired
+curtains, low shelf, and a 0.62 × 0.44 m cyan screen-spill panel with a radial
+alpha mask for soft edges. There are no
+separate foreground art layers yet; the live TV geometry itself is the sole
+foreground occluder. These vector-like layers are resolution-independent and
+need no raster source asset. The live TV stand, cabinet, curved CRT phosphor,
+and machine framebuffer remain 3D/runtime content. The back wall is behind the
+TV and the panel is behind the CRT, so room artwork cannot cover the live image.
+The simple rectangles are authored in the project; no generated or third-party
+artwork is used. The stand and television models continue to use the existing
+Poly Haven assets (CC0; see `crates/living_room/assets/CREDITS`).
+
+The camera framing contract reserves 1.55 × 1.62 m hero bounds at 78% of the
+viewport. The geometry-only resize cases are 320×900, 450×1000, 800×800,
+1280×720, 2560×1080, and 320×240. Headless Bevy screenshots were captured at
+each size; they show the complete CRT and active test pattern. Human visual
+review against the Spectrum Cabinet concept remains open. On the current
+headless 1920×1080 probe, fixed mode averaged 3.17 ms/tick (p95 3.81 ms) and
+the existing 3D mode averaged 4.51 ms/tick (p95 5.42 ms) over 100 ticks. This
+is a rendering-cost diagnostic, not a display frame-pacing or input-latency
+measurement, and does not predict reference hardware performance. Input
+latency remains unmeasured. Keep the existing 3D room selectable until visual
+and technical go/no-go review is recorded.
+
 **Status:** experimental / not the default product UI. Tracked in
 [#146](https://github.com/mward-sudo/spec_chum/issues/146).
 

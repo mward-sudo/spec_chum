@@ -7,6 +7,7 @@ pub mod agent_embed;
 #[cfg(feature = "standalone")]
 pub mod audio;
 pub mod baked_room;
+mod cabinet_room;
 pub mod camera;
 pub mod crt;
 pub mod external_fb;
