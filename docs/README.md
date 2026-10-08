@@ -40,6 +40,7 @@ Build, test, package, and extend the emulator.
 | [AGENT_DEBUG_API.md](AGENT_DEBUG_API.md) | Contributors / automation | Loopback HTTP control & inspect API |
 | [GRAPHIFY.md](GRAPHIFY.md) | Contributors | Graph setup and refresh |
 | [MODULE_COHESION.md](MODULE_COHESION.md) | Contributors | Module ownership boundaries and extraction guidance |
+| [NEXT_HARDWARE_INVENTORY.md](NEXT_HARDWARE_INVENTORY.md) | Contributors | Pinned Spectrum Next register and port coverage inventory |
 | [../packaging/icon/README.md](../packaging/icon/README.md) | Packaging | Shared app icon assets |
 
 ## Automation surface (product feature)
