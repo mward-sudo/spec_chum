@@ -174,6 +174,7 @@ def zesarux_result(app: str, nex: Path) -> tuple[int, int, int, int]:
         launch = ["open", "-n", "-g", "-j", "-W", "-a", app, "--args", *args]
     else:
         launch = [app, *args]
+    launch_services = platform.system() == "Darwin"
     process = subprocess.Popen(launch, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     sock = None
     try:
@@ -183,11 +184,17 @@ def zesarux_result(app: str, nex: Path) -> tuple[int, int, int, int]:
                 sock = socket.create_connection(("127.0.0.1", ZRCP_PORT), timeout=0.5)
                 break
             except OSError:
-                if process.poll() is not None:
+                # On macOS this process is `open`, not the app. Its exit status
+                # does not tell us whether LaunchServices has finished starting
+                # ZEsarUX, so keep waiting for the app's actual ZRCP endpoint.
+                if not launch_services and process.poll() is not None:
                     raise RuntimeError(f"ZEsarUX exited with status {process.returncode}")
                 time.sleep(0.2)
         if sock is None:
-            raise RuntimeError("ZEsarUX did not open its local ZRCP port within 15 seconds")
+            message = "ZEsarUX did not open its local ZRCP port within 15 seconds"
+            if launch_services and process.poll() is not None:
+                message += f" (LaunchServices wrapper exited with status {process.returncode})"
+            raise RuntimeError(message)
 
         sock.settimeout(0.1)
         zesarux_command(sock, "")
