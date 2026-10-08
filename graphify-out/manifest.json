@@ -2304,15 +2304,15 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next.rs": {
-    "mtime": 1791419627.5499334,
-    "seen": 1791419688.410701,
-    "ast_hash": "e0f99c510d6db8a82f5d25300b8e395a",
+    "mtime": 1791420117.3673198,
+    "seen": 1791420365.030238,
+    "ast_hash": "a127c8f933b91bd1f4d7b63d746a8d44",
     "semantic_hash": ""
   },
   "crates/machine/src/next.rs": {
-    "mtime": 1791419596.767264,
-    "seen": 1791419688.4111412,
-    "ast_hash": "226b0532ccf2b58ab354e9c335d11904",
+    "mtime": 1791420286.4398978,
+    "seen": 1791420365.042204,
+    "ast_hash": "b58173f9d2627dcbc24f3ce5b90e6a77",
     "semantic_hash": ""
   },
   "scripts/system_next_assets.py": {
@@ -2394,9 +2394,9 @@
     "semantic_hash": ""
   },
   "crates/bus/src/next_ctc.rs": {
-    "mtime": 1791419393.929959,
-    "seen": 1791419688.41071,
-    "ast_hash": "648c742fabb4bdc29d24c9bc30c66a5f",
+    "mtime": 1791420097.5995367,
+    "seen": 1791420365.0303109,
+    "ast_hash": "6947c907dd7495aa9fd3450fb9c21e8d",
     "semantic_hash": ""
   },
   "docs/NEXT_CTC.md": {

@@ -1474,9 +1474,10 @@ impl NextBus {
     /// Vector supplied by the highest-priority CTC channel during Z80 IRQ ACK.
     pub fn ctc_interrupt_acknowledge(&mut self, cpu_im2: bool) -> Option<u8> {
         if self.interrupt_control & 1 == 0 {
-            // Pulse mode has no daisy-chain service state. Drop the request so
-            // the line deasserts; `$C9` retains its overflow history.
-            self.ctc.clear_pending_requests();
+            // Pulse mode has no daisy-chain service state. Acknowledge only
+            // the highest-priority request; lower channels may be pending too.
+            // `$C9` retains overflow history independently of pending requests.
+            self.ctc.acknowledge_pulse();
             return None;
         }
         if !cpu_im2 {
@@ -1642,6 +1643,27 @@ mod tests {
 
         bus.advance_ctc(4);
         assert!(bus.ctc_interrupt_pending(false));
+    }
+
+    #[test]
+    fn ctc_pulse_acknowledge_preserves_lower_priority_requests() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        for port in [0x183b, 0x193b] {
+            bus.out_port(port, 0x85);
+            bus.out_port(port, 1);
+        }
+        bus.write_nextreg(0xc5, 0x03);
+        bus.advance_ctc(2);
+
+        assert!(bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 0x03, 0x03);
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 0x03, 0x03);
+
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(!bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 0x03, 0x03);
     }
 
     #[test]

@@ -584,10 +584,44 @@ mod tests {
     #[test]
     fn ctc_hardware_im2_interrupt_runs_guest_handler_and_reti_releases_service() {
         let mut machine = NextMachine::new(&test_rom()).expect("valid test ROM");
-        // Leave the CPU in a loop, with a small handler that writes a marker
-        // and returns using RETI.
-        machine.bus.write(0x4000, 0x18);
-        machine.bus.write(0x4001, 0xfe);
+        // Guest code programs a timer on channel 0 and a counter on channel 1.
+        // The timer's output cascades into the counter, making both channels
+        // request interrupts from one source event.
+        for (address, byte) in [
+            (0x4000, 0x01), // LD BC,$183B
+            (0x4001, 0x3b),
+            (0x4002, 0x18),
+            (0x4003, 0x3e), // LD A,$85; channel 0 timer, constant follows
+            (0x4004, 0x85),
+            (0x4005, 0xed), // OUT (C),A
+            (0x4006, 0x79),
+            (0x4007, 0x3e), // LD A,100; timer interval
+            (0x4008, 100),
+            (0x4009, 0xed), // OUT (C),A
+            (0x400a, 0x79),
+            (0x400b, 0x01), // LD BC,$193B
+            (0x400c, 0x3b),
+            (0x400d, 0x19),
+            (0x400e, 0x3e), // LD A,$C5; channel 1 counter, constant follows
+            (0x400f, 0xc5),
+            (0x4010, 0xed), // OUT (C),A
+            (0x4011, 0x79),
+            (0x4012, 0x3e), // LD A,1; counter interval
+            (0x4013, 1),
+            (0x4014, 0xed), // OUT (C),A
+            (0x4015, 0x79),
+            (0x4016, 0xed), // NEXTREG $C5,3; enable channels 0 and 1
+            (0x4017, 0x91),
+            (0x4018, 0xc5),
+            (0x4019, 3),
+            (0x401a, 0xc3), // JP $4020
+            (0x401b, 0x20),
+            (0x401c, 0x40),
+            (0x4020, 0x18), // JR $4020
+            (0x4021, 0xfe),
+        ] {
+            machine.bus.write(address, byte);
+        }
         for (address, byte) in [
             (0x4567, 0x3e), // LD A, $42
             (0x4568, 0x42),
@@ -599,14 +633,20 @@ mod tests {
             (0x456e, 0x4d),
             (0xd0a6, 0x67), // CTC0 slot 3: vector $A6 -> $4567
             (0xd0a7, 0x45),
+            (0x4570, 0x3e), // LD A, $43
+            (0x4571, 0x43),
+            (0x4572, 0x32), // LD ($8001), A
+            (0x4573, 0x01),
+            (0x4574, 0x80),
+            (0x4575, 0xfb), // EI
+            (0x4576, 0xed), // RETI
+            (0x4577, 0x4d),
+            (0xd0a8, 0x70), // CTC1 slot 4: vector $A8 -> $4570
+            (0xd0a9, 0x45),
         ] {
             machine.bus.write(address, byte);
         }
         machine.bus.write_nextreg(0xc0, 0xa1);
-        machine.bus.out_port(0x183b, 0x85);
-        machine.bus.out_port(0x183b, 1);
-        machine.bus.write_nextreg(0xc5, 1);
-        machine.bus.advance_ctc(2);
 
         machine.cpu.regs.pc = 0x4000;
         machine.cpu.regs.sp = 0xbffe;
@@ -616,6 +656,22 @@ mod tests {
         machine.cpu.regs.iff2 = true;
         machine.master_t = 100 * 8;
 
+        for _ in 0..1_000 {
+            if machine.bus.read_nextreg(0xc9) & 0x03 == 0x03 {
+                break;
+            }
+            machine.step_once();
+        }
+        assert_eq!(
+            machine.bus.read_nextreg(0xc9) & 0x03,
+            0x03,
+            "pc={:#06x}, master_t={}, c0={:#04x}, c5={:#04x}",
+            machine.cpu.regs.pc,
+            machine.master_t,
+            machine.bus.read_nextreg(0xc0),
+            machine.bus.read_nextreg(0xc5)
+        );
+        assert!(machine.bus.ctc_interrupt_pending(true));
         assert!(machine.step_once() > 0);
         assert_eq!(machine.cpu.regs.pc, 0x4567);
         machine.step_once();
@@ -623,10 +679,17 @@ mod tests {
         assert_eq!(machine.bus.read(0x8000), 0x42);
         machine.step_once();
         machine.step_once();
-        assert_eq!(machine.cpu.regs.pc, 0x4000);
+        assert_eq!(machine.cpu.regs.pc, 0x4020);
         assert!(machine.bus.ctc_interrupt_pending(true));
         machine.step_once();
-        assert_eq!(machine.cpu.regs.pc, 0x4567);
+        assert_eq!(machine.cpu.regs.pc, 0x4570);
+        machine.step_once();
+        machine.step_once();
+        assert_eq!(machine.bus.read(0x8001), 0x43);
+        machine.step_once();
+        machine.step_once();
+        assert_eq!(machine.cpu.regs.pc, 0x4020);
+        assert!(!machine.bus.ctc_interrupt_pending(true));
     }
 
     #[test]

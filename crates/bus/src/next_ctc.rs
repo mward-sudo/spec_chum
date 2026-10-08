@@ -280,10 +280,10 @@ impl NextCtc {
         Some(channel)
     }
 
-    pub(crate) fn clear_pending_requests(&mut self) {
-        for channel in &mut self.channels {
-            channel.pending = false;
-        }
+    pub(crate) fn acknowledge_pulse(&mut self) -> Option<usize> {
+        let channel = self.highest_request()?;
+        self.channels[channel].pending = false;
+        Some(channel)
     }
 
     pub(crate) fn reti(&mut self) {
