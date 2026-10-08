@@ -7,6 +7,7 @@ use std::path::Path;
 
 use crate::ay::PsgModel;
 use crate::next_copper::NextCopper;
+use crate::next_ctc::NextCtc;
 use crate::next_dma::{DmaAction, Endpoint, NextDma};
 pub use crate::next_sd::NextSdError;
 use crate::next_sd::{SdSpi, PORT_NEXT_SD_CS, PORT_NEXT_SD_DATA};
@@ -33,6 +34,7 @@ const NEXT_BOARD_ID: u8 = 0x00;
 const RESET_PAGES: [u8; 8] = [0xff, 0xff, 10, 11, 4, 5, 0, 1];
 const PORT_NEXTREG_SELECT: u16 = 0x243b;
 const PORT_NEXTREG_ACCESS: u16 = 0x253b;
+const CTC_CLOCKS_PER_TSTATE: u64 = 8;
 const PORT_LAYER2_CONTROL: u16 = 0x123b;
 const PORT_SPRITE_SELECT: u16 = 0x303b;
 const PORT_AY_DATA_MASK: u16 = 0xc007;
@@ -57,16 +59,21 @@ pub struct NextBus {
     boot_enabled: bool,
     machine_type: u8,
     display_timing: u8,
+    cpu_speed: u8,
+    active_cpu_speed: u8,
     display_screen_bank: u8,
     border: u8,
     config_mapping: u8,
     next_video: NextVideo,
     copper: NextCopper,
     dma: NextDma,
+    ctc: NextCtc,
     next_sprites: NextSprites,
     peripheral2: u8,
     peripheral3: u8,
     peripheral6: u8,
+    interrupt_control: u8,
+    cpu_interrupt_mode: u8,
     /// Held 8-bit DAC outputs in A, B, C, D order.
     dac_values: [u8; 4],
     /// Timestamped output snapshots consumed by the machine's audio sampler.
@@ -218,16 +225,21 @@ impl NextBus {
             boot_enabled: false,
             machine_type: 0,
             display_timing: 0,
+            cpu_speed: 0,
+            active_cpu_speed: 0,
             display_screen_bank: 0,
             border: 0,
             config_mapping: 0,
             next_video: NextVideo::new(),
             copper: NextCopper::new(),
             dma: NextDma::default(),
+            ctc: NextCtc::default(),
             next_sprites: NextSprites::new(),
             peripheral2: 0,
             peripheral3: 0,
             peripheral6: 0,
+            interrupt_control: 0,
+            cpu_interrupt_mode: 0,
             dac_values: [0x80; 4],
             dac_writes: Vec::new(),
             ay: std::array::from_fn(|_| Ay8912::new()),
@@ -272,16 +284,21 @@ impl NextBus {
         self.zx128_bank_high = 0;
         self.machine_type = 0;
         self.display_timing = 0;
+        self.cpu_speed = 0;
+        self.active_cpu_speed = 0;
         self.display_screen_bank = 5;
         self.config_mapping = 0;
         self.alternate_rom_register = 0;
         self.next_video.reset();
         self.copper.reset();
         self.dma.reset();
+        self.ctc.reset();
         self.next_sprites.reset();
         self.peripheral2 = 0;
         self.peripheral3 = 0x10;
         self.peripheral6 = 0;
+        self.interrupt_control = 0;
+        self.cpu_interrupt_mode = 0;
         self.dac_values = [0x80; 4];
         self.dac_writes.clear();
         self.ay = std::array::from_fn(|_| Ay8912::new());
@@ -333,6 +350,18 @@ impl NextBus {
         self.alternate_rom_register = alternate_rom_reset;
         self.peripheral6 = 0xa0;
         self.reset_register = 0x01;
+    }
+
+    /// Adopt a programmed CPU speed at an instruction boundary. The actual
+    /// speed is exposed separately from the programmed bits in `NextReg` `$07`.
+    pub fn adopt_cpu_speed(&mut self) {
+        self.active_cpu_speed = self.cpu_speed;
+    }
+
+    /// Number of 28 MHz master ticks in one CPU T-state.
+    #[must_use]
+    pub fn cpu_t_master_ticks(&self) -> u64 {
+        CTC_CLOCKS_PER_TSTATE >> self.active_cpu_speed
     }
 
     /// Enable an 8 KiB IPL ROM over address 0 after reset.
@@ -508,12 +537,16 @@ impl NextBus {
                     | (self.display_timing << 4)
                     | self.machine_type
             }
+            0x07 => self.cpu_speed | (self.active_cpu_speed << 4),
             0x08 => (self.peripheral3 & 0x7f) | (u8::from(!self.zx128_locked) << 7),
             0x1e | 0x1f => 0,
             0x61 => self.copper.address_low(),
             0x62 => self.copper.control(),
             0x06 => self.peripheral6,
             0x09 => self.peripheral2,
+            0xc0 => (self.interrupt_control & 0xe1) | ((self.cpu_interrupt_mode & 0x03) << 1),
+            0xc5 => self.ctc.interrupt_enable(),
+            0xc9 => self.ctc.interrupt_status(),
             0x0a => self.peripheral5,
             0x0e => NEXT_CORE_SUBMINOR,
             0x0f => NEXT_BOARD_ID,
@@ -791,6 +824,10 @@ impl NextBus {
             return;
         }
         match register {
+            0xc0 => self.interrupt_control = value & 0xe1,
+            0xc5 => self.ctc.write_interrupt_enable(value),
+            0xc9 => self.ctc.clear_interrupt_status(value),
+            0x07 => self.cpu_speed = value & 0x03,
             0x02 => {
                 self.reset_pending = value & 0x03;
                 if value & 0x04 != 0 {
@@ -1328,6 +1365,10 @@ impl NextBus {
 
     /// CPU port read with its absolute T-state, for timed devices such as SD SPI.
     pub fn in_port_at(&mut self, port: u16, t: u64) -> u8 {
+        self.ctc.advance_to(t.saturating_mul(CTC_CLOCKS_PER_TSTATE));
+        if let Some(value) = self.ctc.read_port(port) {
+            return value;
+        }
         match port {
             _ if port & 0xff == 0x6b => self.dma.read(),
             _ if Self::is_128_paging_port(port) => 0xff,
@@ -1361,11 +1402,16 @@ impl NextBus {
 
     /// CPU port write with its absolute T-state, for timed devices such as SD SPI.
     pub fn out_port_at(&mut self, port: u16, value: u8, t: u64) -> u32 {
+        self.ctc.advance_to(t.saturating_mul(CTC_CLOCKS_PER_TSTATE));
         if self.write_dac_alias(port as u8, value, t) {
             return 0;
         }
         if port & 0xff == 0x6b {
             return self.write_dma(value, t);
+        }
+        if port & 0xf8ff == 0x183b {
+            self.ctc.write_port(port, value);
+            return 0;
         }
         match port {
             _ if Self::is_128_paging_port(port) => self.write_128_paging(port, value),
@@ -1406,6 +1452,50 @@ impl NextBus {
             _ => {}
         }
         0
+    }
+
+    /// Advance the CTC from the independent Spectrum Next master-time clock.
+    pub fn advance_ctc(&mut self, through_t: u64) {
+        self.advance_ctc_master(through_t.saturating_mul(CTC_CLOCKS_PER_TSTATE));
+    }
+
+    /// Advance the CTC at full master-clock resolution for CPU accesses in
+    /// turbo modes, where several CPU T-states fit inside one video T-state.
+    pub fn advance_ctc_master(&mut self, through_master_t: u64) {
+        self.ctc.advance_to(through_master_t);
+    }
+
+    /// Whether an enabled CTC source currently asserts the maskable interrupt line.
+    #[must_use]
+    pub fn ctc_interrupt_pending(&self, cpu_im2: bool) -> bool {
+        (self.interrupt_control & 1 == 0 || cpu_im2) && self.ctc.interrupt_pending()
+    }
+
+    /// Vector supplied by the highest-priority CTC channel during Z80 IRQ ACK.
+    pub fn ctc_interrupt_acknowledge(&mut self, cpu_im2: bool) -> Option<u8> {
+        if self.interrupt_control & 1 == 0 {
+            // Pulse mode has no daisy-chain service state. Acknowledge only
+            // the highest-priority request; lower channels may be pending too.
+            // `$C9` retains overflow history independently of pending requests.
+            self.ctc.acknowledge_pulse();
+            return None;
+        }
+        if !cpu_im2 {
+            // A hardware vector is consumed only by a CPU in IM2.
+            return None;
+        }
+        let channel = self.ctc.acknowledge()?;
+        Some((self.interrupt_control & 0xe0) | (((3 + channel) as u8) << 1))
+    }
+
+    /// Keep `NextReg` `$C0`'s read-only Z80 mode bits synchronized by the host.
+    pub fn set_cpu_interrupt_mode(&mut self, mode: u8) {
+        self.cpu_interrupt_mode = mode & 0x03;
+    }
+
+    /// Release the highest-priority CTC channel in service after RETI.
+    pub fn ctc_reti(&mut self) {
+        self.ctc.reti();
     }
 
     /// Advance burst-mode DMA events through an absolute machine T-state.
@@ -1505,6 +1595,75 @@ mod tests {
         bus.write_nextreg_at(0x62, 0x00, writes[0].0);
 
         assert_eq!(bus.advance_copper(20), []);
+    }
+
+    #[test]
+    fn ctc_hardware_im2_vectors_use_slots_three_through_six() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0xc0, 0xa1);
+        bus.out_port(0x183b, 0x85);
+        bus.out_port(0x183b, 1);
+        bus.write_nextreg(0xc5, 1);
+        bus.advance_ctc(2);
+        assert!(bus.ctc_interrupt_pending(true));
+        assert!(!bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.ctc_interrupt_acknowledge(true), Some(0xa6));
+        bus.ctc_reti();
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+    }
+
+    #[test]
+    fn ctc_acknowledge_leaves_hardware_request_pending_outside_im2() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.write_nextreg(0xc0, 0xa1);
+        bus.out_port(0x183b, 0x85);
+        bus.out_port(0x183b, 1);
+        bus.write_nextreg(0xc5, 1);
+        bus.advance_ctc(2);
+
+        assert!(bus.ctc_interrupt_pending(true));
+        assert!(!bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(bus.ctc_interrupt_pending(true));
+        assert_eq!(bus.ctc_interrupt_acknowledge(true), Some(0xa6));
+    }
+
+    #[test]
+    fn ctc_pulse_acknowledge_clears_request_without_service_state() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        bus.out_port(0x183b, 0x85);
+        bus.out_port(0x183b, 1);
+        bus.write_nextreg(0xc5, 1);
+        bus.advance_ctc(2);
+
+        assert!(bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(!bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 1, 1);
+
+        bus.advance_ctc(4);
+        assert!(bus.ctc_interrupt_pending(false));
+    }
+
+    #[test]
+    fn ctc_pulse_acknowledge_preserves_lower_priority_requests() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        for port in [0x183b, 0x193b] {
+            bus.out_port(port, 0x85);
+            bus.out_port(port, 1);
+        }
+        bus.write_nextreg(0xc5, 0x03);
+        bus.advance_ctc(2);
+
+        assert!(bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 0x03, 0x03);
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 0x03, 0x03);
+
+        assert_eq!(bus.ctc_interrupt_acknowledge(false), None);
+        assert!(!bus.ctc_interrupt_pending(false));
+        assert_eq!(bus.read_nextreg(0xc9) & 0x03, 0x03);
     }
 
     #[test]
@@ -2617,6 +2776,22 @@ mod tests {
         bus.write_nextreg(0x03, 0x03);
         bus.write_nextreg(0x0a, 0);
         assert_eq!(bus.read_nextreg(0x0a), 0xe0);
+    }
+
+    #[test]
+    fn cpu_speed_register_separates_programmed_and_actual_rates_and_resets() {
+        let mut bus = NextBus::new(&vec![0; NEXT_ROM_SIZE]).expect("valid ROM");
+        assert_eq!(bus.read_nextreg(0x07), 0);
+        for speed in 0..4 {
+            bus.write_nextreg(0x07, 0xfc | speed);
+            assert_eq!(bus.read_nextreg(0x07) & 0x03, speed);
+            bus.adopt_cpu_speed();
+            assert_eq!(bus.read_nextreg(0x07), speed | speed << 4);
+            assert_eq!(bus.cpu_t_master_ticks(), 8u64 >> speed);
+        }
+        bus.soft_reset();
+        assert_eq!(bus.read_nextreg(0x07), 0);
+        assert_eq!(bus.cpu_t_master_ticks(), 8);
     }
 
     #[test]

@@ -116,7 +116,7 @@ impl Cpu {
     ///
     /// The returned value includes contention waits from stack / IM2 vector accesses so
     /// hosts can advance ULA/`frame_t` in lockstep with `cpu.t`.
-    pub fn interrupt<M: Memory>(&mut self, mem: &mut M) -> u32 {
+    pub fn interrupt<M: Memory + Io>(&mut self, mem: &mut M) -> u32 {
         if self.interrupt_deferred || !self.regs.iff1 {
             return 0;
         }
@@ -137,6 +137,7 @@ impl Cpu {
         // IRQ ACK bypasses `execute`, which normally clears Q for non-flag ops.
         self.regs.q = 0;
         self.regs.inc_r();
+        let interrupt_data = mem.interrupt_acknowledge(self.regs.im == 2);
 
         // Nominal breakdown (uncontended): IM0/1 = 7T ack + 6T push; IM2 adds 6T vector.
         // `push` / `read_mem` already account for their memory cycles (+ contention).
@@ -149,7 +150,7 @@ impl Cpu {
             }
             _ => {
                 self.push(mem, self.regs.pc);
-                let vec = (u16::from(self.regs.i) << 8) | 0x00ff;
+                let vec = (u16::from(self.regs.i) << 8) | u16::from(interrupt_data.unwrap_or(0xff));
                 let lo = self.read_mem(mem, vec);
                 let hi = self.read_mem(mem, vec.wrapping_add(1));
                 let addr = u16::from(hi) << 8 | u16::from(lo);
@@ -379,6 +380,7 @@ mod tests {
         data: Box<[u8; 65536]>,
         reads: Vec<(u16, u64)>,
         writes: Vec<(u8, u8, u64)>,
+        acknowledgements: u8,
     }
 
     impl NextBus {
@@ -389,6 +391,7 @@ mod tests {
                 data,
                 reads: Vec::new(),
                 writes: Vec::new(),
+                acknowledgements: 0,
             }
         }
     }
@@ -416,6 +419,11 @@ mod tests {
 
         fn nextreg_write(&mut self, register: u8, value: u8, t: u64) {
             self.writes.push((register, value, t));
+        }
+
+        fn interrupt_acknowledge(&mut self, _im2: bool) -> Option<u8> {
+            self.acknowledgements += 1;
+            Some(0x42)
         }
     }
 
@@ -939,6 +947,18 @@ mod tests {
         let t = cpu.interrupt(&mut mem);
         assert_eq!(t, 19);
         assert_eq!(cpu.regs.pc, 0x4000);
+    }
+
+    #[test]
+    fn interrupt_acknowledges_peripheral_in_im1_too() {
+        let mut cpu = Cpu::new();
+        let mut bus = NextBus::program(&[]);
+        cpu.regs.iff1 = true;
+        cpu.regs.iff2 = true;
+        cpu.regs.im = 1;
+        assert_eq!(cpu.interrupt(&mut bus), 13);
+        assert_eq!(cpu.regs.pc, 0x0038);
+        assert_eq!(bus.acknowledgements, 1);
     }
 
     #[test]
