@@ -41,6 +41,7 @@ Build, test, package, and extend the emulator.
 | [GRAPHIFY.md](GRAPHIFY.md) | Contributors | Graph setup and refresh |
 | [MODULE_COHESION.md](MODULE_COHESION.md) | Contributors | Module ownership boundaries and extraction guidance |
 | [NEXT_HARDWARE_INVENTORY.md](NEXT_HARDWARE_INVENTORY.md) | Contributors | Pinned Spectrum Next register and port coverage inventory |
+| [NEXT_TIMING_COMPARISONS.md](NEXT_TIMING_COMPARISONS.md) | Contributors | Reproducible Spectrum Next comparisons against MAME and ZEsarUX |
 | [../packaging/icon/README.md](../packaging/icon/README.md) | Packaging | Shared app icon assets |
 
 ## Automation surface (product feature)
