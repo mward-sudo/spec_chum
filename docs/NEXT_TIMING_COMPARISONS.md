@@ -49,7 +49,11 @@ The runner records the base timing from `$C000` to `$C005`, then measures throug
 | MAME | 0.289 | 20 | 180 | `$2A` | `$01` |
 | ZEsarUX | 13.0 | 20 | 180 | `$2A` | `$00` |
 
-The timing and marker agree, while CTC status differs. The official [CTC description](https://wiki.specnext.dev/CTC) documents the channel timer, and [NextReg `$C9`](https://wiki.specnext.dev/Interrupt_Status_1_Register) records whether a CTC interrupt occurred or is pending. Spec Chum's `ctc_hardware_im2_interrupt_runs_guest_handler_and_reti_releases_service` test expects the channel status bit after overflow, consistent with MAME's observation. This comparison does not establish which reference matches physical hardware; the CTC difference remains unresolved and #551 stays open.
+The timing and marker agree, while CTC status differs. The official [CTC description](https://wiki.specnext.dev/CTC) documents the channel timer, and [NextReg `$C9`](https://wiki.specnext.dev/Interrupt_Status_1_Register) records whether a CTC interrupt occurred or is pending. Spec Chum's `ctc_hardware_im2_interrupt_runs_guest_handler_and_reti_releases_service` test expects the channel status bit after overflow, consistent with MAME's observation.
+
+Source inspection classifies this as a reference-coverage difference. [MAME 0.289's Next driver](https://github.com/mamedev/mame/blob/mame0289/src/mame/sinclair/next/specnext.cpp) maps `$C5` to its CTC interrupt control and `$C9` to CTC interrupt status; [its CTC device](https://github.com/mamedev/mame/blob/mame0289/src/mame/sinclair/next/specnext_ctc.cpp) implements four channels.
+
+In the [ZEsarUX 13.0 source tree](https://github.com/chernandezba/zesarux/tree/ZEsarUX-13.0/src/machines), `tbblue.c` mentions CTC channels in the interrupt-priority description, but we found no CTC device or port handler in the tagged source. Its `$00` result therefore does not independently test the CTC behavior. This is not evidence that MAME matches physical hardware or that Spec Chum is wrong. Treat the case as a ZEsarUX 13.0 capability gap; keep #551 open for comparisons with independent coverage, including interrupt boundaries and video/register changes.
 
 Fixture SHA-256: `e5b123c972a3bcb71d312c649a3b3bb985cfb3aef7a3c1b9f78e2cc940edf126`.
 
