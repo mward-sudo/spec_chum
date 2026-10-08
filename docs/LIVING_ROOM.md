@@ -11,10 +11,12 @@ distance to keep the authored hero bounds in frame. The regular egui flat displa
 remains available as the close-view alternative.
 
 The prototype uses flat, unlit Bevy rectangle meshes in the same 3D world and
-camera, with depth ordering behind the TV. There is no second render target or
-camera. The composition has a 4.2 × 2.45 m dark wall, inset panel, paired
-curtains, low shelf, and a 0.62 × 0.44 m cyan screen-spill panel with a radial
-alpha mask for soft edges. There are no
+camera. A matching unlit 8.0 × 9.0 m base wall extends behind the 4.2 × 2.45 m
+authored wall so portrait and ultrawide viewports do not expose clear-color
+margins; it scales with the camera frustum outside the tested aspect range,
+while detail layers and cabinet retain their authored scale. The set has
+an inset panel, paired curtains, low shelf, and a 0.62 × 0.44 m cyan
+screen-spill panel with a radial alpha mask for soft edges. There are no
 separate foreground art layers yet; the live TV geometry itself is the sole
 foreground occluder. These vector-like layers are resolution-independent and
 need no raster source asset. The live TV stand, cabinet, curved CRT phosphor,

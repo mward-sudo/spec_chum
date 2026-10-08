@@ -360,6 +360,7 @@ impl Plugin for CameraPlugin {
                     zoom_from_scroll,
                     apply_zoom_camera,
                     apply_fixed_camera_frame,
+                    apply_fixed_backdrop_size,
                 )
                     .chain(),
             );
@@ -797,7 +798,37 @@ fn apply_fixed_camera_frame(
         return;
     }
     for (camera, mut transform) in &mut cameras {
-        *transform = fixed_cabinet_pose(camera_aspect(camera));
+        let aspect = camera_aspect(camera);
+        let pose = fixed_cabinet_pose(aspect);
+        if *transform != pose {
+            *transform = pose;
+        }
+    }
+}
+
+/// Expand only the base wall beyond its authored envelope; room details and TV
+/// preserve their authored scale at every viewport aspect.
+fn apply_fixed_backdrop_size(
+    presentation: Res<crate::cabinet_room::RoomPresentation>,
+    cameras: Query<&Camera, With<LivingRoomCamera>>,
+    mut backdrop: Query<&mut Transform, With<crate::cabinet_room::CabinetBackdropBase>>,
+) {
+    if *presentation != crate::cabinet_room::RoomPresentation::FixedCabinet {
+        return;
+    }
+    for camera in &cameras {
+        let aspect = camera_aspect(camera);
+        let required = crate::cabinet_room::viewport_background_size(LOCKED_FOV, aspect);
+        let scale = Vec3::new(
+            (required.x / crate::cabinet_room::BACKDROP_BASE_SIZE.x).max(1.0),
+            (required.y / crate::cabinet_room::BACKDROP_BASE_SIZE.y).max(1.0),
+            1.0,
+        );
+        for mut backdrop_transform in &mut backdrop {
+            if backdrop_transform.scale != scale {
+                backdrop_transform.scale = scale;
+            }
+        }
     }
 }
 

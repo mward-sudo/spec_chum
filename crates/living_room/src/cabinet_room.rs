@@ -48,12 +48,17 @@ impl RoomPresentation {
 pub const BACKDROP_CENTER_Y: f32 = 1.22;
 pub const BACKDROP_DEPTH: f32 = crate::room::TV_STAND_POS.z - 0.78;
 pub const HERO_CENTER_Y: f32 = 0.82;
+/// Continuous base wall covering the camera bounds for portrait through ultrawide views.
+pub const BACKDROP_BASE_SIZE: Vec2 = Vec2::new(8.0, 9.0);
 pub const HERO_FRAME_W: f32 = 1.55;
 pub const HERO_FRAME_H: f32 = 1.62;
 pub const HERO_FRAME_FILL: f32 = 0.78;
 
 #[derive(Component, Debug)]
 struct CabinetBackdrop;
+
+#[derive(Component, Debug)]
+pub(crate) struct CabinetBackdropBase;
 
 /// Spawn the flat, layered wall behind the live TV. Shapes are unlit so the
 /// static composition remains legible while CRT spill is added independently.
@@ -78,6 +83,17 @@ pub fn spawn_backdrop(
     });
 
     let wall_z = BACKDROP_DEPTH;
+    // Keep the same wall color behind the authored set so extreme aspect ratios
+    // reveal no clear-color gaps. This base layer never changes cabinet scale.
+    let base = spawn_panel(
+        commands,
+        meshes,
+        wall.clone(),
+        "cabinet_backdrop_base",
+        Vec3::new(0.0, HERO_CENTER_Y, wall_z - 0.012),
+        BACKDROP_BASE_SIZE,
+    );
+    commands.entity(base).insert(CabinetBackdropBase);
     spawn_panel(
         commands,
         meshes,
@@ -166,14 +182,16 @@ fn spawn_panel(
     name: &'static str,
     position: Vec3,
     size: Vec2,
-) {
-    commands.spawn((
-        Mesh3d(meshes.add(Rectangle::new(size.x, size.y))),
-        MeshMaterial3d(material),
-        Transform::from_translation(position),
-        CabinetBackdrop,
-        Name::new(name),
-    ));
+) -> Entity {
+    commands
+        .spawn((
+            Mesh3d(meshes.add(Rectangle::new(size.x, size.y))),
+            MeshMaterial3d(material),
+            Transform::from_translation(position),
+            CabinetBackdrop,
+            Name::new(name),
+        ))
+        .id()
 }
 
 /// Fit the authored cabinet hero bounds to every positive viewport aspect.
@@ -187,6 +205,22 @@ pub fn camera_distance(fov_y: f32, aspect: f32) -> f32 {
     let visible_height =
         (HERO_FRAME_H / HERO_FRAME_FILL).max(HERO_FRAME_W / (aspect * HERO_FRAME_FILL));
     visible_height / (2.0 * (fov_y * 0.5).tan())
+}
+
+/// World-space wall extent needed at the wall's greater camera depth.
+#[must_use]
+pub fn viewport_background_size(fov_y: f32, aspect: f32) -> Vec2 {
+    let aspect = if aspect.is_finite() && aspect > 0.0 {
+        aspect
+    } else {
+        16.0 / 9.0
+    };
+    let distance = camera_distance(fov_y, aspect);
+    let screen_z = crate::crt::crt_screen_world_center().z;
+    let base_z = BACKDROP_DEPTH - 0.012;
+    let camera_to_base = distance + screen_z - base_z;
+    let visible_height = 2.0 * camera_to_base * (fov_y * 0.5).tan() * 1.05;
+    Vec2::new(visible_height * aspect, visible_height)
 }
 
 #[cfg(test)]
@@ -226,6 +260,38 @@ mod tests {
             assert!(visible_width * HERO_FRAME_FILL >= crate::crt::PHOSPHOR_W);
         }
         assert!(camera_distance(fov, 320.0 / 900.0) > camera_distance(fov, 1280.0 / 720.0));
+    }
+
+    #[test]
+    fn base_wall_covers_every_supported_viewport_aspect() {
+        let fov = 0.85_f32;
+        for (width, height) in [
+            (320.0_f32, 900.0_f32),
+            (450.0, 1000.0),
+            (800.0, 800.0),
+            (1280.0, 720.0),
+            (2560.0, 1080.0),
+            (320.0, 240.0),
+        ] {
+            let aspect = width / height;
+            let required = viewport_background_size(fov, aspect);
+            assert!(BACKDROP_BASE_SIZE.y >= required.y);
+            assert!(BACKDROP_BASE_SIZE.x >= required.x);
+        }
+    }
+
+    #[test]
+    fn viewport_background_size_covers_extreme_aspects() {
+        let fov = 0.85_f32;
+        for aspect in [0.1_f32, 0.35, 1.0, 2.37, 10.0] {
+            let size = viewport_background_size(fov, aspect);
+            let distance = camera_distance(fov, aspect);
+            let camera_to_base =
+                distance + crate::crt::crt_screen_world_center().z - (BACKDROP_DEPTH - 0.012);
+            let projected_height = 2.0 * camera_to_base * (fov * 0.5).tan();
+            assert!(size.y >= projected_height);
+            assert!(size.x >= projected_height * aspect);
+        }
     }
 
     #[test]
