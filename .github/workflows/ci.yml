@@ -49,6 +49,9 @@ jobs:
       - name: Fetch ROMs
         run: ./scripts/fetch_roms.sh
 
+      - name: Check Spectrum Next register/port inventory
+        run: python3 scripts/check_next_inventory.py
+
       - name: rustfmt
         run: cargo fmt --all -- --check
 

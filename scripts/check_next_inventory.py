@@ -51,6 +51,11 @@ def main() -> int:
     ports = read_csv(DATA / "ports.csv")
     errors: list[str] = []
 
+    for path, rows in ((DATA / "nextreg.csv", registers), (DATA / "ports.csv", ports)):
+        for index, row in enumerate(rows, start=2):
+            if None in row or any(value is None for value in row.values()):
+                errors.append(f"{path.name}:{index}: row does not match its CSV header width")
+
     expected_regs = set(manifest["nextreg_ids"])
     actual_regs = [row["id"].upper() for row in registers]
     if len(actual_regs) != len(set(actual_regs)):
