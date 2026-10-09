@@ -1,13 +1,11 @@
 use super::*;
+use windows_shell::{
+    library_command, LibraryCommand, ID_LIBRARY_CATEGORY, ID_LIBRARY_CLOSE_BUTTON,
+    ID_LIBRARY_DETAILS, ID_LIBRARY_LIST, ID_LIBRARY_OPEN_BUTTON, ID_LIBRARY_REMOVE_BUTTON,
+    ID_LIBRARY_SEARCH,
+};
 
 const LIBRARY_CLASS: &str = "SpecChumWindowsLibrary\0";
-const ID_LIBRARY_SEARCH: i32 = 3001;
-const ID_LIBRARY_CATEGORY: i32 = 3002;
-const ID_LIBRARY_LIST: i32 = 3003;
-const ID_LIBRARY_DETAILS: i32 = 3004;
-const ID_LIBRARY_OPEN_BUTTON: i32 = 3005;
-const ID_LIBRARY_REMOVE_BUTTON: i32 = 3006;
-const ID_LIBRARY_CLOSE_BUTTON: i32 = 3007;
 
 impl AppState {
     pub(super) fn open_library(&mut self, app_ptr: *mut AppState) {
@@ -373,12 +371,14 @@ extern "system" fn library_wnd_proc(
             LRESULT(0)
         }
         WM_COMMAND if !app_ptr.is_null() => {
-            let id = wparam.0 & 0xffff;
+            let id = (wparam.0 & 0xffff) as i32;
             let notification = (wparam.0 >> 16) & 0xffff;
             let app = unsafe { &mut *app_ptr };
-            match (id as i32, notification) {
-                (ID_LIBRARY_SEARCH, 0x0300) | (ID_LIBRARY_CATEGORY, 1) => app.refresh_library(),
-                (ID_LIBRARY_LIST, 1) => {
+            // Only `BN_CLICKED` may open, remove, or close. Focus notifications
+            // arrive first on a click and would act on the wrong list row.
+            match library_command(id, notification) {
+                Some(LibraryCommand::Refresh) => app.refresh_library(),
+                Some(LibraryCommand::SelectionChanged) => {
                     let selected = app
                         .library_list
                         .map_or(-1, |list| send_message(list, 0x0188, 0, 0).0);
@@ -386,12 +386,12 @@ extern "system" fn library_wnd_proc(
                         app.refresh_library_details(selected as usize);
                     }
                 }
-                (ID_LIBRARY_OPEN_BUTTON, _) => app.open_selected_library_entry(),
-                (ID_LIBRARY_REMOVE_BUTTON, _) => app.remove_selected_library_entry(),
-                (ID_LIBRARY_CLOSE_BUTTON, _) => unsafe {
+                Some(LibraryCommand::Open) => app.open_selected_library_entry(),
+                Some(LibraryCommand::Remove) => app.remove_selected_library_entry(),
+                Some(LibraryCommand::Close) => unsafe {
                     let _ = DestroyWindow(hwnd);
                 },
-                _ => {}
+                None => {}
             }
             LRESULT(0)
         }
