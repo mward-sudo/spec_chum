@@ -1233,7 +1233,9 @@ fn refresh_media_library(
             query_recent_media(&recent, search.text().as_str(), selected_category, session)
         })
     };
-    list.remove_all();
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
     for entry in &found {
         let availability = if entry.available {
             "Available"
