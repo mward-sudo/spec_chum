@@ -1,13 +1,11 @@
 use super::*;
+use windows_shell::{
+    library_command, LibraryCommand, ID_LIBRARY_CATEGORY, ID_LIBRARY_CLOSE_BUTTON,
+    ID_LIBRARY_DETAILS, ID_LIBRARY_LIST, ID_LIBRARY_OPEN_BUTTON, ID_LIBRARY_REMOVE_BUTTON,
+    ID_LIBRARY_SEARCH,
+};
 
 const LIBRARY_CLASS: &str = "SpecChumWindowsLibrary\0";
-const ID_LIBRARY_SEARCH: i32 = 3001;
-const ID_LIBRARY_CATEGORY: i32 = 3002;
-const ID_LIBRARY_LIST: i32 = 3003;
-const ID_LIBRARY_DETAILS: i32 = 3004;
-const ID_LIBRARY_OPEN_BUTTON: i32 = 3005;
-const ID_LIBRARY_REMOVE_BUTTON: i32 = 3006;
-const ID_LIBRARY_CLOSE_BUTTON: i32 = 3007;
 
 pub(super) fn open_library(app_ptr: *mut AppState) {
     // Keep the AppState borrow out of USER32 calls: CreateWindowExW synchronously
@@ -72,7 +70,7 @@ pub(super) fn open_library(app_ptr: *mut AppState) {
 }
 
 impl AppState {
-    fn refresh_library(&mut self) {
+    pub(super) fn refresh_library(&mut self) {
         let (Some(search_hwnd), Some(category_hwnd), Some(list_hwnd)) = (
             self.library_search,
             self.library_category,
@@ -423,7 +421,8 @@ extern "system" fn library_wnd_proc(
         WM_COMMAND if !app_ptr.is_null() => {
             let id = wparam.0 & 0xffff;
             let notification = (wparam.0 >> 16) & 0xffff;
-            if id as i32 == ID_LIBRARY_CLOSE_BUTTON {
+            let command = library_command(id as i32, notification);
+            if command == Some(LibraryCommand::Close) {
                 // WM_DESTROY reenters this procedure, so release AppState first.
                 unsafe {
                     let _ = DestroyWindow(hwnd);
@@ -431,16 +430,16 @@ extern "system" fn library_wnd_proc(
                 return LRESULT(0);
             }
             let app = unsafe { &mut *app_ptr };
-            match (id as i32, notification) {
-                (ID_LIBRARY_SEARCH, 0x0300) | (ID_LIBRARY_CATEGORY, 1) => app.refresh_library(),
-                (ID_LIBRARY_LIST, 1) => {
+            match command {
+                Some(LibraryCommand::Refresh) => app.refresh_library(),
+                Some(LibraryCommand::SelectionChanged) => {
                     let selected = app
                         .library_list
                         .map_or(-1, |list| send_message(list, 0x0188, 0, 0).0);
                     app.refresh_library_details(usize::try_from(selected).unwrap_or(usize::MAX));
                 }
-                (ID_LIBRARY_OPEN_BUTTON, _) => app.open_selected_library_entry(),
-                (ID_LIBRARY_REMOVE_BUTTON, _) => app.remove_selected_library_entry(),
+                Some(LibraryCommand::Open) => app.open_selected_library_entry(),
+                Some(LibraryCommand::Remove) => app.remove_selected_library_entry(),
                 _ => {}
             }
             LRESULT(0)
