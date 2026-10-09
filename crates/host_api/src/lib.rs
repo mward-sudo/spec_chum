@@ -24,8 +24,8 @@ pub use media_title_lookup::{
 pub use model_catalog::{host_model_catalog, HostModelDescriptor, HostRomSlotDescriptor};
 pub use prefs::{
     default_prefs_path, load_prefs, model_rom_path_key, pref_model_slug, save_prefs, update_prefs,
-    PrefAyStereo, PrefJoystick, PrefModel, UiPreferences, MAX_RECENT_FILES, MIN_WINDOW_HEIGHT,
-    MIN_WINDOW_WIDTH, PREFS_VERSION,
+    AppearancePreference, PrefAyStereo, PrefJoystick, PrefModel, UiPreferences, MAX_RECENT_FILES,
+    MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, PREFS_VERSION,
 };
 pub use rom_setup::{
     acquire_next_assets, install_model_rom, model_requires_user_rom, model_rom_available,

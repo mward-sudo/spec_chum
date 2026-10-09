@@ -5,7 +5,9 @@ use super::{
     UserMachineConfig, MAPPING_DOC,
 };
 use eframe::egui;
-use spec_chum_host::{model_rom_available, PrefAyStereo, PrefJoystick, PrefModel};
+use spec_chum_host::{
+    model_rom_available, AppearancePreference, PrefAyStereo, PrefJoystick, PrefModel,
+};
 use std::path::Path;
 
 impl SpecChumApp {
@@ -349,6 +351,25 @@ impl SpecChumApp {
                         )
                         .changed()
                     {
+                        self.mark_prefs_dirty();
+                    }
+                });
+                ui.menu_button("Settings", |ui| {
+                    ui.label("Appearance");
+                    let mut appearance = self.prefs.appearance;
+                    let mut changed = false;
+                    changed |= ui
+                        .radio_value(&mut appearance, AppearancePreference::System, "System")
+                        .changed();
+                    changed |= ui
+                        .radio_value(&mut appearance, AppearancePreference::Light, "Light")
+                        .changed();
+                    changed |= ui
+                        .radio_value(&mut appearance, AppearancePreference::Dark, "Dark")
+                        .changed();
+                    if changed {
+                        self.prefs.appearance = appearance;
+                        theme::set_appearance(ctx, appearance);
                         self.mark_prefs_dirty();
                     }
                 });

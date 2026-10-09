@@ -92,7 +92,7 @@ impl SpecChumApp {
     /// egui UI body — callable from `App::update` or headless `Context::run`.
     pub fn ui(&mut self, ctx: &egui::Context) {
         if !self.theme_applied {
-            theme::apply(ctx);
+            theme::apply(ctx, self.prefs.appearance);
             self.theme_applied = true;
         }
         self.menu_bar(ctx);
@@ -220,8 +220,8 @@ impl Default for SpecChumApp {
 }
 
 impl eframe::App for SpecChumApp {
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        theme::clear_color()
+    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        theme::clear_color(visuals)
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {

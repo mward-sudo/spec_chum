@@ -6,6 +6,13 @@ import UniformTypeIdentifiers
 import CSpecChumHost
 
 extension HostBridge {
+    static func loadPersistedAppearance() -> AppearancePreference {
+        guard let value = UserDefaults.standard.string(forKey: appearanceDefaultsKey) else {
+            return .system
+        }
+        return AppearancePreference(rawValue: value) ?? .system
+    }
+
     static func loadPersistedVolume() -> Float {
         let defaults = UserDefaults.standard
         if defaults.object(forKey: volumeDefaultsKey) == nil {

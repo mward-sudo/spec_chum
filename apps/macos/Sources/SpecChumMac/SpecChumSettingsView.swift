@@ -7,6 +7,14 @@ struct SpecChumSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Appearance") {
+                Picker("Appearance", selection: $host.appearance) {
+                    ForEach(AppearancePreference.allCases) { appearance in
+                        Text(appearance.title).tag(appearance)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
             Section("Machine") {
                 Text("Built-in models and custom configurations are in the Machine menu and toolbar picker.")
                     .font(.caption)

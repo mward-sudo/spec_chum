@@ -29,6 +29,16 @@ pub const MAX_RECENT_FILES: usize = 12;
 pub const MIN_WINDOW_WIDTH: f32 = 480.0;
 pub const MIN_WINDOW_HEIGHT: f32 = 400.0;
 
+/// Host-chrome appearance preference; it does not affect the emulated guest.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 const DEFAULT_WINDOW_WIDTH: f32 = 780.0;
 const DEFAULT_WINDOW_HEIGHT: f32 = 680.0;
 
@@ -37,6 +47,9 @@ const DEFAULT_WINDOW_HEIGHT: f32 = 680.0;
 pub struct UiPreferences {
     #[serde(default = "prefs_version")]
     pub version: u32,
+    /// Light/dark mode for host UI chrome, independent of emulator state.
+    #[serde(default)]
+    pub appearance: AppearancePreference,
     #[serde(default)]
     pub model: PrefModel,
     /// Last built-in model selected (restored when deleting an active custom profile).
@@ -103,6 +116,7 @@ impl Default for UiPreferences {
     fn default() -> Self {
         Self {
             version: PREFS_VERSION,
+            appearance: AppearancePreference::System,
             model: PrefModel::Spectrum48,
             last_builtin_model: PrefModel::Spectrum48,
             tape_experience: false,
@@ -732,6 +746,20 @@ mod tests {
         let json = br#"{"version":2}"#;
         let p: UiPreferences = serde_json::from_slice(json).expect("parse");
         assert!(!p.sanitized().online_tape_titles);
+    }
+
+    #[test]
+    fn appearance_defaults_for_older_preferences_and_round_trips() {
+        let legacy: UiPreferences = serde_json::from_str(r#"{"version":2}"#).expect("parse");
+        assert_eq!(legacy.appearance, AppearancePreference::System);
+
+        let prefs = UiPreferences {
+            appearance: AppearancePreference::Dark,
+            ..UiPreferences::default()
+        };
+        let json = serde_json::to_string(&prefs).expect("serialize");
+        let restored: UiPreferences = serde_json::from_str(&json).expect("parse");
+        assert_eq!(restored.appearance, AppearancePreference::Dark);
     }
 
     #[test]

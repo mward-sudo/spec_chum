@@ -20,6 +20,7 @@ struct ContentView: View {
             }
         }
         .background(WindowTitleBinder(title: host.windowTitle))
+        .preferredColorScheme(host.appearance.colorScheme)
         .toolbar {
             livingRoomToolbar
         }
