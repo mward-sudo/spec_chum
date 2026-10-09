@@ -254,32 +254,38 @@ fn layout_library(app: &AppState, hwnd: HWND) {
     }
 }
 
+struct LibraryControlSpec {
+    class: &'static str,
+    text: &'static str,
+    style: u32,
+    bounds: (i32, i32, i32, i32),
+    id: i32,
+}
+
 fn create_library_control(
     instance: windows::Win32::Foundation::HINSTANCE,
     parent: HWND,
-    class: &str,
-    text: &str,
-    style: u32,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-    id: i32,
+    spec: LibraryControlSpec,
 ) -> Option<HWND> {
-    let class: Vec<u16> = class.encode_utf16().chain(std::iter::once(0)).collect();
-    let text: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let class: Vec<u16> = spec
+        .class
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let text: Vec<u16> = spec.text.encode_utf16().chain(std::iter::once(0)).collect();
+    let (x, y, width, height) = spec.bounds;
     unsafe {
         CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             PCWSTR(class.as_ptr()),
             PCWSTR(text.as_ptr()),
-            WINDOW_STYLE(style),
+            WINDOW_STYLE(spec.style),
             x,
             y,
             width,
             height,
             Some(parent),
-            Some(HMENU(id as isize as *mut core::ffi::c_void)),
+            Some(HMENU(spec.id as isize as *mut core::ffi::c_void)),
             Some(instance),
             None,
         )
@@ -310,86 +316,79 @@ extern "system" fn library_wnd_proc(
             let search = create_library_control(
                 instance.into(),
                 hwnd,
-                "EDIT",
-                "",
-                base | border | 0x0080,
-                16,
-                16,
-                330,
-                26,
-                ID_LIBRARY_SEARCH,
+                LibraryControlSpec {
+                    class: "EDIT",
+                    text: "",
+                    style: base | border | 0x0080,
+                    bounds: (16, 16, 330, 26),
+                    id: ID_LIBRARY_SEARCH,
+                },
             );
             let category = create_library_control(
                 instance.into(),
                 hwnd,
-                "COMBOBOX",
-                "All types",
-                base | 0x0002_0000 | 0x0000_0003 | 0x0000_0200 | 0x0020_0000,
-                360,
-                16,
-                220,
-                200,
-                ID_LIBRARY_CATEGORY,
+                LibraryControlSpec {
+                    class: "COMBOBOX",
+                    text: "All types",
+                    style: base | 0x0002_0000 | 0x0000_0003 | 0x0000_0200 | 0x0020_0000,
+                    bounds: (360, 16, 220, 200),
+                    id: ID_LIBRARY_CATEGORY,
+                },
             );
             let list = create_library_control(
                 instance.into(),
                 hwnd,
-                "LISTBOX",
-                "",
-                base | 0x0080_0000 | 0x0020_0000 | 1,
-                16,
-                54,
-                350,
-                360,
-                ID_LIBRARY_LIST,
+                LibraryControlSpec {
+                    class: "LISTBOX",
+                    text: "",
+                    style: base | 0x0080_0000 | 0x0020_0000 | 1,
+                    bounds: (16, 54, 350, 360),
+                    id: ID_LIBRARY_LIST,
+                },
             );
             let details = create_library_control(
                 instance.into(),
                 hwnd,
-                "STATIC",
-                "",
-                base | border,
-                382,
-                54,
-                340,
-                250,
-                ID_LIBRARY_DETAILS,
+                LibraryControlSpec {
+                    class: "STATIC",
+                    text: "",
+                    style: base | border,
+                    bounds: (382, 54, 340, 250),
+                    id: ID_LIBRARY_DETAILS,
+                },
             );
             let _ = create_library_control(
                 instance.into(),
                 hwnd,
-                "BUTTON",
-                "Open",
-                base | 0x0000_0001,
-                382,
-                326,
-                100,
-                32,
-                ID_LIBRARY_OPEN_BUTTON,
+                LibraryControlSpec {
+                    class: "BUTTON",
+                    text: "Open",
+                    style: base | 0x0000_0001,
+                    bounds: (382, 326, 100, 32),
+                    id: ID_LIBRARY_OPEN_BUTTON,
+                },
             );
             let _ = create_library_control(
                 instance.into(),
                 hwnd,
-                "BUTTON",
-                "Remove from Library",
-                base | 0x0000_0001,
-                490,
-                326,
-                175,
-                32,
-                ID_LIBRARY_REMOVE_BUTTON,
+                LibraryControlSpec {
+                    class: "BUTTON",
+                    text: "Remove from Library",
+                    style: base | 0x0000_0001,
+                    bounds: (490, 326, 175, 32),
+                    id: ID_LIBRARY_REMOVE_BUTTON,
+                },
             );
             let _ = create_library_control(
                 instance.into(),
                 hwnd,
-                "BUTTON",
-                "Close",
-                base | 0x0000_0001,
-                622,
-                420,
-                100,
-                32,
-                ID_LIBRARY_CLOSE_BUTTON,
+                LibraryControlSpec {
+                    class: "BUTTON",
+                    text: "Close",
+                    style: base | 0x0000_0001,
+                    bounds: (622, 420, 100, 32),
+                    id: ID_LIBRARY_CLOSE_BUTTON,
+                },
             );
             if let Some(combo) = category {
                 for label in ["All types", "Tape", "Snapshot", "Recording", "Disk"] {

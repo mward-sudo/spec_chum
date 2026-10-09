@@ -2484,9 +2484,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32/library.rs": {
-    "mtime": 1791589803.067615,
-    "seen": 1791589843.155982,
-    "ast_hash": "95b6815f72ec28be2ed289daa2d2f311",
+    "mtime": 1791590090.7188344,
+    "seen": 1791590125.941761,
+    "ast_hash": "197c656feb44a9cd638c755d520016e1",
     "semantic_hash": ""
   },
   "crates/windows_shell/src/library_cmd.rs": {
