@@ -1476,9 +1476,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1791512735.5322614,
-    "seen": 1791512757.778024,
-    "ast_hash": "f250bc6f4a50bf885dc19f439e88a181",
+    "mtime": 1791515205.612417,
+    "seen": 1791515235.1492789,
+    "ast_hash": "3d91b43cf69a30bf3840da611f6ad375",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -1512,9 +1512,9 @@
     "semantic_hash": ""
   },
   "crates/linux_shell/src/gtk_ui.rs": {
-    "mtime": 1791512477.4954176,
-    "seen": 1791512757.775638,
-    "ast_hash": "58e70b1572e1aba7e8c7825c1ced3004",
+    "mtime": 1791515130.5556104,
+    "seen": 1791515235.146313,
+    "ast_hash": "58375f281f06a59c1d7f8ce2b45379d3",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/keymap.rs": {
@@ -2064,9 +2064,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/frontend.rs": {
-    "mtime": 1791511491.3794277,
-    "seen": 1791511575.96166,
-    "ast_hash": "c2e9e5adf3f9b33fba118e6ff5bc28ab",
+    "mtime": 1791514732.4515834,
+    "seen": 1791515235.143488,
+    "ast_hash": "c3ac4fb7c0d9f540c6fe61c0bcadedea",
     "semantic_hash": ""
   },
   "crates/host_api/examples/support/mod.rs": {
@@ -2160,9 +2160,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/frontend/menu.rs": {
-    "mtime": 1791511480.5882657,
-    "seen": 1791511575.961662,
-    "ast_hash": "a3dc9d65db382c729ebf038e998d5b9c",
+    "mtime": 1791514435.238513,
+    "seen": 1791515235.1435788,
+    "ast_hash": "45911572a504a82f676cd34354768ae8",
     "semantic_hash": ""
   },
   "crates/machine/src/construction.rs": {
@@ -2463,6 +2463,12 @@
     "mtime": 1791511634.2704585,
     "seen": 1791511774.8416052,
     "ast_hash": "f663740466dce4471735b920282ee8d0",
+    "semantic_hash": ""
+  },
+  "crates/app/src/frontend/navigation.rs": {
+    "mtime": 1791514716.20829,
+    "seen": 1791515235.14358,
+    "ast_hash": "1b7c4d7a970f774aad9590551ca04bf4",
     "semantic_hash": ""
   }
 }
