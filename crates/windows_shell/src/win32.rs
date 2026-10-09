@@ -26,10 +26,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, LoadCursorW, MessageBoxW, PeekMessageW, PostQuitMessage, RegisterClassExW,
     SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW,
     CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA,
-    HMENU, IDC_ARROW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MSG, PM_REMOVE,
-    SW_SHOW, WINDOW_EX_STYLE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_KEYDOWN, WM_KEYUP, WM_PAINT,
-    WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDCLASSEXW, WS_BORDER,
-    WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    HMENU, IDC_ARROW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG,
+    PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
+    WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
@@ -67,6 +67,8 @@ const DEBUG_CLASS: &str = "SpecChumWindowsDebug\0";
 const WINDOW_TITLE: &str = "Spec Chum\0";
 const ID_DBG_EDIT: i32 = 2001;
 const IDM_MACHINE_ROM_SETUP: usize = 1289;
+const IDM_LIBRARY_RECENT_BASE: usize = 1600;
+const IDM_LIBRARY_RECENT_COUNT: usize = 12;
 const PERSONALIZE_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0";
 const APPS_USE_LIGHT_THEME: &str = "AppsUseLightTheme\0";
 
@@ -120,6 +122,7 @@ struct AppState {
     /// Last time the debugger EDIT control was rewritten from `tick_frame`.
     last_debug_refresh: Instant,
     next_assets_download: Option<NextAssetDownload>,
+    recent_menu: Option<HMENU>,
 }
 
 impl AppState {
@@ -198,6 +201,7 @@ impl AppState {
             main_hwnd: None,
             last_debug_refresh: Instant::now(),
             next_assets_download: None,
+            recent_menu: None,
         })
     }
 
@@ -441,6 +445,73 @@ impl AppState {
             &["trd"],
             HostSession::load_trd,
         );
+    }
+
+    fn open_recent_media(&mut self, index: usize) {
+        let Some(path) = recent_media_paths(&self.prefs.recent_files)
+            .get(index)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+            return;
+        };
+        let load: fn(&mut HostSession, &Path) -> Result<(), HostError> =
+            match extension.to_ascii_lowercase().as_str() {
+                "tap" | "tzx" => HostSession::open_tape,
+                "sna" | "z80" | "szx" => HostSession::load_snapshot,
+                "rzx" => HostSession::load_rzx,
+                "dsk" => HostSession::load_dsk,
+                "trd" => HostSession::load_trd,
+                _ => return,
+            };
+        match self.host.with_mut(|session| load(session, &path)) {
+            Ok(()) => {
+                self.prefs.push_recent(&path);
+                self.persist_prefs();
+            }
+            Err(error) => self.report_err("Open recent media", &error),
+        }
+    }
+
+    fn refresh_recent_menu(&self, menu: HMENU) {
+        use windows::Win32::UI::WindowsAndMessaging::{DeleteMenu, GetMenuItemCount};
+        // SAFETY: menu is the Library popup created and owned by this window.
+        unsafe {
+            while GetMenuItemCount(Some(menu)) > 0 {
+                if DeleteMenu(menu, 0, MF_BYPOSITION).is_err() {
+                    break;
+                }
+            }
+        }
+        let paths = recent_media_paths(&self.prefs.recent_files);
+        if paths.is_empty() {
+            let label: Vec<u16> = "No recent media\0".encode_utf16().collect();
+            // SAFETY: menu is our popup and label is NUL-terminated.
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::AppendMenuW(
+                    menu,
+                    windows::Win32::UI::WindowsAndMessaging::MF_STRING
+                        | windows::Win32::UI::WindowsAndMessaging::MF_GRAYED,
+                    0,
+                    PCWSTR(label.as_ptr()),
+                );
+            }
+            return;
+        }
+        for (index, path) in paths.iter().enumerate() {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("Media");
+            let parent = path.parent().and_then(Path::to_str).unwrap_or("");
+            append_menu(
+                menu,
+                IDM_LIBRARY_RECENT_BASE + index,
+                &format!("&{} {name} — {parent}", index + 1),
+            );
+        }
     }
 
     /// Offer the shared per-slot ROM setup flow. Returns false when the user
@@ -815,6 +886,11 @@ impl AppState {
             return;
         };
         match id {
+            id if (IDM_LIBRARY_RECENT_BASE..IDM_LIBRARY_RECENT_BASE + IDM_LIBRARY_RECENT_COUNT)
+                .contains(&id) =>
+            {
+                self.open_recent_media(id - IDM_LIBRARY_RECENT_BASE)
+            }
             IDM_FILE_OPEN_TAPE => self.open_tape(),
             IDM_FILE_OPEN_SNAPSHOT => self.open_snapshot(),
             IDM_FILE_OPEN_RZX => self.open_rzx(),
@@ -1011,7 +1087,23 @@ fn append_sep(menu: HMENU) {
     }
 }
 
-fn build_menu() -> Result<HMENU> {
+fn recent_media_paths(recent_files: &[String]) -> Vec<PathBuf> {
+    recent_files
+        .iter()
+        .filter_map(|value| {
+            let path = PathBuf::from(value);
+            let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+            matches!(
+                extension.as_str(),
+                "tap" | "tzx" | "sna" | "z80" | "szx" | "rzx" | "dsk" | "trd"
+            )
+            .then_some(path)
+        })
+        .take(IDM_LIBRARY_RECENT_COUNT)
+        .collect()
+}
+
+fn build_menu() -> Result<(HMENU, HMENU)> {
     use windows::Win32::UI::WindowsAndMessaging::{CreateMenu, CreatePopupMenu};
     // SAFETY: CreateMenu/CreatePopupMenu return owned menus we attach to the window.
     unsafe {
@@ -1026,6 +1118,9 @@ fn build_menu() -> Result<HMENU> {
         append_sep(file);
         append_menu(file, IDM_FILE_EXIT, "E&xit");
         append_popup(menubar, file, "&File");
+
+        let library = CreatePopupMenu()?;
+        append_popup(menubar, library, "&Library");
 
         let machine = CreatePopupMenu()?;
         for m in ModelId::ALL {
@@ -1118,7 +1213,7 @@ fn build_menu() -> Result<HMENU> {
         append_menu(debug, IDM_DBG_REFRESH, "&Refresh");
         append_popup(menubar, debug, "&Debug");
 
-        Ok(menubar)
+        Ok((menubar, library))
     }
 }
 
@@ -1330,6 +1425,17 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
             }
             LRESULT(0)
         }
+        WM_INITMENUPOPUP => {
+            if !state_ptr.is_null() {
+                let state = unsafe { &mut *state_ptr };
+                let menu = HMENU(wparam.0 as _);
+                if state.recent_menu == Some(menu) {
+                    state.refresh_recent_menu(menu);
+                    return LRESULT(0);
+                }
+            }
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
         WM_KEYDOWN | WM_SYSKEYDOWN => {
             if !state_ptr.is_null() {
                 let vk = (wparam.0 & 0xffff) as u16;
@@ -1399,7 +1505,7 @@ pub fn run() -> Result<()> {
             anyhow::bail!("RegisterClassExW failed");
         }
 
-        let menu = build_menu()?;
+        let (menu, recent_menu) = build_menu()?;
         let title: Vec<u16> = WINDOW_TITLE.encode_utf16().collect();
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
@@ -1417,6 +1523,7 @@ pub fn run() -> Result<()> {
         )?;
 
         (*app_ptr).main_hwnd = Some(hwnd);
+        (*app_ptr).recent_menu = Some(recent_menu);
         apply_window_appearance(hwnd, (*app_ptr).prefs.appearance);
         let _ = ShowWindow(hwnd, SW_SHOW);
 
@@ -1448,6 +1555,31 @@ pub fn run() -> Result<()> {
 #[cfg(test)]
 mod startup_tests {
     use super::*;
+
+    #[test]
+    fn library_recent_paths_include_media_and_exclude_hardware_images() {
+        let recent = [
+            "/games/next.rom",
+            "/games/disk.img",
+            "/games/PLAY.TAP",
+            "/games/snapshot.szx",
+            "/games/disk.trd",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+
+        let paths = recent_media_paths(&recent);
+
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::from("/games/PLAY.TAP"),
+                PathBuf::from("/games/snapshot.szx"),
+                PathBuf::from("/games/disk.trd"),
+            ]
+        );
+    }
 
     #[test]
     fn preferred_failure_uses_successful_48k_fallback() {
