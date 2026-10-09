@@ -1476,9 +1476,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1791515205.612417,
-    "seen": 1791515235.1492789,
-    "ast_hash": "3d91b43cf69a30bf3840da611f6ad375",
+    "mtime": 1791515977.6540396,
+    "seen": 1791515992.143405,
+    "ast_hash": "8e292307a889242424b18283a8f3e576",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {

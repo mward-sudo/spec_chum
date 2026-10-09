@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{BOOL, ERROR_SUCCESS, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{ERROR_SUCCESS, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, EndPaint, InvalidateRect, StretchDIBits, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
@@ -1307,15 +1307,15 @@ fn apply_window_appearance(hwnd: HWND, preference: AppearancePreference) {
         AppearancePreference::Light => false,
         AppearancePreference::Dark => true,
     };
-    let dark_mode = BOOL(i32::from(dark));
+    let dark_mode = i32::from(dark);
     // SAFETY: hwnd is the live top-level window owned by this shell and the
-    // attribute receives a pointer to a correctly sized BOOL for this call.
+    // attribute receives a pointer to the correctly sized Win32 BOOL value (i32).
     let _ = unsafe {
         DwmSetWindowAttribute(
             hwnd,
             DWMWA_USE_IMMERSIVE_DARK_MODE,
-            (&dark_mode as *const BOOL).cast(),
-            size_of::<BOOL>() as u32,
+            (&dark_mode as *const i32).cast(),
+            size_of::<i32>() as u32,
         )
     };
 
@@ -1326,7 +1326,7 @@ fn apply_window_appearance(hwnd: HWND, preference: AppearancePreference) {
     };
     // SAFETY: hwnd is the live top-level window whose menu was created by this shell.
     let menu = unsafe { GetMenu(hwnd) };
-    if menu.0 != 0 {
+    if !menu.0.is_null() {
         // SAFETY: the appearance commands are consecutive IDs in this menu.
         let _ = unsafe {
             CheckMenuRadioItem(
@@ -1334,7 +1334,7 @@ fn apply_window_appearance(hwnd: HWND, preference: AppearancePreference) {
                 IDM_SET_APPEARANCE_SYSTEM as u32,
                 IDM_SET_APPEARANCE_DARK as u32,
                 selected_id as u32,
-                MF_BYCOMMAND,
+                MF_BYCOMMAND.0,
             )
         };
     }
