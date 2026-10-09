@@ -50,9 +50,9 @@ pub const BACKDROP_DEPTH: f32 = crate::room::TV_STAND_POS.z - 0.78;
 pub const HERO_CENTER_Y: f32 = 0.82;
 /// Continuous base wall covering the camera bounds for portrait through ultrawide views.
 pub const BACKDROP_BASE_SIZE: Vec2 = Vec2::new(8.0, 9.0);
-pub const HERO_FRAME_W: f32 = 1.55;
-pub const HERO_FRAME_H: f32 = 1.62;
-pub const HERO_FRAME_FILL: f32 = 0.78;
+pub const HERO_FRAME_W: f32 = 0.95;
+pub const HERO_FRAME_H: f32 = 0.72;
+pub const HERO_FRAME_FILL: f32 = 0.95;
 
 #[derive(Component, Debug)]
 struct CabinetBackdrop;

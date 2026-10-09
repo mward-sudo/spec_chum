@@ -26,17 +26,21 @@ The simple rectangles are authored in the project; no generated or third-party
 artwork is used. The stand and television models continue to use the existing
 Poly Haven assets (CC0; see `crates/living_room/assets/CREDITS`).
 
-The camera framing contract reserves 1.55 × 1.62 m hero bounds at 78% of the
-viewport. The geometry-only resize cases are 320×900, 450×1000, 800×800,
+The camera framing contract reserves 0.95 × 0.72 m hero bounds at 95% of the
+viewport, bringing the CRT forward toward the scale shown in the Spectrum Cabinet
+concept while keeping the complete phosphor in frame. The geometry-only resize
+cases are 320×900, 450×1000, 800×800,
 1280×720, 2560×1080, and 320×240. Headless Bevy screenshots were captured at
-each size; they show the complete CRT and active test pattern. Human visual
-review against the Spectrum Cabinet concept remains open. On this Mac, the same
+each size after the closer framing change; they show the complete CRT and active
+test pattern. The user accepted this opt-in prototype increment for merge;
+final environment composition review against the Spectrum Cabinet concept
+remains open in #558. Before the closer framing change, on this Mac, the same
 headless 1920×1080 probe measured fixed mode at 3.00 ms/tick average (p95
 3.32 ms) and the existing 3D mode at 4.17 ms/tick average (p95 4.86 ms), each
 over 100 ticks. This
 is a rendering-cost diagnostic, not a display frame-pacing or input-latency
 measurement, and does not predict reference hardware performance. Input
-latency remains unmeasured. Keep the existing 3D room selectable until visual
+latency remains unmeasured. Keep the existing 3D room selectable until final visual
 and technical go/no-go review is recorded.
 
 **Status:** experimental / not the default product UI. Tracked in

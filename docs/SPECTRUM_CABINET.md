@@ -79,6 +79,10 @@ All hosts expose the same Library, Play, Machines, Debugger, and Settings capabi
 
 The user-selected target is a mostly 2D authored room composition with the live television/CRT kept in 3D. The first implementation step is a comparison prototype, not an assumption that a 2D plate will improve fidelity or performance.
 
+The approved dark Spectrum Cabinet concept is the visual reference for the play view. It is a design mockup, not production UI or distributable scene art; use it to guide camera framing, palette, visual hierarchy, and room detail while implementing those elements with project-authored or rights-cleared assets.
+
+![Approved dark Spectrum Cabinet concept, including the Play view](images/spectrum-cabinet-dark-reference.png)
+
 - Keep the existing Bevy renderer and live Spectrum framebuffer path. Preserve the curved phosphor surface, glass, shader, input, and framebuffer-driven CRT effects.
 - Use one fixed hero camera position with layered room artwork behind and selectively in front of the 3D television. The first version has no moving intro, user camera, or zoom presets. Add authored light/spill masks around the CRT as needed because static art does not receive the current dynamic room lighting.
 - Treat foreground occlusion and screen-to-room color spill as part of the composition. Keep the complete CRT visible at supported aspect ratios.
@@ -92,8 +96,10 @@ The user-selected target is a mostly 2D authored room composition with the live 
 The opt-in Bevy prototype is implemented in `crates/living_room/src/cabinet_room.rs` and documented in [`docs/LIVING_ROOM.md`](LIVING_ROOM.md). `SPEC_CHUM_ROOM_PRESENTATION=fixed-cabinet` selects it in the standalone room; the existing 3D room remains the default. This is not yet a GUI-host presentation mode. Cross-host rollout remains in #563 and is blocked on the review below.
 
 - The prototype uses project-authored flat Bevy rectangles for its wall, trim, and curtains, with the existing Poly Haven CC0 television assets and live curved CRT. No new third-party art is bundled.
+- Outstanding environment composition work: adjust the fixed camera angle, height, look-at point, distance, field of view, and TV placement/scale to match the finalized environment reference image. The current closer framing is provisional. Review the environment art, lighting, foreground layers, and CRT spill alongside that reference, and verify that the complete CRT remains visible across supported window aspect ratios before visual sign-off.
 - Headless captures cover 320×900, 450×1000, 800×800, 1280×720, 2560×1080, and 320×240. They show the full CRT and test pattern, but are not a substitute for review against the approved concept and current 3D room.
-- On this Mac, the same headless 1920×1080, 100-tick diagnostic measured 3.00 ms/tick average (p95 3.32 ms) for fixed mode and 4.17 ms/tick average (p95 4.86 ms) for the existing 3D mode. This measures renderer tick cost only; frame pacing and input latency remain unmeasured.
+- Before the closer framing change, on this Mac, the same headless 1920×1080, 100-tick diagnostic measured 3.00 ms/tick average (p95 3.32 ms) for fixed mode and 4.17 ms/tick average (p95 4.86 ms) for the existing 3D mode. This measures renderer tick cost only; frame pacing and input latency remain unmeasured.
+- The user accepted the opt-in prototype increment for merge. This does not complete the final environment composition or technical go/no-go in #558.
 - A human visual review and explicit technical go/no-go remain required before promoting the room or adding it to GUI hosts. Keep the 3D room selectable and the flat display available until that decision is recorded.
 
 ## Delivery sequence
