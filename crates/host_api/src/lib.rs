@@ -7,6 +7,7 @@ pub mod ffi;
 pub mod handle;
 pub mod keymap;
 pub mod machine_config;
+pub mod media_library;
 pub mod media_title_lookup;
 pub mod model_catalog;
 pub mod next_assets;
@@ -17,6 +18,9 @@ pub mod session;
 pub use machine_config::{
     apply_user_config, expected_rom_bytes, hardware_compat, new_config_id, validate_main_rom,
     AppliedConfig, HardwareCompat, MachineConfigError, UserMachineConfig, MAX_CUSTOM_CONFIGS,
+};
+pub use media_library::{
+    query_recent_media, MediaCategory, MediaCompatibility, MediaEntry, MediaFormat,
 };
 pub use media_title_lookup::{
     default_cache_path as default_zxinfo_cache_path, user_agent as zxinfo_user_agent,

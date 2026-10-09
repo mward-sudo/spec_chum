@@ -61,6 +61,13 @@ unsigned int sc_framebuffer_width(void *handle);
 unsigned int sc_framebuffer_height(void *handle);
 
 int sc_open_tape(void *handle, const char *path);
+/* Local recent-media query. Pass JSON array of UTF-8 paths; category is
+ * all/tape/snapshot/recording/disk (or null). Null search means no search.
+ * Returns a heap JSON array; free with sc_string_free. Null on error. */
+char *sc_media_library_json(void *handle, const char *recent_paths_json,
+                            const char *search, const char *category);
+/* Open TAP/TZX, SNA/Z80, RZX, compatible DSK/TRD through shared policy. */
+int sc_open_media(void *handle, const char *path);
 /* Heap UTF-8 display title for the inserted tape (catalogue or filename); free with sc_string_free. Null if none. */
 char *sc_media_title(void *handle);
 /* Heap UTF-8 lowercase SHA-512 hex of the inserted tape file; free with sc_string_free. Null if none. */

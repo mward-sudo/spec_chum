@@ -35,6 +35,11 @@ struct SpecChumMacApp: App {
             // File — Open… counterparts to toolbar (standard once); other media kinds here only
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
+                Button("Library…") {
+                    host.showLibrary = true
+                }
+                .keyboardShortcut("l", modifiers: .command)
+
                 Button(host.openMediaMenuTitle) {
                     host.presentOpenMediaPanel()
                 }
@@ -61,12 +66,13 @@ struct SpecChumMacApp: App {
                 }
                 .disabled(!host.model.supportsBeta)
 
-                if !host.recentFiles.isEmpty {
+                let recentMedia = host.mediaLibraryEntries()
+                if !recentMedia.isEmpty {
                     Divider()
                     Menu("Open Recent") {
-                        ForEach(Array(host.recentFiles.enumerated()), id: \.offset) { _, url in
-                            Button(url.lastPathComponent) {
-                                host.openRecentFile(url)
+                        ForEach(recentMedia) { entry in
+                            Button(entry.name) {
+                                host.openRecentFile(URL(fileURLWithPath: entry.path))
                             }
                         }
                     }

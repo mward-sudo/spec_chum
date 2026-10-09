@@ -362,6 +362,7 @@ final class HostBridge: ObservableObject {
 
     /// Recent media paths (most recent first); reopen from File menu — not auto-inserted on launch.
     @Published var recentFiles: [URL] = HostBridge.loadPersistedRecentFiles()
+    @Published var showLibrary = false
 
     /// Document-style window title: media + machine (HIG).
     var windowTitle: String {

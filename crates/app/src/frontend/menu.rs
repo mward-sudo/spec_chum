@@ -6,7 +6,8 @@ use super::{
 };
 use eframe::egui;
 use spec_chum_host::{
-    model_rom_available, AppearancePreference, PrefAyStereo, PrefJoystick, PrefModel,
+    model_rom_available, query_recent_media, AppearancePreference, PrefAyStereo, PrefJoystick,
+    PrefModel,
 };
 use std::path::Path;
 
@@ -82,17 +83,18 @@ impl SpecChumApp {
                         }
                         ui.close_menu();
                     }
-                    if !self.prefs.recent_files.is_empty() {
+                    let recent_media = query_recent_media(
+                        &self.prefs.recent_files,
+                        "",
+                        None,
+                        &self.session.host_mut(),
+                    );
+                    if !recent_media.is_empty() {
                         ui.separator();
                         ui.menu_button("Open recent", |ui| {
-                            let recents = self.prefs.recent_files.clone();
-                            for path_str in recents {
-                                let label = Path::new(&path_str)
-                                    .file_name()
-                                    .and_then(|n| n.to_str())
-                                    .unwrap_or(path_str.as_str());
-                                if ui.button(label).clicked() {
-                                    self.open_recent_path(Path::new(&path_str));
+                            for entry in recent_media {
+                                if ui.button(&entry.name).on_hover_text(&entry.path).clicked() {
+                                    self.open_recent_path(Path::new(&entry.path));
                                     ui.close_menu();
                                 }
                             }

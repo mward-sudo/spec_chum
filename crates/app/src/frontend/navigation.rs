@@ -2,6 +2,7 @@
 
 use super::{display, SpecChumApp};
 use eframe::egui;
+use spec_chum_host::{query_recent_media, MediaCategory, MediaCompatibility, MediaEntry};
 
 const FRONTEND_VIEW_ID: &str = "frontend.view";
 pub(super) const GUEST_KEYBOARD_SUPPRESSED_ID: &str = "frontend.guest_keyboard_suppressed";
@@ -68,16 +69,20 @@ impl SpecChumApp {
                         if let Some(path) = rfd::FileDialog::new()
                             .add_filter(
                                 "Spectrum media",
-                                &["sna", "z80", "tap", "tzx", "rzx", "dsk"],
+                                &["sna", "z80", "tap", "tzx", "rzx", "dsk", "trd"],
                             )
                             .pick_file()
                         {
-                            self.open_recent_path(&path);
-                            current = FrontendView::Play;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(egui::Id::new(GUEST_KEYBOARD_SUPPRESSED_ID), true);
-                                data.insert_temp(egui::Id::new(PLAY_FOCUS_REQUEST_ID), true);
-                            });
+                            if self.open_recent_path(&path) {
+                                current = FrontendView::Play;
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(
+                                        egui::Id::new(GUEST_KEYBOARD_SUPPRESSED_ID),
+                                        true,
+                                    );
+                                    data.insert_temp(egui::Id::new(PLAY_FOCUS_REQUEST_ID), true);
+                                });
+                            }
                         }
                     }
                 });
@@ -167,27 +172,169 @@ impl SpecChumApp {
 
     fn render_library(&mut self, ui: &mut egui::Ui) {
         ui.heading("Library");
-        ui.label("Recently opened media");
+        ui.label("Recent media on this device");
         ui.separator();
-        if self.prefs.recent_files.is_empty() {
-            ui.label("No recent media yet. Use Open media… or File → Open.");
+        ui.horizontal(|ui| {
+            ui.label("Search");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.library_search)
+                    .hint_text("Name or path")
+                    .desired_width(220.0),
+            );
+            egui::ComboBox::from_id_salt("library-category")
+                .selected_text(category_label(self.library_category))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.library_category, None, "All types");
+                    for category in [
+                        MediaCategory::Tape,
+                        MediaCategory::Snapshot,
+                        MediaCategory::Recording,
+                        MediaCategory::Disk,
+                    ] {
+                        ui.selectable_value(
+                            &mut self.library_category,
+                            Some(category),
+                            category_label(Some(category)),
+                        );
+                    }
+                });
+        });
+
+        let entries = query_recent_media(
+            &self.prefs.recent_files,
+            &self.library_search,
+            self.library_category,
+            &self.session.host_mut(),
+        );
+        if self
+            .selected_media_path
+            .as_ref()
+            .is_none_or(|selected| !entries.iter().any(|entry| &entry.path == selected))
+        {
+            self.selected_media_path = entries.first().map(|entry| entry.path.clone());
+        }
+        if entries.is_empty() {
+            ui.add_space(12.0);
+            ui.label(if self.prefs.recent_files.is_empty() {
+                "No recent media yet. Open a supported media file to add it here."
+            } else {
+                "No supported recent media matches these filters."
+            });
             return;
         }
-        let recents = self.prefs.recent_files.clone();
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for path in recents {
-                let label = std::path::Path::new(&path)
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or(&path);
-                if ui.button(label).on_hover_text(&path).clicked() {
-                    self.open_recent_path(std::path::Path::new(&path));
-                    FrontendView::Play.set(ui.ctx());
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new(PLAY_FOCUS_REQUEST_ID), true);
-                    });
-                }
+
+        let mut open_path = None;
+        let mut remove_path = None;
+        ui.columns(2, |columns| {
+            egui::ScrollArea::vertical()
+                .id_salt("library-items")
+                .show(&mut columns[0], |ui| {
+                    for entry in &entries {
+                        let selected = self.selected_media_path.as_deref() == Some(&entry.path);
+                        ui.horizontal(|ui| {
+                            if ui.selectable_label(selected, &entry.name).clicked() {
+                                self.selected_media_path = Some(entry.path.clone());
+                            }
+                            ui.small(format_label(entry));
+                        });
+                        ui.small(format!(
+                            "{} · {}",
+                            if entry.available {
+                                "Available"
+                            } else {
+                                "Missing"
+                            },
+                            compatibility_label(entry.compatibility)
+                        ));
+                        ui.separator();
+                    }
+                });
+
+            if let Some(entry) = self
+                .selected_media_path
+                .as_deref()
+                .and_then(|selected| entries.iter().find(|entry| entry.path == selected))
+            {
+                columns[1].heading(&entry.name);
+                columns[1].label(format!(
+                    "{} · {}",
+                    format_label(entry),
+                    category_label(Some(entry.category))
+                ));
+                columns[1].label(if entry.available {
+                    "Available on this device"
+                } else {
+                    "File is unavailable"
+                });
+                columns[1].label(compatibility_label(entry.compatibility));
+                columns[1].collapsing("Path", |ui| {
+                    ui.code(&entry.path);
+                });
+                columns[1].horizontal(|ui| {
+                    if ui
+                        .add_enabled(
+                            entry.available && entry.compatibility.can_open(),
+                            egui::Button::new("Open"),
+                        )
+                        .clicked()
+                    {
+                        open_path = Some(entry.path.clone());
+                    }
+                    if ui.button("Remove from Library").clicked() {
+                        remove_path = Some(entry.path.clone());
+                    }
+                });
             }
         });
+
+        if let Some(path) = remove_path {
+            self.prefs.remove_recent(std::path::Path::new(&path));
+            self.mark_prefs_dirty();
+            if self.selected_media_path.as_deref() == Some(&path) {
+                self.selected_media_path = None;
+            }
+        } else if let Some(path) = open_path {
+            if self.open_recent_path(std::path::Path::new(&path)) {
+                FrontendView::Play.set(ui.ctx());
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new(PLAY_FOCUS_REQUEST_ID), true);
+                });
+            }
+        }
+    }
+}
+
+fn category_label(category: Option<MediaCategory>) -> &'static str {
+    match category {
+        None => "All types",
+        Some(MediaCategory::Tape) => "Tape",
+        Some(MediaCategory::Snapshot) => "Snapshot",
+        Some(MediaCategory::Recording) => "Recording",
+        Some(MediaCategory::Disk) => "Disk",
+    }
+}
+
+fn format_label(entry: &MediaEntry) -> &'static str {
+    match entry.format {
+        spec_chum_host::MediaFormat::Tap => "TAP",
+        spec_chum_host::MediaFormat::Tzx => "TZX",
+        spec_chum_host::MediaFormat::Sna => "SNA",
+        spec_chum_host::MediaFormat::Z80 => "Z80",
+        spec_chum_host::MediaFormat::Rzx => "RZX",
+        spec_chum_host::MediaFormat::Dsk => "DSK",
+        spec_chum_host::MediaFormat::Trd => "TRD",
+    }
+}
+
+fn compatibility_label(compatibility: MediaCompatibility) -> &'static str {
+    match compatibility {
+        MediaCompatibility::Ready => "Compatible with current machine",
+        MediaCompatibility::MayRequireMachine => "May need a machine",
+        MediaCompatibility::RequiresMachine => "Select a machine before opening",
+        MediaCompatibility::RequiresPlus3 => "Requires a +3 or +3e",
+        MediaCompatibility::RequiresBetaModel => "Requires a Beta-compatible model",
+        MediaCompatibility::RequiresBeta => "Requires Beta Disk hardware",
+        MediaCompatibility::RequiresTrdosRom => "Requires a TR-DOS ROM",
+        MediaCompatibility::UnsupportedOnNext => "Not supported on Spectrum Next",
     }
 }

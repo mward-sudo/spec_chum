@@ -142,6 +142,9 @@ impl SpecChumApp {
             theme_applied: false,
             gilrs,
             prefs,
+            library_search: String::new(),
+            library_category: None,
+            selected_media_path: None,
             prefs_path,
             prefs_dirty: false,
             prefs_size_deadline: None,
@@ -249,47 +252,23 @@ impl SpecChumApp {
         }
     }
 
-    pub(super) fn open_recent_path(&mut self, path: &Path) {
-        if !path.is_file() {
+    pub(super) fn open_recent_path(&mut self, path: &Path) -> bool {
+        let result = self.session.host_mut().open_media_path(path);
+        if let Err(error) = result {
             self.session
                 .host_mut()
-                .set_status(format!("Recent file missing: {}", path.display()));
-            self.prefs.recent_files.retain(|p| Path::new(p) != path);
-            self.mark_prefs_dirty();
-            return;
-        }
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        match ext.as_str() {
-            "sna" | "z80" => self.session.load_snapshot(path),
-            "tap" => self.session.load_tap(path),
-            "tzx" => self.session.load_tzx(path),
-            "rzx" => self.session.load_rzx(path),
-            "dsk" => self.session.load_dsk(path),
-            _ => {
-                self.session
-                    .host_mut()
-                    .set_status(format!("Unknown recent type: {}", path.display()));
-                return;
+                .set_status(format!("Open failed: {error}"));
+            if !path.is_file() {
+                self.prefs.remove_recent(path);
+                self.mark_prefs_dirty();
             }
+            return false;
         }
-        if !self
-            .session
-            .host_mut()
-            .status()
-            .to_ascii_lowercase()
-            .contains("error")
-            && !self.session.host_mut().status().contains("before")
-            && !self.session.host_mut().status().contains("Missing")
-        {
-            self.note_recent_if_ok(path);
-        }
+        self.note_recent_file(path);
         // Snapshot may have switched model — keep prefs in sync.
         self.prefs.set_model_from_machine(self.session.model());
         self.mark_prefs_dirty();
+        true
     }
 
     pub(super) fn poll_gamepad(&mut self) -> JoystickState {
