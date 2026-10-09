@@ -1,6 +1,7 @@
 //! ROM setup and saved machine configuration dialogs.
 
 use super::SpecChumApp;
+use crate::theme;
 use eframe::egui;
 use spec_chum_host::{
     acquire_next_assets, hardware_compat, install_model_rom, model_requires_user_rom,
@@ -165,10 +166,11 @@ impl SpecChumApp {
                     ui.group(|ui| {
                         ui.horizontal(|ui| {
                             ui.strong(&slot.label);
+                            let colors = theme::status_colors(ui.visuals());
                             let (label, color) = match slot.status.as_str() {
-                                "found" => ("Found", egui::Color32::GREEN),
-                                "wrong_size" => ("Wrong size", egui::Color32::YELLOW),
-                                _ => ("Missing", egui::Color32::RED),
+                                "found" => ("Found", colors.success),
+                                "wrong_size" => ("Wrong size", colors.warning),
+                                _ => ("Missing", colors.error),
                             };
                             ui.colored_label(color, label);
                         });
@@ -217,10 +219,12 @@ impl SpecChumApp {
                     ui.add_space(6.0);
                 }
                 if doc.complete {
-                    ui.colored_label(egui::Color32::GREEN, "All required ROMs are present.");
+                    let color = theme::status_colors(ui.visuals()).success;
+                    ui.colored_label(color, "All required ROMs are present.");
                 }
                 if let Some(err) = &self.rom_setup_error {
-                    ui.colored_label(egui::Color32::RED, err);
+                    let color = theme::status_colors(ui.visuals()).error;
+                    ui.colored_label(color, err);
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -367,7 +371,8 @@ impl SpecChumApp {
                         ui.weak("No optional peripheral hardware on this base model.");
                     }
                     if let Some(err) = &self.config_editor_error {
-                        ui.colored_label(egui::Color32::RED, err);
+                        let color = theme::status_colors(ui.visuals()).error;
+                        ui.colored_label(color, err);
                     }
                 });
                 ui.separator();

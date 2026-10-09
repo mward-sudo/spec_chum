@@ -175,6 +175,11 @@ final class HostBridge: ObservableObject {
         }
     }
     @Published var showInspector: Bool = false
+    @Published var appearance: AppearancePreference = HostBridge.loadPersistedAppearance() {
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: Self.appearanceDefaultsKey)
+        }
+    }
     /// When true, center view is the Bevy living room (SwiftUI chrome stays). Default off — experimental.
     /// Set `SPEC_CHUM_LIVING_ROOM=1` to start in living-room mode (automation / perf capture).
     @Published var livingRoomMode: Bool = ProcessInfo.processInfo.environment["SPEC_CHUM_LIVING_ROOM"] == "1" {
@@ -566,6 +571,7 @@ final class HostBridge: ObservableObject {
     static let onlineTapeTitlesDefaultsKey = "specChum.onlineTapeTitles"
     static let joystickDefaultsKey = "specChum.joystickMode"
     static let kempstonMouseDefaultsKey = "specChum.kempstonMouse"
+    static let appearanceDefaultsKey = "specChum.appearance"
     static let recentFilesDefaultsKey = "specChum.recentFiles"
     static let modelRomPathsKey = "specChum.modelRomPaths"
     static let maxRecentFiles = 12

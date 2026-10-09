@@ -12,28 +12,31 @@ use anyhow::{Context, Result};
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{ERROR_SUCCESS, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, EndPaint, InvalidateRect, StretchDIBits, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
     DIB_RGB_COLORS, PAINTSTRUCT, SRCCOPY,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect, GetWindowLongPtrW,
-    LoadCursorW, MessageBoxW, PeekMessageW, PostQuitMessage, RegisterClassExW, SetWindowLongPtrW,
-    SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW,
-    CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW,
-    IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WM_COMMAND,
-    WM_CREATE, WM_DESTROY, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SIZE, WM_SYSKEYDOWN,
-    WM_SYSKEYUP, WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect, GetMenu,
+    GetWindowLongPtrW, LoadCursorW, MessageBoxW, PeekMessageW, PostQuitMessage, RegisterClassExW,
+    SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW,
+    CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA,
+    HMENU, IDC_ARROW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG,
+    PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
+    WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
 use spec_chum_host::{
     acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, rom_setup_json,
-    save_prefs, sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel,
-    UiPreferences,
+    save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession, ModelId,
+    PrefAyStereo, PrefModel, UiPreferences,
 };
 
 use native_shell_common::audio::{self, PcmRing};
@@ -48,7 +51,8 @@ use native_shell_common::{
     IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1, IDM_HW_ATTACH_MULTIFACE, IDM_HW_DIVMMC_EEPROM,
     IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1, IDM_HW_EJECT_DCK, IDM_HW_INSERT_DCK,
     IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM, IDM_HW_MULTIFACE_NMI, IDM_HW_OPEN_TRD,
-    IDM_MACHINE_RESET, IDM_SET_AY_ABC, IDM_SET_AY_ACB, IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR,
+    IDM_MACHINE_RESET, IDM_SET_APPEARANCE_DARK, IDM_SET_APPEARANCE_LIGHT,
+    IDM_SET_APPEARANCE_SYSTEM, IDM_SET_AY_ABC, IDM_SET_AY_ACB, IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR,
     IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L, IDM_SET_JOY_SINCLAIR_R, IDM_SET_KEMPSTON_MOUSE,
     IDM_SET_MUTE, IDM_SET_ONLINE_TITLES, IDM_SET_TAPE_EAR_1, IDM_SET_TAPE_EAR_10,
     IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20, IDM_SET_TAPE_EAR_5, IDM_SET_TAPE_EXPERIENCE,
@@ -63,6 +67,10 @@ const DEBUG_CLASS: &str = "SpecChumWindowsDebug\0";
 const WINDOW_TITLE: &str = "Spec Chum\0";
 const ID_DBG_EDIT: i32 = 2001;
 const IDM_MACHINE_ROM_SETUP: usize = 1289;
+const IDM_LIBRARY_RECENT_BASE: usize = 1600;
+const IDM_LIBRARY_RECENT_COUNT: usize = 12;
+const PERSONALIZE_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0";
+const APPS_USE_LIGHT_THEME: &str = "AppsUseLightTheme\0";
 
 /// Live host held either exclusively or shared with embedded Agent HTTP.
 #[derive(Debug)]
@@ -114,6 +122,7 @@ struct AppState {
     /// Last time the debugger EDIT control was rewritten from `tick_frame`.
     last_debug_refresh: Instant,
     next_assets_download: Option<NextAssetDownload>,
+    recent_menu: Option<HMENU>,
 }
 
 impl AppState {
@@ -192,6 +201,7 @@ impl AppState {
             main_hwnd: None,
             last_debug_refresh: Instant::now(),
             next_assets_download: None,
+            recent_menu: None,
         })
     }
 
@@ -437,6 +447,73 @@ impl AppState {
         );
     }
 
+    fn open_recent_media(&mut self, index: usize) {
+        let Some(path) = recent_media_paths(&self.prefs.recent_files)
+            .get(index)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+            return;
+        };
+        let load: fn(&mut HostSession, &Path) -> Result<(), HostError> =
+            match extension.to_ascii_lowercase().as_str() {
+                "tap" | "tzx" => HostSession::open_tape,
+                "sna" | "z80" | "szx" => HostSession::load_snapshot,
+                "rzx" => HostSession::load_rzx,
+                "dsk" => HostSession::load_dsk,
+                "trd" => HostSession::load_trd,
+                _ => return,
+            };
+        match self.host.with_mut(|session| load(session, &path)) {
+            Ok(()) => {
+                self.prefs.push_recent(&path);
+                self.persist_prefs();
+            }
+            Err(error) => self.report_err("Open recent media", &error),
+        }
+    }
+
+    fn refresh_recent_menu(&self, menu: HMENU) {
+        use windows::Win32::UI::WindowsAndMessaging::{DeleteMenu, GetMenuItemCount};
+        // SAFETY: menu is the Library popup created and owned by this window.
+        unsafe {
+            while GetMenuItemCount(Some(menu)) > 0 {
+                if DeleteMenu(menu, 0, MF_BYPOSITION).is_err() {
+                    break;
+                }
+            }
+        }
+        let paths = recent_media_paths(&self.prefs.recent_files);
+        if paths.is_empty() {
+            let label: Vec<u16> = "No recent media\0".encode_utf16().collect();
+            // SAFETY: menu is our popup and label is NUL-terminated.
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::AppendMenuW(
+                    menu,
+                    windows::Win32::UI::WindowsAndMessaging::MF_STRING
+                        | windows::Win32::UI::WindowsAndMessaging::MF_GRAYED,
+                    0,
+                    PCWSTR(label.as_ptr()),
+                );
+            }
+            return;
+        }
+        for (index, path) in paths.iter().enumerate() {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("Media");
+            let parent = path.parent().and_then(Path::to_str).unwrap_or("");
+            append_menu(
+                menu,
+                IDM_LIBRARY_RECENT_BASE + index,
+                &format!("&{} {name} — {parent}", index + 1),
+            );
+        }
+    }
+
     /// Offer the shared per-slot ROM setup flow. Returns false when the user
     /// cancels, validation fails, or a background download is pending.
     fn setup_roms_for_model(&mut self, model: ModelId, after: AfterNextAssets) -> bool {
@@ -451,11 +528,13 @@ impl AppState {
         if setup.complete {
             return true;
         }
-        if model == ModelId::SpectrumNext && message_box_confirm(
-            self.main_hwnd,
-            "ZX Spectrum Next assets",
-            "Get the pinned official System/Next 24.11 distribution and separate GPL boot code? Choose Cancel to select the verified archive from its companion asset folder. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.",
-        ) {
+        if model == ModelId::SpectrumNext
+            && message_box_confirm(
+                self.main_hwnd,
+                "ZX Spectrum Next assets",
+                "Get the pinned official System/Next 24.11 distribution and separate GPL boot code? Choose Cancel to select the verified archive from its companion asset folder. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.",
+            )
+        {
             if self.next_assets_download.is_none() {
                 let (sender, receiver) = mpsc::channel();
                 std::thread::spawn(move || {
@@ -689,6 +768,14 @@ impl AppState {
         self.persist_prefs();
     }
 
+    fn set_appearance(&mut self, appearance: AppearancePreference) {
+        self.prefs.appearance = appearance;
+        self.persist_prefs();
+        if let Some(hwnd) = self.main_hwnd {
+            apply_window_appearance(hwnd, appearance);
+        }
+    }
+
     fn set_ay(&mut self, mode: PrefAyStereo) {
         self.update_prefs("AY stereo", |prefs| prefs.set_ay_stereo(mode.to_mode()));
     }
@@ -799,6 +886,11 @@ impl AppState {
             return;
         };
         match id {
+            id if (IDM_LIBRARY_RECENT_BASE..IDM_LIBRARY_RECENT_BASE + IDM_LIBRARY_RECENT_COUNT)
+                .contains(&id) =>
+            {
+                self.open_recent_media(id - IDM_LIBRARY_RECENT_BASE)
+            }
             IDM_FILE_OPEN_TAPE => self.open_tape(),
             IDM_FILE_OPEN_SNAPSHOT => self.open_snapshot(),
             IDM_FILE_OPEN_RZX => self.open_rzx(),
@@ -880,6 +972,9 @@ impl AppState {
             IDM_SET_THROTTLE => self.toggle_throttle(),
             IDM_SET_ONLINE_TITLES => self.toggle_online_titles(),
             IDM_SET_KEMPSTON_MOUSE => self.toggle_kempston_mouse(),
+            IDM_SET_APPEARANCE_SYSTEM => self.set_appearance(AppearancePreference::System),
+            IDM_SET_APPEARANCE_LIGHT => self.set_appearance(AppearancePreference::Light),
+            IDM_SET_APPEARANCE_DARK => self.set_appearance(AppearancePreference::Dark),
             IDM_SET_AY_MONO => self.set_ay(PrefAyStereo::Mono),
             IDM_SET_AY_ACB => self.set_ay(PrefAyStereo::Acb),
             IDM_SET_AY_ABC => self.set_ay(PrefAyStereo::Abc),
@@ -992,7 +1087,23 @@ fn append_sep(menu: HMENU) {
     }
 }
 
-fn build_menu() -> Result<HMENU> {
+fn recent_media_paths(recent_files: &[String]) -> Vec<PathBuf> {
+    recent_files
+        .iter()
+        .filter_map(|value| {
+            let path = PathBuf::from(value);
+            let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+            matches!(
+                extension.as_str(),
+                "tap" | "tzx" | "sna" | "z80" | "szx" | "rzx" | "dsk" | "trd"
+            )
+            .then_some(path)
+        })
+        .take(IDM_LIBRARY_RECENT_COUNT)
+        .collect()
+}
+
+fn build_menu() -> Result<(HMENU, HMENU)> {
     use windows::Win32::UI::WindowsAndMessaging::{CreateMenu, CreatePopupMenu};
     // SAFETY: CreateMenu/CreatePopupMenu return owned menus we attach to the window.
     unsafe {
@@ -1007,6 +1118,9 @@ fn build_menu() -> Result<HMENU> {
         append_sep(file);
         append_menu(file, IDM_FILE_EXIT, "E&xit");
         append_popup(menubar, file, "&File");
+
+        let library = CreatePopupMenu()?;
+        append_popup(menubar, library, "&Library");
 
         let machine = CreatePopupMenu()?;
         for m in ModelId::ALL {
@@ -1045,6 +1159,12 @@ fn build_menu() -> Result<HMENU> {
         append_popup(menubar, hw, "&Hardware");
 
         let settings = CreatePopupMenu()?;
+        let appearance = CreatePopupMenu()?;
+        append_menu(appearance, IDM_SET_APPEARANCE_SYSTEM, "&System");
+        append_menu(appearance, IDM_SET_APPEARANCE_LIGHT, "&Light");
+        append_menu(appearance, IDM_SET_APPEARANCE_DARK, "&Dark");
+        append_popup(settings, appearance, "&Appearance");
+        append_sep(settings);
         let joy = CreatePopupMenu()?;
         append_menu(joy, IDM_SET_JOY_KEMPSTON, "&Kempston");
         append_menu(joy, IDM_SET_JOY_SINCLAIR_L, "Sinclair &Left");
@@ -1093,7 +1213,7 @@ fn build_menu() -> Result<HMENU> {
         append_menu(debug, IDM_DBG_REFRESH, "&Refresh");
         append_popup(menubar, debug, "&Debug");
 
-        Ok(menubar)
+        Ok((menubar, library))
     }
 }
 
@@ -1156,6 +1276,68 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
 
         let _ = ShowWindow(hwnd, SW_SHOW);
         Ok((hwnd, edit))
+    }
+}
+
+fn system_appearance_is_dark() -> bool {
+    let key: Vec<u16> = PERSONALIZE_KEY.encode_utf16().collect();
+    let value_name: Vec<u16> = APPS_USE_LIGHT_THEME.encode_utf16().collect();
+    let mut apps_use_light_theme = 1_u32;
+    let mut value_size = size_of::<u32>() as u32;
+    // SAFETY: both strings are NUL-terminated UTF-16 buffers that remain alive
+    // for the call; the data and size pointers refer to live DWORD values.
+    let result = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            PCWSTR(key.as_ptr()),
+            PCWSTR(value_name.as_ptr()),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&mut apps_use_light_theme as *mut u32).cast()),
+            Some(&mut value_size),
+        )
+    };
+
+    // Missing/unreadable personalization values use Windows' light default.
+    result == ERROR_SUCCESS && apps_use_light_theme == 0
+}
+
+fn apply_window_appearance(hwnd: HWND, preference: AppearancePreference) {
+    let dark = match preference {
+        AppearancePreference::System => system_appearance_is_dark(),
+        AppearancePreference::Light => false,
+        AppearancePreference::Dark => true,
+    };
+    let dark_mode = i32::from(dark);
+    // SAFETY: hwnd is the live top-level window owned by this shell and the
+    // attribute receives a pointer to the correctly sized Win32 BOOL value (i32).
+    let _ = unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            (&dark_mode as *const i32).cast(),
+            size_of::<i32>() as u32,
+        )
+    };
+
+    let selected_id = match preference {
+        AppearancePreference::System => IDM_SET_APPEARANCE_SYSTEM,
+        AppearancePreference::Light => IDM_SET_APPEARANCE_LIGHT,
+        AppearancePreference::Dark => IDM_SET_APPEARANCE_DARK,
+    };
+    // SAFETY: hwnd is the live top-level window whose menu was created by this shell.
+    let menu = unsafe { GetMenu(hwnd) };
+    if !menu.0.is_null() {
+        // SAFETY: the appearance commands are consecutive IDs in this menu.
+        let _ = unsafe {
+            CheckMenuRadioItem(
+                menu,
+                IDM_SET_APPEARANCE_SYSTEM as u32,
+                IDM_SET_APPEARANCE_DARK as u32,
+                selected_id as u32,
+                MF_BYCOMMAND.0,
+            )
+        };
     }
 }
 
@@ -1225,6 +1407,17 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
             }
             LRESULT(0)
         }
+        WM_SETTINGCHANGE => {
+            if !state_ptr.is_null() {
+                // SAFETY: state_ptr is owned by this window until WM_DESTROY.
+                let state = unsafe { &mut *state_ptr };
+                if state.prefs.appearance == AppearancePreference::System {
+                    apply_window_appearance(hwnd, AppearancePreference::System);
+                }
+            }
+            // Keep the standard notification handling intact for USER32/DWM.
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
         WM_COMMAND => {
             if !state_ptr.is_null() {
                 let id = wparam.0 & 0xffff;
@@ -1232,6 +1425,17 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
                 state.queue_command(id);
             }
             LRESULT(0)
+        }
+        WM_INITMENUPOPUP => {
+            if !state_ptr.is_null() {
+                let state = unsafe { &mut *state_ptr };
+                let menu = HMENU(wparam.0 as _);
+                if state.recent_menu == Some(menu) {
+                    state.refresh_recent_menu(menu);
+                    return LRESULT(0);
+                }
+            }
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
         WM_KEYDOWN | WM_SYSKEYDOWN => {
             if !state_ptr.is_null() {
@@ -1302,7 +1506,7 @@ pub fn run() -> Result<()> {
             anyhow::bail!("RegisterClassExW failed");
         }
 
-        let menu = build_menu()?;
+        let (menu, recent_menu) = build_menu()?;
         let title: Vec<u16> = WINDOW_TITLE.encode_utf16().collect();
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
@@ -1320,6 +1524,8 @@ pub fn run() -> Result<()> {
         )?;
 
         (*app_ptr).main_hwnd = Some(hwnd);
+        (*app_ptr).recent_menu = Some(recent_menu);
+        apply_window_appearance(hwnd, (*app_ptr).prefs.appearance);
         let _ = ShowWindow(hwnd, SW_SHOW);
 
         let mut msg = MSG::default();
@@ -1350,6 +1556,31 @@ pub fn run() -> Result<()> {
 #[cfg(test)]
 mod startup_tests {
     use super::*;
+
+    #[test]
+    fn library_recent_paths_include_media_and_exclude_hardware_images() {
+        let recent = [
+            "/games/next.rom",
+            "/games/disk.img",
+            "/games/PLAY.TAP",
+            "/games/snapshot.szx",
+            "/games/disk.trd",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+
+        let paths = recent_media_paths(&recent);
+
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::from("/games/PLAY.TAP"),
+                PathBuf::from("/games/snapshot.szx"),
+                PathBuf::from("/games/disk.trd"),
+            ]
+        );
+    }
 
     #[test]
     fn preferred_failure_uses_successful_48k_fallback() {

@@ -21,8 +21,8 @@ use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use spec_chum_host::{
     acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, rom_setup_json,
-    save_prefs, sync_model_rom_paths, HostError, HostSession, ModelId, PrefAyStereo, PrefModel,
-    UiPreferences,
+    save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession, ModelId,
+    PrefAyStereo, PrefModel, UiPreferences,
 };
 
 use linux_shell::keymap::{
@@ -79,6 +79,7 @@ struct AppState {
     debug_buffer: Option<TextBuffer>,
     last_debug_refresh: Instant,
     next_assets_download: Option<NextAssetDownload>,
+    recent_menu: Option<gio::Menu>,
 }
 
 impl AppState {
@@ -146,6 +147,7 @@ impl AppState {
             debug_buffer: None,
             last_debug_refresh: Instant::now(),
             next_assets_download: None,
+            recent_menu: None,
         })
     }
 
@@ -277,8 +279,62 @@ impl AppState {
             Ok(()) => {
                 self.prefs.push_recent(&path);
                 self.persist_prefs();
+                self.refresh_recent_menu();
             }
             Err(e) => self.report_err(title, &e),
+        }
+    }
+
+    fn refresh_recent_menu(&self) {
+        let Some(menu) = &self.recent_menu else {
+            return;
+        };
+        menu.remove_all();
+        for path in self
+            .prefs
+            .recent_files
+            .iter()
+            .filter(|path| is_media_path(path))
+        {
+            let label = Path::new(path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(path);
+            let item = gio::MenuItem::new(Some(label), None);
+            item.set_action_and_target_value(Some("app.open_recent"), Some(&path.to_variant()));
+            menu.append_item(&item);
+        }
+        if menu.n_items() == 0 {
+            menu.append(Some("No recent media"), None);
+        }
+    }
+
+    fn open_recent_path(&mut self, path: &Path) {
+        let result = match path.extension().and_then(|extension| extension.to_str()) {
+            Some(ext) if ext.eq_ignore_ascii_case("tap") || ext.eq_ignore_ascii_case("tzx") => {
+                self.host.with_mut(|session| session.open_tape(path))
+            }
+            Some(ext) if ext.eq_ignore_ascii_case("sna") || ext.eq_ignore_ascii_case("z80") => {
+                self.host.with_mut(|session| session.load_snapshot(path))
+            }
+            Some(ext) if ext.eq_ignore_ascii_case("rzx") => {
+                self.host.with_mut(|session| session.load_rzx(path))
+            }
+            Some(ext) if ext.eq_ignore_ascii_case("dsk") => {
+                self.host.with_mut(|session| session.load_dsk(path))
+            }
+            Some(ext) if ext.eq_ignore_ascii_case("trd") => {
+                self.host.with_mut(|session| session.load_trd(path))
+            }
+            _ => return,
+        };
+        match result {
+            Ok(()) => {
+                self.prefs.push_recent(path);
+                self.persist_prefs();
+                self.refresh_recent_menu();
+            }
+            Err(error) => self.report_err("Open Recent", &error),
         }
     }
 
@@ -764,6 +820,8 @@ pub fn run() -> Result<()> {
 }
 
 fn build_ui(app: &Application, state: Rc<RefCell<AppState>>) {
+    apply_appearance(state.borrow().prefs.appearance);
+
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Spec Chum")
@@ -791,7 +849,7 @@ fn build_ui(app: &Application, state: Rc<RefCell<AppState>>) {
     window.set_child(Some(&vbox));
 
     install_actions(app, &window, Rc::clone(&state));
-    install_menubar(app);
+    install_menubar(app, Rc::clone(&state));
     install_keys(&window, &picture, Rc::clone(&state));
 
     glib::timeout_add_local(
@@ -818,8 +876,15 @@ fn build_ui(app: &Application, state: Rc<RefCell<AppState>>) {
     let _ = picture.grab_focus();
 }
 
-fn install_menubar(app: &Application) {
+fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
     let menubar = gio::Menu::new();
+
+    let library = gio::Menu::new();
+    let recent = gio::Menu::new();
+    state.borrow_mut().recent_menu = Some(recent.clone());
+    state.borrow().refresh_recent_menu();
+    library.append_submenu(Some("Recent Media"), &recent);
+    menubar.append_submenu(Some("_Library"), &library);
 
     let file = gio::Menu::new();
     file.append(Some("Open Tape…"), Some("app.open_tape"));
@@ -870,6 +935,21 @@ fn install_menubar(app: &Application) {
     menubar.append_submenu(Some("_Hardware"), &hw);
 
     let settings = gio::Menu::new();
+    let appearance = gio::Menu::new();
+    for (label, value) in [
+        ("System", AppearancePreference::System),
+        ("Light", AppearancePreference::Light),
+        ("Dark", AppearancePreference::Dark),
+    ] {
+        let item = gio::MenuItem::new(Some(label), None);
+        item.set_action_and_target_value(
+            Some("app.set_appearance"),
+            Some(&appearance_variant(value)),
+        );
+        appearance.append_item(&item);
+    }
+    settings.append_submenu(Some("Appearance"), &appearance);
+
     let joy = gio::Menu::new();
     joy.append(Some("Kempston"), Some("app.set_joy_kempston"));
     joy.append(Some("Sinclair Left"), Some("app.set_joy_sinclair_l"));
@@ -918,6 +998,17 @@ fn install_menubar(app: &Application) {
     app.set_menubar(Some(&menubar));
 }
 
+fn is_media_path(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            ["tap", "tzx", "sna", "z80", "rzx", "dsk", "trd"]
+                .iter()
+                .any(|supported| extension.eq_ignore_ascii_case(supported))
+        })
+}
+
 fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefCell<AppState>>) {
     fn add_action(
         app: &Application,
@@ -931,6 +1022,35 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
         });
         app.add_action(&action);
     }
+
+    let appearance = gio::SimpleAction::new_stateful(
+        "set_appearance",
+        Some(glib::VariantTy::STRING),
+        &appearance_variant(state.borrow().prefs.appearance),
+    );
+    appearance.connect_activate(clone!(
+        #[strong]
+        state,
+        move |action, parameter| {
+            let Some(value) = parameter.and_then(glib::Variant::str) else {
+                return;
+            };
+            let preference = match value {
+                "system" => AppearancePreference::System,
+                "light" => AppearancePreference::Light,
+                "dark" => AppearancePreference::Dark,
+                _ => return,
+            };
+            action.set_state(&appearance_variant(preference));
+            {
+                let mut state = state.borrow_mut();
+                state.prefs.appearance = preference;
+                state.persist_prefs();
+            }
+            apply_appearance(preference);
+        }
+    ));
+    app.add_action(&appearance);
 
     add_action(app, "open_tape", Rc::clone(&state), |s| {
         s.open_path("Open Tape", "Tape", &["tap", "tzx"], HostSession::open_tape);
@@ -952,6 +1072,18 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
     add_action(app, "open_trd", Rc::clone(&state), |s| {
         s.open_path("Open TRD", "TRD", &["trd"], HostSession::load_trd);
     });
+    let recent = gio::SimpleAction::new("open_recent", Some(glib::VariantTy::STRING));
+    recent.connect_activate(clone!(
+        #[strong]
+        state,
+        move |_, parameter| {
+            let Some(path) = parameter.and_then(glib::Variant::str) else {
+                return;
+            };
+            state.borrow_mut().open_recent_path(Path::new(path));
+        }
+    ));
+    app.add_action(&recent);
     add_action(app, "tape_play", Rc::clone(&state), |s| {
         s.host_action("Play tape", HostSession::play_tape);
     });
@@ -1153,6 +1285,34 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
     app.set_accels_for_action("app.quit", &["<Control>q"]);
 }
 
+fn appearance_variant(preference: AppearancePreference) -> glib::Variant {
+    match preference {
+        AppearancePreference::System => "system",
+        AppearancePreference::Light => "light",
+        AppearancePreference::Dark => "dark",
+    }
+    .to_variant()
+}
+
+fn apply_appearance(preference: AppearancePreference) {
+    if let Some(settings) = gtk4::Settings::default() {
+        match preference {
+            AppearancePreference::System => {
+                settings.reset_property("gtk-theme-name");
+                settings.reset_property("gtk-application-prefer-dark-theme");
+            }
+            AppearancePreference::Light => {
+                settings.reset_property("gtk-theme-name");
+                settings.set_gtk_application_prefer_dark_theme(false);
+            }
+            AppearancePreference::Dark => {
+                settings.reset_property("gtk-theme-name");
+                settings.set_gtk_application_prefer_dark_theme(true);
+            }
+        }
+    }
+}
+
 fn keyval_from_gdk(key: gdk4::Key) -> u32 {
     key.into_glib()
 }
@@ -1212,6 +1372,15 @@ fn install_keys(window: &ApplicationWindow, picture: &Picture, state: Rc<RefCell
 #[cfg(test)]
 mod startup_model_tests {
     use super::*;
+
+    #[test]
+    fn library_recent_media_excludes_peripheral_assets() {
+        assert!(is_media_path("/games/PLAY.TAP"));
+        assert!(is_media_path("/games/snapshot.z80"));
+        assert!(is_media_path("/games/disk.trd"));
+        assert!(!is_media_path("/roms/spec48.rom"));
+        assert!(!is_media_path("/images/sd.img"));
+    }
 
     #[test]
     fn falls_back_to_48k_when_preferred_model_fails() {

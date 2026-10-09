@@ -5,7 +5,9 @@ use super::{
     UserMachineConfig, MAPPING_DOC,
 };
 use eframe::egui;
-use spec_chum_host::{model_rom_available, PrefAyStereo, PrefJoystick, PrefModel};
+use spec_chum_host::{
+    model_rom_available, AppearancePreference, PrefAyStereo, PrefJoystick, PrefModel,
+};
 use std::path::Path;
 
 impl SpecChumApp {
@@ -100,258 +102,8 @@ impl SpecChumApp {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-                ui.menu_button("Machine", |ui| {
-                    if self.prefs.active_config_id.is_none() {
-                        if ui.button("ROMs…").clicked() {
-                            self.show_rom_setup = true;
-                            self.refresh_rom_setup();
-                            ui.close_menu();
-                        }
-                        ui.separator();
-                    }
-                    ui.label("Built-in models");
-                    ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
-                    ui.weak(
-                        "Timex TC2048 / TS2068: SCLD alt file, hi-colour, and 512×192 hi-res — docs/TIMEX.md.",
-                    );
-                    for pick in machine::ALL_MODELS {
-                        let pref = PrefModel::from_model(pick);
-                        let available = model_rom_available(
-                            pref.to_model_id(),
-                            &self.prefs.model_rom_paths,
-                        );
-                        let title = machine::model_title(pick);
-                        let label = if available {
-                            title.to_string()
-                        } else {
-                            format!("{title} (ROMs required)")
-                        };
-                        let mut selected = self.prefs.active_config_id.is_none()
-                            && self.session.model() == pick;
-                        let response = ui.radio_value(&mut selected, true, label);
-                        if !available {
-                            response.clone().on_hover_text(format!(
-                                "{} — {}",
-                                title,
-                                machine::unavailable_reason(pick)
-                            ));
-                        } else if pick == Model::TimexTC2048 || pick == Model::TimexTS2068 {
-                            response.clone().on_hover_text(
-                                "Timex: home/EX-ROM + SCLD MMU (TS2068) / latches (TC2048); \
-                                 alt file, hi-colour, and 512×192 hi-res (docs/TIMEX.md)",
-                            );
-                        }
-                        if response.clicked() {
-                            self.on_builtin_model_selected(pick);
-                        }
-                    }
-                    ui.separator();
-                    ui.label("My configurations");
-                    if ui.button("+ New configuration…").clicked() {
-                        let base = if let Some(cfg) = self.prefs.active_custom_config() {
-                            cfg.base
-                        } else {
-                            PrefModel::from_model(self.session.model())
-                        };
-                        let mut draft = UserMachineConfig::new_named("My Spectrum", base);
-                        draft.joystick_mode =
-                            PrefJoystick::from_mode(self.session.host_mut().joystick_mode());
-                        draft.kempston_mouse = self.session.kempston_mouse;
-                        {
-                            let host = &mut *self.session.host_mut();
-                            if let Some(m) = host.machine() {
-                                draft.ay_stereo = PrefAyStereo::from_mode(m.ay_stereo_mode());
-                            }
-                        }
-                        self.config_draft = Some(draft);
-                        self.config_editor_is_new = true;
-                        self.config_editor_error = None;
-                        ui.close_menu();
-                    }
-                    if self.prefs.custom_configs.is_empty() {
-                        ui.weak("(none saved yet)");
-                    }
-                    let configs: Vec<UserMachineConfig> =
-                        self.prefs.custom_configs.clone();
-                    for cfg in &configs {
-                        ui.horizontal(|ui| {
-                            let mut selected = self.prefs.active_config_id.as_deref()
-                                == Some(cfg.id.as_str());
-                            if ui.radio_value(&mut selected, true, &cfg.name).clicked() {
-                                self.show_rom_setup = false;
-                                self.prefs.select_custom_config(&cfg.id);
-                                if let Some(active) = self.prefs.active_custom_config().cloned()
-                                {
-                                    match self.session.apply_user_machine_config(&active) {
-                                        Ok(()) => {
-                                            self.prefs.sync_machine_fields_from_config(&active);
-                                            self.session.host_mut().set_joystick_mode(active.joystick_mode.to_mode());
-                                            self.session.kempston_mouse = active.kempston_mouse;
-                                            self.apply_restored_machine_options();
-                                            self.mark_prefs_dirty();
-                                        }
-                                        Err(e) => self.session.host_mut().set_status(e.to_string()),
-                                    }
-                                }
-                            }
-                            if ui.small_button("Edit…").clicked() {
-                                self.config_draft = Some(cfg.clone());
-                                self.config_editor_is_new = false;
-                                self.config_editor_error = None;
-                                ui.close_menu();
-                            }
-                            if ui.small_button("Delete").clicked() {
-                                let was_active =
-                                    self.prefs.active_config_id.as_deref() == Some(cfg.id.as_str());
-                                self.prefs.delete_custom_config(&cfg.id);
-                                if was_active {
-                                    self.prefs.model = self.prefs.last_builtin_model;
-                                    self.on_builtin_model_selected(
-                                        self.prefs.last_builtin_model.to_model(),
-                                    );
-                                }
-                                self.mark_prefs_dirty();
-                                ui.close_menu();
-                            }
-                        });
-                    }
-                    let has_active = self.prefs.is_custom_config_active();
-                    if ui
-                        .add_enabled(has_active, egui::Button::new("Edit configuration…"))
-                        .clicked()
-                    {
-                        if let Some(id) = self.prefs.active_config_id.clone() {
-                            if let Some(cfg) =
-                                self.prefs.custom_configs.iter().find(|c| c.id == id)
-                            {
-                                self.config_draft = Some(cfg.clone());
-                                self.config_editor_is_new = false;
-                                self.config_editor_error = None;
-                            }
-                        }
-                        ui.close_menu();
-                    }
-                    if ui
-                        .add_enabled(has_active, egui::Button::new("Delete configuration"))
-                        .clicked()
-                    {
-                        if let Some(id) = self.prefs.active_config_id.clone() {
-                            self.prefs.delete_custom_config(&id);
-                            self.on_builtin_model_selected(
-                                self.prefs.last_builtin_model.to_model(),
-                            );
-                        }
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    ui.label("Session");
-                    if ui
-                        .add_enabled(
-                            self.session.host_mut().has_machine(),
-                            egui::Button::new("Reset"),
-                        )
-                        .clicked()
-                    {
-                        let reset_err = self.session.host_mut().reset().err();
-                        if let Some(e) = reset_err {
-                            self.session.host_mut().set_status(e.to_string());
-                        }
-                        ui.close_menu();
-                    }
-                    {
-                        let mut running = self.session.host_mut().running();
-                        if ui.checkbox(&mut running, "Running").changed() {
-                            self.session.host_mut().set_running(running);
-                        }
-                    }
-                    if ui
-                        .checkbox(&mut self.session.throttle, "Throttle ~50Hz")
-                        .changed()
-                    {
-                        self.mark_prefs_dirty();
-                    }
-                    ui.separator();
-                    ui.label("Joystick");
-                    {
-                        let mut joy = self.session.host_mut().joystick_mode();
-                        let mut joy_changed = false;
-                        joy_changed |= ui
-                            .radio_value(&mut joy, JoystickMode::Kempston, "Kempston")
-                            .changed();
-                        joy_changed |= ui
-                            .radio_value(
-                                &mut joy,
-                                JoystickMode::SinclairLeft,
-                                "Sinclair left (1–5)",
-                            )
-                            .changed();
-                        joy_changed |= ui
-                            .radio_value(
-                                &mut joy,
-                                JoystickMode::SinclairRight,
-                                "Sinclair right (6–0)",
-                            )
-                            .changed();
-                        joy_changed |= ui
-                            .radio_value(&mut joy, JoystickMode::Cursor, "Cursor")
-                            .changed();
-                        if joy_changed {
-                            self.session.host_mut().set_joystick_mode(joy);
-                            self.mark_prefs_dirty();
-                        }
-                    }
-                    if ui
-                        .checkbox(&mut self.session.kempston_mouse, "Kempston mouse")
-                        .changed()
-                    {
-                        self.mark_prefs_dirty();
-                    }
-                    if matches!(
-                        self.session.model(),
-                        Model::Spectrum128
-                            | Model::SpectrumPlus2
-                            | Model::SpectrumPlus2A
-                            | Model::SpectrumPlus3
-                            | Model::SpectrumPlus3e
-                            | Model::Pentagon128
-                            | Model::ScorpionZs256
-                            | Model::TimexTS2068
-                    ) {
-                        ui.separator();
-                        ui.label("AY stereo");
-                        let mut mode = self
-                            .session
-                            .host_mut().machine()
-                            .map_or(AyStereoMode::Mono, Machine::ay_stereo_mode);
-                        let before = mode;
-                        ui.radio_value(&mut mode, AyStereoMode::Mono, "Mono");
-                        ui.radio_value(&mut mode, AyStereoMode::Acb, "ACB");
-                        ui.radio_value(&mut mode, AyStereoMode::Abc, "ABC");
-                        if mode != before {
-                            {
-                                let host = &mut *self.session.host_mut();
-                                if let Some(m) = host.machine_mut() {
-                                    m.set_ay_stereo_mode(mode);
-                                }
-                            }
-                            self.prefs.set_ay_stereo(mode);
-                            self.mark_prefs_dirty();
-                        }
-                    }
-                    if ui.checkbox(&mut self.session.muted, "Mute").changed() {
-                        self.mark_prefs_dirty();
-                    }
-                    if ui
-                        .add_enabled(
-                            !self.session.muted,
-                            egui::Slider::new(&mut self.session.volume, 0.0..=1.0)
-                                .text("Volume"),
-                        )
-                        .changed()
-                    {
-                        self.mark_prefs_dirty();
-                    }
-                });
+                ui.menu_button("Machine", |ui| self.machine_menu_contents(ui));
+                ui.menu_button("Settings", |ui| self.settings_contents(ui, ctx));
                 ui.menu_button("Hardware", |ui| {
                     let model = self.session.model();
                     let has_mf = self
@@ -827,5 +579,263 @@ of their copyrighted material but retain that copyright.",
                 ui.label(self.session.host_mut().status());
             });
         });
+    }
+
+    pub(super) fn machine_menu_contents(&mut self, ui: &mut egui::Ui) {
+        if self.prefs.active_config_id.is_none() {
+            if ui.button("ROMs…").clicked() {
+                self.show_rom_setup = true;
+                self.refresh_rom_setup();
+                ui.close_menu();
+            }
+            ui.separator();
+        }
+        ui.label("Built-in models");
+        ui.weak("Select only — default ROMs. Session hardware via Hardware menu.");
+        ui.weak(
+            "Timex TC2048 / TS2068: SCLD alt file, hi-colour, and 512×192 hi-res — docs/TIMEX.md.",
+        );
+        for pick in machine::ALL_MODELS {
+            let pref = PrefModel::from_model(pick);
+            let available = model_rom_available(pref.to_model_id(), &self.prefs.model_rom_paths);
+            let title = machine::model_title(pick);
+            let label = if available {
+                title.to_string()
+            } else {
+                format!("{title} (ROMs required)")
+            };
+            let mut selected =
+                self.prefs.active_config_id.is_none() && self.session.model() == pick;
+            let response = ui.radio_value(&mut selected, true, label);
+            if !available {
+                response.clone().on_hover_text(format!(
+                    "{} — {}",
+                    title,
+                    machine::unavailable_reason(pick)
+                ));
+            } else if pick == Model::TimexTC2048 || pick == Model::TimexTS2068 {
+                response.clone().on_hover_text(
+                    "Timex: home/EX-ROM + SCLD MMU (TS2068) / latches (TC2048); \
+                                     alt file, hi-colour, and 512×192 hi-res (docs/TIMEX.md)",
+                );
+            }
+            if response.clicked() {
+                self.on_builtin_model_selected(pick);
+            }
+        }
+        ui.separator();
+        ui.label("My configurations");
+        if ui.button("+ New configuration…").clicked() {
+            let base = if let Some(cfg) = self.prefs.active_custom_config() {
+                cfg.base
+            } else {
+                PrefModel::from_model(self.session.model())
+            };
+            let mut draft = UserMachineConfig::new_named("My Spectrum", base);
+            draft.joystick_mode = PrefJoystick::from_mode(self.session.host_mut().joystick_mode());
+            draft.kempston_mouse = self.session.kempston_mouse;
+            {
+                let host = &mut *self.session.host_mut();
+                if let Some(m) = host.machine() {
+                    draft.ay_stereo = PrefAyStereo::from_mode(m.ay_stereo_mode());
+                }
+            }
+            self.config_draft = Some(draft);
+            self.config_editor_is_new = true;
+            self.config_editor_error = None;
+            ui.close_menu();
+        }
+        if self.prefs.custom_configs.is_empty() {
+            ui.weak("(none saved yet)");
+        }
+        let configs: Vec<UserMachineConfig> = self.prefs.custom_configs.clone();
+        for cfg in &configs {
+            ui.horizontal(|ui| {
+                let mut selected = self.prefs.active_config_id.as_deref() == Some(cfg.id.as_str());
+                if ui.radio_value(&mut selected, true, &cfg.name).clicked() {
+                    self.show_rom_setup = false;
+                    self.prefs.select_custom_config(&cfg.id);
+                    if let Some(active) = self.prefs.active_custom_config().cloned() {
+                        match self.session.apply_user_machine_config(&active) {
+                            Ok(()) => {
+                                self.prefs.sync_machine_fields_from_config(&active);
+                                self.session
+                                    .host_mut()
+                                    .set_joystick_mode(active.joystick_mode.to_mode());
+                                self.session.kempston_mouse = active.kempston_mouse;
+                                self.apply_restored_machine_options();
+                                self.mark_prefs_dirty();
+                            }
+                            Err(e) => self.session.host_mut().set_status(e.to_string()),
+                        }
+                    }
+                }
+                if ui.small_button("Edit…").clicked() {
+                    self.config_draft = Some(cfg.clone());
+                    self.config_editor_is_new = false;
+                    self.config_editor_error = None;
+                    ui.close_menu();
+                }
+                if ui.small_button("Delete").clicked() {
+                    let was_active =
+                        self.prefs.active_config_id.as_deref() == Some(cfg.id.as_str());
+                    self.prefs.delete_custom_config(&cfg.id);
+                    if was_active {
+                        self.prefs.model = self.prefs.last_builtin_model;
+                        self.on_builtin_model_selected(self.prefs.last_builtin_model.to_model());
+                    }
+                    self.mark_prefs_dirty();
+                    ui.close_menu();
+                }
+            });
+        }
+        let has_active = self.prefs.is_custom_config_active();
+        if ui
+            .add_enabled(has_active, egui::Button::new("Edit configuration…"))
+            .clicked()
+        {
+            if let Some(id) = self.prefs.active_config_id.clone() {
+                if let Some(cfg) = self.prefs.custom_configs.iter().find(|c| c.id == id) {
+                    self.config_draft = Some(cfg.clone());
+                    self.config_editor_is_new = false;
+                    self.config_editor_error = None;
+                }
+            }
+            ui.close_menu();
+        }
+        if ui
+            .add_enabled(has_active, egui::Button::new("Delete configuration"))
+            .clicked()
+        {
+            if let Some(id) = self.prefs.active_config_id.clone() {
+                self.prefs.delete_custom_config(&id);
+                self.on_builtin_model_selected(self.prefs.last_builtin_model.to_model());
+            }
+            ui.close_menu();
+        }
+        ui.separator();
+        ui.label("Session");
+        if ui
+            .add_enabled(
+                self.session.host_mut().has_machine(),
+                egui::Button::new("Reset"),
+            )
+            .clicked()
+        {
+            let reset_err = self.session.host_mut().reset().err();
+            if let Some(e) = reset_err {
+                self.session.host_mut().set_status(e.to_string());
+            }
+            ui.close_menu();
+        }
+        {
+            let mut running = self.session.host_mut().running();
+            if ui.checkbox(&mut running, "Running").changed() {
+                self.session.host_mut().set_running(running);
+            }
+        }
+        if ui
+            .checkbox(&mut self.session.throttle, "Throttle ~50Hz")
+            .changed()
+        {
+            self.mark_prefs_dirty();
+        }
+        ui.separator();
+        ui.label("Joystick");
+        {
+            let mut joy = self.session.host_mut().joystick_mode();
+            let mut joy_changed = false;
+            joy_changed |= ui
+                .radio_value(&mut joy, JoystickMode::Kempston, "Kempston")
+                .changed();
+            joy_changed |= ui
+                .radio_value(&mut joy, JoystickMode::SinclairLeft, "Sinclair left (1–5)")
+                .changed();
+            joy_changed |= ui
+                .radio_value(
+                    &mut joy,
+                    JoystickMode::SinclairRight,
+                    "Sinclair right (6–0)",
+                )
+                .changed();
+            joy_changed |= ui
+                .radio_value(&mut joy, JoystickMode::Cursor, "Cursor")
+                .changed();
+            if joy_changed {
+                self.session.host_mut().set_joystick_mode(joy);
+                self.mark_prefs_dirty();
+            }
+        }
+        if ui
+            .checkbox(&mut self.session.kempston_mouse, "Kempston mouse")
+            .changed()
+        {
+            self.mark_prefs_dirty();
+        }
+        if matches!(
+            self.session.model(),
+            Model::Spectrum128
+                | Model::SpectrumPlus2
+                | Model::SpectrumPlus2A
+                | Model::SpectrumPlus3
+                | Model::SpectrumPlus3e
+                | Model::Pentagon128
+                | Model::ScorpionZs256
+                | Model::TimexTS2068
+        ) {
+            ui.separator();
+            ui.label("AY stereo");
+            let mut mode = self
+                .session
+                .host_mut()
+                .machine()
+                .map_or(AyStereoMode::Mono, Machine::ay_stereo_mode);
+            let before = mode;
+            ui.radio_value(&mut mode, AyStereoMode::Mono, "Mono");
+            ui.radio_value(&mut mode, AyStereoMode::Acb, "ACB");
+            ui.radio_value(&mut mode, AyStereoMode::Abc, "ABC");
+            if mode != before {
+                {
+                    let host = &mut *self.session.host_mut();
+                    if let Some(m) = host.machine_mut() {
+                        m.set_ay_stereo_mode(mode);
+                    }
+                }
+                self.prefs.set_ay_stereo(mode);
+                self.mark_prefs_dirty();
+            }
+        }
+        if ui.checkbox(&mut self.session.muted, "Mute").changed() {
+            self.mark_prefs_dirty();
+        }
+        if ui
+            .add_enabled(
+                !self.session.muted,
+                egui::Slider::new(&mut self.session.volume, 0.0..=1.0).text("Volume"),
+            )
+            .changed()
+        {
+            self.mark_prefs_dirty();
+        }
+    }
+
+    pub(super) fn settings_contents(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        ui.label("Appearance");
+        let mut appearance = self.prefs.appearance;
+        let mut changed = false;
+        changed |= ui
+            .radio_value(&mut appearance, AppearancePreference::System, "System")
+            .changed();
+        changed |= ui
+            .radio_value(&mut appearance, AppearancePreference::Light, "Light")
+            .changed();
+        changed |= ui
+            .radio_value(&mut appearance, AppearancePreference::Dark, "Dark")
+            .changed();
+        if changed {
+            self.prefs.appearance = appearance;
+            theme::set_appearance(ctx, appearance);
+            self.mark_prefs_dirty();
+        }
     }
 }
