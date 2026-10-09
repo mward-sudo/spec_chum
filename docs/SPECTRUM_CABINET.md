@@ -84,7 +84,7 @@ The approved dark Spectrum Cabinet concept is the visual reference for the play 
 ![Approved dark Spectrum Cabinet concept, including the Play view](images/spectrum-cabinet-dark-reference.png)
 
 - Keep the existing Bevy renderer and live Spectrum framebuffer path. Preserve the curved phosphor surface, glass, shader, input, and framebuffer-driven CRT effects.
-- Use one fixed hero camera position with layered room artwork behind and selectively in front of the 3D television. The first version has no moving intro, user camera, or zoom presets. Add authored light/spill masks around the CRT as needed because static art does not receive the current dynamic room lighting.
+- Use one fixed hero camera direction and center, with viewing distance adapted to the viewport aspect ratio. Place layered room artwork behind and selectively in front of the 3D television. The first version has no moving intro, user camera, or zoom presets. Add authored light/spill masks around the CRT as needed because static art does not receive the current dynamic room lighting.
 - Treat foreground occlusion and screen-to-room color spill as part of the composition. Keep the complete CRT visible at supported aspect ratios.
 - The existing multi-preset zoom and moving intro cannot simply be combined with flat camera-mounted plates: the prior approach was disabled after parallax and blank-background problems. Do not add another viewpoint in the first version; the flat display remains available when users want a close, unobstructed picture.
 - Keep the current 3D room available for A/B comparison until the new composition passes art, CRT-legibility, resizing, frame-pacing, and input-latency review on supported hosts.

@@ -16,6 +16,10 @@ const SCENE: &str = "lightmaps/room_static.gltf#Scene0";
 const IMAGE: &str = "lightmaps/room_static_lightmap.png";
 const BAKED_MESH_NAME: &str = "spec_chum_room_static_baked";
 
+fn should_spawn_baked_room(presentation: crate::cabinet_room::RoomPresentation) -> bool {
+    presentation != crate::cabinet_room::RoomPresentation::FixedCabinet
+}
+
 fn all_baked_meshes_bound(mesh_count: usize, bound_count: usize) -> bool {
     mesh_count > 0 && mesh_count == bound_count
 }
@@ -67,8 +71,13 @@ impl Plugin for BakedRoomPlugin {
 fn spawn_baked_room(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    presentation: Res<crate::cabinet_room::RoomPresentation>,
     #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
 ) {
+    if !should_spawn_baked_room(*presentation) {
+        return;
+    }
+
     #[cfg(feature = "skein")]
     if skein_mode
         .as_deref()
@@ -227,7 +236,14 @@ fn animate_baked_lighting(
 
 #[cfg(test)]
 mod tests {
-    use super::all_baked_meshes_bound;
+    use super::{all_baked_meshes_bound, should_spawn_baked_room};
+    use crate::cabinet_room::RoomPresentation;
+
+    #[test]
+    fn fixed_cabinet_does_not_spawn_the_baked_three_dimensional_room() {
+        assert!(!should_spawn_baked_room(RoomPresentation::FixedCabinet));
+        assert!(should_spawn_baked_room(RoomPresentation::ThreeDimensional));
+    }
 
     #[test]
     fn baked_room_waits_for_every_mesh_lightmap() {
