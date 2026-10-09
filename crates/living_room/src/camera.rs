@@ -779,13 +779,11 @@ pub(crate) fn apply_zoom_camera(
 }
 
 fn fixed_cabinet_pose(aspect: f32) -> Transform {
-    let look = Vec3::new(
-        crate::room::TV_STAND_POS.x,
-        crate::cabinet_room::HERO_CENTER_Y,
-        crate::crt::crt_screen_world_center().z,
-    );
+    let look = crate::cabinet_room::room_plate_center();
     let distance = crate::cabinet_room::camera_distance(LOCKED_FOV, aspect);
-    Transform::from_translation(look + Vec3::Z * distance).looking_at(look, Vec3::Y)
+    let pitch = crate::cabinet_room::HERO_CAMERA_PITCH;
+    let offset = Vec3::new(0.0, distance * pitch.sin(), distance * pitch.cos());
+    Transform::from_translation(look + offset).looking_at(look, Vec3::Y)
 }
 
 /// Fixed mode adapts its viewing distance to the resized viewport while

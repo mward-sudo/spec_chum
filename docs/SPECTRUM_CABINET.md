@@ -6,7 +6,7 @@
 
 ## Tracking issues
 
-- [#558 — Prototype a fixed 2D room with a live 3D CRT](https://github.com/mward-sudo/spec_chum/issues/558)
+- [#558 — Prototype the reference-matched 2D Spectrum Cabinet scene](https://github.com/mward-sudo/spec_chum/issues/558)
 - [#559 — Add shared navigation and System/Light/Dark appearance](https://github.com/mward-sudo/spec_chum/issues/559)
 - [#560 — Build a local-first media library browser](https://github.com/mward-sudo/spec_chum/issues/560)
 - [#561 — Add accurate illustrated machine and peripheral selection](https://github.com/mward-sudo/spec_chum/issues/561)
@@ -75,16 +75,16 @@ All hosts expose the same Library, Play, Machines, Debugger, and Settings capabi
 - Show only peripherals compatible with the selected base model. Reuse the hardware-compatibility rules and existing saved-configuration behavior; do not create host-only hardware semantics.
 - Use image assets as explanatory UI. They do not imply that ROMs, firmware, or physical-device support ship with the app.
 
-## Living Room: 2D art direction with a 3D CRT
+## Living Room: reference-matched 2D scene
 
-The user-selected target is a mostly 2D authored room composition with the live television/CRT kept in 3D. The first implementation step is a comparison prototype, not an assumption that a 2D plate will improve fidelity or performance.
+The user-selected target is a reference-matched 2D scene, including the room, TV, and cabinet. Keep the emulator picture live in the screen opening; restrained 3D lighting effects are optional. The first implementation step is a comparison prototype, not an assumption that 2D artwork will improve fidelity or performance.
 
 The approved dark Spectrum Cabinet concept is the visual reference for the play view. It is a design mockup, not production UI or distributable scene art; use it to guide camera framing, palette, visual hierarchy, and room detail while implementing those elements with project-authored or rights-cleared assets.
 
 ![Approved dark Spectrum Cabinet concept, including the Play view](images/spectrum-cabinet-dark-reference.png)
 
-- Keep the existing Bevy renderer and live Spectrum framebuffer path. Preserve the curved phosphor surface, glass, shader, input, and framebuffer-driven CRT effects.
-- Use one fixed hero camera direction and center, with viewing distance adapted to the viewport aspect ratio. Place layered room artwork behind and selectively in front of the 3D television. The first version has no moving intro, user camera, or zoom presets. Add authored light/spill masks around the CRT as needed because static art does not receive the current dynamic room lighting.
+- Match the approved reference image's room, palette, prop arrangement, camera angle, and visual detail. Keep the room, TV, and cabinet in 2D scene artwork; do not invent a different room design or make the TV/cabinet 3D props.
+- Preserve the live Spectrum framebuffer in the screen opening, including input and CRT effects. Subtle, basic 3D may be used for lighting effects if it improves the reference-matched composition. The first version has no moving intro, user camera, or zoom presets.
 - Treat foreground occlusion and screen-to-room color spill as part of the composition. Keep the complete CRT visible at supported aspect ratios.
 - The existing multi-preset zoom and moving intro cannot simply be combined with flat camera-mounted plates: the prior approach was disabled after parallax and blank-background problems. Do not add another viewpoint in the first version; the flat display remains available when users want a close, unobstructed picture.
 - Keep the current 3D room available for A/B comparison until the new composition passes art, CRT-legibility, resizing, frame-pacing, and input-latency review on supported hosts.
@@ -95,16 +95,19 @@ The approved dark Spectrum Cabinet concept is the visual reference for the play 
 
 The opt-in Bevy prototype is implemented in `crates/living_room/src/cabinet_room.rs` and documented in [`docs/LIVING_ROOM.md`](LIVING_ROOM.md). `SPEC_CHUM_ROOM_PRESENTATION=fixed-cabinet` selects it in the standalone room; the existing 3D room remains the default. This is not yet a GUI-host presentation mode. Cross-host rollout remains in #563 and is blocked on the review below.
 
-- The prototype uses project-authored flat Bevy rectangles for its wall, trim, and curtains, with the existing Poly Haven CC0 television assets and live curved CRT. No new third-party art is bundled.
-- Outstanding environment composition work: adjust the fixed camera angle, height, look-at point, distance, field of view, and TV placement/scale to match the finalized environment reference image. The current closer framing is provisional. Review the environment art, lighting, foreground layers, and CRT spill alongside that reference, and verify that the complete CRT remains visible across supported window aspect ratios before visual sign-off.
-- Headless captures cover 320×900, 450×1000, 800×800, 1280×720, 2560×1080, and 320×240. They show the full CRT and test pattern, but are not a substitute for review against the approved concept and current 3D room.
-- Before the closer framing change, on this Mac, the same headless 1920×1080, 100-tick diagnostic measured 3.00 ms/tick average (p95 3.32 ms) for fixed mode and 4.17 ms/tick average (p95 4.86 ms) for the existing 3D mode. This measures renderer tick cost only; frame pacing and input latency remain unmeasured.
-- The user accepted the opt-in prototype increment for merge. This does not complete the final environment composition or technical go/no-go in #558.
+- The fixed-room implementation draws a 1672 × 941 generated 2D room/TV/cabinet plate, the live curved CRT, a green screen-spill layer, and a separate authentic 48K photo layer. The computer image is cropped/background-masked to 3130 × 1966 from a 4643 × 3086 CC0 photo. At the prototype's 2.20 m room width, the illustrated CRT opening is approximately 18 in diagonal. The room plate is not native 4K and remains subject to human review at intended output sizes. See `crates/living_room/assets/CREDITS` for provenance, license, and resolution limits.
+- The existing default 3D room remains available for comparison. Fixed mode has one camera position, no intro or zoom, and keeps the flat display as a close-view fallback.
+- Headless captures cover 320×900, 450×1000, 800×800, 1280×720, 2560×1080, and 320×240. The probe changes the framebuffer mid-run and checks that rendered pixels change; this establishes framebuffer response in the headless Bevy path, not end-to-end interactive latency.
+- Three alternating paired headless `room_perf` samples at 1920×1080 time 100 tick-only frames per run. The 3D baseline average/p95 values were 4.44/5.31, 4.16/5.00, and 4.91/7.72 ms; fixed-room values were 3.70/4.20, 3.75/4.31, and 3.70/4.11 ms. Median average/p95 were 4.44/5.31 ms for 3D and 3.70/4.20 ms for fixed mode. These short runs are noisy renderer-cost samples, not controlled benchmarks or display-link frame pacing, and they do not establish a user-visible performance improvement.
+- The screenshot comparison against the approved concept and current 3D room, end-to-end input latency, and actual frame-pacing measurements remain outstanding. The headless probe proves only that framebuffer updates reach rendered pixels and that the fixed composition fits its tested viewports.
+- The earlier opt-in prototype increment was accepted for review/merge. This follow-on composition still needs human visual review and a technical go/no-go before #558 can close.
+
+![Fixed-room headless candidate with live CRT test pattern](images/spectrum-cabinet-prototype.png)
 - A human visual review and explicit technical go/no-go remain required before promoting the room or adding it to GUI hosts. Keep the 3D room selectable and the flat display available until that decision is recorded.
 
 ## Delivery sequence
 
-1. **Room feasibility:** define art composition, asset rights, and the single fixed viewpoint; prototype a layered 2D room plus 3D television/CRT. Decide whether the production path should proceed based on actual screenshots and measurements.
+1. **Room feasibility:** define the reference-matched 2D composition, asset rights, and fixed framing; prototype 2D room/TV/cabinet artwork with live emulator pixels in the screen and optional restrained 3D lighting. Decide whether the production path should proceed based on actual screenshots and measurements.
 2. **Shared product foundation:** navigation, System/Light/Dark appearance, and shared model/media presentation contracts across all four GUI hosts.
 3. **Library and machines:** deliver useful recent-media browsing and illustrated model/peripheral selection using real shared data and format/model compatibility.
 4. **Debugger and settings:** make the inspected execution workflow discoverable and consistent while retaining native window/settings patterns.
@@ -115,5 +118,5 @@ The opt-in Bevy prototype is implemented in `crates/living_room/src/cabinet_room
 - The same supported media, model/configuration, input/audio preferences, debugger actions, and flat display are available across all four GUI hosts, subject only to documented platform-specific presentation and explicit bounded deferrals.
 - Users can browse/reopen recent supported media locally, see accurate model/peripheral choices, and resolve ROM requirements without losing the active working machine.
 - System/Light/Dark appearance works across every host and remains accessible.
-- The room prototype keeps the live 3D CRT and Spectrum framebuffer readable at the fixed camera position, survives representative window sizes, and avoids unintended cropping or distortion; final promotion depends on measured frame pacing/input responsiveness and visual review against the approved direction.
+- The room prototype keeps the live Spectrum framebuffer readable inside the 2D TV artwork, survives representative window sizes, and avoids unintended cropping or distortion; final promotion depends on measured frame pacing/input responsiveness and visual review against the approved reference.
 - Tests, builds, formatting/lint, graph refresh for code changes, and cross-host review follow the touched crates and project gates. This document is a product spec, not evidence that implementation is complete.

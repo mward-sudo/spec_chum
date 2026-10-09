@@ -36,3 +36,11 @@ Re-fetch with:
 ```
 
 Shaders under `shaders/` are Spec Chum original (MIT).
+
+## Spectrum Cabinet scene art and sourced hardware
+
+| Asset | Path | Provenance |
+| --- | --- | --- |
+| Spectrum Cabinet living-room plate | `spectrum_cabinet/room_plate_reference_candidate.png` | Generated for this project with OpenAI ImageGen on 2026-10-09 using the approved Spectrum Cabinet Play concept as visual guidance. Native output is 1672 × 941; it is not native 4K. The illustrated CRT opening is approximately 18 in at the prototype's 2.20 m room-plate scale. |
+| Spectrum 48K hardware layer | `spectrum_cabinet/spectrum_48k_cc0.png` | Transparent mask from Nilo Velez's original 4643 × 3086 photograph ([WordPress Photo Directory](https://wordpress.org/photos/photo/57665be537/)), licensed CC0. macOS Vision generated a foreground mask and cropped it to 3130 × 1966 while preserving the source photo pixels. Attribution is not required; credit is included here for provenance. |
+| CRT screen-spill mask | `spectrum_cabinet/screen_spill.png` | Project-authored 128 × 128 radial alpha mask. |

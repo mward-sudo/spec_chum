@@ -38,11 +38,13 @@ fn main() {
     let mut room = HeadlessRoom::new(w, h);
     room.request_skip_intro();
 
-    let fb = crt_test_pattern();
+    let initial_fb = crt_test_pattern(false);
+    let updated_fb = crt_test_pattern(true);
     let mut buf = vec![0u8; (w * h * 4) as usize];
+    let mut initial_frame = vec![0u8; buf.len()];
     // Intro skip resets zoom, so settle first, then nudge and let plates re-settle.
     for _ in 0..90 {
-        room.set_framebuffer(&fb);
+        room.set_framebuffer(&initial_fb);
         room.tick();
     }
     if zoom_steps != 0 {
@@ -54,17 +56,36 @@ fn main() {
             room.nudge_zoom(direction);
             thread::sleep(Duration::from_millis(110));
             for _ in 0..12 {
-                room.set_framebuffer(&fb);
+                room.set_framebuffer(&initial_fb);
                 room.tick();
             }
         }
     }
+    // Capture after zoom settles so camera movement cannot masquerade as a
+    // framebuffer update in the pixel comparison below.
+    let initial_len = room.copy_frame_rgba(&mut initial_frame);
+    assert_eq!(
+        initial_len,
+        initial_frame.len(),
+        "short initial frame readback"
+    );
     for _ in 0..120 {
-        room.set_framebuffer(&fb);
+        room.set_framebuffer(&updated_fb);
         room.tick();
     }
     let n = room.copy_frame_rgba(&mut buf);
     assert_eq!(n, buf.len(), "short frame readback");
+    let changed_pixels = initial_frame
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(buf.as_chunks::<4>().0.iter())
+        .filter(|(before, after)| before != after)
+        .count();
+    assert!(
+        changed_pixels > 0,
+        "framebuffer update changed no rendered pixels"
+    );
 
     // Present target is BGRA; PPM wants RGB.
     let mut ppm = Vec::with_capacity(buf.len() / 4 * 3 + 32);
@@ -90,11 +111,12 @@ fn main() {
         eprintln!("  {label} third: mean luma {mean:.1}");
     }
     eprintln!("  zoom preset {}", room.zoom_preset());
+    eprintln!("  framebuffer update changed {changed_pixels} rendered pixels");
     eprintln!("wrote {out_path}");
 }
 
 /// Color bars and fine horizontal/vertical edges make phosphor filtering visible.
-fn crt_test_pattern() -> Vec<u8> {
+fn crt_test_pattern(alternate: bool) -> Vec<u8> {
     const BARS: [[u8; 3]; 8] = [
         [235, 235, 235],
         [235, 220, 32],
@@ -109,14 +131,18 @@ fn crt_test_pattern() -> Vec<u8> {
     for y in 0..SCREEN_H {
         for x in 0..SCREEN_W {
             let rgb = if y < SCREEN_H / 2 {
-                BARS[(x * BARS.len() as u32 / SCREEN_W) as usize]
+                let bar = (x * BARS.len() as u32 / SCREEN_W) as usize;
+                BARS[if alternate { BARS.len() - bar - 1 } else { bar }]
             } else if y < SCREEN_H * 3 / 4 {
-                if (x / 4) % 2 == 0 {
+                if (x / if alternate { 7 } else { 4 }) % 2 == 0 {
                     [240, 240, 240]
                 } else {
                     [8, 8, 8]
                 }
-            } else if ((x / 8) + (y / 8)) % 2 == 0 {
+            } else if ((x / if alternate { 5 } else { 8 }) + (y / if alternate { 5 } else { 8 }))
+                % 2
+                == 0
+            {
                 [240, 240, 240]
             } else {
                 [8, 8, 8]

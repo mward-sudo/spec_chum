@@ -1,13 +1,9 @@
 //! Fixed-camera, flat-room comparison for the Spectrum Cabinet prototype (#558).
 //!
-//! The backdrop is deliberately authored from simple Bevy rectangles so this
-//! experiment has no external artwork dependency. The television cabinet and
-//! phosphor remain live 3D entities from `room` and `crt`.
+//! The room, television, and cabinet use a generated 2D art plate; the
+//! CRT screen and restrained lighting remain live runtime effects.
 
-use bevy::asset::RenderAssetUsages;
-use bevy::image::{ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RoomPresentation {
@@ -45,14 +41,34 @@ impl RoomPresentation {
 }
 
 /// Back wall sits behind the CRT/cabinet and extends beyond the 16:9 hero view.
-pub const BACKDROP_CENTER_Y: f32 = 1.22;
 pub const BACKDROP_DEPTH: f32 = crate::room::TV_STAND_POS.z - 0.78;
 pub const HERO_CENTER_Y: f32 = 0.82;
-/// Continuous base wall covering the camera bounds for portrait through ultrawide views.
+/// Small downward viewing angle from the approved room composition.
+pub const HERO_CAMERA_PITCH: f32 = 0.069_813_17;
+/// Continuous base wall covering viewport margins for portrait through ultrawide.
 pub const BACKDROP_BASE_SIZE: Vec2 = Vec2::new(8.0, 9.0);
-pub const HERO_FRAME_W: f32 = 0.95;
-pub const HERO_FRAME_H: f32 = 0.72;
+pub const ROOM_PLATE_WIDTH: f32 = 2.20;
+pub const ROOM_PLATE_HEIGHT: f32 = ROOM_PLATE_WIDTH * 941.0 / 1672.0;
+/// Pixel width of the 17–20 inch CRT opening in the authored room plate.
+const CRT_OPENING_WIDTH_PX: f32 = 278.0;
+/// The illustrated television glass opening is scaled to the live 4:3 CRT.
+pub const FIXED_CRT_SCALE: f32 =
+    ROOM_PLATE_WIDTH * CRT_OPENING_WIDTH_PX / 1672.0 / crate::crt::PHOSPHOR_W;
+pub const HERO_FRAME_W: f32 = ROOM_PLATE_WIDTH;
+pub const HERO_FRAME_H: f32 = ROOM_PLATE_HEIGHT;
 pub const HERO_FRAME_FILL: f32 = 0.95;
+const SCREEN_CENTER_X: f32 = 828.0;
+const SCREEN_CENTER_Y: f32 = 438.5;
+const SPECTRUM_48K_WIDTH: f32 = 0.25;
+const SPECTRUM_48K_HEIGHT: f32 = SPECTRUM_48K_WIDTH * 1966.0 / 3130.0;
+/// Tilt the authentic cutout toward the tabletop to match the plate's camera projection.
+const SPECTRUM_48K_TABLETOP_TILT: f32 = 0.872_664_63;
+const SPECTRUM_48K_DEPTH_OFFSET: f32 = 0.08;
+const SPECTRUM_48K_SHADOW_DEPTH_OFFSET: f32 = 0.035;
+const SPECTRUM_48K_IMAGE_CENTER_X: f32 = 836.0;
+const SPECTRUM_48K_IMAGE_CENTER_Y: f32 = 667.0;
+const SCREEN_OFFSET_X: f32 = ROOM_PLATE_WIDTH * (836.0 - SCREEN_CENTER_X) / 1672.0;
+const SCREEN_OFFSET_Y: f32 = ROOM_PLATE_HEIGHT * (470.5 - SCREEN_CENTER_Y) / 941.0;
 
 #[derive(Component, Debug)]
 struct CabinetBackdrop;
@@ -60,138 +76,116 @@ struct CabinetBackdrop;
 #[derive(Component, Debug)]
 pub(crate) struct CabinetBackdropBase;
 
-/// Spawn the flat, layered wall behind the live TV. Shapes are unlit so the
-/// static composition remains legible while CRT spill is added independently.
+/// World-space center of the 2D room illustration, used to center its fixed view.
+#[must_use]
+pub fn room_plate_center() -> Vec3 {
+    let screen = crate::crt::crt_screen_world_center();
+    Vec3::new(
+        screen.x + SCREEN_OFFSET_X,
+        screen.y - SCREEN_OFFSET_Y,
+        screen.z - 0.02,
+    )
+}
+
+/// Spawn the reference-matched 2D room plate and a scalable
+/// warm backdrop for viewport margins. The illustrated TV remains static; only
+/// its screen opening is rendered live by the CRT plugin.
 pub fn spawn_backdrop(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    images: &mut Assets<Image>,
+    asset_server: &AssetServer,
 ) {
-    let wall = material(materials, Color::srgb(0.12, 0.16, 0.19));
-    let inset = material(materials, Color::srgb(0.20, 0.22, 0.21));
-    let curtain = material(materials, Color::srgb(0.20, 0.10, 0.10));
-    let trim = material(materials, Color::srgb(0.30, 0.19, 0.11));
-    let spill_mask = images.add(spill_mask());
-    let screen_spill = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.42, 0.78, 1.0, 0.48),
-        base_color_texture: Some(spill_mask),
-        emissive: LinearRgba::rgb(0.025, 0.095, 0.18),
+    let backdrop_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.012, 0.035, 0.026),
+        unlit: true,
+        ..default()
+    });
+    let plate_material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        base_color_texture: Some(
+            asset_server.load("spectrum_cabinet/room_plate_reference_candidate.png"),
+        ),
+        unlit: true,
+        ..default()
+    });
+    let screen_spill_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.10, 0.88, 0.55, 0.18),
+        base_color_texture: Some(asset_server.load("spectrum_cabinet/screen_spill.png")),
         alpha_mode: AlphaMode::Blend,
+        emissive: LinearRgba::rgb(0.002, 0.035, 0.012),
         unlit: true,
         ..default()
     });
 
-    let wall_z = BACKDROP_DEPTH;
-    // Keep the same wall color behind the authored set so extreme aspect ratios
-    // reveal no clear-color gaps. This base layer never changes cabinet scale.
-    let base = spawn_panel(
-        commands,
-        meshes,
-        wall.clone(),
-        "cabinet_backdrop_base",
-        Vec3::new(0.0, HERO_CENTER_Y, wall_z - 0.012),
-        BACKDROP_BASE_SIZE,
-    );
-    commands.entity(base).insert(CabinetBackdropBase);
-    spawn_panel(
-        commands,
-        meshes,
-        wall.clone(),
-        "cabinet_backdrop_wall",
-        Vec3::new(0.0, BACKDROP_CENTER_Y, wall_z),
-        Vec2::new(4.2, 2.45),
-    );
-    // Low-contrast wall panels frame, but do not compete with, the screen.
-    spawn_panel(
-        commands,
-        meshes,
-        inset,
-        "cabinet_backdrop_wall_panel",
-        Vec3::new(0.0, BACKDROP_CENTER_Y, wall_z + 0.012),
-        Vec2::new(3.35, 1.95),
-    );
-    for x in [-1.72, 1.72] {
-        spawn_panel(
-            commands,
-            meshes,
-            curtain.clone(),
-            "cabinet_backdrop_curtain",
-            Vec3::new(x, 1.28, wall_z + 0.024),
-            Vec2::new(0.46, 2.25),
-        );
-    }
-    spawn_panel(
-        commands,
-        meshes,
-        trim,
-        "cabinet_backdrop_shelf",
-        Vec3::new(0.0, 0.19, wall_z + 0.03),
-        Vec2::new(3.55, 0.12),
-    );
-    // A restrained authored spill halo peeks around the cabinet; it never
-    // replaces the CRT pixels and is layered behind the television geometry.
-    spawn_panel(
-        commands,
-        meshes,
-        screen_spill,
-        "cabinet_screen_spill",
-        Vec3::new(0.0, crate::crt::crt_screen_world_center().y, wall_z + 0.04),
-        Vec2::new(0.62, 0.44),
-    );
-}
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(BACKDROP_BASE_SIZE.x, BACKDROP_BASE_SIZE.y))),
+        MeshMaterial3d(backdrop_material),
+        Transform::from_xyz(0.0, HERO_CENTER_Y, BACKDROP_DEPTH - 0.01),
+        CabinetBackdropBase,
+        CabinetBackdrop,
+        Name::new("cabinet_backdrop_base"),
+    ));
 
-fn spill_mask() -> Image {
-    const SIZE: u32 = 64;
-    let mut pixels = Vec::with_capacity((SIZE * SIZE * 4) as usize);
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let dx = (x as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0;
-            let dy = (y as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0;
-            let alpha = (1.0 - dx.hypot(dy)).clamp(0.0, 1.0).powi(2);
-            pixels.extend_from_slice(&[255, 255, 255, (alpha * 255.0) as u8]);
-        }
-    }
-    let mut image = Image::new(
-        Extent3d {
-            width: SIZE,
-            height: SIZE,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        pixels,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
-    );
-    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor::linear());
-    image
-}
+    let screen = crate::crt::crt_screen_world_center();
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(ROOM_PLATE_WIDTH, ROOM_PLATE_HEIGHT))),
+        MeshMaterial3d(plate_material),
+        Transform::from_translation(room_plate_center()),
+        CabinetBackdrop,
+        Name::new("spectrum_cabinet_room_plate"),
+    ));
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(0.84, 0.60))),
+        MeshMaterial3d(screen_spill_material),
+        Transform::from_translation(screen + Vec3::new(0.0, 0.025, -0.012)),
+        CabinetBackdrop,
+        Name::new("spectrum_cabinet_green_screen_spill"),
+    ));
 
-fn material(materials: &mut Assets<StandardMaterial>, color: Color) -> Handle<StandardMaterial> {
-    materials.add(StandardMaterial {
-        base_color: color,
+    let spectrum_x = ROOM_PLATE_WIDTH * (SPECTRUM_48K_IMAGE_CENTER_X - 836.0) / 1672.0;
+    let spectrum_y =
+        ROOM_PLATE_HEIGHT * 0.5 - SPECTRUM_48K_IMAGE_CENTER_Y * ROOM_PLATE_HEIGHT / 941.0;
+    let spectrum_shadow_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.004, 0.008, 0.006, 0.48),
+        base_color_texture: Some(asset_server.load("spectrum_cabinet/screen_spill.png")),
+        alpha_mode: AlphaMode::Blend,
         unlit: true,
         ..default()
-    })
-}
-
-fn spawn_panel(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    material: Handle<StandardMaterial>,
-    name: &'static str,
-    position: Vec3,
-    size: Vec2,
-) -> Entity {
-    commands
-        .spawn((
-            Mesh3d(meshes.add(Rectangle::new(size.x, size.y))),
-            MeshMaterial3d(material),
-            Transform::from_translation(position),
-            CabinetBackdrop,
-            Name::new(name),
-        ))
-        .id()
+    });
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(SPECTRUM_48K_WIDTH * 1.20, 0.08))),
+        MeshMaterial3d(spectrum_shadow_material),
+        Transform::from_translation(
+            room_plate_center()
+                + Vec3::new(
+                    spectrum_x,
+                    spectrum_y - 0.012,
+                    SPECTRUM_48K_SHADOW_DEPTH_OFFSET,
+                ),
+        )
+        .with_rotation(Quat::from_rotation_x(SPECTRUM_48K_TABLETOP_TILT)),
+        CabinetBackdrop,
+        Name::new("spectrum_48k_contact_shadow"),
+    ));
+    let spectrum_material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        base_color_texture: Some(asset_server.load("spectrum_cabinet/spectrum_48k_cc0.png")),
+        alpha_mode: AlphaMode::Blend,
+        cull_mode: None,
+        unlit: true,
+        ..default()
+    });
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(SPECTRUM_48K_WIDTH, SPECTRUM_48K_HEIGHT))),
+        MeshMaterial3d(spectrum_material),
+        Transform::from_translation(
+            room_plate_center() + Vec3::new(spectrum_x, spectrum_y, SPECTRUM_48K_DEPTH_OFFSET),
+        )
+        .with_rotation(Quat::from_rotation_x(SPECTRUM_48K_TABLETOP_TILT)),
+        CabinetBackdrop,
+        Name::new("spectrum_48k_hardware_layer"),
+    ));
 }
 
 /// Fit the authored cabinet hero bounds to every positive viewport aspect.
@@ -202,9 +196,15 @@ pub fn camera_distance(fov_y: f32, aspect: f32) -> f32 {
     } else {
         16.0 / 9.0
     };
-    let visible_height =
-        (HERO_FRAME_H / HERO_FRAME_FILL).max(HERO_FRAME_W / (aspect * HERO_FRAME_FILL));
-    visible_height / (2.0 * (fov_y * 0.5).tan())
+    let half_visible_height = HERO_FRAME_H / (2.0 * HERO_FRAME_FILL);
+    let half_visible_width = HERO_FRAME_W / (2.0 * HERO_FRAME_FILL);
+    let tan_half_fov = (fov_y * 0.5).tan();
+    let sin_pitch = HERO_CAMERA_PITCH.sin();
+    let cos_pitch = HERO_CAMERA_PITCH.cos();
+    let vertical_fit = half_visible_height * (cos_pitch / tan_half_fov + sin_pitch);
+    let horizontal_fit =
+        half_visible_width / (aspect * tan_half_fov) + half_visible_height * sin_pitch;
+    vertical_fit.max(horizontal_fit)
 }
 
 /// World-space wall extent needed at the wall's greater camera depth.
@@ -256,8 +256,13 @@ mod tests {
             let visible_width = visible_height * aspect;
             assert!(visible_height * HERO_FRAME_FILL >= HERO_FRAME_H - 0.001);
             assert!(visible_width * HERO_FRAME_FILL >= HERO_FRAME_W - 0.001);
-            assert!(visible_height * HERO_FRAME_FILL >= crate::crt::PHOSPHOR_H);
-            assert!(visible_width * HERO_FRAME_FILL >= crate::crt::PHOSPHOR_W);
+            assert!(
+                visible_height * HERO_FRAME_FILL
+                    >= crate::crt::PHOSPHOR_H * FIXED_CRT_SCALE - 0.001
+            );
+            assert!(
+                visible_width * HERO_FRAME_FILL >= crate::crt::PHOSPHOR_W * FIXED_CRT_SCALE - 0.001
+            );
         }
         assert!(camera_distance(fov, 320.0 / 900.0) > camera_distance(fov, 1280.0 / 720.0));
     }
@@ -304,12 +309,38 @@ mod tests {
     }
 
     #[test]
-    fn spill_mask_fades_to_transparent_at_its_edges() {
-        let image = spill_mask();
-        let pixels = image.data.expect("generated spill mask has pixel data");
-        let pixel = |x: usize, y: usize| pixels[(y * 64 + x) * 4 + 3];
-        assert!(pixel(32, 32) > 240);
-        assert_eq!(pixel(0, 0), 0);
-        assert!(pixel(32, 8) < pixel(32, 20));
+    fn spectrum_hardware_layer_asset_is_rgba_with_expected_dimensions() {
+        let png = include_bytes!("../assets/spectrum_cabinet/spectrum_48k_cc0.png");
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(
+            u32::from_be_bytes(png[16..20].try_into().expect("PNG width bytes")),
+            3130
+        );
+        assert_eq!(
+            u32::from_be_bytes(png[20..24].try_into().expect("PNG height bytes")),
+            1966
+        );
+        assert_eq!(png[25], 6, "hardware cutout keeps RGBA transparency");
+    }
+
+    #[test]
+    fn spectrum_hardware_layer_preserves_source_aspect_ratio() {
+        let source_aspect = 3130.0_f32 / 1966.0;
+        let layer_aspect = SPECTRUM_48K_WIDTH / SPECTRUM_48K_HEIGHT;
+        assert!((layer_aspect - source_aspect).abs() < f32::EPSILON * 4.0);
+    }
+
+    #[test]
+    fn spill_mask_asset_has_expected_png_dimensions() {
+        let png = include_bytes!("../assets/spectrum_cabinet/screen_spill.png");
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(
+            u32::from_be_bytes(png[16..20].try_into().expect("PNG width bytes")),
+            128
+        );
+        assert_eq!(
+            u32::from_be_bytes(png[20..24].try_into().expect("PNG height bytes")),
+            128
+        );
     }
 }
