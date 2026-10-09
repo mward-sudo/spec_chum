@@ -1302,9 +1302,7 @@ fn apply_appearance(preference: AppearancePreference) {
                 settings.reset_property("gtk-application-prefer-dark-theme");
             }
             AppearancePreference::Light => {
-                // GTK only exposes a dark variant preference. Use its built-in
-                // light theme for an explicit Light choice.
-                settings.set_gtk_theme_name(Some("Adwaita"));
+                settings.reset_property("gtk-theme-name");
                 settings.set_gtk_application_prefer_dark_theme(false);
             }
             AppearancePreference::Dark => {

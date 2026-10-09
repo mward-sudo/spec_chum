@@ -1476,9 +1476,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1791515977.6540396,
-    "seen": 1791515992.143405,
-    "ast_hash": "8e292307a889242424b18283a8f3e576",
+    "mtime": 1791517115.7523603,
+    "seen": 1791517133.416873,
+    "ast_hash": "4a8d7949085fdebdd49cb5f66543b27e",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -1512,9 +1512,9 @@
     "semantic_hash": ""
   },
   "crates/linux_shell/src/gtk_ui.rs": {
-    "mtime": 1791515130.5556104,
-    "seen": 1791515235.146313,
-    "ast_hash": "58375f281f06a59c1d7f8ce2b45379d3",
+    "mtime": 1791517115.7333086,
+    "seen": 1791517133.414499,
+    "ast_hash": "9ba1fdcbd988aa6168642a0d100a0f2c",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/keymap.rs": {
@@ -2466,9 +2466,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/frontend/navigation.rs": {
-    "mtime": 1791514716.20829,
-    "seen": 1791515235.14358,
-    "ast_hash": "1b7c4d7a970f774aad9590551ca04bf4",
+    "mtime": 1791517115.711206,
+    "seen": 1791517133.412344,
+    "ast_hash": "c666375d607dff814508fc965d4fb068",
     "semantic_hash": ""
   }
 }

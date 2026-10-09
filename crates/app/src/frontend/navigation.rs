@@ -74,6 +74,10 @@ impl SpecChumApp {
                         {
                             self.open_recent_path(&path);
                             current = FrontendView::Play;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(egui::Id::new(GUEST_KEYBOARD_SUPPRESSED_ID), true);
+                                data.insert_temp(egui::Id::new(PLAY_FOCUS_REQUEST_ID), true);
+                            });
                         }
                     }
                 });

@@ -1283,8 +1283,9 @@ fn system_appearance_is_dark() -> bool {
     let key: Vec<u16> = PERSONALIZE_KEY.encode_utf16().collect();
     let value_name: Vec<u16> = APPS_USE_LIGHT_THEME.encode_utf16().collect();
     let mut apps_use_light_theme = 1_u32;
+    let mut value_size = size_of::<u32>() as u32;
     // SAFETY: both strings are NUL-terminated UTF-16 buffers that remain alive
-    // for the call, and the output pointer refers to a live DWORD.
+    // for the call; the data and size pointers refer to live DWORD values.
     let result = unsafe {
         RegGetValueW(
             HKEY_CURRENT_USER,
@@ -1293,7 +1294,7 @@ fn system_appearance_is_dark() -> bool {
             RRF_RT_REG_DWORD,
             None,
             Some((&mut apps_use_light_theme as *mut u32).cast()),
-            None,
+            Some(&mut value_size),
         )
     };
 
