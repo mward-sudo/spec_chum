@@ -20,7 +20,9 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    EnableWindow, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
     GetClientRect, GetDlgItem, GetMenu, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
@@ -28,10 +30,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SendMessageW, SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW,
     CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY,
     GWLP_USERDATA, HMENU, IDC_ARROW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND,
-    MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COMMAND, WM_CREATE,
-    WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE,
-    WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW,
-    WS_VISIBLE, WS_VSCROLL,
+    MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_COMMAND,
+    WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT,
+    WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDCLASSEXW, WS_BORDER, WS_CHILD,
+    WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
@@ -637,6 +639,9 @@ impl AppState {
             }
             Err(error) => self.report_err("Next asset setup", &HostError::Message(error)),
         }
+        if self.library_hwnd.is_some() {
+            self.refresh_library();
+        }
     }
 
     fn select_model(&mut self, model: ModelId) {
@@ -894,12 +899,24 @@ impl AppState {
         self.pending_cmd = Some(id);
     }
 
-    fn drain_pending_command(&mut self, app_ptr: *mut AppState) {
-        let Some(id) = self.pending_cmd.take() else {
-            return;
-        };
+    fn drain_pending_command(&mut self, id: usize) {
+        let affects_library = (IDM_LIBRARY_RECENT_BASE
+            ..IDM_LIBRARY_RECENT_BASE + IDM_LIBRARY_RECENT_COUNT)
+            .contains(&id)
+            || model_from_menu_id(id).is_some()
+            || matches!(
+                id,
+                IDM_FILE_OPEN_TAPE
+                    | IDM_FILE_OPEN_SNAPSHOT
+                    | IDM_FILE_OPEN_RZX
+                    | IDM_FILE_OPEN_DSK
+                    | IDM_FILE_OPEN_TRD
+                    | IDM_MACHINE_ROM_SETUP
+                    | IDM_HW_ATTACH_BETA
+                    | IDM_HW_LOAD_TRDOS_ROM
+                    | IDM_HW_OPEN_TRD
+            );
         match id {
-            IDM_LIBRARY_OPEN => self.open_library(app_ptr),
             id if (IDM_LIBRARY_RECENT_BASE..IDM_LIBRARY_RECENT_BASE + IDM_LIBRARY_RECENT_COUNT)
                 .contains(&id) =>
             {
@@ -1000,6 +1017,9 @@ impl AppState {
             IDM_DBG_CLEAR_BREAKS => self.debug_clear_breaks(),
             IDM_DBG_REFRESH => self.refresh_debug_text(),
             _ => {}
+        }
+        if affects_library && self.library_hwnd.is_some() {
+            self.refresh_library();
         }
         let _ = &self.plane;
     }
@@ -1470,14 +1490,18 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
         }
         WM_DESTROY => {
             if !state_ptr.is_null() {
-                // SAFETY: tear down debug HWND while AppState is still alive, then free it.
+                // DestroyWindow synchronously calls the Library procedure, which
+                // borrows AppState. End our borrow before destroying either HWND.
                 unsafe {
-                    let state = &mut *state_ptr;
-                    if let Some(dbg) = state.debug_hwnd.take() {
+                    let (dbg, library) = {
+                        let state = &mut *state_ptr;
                         state.debug_edit = None;
-                        let _ = windows::Win32::UI::WindowsAndMessaging::DestroyWindow(dbg);
+                        (state.debug_hwnd.take(), state.library_hwnd.take())
+                    };
+                    if let Some(dbg) = dbg {
+                        let _ = DestroyWindow(dbg);
                     }
-                    if let Some(library) = state.library_hwnd.take() {
+                    if let Some(library) = library {
                         let _ = DestroyWindow(library);
                     }
                     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
@@ -1555,7 +1579,16 @@ pub fn run() -> Result<()> {
             if state_ptr.is_null() {
                 break;
             }
-            (*state_ptr).drain_pending_command(state_ptr);
+            // The Library constructor enters its window proc synchronously.
+            // Pop the command before calling it so no AppState borrow spans that call.
+            let pending_cmd = (*state_ptr).pending_cmd.take();
+            if let Some(id) = pending_cmd {
+                if id == IDM_LIBRARY_OPEN {
+                    library::open_library(state_ptr);
+                } else {
+                    (*state_ptr).drain_pending_command(id);
+                }
+            }
             (*state_ptr).tick_frame(hwnd);
             let throttle = (*state_ptr).prefs.throttle;
             if throttle {

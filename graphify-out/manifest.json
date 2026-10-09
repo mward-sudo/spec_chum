@@ -1476,9 +1476,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1791587878.782872,
-    "seen": 1791587905.040968,
-    "ast_hash": "7911d6de465c2dc26dddf21599469141",
+    "mtime": 1791589238.7964125,
+    "seen": 1791589429.2656682,
+    "ast_hash": "c11fef46e1a3bbab7c08de98d06aa650",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -2484,9 +2484,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32/library.rs": {
-    "mtime": 1791587879.3305829,
-    "seen": 1791587905.040969,
-    "ast_hash": "866310aa16113afe0d1ee28c989972d0",
+    "mtime": 1791589109.5231998,
+    "seen": 1791589185.807338,
+    "ast_hash": "f09f7fc3c595665d9cda2dbef5ec167d",
     "semantic_hash": ""
   }
 }
