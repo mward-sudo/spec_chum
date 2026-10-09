@@ -2,46 +2,34 @@
 
 ## Spectrum Cabinet fixed-room comparison (#558)
 
-The standalone room supports a fixed-camera composition experiment alongside the
-existing 3D room. Set `SPEC_CHUM_ROOM_PRESENTATION=fixed-cabinet` before launch
-to select it; unset the variable (or use `3d`) to keep the existing 3D room.
-Switching presentations currently requires a restart. The fixed mode has no
-intro dolly, mouse-look, or zoom stops; viewport changes only adjust camera
-distance to keep the authored hero bounds in frame. The regular egui flat display
-remains available as the close-view alternative.
+The standalone room supports an opt-in fixed 2D composition beside the existing
+3D room. Set `SPEC_CHUM_ROOM_PRESENTATION=fixed-cabinet` before launch; unset
+the variable (or use `3d`) to keep the existing 3D room. Switching
+presentations requires a restart. Fixed mode has no intro, mouse-look, or zoom;
+the flat display remains the close-view fallback.
 
-The prototype uses flat, unlit Bevy rectangle meshes in the same 3D world and
-camera. A matching unlit 8.0 × 9.0 m base wall extends behind the 4.2 × 2.45 m
-authored wall so portrait and ultrawide viewports do not expose clear-color
-margins; it scales with the camera frustum outside the tested aspect range,
-while detail layers and cabinet retain their authored scale. The set has
-an inset panel, paired curtains, low shelf, and a 0.62 × 0.44 m cyan
-screen-spill panel with a radial alpha mask for soft edges. There are no
-separate foreground art layers yet; the live TV geometry itself is the sole
-foreground occluder. These vector-like layers are resolution-independent and
-need no raster source asset. The live TV stand, cabinet, curved CRT phosphor,
-and machine framebuffer remain 3D/runtime content. The back wall is behind the
-TV and the panel is behind the CRT, so room artwork cannot cover the live image.
-The simple rectangles are authored in the project; no generated or third-party
-artwork is used. The stand and television models continue to use the existing
-Poly Haven assets (CC0; see `crates/living_room/assets/CREDITS`).
+The room, 4:3 television, and walnut cabinet are rendered from the 2D plate at
+`assets/spectrum_cabinet/room_plate_reference_candidate.png`. The dark screen opening is
+aligned with the live curved phosphor, glass, shader, and framebuffer path in
+3D. A restrained green spill mask remains live. The authentic 48K computer is
+a separate transparent image layer, so its model artwork can later follow the
+selected machine. A subtle contact shadow grounds that layer. The back wall
+extends behind the plate so viewport margins remain filled. Provenance is in
+`assets/CREDITS`. The room plate's native output is 1672 × 941, not 4K; the
+scene is scaled to a 2.20 m wide room with an approximately 18 in CRT opening. This
+provides more source pixels than the 1280 × 720 probe but is not full-resolution
+for 4K output. The authentic 48K photo layer is 3130 × 1966 after background
+masking.
 
-The camera framing contract reserves 0.95 × 0.72 m hero bounds at 95% of the
-viewport, bringing the CRT forward toward the scale shown in the Spectrum Cabinet
-concept while keeping the complete phosphor in frame. The geometry-only resize
-cases are 320×900, 450×1000, 800×800,
-1280×720, 2560×1080, and 320×240. Headless Bevy screenshots were captured at
-each size after the closer framing change; they show the complete CRT and active
-test pattern. The user accepted this opt-in prototype increment for merge;
-final environment composition review against the Spectrum Cabinet concept
-remains open in #558. Before the closer framing change, on this Mac, the same
-headless 1920×1080 probe measured fixed mode at 3.00 ms/tick average (p95
-3.32 ms) and the existing 3D mode at 4.17 ms/tick average (p95 4.86 ms), each
-over 100 ticks. This
-is a rendering-cost diagnostic, not a display frame-pacing or input-latency
-measurement, and does not predict reference hardware performance. Input
-latency remains unmeasured. Keep the existing 3D room selectable until final visual
-and technical go/no-go review is recorded.
+The camera keeps the authored 2.20 × 1.24 m composition in view, fits the live
+4:3 phosphor to the illustrated TV opening, and adapts its distance to viewport
+aspect, aiming at the illustration center so neither edge is cropped. The headless probe checks 320×900, 450×1000, 800×800, 1280×720,
+2560×1080, and 320×240; it changes the framebuffer mid-run, checks that the
+rendered pixels change, and writes a PPM capture. It does not measure
+end-to-end input latency or display-link frame pacing. `room_perf` records
+headless tick-only rendering cost, not full presentation or input latency; see
+the comparison in `docs/SPECTRUM_CABINET.md`. Keep the existing 3D room selectable
+until the #558 visual/technical decision is recorded.
 
 **Status:** experimental / not the default product UI. Tracked in
 [#146](https://github.com/mward-sudo/spec_chum/issues/146).

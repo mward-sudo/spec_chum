@@ -14,6 +14,13 @@ const WALLPAPER_TILE_M: f32 = 0.55;
 /// World pose of the CRT cabinet / console (phosphor overlay uses the same constant).
 /// Against the back wall; locked cam frames CRT at ~50% vertical fill with room visible.
 pub const TV_STAND_POS: Vec3 = Vec3::new(0.0, 0.0, -ROOM_D * 0.5 + 0.55);
+pub const TV_STAND_SCALE: f32 = 0.85;
+pub const TV_STAND_TOP_Y: f32 = 0.68 * TV_STAND_SCALE;
+pub const TV_CABINET_POS: Vec3 = Vec3::new(
+    TV_STAND_POS.x,
+    TV_STAND_POS.y + TV_STAND_TOP_Y,
+    TV_STAND_POS.z + 0.05,
+);
 
 /// Marker on the `television_02` scene root — phosphor is placed in this local space.
 #[derive(Component, Reflect, Debug, Clone, Copy, Default)]
@@ -45,7 +52,6 @@ fn setup_room(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut images: ResMut<Assets<Image>>,
     asset_server: Res<AssetServer>,
     #[cfg(feature = "skein")] skein_mode: Option<Res<crate::skein::SkeinRoomMode>>,
     presentation: Res<crate::cabinet_room::RoomPresentation>,
@@ -55,9 +61,9 @@ fn setup_room(
             &mut commands,
             &mut meshes,
             &mut materials,
-            &mut images,
+            &asset_server,
         );
-        spawn_live_television(&mut commands, &asset_server);
+        spawn_fixed_screen_anchor(&mut commands);
         return;
     }
     #[cfg(feature = "skein")]
@@ -262,17 +268,29 @@ fn setup_procedural_room(
     setup_room_dressing(commands, meshes, materials, asset_server);
 }
 
+/// Keep the curved live CRT at the illustrated television aperture.
+fn spawn_fixed_screen_anchor(commands: &mut Commands) {
+    let scale = crate::cabinet_room::FIXED_CRT_SCALE;
+    let local_screen = crate::crt::crt_phosphor_local();
+    let origin = TV_CABINET_POS + local_screen * (1.0 - scale);
+    commands.spawn((
+        Transform::from_translation(origin).with_scale(Vec3::splat(scale)),
+        Visibility::default(),
+        TelevisionCabinet,
+        Name::new("illustrated_television_screen_anchor"),
+        crate::hybrid::LiveTv,
+    ));
+}
+
 fn spawn_live_television(commands: &mut Commands, asset_server: &AssetServer) {
     // Low teak-ish sideboard as an 80s TV stand (replaces ornate ClassicConsole_01).
-    let tv_stand_scale = 0.85;
-    let tv_stand_top = 0.68 * tv_stand_scale;
     commands.spawn((
         WorldAssetRoot(
             asset_server.load(
                 "polyhaven/models/modern_wooden_cabinet/modern_wooden_cabinet_1k.gltf#Scene0",
             ),
         ),
-        Transform::from_translation(TV_STAND_POS).with_scale(Vec3::splat(tv_stand_scale)),
+        Transform::from_translation(TV_STAND_POS).with_scale(Vec3::splat(TV_STAND_SCALE)),
         Name::new("tv_stand"),
         crate::hybrid::LiveTv,
     ));
@@ -285,7 +303,7 @@ fn spawn_live_television(commands: &mut Commands, asset_server: &AssetServer) {
         WorldAssetRoot(
             asset_server.load("polyhaven/models/television_02/television_02_aperture.gltf#Scene0"),
         ),
-        Transform::from_translation(TV_STAND_POS + Vec3::new(0.0, tv_stand_top, 0.05)),
+        Transform::from_translation(TV_CABINET_POS),
         TelevisionCabinet,
         Name::new("television_02"),
         crate::hybrid::LiveTv,
@@ -340,8 +358,7 @@ fn spawn_video_cassette_deck(
         perceptual_roughness: 0.3,
         ..default()
     });
-    let tv_stand_top = 0.68 * 0.85;
-    let origin = TV_STAND_POS + Vec3::new(0.66, tv_stand_top + 0.0475, 0.0);
+    let origin = TV_STAND_POS + Vec3::new(0.66, TV_STAND_TOP_Y + 0.0475, 0.0);
     let root = commands
         .spawn((
             Transform::from_translation(origin),

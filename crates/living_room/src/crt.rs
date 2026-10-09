@@ -46,7 +46,7 @@ use bevy::render::{
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{Material2d, Material2dPlugin};
 
-use crate::room::{TelevisionCabinet, TV_STAND_POS};
+use crate::room::{TelevisionCabinet, TV_CABINET_POS};
 
 pub const SCREEN_W: u32 = 352;
 pub const SCREEN_H: u32 = 296;
@@ -324,8 +324,7 @@ pub fn crt_phosphor_local() -> Vec3 {
 /// World-space CRT pose shared by camera look-at (TV spawn + local phosphor).
 #[must_use]
 pub fn crt_screen_world_center() -> Vec3 {
-    let tv_base = TV_STAND_POS + Vec3::new(0.0, 0.95, 0.05);
-    tv_base + crt_phosphor_local()
+    TV_CABINET_POS + crt_phosphor_local()
 }
 
 #[derive(Resource)]
@@ -694,6 +693,14 @@ mod tests {
         const {
             assert!(PHOSPHOR_Z_BEHIND < 0.01);
         }
+    }
+
+    #[test]
+    fn screen_world_center_uses_the_spawned_television_pose() {
+        let expected = crate::room::TV_CABINET_POS + crt_phosphor_local();
+        let actual = crt_screen_world_center();
+        assert!((actual - expected).length() < 1e-6);
+        assert!((actual.y - 0.8368).abs() < 1e-4);
     }
 
     #[test]
