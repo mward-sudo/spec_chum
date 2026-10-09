@@ -55,6 +55,9 @@ pub const IDM_SET_KEMPSTON_MOUSE: usize = 1423;
 pub const IDM_SET_AY_MONO: usize = 1430;
 pub const IDM_SET_AY_ACB: usize = 1431;
 pub const IDM_SET_AY_ABC: usize = 1432;
+pub const IDM_SET_APPEARANCE_SYSTEM: usize = 1440;
+pub const IDM_SET_APPEARANCE_LIGHT: usize = 1441;
+pub const IDM_SET_APPEARANCE_DARK: usize = 1442;
 
 /// Debug / inspect
 pub const IDM_DBG_TOGGLE: usize = 1501;
