@@ -16,9 +16,11 @@ mod audio;
 mod debugger;
 mod dialogs;
 mod menu;
+mod navigation;
 mod state;
 
 use audio::{start_beeper, BeeperState};
+use navigation::{should_suppress_guest_keyboard, FrontendView, GUEST_KEYBOARD_SUPPRESSED_ID};
 
 const CPU_TSTATES_PER_SECOND: f64 = 3_500_000.0;
 
@@ -96,6 +98,8 @@ impl SpecChumApp {
             self.theme_applied = true;
         }
         self.menu_bar(ctx);
+        let route_changed = self.navigation_bar(ctx);
+        let view = FrontendView::get(ctx);
 
         if self.session.kempston_mouse {
             {
@@ -142,7 +146,26 @@ impl SpecChumApp {
             let script_consumed_input =
                 should_step_key_script(advancing, throttled, due) && self.session.tick_key_script();
             if !script_consumed_input {
-                let (keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
+                let (mut keys_down, modifiers) = ctx.input(|i| (i.keys_down.clone(), i.modifiers));
+                let previous_suppression = ctx.data(|data| {
+                    data.get_temp::<bool>(egui::Id::new(GUEST_KEYBOARD_SUPPRESSED_ID))
+                        .unwrap_or(false)
+                });
+                let suppress_guest_keys = should_suppress_guest_keyboard(
+                    view,
+                    route_changed,
+                    previous_suppression,
+                    !keys_down.is_empty(),
+                );
+                ctx.data_mut(|data| {
+                    data.insert_temp(
+                        egui::Id::new(GUEST_KEYBOARD_SUPPRESSED_ID),
+                        suppress_guest_keys,
+                    );
+                });
+                if suppress_guest_keys {
+                    keys_down.clear();
+                }
                 let pad = self.poll_gamepad();
                 self.session.sync_keyboard(&keys_down, modifiers, pad);
             }
@@ -172,29 +195,7 @@ impl SpecChumApp {
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let (image, src) = {
-                let host = &*self.session.host_mut();
-                let image = egui::ColorImage::from_rgba_unmultiplied(
-                    [host.width(), host.height()],
-                    host.framebuffer(),
-                );
-                let src = egui::vec2(host.width() as f32, host.height() as f32);
-                (image, src)
-            };
-            let tex = self.texture.get_or_insert_with(|| {
-                ctx.load_texture("screen", image.clone(), egui::TextureOptions::NEAREST)
-            });
-            tex.set(image, egui::TextureOptions::NEAREST);
-            let avail = ui.available_size();
-            let fitted = display::fit_size(src, avail);
-            if let Some(plane) = self.plane.as_ref() {
-                let pw = avail.x.round().max(1.0) as u32;
-                let ph = avail.y.round().max(1.0) as u32;
-                plane.set_display_panel_size(pw, ph);
-            }
-            ui.centered_and_justified(|ui| {
-                ui.image((tex.id(), fitted));
-            });
+            self.render_view(ui, ctx, view, route_changed);
         });
 
         self.render_debugger(ctx);
@@ -264,6 +265,7 @@ impl eframe::App for SpecChumApp {
 
 #[cfg(test)]
 mod tests {
+    use super::navigation::{should_suppress_guest_keyboard, FrontendView};
     use super::{frame_is_due, frame_repaint_delay, next_frame_deadline, should_step_key_script};
     use std::time::{Duration, Instant};
 
@@ -314,5 +316,39 @@ mod tests {
         assert!(should_step_key_script(true, true, true));
         assert!(!should_step_key_script(true, true, false));
         assert!(!should_step_key_script(false, false, true));
+    }
+
+    #[test]
+    fn navigation_keys_do_not_reach_the_guest_and_suppression_clears_after_release() {
+        assert!(should_suppress_guest_keyboard(
+            FrontendView::Library,
+            false,
+            false,
+            true,
+        ));
+        assert!(should_suppress_guest_keyboard(
+            FrontendView::Play,
+            true,
+            false,
+            true,
+        ));
+        assert!(should_suppress_guest_keyboard(
+            FrontendView::Play,
+            false,
+            true,
+            true,
+        ));
+        assert!(!should_suppress_guest_keyboard(
+            FrontendView::Play,
+            false,
+            true,
+            false,
+        ));
+        assert!(!should_suppress_guest_keyboard(
+            FrontendView::Play,
+            false,
+            false,
+            true,
+        ));
     }
 }
