@@ -390,9 +390,9 @@
     "semantic_hash": ""
   },
   "crates/living_room/examples/room_probe.rs": {
-    "mtime": 1791567519.2661448,
-    "seen": 1791567593.700306,
-    "ast_hash": "b20c144b0662e701f88904b4a2fe3a52",
+    "mtime": 1791575253.4380536,
+    "seen": 1791575362.024848,
+    "ast_hash": "c1bb209cbc00f47c647d71050321d4e4",
     "semantic_hash": ""
   },
   "crates/living_room/include/spec_chum_room.h": {

@@ -47,12 +47,6 @@ fn main() {
         room.set_framebuffer(&initial_fb);
         room.tick();
     }
-    let initial_len = room.copy_frame_rgba(&mut initial_frame);
-    assert_eq!(
-        initial_len,
-        initial_frame.len(),
-        "short initial frame readback"
-    );
     if zoom_steps != 0 {
         let direction = zoom_steps.signum();
         let step_count = zoom_steps
@@ -67,6 +61,14 @@ fn main() {
             }
         }
     }
+    // Capture after zoom settles so camera movement cannot masquerade as a
+    // framebuffer update in the pixel comparison below.
+    let initial_len = room.copy_frame_rgba(&mut initial_frame);
+    assert_eq!(
+        initial_len,
+        initial_frame.len(),
+        "short initial frame readback"
+    );
     for _ in 0..120 {
         room.set_framebuffer(&updated_fb);
         room.tick();

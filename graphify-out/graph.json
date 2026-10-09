@@ -51482,7 +51482,7 @@
       "file_type": "code",
       "norm_label": "crt_test_pattern()",
       "source_file": "crates/living_room/examples/room_probe.rs",
-      "source_location": "L117"
+      "source_location": "L119"
     },
     {
       "id": "crates_living_room_examples_room_probe_main",
@@ -207584,7 +207584,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/living_room/examples/room_probe.rs",
-      "source_location": "L117",
+      "source_location": "L119",
       "weight": 1.0
     },
     {
@@ -230220,7 +230220,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/living_room/examples/room_probe.rs",
-      "source_location": "L117",
+      "source_location": "L119",
       "weight": 1.0
     },
     {
@@ -285545,5 +285545,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "187e4b6ed86446c4e9c8c1b3b545541acc01965f"
+  "built_at_commit": "23b37997be7acfb79a78ecfd92cb2e33f02a5ef5"
 }
