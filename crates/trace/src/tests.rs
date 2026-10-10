@@ -28,6 +28,10 @@ fn ring_keeps_last_n() {
     assert_eq!(snap.len(), 4);
     assert_eq!(snap[0].kind, EventKind::TapePause { block: 6 });
     assert_eq!(snap[3].kind, EventKind::TapePause { block: 9 });
+    let recent = snapshot_recent(2);
+    assert_eq!(recent.len(), 2);
+    assert_eq!(recent[0].kind, EventKind::TapePause { block: 8 });
+    assert_eq!(recent[1].kind, EventKind::TapePause { block: 9 });
     {
         let mut g = ring().lock().expect("lock");
         *g = Ring::new(DEFAULT_CAPACITY);

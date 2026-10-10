@@ -169,12 +169,18 @@ extension HostBridge {
             debugSp = r.sp
             debugAf = r.af
         }
-        if let handle, let cstr = sc_debugger_text(handle) {
+        let address = UInt32(debugMemoryAddress.trimmingCharacters(in: CharacterSet(charactersIn: "$")) .replacingOccurrences(of: "0x", with: "", options: .caseInsensitive), radix: 16) ?? UInt32(debugPc)
+        if let handle, let cstr = sc_debugger_text_at(handle, address) {
             debuggerTextPreview = String(cString: cstr)
             sc_string_free(cstr)
         } else {
             debuggerTextPreview = "(no machine)"
         }
+    }
+
+    func showMemoryAtProgramCounter() {
+        debugMemoryAddress = String(format: "%04X", debugPc)
+        refreshInspector()
     }
 
 }

@@ -333,6 +333,7 @@ final class HostBridge: ObservableObject {
     /// 50 Hz host clock (owns Spectrum pacing; SwiftUI only presents).
     var frameTimer: DispatchSourceTimer?
     @Published var debugPc: UInt16 = 0
+    @Published var debugMemoryAddress: String = "0000"
     @Published var debugSp: UInt16 = 0
     @Published var debugAf: UInt16 = 0
     @Published var debuggerTextPreview: String = ""

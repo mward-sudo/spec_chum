@@ -14,8 +14,8 @@ use glib::clone;
 use glib::translate::IntoGlib;
 use gtk4::prelude::*;
 use gtk4::{
-    gio, glib, Application, ApplicationWindow, Button, Label, Orientation, Picture, ScrolledWindow,
-    TextBuffer, TextView, Window,
+    gio, glib, Application, ApplicationWindow, Button, Entry, Label, Orientation, Picture,
+    ScrolledWindow, TextBuffer, TextView, Window,
 };
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
@@ -77,6 +77,8 @@ struct AppState {
     last_frame: Instant,
     debug_window: Option<Window>,
     debug_buffer: Option<TextBuffer>,
+    debug_address: Option<Entry>,
+    debug_memory: u16,
     last_debug_refresh: Instant,
     hardware_actions: Vec<(CompatAction, gio::SimpleAction)>,
     next_assets_download: Option<NextAssetDownload>,
@@ -91,6 +93,16 @@ enum CompatAction {
     Beta,
     TimexDock,
     Plus3Disk,
+}
+
+#[derive(Clone, Copy)]
+enum DebugAction {
+    Pause,
+    Continue,
+    Step,
+    Breakpoint,
+    ClearBreakpoints,
+    Refresh,
 }
 
 impl AppState {
@@ -156,6 +168,8 @@ impl AppState {
             last_frame: Instant::now(),
             debug_window: None,
             debug_buffer: None,
+            debug_address: None,
+            debug_memory: 0,
             last_debug_refresh: Instant::now(),
             hardware_actions: Vec::new(),
             next_assets_download: None,
@@ -644,6 +658,7 @@ impl AppState {
     fn toggle_debug_window(&mut self, parent: &ApplicationWindow, state: &Rc<RefCell<AppState>>) {
         if let Some(win) = self.debug_window.take() {
             self.debug_buffer = None;
+            self.debug_address = None;
             if win.is_visible() {
                 win.destroy();
             }
@@ -666,12 +681,24 @@ impl AppState {
         content.set_margin_end(10);
         let controls = gtk4::Box::new(Orientation::Horizontal, 6);
         for (label, accessible_name, action) in [
-            ("Pause", "Pause emulation", 0_u8),
-            ("Continue", "Continue emulation", 1),
-            ("Step", "Execute one instruction", 2),
-            ("Breakpoint at PC", "Add breakpoint at current PC", 3),
-            ("Clear breakpoints", "Clear all PC breakpoints", 4),
-            ("Refresh", "Refresh debugger workspace", 5),
+            ("Pause", "Pause emulation", DebugAction::Pause),
+            ("Continue", "Continue emulation", DebugAction::Continue),
+            ("Step", "Execute one instruction", DebugAction::Step),
+            (
+                "Breakpoint at PC",
+                "Add breakpoint at current PC",
+                DebugAction::Breakpoint,
+            ),
+            (
+                "Clear breakpoints",
+                "Clear all PC breakpoints",
+                DebugAction::ClearBreakpoints,
+            ),
+            (
+                "Refresh",
+                "Refresh debugger workspace",
+                DebugAction::Refresh,
+            ),
         ] {
             let button = Button::with_label(label);
             button.update_property(&[gtk4::accessible::Property::Label(accessible_name)]);
@@ -680,16 +707,60 @@ impl AppState {
             button.connect_clicked(move |_| {
                 let mut state = state.borrow_mut();
                 match action {
-                    0 => state.debug_pause(),
-                    1 => state.debug_continue(),
-                    2 => state.debug_step(),
-                    3 => state.debug_break_at_pc(),
-                    4 => state.debug_clear_breaks(),
-                    _ => state.refresh_debug_text(),
+                    DebugAction::Pause => state.debug_pause(),
+                    DebugAction::Continue => state.debug_continue(),
+                    DebugAction::Step => state.debug_step(),
+                    DebugAction::Breakpoint => state.debug_break_at_pc(),
+                    DebugAction::ClearBreakpoints => state.debug_clear_breaks(),
+                    DebugAction::Refresh => state.refresh_debug_text(),
                 }
             });
             controls.append(&button);
         }
+        let address_row = gtk4::Box::new(Orientation::Horizontal, 6);
+        let address = Entry::builder()
+            .placeholder_text("Address (hex, e.g. 4000)")
+            .text("0000")
+            .width_chars(12)
+            .build();
+        address.set_accessible_label("Memory address in hexadecimal");
+        let go = Button::with_label("View memory");
+        go.set_accessible_label("View memory at address");
+        address_row.append(&Label::new(Some("Memory address")));
+        address_row.append(&address);
+        address_row.append(&go);
+        let state_for_go = Rc::clone(state);
+        let address_for_go = address.clone();
+        go.connect_clicked(move |_| {
+            let value = address_for_go.text();
+            if let Ok(parsed) = u16::from_str_radix(
+                value
+                    .trim()
+                    .trim_start_matches('$')
+                    .trim_start_matches("0x"),
+                16,
+            ) {
+                let mut state = state_for_go.borrow_mut();
+                state.debug_memory = parsed;
+                state.refresh_debug_text();
+            }
+        });
+        let state_for_enter = Rc::clone(state);
+        address.connect_activate(move |entry| {
+            if let Ok(parsed) = u16::from_str_radix(
+                entry
+                    .text()
+                    .trim()
+                    .trim_start_matches('$')
+                    .trim_start_matches("0x"),
+                16,
+            ) {
+                let mut state = state_for_enter.borrow_mut();
+                state.debug_memory = parsed;
+                state.refresh_debug_text();
+            }
+        });
+        content.append(&address_row);
         content.append(&controls);
         content.append(&scroll);
         let win = Window::builder()
@@ -714,6 +785,7 @@ impl AppState {
         ));
         win.present();
         self.debug_buffer = Some(buffer);
+        self.debug_address = Some(address);
         self.debug_window = Some(win);
         self.refresh_debug_text();
     }
@@ -733,7 +805,10 @@ impl AppState {
         let Some(buffer) = self.debug_buffer.as_ref() else {
             return;
         };
-        let text = self.host.with_mut(|session| session.debugger_text());
+        let address = self.debug_memory;
+        let text = self
+            .host
+            .with_mut(|session| session.debugger_text_at(address));
         buffer.set_text(&text);
         self.last_debug_refresh = Instant::now();
     }

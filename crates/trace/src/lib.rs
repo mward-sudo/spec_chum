@@ -68,6 +68,11 @@ impl Ring {
     fn snapshot(&self) -> Vec<TraceEvent> {
         self.events.iter().copied().collect()
     }
+
+    fn snapshot_recent(&self, limit: usize) -> Vec<TraceEvent> {
+        let start = self.events.len().saturating_sub(limit);
+        self.events.iter().skip(start).copied().collect()
+    }
 }
 
 static ENABLED: AtomicU64 = AtomicU64::new(0);
@@ -211,6 +216,15 @@ pub fn clear() {
 #[must_use]
 pub fn snapshot() -> Vec<TraceEvent> {
     ring().lock().map(|g| g.snapshot()).unwrap_or_default()
+}
+
+/// Snapshot at most the most recent `limit` events (oldest → newest).
+#[must_use]
+pub fn snapshot_recent(limit: usize) -> Vec<TraceEvent> {
+    ring()
+        .lock()
+        .map(|g| g.snapshot_recent(limit))
+        .unwrap_or_default()
 }
 
 /// How many events are currently buffered.

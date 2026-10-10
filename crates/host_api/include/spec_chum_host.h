@@ -195,6 +195,7 @@ int sc_poke(void *handle, unsigned int addr, uint8_t value);
 char *sc_inspect_json(void *handle);
 /* Heap UTF-8 debugger workspace snapshot; free with sc_string_free. */
 char *sc_debugger_text(void *handle);
+char *sc_debugger_text_at(void *handle, unsigned int addr);
 /* Fill pc,sp,af,bc,de,hl,ix,iy (8 uint16). Returns 0 on success, -1 on error. */
 int sc_regs(void *handle, unsigned short *pc, unsigned short *sp, unsigned short *af, unsigned short *bc, unsigned short *de, unsigned short *hl, unsigned short *ix, unsigned short *iy);
 int sc_step(void *handle); /* one step_once; 0 ok, -1 no machine */

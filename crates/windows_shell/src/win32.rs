@@ -76,6 +76,8 @@ const CLASS_NAME: &str = "SpecChumWindowsShell\0";
 const DEBUG_CLASS: &str = "SpecChumWindowsDebug\0";
 const WINDOW_TITLE: &str = "Spec Chum\0";
 const ID_DBG_EDIT: i32 = 2001;
+const ID_DBG_ADDRESS: i32 = 2002;
+const ID_DBG_VIEW_MEMORY: i32 = 2003;
 const IDM_MACHINE_ROM_SETUP: usize = 1289;
 const IDM_LIBRARY_RECENT_BASE: usize = 1600;
 const IDM_LIBRARY_RECENT_COUNT: usize = 12;
@@ -130,6 +132,7 @@ struct AppState {
     pending_cmd: Option<usize>,
     debug_hwnd: Option<HWND>,
     debug_edit: Option<HWND>,
+    debug_address: u16,
     library_hwnd: Option<HWND>,
     library_search: Option<HWND>,
     library_category: Option<HWND>,
@@ -220,6 +223,7 @@ impl AppState {
             pending_cmd: None,
             debug_hwnd: None,
             debug_edit: None,
+            debug_address: 0,
             library_hwnd: None,
             library_search: None,
             library_category: None,
@@ -915,7 +919,10 @@ impl AppState {
         let Some(edit) = self.debug_edit else {
             return;
         };
-        let text = self.host.with_mut(|session| session.debugger_text());
+        let address = self.debug_address;
+        let text = self
+            .host
+            .with_mut(|session| session.debugger_text_at(address));
         // Win32 multiline EDIT expects CRLF line endings.
         let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         set_window_title(edit, &text);
@@ -1150,6 +1157,16 @@ fn set_window_title(hwnd: HWND, title: &str) {
     }
 }
 
+fn window_text(hwnd: HWND) -> String {
+    // SAFETY: query required UTF-16 length, then provide a buffer with one spare NUL slot.
+    unsafe {
+        let len = GetWindowTextLengthW(hwnd).max(0) as usize;
+        let mut buf = vec![0_u16; len + 1];
+        let written = GetWindowTextW(hwnd, &mut buf) as usize;
+        String::from_utf16_lossy(&buf[..written.min(buf.len())])
+    }
+}
+
 fn message_box(owner: Option<HWND>, title: &str, body: &str) {
     let t: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
     let b: Vec<u16> = body.encode_utf16().chain(std::iter::once(0)).collect();
@@ -1370,6 +1387,54 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
         let edit_class: Vec<u16> = "EDIT\0".encode_utf16().collect();
         let mut client = RECT::default();
         let _ = GetClientRect(hwnd, &mut client);
+        let address_class: Vec<u16> = "EDIT\0".encode_utf16().collect();
+        let address_title: Vec<u16> = "0000\0".encode_utf16().collect();
+        let _address = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(address_class.as_ptr()),
+            PCWSTR(address_title.as_ptr()),
+            WS_CHILD | WS_VISIBLE | WS_BORDER,
+            12,
+            12,
+            110,
+            26,
+            Some(hwnd),
+            Some(HMENU(ID_DBG_ADDRESS as isize as *mut core::ffi::c_void)),
+            Some(hinstance.into()),
+            None,
+        )?;
+        let static_class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let address_label: Vec<u16> = "Memory address (hex):\0".encode_utf16().collect();
+        let _label = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(static_class.as_ptr()),
+            PCWSTR(address_label.as_ptr()),
+            WS_CHILD | WS_VISIBLE,
+            12,
+            12,
+            130,
+            26,
+            Some(hwnd),
+            None,
+            Some(hinstance.into()),
+            None,
+        )?;
+        let button_class: Vec<u16> = "BUTTON\0".encode_utf16().collect();
+        let button_title: Vec<u16> = "View memory\0".encode_utf16().collect();
+        let _button = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(button_class.as_ptr()),
+            PCWSTR(button_title.as_ptr()),
+            WS_CHILD | WS_VISIBLE,
+            260,
+            12,
+            110,
+            26,
+            Some(hwnd),
+            Some(HMENU(ID_DBG_VIEW_MEMORY as isize as *mut core::ffi::c_void)),
+            Some(hinstance.into()),
+            None,
+        )?;
         let edit = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             PCWSTR(edit_class.as_ptr()),
@@ -1381,8 +1446,8 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
                 | windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(
                     (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL) as u32,
                 ),
-            0,
-            0,
+            12,
+            48,
             client.right - client.left,
             client.bottom - client.top,
             Some(hwnd),
@@ -1478,12 +1543,30 @@ extern "system" fn debug_wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     let _ = GetClientRect(hwnd, &mut client);
                     let _ = MoveWindow(
                         edit,
-                        0,
-                        0,
-                        client.right - client.left,
-                        client.bottom - client.top,
+                        12,
+                        48,
+                        client.right - client.left - 24,
+                        client.bottom - client.top - 60,
                         true,
                     );
+                }
+            }
+            LRESULT(0)
+        }
+        WM_COMMAND => {
+            if (wparam.0 & 0xffff) as i32 == ID_DBG_VIEW_MEMORY {
+                let state_ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut AppState;
+                if !state_ptr.is_null() {
+                    let address = unsafe { GetDlgItem(Some(hwnd), ID_DBG_ADDRESS) };
+                    if let Ok(address) = address {
+                        let raw = window_text(address);
+                        let raw = raw.trim().trim_start_matches('$').trim_start_matches("0x");
+                        if let Ok(parsed) = u16::from_str_radix(raw, 16) {
+                            let state = unsafe { &mut *state_ptr };
+                            state.debug_address = parsed;
+                            state.refresh_debug_text();
+                        }
+                    }
                 }
             }
             LRESULT(0)

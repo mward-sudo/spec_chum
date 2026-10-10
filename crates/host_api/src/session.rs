@@ -1662,6 +1662,12 @@ impl HostSession {
     /// Keep this read-only and bounded: native shells refresh it on a timer so
     /// debugger UI work never runs in the guest frame or audio path.
     pub fn debugger_text(&self) -> String {
+        let pc = self.regs().map_or(0, |regs| regs.pc);
+        self.debugger_text_at(pc)
+    }
+
+    /// Combined debugger workspace snapshot focused on a selected memory address.
+    pub fn debugger_text_at(&self, address: u16) -> String {
         let inspect = self
             .inspect_text()
             .unwrap_or_else(|e| format!("inspect: {e}"));
@@ -1669,8 +1675,7 @@ impl HostSession {
             .debugger_flags_text()
             .unwrap_or_else(|e| format!("flags: {e}"));
         let disasm = self.disasm(None, 16).unwrap_or_default();
-        let pc = self.regs().map_or(0, |regs| regs.pc);
-        let memory = self.hexdump(pc, 64).unwrap_or_default();
+        let memory = self.hexdump(address, 64).unwrap_or_default();
         let breaks = self
             .list_pc_breakpoints()
             .unwrap_or_default()
@@ -1685,8 +1690,8 @@ impl HostSession {
         } else {
             "running"
         };
-        let trace_events = trace::snapshot();
-        let trace_count = trace_events.len();
+        let trace_count = trace::len();
+        let trace_events = trace::snapshot_recent(16);
         let trace = trace_events
             .into_iter()
             .rev()
@@ -1700,7 +1705,7 @@ impl HostSession {
             trace
         };
         format!(
-            "Execution: {paused}\n\n{inspect}\n{flags}\n\n--- disassembly at PC ---\n{disasm}\n\n--- memory at PC ---\n{memory}\n\nPC breakpoints: {breaks}\n\n--- recent trace ({trace_count} buffered, latest 16) ---\n{trace}\n"
+            "Execution: {paused}\n\n{inspect}\n{flags}\n\n--- disassembly at PC ---\n{disasm}\n\n--- memory at ${address:04X} ---\n{memory}\n\nPC breakpoints: {breaks}\n\n--- recent trace ({trace_count} buffered, latest 16) ---\n{trace}\n"
         )
     }
 

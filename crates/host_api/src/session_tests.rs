@@ -73,9 +73,16 @@ fn debugger_workspace_snapshot_exposes_shared_sections_without_a_machine() {
     let text = session.debugger_text();
     assert!(text.contains("Execution: no machine loaded"));
     assert!(text.contains("--- disassembly at PC ---"));
-    assert!(text.contains("--- memory at PC ---"));
+    assert!(text.contains("--- memory at $0000 ---"));
     assert!(text.contains("PC breakpoints:"));
     assert!(text.contains("--- recent trace ("));
+}
+
+#[test]
+fn debugger_workspace_snapshot_uses_selected_memory_address() {
+    let session = HostSession::new(ModelId::Spectrum48, true);
+    let text = session.debugger_text_at(0x4000);
+    assert!(text.contains("--- memory at $4000 ---"));
 }
 
 #[test]

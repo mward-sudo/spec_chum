@@ -582,6 +582,19 @@ struct DebugInspectorView: View {
                     host.clearBreakpoints()
                 }
             }
+            HStack {
+                Text("Memory address")
+                TextField("Hex address", text: $host.debugMemoryAddress)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(width: 110)
+                    .accessibilityLabel("Memory address in hexadecimal")
+                Button("View memory") {
+                    host.refreshInspector()
+                }
+                Button("At PC") {
+                    host.showMemoryAtProgramCounter()
+                }
+            }
             ScrollView {
                 Text(host.debuggerTextPreview)
                     .font(.system(.callout, design: .monospaced))
