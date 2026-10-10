@@ -590,9 +590,14 @@ fn opening_tap_or_tzx_clears_ephemeral_instant_mode() {
     session
         .set_tape_load_options(experience)
         .expect("set Experience mode");
-    session.open_tape(&tap).expect("reopen TAP in Experience mode");
+    session
+        .open_tape(&tap)
+        .expect("reopen TAP in Experience mode");
     let options = session.tape_load_options().expect("tape options");
-    assert!(options.experience_load, "opening TAP preserves Experience mode");
+    assert!(
+        options.experience_load,
+        "opening TAP preserves Experience mode"
+    );
     assert_eq!(
         options.speed, experience.speed,
         "TAP preserves the selected Experience speed"
