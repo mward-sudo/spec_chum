@@ -17,8 +17,14 @@ pub const IDM_TAPE_PLAY: usize = 1101;
 pub const IDM_TAPE_PAUSE: usize = 1102;
 pub const IDM_TAPE_REWIND: usize = 1103;
 
-/// Machine → model (1200 + ordinal in [`ModelId::ALL`]) and reset
+/// Machine → model (1200 + ordinal in [`ModelId::ALL`]) and reset.
+///
+/// Gallery and ROM setup sit below reset so a new model ordinal cannot alias them,
+/// and they must stay distinct from [`IDM_MACHINE_RESET`]. The Windows shell handles
+/// the gallery before any other command, so a shared id would swallow Reset.
 pub const IDM_MACHINE_MODEL_BASE: usize = 1200;
+pub const IDM_MACHINE_PICKER: usize = 1288;
+pub const IDM_MACHINE_ROM_SETUP: usize = 1289;
 pub const IDM_MACHINE_RESET: usize = 1290;
 
 /// Hardware attach / media
@@ -150,6 +156,25 @@ mod tests {
             assert!(label.contains("ROMs ready") || label.contains("ROM setup required"));
         }
         assert_eq!(model_from_menu_id(IDM_MACHINE_RESET), None);
+    }
+
+    #[test]
+    fn machine_chrome_command_ids_do_not_alias() {
+        let model_ids: std::collections::BTreeSet<_> =
+            ModelId::ALL.into_iter().map(menu_id_for_model).collect();
+        for (name, id) in [
+            ("picker", IDM_MACHINE_PICKER),
+            ("rom setup", IDM_MACHINE_ROM_SETUP),
+            ("reset", IDM_MACHINE_RESET),
+        ] {
+            assert!(
+                !model_ids.contains(&id),
+                "{name} command id {id} aliases a built-in model menu id"
+            );
+        }
+        assert_ne!(IDM_MACHINE_PICKER, IDM_MACHINE_RESET);
+        assert_ne!(IDM_MACHINE_PICKER, IDM_MACHINE_ROM_SETUP);
+        assert_ne!(IDM_MACHINE_ROM_SETUP, IDM_MACHINE_RESET);
     }
 
     #[test]
