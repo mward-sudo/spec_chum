@@ -7049,7 +7049,7 @@
       "file_type": "code",
       "norm_label": "startupmodelerror",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1109"
+      "source_location": "L1111"
     },
     {
       "id": "crates_host_api_src_session_pcbreakpointobservation",
@@ -8765,7 +8765,7 @@
       "file_type": "code",
       "norm_label": "machinepickerstate",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1330"
+      "source_location": "L1332"
     },
     {
       "id": "crates_agent_client_src_lib_breakpointevent",
@@ -18975,7 +18975,7 @@
       "file_type": "code",
       "norm_label": "direct_48k_failure_is_returned_without_retry()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2296"
+      "source_location": "L2311"
     },
     {
       "id": "crates_windows_shell_src_win32_id_dbg_edit",
@@ -19085,7 +19085,7 @@
       "file_type": "code",
       "norm_label": "preferred_and_fallback_failures_are_both_returned()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2278"
+      "source_location": "L2293"
     },
     {
       "id": "crates_windows_shell_src_win32_preferred_failure_uses_successful_48k_fallback",
@@ -19096,7 +19096,7 @@
       "file_type": "code",
       "norm_label": "preferred_failure_uses_successful_48k_fallback()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2266"
+      "source_location": "L2281"
     },
     {
       "id": "crates_windows_shell_src_win32_rs_arc",
@@ -19173,7 +19173,7 @@
       "file_type": "code",
       "norm_label": "select_startup_model()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114"
+      "source_location": "L1116"
     },
     {
       "id": "crates_windows_shell_src_win32_window_title",
@@ -21199,7 +21199,7 @@
       "file_type": "code",
       "norm_label": ".apply_prefs_to_host()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L253"
+      "source_location": "L255"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_debug_break_at_pc",
@@ -21210,7 +21210,7 @@
       "file_type": "code",
       "norm_label": ".debug_break_at_pc()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L948"
+      "source_location": "L950"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_debug_clear_breaks",
@@ -21221,7 +21221,7 @@
       "file_type": "code",
       "norm_label": ".debug_clear_breaks()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L964"
+      "source_location": "L966"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_debug_continue",
@@ -21232,7 +21232,7 @@
       "file_type": "code",
       "norm_label": ".debug_continue()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L938"
+      "source_location": "L940"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_debug_pause",
@@ -21243,7 +21243,7 @@
       "file_type": "code",
       "norm_label": ".debug_pause()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L933"
+      "source_location": "L935"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_debug_step",
@@ -21254,7 +21254,7 @@
       "file_type": "code",
       "norm_label": ".debug_step()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L943"
+      "source_location": "L945"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_drain_pending_command",
@@ -21265,7 +21265,7 @@
       "file_type": "code",
       "norm_label": ".drain_pending_command()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L979"
+      "source_location": "L981"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_host_action",
@@ -21276,7 +21276,7 @@
       "file_type": "code",
       "norm_label": ".host_action()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L878"
+      "source_location": "L880"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_maybe_refresh_debug_text",
@@ -21287,7 +21287,7 @@
       "file_type": "code",
       "norm_label": ".maybe_refresh_debug_text()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L910"
+      "source_location": "L912"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_dsk",
@@ -21298,7 +21298,7 @@
       "file_type": "code",
       "norm_label": ".open_dsk()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L484"
+      "source_location": "L486"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_path",
@@ -21309,7 +21309,7 @@
       "file_type": "code",
       "norm_label": ".open_path()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L446"
+      "source_location": "L448"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_recent_media",
@@ -21320,7 +21320,7 @@
       "file_type": "code",
       "norm_label": ".open_recent_media()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L497"
+      "source_location": "L499"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_rom_setup",
@@ -21331,7 +21331,7 @@
       "file_type": "code",
       "norm_label": ".open_rom_setup()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L781"
+      "source_location": "L783"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_rzx",
@@ -21342,7 +21342,7 @@
       "file_type": "code",
       "norm_label": ".open_rzx()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L480"
+      "source_location": "L482"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_snapshot",
@@ -21353,7 +21353,7 @@
       "file_type": "code",
       "norm_label": ".open_snapshot()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L471"
+      "source_location": "L473"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_tape",
@@ -21364,7 +21364,7 @@
       "file_type": "code",
       "norm_label": ".open_tape()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L467"
+      "source_location": "L469"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_open_trd",
@@ -21375,7 +21375,7 @@
       "file_type": "code",
       "norm_label": ".open_trd()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L488"
+      "source_location": "L490"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_persist_prefs",
@@ -21386,7 +21386,7 @@
       "file_type": "code",
       "norm_label": ".persist_prefs()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L247"
+      "source_location": "L249"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_poll_next_assets_download",
@@ -21397,7 +21397,7 @@
       "file_type": "code",
       "norm_label": ".poll_next_assets_download()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L676"
+      "source_location": "L678"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_refresh_debug_text",
@@ -21408,7 +21408,7 @@
       "file_type": "code",
       "norm_label": ".refresh_debug_text()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L922"
+      "source_location": "L924"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_report_err",
@@ -21419,7 +21419,7 @@
       "file_type": "code",
       "norm_label": ".report_err()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L431"
+      "source_location": "L433"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_reset_machine",
@@ -21430,7 +21430,7 @@
       "file_type": "code",
       "norm_label": ".reset_machine()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L798"
+      "source_location": "L800"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_select_model",
@@ -21441,7 +21441,7 @@
       "file_type": "code",
       "norm_label": ".select_model()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L719"
+      "source_location": "L721"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_set_ay",
@@ -21452,7 +21452,7 @@
       "file_type": "code",
       "norm_label": ".set_ay()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L874"
+      "source_location": "L876"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_set_joystick",
@@ -21463,7 +21463,7 @@
       "file_type": "code",
       "norm_label": ".set_joystick()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L816"
+      "source_location": "L818"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_set_tape_ear_speed",
@@ -21474,7 +21474,7 @@
       "file_type": "code",
       "norm_label": ".set_tape_ear_speed()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L820"
+      "source_location": "L822"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_set_tape_experience",
@@ -21485,7 +21485,7 @@
       "file_type": "code",
       "norm_label": ".set_tape_experience()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L827"
+      "source_location": "L829"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_set_tape_instant",
@@ -21496,7 +21496,7 @@
       "file_type": "code",
       "norm_label": ".set_tape_instant()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L831"
+      "source_location": "L833"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_setup_roms_for_model",
@@ -21507,7 +21507,7 @@
       "file_type": "code",
       "norm_label": ".setup_roms_for_model()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L606"
+      "source_location": "L608"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_sync_bgra",
@@ -21518,7 +21518,7 @@
       "file_type": "code",
       "norm_label": ".sync_bgra()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L310"
+      "source_location": "L312"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_tick_frame",
@@ -21529,7 +21529,7 @@
       "file_type": "code",
       "norm_label": ".tick_frame()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L262"
+      "source_location": "L264"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_toggle_debug_window",
@@ -21540,7 +21540,7 @@
       "file_type": "code",
       "norm_label": ".toggle_debug_window()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L888"
+      "source_location": "L890"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_toggle_kempston_mouse",
@@ -21551,7 +21551,7 @@
       "file_type": "code",
       "norm_label": ".toggle_kempston_mouse()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L860"
+      "source_location": "L862"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_toggle_mute",
@@ -21562,7 +21562,7 @@
       "file_type": "code",
       "norm_label": ".toggle_mute()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L842"
+      "source_location": "L844"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_toggle_online_titles",
@@ -21573,7 +21573,7 @@
       "file_type": "code",
       "norm_label": ".toggle_online_titles()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L853"
+      "source_location": "L855"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_toggle_throttle",
@@ -21584,7 +21584,7 @@
       "file_type": "code",
       "norm_label": ".toggle_throttle()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L848"
+      "source_location": "L850"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_update_prefs",
@@ -21595,7 +21595,7 @@
       "file_type": "code",
       "norm_label": ".update_prefs()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L804"
+      "source_location": "L806"
     },
     {
       "id": "crates_windows_shell_src_win32_hostslot_with_mut",
@@ -21672,7 +21672,7 @@
       "file_type": "code",
       "norm_label": "set_window_title()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1138"
+      "source_location": "L1140"
     },
     {
       "id": "crates_living_room_src_headless",
@@ -42341,7 +42341,7 @@
       "file_type": "code",
       "norm_label": "append_menu()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1175"
+      "source_location": "L1177"
     },
     {
       "id": "crates_windows_shell_src_win32_append_popup",
@@ -42352,7 +42352,7 @@
       "file_type": "code",
       "norm_label": "append_popup()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1184"
+      "source_location": "L1186"
     },
     {
       "id": "crates_windows_shell_src_win32_append_sep",
@@ -42363,7 +42363,7 @@
       "file_type": "code",
       "norm_label": "append_sep()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1193"
+      "source_location": "L1195"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_on_key",
@@ -42374,7 +42374,7 @@
       "file_type": "code",
       "norm_label": ".on_key()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L413"
+      "source_location": "L415"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_paint",
@@ -42385,7 +42385,7 @@
       "file_type": "code",
       "norm_label": ".paint()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L325"
+      "source_location": "L327"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_queue_command",
@@ -42396,7 +42396,7 @@
       "file_type": "code",
       "norm_label": ".queue_command()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L969"
+      "source_location": "L971"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_refresh_file_menu",
@@ -42407,7 +42407,7 @@
       "file_type": "code",
       "norm_label": ".refresh_file_menu()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L551"
+      "source_location": "L553"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_refresh_hardware_menu",
@@ -42418,7 +42418,7 @@
       "file_type": "code",
       "norm_label": ".refresh_hardware_menu()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L519"
+      "source_location": "L521"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_refresh_input",
@@ -42429,7 +42429,7 @@
       "file_type": "code",
       "norm_label": ".refresh_input()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L374"
+      "source_location": "L376"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_refresh_recent_menu",
@@ -42440,7 +42440,7 @@
       "file_type": "code",
       "norm_label": ".refresh_recent_menu()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L565"
+      "source_location": "L567"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_refresh_recent_menu_entries",
@@ -42451,7 +42451,7 @@
       "file_type": "code",
       "norm_label": ".refresh_recent_menu_entries()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L513"
+      "source_location": "L515"
     },
     {
       "id": "crates_windows_shell_src_win32_appstate_set_key_matrix",
@@ -42462,7 +42462,7 @@
       "file_type": "code",
       "norm_label": ".set_key_matrix()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L370"
+      "source_location": "L372"
     },
     {
       "id": "crates_windows_shell_src_win32_build_menu",
@@ -42473,7 +42473,7 @@
       "file_type": "code",
       "norm_label": "build_menu()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1209"
+      "source_location": "L1211"
     },
     {
       "id": "crates_windows_shell_src_win32_key_down",
@@ -42484,7 +42484,7 @@
       "file_type": "code",
       "norm_label": "key_down()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1133"
+      "source_location": "L1135"
     },
     {
       "id": "crates_windows_shell_src_win32_wnd_proc",
@@ -45511,7 +45511,7 @@
       "file_type": "code",
       "norm_label": ".new()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L159"
+      "source_location": "L160"
     },
     {
       "id": "crates_windows_shell_src_win32_compatible_peripheral_summary",
@@ -45533,7 +45533,7 @@
       "file_type": "code",
       "norm_label": "create_machine_picker()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1337"
+      "source_location": "L1339"
     },
     {
       "id": "crates_windows_shell_src_win32_library_recent_paths_include_supported_media_only",
@@ -45544,7 +45544,7 @@
       "file_type": "code",
       "norm_label": "library_recent_paths_include_supported_media_only()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2240"
+      "source_location": "L2255"
     },
     {
       "id": "crates_windows_shell_src_win32_recent_media_paths",
@@ -45555,7 +45555,7 @@
       "file_type": "code",
       "norm_label": "recent_media_paths()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1201"
+      "source_location": "L1203"
     },
     {
       "id": "crates_windows_shell_src_win32_rs_pathbuf",
@@ -45632,7 +45632,7 @@
       "file_type": "code",
       "norm_label": "run()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2139"
+      "source_location": "L2154"
     },
     {
       "id": "crates_app_src_frontend_audio",
@@ -46306,7 +46306,7 @@
       "file_type": "code",
       "norm_label": "machine_picker_wnd_proc()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1385"
+      "source_location": "L1390"
     },
     {
       "id": "crates_windows_shell_src_win32_message_box",
@@ -46317,7 +46317,7 @@
       "file_type": "code",
       "norm_label": "message_box()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1146"
+      "source_location": "L1148"
     },
     {
       "id": "crates_windows_shell_src_win32_message_box_confirm",
@@ -46328,7 +46328,7 @@
       "file_type": "code",
       "norm_label": "message_box_confirm()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1160"
+      "source_location": "L1162"
     },
     {
       "id": "crates_windows_shell_src_win32_picker_label",
@@ -46350,7 +46350,7 @@
       "file_type": "code",
       "norm_label": "populate_machine_picker()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1538"
+      "source_location": "L1549"
     },
     {
       "id": "crates_windows_shell_src_win32_rs_hwnd",
@@ -53760,7 +53760,7 @@
       "file_type": "code",
       "norm_label": "every_catalog_image_key_has_a_decodable_embedded_asset()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2315"
+      "source_location": "L2330"
     },
     {
       "id": "atomicusize",
@@ -53980,7 +53980,7 @@
       "file_type": "code",
       "norm_label": ".set_appearance()",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L866"
+      "source_location": "L868"
     },
     {
       "id": "crates_windows_shell_src_win32_rs_appearancepreference",
@@ -83807,6 +83807,18 @@
       "type": "external"
     },
     {
+      "id": "ss_bitmap",
+      "label": "ss_bitmap",
+      "_origin": "semantic",
+      "community": 122,
+      "community_name": "win32.rs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ss_bitmap",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "windowsandmessaging",
       "label": "windowsandmessaging",
       "_origin": "semantic",
@@ -86215,17 +86227,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "atomic",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ss_bitmap",
-      "label": "ss_bitmap",
-      "community": 122,
-      "community_name": "win32.rs",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ss_bitmap",
       "source_file": "",
       "type": "external"
     }
@@ -136808,7 +136809,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L255",
+      "source_location": "L257",
       "weight": 1.0
     },
     {
@@ -136820,7 +136821,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L949",
+      "source_location": "L951",
       "weight": 1.0
     },
     {
@@ -136832,7 +136833,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L958",
+      "source_location": "L960",
       "weight": 1.0
     },
     {
@@ -136844,7 +136845,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L960",
+      "source_location": "L962",
       "weight": 1.0
     },
     {
@@ -136856,7 +136857,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L965",
+      "source_location": "L967",
       "weight": 1.0
     },
     {
@@ -136868,7 +136869,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L966",
+      "source_location": "L968",
       "weight": 1.0
     },
     {
@@ -136880,7 +136881,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L939",
+      "source_location": "L941",
       "weight": 1.0
     },
     {
@@ -136892,7 +136893,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L940",
+      "source_location": "L942",
       "weight": 1.0
     },
     {
@@ -136904,7 +136905,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L934",
+      "source_location": "L936",
       "weight": 1.0
     },
     {
@@ -136916,7 +136917,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L935",
+      "source_location": "L937",
       "weight": 1.0
     },
     {
@@ -136928,7 +136929,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L944",
+      "source_location": "L946",
       "weight": 1.0
     },
     {
@@ -136940,7 +136941,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L945",
+      "source_location": "L947",
       "weight": 1.0
     },
     {
@@ -136952,7 +136953,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1000",
+      "source_location": "L1002",
       "weight": 1.0
     },
     {
@@ -136964,7 +136965,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1002",
+      "source_location": "L1004",
       "weight": 1.0
     },
     {
@@ -136976,7 +136977,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1003",
+      "source_location": "L1005",
       "weight": 1.0
     },
     {
@@ -136988,7 +136989,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1004",
+      "source_location": "L1006",
       "weight": 1.0
     },
     {
@@ -137000,7 +137001,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1005",
+      "source_location": "L1007",
       "weight": 1.0
     },
     {
@@ -137012,7 +137013,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1006",
+      "source_location": "L1008",
       "weight": 1.0
     },
     {
@@ -137024,7 +137025,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1007",
+      "source_location": "L1009",
       "weight": 1.0
     },
     {
@@ -137036,7 +137037,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1010",
+      "source_location": "L1012",
       "weight": 1.0
     },
     {
@@ -137048,7 +137049,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1013",
+      "source_location": "L1015",
       "weight": 1.0
     },
     {
@@ -137060,7 +137061,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1016",
+      "source_location": "L1018",
       "weight": 1.0
     },
     {
@@ -137072,7 +137073,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1017",
+      "source_location": "L1019",
       "weight": 1.0
     },
     {
@@ -137084,7 +137085,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1069",
+      "source_location": "L1071",
       "weight": 1.0
     },
     {
@@ -137096,7 +137097,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1074",
+      "source_location": "L1076",
       "weight": 1.0
     },
     {
@@ -137108,7 +137109,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1077",
+      "source_location": "L1079",
       "weight": 1.0
     },
     {
@@ -137120,7 +137121,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1078",
+      "source_location": "L1080",
       "weight": 1.0
     },
     {
@@ -137132,7 +137133,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1079",
+      "source_location": "L1081",
       "weight": 1.0
     },
     {
@@ -137144,7 +137145,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1080",
+      "source_location": "L1082",
       "weight": 1.0
     },
     {
@@ -137156,7 +137157,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1081",
+      "source_location": "L1083",
       "weight": 1.0
     },
     {
@@ -137168,7 +137169,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1082",
+      "source_location": "L1084",
       "weight": 1.0
     },
     {
@@ -137180,7 +137181,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1083",
+      "source_location": "L1085",
       "weight": 1.0
     },
     {
@@ -137192,7 +137193,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1086",
+      "source_location": "L1088",
       "weight": 1.0
     },
     {
@@ -137204,7 +137205,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1089",
+      "source_location": "L1091",
       "weight": 1.0
     },
     {
@@ -137216,7 +137217,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1090",
+      "source_location": "L1092",
       "weight": 1.0
     },
     {
@@ -137228,7 +137229,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1091",
+      "source_location": "L1093",
       "weight": 1.0
     },
     {
@@ -137240,7 +137241,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1092",
+      "source_location": "L1094",
       "weight": 1.0
     },
     {
@@ -137252,7 +137253,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1093",
+      "source_location": "L1095",
       "weight": 1.0
     },
     {
@@ -137264,7 +137265,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1094",
+      "source_location": "L1096",
       "weight": 1.0
     },
     {
@@ -137276,7 +137277,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1095",
+      "source_location": "L1097",
       "weight": 1.0
     },
     {
@@ -137288,7 +137289,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L883",
+      "source_location": "L885",
       "weight": 1.0
     },
     {
@@ -137300,7 +137301,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L884",
+      "source_location": "L886",
       "weight": 1.0
     },
     {
@@ -137312,7 +137313,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L919",
+      "source_location": "L921",
       "weight": 1.0
     },
     {
@@ -137324,7 +137325,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L169",
+      "source_location": "L170",
       "weight": 1.0
     },
     {
@@ -137336,7 +137337,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L169",
+      "source_location": "L170",
       "weight": 1.0
     },
     {
@@ -137348,7 +137349,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L418",
+      "source_location": "L420",
       "weight": 1.0
     },
     {
@@ -137360,7 +137361,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L485",
+      "source_location": "L487",
       "weight": 1.0
     },
     {
@@ -137372,7 +137373,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L453",
+      "source_location": "L455",
       "weight": 1.0
     },
     {
@@ -137384,7 +137385,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L458",
+      "source_location": "L460",
       "weight": 1.0
     },
     {
@@ -137396,7 +137397,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L461",
+      "source_location": "L463",
       "weight": 1.0
     },
     {
@@ -137408,7 +137409,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L463",
+      "source_location": "L465",
       "weight": 1.0
     },
     {
@@ -137420,7 +137421,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L498",
+      "source_location": "L500",
       "weight": 1.0
     },
     {
@@ -137432,7 +137433,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L504",
+      "source_location": "L506",
       "weight": 1.0
     },
     {
@@ -137444,7 +137445,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L507",
+      "source_location": "L509",
       "weight": 1.0
     },
     {
@@ -137456,7 +137457,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L509",
+      "source_location": "L511",
       "weight": 1.0
     },
     {
@@ -137468,7 +137469,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L784",
+      "source_location": "L786",
       "weight": 1.0
     },
     {
@@ -137480,7 +137481,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L789",
+      "source_location": "L791",
       "weight": 1.0
     },
     {
@@ -137492,7 +137493,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L789",
+      "source_location": "L791",
       "weight": 1.0
     },
     {
@@ -137504,7 +137505,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L790",
+      "source_location": "L792",
       "weight": 1.0
     },
     {
@@ -137516,7 +137517,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L793",
+      "source_location": "L795",
       "weight": 1.0
     },
     {
@@ -137528,7 +137529,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L481",
+      "source_location": "L483",
       "weight": 1.0
     },
     {
@@ -137540,7 +137541,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L472",
+      "source_location": "L474",
       "weight": 1.0
     },
     {
@@ -137552,7 +137553,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L468",
+      "source_location": "L470",
       "weight": 1.0
     },
     {
@@ -137564,7 +137565,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L489",
+      "source_location": "L491",
       "weight": 1.0
     },
     {
@@ -137576,7 +137577,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L330",
+      "source_location": "L332",
       "weight": 1.0
     },
     {
@@ -137588,7 +137589,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L698",
+      "source_location": "L700",
       "weight": 1.0
     },
     {
@@ -137600,7 +137601,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L699",
+      "source_location": "L701",
       "weight": 1.0
     },
     {
@@ -137612,7 +137613,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L703",
+      "source_location": "L705",
       "weight": 1.0
     },
     {
@@ -137624,7 +137625,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L712",
+      "source_location": "L714",
       "weight": 1.0
     },
     {
@@ -137636,7 +137637,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L926",
+      "source_location": "L928",
       "weight": 1.0
     },
     {
@@ -137648,7 +137649,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L929",
+      "source_location": "L931",
       "weight": 1.0
     },
     {
@@ -137660,7 +137661,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L555",
+      "source_location": "L557",
       "weight": 1.0
     },
     {
@@ -137672,7 +137673,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L524",
+      "source_location": "L526",
       "weight": 1.0
     },
     {
@@ -137684,7 +137685,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L375",
+      "source_location": "L377",
       "weight": 1.0
     },
     {
@@ -137696,7 +137697,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L379",
+      "source_location": "L381",
       "weight": 1.0
     },
     {
@@ -137708,7 +137709,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L400",
+      "source_location": "L402",
       "weight": 1.0
     },
     {
@@ -137720,7 +137721,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L402",
+      "source_location": "L404",
       "weight": 1.0
     },
     {
@@ -137732,7 +137733,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L575",
+      "source_location": "L577",
       "weight": 1.0
     },
     {
@@ -137744,7 +137745,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L596",
+      "source_location": "L598",
       "weight": 1.0
     },
     {
@@ -137756,7 +137757,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L515",
+      "source_location": "L517",
       "weight": 1.0
     },
     {
@@ -137768,7 +137769,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L433",
+      "source_location": "L435",
       "weight": 1.0
     },
     {
@@ -137780,7 +137781,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L441",
+      "source_location": "L443",
       "weight": 1.0
     },
     {
@@ -137792,7 +137793,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L441",
+      "source_location": "L443",
       "weight": 1.0
     },
     {
@@ -137804,7 +137805,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L799",
+      "source_location": "L801",
       "weight": 1.0
     },
     {
@@ -137816,7 +137817,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L800",
+      "source_location": "L802",
       "weight": 1.0
     },
     {
@@ -137828,7 +137829,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L728",
+      "source_location": "L730",
       "weight": 1.0
     },
     {
@@ -137840,7 +137841,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L738",
+      "source_location": "L740",
       "weight": 1.0
     },
     {
@@ -137852,7 +137853,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L749",
+      "source_location": "L751",
       "weight": 1.0
     },
     {
@@ -137864,7 +137865,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L759",
+      "source_location": "L761",
       "weight": 1.0
     },
     {
@@ -137876,7 +137877,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L868",
+      "source_location": "L870",
       "weight": 1.0
     },
     {
@@ -137888,7 +137889,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L870",
+      "source_location": "L872",
       "weight": 1.0
     },
     {
@@ -137900,7 +137901,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L875",
+      "source_location": "L877",
       "weight": 1.0
     },
     {
@@ -137912,7 +137913,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L817",
+      "source_location": "L819",
       "weight": 1.0
     },
     {
@@ -137924,7 +137925,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L371",
+      "source_location": "L373",
       "weight": 1.0
     },
     {
@@ -137936,7 +137937,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L821",
+      "source_location": "L823",
       "weight": 1.0
     },
     {
@@ -137948,7 +137949,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L828",
+      "source_location": "L830",
       "weight": 1.0
     },
     {
@@ -137960,7 +137961,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L837",
+      "source_location": "L839",
       "weight": 1.0
     },
     {
@@ -137972,7 +137973,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L838",
+      "source_location": "L840",
       "weight": 1.0
     },
     {
@@ -137984,7 +137985,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L608",
+      "source_location": "L610",
       "weight": 1.0
     },
     {
@@ -137996,7 +137997,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L619",
+      "source_location": "L621",
       "weight": 1.0
     },
     {
@@ -138008,7 +138009,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L654",
+      "source_location": "L656",
       "weight": 1.0
     },
     {
@@ -138020,7 +138021,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L662",
+      "source_location": "L664",
       "weight": 1.0
     },
     {
@@ -138032,7 +138033,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L665",
+      "source_location": "L667",
       "weight": 1.0
     },
     {
@@ -138044,7 +138045,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L263",
+      "source_location": "L265",
       "weight": 1.0
     },
     {
@@ -138056,7 +138057,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L265",
+      "source_location": "L267",
       "weight": 1.0
     },
     {
@@ -138068,7 +138069,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L301",
+      "source_location": "L303",
       "weight": 1.0
     },
     {
@@ -138080,7 +138081,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L302",
+      "source_location": "L304",
       "weight": 1.0
     },
     {
@@ -138092,7 +138093,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L307",
+      "source_location": "L309",
       "weight": 1.0
     },
     {
@@ -138104,7 +138105,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L898",
+      "source_location": "L900",
       "weight": 1.0
     },
     {
@@ -138116,7 +138117,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L902",
+      "source_location": "L904",
       "weight": 1.0
     },
     {
@@ -138128,7 +138129,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L863",
+      "source_location": "L865",
       "weight": 1.0
     },
     {
@@ -138140,7 +138141,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L845",
+      "source_location": "L847",
       "weight": 1.0
     },
     {
@@ -138152,7 +138153,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L856",
+      "source_location": "L858",
       "weight": 1.0
     },
     {
@@ -138164,7 +138165,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L857",
+      "source_location": "L859",
       "weight": 1.0
     },
     {
@@ -138176,7 +138177,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L850",
+      "source_location": "L852",
       "weight": 1.0
     },
     {
@@ -138188,7 +138189,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L805",
+      "source_location": "L807",
       "weight": 1.0
     },
     {
@@ -138200,7 +138201,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L809",
+      "source_location": "L811",
       "weight": 1.0
     },
     {
@@ -138212,7 +138213,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L812",
+      "source_location": "L814",
       "weight": 1.0
     },
     {
@@ -138224,7 +138225,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1216",
+      "source_location": "L1218",
       "weight": 1.0
     },
     {
@@ -138236,7 +138237,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1221",
+      "source_location": "L1223",
       "weight": 1.0
     },
     {
@@ -138248,7 +138249,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1223",
+      "source_location": "L1225",
       "weight": 1.0
     },
     {
@@ -138284,7 +138285,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1355",
+      "source_location": "L1357",
       "weight": 1.0
     },
     {
@@ -138308,7 +138309,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2298",
+      "source_location": "L2313",
       "weight": 1.0
     },
     {
@@ -138512,7 +138513,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2253",
+      "source_location": "L2268",
       "weight": 1.0
     },
     {
@@ -138548,7 +138549,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1401",
+      "source_location": "L1406",
       "weight": 1.0
     },
     {
@@ -138560,7 +138561,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1403",
+      "source_location": "L1408",
       "weight": 1.0
     },
     {
@@ -138572,7 +138573,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1425",
+      "source_location": "L1430",
       "weight": 1.0
     },
     {
@@ -138584,7 +138585,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1426",
+      "source_location": "L1431",
       "weight": 1.0
     },
     {
@@ -138596,7 +138597,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1441",
+      "source_location": "L1446",
       "weight": 1.0
     },
     {
@@ -138608,7 +138609,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1543",
+      "source_location": "L1554",
       "weight": 1.0
     },
     {
@@ -138680,7 +138681,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2279",
+      "source_location": "L2294",
       "weight": 1.0
     },
     {
@@ -138692,7 +138693,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2267",
+      "source_location": "L2282",
       "weight": 1.0
     },
     {
@@ -138704,7 +138705,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1204",
+      "source_location": "L1206",
       "weight": 1.0
     },
     {
@@ -138716,7 +138717,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2140",
+      "source_location": "L2155",
       "weight": 1.0
     },
     {
@@ -138728,7 +138729,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2164",
+      "source_location": "L2179",
       "weight": 1.0
     },
     {
@@ -138740,7 +138741,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2185",
+      "source_location": "L2200",
       "weight": 1.0
     },
     {
@@ -138752,7 +138753,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2222",
+      "source_location": "L2237",
       "weight": 1.0
     },
     {
@@ -138764,7 +138765,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2225",
+      "source_location": "L2240",
       "weight": 1.0
     },
     {
@@ -138824,7 +138825,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2052",
+      "source_location": "L2060",
       "weight": 1.0
     },
     {
@@ -138836,7 +138837,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2056",
+      "source_location": "L2064",
       "weight": 1.0
     },
     {
@@ -138848,7 +138849,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2064",
+      "source_location": "L2072",
       "weight": 1.0
     },
     {
@@ -138860,7 +138861,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2072",
+      "source_location": "L2080",
       "weight": 1.0
     },
     {
@@ -138872,7 +138873,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2074",
+      "source_location": "L2082",
       "weight": 1.0
     },
     {
@@ -138884,7 +138885,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2078",
+      "source_location": "L2086",
       "weight": 1.0
     },
     {
@@ -138896,7 +138897,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2082",
+      "source_location": "L2090",
       "weight": 1.0
     },
     {
@@ -138908,7 +138909,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2093",
+      "source_location": "L2101",
       "weight": 1.0
     },
     {
@@ -138920,7 +138921,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2096",
+      "source_location": "L2104",
       "weight": 1.0
     },
     {
@@ -151268,7 +151269,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L149",
+      "source_location": "L150",
       "weight": 1.0
     },
     {
@@ -151280,7 +151281,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L151",
+      "source_location": "L152",
       "weight": 1.0
     },
     {
@@ -151292,7 +151293,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L155",
+      "source_location": "L156",
       "weight": 1.0
     },
     {
@@ -151328,7 +151329,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1331",
+      "source_location": "L1333",
       "weight": 1.0
     },
     {
@@ -151340,7 +151341,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1332",
+      "source_location": "L1334",
       "weight": 1.0
     },
     {
@@ -151352,7 +151353,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1333",
+      "source_location": "L1335",
       "weight": 1.0
     },
     {
@@ -151388,7 +151389,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1111",
+      "source_location": "L1113",
       "weight": 1.0
     },
     {
@@ -168128,7 +168129,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L147",
+      "source_location": "L148",
       "weight": 1.0
     },
     {
@@ -168140,7 +168141,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L149",
+      "source_location": "L150",
       "weight": 1.0
     },
     {
@@ -168152,7 +168153,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L152",
+      "source_location": "L153",
       "weight": 1.0
     },
     {
@@ -168164,7 +168165,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L155",
+      "source_location": "L156",
       "weight": 1.0
     },
     {
@@ -168176,7 +168177,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L253",
+      "source_location": "L255",
       "weight": 1.0
     },
     {
@@ -168188,7 +168189,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L878",
+      "source_location": "L880",
       "weight": 1.0
     },
     {
@@ -168200,7 +168201,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L159",
+      "source_location": "L160",
       "weight": 1.0
     },
     {
@@ -168212,7 +168213,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L446",
+      "source_location": "L448",
       "weight": 1.0
     },
     {
@@ -168224,7 +168225,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1209",
+      "source_location": "L1211",
       "weight": 1.0
     },
     {
@@ -168248,7 +168249,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1337",
+      "source_location": "L1339",
       "weight": 1.0
     },
     {
@@ -168320,7 +168321,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1333",
+      "source_location": "L1335",
       "weight": 1.0
     },
     {
@@ -168332,7 +168333,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1146",
+      "source_location": "L1148",
       "weight": 1.0
     },
     {
@@ -168344,7 +168345,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1160",
+      "source_location": "L1162",
       "weight": 1.0
     },
     {
@@ -168404,7 +168405,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1201",
+      "source_location": "L1203",
       "weight": 1.0
     },
     {
@@ -168416,7 +168417,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -168428,7 +168429,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -168440,7 +168441,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -168452,7 +168453,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -181568,7 +181569,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2312",
+      "source_location": "L2327",
       "weight": 1.0
     },
     {
@@ -200600,7 +200601,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1175",
+      "source_location": "L1177",
       "weight": 1.0
     },
     {
@@ -200612,7 +200613,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1184",
+      "source_location": "L1186",
       "weight": 1.0
     },
     {
@@ -200624,7 +200625,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1193",
+      "source_location": "L1195",
       "weight": 1.0
     },
     {
@@ -200660,7 +200661,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L878",
+      "source_location": "L880",
       "weight": 1.0
     },
     {
@@ -200672,7 +200673,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L878",
+      "source_location": "L880",
       "weight": 1.0
     },
     {
@@ -200684,7 +200685,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L878",
+      "source_location": "L880",
       "weight": 1.0
     },
     {
@@ -200696,7 +200697,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L446",
+      "source_location": "L448",
       "weight": 1.0
     },
     {
@@ -200708,7 +200709,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L446",
+      "source_location": "L448",
       "weight": 1.0
     },
     {
@@ -200720,7 +200721,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L446",
+      "source_location": "L448",
       "weight": 1.0
     },
     {
@@ -200732,7 +200733,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L446",
+      "source_location": "L448",
       "weight": 1.0
     },
     {
@@ -200744,7 +200745,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L325",
+      "source_location": "L327",
       "weight": 1.0
     },
     {
@@ -200756,7 +200757,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L551",
+      "source_location": "L553",
       "weight": 1.0
     },
     {
@@ -200768,7 +200769,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L519",
+      "source_location": "L521",
       "weight": 1.0
     },
     {
@@ -200780,7 +200781,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L565",
+      "source_location": "L567",
       "weight": 1.0
     },
     {
@@ -200792,7 +200793,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L431",
+      "source_location": "L433",
       "weight": 1.0
     },
     {
@@ -200804,7 +200805,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L719",
+      "source_location": "L721",
       "weight": 1.0
     },
     {
@@ -200816,7 +200817,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L866",
+      "source_location": "L868",
       "weight": 1.0
     },
     {
@@ -200828,7 +200829,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L874",
+      "source_location": "L876",
       "weight": 1.0
     },
     {
@@ -200840,7 +200841,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L816",
+      "source_location": "L818",
       "weight": 1.0
     },
     {
@@ -200852,7 +200853,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L606",
+      "source_location": "L608",
       "weight": 1.0
     },
     {
@@ -200864,7 +200865,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L606",
+      "source_location": "L608",
       "weight": 1.0
     },
     {
@@ -200876,7 +200877,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L262",
+      "source_location": "L264",
       "weight": 1.0
     },
     {
@@ -200888,7 +200889,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L804",
+      "source_location": "L806",
       "weight": 1.0
     },
     {
@@ -200900,7 +200901,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L804",
+      "source_location": "L806",
       "weight": 1.0
     },
     {
@@ -200948,7 +200949,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1337",
+      "source_location": "L1339",
       "weight": 1.0
     },
     {
@@ -201140,7 +201141,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1385",
+      "source_location": "L1390",
       "weight": 1.0
     },
     {
@@ -201152,7 +201153,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1146",
+      "source_location": "L1148",
       "weight": 1.0
     },
     {
@@ -201164,7 +201165,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1160",
+      "source_location": "L1162",
       "weight": 1.0
     },
     {
@@ -201188,7 +201189,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1538",
+      "source_location": "L1549",
       "weight": 1.0
     },
     {
@@ -201200,7 +201201,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1538",
+      "source_location": "L1549",
       "weight": 1.0
     },
     {
@@ -201212,7 +201213,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1201",
+      "source_location": "L1203",
       "weight": 1.0
     },
     {
@@ -201224,7 +201225,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -201236,7 +201237,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1138",
+      "source_location": "L1140",
       "weight": 1.0
     },
     {
@@ -218402,7 +218403,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L253",
+      "source_location": "L255",
       "weight": 1.0
     },
     {
@@ -218414,7 +218415,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L159",
+      "source_location": "L160",
       "weight": 1.0
     },
     {
@@ -218426,7 +218427,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1209",
+      "source_location": "L1211",
       "weight": 1.0
     },
     {
@@ -218462,7 +218463,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1337",
+      "source_location": "L1339",
       "weight": 1.0
     },
     {
@@ -218558,7 +218559,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1201",
+      "source_location": "L1203",
       "weight": 1.0
     },
     {
@@ -218570,7 +218571,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2139",
+      "source_location": "L2154",
       "weight": 1.0
     },
     {
@@ -218582,7 +218583,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -252250,7 +252251,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1109",
+      "source_location": "L1111",
       "weight": 1.0
     },
     {
@@ -252261,7 +252262,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1114",
+      "source_location": "L1116",
       "weight": 1.0
     },
     {
@@ -252272,7 +252273,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1133",
+      "source_location": "L1135",
       "weight": 1.0
     },
     {
@@ -252283,7 +252284,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1138",
+      "source_location": "L1140",
       "weight": 1.0
     },
     {
@@ -252294,7 +252295,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1146",
+      "source_location": "L1148",
       "weight": 1.0
     },
     {
@@ -252305,7 +252306,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1160",
+      "source_location": "L1162",
       "weight": 1.0
     },
     {
@@ -252316,7 +252317,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1175",
+      "source_location": "L1177",
       "weight": 1.0
     },
     {
@@ -252327,7 +252328,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1184",
+      "source_location": "L1186",
       "weight": 1.0
     },
     {
@@ -252338,7 +252339,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1193",
+      "source_location": "L1195",
       "weight": 1.0
     },
     {
@@ -252349,7 +252350,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1201",
+      "source_location": "L1203",
       "weight": 1.0
     },
     {
@@ -252360,7 +252361,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1209",
+      "source_location": "L1211",
       "weight": 1.0
     },
     {
@@ -252382,7 +252383,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1330",
+      "source_location": "L1332",
       "weight": 1.0
     },
     {
@@ -252393,7 +252394,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1337",
+      "source_location": "L1339",
       "weight": 1.0
     },
     {
@@ -252404,7 +252405,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1385",
+      "source_location": "L1390",
       "weight": 1.0
     },
     {
@@ -252415,7 +252416,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1538",
+      "source_location": "L1549",
       "weight": 1.0
     },
     {
@@ -252525,7 +252526,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2139",
+      "source_location": "L2154",
       "weight": 1.0
     },
     {
@@ -252536,7 +252537,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2240",
+      "source_location": "L2255",
       "weight": 1.0
     },
     {
@@ -252547,7 +252548,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2266",
+      "source_location": "L2281",
       "weight": 1.0
     },
     {
@@ -252558,7 +252559,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2278",
+      "source_location": "L2293",
       "weight": 1.0
     },
     {
@@ -252569,7 +252570,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2296",
+      "source_location": "L2311",
       "weight": 1.0
     },
     {
@@ -252580,7 +252581,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2315",
+      "source_location": "L2330",
       "weight": 1.0
     },
     {
@@ -280047,7 +280048,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L159",
+      "source_location": "L160",
       "weight": 1.0
     },
     {
@@ -280058,7 +280059,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L247",
+      "source_location": "L249",
       "weight": 1.0
     },
     {
@@ -280069,7 +280070,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L253",
+      "source_location": "L255",
       "weight": 1.0
     },
     {
@@ -280080,7 +280081,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L262",
+      "source_location": "L264",
       "weight": 1.0
     },
     {
@@ -280091,7 +280092,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L310",
+      "source_location": "L312",
       "weight": 1.0
     },
     {
@@ -280102,7 +280103,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L325",
+      "source_location": "L327",
       "weight": 1.0
     },
     {
@@ -280113,7 +280114,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L370",
+      "source_location": "L372",
       "weight": 1.0
     },
     {
@@ -280124,7 +280125,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L374",
+      "source_location": "L376",
       "weight": 1.0
     },
     {
@@ -280135,7 +280136,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L413",
+      "source_location": "L415",
       "weight": 1.0
     },
     {
@@ -280146,7 +280147,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L431",
+      "source_location": "L433",
       "weight": 1.0
     },
     {
@@ -280157,7 +280158,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L446",
+      "source_location": "L448",
       "weight": 1.0
     },
     {
@@ -280168,7 +280169,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L467",
+      "source_location": "L469",
       "weight": 1.0
     },
     {
@@ -280179,7 +280180,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L471",
+      "source_location": "L473",
       "weight": 1.0
     },
     {
@@ -280190,7 +280191,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L480",
+      "source_location": "L482",
       "weight": 1.0
     },
     {
@@ -280201,7 +280202,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L484",
+      "source_location": "L486",
       "weight": 1.0
     },
     {
@@ -280212,7 +280213,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L488",
+      "source_location": "L490",
       "weight": 1.0
     },
     {
@@ -280223,7 +280224,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L497",
+      "source_location": "L499",
       "weight": 1.0
     },
     {
@@ -280234,7 +280235,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L513",
+      "source_location": "L515",
       "weight": 1.0
     },
     {
@@ -280245,7 +280246,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L519",
+      "source_location": "L521",
       "weight": 1.0
     },
     {
@@ -280256,7 +280257,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L551",
+      "source_location": "L553",
       "weight": 1.0
     },
     {
@@ -280267,7 +280268,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L565",
+      "source_location": "L567",
       "weight": 1.0
     },
     {
@@ -280278,7 +280279,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L606",
+      "source_location": "L608",
       "weight": 1.0
     },
     {
@@ -280289,7 +280290,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L676",
+      "source_location": "L678",
       "weight": 1.0
     },
     {
@@ -280300,7 +280301,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L719",
+      "source_location": "L721",
       "weight": 1.0
     },
     {
@@ -280311,7 +280312,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L781",
+      "source_location": "L783",
       "weight": 1.0
     },
     {
@@ -280322,7 +280323,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L798",
+      "source_location": "L800",
       "weight": 1.0
     },
     {
@@ -280333,7 +280334,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L804",
+      "source_location": "L806",
       "weight": 1.0
     },
     {
@@ -280344,7 +280345,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L816",
+      "source_location": "L818",
       "weight": 1.0
     },
     {
@@ -280355,7 +280356,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L820",
+      "source_location": "L822",
       "weight": 1.0
     },
     {
@@ -280366,7 +280367,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L827",
+      "source_location": "L829",
       "weight": 1.0
     },
     {
@@ -280377,7 +280378,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L831",
+      "source_location": "L833",
       "weight": 1.0
     },
     {
@@ -280388,7 +280389,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L842",
+      "source_location": "L844",
       "weight": 1.0
     },
     {
@@ -280399,7 +280400,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L848",
+      "source_location": "L850",
       "weight": 1.0
     },
     {
@@ -280410,7 +280411,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L853",
+      "source_location": "L855",
       "weight": 1.0
     },
     {
@@ -280421,7 +280422,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L860",
+      "source_location": "L862",
       "weight": 1.0
     },
     {
@@ -280432,7 +280433,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L866",
+      "source_location": "L868",
       "weight": 1.0
     },
     {
@@ -280443,7 +280444,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L874",
+      "source_location": "L876",
       "weight": 1.0
     },
     {
@@ -280454,7 +280455,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L878",
+      "source_location": "L880",
       "weight": 1.0
     },
     {
@@ -280465,7 +280466,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L888",
+      "source_location": "L890",
       "weight": 1.0
     },
     {
@@ -280476,7 +280477,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L910",
+      "source_location": "L912",
       "weight": 1.0
     },
     {
@@ -280487,7 +280488,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L922",
+      "source_location": "L924",
       "weight": 1.0
     },
     {
@@ -280498,7 +280499,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L933",
+      "source_location": "L935",
       "weight": 1.0
     },
     {
@@ -280509,7 +280510,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L938",
+      "source_location": "L940",
       "weight": 1.0
     },
     {
@@ -280520,7 +280521,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L943",
+      "source_location": "L945",
       "weight": 1.0
     },
     {
@@ -280531,7 +280532,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L948",
+      "source_location": "L950",
       "weight": 1.0
     },
     {
@@ -280542,7 +280543,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L964",
+      "source_location": "L966",
       "weight": 1.0
     },
     {
@@ -280553,7 +280554,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L969",
+      "source_location": "L971",
       "weight": 1.0
     },
     {
@@ -280564,7 +280565,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L979",
+      "source_location": "L981",
       "weight": 1.0
     },
     {
@@ -293226,7 +293227,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1067",
+      "source_location": "L1069",
       "weight": 1.0
     },
     {
@@ -293238,7 +293239,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1072",
+      "source_location": "L1074",
       "weight": 1.0
     },
     {
@@ -293250,7 +293251,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L983",
+      "source_location": "L985",
       "weight": 1.0
     },
     {
@@ -293262,7 +293263,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L160",
+      "source_location": "L161",
       "weight": 1.0
     },
     {
@@ -293274,7 +293275,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L161",
+      "source_location": "L162",
       "weight": 1.0
     },
     {
@@ -293286,7 +293287,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L162",
+      "source_location": "L163",
       "weight": 1.0
     },
     {
@@ -293298,7 +293299,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L783",
+      "source_location": "L785",
       "weight": 1.0
     },
     {
@@ -293310,7 +293311,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L248",
+      "source_location": "L250",
       "weight": 1.0
     },
     {
@@ -293322,7 +293323,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L697",
+      "source_location": "L699",
       "weight": 1.0
     },
     {
@@ -293334,7 +293335,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L556",
+      "source_location": "L558",
       "weight": 1.0
     },
     {
@@ -293346,7 +293347,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L526",
+      "source_location": "L528",
       "weight": 1.0
     },
     {
@@ -293358,7 +293359,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L385",
+      "source_location": "L387",
       "weight": 1.0
     },
     {
@@ -293370,7 +293371,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L386",
+      "source_location": "L388",
       "weight": 1.0
     },
     {
@@ -293382,7 +293383,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L403",
+      "source_location": "L405",
       "weight": 1.0
     },
     {
@@ -293394,7 +293395,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L408",
+      "source_location": "L410",
       "weight": 1.0
     },
     {
@@ -293406,7 +293407,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L726",
+      "source_location": "L728",
       "weight": 1.0
     },
     {
@@ -293418,7 +293419,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L742",
+      "source_location": "L744",
       "weight": 1.0
     },
     {
@@ -293430,7 +293431,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L614",
+      "source_location": "L616",
       "weight": 1.0
     },
     {
@@ -293442,7 +293443,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L628",
+      "source_location": "L630",
       "weight": 1.0
     },
     {
@@ -293454,7 +293455,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L659",
+      "source_location": "L661",
       "weight": 1.0
     },
     {
@@ -293466,7 +293467,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L670",
+      "source_location": "L672",
       "weight": 1.0
     },
     {
@@ -293478,7 +293479,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1236",
+      "source_location": "L1238",
       "weight": 1.0
     },
     {
@@ -293490,7 +293491,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1237",
+      "source_location": "L1239",
       "weight": 1.0
     },
     {
@@ -293502,7 +293503,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L2320",
+      "source_location": "L2335",
       "weight": 1.0
     },
     {
@@ -293538,7 +293539,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/windows_shell/src/win32.rs",
-      "source_location": "L1425",
+      "source_location": "L1430",
       "weight": 1.0
     },
     {
@@ -294788,5 +294789,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "f5d531145c9a936b58d1d5b98518356a6b87ecfc"
+  "built_at_commit": "3e2fe2c74eae1129f23d133162edc5735f3fd97d"
 }

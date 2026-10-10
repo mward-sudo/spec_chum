@@ -1,7 +1,7 @@
 # Graph Report - issue-561-parity  (2026-10-10)
 
 ## Corpus Check
-- 348 files · ~2,113,532 words
+- 348 files · ~2,113,632 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 56 file(s) not represented in the graph (top: .tap 10, .mdc 8, (none) 6)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f5d53114`
+- Built from commit: `3e2fe2c7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

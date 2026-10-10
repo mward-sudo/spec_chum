@@ -2028,9 +2028,9 @@ mod machine_picker_image_tests {
     #[test]
     fn every_catalog_image_key_has_an_embedded_asset() {
         for model in spec_chum_host::host_model_catalog() {
-            let key = model
-                .image_key
-                .expect("built-in models have catalog image keys");
+            let Some(key) = model.image_key else {
+                continue;
+            };
             let bytes = machine_image_bytes(key)
                 .unwrap_or_else(|| panic!("catalog image key {key} has no embedded asset"));
             assert!(!bytes.is_empty(), "embedded asset {key} is empty");

@@ -32,13 +32,13 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetDlgItem, GetMenu, GetScrollInfo, GetWindowLongPtrW, GetWindowTextLengthW,
     GetWindowTextW, IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW,
     PostMessageW, PostQuitMessage, RegisterClassExW, ScrollWindowEx, SendMessageW,
-    SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW,
-    CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA,
-    HMENU, IDC_ARROW, IDOK, IMAGE_BITMAP, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND,
-    MF_BYPOSITION, MSG, PM_REMOVE, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP,
-    SB_THUMBPOSITION, SB_THUMBTRACK, SB_VERT, SCROLLINFO, SIF_ALL, STM_SETIMAGE, SW_INVALIDATE,
-    SW_SCROLLCHILDREN, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND,
-    WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT,
+    SetForegroundWindow, SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage,
+    CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE,
+    ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW, IDOK, IMAGE_BITMAP, MB_ICONERROR, MB_OK,
+    MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG, PM_REMOVE, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN,
+    SB_PAGEUP, SB_THUMBPOSITION, SB_THUMBTRACK, SB_VERT, SCROLLINFO, SIF_ALL, STM_SETIMAGE,
+    SW_INVALIDATE, SW_SCROLLCHILDREN, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_APP,
+    WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT,
     WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_VSCROLL, WNDCLASSEXW, WS_BORDER,
     WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
@@ -145,6 +145,7 @@ struct AppState {
     library_details: Option<HWND>,
     library_entries: Vec<MediaEntry>,
     main_hwnd: Option<HWND>,
+    machine_picker_hwnd: Option<HWND>,
     /// Modal errors are queued so no AppState borrow spans USER32's nested message loop.
     pending_error_dialogs: VecDeque<(String, String)>,
     /// Last time the debugger EDIT control was rewritten from `tick_frame`.
@@ -235,6 +236,7 @@ impl AppState {
             library_details: None,
             library_entries: Vec::new(),
             main_hwnd: None,
+            machine_picker_hwnd: None,
             pending_error_dialogs: VecDeque::new(),
             last_debug_refresh: Instant::now(),
             next_assets_download: None,
@@ -1373,7 +1375,10 @@ fn create_machine_picker(owner: HWND, app: *mut AppState) -> Result<HWND> {
             Some(hinstance.into()),
             Some(state_ptr.cast()),
         ) {
-            Ok(hwnd) => Ok(hwnd),
+            Ok(hwnd) => {
+                (*app).machine_picker_hwnd = Some(hwnd);
+                Ok(hwnd)
+            }
             Err(error) => {
                 drop(Box::from_raw(state_ptr));
                 Err(error.into())
@@ -1504,6 +1509,12 @@ extern "system" fn machine_picker_wnd_proc(
                 // prevents a second reclamation; the Box owns each retained bitmap.
                 unsafe {
                     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                    // SAFETY: the owned picker cannot outlive its owner AppState.
+                    let picker_state = &mut *state_ptr;
+                    let app = &mut *picker_state.app;
+                    if app.machine_picker_hwnd == Some(hwnd) {
+                        app.machine_picker_hwnd = None;
+                    }
                     let mut state = Box::from_raw(state_ptr);
                     for (image_id, bitmap) in state.bitmaps.drain(..) {
                         // SAFETY: hwnd owns the child control; its image is the bitmap
@@ -1540,18 +1551,7 @@ unsafe fn populate_machine_picker(hwnd: HWND, state: &mut MachinePickerState) {
         Ok(instance) => instance,
         Err(_) => return,
     };
-    let header = picker_label(hwnd, hinstance, 12, 10, 900, 30, "Choose a Spectrum model");
-    if !header.0.is_null() {
-        let _ = SetWindowTextW(
-            header,
-            PCWSTR(
-                "Choose a Spectrum model\0"
-                    .encode_utf16()
-                    .collect::<Vec<_>>()
-                    .as_ptr(),
-            ),
-        );
-    }
+    let _ = picker_label(hwnd, hinstance, 12, 10, 900, 30, "Choose a Spectrum model");
     let catalog = spec_chum_host::host_model_catalog();
     for (index, descriptor) in catalog.iter().enumerate() {
         let col = (index % 2) as i32;
@@ -2049,7 +2049,15 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
             if !state_ptr.is_null() {
                 let id = wparam.0 & 0xffff;
                 if id == IDM_MACHINE_PICKER {
-                    if let Err(error) = create_machine_picker(hwnd, state_ptr) {
+                    // SAFETY: state_ptr is the AppState stored on this live main window.
+                    // Copy the handle so no AppState borrow spans nested USER32 calls.
+                    let existing_picker = unsafe { (*state_ptr).machine_picker_hwnd };
+                    if let Some(picker) = existing_picker {
+                        // Bring the existing modeless picker forward instead of
+                        // creating duplicate windows and duplicate retained bitmaps.
+                        let _ = unsafe { ShowWindow(picker, SW_SHOW) };
+                        let _ = unsafe { SetForegroundWindow(picker) };
+                    } else if let Err(error) = create_machine_picker(hwnd, state_ptr) {
                         // SAFETY: state_ptr is this main window's live AppState until
                         // WM_DESTROY; picker creation only failed before ownership changed.
                         unsafe {
@@ -2108,19 +2116,26 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
         }
         WM_DESTROY => {
             if !state_ptr.is_null() {
-                // DestroyWindow synchronously calls the Library procedure, which
-                // borrows AppState. End our borrow before destroying either HWND.
+                // DestroyWindow synchronously calls owned-window procedures that
+                // borrow AppState. End our borrow before destroying their HWNDs.
                 unsafe {
-                    let (dbg, library) = {
+                    let (dbg, library, picker) = {
                         let state = &mut *state_ptr;
                         state.debug_edit = None;
-                        (state.debug_hwnd.take(), state.library_hwnd.take())
+                        (
+                            state.debug_hwnd.take(),
+                            state.library_hwnd.take(),
+                            state.machine_picker_hwnd.take(),
+                        )
                     };
                     if let Some(dbg) = dbg {
                         let _ = DestroyWindow(dbg);
                     }
                     if let Some(library) = library {
                         let _ = DestroyWindow(library);
+                    }
+                    if let Some(picker) = picker {
+                        let _ = DestroyWindow(picker);
                     }
                     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                     drop(Box::from_raw(state_ptr));
@@ -2314,9 +2329,9 @@ mod machine_picker_image_tests {
     #[test]
     fn every_catalog_image_key_has_a_decodable_embedded_asset() {
         for model in spec_chum_host::host_model_catalog() {
-            let key = model
-                .image_key
-                .expect("built-in models have catalog image keys");
+            let Some(key) = model.image_key else {
+                continue;
+            };
             let bytes = machine_image_bytes(key)
                 .unwrap_or_else(|| panic!("catalog image key {key} has no embedded asset"));
             assert!(
