@@ -479,6 +479,19 @@
       "source_location": "L13"
     },
     {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys",
+      "label": "CodingKeys",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "codingkeys",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L21"
+    },
+    {
       "id": "apps_macos_sources_specchummac_specchummacapp_specchummacapp",
       "label": "SpecChumMacApp",
       "_callable": true,
@@ -529,19 +542,6 @@
       "norm_label": "machineconfigeditorview",
       "source_file": "apps/macos/Sources/SpecChumMac/MachineConfigEditorView.swift",
       "source_location": "L7"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference",
-      "label": "AppearancePreference",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": "appearancepreference",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L3"
     },
     {
       "id": "apps_macos_sources_specchummac_hostbridge_codingkeys",
@@ -609,17 +609,17 @@
       "source_location": "L34"
     },
     {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys",
-      "label": "CodingKeys",
+      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference",
+      "label": "AppearancePreference",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
-      "norm_label": "codingkeys",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L21"
+      "norm_label": "appearancepreference",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L3"
     },
     {
       "id": "apps_macos_sources_specchummac_usermachineconfig_hardwarecompatflags",
@@ -628,7 +628,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "hardwarecompatflags",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -641,11 +641,11 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "hostbridge.model",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L210"
+      "source_location": "L198"
     },
     {
       "id": "apps_macos_sources_specchummac_usermachineconfig_prefaystereoslug",
@@ -654,7 +654,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "prefaystereoslug",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -667,7 +667,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "prefjoystickslug",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -680,7 +680,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "prefmodelslug",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -693,7 +693,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "usermachineconfig",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -4548,7 +4548,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".beginnewconfiguration()",
       "source_file": "apps/macos/Sources/SpecChumMac/HostBridge+Config.swift",
@@ -4560,11 +4560,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".formodel()",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L177"
+      "source_location": "L165"
     },
     {
       "id": "apps_macos_sources_specchummac_usermachineconfig_prefjoystickslug_from",
@@ -4572,7 +4572,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".from()",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -4584,7 +4584,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".newnamed()",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -8071,6 +8071,18 @@
       "source_location": "L23"
     },
     {
+      "id": "crates_living_room_src_audio_audiomuted",
+      "label": "AudioMuted",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 226,
+      "community_name": "living_room/src/audio.rs",
+      "file_type": "code",
+      "norm_label": "audiomuted",
+      "source_file": "crates/living_room/src/audio.rs",
+      "source_location": "L72"
+    },
+    {
       "id": "crates_living_room_src_audio_audioout",
       "label": "AudioOut",
       "_origin": "ast",
@@ -8081,6 +8093,18 @@
       "norm_label": "audioout",
       "source_file": "crates/living_room/src/audio.rs",
       "source_location": "L35"
+    },
+    {
+      "id": "crates_living_room_src_audio_audioplugin",
+      "label": "AudioPlugin",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 226,
+      "community_name": "living_room/src/audio.rs",
+      "file_type": "code",
+      "norm_label": "audioplugin",
+      "source_file": "crates/living_room/src/audio.rs",
+      "source_location": "L141"
     },
     {
       "id": "crates_living_room_src_audio_audiostream",
@@ -8105,18 +8129,6 @@
       "norm_label": "dcblock",
       "source_file": "crates/living_room/src/audio.rs",
       "source_location": "L50"
-    },
-    {
-      "id": "crates_living_room_src_camera_cameralocked",
-      "label": "CameraLocked",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 226,
-      "community_name": "living_room/src/audio.rs",
-      "file_type": "code",
-      "norm_label": "cameralocked",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L219"
     },
     {
       "id": "crates_machine_src_tape_state_tapeloadoptions",
@@ -8707,6 +8719,18 @@
       "source_location": "L1823"
     },
     {
+      "id": "crates_living_room_src_camera_cameraintro",
+      "label": "CameraIntro",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "cameraintro",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L129"
+    },
+    {
       "id": "crates_living_room_src_ui_overlay_chromeaction",
       "label": "ChromeAction",
       "_origin": "ast",
@@ -8717,6 +8741,54 @@
       "norm_label": "chromeaction",
       "source_file": "crates/living_room/src/ui_overlay.rs",
       "source_location": "L15"
+    },
+    {
+      "id": "crates_living_room_src_ui_overlay_introhinttext",
+      "label": "IntroHintText",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "introhinttext",
+      "source_file": "crates/living_room/src/ui_overlay.rs",
+      "source_location": "L37"
+    },
+    {
+      "id": "crates_living_room_src_ui_overlay_mutelabel",
+      "label": "MuteLabel",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "mutelabel",
+      "source_file": "crates/living_room/src/ui_overlay.rs",
+      "source_location": "L40"
+    },
+    {
+      "id": "crates_living_room_src_ui_overlay_pauselabel",
+      "label": "PauseLabel",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "pauselabel",
+      "source_file": "crates/living_room/src/ui_overlay.rs",
+      "source_location": "L43"
+    },
+    {
+      "id": "crates_living_room_src_ui_overlay_statustext",
+      "label": "StatusText",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "statustext",
+      "source_file": "crates/living_room/src/ui_overlay.rs",
+      "source_location": "L34"
     },
     {
       "id": "crates_control_plane_src_present_presentmeta",
@@ -8801,30 +8873,6 @@
       "norm_label": "watch",
       "source_file": "crates/machine/src/debugger.rs",
       "source_location": "L43"
-    },
-    {
-      "id": "crates_living_room_src_file_dialog_filedialogplugin",
-      "label": "FileDialogPlugin",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 292,
-      "community_name": "file_dialog.rs",
-      "file_type": "code",
-      "norm_label": "filedialogplugin",
-      "source_file": "crates/living_room/src/file_dialog.rs",
-      "source_location": "L18"
-    },
-    {
-      "id": "crates_living_room_src_file_dialog_openmediadialog",
-      "label": "OpenMediaDialog",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 292,
-      "community_name": "file_dialog.rs",
-      "file_type": "code",
-      "norm_label": "openmediadialog",
-      "source_file": "crates/living_room/src/file_dialog.rs",
-      "source_location": "L12"
     },
     {
       "id": "crates_living_room_src_crt_crtattachedtotv",
@@ -9391,6 +9439,18 @@
       "source_location": "L188"
     },
     {
+      "id": "crates_living_room_src_camera_cameralocked",
+      "label": "CameraLocked",
+      "_origin": "ast",
+      "_rust_declaration_count": 1,
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "cameralocked",
+      "source_file": "crates/living_room/src/camera.rs",
+      "source_location": "L219"
+    },
+    {
       "id": "crates_living_room_src_host_emulatorhost",
       "label": "EmulatorHost",
       "_origin": "ast",
@@ -9451,88 +9511,28 @@
       "source_location": "L1173"
     },
     {
-      "id": "crates_living_room_src_camera_cameraintro",
-      "label": "CameraIntro",
+      "id": "crates_living_room_src_file_dialog_filedialogplugin",
+      "label": "FileDialogPlugin",
       "_origin": "ast",
       "_rust_declaration_count": 1,
       "community": 344,
       "community_name": "chrome_buttons",
       "file_type": "code",
-      "norm_label": "cameraintro",
-      "source_file": "crates/living_room/src/camera.rs",
-      "source_location": "L129"
+      "norm_label": "filedialogplugin",
+      "source_file": "crates/living_room/src/file_dialog.rs",
+      "source_location": "L18"
     },
     {
-      "id": "crates_living_room_src_ui_overlay_introhinttext",
-      "label": "IntroHintText",
+      "id": "crates_living_room_src_file_dialog_openmediadialog",
+      "label": "OpenMediaDialog",
       "_origin": "ast",
       "_rust_declaration_count": 1,
       "community": 344,
       "community_name": "chrome_buttons",
       "file_type": "code",
-      "norm_label": "introhinttext",
-      "source_file": "crates/living_room/src/ui_overlay.rs",
-      "source_location": "L37"
-    },
-    {
-      "id": "crates_living_room_src_ui_overlay_mutelabel",
-      "label": "MuteLabel",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 344,
-      "community_name": "chrome_buttons",
-      "file_type": "code",
-      "norm_label": "mutelabel",
-      "source_file": "crates/living_room/src/ui_overlay.rs",
-      "source_location": "L40"
-    },
-    {
-      "id": "crates_living_room_src_ui_overlay_pauselabel",
-      "label": "PauseLabel",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 344,
-      "community_name": "chrome_buttons",
-      "file_type": "code",
-      "norm_label": "pauselabel",
-      "source_file": "crates/living_room/src/ui_overlay.rs",
-      "source_location": "L43"
-    },
-    {
-      "id": "crates_living_room_src_ui_overlay_statustext",
-      "label": "StatusText",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 344,
-      "community_name": "chrome_buttons",
-      "file_type": "code",
-      "norm_label": "statustext",
-      "source_file": "crates/living_room/src/ui_overlay.rs",
-      "source_location": "L34"
-    },
-    {
-      "id": "crates_living_room_src_audio_audiomuted",
-      "label": "AudioMuted",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 346,
-      "community_name": "AudioMuted",
-      "file_type": "code",
-      "norm_label": "audiomuted",
-      "source_file": "crates/living_room/src/audio.rs",
-      "source_location": "L72"
-    },
-    {
-      "id": "crates_living_room_src_audio_audioplugin",
-      "label": "AudioPlugin",
-      "_origin": "ast",
-      "_rust_declaration_count": 1,
-      "community": 346,
-      "community_name": "AudioMuted",
-      "file_type": "code",
-      "norm_label": "audioplugin",
-      "source_file": "crates/living_room/src/audio.rs",
-      "source_location": "L141"
+      "norm_label": "openmediadialog",
+      "source_file": "crates/living_room/src/file_dialog.rs",
+      "source_location": "L12"
     },
     {
       "id": "crates_living_room_src_hybrid_hybridplugin",
@@ -30444,6 +30444,28 @@
       "source_location": ""
     },
     {
+      "id": "crates_host_api_src_session_media_title",
+      "label": "media_title.rs",
+      "_origin": "ast",
+      "community": 176,
+      "community_name": "agent_server/src/main.rs",
+      "file_type": "code",
+      "norm_label": "media_title.rs",
+      "source_file": "crates/host_api/src/session/media_title.rs",
+      "source_location": "L1"
+    },
+    {
+      "id": "thread",
+      "label": "Thread",
+      "_origin": "ast",
+      "community": 176,
+      "community_name": "agent_server/src/main.rs",
+      "file_type": "code",
+      "norm_label": "thread",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_machine_src_lib",
       "label": "machine/src/lib.rs",
       "_origin": "ast",
@@ -39577,17 +39599,6 @@
       "source_location": "L29"
     },
     {
-      "id": "cstring",
-      "label": "CString",
-      "_origin": "ast",
-      "community": 22,
-      "community_name": "ffi.rs",
-      "file_type": "code",
-      "norm_label": "cstring",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
       "id": "docs_linux_native_agent_debug_http",
       "label": "Agent Debug HTTP",
       "_origin": "ast",
@@ -40387,6 +40398,17 @@
       "source_location": "L101"
     },
     {
+      "id": "crates_living_room_src_audio_audioplugin_build",
+      "label": ".build()",
+      "_origin": "ast",
+      "community": 226,
+      "community_name": "living_room/src/audio.rs",
+      "file_type": "code",
+      "norm_label": ".build()",
+      "source_file": "crates/living_room/src/audio.rs",
+      "source_location": "L144"
+    },
+    {
       "id": "crates_living_room_src_audio_dcblock_process",
       "label": ".process()",
       "_origin": "ast",
@@ -40464,6 +40486,17 @@
       "source_location": "L26"
     },
     {
+      "id": "crates_living_room_src_audio_rs_app",
+      "label": "App",
+      "_origin": "ast",
+      "community": 226,
+      "community_name": "living_room/src/audio.rs",
+      "file_type": "code",
+      "norm_label": "app",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_living_room_src_audio_rs_arc",
       "label": "Arc",
       "_origin": "ast",
@@ -40526,6 +40559,17 @@
       "community_name": "living_room/src/audio.rs",
       "file_type": "code",
       "norm_label": "pathbuf",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_audio_rs_plugin",
+      "label": "Plugin",
+      "_origin": "ast",
+      "community": 226,
+      "community_name": "living_room/src/audio.rs",
+      "file_type": "code",
+      "norm_label": "plugin",
       "source_file": "",
       "source_location": ""
     },
@@ -48264,6 +48308,17 @@
       "source_location": ""
     },
     {
+      "id": "crates_living_room_src_ui_overlay_rs_without",
+      "label": "Without",
+      "_origin": "ast",
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "without",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_living_room_src_ui_overlay_select_model_if_rom",
       "label": "select_model_if_rom()",
       "_origin": "ast",
@@ -48306,6 +48361,28 @@
       "norm_label": "toolbar_bg",
       "source_file": "crates/living_room/src/ui_overlay.rs",
       "source_location": "L48"
+    },
+    {
+      "id": "crates_living_room_src_ui_overlay_update_labels",
+      "label": "update_labels()",
+      "_origin": "ast",
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "update_labels()",
+      "source_file": "crates/living_room/src/ui_overlay.rs",
+      "source_location": "L337"
+    },
+    {
+      "id": "text",
+      "label": "Text",
+      "_origin": "ast",
+      "community": 278,
+      "community_name": "ui_overlay.rs",
+      "file_type": "code",
+      "norm_label": "text",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "crates_control_plane_src_present",
@@ -49339,6 +49416,17 @@
       "source_location": "L1"
     },
     {
+      "id": "cstring",
+      "label": "CString",
+      "_origin": "ast",
+      "community": 285,
+      "community_name": "ffi/mod.rs",
+      "file_type": "code",
+      "norm_label": "cstring",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_host_api_examples_arkanoid_ram_diff",
       "label": "arkanoid_ram_diff.rs",
       "_origin": "ast",
@@ -49438,17 +49526,6 @@
       "source_location": "L18"
     },
     {
-      "id": "crates_host_api_src_session_media_title",
-      "label": "media_title.rs",
-      "_origin": "ast",
-      "community": 287,
-      "community_name": "room_probe.rs",
-      "file_type": "code",
-      "norm_label": "media_title.rs",
-      "source_file": "crates/host_api/src/session/media_title.rs",
-      "source_location": "L1"
-    },
-    {
       "id": "crates_living_room_examples_room_probe",
       "label": "room_probe.rs",
       "_origin": "ast",
@@ -49489,17 +49566,6 @@
       "community_name": "room_probe.rs",
       "file_type": "code",
       "norm_label": "vec",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "thread",
-      "label": "Thread",
-      "_origin": "ast",
-      "community": 287,
-      "community_name": "room_probe.rs",
-      "file_type": "code",
-      "norm_label": "thread",
       "source_file": "",
       "source_location": ""
     },
@@ -50365,70 +50431,246 @@
       "source_location": "L1"
     },
     {
-      "id": "crates_living_room_src_file_dialog",
-      "label": "file_dialog.rs",
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachbeta",
+      "label": "attachBeta",
       "_origin": "ast",
       "community": 292,
-      "community_name": "file_dialog.rs",
+      "community_name": "CodingKeys",
       "file_type": "code",
-      "norm_label": "file_dialog.rs",
-      "source_file": "crates/living_room/src/file_dialog.rs",
-      "source_location": "L1"
+      "norm_label": "attachbeta",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L33"
     },
     {
-      "id": "crates_living_room_src_file_dialog_filedialogplugin_build",
-      "label": ".build()",
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachdivmmc",
+      "label": "attachDivmmc",
       "_origin": "ast",
       "community": 292,
-      "community_name": "file_dialog.rs",
+      "community_name": "CodingKeys",
       "file_type": "code",
-      "norm_label": ".build()",
-      "source_file": "crates/living_room/src/file_dialog.rs",
-      "source_location": "L21"
+      "norm_label": "attachdivmmc",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L29"
     },
     {
-      "id": "crates_living_room_src_file_dialog_rs_app",
-      "label": "App",
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachinterface1",
+      "label": "attachInterface1",
       "_origin": "ast",
       "community": 292,
-      "community_name": "file_dialog.rs",
+      "community_name": "CodingKeys",
       "file_type": "code",
-      "norm_label": "app",
-      "source_file": "",
-      "source_location": ""
+      "norm_label": "attachinterface1",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L31"
     },
     {
-      "id": "crates_living_room_src_file_dialog_rs_plugin",
-      "label": "Plugin",
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachmultiface",
+      "label": "attachMultiface",
       "_origin": "ast",
       "community": 292,
-      "community_name": "file_dialog.rs",
+      "community_name": "CodingKeys",
       "file_type": "code",
-      "norm_label": "plugin",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_file_dialog_rs_resmut",
-      "label": "ResMut",
-      "_origin": "ast",
-      "community": 292,
-      "community_name": "file_dialog.rs",
-      "file_type": "code",
-      "norm_label": "resmut",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_file_dialog_run_open_dialog",
-      "label": "run_open_dialog()",
-      "_origin": "ast",
-      "community": 292,
-      "community_name": "file_dialog.rs",
-      "file_type": "code",
-      "norm_label": "run_open_dialog()",
-      "source_file": "crates/living_room/src/file_dialog.rs",
+      "norm_label": "attachmultiface",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
       "source_location": "L27"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_aystereo",
+      "label": "ayStereo",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "aystereo",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L26"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_base",
+      "label": "base",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "base",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L22"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_beta",
+      "label": "beta",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "beta",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L158"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_customrompath",
+      "label": "customRomPath",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "customrompath",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L23"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_divmmc",
+      "label": "divmmc",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "divmmc",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L158"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_divmmceeprompath",
+      "label": "divmmcEepromPath",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "divmmceeprompath",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L30"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_id",
+      "label": "id",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "id",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L22"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_interface1",
+      "label": "interface1",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "interface1",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L158"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_interface1rompath",
+      "label": "interface1RomPath",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "interface1rompath",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L32"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_joystick",
+      "label": "joystick",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "joystick",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L158"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_joystickmode",
+      "label": "joystickMode",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "joystickmode",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L24"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_kempstonmouse",
+      "label": "kempstonMouse",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "kempstonmouse",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L25"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_multiface",
+      "label": "multiface",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "multiface",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L158"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_multifacerompath",
+      "label": "multifaceRomPath",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "multifacerompath",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L28"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_name",
+      "label": "name",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "name",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L22"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_plus3disk",
+      "label": "plus3Disk",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "plus3disk",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L161"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_timexdock",
+      "label": "timexDock",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "timexdock",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L162"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_trdosrompath",
+      "label": "trdosRomPath",
+      "_origin": "ast",
+      "community": 292,
+      "community_name": "CodingKeys",
+      "file_type": "code",
+      "norm_label": "trdosrompath",
+      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
+      "source_location": "L34"
     },
     {
       "id": "crates_living_room_examples_room_perf",
@@ -52459,226 +52701,6 @@
       "source_location": ""
     },
     {
-      "id": "c_double",
-      "label": "c_double",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "c_double",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio",
-      "label": "ffi/audio.rs",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "ffi/audio.rs",
-      "source_file": "crates/host_api/src/ffi/audio.rs",
-      "source_location": "L1"
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_rs_c_uint",
-      "label": "c_uint",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "c_uint",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_rs_c_void",
-      "label": "c_void",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "c_void",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_sc_audio_frames",
-      "label": "sc_audio_frames()",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "sc_audio_frames()",
-      "source_file": "crates/host_api/src/ffi/audio.rs",
-      "source_location": "L25"
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_sc_audio_ptr",
-      "label": "sc_audio_ptr()",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "sc_audio_ptr()",
-      "source_file": "crates/host_api/src/ffi/audio.rs",
-      "source_location": "L10"
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_sc_audio_sample_rate",
-      "label": "sc_audio_sample_rate()",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "sc_audio_sample_rate()",
-      "source_file": "crates/host_api/src/ffi/audio.rs",
-      "source_location": "L31"
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_sc_audio_stereo_frames",
-      "label": "sc_audio_stereo_frames()",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "sc_audio_stereo_frames()",
-      "source_file": "crates/host_api/src/ffi/audio.rs",
-      "source_location": "L52"
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_sc_audio_stereo_ptr",
-      "label": "sc_audio_stereo_ptr()",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "sc_audio_stereo_ptr()",
-      "source_file": "crates/host_api/src/ffi/audio.rs",
-      "source_location": "L38"
-    },
-    {
-      "id": "crates_host_api_src_ffi_audio_sc_frame_period_seconds",
-      "label": "sc_frame_period_seconds()",
-      "_origin": "ast",
-      "community": 306,
-      "community_name": "ffi/audio.rs",
-      "file_type": "code",
-      "norm_label": "sc_frame_period_seconds()",
-      "source_file": "crates/host_api/src/ffi/audio.rs",
-      "source_location": "L58"
-    },
-    {
-      "id": "crates_living_room_src_host_host_hotkeys",
-      "label": "host_hotkeys()",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "host_hotkeys()",
-      "source_file": "crates/living_room/src/host.rs",
-      "source_location": "L153"
-    },
-    {
-      "id": "crates_living_room_src_host_rs_assets",
-      "label": "Assets",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "assets",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_rs_buttoninput",
-      "label": "ButtonInput",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "buttoninput",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_rs_image",
-      "label": "Image",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "image",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_rs_keycode",
-      "label": "KeyCode",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "keycode",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_rs_option",
-      "label": "Option",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "option",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_rs_res",
-      "label": "Res",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "res",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_rs_resmut",
-      "label": "ResMut",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "resmut",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_rs_time",
-      "label": "Time",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "time",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_host_tick_emulator",
-      "label": "tick_emulator()",
-      "_origin": "ast",
-      "community": 307,
-      "community_name": "tick_emulator",
-      "file_type": "code",
-      "norm_label": "tick_emulator()",
-      "source_file": "crates/living_room/src/host.rs",
-      "source_location": "L185"
-    },
-    {
       "id": "crates_machine_src_tests_interface1",
       "label": "tests/interface1.rs",
       "_origin": "ast",
@@ -52734,6 +52756,17 @@
       "source_location": "L28"
     },
     {
+      "id": "c_double",
+      "label": "c_double",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "c_double",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_app_src_frontend_menu",
       "label": "menu.rs",
       "_origin": "ast",
@@ -52787,6 +52820,105 @@
       "norm_label": "result.rs",
       "source_file": "crates/formats/src/fdc/result.rs",
       "source_location": "L1"
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio",
+      "label": "ffi/audio.rs",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "ffi/audio.rs",
+      "source_file": "crates/host_api/src/ffi/audio.rs",
+      "source_location": "L1"
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_rs_c_uint",
+      "label": "c_uint",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "c_uint",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_rs_c_void",
+      "label": "c_void",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "c_void",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_sc_audio_frames",
+      "label": "sc_audio_frames()",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "sc_audio_frames()",
+      "source_file": "crates/host_api/src/ffi/audio.rs",
+      "source_location": "L25"
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_sc_audio_ptr",
+      "label": "sc_audio_ptr()",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "sc_audio_ptr()",
+      "source_file": "crates/host_api/src/ffi/audio.rs",
+      "source_location": "L10"
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_sc_audio_sample_rate",
+      "label": "sc_audio_sample_rate()",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "sc_audio_sample_rate()",
+      "source_file": "crates/host_api/src/ffi/audio.rs",
+      "source_location": "L31"
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_sc_audio_stereo_frames",
+      "label": "sc_audio_stereo_frames()",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "sc_audio_stereo_frames()",
+      "source_file": "crates/host_api/src/ffi/audio.rs",
+      "source_location": "L52"
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_sc_audio_stereo_ptr",
+      "label": "sc_audio_stereo_ptr()",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "sc_audio_stereo_ptr()",
+      "source_file": "crates/host_api/src/ffi/audio.rs",
+      "source_location": "L38"
+    },
+    {
+      "id": "crates_host_api_src_ffi_audio_sc_frame_period_seconds",
+      "label": "sc_frame_period_seconds()",
+      "_origin": "ast",
+      "community": 309,
+      "community_name": "super",
+      "file_type": "code",
+      "norm_label": "sc_frame_period_seconds()",
+      "source_file": "crates/host_api/src/ffi/audio.rs",
+      "source_location": "L58"
     },
     {
       "id": "crates_host_api_src_ffi_mod_model_catalog_ffi_json_preserves_order_and_stable_identifiers",
@@ -54807,94 +54939,6 @@
       "source_location": "L1728"
     },
     {
-      "id": "apps_macos_sources_specchummac_appearancepreference",
-      "label": "AppearancePreference.swift",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": "appearancepreference.swift",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L1"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_colorscheme",
-      "label": ".colorScheme",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": ".colorscheme",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L18"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_dark",
-      "label": "dark",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": "dark",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L6"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_id",
-      "label": ".id",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": ".id",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L8"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_light",
-      "label": "light",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": "light",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L5"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_system",
-      "label": "system",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": "system",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L4"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_title",
-      "label": ".title",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": ".title",
-      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
-      "source_location": "L10"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_appearancepreference_swift_self",
-      "label": "Self",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": "self",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
       "id": "apps_macos_sources_specchummac_hostbridge_codingkeys_available",
       "label": "available",
       "_origin": "ast",
@@ -55408,17 +55452,6 @@
       "community_name": "Model",
       "file_type": "code",
       "norm_label": "uint32",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "colorscheme",
-      "label": "ColorScheme",
-      "_origin": "ast",
-      "community": 32,
-      "community_name": "Model",
-      "file_type": "code",
-      "norm_label": "colorscheme",
       "source_file": "",
       "source_location": ""
     },
@@ -58120,6 +58153,17 @@
       "source_location": "L119"
     },
     {
+      "id": "crates_living_room_src_host_host_hotkeys",
+      "label": "host_hotkeys()",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "host_hotkeys()",
+      "source_file": "crates/living_room/src/host.rs",
+      "source_location": "L153"
+    },
+    {
       "id": "crates_living_room_src_host_hostplugin_build",
       "label": ".build()",
       "_origin": "ast",
@@ -58160,6 +58204,28 @@
       "community_name": "EmulatorHost",
       "file_type": "code",
       "norm_label": "app",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_host_rs_assets",
+      "label": "Assets",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "assets",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_host_rs_buttoninput",
+      "label": "ButtonInput",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "buttoninput",
       "source_file": "",
       "source_location": ""
     },
@@ -58208,6 +58274,39 @@
       "source_location": ""
     },
     {
+      "id": "crates_living_room_src_host_rs_image",
+      "label": "Image",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "image",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_host_rs_keycode",
+      "label": "KeyCode",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "keycode",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_host_rs_option",
+      "label": "Option",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "option",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_living_room_src_host_rs_pathbuf",
       "label": "PathBuf",
       "_origin": "ast",
@@ -58226,6 +58325,28 @@
       "community_name": "EmulatorHost",
       "file_type": "code",
       "norm_label": "plugin",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_host_rs_res",
+      "label": "Res",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "res",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_host_rs_resmut",
+      "label": "ResMut",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "resmut",
       "source_file": "",
       "source_location": ""
     },
@@ -58263,6 +58384,17 @@
       "source_location": ""
     },
     {
+      "id": "crates_living_room_src_host_rs_time",
+      "label": "Time",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "time",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_living_room_src_host_select_model_keeps_session_model_matching",
       "label": "select_model_keeps_session_model_matching()",
       "_origin": "ast",
@@ -58272,6 +58404,17 @@
       "norm_label": "select_model_keeps_session_model_matching()",
       "source_file": "crates/living_room/src/host.rs",
       "source_location": "L260"
+    },
+    {
+      "id": "crates_living_room_src_host_tick_emulator",
+      "label": "tick_emulator()",
+      "_origin": "ast",
+      "community": 342,
+      "community_name": "EmulatorHost",
+      "file_type": "code",
+      "norm_label": "tick_emulator()",
+      "source_file": "crates/living_room/src/host.rs",
+      "source_location": "L185"
     },
     {
       "id": "crates_living_room_src_ui_overlay_toggle_pause",
@@ -58461,6 +58604,72 @@
       "source_location": ""
     },
     {
+      "id": "crates_living_room_src_file_dialog",
+      "label": "file_dialog.rs",
+      "_origin": "ast",
+      "community": 344,
+      "community_name": "chrome_buttons",
+      "file_type": "code",
+      "norm_label": "file_dialog.rs",
+      "source_file": "crates/living_room/src/file_dialog.rs",
+      "source_location": "L1"
+    },
+    {
+      "id": "crates_living_room_src_file_dialog_filedialogplugin_build",
+      "label": ".build()",
+      "_origin": "ast",
+      "community": 344,
+      "community_name": "chrome_buttons",
+      "file_type": "code",
+      "norm_label": ".build()",
+      "source_file": "crates/living_room/src/file_dialog.rs",
+      "source_location": "L21"
+    },
+    {
+      "id": "crates_living_room_src_file_dialog_rs_app",
+      "label": "App",
+      "_origin": "ast",
+      "community": 344,
+      "community_name": "chrome_buttons",
+      "file_type": "code",
+      "norm_label": "app",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_file_dialog_rs_plugin",
+      "label": "Plugin",
+      "_origin": "ast",
+      "community": 344,
+      "community_name": "chrome_buttons",
+      "file_type": "code",
+      "norm_label": "plugin",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_file_dialog_rs_resmut",
+      "label": "ResMut",
+      "_origin": "ast",
+      "community": 344,
+      "community_name": "chrome_buttons",
+      "file_type": "code",
+      "norm_label": "resmut",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "crates_living_room_src_file_dialog_run_open_dialog",
+      "label": "run_open_dialog()",
+      "_origin": "ast",
+      "community": 344,
+      "community_name": "chrome_buttons",
+      "file_type": "code",
+      "norm_label": "run_open_dialog()",
+      "source_file": "crates/living_room/src/file_dialog.rs",
+      "source_location": "L27"
+    },
+    {
       "id": "crates_living_room_src_ui_overlay_chrome_buttons",
       "label": "chrome_buttons()",
       "_origin": "ast",
@@ -58571,28 +58780,6 @@
       "source_location": ""
     },
     {
-      "id": "crates_living_room_src_ui_overlay_rs_without",
-      "label": "Without",
-      "_origin": "ast",
-      "community": 344,
-      "community_name": "chrome_buttons",
-      "file_type": "code",
-      "norm_label": "without",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_ui_overlay_update_labels",
-      "label": "update_labels()",
-      "_origin": "ast",
-      "community": 344,
-      "community_name": "chrome_buttons",
-      "file_type": "code",
-      "norm_label": "update_labels()",
-      "source_file": "crates/living_room/src/ui_overlay.rs",
-      "source_location": "L337"
-    },
-    {
       "id": "interaction",
       "label": "Interaction",
       "_origin": "ast",
@@ -58600,17 +58787,6 @@
       "community_name": "chrome_buttons",
       "file_type": "code",
       "norm_label": "interaction",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "text",
-      "label": "Text",
-      "_origin": "ast",
-      "community": 344,
-      "community_name": "chrome_buttons",
-      "file_type": "code",
-      "norm_label": "text",
       "source_file": "",
       "source_location": ""
     },
@@ -58657,39 +58833,6 @@
       "norm_label": ".plane()",
       "source_file": "crates/app/src/frontend/state.rs",
       "source_location": "L168"
-    },
-    {
-      "id": "crates_living_room_src_audio_audioplugin_build",
-      "label": ".build()",
-      "_origin": "ast",
-      "community": 346,
-      "community_name": "AudioMuted",
-      "file_type": "code",
-      "norm_label": ".build()",
-      "source_file": "crates/living_room/src/audio.rs",
-      "source_location": "L144"
-    },
-    {
-      "id": "crates_living_room_src_audio_rs_app",
-      "label": "App",
-      "_origin": "ast",
-      "community": 346,
-      "community_name": "AudioMuted",
-      "file_type": "code",
-      "norm_label": "app",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "crates_living_room_src_audio_rs_plugin",
-      "label": "Plugin",
-      "_origin": "ast",
-      "community": 346,
-      "community_name": "AudioMuted",
-      "file_type": "code",
-      "norm_label": "plugin",
-      "source_file": "",
-      "source_location": ""
     },
     {
       "id": "crates_living_room_src_crt_aperture_debug_enabled",
@@ -59118,28 +59261,6 @@
       "norm_label": "clear_last_error()",
       "source_file": "crates/host_api/src/ffi/mod.rs",
       "source_location": "L56"
-    },
-    {
-      "id": "crates_host_api_src_ffi_mod_heap_cstring",
-      "label": "heap_cstring()",
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "set_last_error",
-      "file_type": "code",
-      "norm_label": "heap_cstring()",
-      "source_file": "crates/host_api/src/ffi/mod.rs",
-      "source_location": "L68"
-    },
-    {
-      "id": "crates_host_api_src_ffi_mod_rs_c_char",
-      "label": "c_char",
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "set_last_error",
-      "file_type": "code",
-      "norm_label": "c_char",
-      "source_file": "",
-      "source_location": ""
     },
     {
       "id": "crates_host_api_src_ffi_mod_rs_into",
@@ -59945,275 +60066,121 @@
       "source_location": ""
     },
     {
+      "id": "apps_macos_sources_specchummac_appearancepreference",
+      "label": "AppearancePreference.swift",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": "appearancepreference.swift",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L1"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_colorscheme",
+      "label": ".colorScheme",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": ".colorscheme",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L18"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_dark",
+      "label": "dark",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": "dark",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L6"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_id",
+      "label": ".id",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": ".id",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L8"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_light",
+      "label": "light",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": "light",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L5"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_system",
+      "label": "system",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": "system",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L4"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_appearancepreference_appearancepreference_title",
+      "label": ".title",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": ".title",
+      "source_file": "apps/macos/Sources/SpecChumMac/AppearancePreference.swift",
+      "source_location": "L10"
+    },
+    {
+      "id": "apps_macos_sources_specchummac_appearancepreference_swift_self",
+      "label": "Self",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": "self",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "apps_macos_sources_specchummac_usermachineconfig",
       "label": "UserMachineConfig.swift",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "usermachineconfig.swift",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
       "source_location": "L1"
     },
     {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachbeta",
-      "label": "attachBeta",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "attachbeta",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L33"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachdivmmc",
-      "label": "attachDivmmc",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "attachdivmmc",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L29"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachinterface1",
-      "label": "attachInterface1",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "attachinterface1",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L31"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_attachmultiface",
-      "label": "attachMultiface",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "attachmultiface",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L27"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_aystereo",
-      "label": "ayStereo",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "aystereo",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L26"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_base",
-      "label": "base",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "base",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L22"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_beta",
-      "label": "beta",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "beta",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L158"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_customrompath",
-      "label": "customRomPath",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "customrompath",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L23"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_divmmc",
-      "label": "divmmc",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "divmmc",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L158"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_divmmceeprompath",
-      "label": "divmmcEepromPath",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "divmmceeprompath",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L30"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_id",
-      "label": "id",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "id",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L22"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_interface1",
-      "label": "interface1",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "interface1",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L158"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_interface1rompath",
-      "label": "interface1RomPath",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "interface1rompath",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L32"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_joystick",
-      "label": "joystick",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "joystick",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L158"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_joystickmode",
-      "label": "joystickMode",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "joystickmode",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L24"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_kempstonmouse",
-      "label": "kempstonMouse",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "kempstonmouse",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L25"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_multiface",
-      "label": "multiface",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "multiface",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L158"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_multifacerompath",
-      "label": "multifaceRomPath",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "multifacerompath",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L28"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_name",
-      "label": "name",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "name",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L22"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_plus3disk",
-      "label": "plus3Disk",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "plus3disk",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L161"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_timexdock",
-      "label": "timexDock",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "timexdock",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L162"
-    },
-    {
-      "id": "apps_macos_sources_specchummac_usermachineconfig_codingkeys_trdosrompath",
-      "label": "trdosRomPath",
-      "_origin": "ast",
-      "community": 39,
-      "community_name": "CodingKeys",
-      "file_type": "code",
-      "norm_label": "trdosrompath",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L34"
-    },
-    {
       "id": "apps_macos_sources_specchummac_usermachineconfig_hostbridge_model_editorhardwarecompat",
       "label": ".editorHardwareCompat",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".editorhardwarecompat",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L211"
+      "source_location": "L199"
     },
     {
       "id": "apps_macos_sources_specchummac_usermachineconfig_prefaystereoslug_abc",
       "label": "abc",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "abc",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60224,7 +60191,7 @@
       "label": "acb",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "acb",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60235,7 +60202,7 @@
       "label": "mono",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "mono",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60246,7 +60213,7 @@
       "label": "cursor",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "cursor",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60257,7 +60224,7 @@
       "label": ".hostMode",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".hostmode",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60268,7 +60235,7 @@
       "label": "kempston",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "kempston",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60279,7 +60246,7 @@
       "label": "sinclairLeft",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "sinclairleft",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60290,7 +60257,7 @@
       "label": "sinclairRight",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "sinclairright",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60301,7 +60268,7 @@
       "label": ".hostModel",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".hostmodel",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60312,7 +60279,7 @@
       "label": "pentagon128",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "pentagon128",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60323,7 +60290,7 @@
       "label": "scorpionZs256",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "scorpionzs256",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60334,7 +60301,7 @@
       "label": "spectrum128",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrum128",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60345,7 +60312,7 @@
       "label": "spectrum16K",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrum16k",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60356,7 +60323,7 @@
       "label": "spectrum48",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrum48",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60367,7 +60334,7 @@
       "label": "spectrumNext",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrumnext",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60378,7 +60345,7 @@
       "label": "spectrumPlus2",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrumplus2",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60389,7 +60356,7 @@
       "label": "spectrumPlus2A",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrumplus2a",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60400,7 +60367,7 @@
       "label": "spectrumPlus3",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrumplus3",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60411,7 +60378,7 @@
       "label": "spectrumPlus3e",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "spectrumplus3e",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60422,7 +60389,7 @@
       "label": "timexTC2048",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "timextc2048",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60433,7 +60400,7 @@
       "label": "timexTS2068",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "timexts2068",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60444,7 +60411,7 @@
       "label": ".title",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": ".title",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
@@ -60455,7 +60422,7 @@
       "label": "Bool",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "bool",
       "source_file": "",
@@ -60466,7 +60433,7 @@
       "label": "String",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "string",
       "source_file": "",
@@ -60477,7 +60444,7 @@
       "label": "CaseIterable",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "caseiterable",
       "source_file": "",
@@ -60488,9 +60455,20 @@
       "label": "Codable",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "codable",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "colorscheme",
+      "label": "ColorScheme",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "PrefModelSlug",
+      "file_type": "code",
+      "norm_label": "colorscheme",
       "source_file": "",
       "source_location": ""
     },
@@ -60499,7 +60477,7 @@
       "label": "Equatable",
       "_origin": "ast",
       "community": 39,
-      "community_name": "CodingKeys",
+      "community_name": "PrefModelSlug",
       "file_type": "code",
       "norm_label": "equatable",
       "source_file": "",
@@ -81712,6 +81690,28 @@
       "source_location": "L215"
     },
     {
+      "id": "crates_host_api_src_ffi_mod_heap_cstring",
+      "label": "heap_cstring()",
+      "_origin": "ast",
+      "community": 98,
+      "community_name": "ffi/debug.rs",
+      "file_type": "code",
+      "norm_label": "heap_cstring()",
+      "source_file": "crates/host_api/src/ffi/mod.rs",
+      "source_location": "L68"
+    },
+    {
+      "id": "crates_host_api_src_ffi_mod_rs_c_char",
+      "label": "c_char",
+      "_origin": "ast",
+      "community": 98,
+      "community_name": "ffi/debug.rs",
+      "file_type": "code",
+      "norm_label": "c_char",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "crates_living_room_src_headless_headlessroom_perf",
       "label": ".perf()",
       "_origin": "ast",
@@ -83245,6 +83245,18 @@
       "type": "external"
     },
     {
+      "id": "refcell",
+      "label": "refcell",
+      "_origin": "semantic",
+      "community": 115,
+      "community_name": "agent_embed.rs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "refcell",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "share_session_arc",
       "label": "share_session_arc",
       "_origin": "semantic",
@@ -83449,14 +83461,14 @@
       "type": "external"
     },
     {
-      "id": "asset_plugin",
-      "label": "asset_plugin",
+      "id": "bakedroomplugin",
+      "label": "bakedroomplugin",
       "_origin": "semantic",
       "community": 133,
       "community_name": "headless.rs",
       "external": true,
       "file_type": "concept",
-      "norm_label": "asset_plugin",
+      "norm_label": "bakedroomplugin",
       "source_file": "",
       "type": "external"
     },
@@ -83469,6 +83481,18 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "exitcondition",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "glowplugin",
+      "label": "glowplugin",
+      "_origin": "semantic",
+      "community": 133,
+      "community_name": "headless.rs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "glowplugin",
       "source_file": "",
       "type": "external"
     },
@@ -83833,6 +83857,18 @@
       "type": "external"
     },
     {
+      "id": "arc",
+      "label": "arc",
+      "_origin": "semantic",
+      "community": 176,
+      "community_name": "agent_server/src/main.rs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "arc",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "context",
       "label": "context",
       "_origin": "semantic",
@@ -83853,6 +83889,18 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "control_plane",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "hostsession",
+      "label": "hostsession",
+      "_origin": "semantic",
+      "community": 176,
+      "community_name": "agent_server/src/main.rs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "hostsession",
       "source_file": "",
       "type": "external"
     },
@@ -84601,18 +84649,6 @@
       "type": "external"
     },
     {
-      "id": "refcell",
-      "label": "refcell",
-      "_origin": "semantic",
-      "community": 285,
-      "community_name": "ffi/mod.rs",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "refcell",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "session",
       "label": "session",
       "_origin": "semantic",
@@ -84637,18 +84673,6 @@
       "type": "external"
     },
     {
-      "id": "arc",
-      "label": "arc",
-      "_origin": "semantic",
-      "community": 287,
-      "community_name": "room_probe.rs",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "arc",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "duration",
       "label": "duration",
       "_origin": "semantic",
@@ -84657,18 +84681,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "duration",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "hostsession",
-      "label": "hostsession",
-      "_origin": "semantic",
-      "community": 287,
-      "community_name": "room_probe.rs",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "hostsession",
       "source_file": "",
       "type": "external"
     },
@@ -85489,6 +85501,18 @@
       "type": "external"
     },
     {
+      "id": "asset_plugin",
+      "label": "asset_plugin",
+      "_origin": "semantic",
+      "community": 8,
+      "community_name": "living_room/src/lib.rs",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "asset_plugin",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "audioplugin",
       "label": "audioplugin",
       "_origin": "semantic",
@@ -85497,18 +85521,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "audioplugin",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "bakedroomplugin",
-      "label": "bakedroomplugin",
-      "_origin": "semantic",
-      "community": 8,
-      "community_name": "living_room/src/lib.rs",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "bakedroomplugin",
       "source_file": "",
       "type": "external"
     },
@@ -85557,18 +85569,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "filedialogplugin",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "glowplugin",
-      "label": "glowplugin",
-      "_origin": "semantic",
-      "community": 8,
-      "community_name": "living_room/src/lib.rs",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "glowplugin",
       "source_file": "",
       "type": "external"
     },
@@ -91047,18 +91047,6 @@
       "weight": 1.0
     },
     {
-      "source": "apps_macos_sources_specchummac_usermachineconfig_hardwarecompatflags",
-      "target": "apps_macos_sources_specchummac_usermachineconfig_hardwarecompatflags",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L165",
-      "weight": 1.0
-    },
-    {
       "source": "apps_macos_sources_specchummac_usermachineconfig_hardwarecompatflags_formodel",
       "target": "apps_macos_sources_specchummac_usermachineconfig_hardwarecompatflags",
       "relation": "calls",
@@ -91067,7 +91055,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L196",
+      "source_location": "L184",
       "weight": 1.0
     },
     {
@@ -145271,7 +145259,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L211",
+      "source_location": "L199",
       "weight": 1.0
     },
     {
@@ -183947,7 +183935,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L177",
+      "source_location": "L165",
       "weight": 1.0
     },
     {
@@ -219684,7 +219672,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L210",
+      "source_location": "L198",
       "weight": 1.0
     },
     {
@@ -262265,7 +262253,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift",
-      "source_location": "L211",
+      "source_location": "L199",
       "weight": 1.0
     },
     {
@@ -293312,5 +293300,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "d83b84cd0a9c77e8342e43580b896118f7f32401"
+  "built_at_commit": "7f5c578eac9c55a961c243a88f039f473ec85d91"
 }

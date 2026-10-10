@@ -102,9 +102,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/UserMachineConfig.swift": {
-    "mtime": 1791606062.078181,
-    "seen": 1791606133.285198,
-    "ast_hash": "1cd2a1a5ad56238a645a2ea80c8aaa75",
+    "mtime": 1791606255.714798,
+    "seen": 1791606265.814831,
+    "ast_hash": "0cd6666a9bcc790e61bcd8e12fab6784",
     "semantic_hash": ""
   },
   "crates/agent_server/Cargo.toml": {

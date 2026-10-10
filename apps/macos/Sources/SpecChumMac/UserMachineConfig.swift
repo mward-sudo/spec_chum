@@ -162,18 +162,6 @@ struct HardwareCompatFlags: Decodable {
         case timexDock = "timex_dock"
     }
 
-    static let unsupported = HardwareCompatFlags(
-        multiface: false,
-        divmmc: false,
-        interface1: false,
-        beta: false,
-        ayStereo: false,
-        kempstonMouse: false,
-        joystick: false,
-        plus3Disk: false,
-        timexDock: false
-    )
-
     static func forModel(_ model: HostBridge.Model) -> HardwareCompatFlags {
         let supportsClassicPeripherals: Bool
         switch model {
