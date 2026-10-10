@@ -586,6 +586,18 @@ fn opening_tap_or_tzx_clears_ephemeral_instant_mode() {
         "new TAP preserves the selected EAR speed"
     );
 
+    let experience = machine::TapeLoadOptions::experience();
+    session
+        .set_tape_load_options(experience)
+        .expect("set Experience mode");
+    session.open_tape(&tap).expect("reopen TAP in Experience mode");
+    let options = session.tape_load_options().expect("tape options");
+    assert!(options.experience_load, "opening TAP preserves Experience mode");
+    assert_eq!(
+        options.speed, experience.speed,
+        "TAP preserves the selected Experience speed"
+    );
+
     let dir = tempfile_dir("spec_chum_new_tape_mode");
     let tzx = dir.join("pulse_only.tzx");
     let mut bytes = Vec::from(&b"ZXTape!"[..]);
@@ -594,7 +606,6 @@ fn opening_tap_or_tzx_clears_ephemeral_instant_mode() {
     bytes.extend_from_slice(&1000u16.to_le_bytes());
     bytes.extend_from_slice(&2u16.to_le_bytes());
     std::fs::write(&tzx, bytes).expect("write TZX");
-    let experience = machine::TapeLoadOptions::experience();
     session
         .set_tape_load_options(experience)
         .expect("set Experience mode");
