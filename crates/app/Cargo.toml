@@ -25,7 +25,7 @@ debug_cli = { workspace = true }
 parking_lot = { workspace = true }
 host_api = { workspace = true }
 eframe = { workspace = true }
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 egui = { workspace = true }
 cpal = { workspace = true }
 gilrs = { workspace = true }

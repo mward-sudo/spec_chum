@@ -7,6 +7,13 @@ use spec_chum_host::{query_recent_media, MediaCategory, MediaCompatibility, Medi
 const FRONTEND_VIEW_ID: &str = "frontend.view";
 pub(super) const GUEST_KEYBOARD_SUPPRESSED_ID: &str = "frontend.guest_keyboard_suppressed";
 const PLAY_FOCUS_REQUEST_ID: &str = "frontend.play_focus_request";
+/// Longest side uploaded for a machine photo.
+///
+/// `egui_glow` aborts when a texture exceeds `GL_MAX_TEXTURE_SIZE`. Several
+/// bundled photos are wider than 4096, the limit on common GLES devices.
+/// The picker draws them at about 220×112, so this cap stays inside that
+/// limit and inside egui's reported maximum when the GPU is smaller.
+const MAX_MACHINE_PHOTO_SIDE: usize = 1024;
 
 fn machine_photo_bytes(key: &str) -> Option<&'static [u8]> {
     match key {
@@ -34,10 +41,26 @@ fn machine_photo_bytes(key: &str) -> Option<&'static [u8]> {
     }
 }
 
+fn fitted_machine_photo(bytes: &[u8], max_side: u32) -> Option<image::RgbaImage> {
+    use image::GenericImageView;
+
+    let max_side = max_side.max(1);
+    let decoded = image::load_from_memory(bytes).ok()?;
+    let (width, height) = decoded.dimensions();
+    let fitted = if width > max_side || height > max_side {
+        decoded.resize(max_side, max_side, image::imageops::FilterType::Triangle)
+    } else {
+        decoded
+    };
+    Some(fitted.to_rgba8())
+}
+
 fn load_machine_photo(ctx: &egui::Context, key: &str) -> Option<egui::TextureHandle> {
     let bytes = machine_photo_bytes(key)?;
-    let decoded = image::load_from_memory(bytes).ok()?;
-    let rgba = decoded.to_rgba8();
+    let max_side = ctx
+        .input(|input| input.max_texture_side)
+        .clamp(1, MAX_MACHINE_PHOTO_SIDE);
+    let rgba = fitted_machine_photo(bytes, max_side as u32)?;
     let size = [rgba.width() as usize, rgba.height() as usize];
     let pixels = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
     Some(ctx.load_texture(
@@ -492,6 +515,10 @@ mod machine_photo_tests {
             let bytes = machine_photo_bytes(key).expect("catalog photo key has an embedded asset");
             assert_ne!(bytes.len(), 0);
             assert!(image::load_from_memory(bytes).is_ok());
+            let fitted = fitted_machine_photo(bytes, MAX_MACHINE_PHOTO_SIDE as u32)
+                .expect("catalog photo decodes within the texture cap");
+            assert!(fitted.width() <= MAX_MACHINE_PHOTO_SIDE as u32);
+            assert!(fitted.height() <= MAX_MACHINE_PHOTO_SIDE as u32);
             assert!(descriptor.image_description.is_some());
         }
         assert_eq!(
