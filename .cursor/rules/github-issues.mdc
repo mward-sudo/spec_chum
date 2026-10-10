@@ -16,7 +16,16 @@ Tiny, self-contained fixes and read-only tasks do not need issue-tracker ceremon
 ## PRs
 
 - Done → `Closes #N` · Partial/related → `Refs #N`
-- Do **not** close until acceptance criteria are truly met (stubs ≠ done)
+
+## Issue closure gate
+
+Before adding `Closes #N` or manually closing an issue:
+
+1. Read the issue's current acceptance criteria, including later clarifications. Make any ambiguous or untestable criterion concrete with the issue owner before treating it as complete.
+2. Check the implementation that will be merged (or is already merged) against **each criterion**. Record a criterion-to-evidence mapping in the PR description or issue: identify the implementation and the check or direct observation that demonstrates it. A passing build or test suite alone does not establish criteria it does not exercise.
+3. Verify user-visible criteria through the actual user-facing path on every host or environment named by the criterion. Source code, bundled assets, and screenshots from a different host are not evidence that the required path works.
+
+Use `Closes #N` only when the implementation being merged satisfies every criterion and the evidence is recorded. For partial work, missing evidence, or a known gap, use `Refs #N` and leave the issue open; update its criteria or record the gap and follow-up when scope changes. Manually close only after the satisfying implementation is available on the target branch and the same evidence is recorded.
 
 ## Gaps discovered mid-work
 

@@ -11,8 +11,7 @@
 - Before substantive implementation, check related issues (`gh issue list` / `gh issue view N`). Prefer extending an existing issue over opening a duplicate; tiny self-contained fixes do not need an issue by default.
 - Use stacked PRs via `gh stack` when work naturally splits into independently reviewable concerns; keep a single focused PR for a single concern.
 - For features, prefer vertical slices that deliver a testable user-visible behavior through all required layers. Split broad work into small, ordered slices with explicit outcomes. Use horizontal changes when the work is inherently layer-wide or accuracy-focused (for example CPU/timing fixes, shared contract migrations, or mechanical refactors); every shape still needs checks appropriate to its behavior and scope.
-- Link PRs with `Closes #N` / `Refs #N`.
-- Do not close an issue until its acceptance criteria are truly met (placeholder/stub PRs must use `Refs`, not `Closes`).
+- Link a PR with `Closes #N` only after checking the implementation against every current acceptance criterion and recording criterion-by-criterion evidence in the PR or issue. The implementation being merged must satisfy every criterion; partial or unverified work uses `Refs #N` and leaves the issue open. For the full closure gate, including user-facing verification, see [`.cursor/rules/github-issues.mdc`](.cursor/rules/github-issues.mdc).
 - When work discovers gaps, update or reopen the issue rather than silently diverging from the tracker.
 
 ## Rust practices
