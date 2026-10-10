@@ -485,12 +485,12 @@ mod machine_photo_tests {
         let mut keys = BTreeSet::new();
         for descriptor in catalog {
             let Some(key) = descriptor.image_key else {
-                assert!(!descriptor.title.is_empty());
+                assert_ne!(descriptor.title, "");
                 continue;
             };
             keys.insert(key);
             let bytes = machine_photo_bytes(key).expect("catalog photo key has an embedded asset");
-            assert!(!bytes.is_empty());
+            assert_ne!(bytes.len(), 0);
             assert!(image::load_from_memory(bytes).is_ok());
             assert!(descriptor.image_description.is_some());
         }

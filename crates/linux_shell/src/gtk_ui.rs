@@ -165,7 +165,7 @@ impl AppState {
 
     fn update_hardware_action_states(&mut self) {
         let compatibility = self.host.with_mut(|session| {
-            spec_chum_host::hardware_compat(PrefModel::from_model(session.model()))
+            spec_chum_host::hardware_compat(PrefModel::from_model_id(session.model()))
         });
         for (kind, action) in &self.hardware_actions {
             let enabled = match kind {

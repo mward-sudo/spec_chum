@@ -514,7 +514,7 @@ impl AppState {
 
         let compatibility = self
             .host
-            .with_mut(|session| hardware_compat(PrefModel::from_model(session.model())));
+            .with_mut(|session| hardware_compat(PrefModel::from_model_id(session.model())));
         let beta = compatibility.beta;
         for (id, enabled) in [
             (IDM_HW_ATTACH_MULTIFACE, compatibility.multiface),
@@ -543,9 +543,9 @@ impl AppState {
         use windows::Win32::UI::WindowsAndMessaging::{
             EnableMenuItem, MF_BYCOMMAND, MF_ENABLED, MF_GRAYED,
         };
-        let compatible = self
-            .host
-            .with_mut(|session| hardware_compat(PrefModel::from_model(session.model())).plus3_disk);
+        let compatible = self.host.with_mut(|session| {
+            hardware_compat(PrefModel::from_model_id(session.model())).plus3_disk
+        });
         let state = if compatible { MF_ENABLED } else { MF_GRAYED };
         // SAFETY: menu is the live File popup retained from build_menu.
         unsafe {

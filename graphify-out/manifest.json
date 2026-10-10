@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/MachineConfigEditorView.swift": {
-    "mtime": 1791600998.357307,
-    "seen": 1791601875.766956,
-    "ast_hash": "8aa1e343ffe605ce87c48a8967cec4fb",
+    "mtime": 1791604861.6089263,
+    "seen": 1791605009.160249,
+    "ast_hash": "e03e6b3ff5e227ad4ca0d4e6b9bdda5c",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/RomSetupView.swift": {
@@ -1476,9 +1476,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1791601358.1802104,
-    "seen": 1791601875.767099,
-    "ast_hash": "e03c86d87e752bc5fe5fec5ef249d480",
+    "mtime": 1791604901.845933,
+    "seen": 1791605009.1659362,
+    "ast_hash": "337d0341c7c084e1efc7d6cf1ac6878f",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -1512,9 +1512,9 @@
     "semantic_hash": ""
   },
   "crates/linux_shell/src/gtk_ui.rs": {
-    "mtime": 1791601351.1654575,
-    "seen": 1791601875.767039,
-    "ast_hash": "349cd30d45e51a377a70fbb55449e89b",
+    "mtime": 1791604861.5867338,
+    "seen": 1791605009.163528,
+    "ast_hash": "fdcd98f19d8602ba326209115940e938",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/keymap.rs": {
@@ -2466,9 +2466,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/frontend/navigation.rs": {
-    "mtime": 1791603904.6928408,
-    "seen": 1791603956.377672,
-    "ast_hash": "8323d60af39f59aa47cf5c8546d92463",
+    "mtime": 1791604861.6320739,
+    "seen": 1791605009.161223,
+    "ast_hash": "e6a036ce44bd485960aadfe0f704771b",
     "semantic_hash": ""
   },
   "crates/host_api/src/media_library.rs": {

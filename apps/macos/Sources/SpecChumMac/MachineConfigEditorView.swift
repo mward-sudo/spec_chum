@@ -189,7 +189,7 @@ struct MachineConfigEditorView: View {
 
     private static func sanitized(_ draft: UserMachineConfig, for base: PrefModelSlug) -> UserMachineConfig {
         var draft = draft
-        let compat = HardwareCompatFlags.forBase(base)
+        let compat = base.hostModel.hardwareCompat
         if !compat.multiface {
             draft.attachMultiface = false
             draft.multifaceRomPath = nil
