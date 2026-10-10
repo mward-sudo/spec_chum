@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{ERROR_SUCCESS, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{ERROR_SUCCESS, HMODULE, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateDIBSection, DeleteObject, EndPaint, GetDC, InvalidateRect, ReleaseDC,
@@ -22,24 +22,25 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+use windows::Win32::System::SystemServices::SS_BITMAP;
 use windows::Win32::UI::Controls::SetScrollInfo;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     EnableWindow, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
-    GetClientRect, GetDlgItem, GetMenu, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
-    IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostMessageW,
-    PostQuitMessage, RegisterClassExW, ScrollWindowEx, SendMessageW, SetWindowLongPtrW,
-    SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW,
-    CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW,
-    IDOK, IMAGE_BITMAP, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG,
-    PM_REMOVE, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP, SB_THUMBPOSITION, SB_THUMBTRACK,
-    SB_VERT, SCROLLINFO, SIF_ALL, SS_BITMAP, STM_SETIMAGE, SW_INVALIDATE, SW_SCROLLCHILDREN,
-    SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY,
-    WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE,
-    WM_SYSKEYDOWN, WM_SYSKEYUP, WM_VSCROLL, WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW,
-    WS_VISIBLE, WS_VSCROLL,
+    GetClientRect, GetDlgItem, GetMenu, GetScrollInfo, GetWindowLongPtrW, GetWindowTextLengthW,
+    GetWindowTextW, IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW,
+    PostMessageW, PostQuitMessage, RegisterClassExW, ScrollWindowEx, SendMessageW,
+    SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW,
+    CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA,
+    HMENU, IDC_ARROW, IDOK, IMAGE_BITMAP, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND,
+    MF_BYPOSITION, MSG, PM_REMOVE, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP,
+    SB_THUMBPOSITION, SB_THUMBTRACK, SB_VERT, SCROLLINFO, SIF_ALL, STM_SETIMAGE, SW_INVALIDATE,
+    SW_SCROLLCHILDREN, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND,
+    WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT,
+    WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_VSCROLL, WNDCLASSEXW, WS_BORDER,
+    WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
@@ -1511,8 +1512,8 @@ extern "system" fn machine_picker_wnd_proc(
                             let _ = SendMessageW(
                                 image,
                                 STM_SETIMAGE,
-                                WPARAM(IMAGE_BITMAP as usize),
-                                LPARAM(0),
+                                Some(WPARAM(IMAGE_BITMAP.0 as usize)),
+                                Some(LPARAM(0)),
                             );
                         }
                         // SAFETY: this bitmap was created by machine_bitmap and is no
@@ -1566,7 +1567,7 @@ unsafe fn populate_machine_picker(hwnd: HWND, state: &mut MachinePickerState) {
             WS_CHILD
                 | WS_VISIBLE
                 | WS_BORDER
-                | windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(SS_BITMAP as u32)
+                | windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(SS_BITMAP.0)
         } else {
             WS_CHILD | WS_VISIBLE | WS_BORDER
         };
@@ -1598,8 +1599,8 @@ unsafe fn populate_machine_picker(hwnd: HWND, state: &mut MachinePickerState) {
                 let _ = SendMessageW(
                     image_hwnd,
                     STM_SETIMAGE,
-                    WPARAM(IMAGE_BITMAP as usize),
-                    LPARAM(bitmap.0 as isize),
+                    Some(WPARAM(IMAGE_BITMAP.0 as usize)),
+                    Some(LPARAM(bitmap.0 as isize)),
                 );
             }
             state.bitmaps.push((image_id as i32, bitmap));
@@ -1747,7 +1748,7 @@ fn compatible_peripheral_summary(compat: spec_chum_host::HardwareCompat) -> Stri
 
 fn picker_label(
     parent: HWND,
-    hinstance: windows::Win32::Foundation::HINSTANCE,
+    hinstance: HMODULE,
     x: i32,
     y: i32,
     width: i32,
@@ -1770,7 +1771,7 @@ fn picker_label(
             height,
             Some(parent),
             None,
-            Some(hinstance),
+            Some(hinstance.into()),
             None,
         )
         .unwrap_or_default()
@@ -1819,7 +1820,7 @@ fn machine_bitmap(encoded: &[u8]) -> Option<HBITMAP> {
     let bitmap = bitmap?;
     if destination.is_null() {
         // SAFETY: bitmap was created above and has not been attached to a control.
-        unsafe { DeleteObject(HGDIOBJ(bitmap.0)) }.ok()?;
+        let _ = unsafe { DeleteObject(HGDIOBJ(bitmap.0)) };
         return None;
     }
     // SAFETY: CreateDIBSection returned a writable buffer for this 160x90x32bpp

@@ -277,6 +277,9 @@ mod tests {
 
     #[test]
     fn builtin_rom_setup_preserves_active_profile_until_boot_succeeds() {
+        let _rom_paths = crate::APP_ROM_PATH_TEST_LOCK
+            .lock()
+            .expect("app ROM path test lock is not poisoned");
         use crate::{Machine, Model, SpecChumApp, UserMachineConfig};
         use spec_chum_host::{model_rom_path_key, PrefModel};
 
@@ -298,14 +301,20 @@ mod tests {
         let profile = UserMachineConfig::new_named("Current custom", PrefModel::Spectrum48);
         app.prefs.custom_configs.push(profile.clone());
         app.prefs.active_config_id = Some(profile.id.clone());
+        let selected_model = Model::ScorpionZs256;
         app.prefs.model_rom_paths.insert(
-            model_rom_path_key(PrefModel::Spectrum16K, "main"),
+            model_rom_path_key(PrefModel::ScorpionZs256, "main"),
             rom_path.display().to_string(),
         );
+        let trdos_path = std::env::temp_dir().join(format!("{unique}-trdos.rom"));
+        app.prefs.model_rom_paths.insert(
+            model_rom_path_key(PrefModel::ScorpionZs256, "trdos"),
+            trdos_path.display().to_string(),
+        );
 
-        app.on_builtin_model_selected(Model::Spectrum16K);
+        app.on_builtin_model_selected(selected_model);
         assert!(app.show_rom_setup);
-        assert_eq!(app.pending_builtin_model, Some(Model::Spectrum16K));
+        assert_eq!(app.pending_builtin_model, Some(selected_model));
         assert_eq!(app.session.model(), Model::Spectrum48);
         assert_eq!(
             app.prefs.active_config_id.as_deref(),
@@ -324,9 +333,10 @@ mod tests {
             Some(profile.id.as_str())
         );
 
-        std::fs::write(&rom_path, vec![0; 16 * 1024]).expect("test target ROM");
-        app.on_builtin_model_selected(Model::Spectrum16K);
-        assert_eq!(app.session.model(), Model::Spectrum16K);
+        std::fs::write(&rom_path, vec![0; 48 * 1024]).expect("test target ROM");
+        std::fs::write(&trdos_path, vec![0; 16 * 1024]).expect("test TR-DOS ROM");
+        app.on_builtin_model_selected(selected_model);
+        assert_eq!(app.session.model(), selected_model);
         assert!(app.session.host_mut().has_machine());
         assert_eq!(app.prefs.active_config_id, None);
         assert!(app
@@ -338,6 +348,7 @@ mod tests {
 
         spec_chum_host::sync_model_rom_paths(std::collections::BTreeMap::default());
         let _ = std::fs::remove_file(rom_path);
+        let _ = std::fs::remove_file(trdos_path);
         let _ = std::fs::remove_file(prefs_path);
     }
 
