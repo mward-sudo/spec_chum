@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
-use spec_chum_host::{RomSetupJson, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
+use spec_chum_host::{MediaCategory, RomSetupJson, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
 
 mod audio;
 mod debugger;
@@ -65,6 +65,9 @@ pub struct SpecChumApp {
     gilrs: Option<gilrs::Gilrs>,
     /// Host-local preferences (#186); written on change / exit.
     prefs: UiPreferences,
+    library_search: String,
+    library_category: Option<MediaCategory>,
+    selected_media_path: Option<String>,
     prefs_path: PathBuf,
     prefs_dirty: bool,
     /// Debounce window-size writes so continuous resize does not save every frame.

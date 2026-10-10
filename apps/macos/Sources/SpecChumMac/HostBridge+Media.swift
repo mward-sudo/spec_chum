@@ -16,24 +16,63 @@ extension HostBridge {
         persistRecentFiles()
     }
 
+    func removeRecentFile(_ url: URL) {
+        recentFiles.removeAll { $0.standardizedFileURL == url.standardizedFileURL }
+        persistRecentFiles()
+    }
+
+    func mediaLibraryEntries(search: String = "", category: String = "all") -> [MediaLibraryEntry] {
+        guard let handle,
+              let paths = try? JSONEncoder().encode(recentFiles.map(\.path)),
+              let pathsJSON = String(data: paths, encoding: .utf8)
+        else {
+            return []
+        }
+        return pathsJSON.withCString { pathsCString in
+            search.withCString { searchCString in
+                category.withCString { categoryCString in
+                    guard let raw = sc_media_library_json(
+                        handle, pathsCString, searchCString, categoryCString
+                    ) else {
+                        return []
+                    }
+                    defer { sc_string_free(raw) }
+                    let data = Data(bytes: raw, count: strlen(raw))
+                    return (try? JSONDecoder().decode([MediaLibraryEntry].self, from: data)) ?? []
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    func openLibraryEntry(_ entry: MediaLibraryEntry) -> Bool {
+        guard let handle else { return false }
+        let result = entry.path.withCString { sc_open_media(handle, $0) }
+        guard result == 0 else {
+            status = HostBridge.takeLastError() ?? "Media could not be opened"
+            let url = URL(fileURLWithPath: entry.path)
+            if !FileManager.default.isReadableFile(atPath: url.path) {
+                removeRecentFile(url)
+            }
+            return false
+        }
+        let url = URL(fileURLWithPath: entry.path)
+        mediaTitle = url.lastPathComponent
+        syncTapeLoadOptionsFromHost()
+        syncModelFromHost()
+        refreshStatus()
+        noteRecentFile(url)
+        return true
+    }
+
     /// Reopen a recent path; missing files are dropped from the list without crashing.
     func openRecentFile(_ url: URL) {
-        guard FileManager.default.isReadableFile(atPath: url.path) else {
-            status = "Recent file missing: \(url.lastPathComponent)"
-            recentFiles.removeAll { $0.standardizedFileURL == url.standardizedFileURL }
-            persistRecentFiles()
+        guard let entry = mediaLibraryEntries().first(where: { $0.path == url.path }) else {
+            status = "Unsupported recent media: \(url.lastPathComponent)"
+            removeRecentFile(url)
             return
         }
-        switch url.pathExtension.lowercased() {
-        case "sna", "z80":
-            openSnapshot(at: url)
-        case "rzx":
-            openRzx(at: url)
-        case "trd":
-            openTrd(at: url)
-        default:
-            openMedia(at: url)
-        }
+        _ = openLibraryEntry(entry)
     }
 
     func loadRom(at url: URL) {

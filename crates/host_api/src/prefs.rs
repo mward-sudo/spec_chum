@@ -344,6 +344,13 @@ impl UiPreferences {
         self.recent_files.truncate(MAX_RECENT_FILES);
     }
 
+    /// Forget one exact recent path without changing the user's media file.
+    pub fn remove_recent(&mut self, path: &Path) {
+        if let Some(path) = path.to_str() {
+            self.recent_files.retain(|recent| recent != path);
+        }
+    }
+
     pub fn set_model_from_machine(&mut self, model: Model) {
         let pref = PrefModel::from_model(model);
         self.model = pref;
@@ -896,6 +903,15 @@ mod tests {
             p.recent_files,
             vec!["/a.tap".to_string(), "/b.tzx".to_string()]
         );
+    }
+
+    #[test]
+    fn removing_recent_only_forgets_that_exact_path() {
+        let mut prefs = UiPreferences::default();
+        prefs.push_recent(Path::new("/a.tap"));
+        prefs.push_recent(Path::new("/b.tzx"));
+        prefs.remove_recent(Path::new("/a.tap"));
+        assert_eq!(prefs.recent_files, vec!["/b.tzx"]);
     }
 
     #[test]

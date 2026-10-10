@@ -2,6 +2,7 @@
 
 #![allow(unsafe_code)] // Win32 window-proc / GDI / USERDATA — SAFETY at each site.
 
+use std::collections::VecDeque;
 use std::mem::{size_of, zeroed};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -20,23 +21,28 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    EnableWindow, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect, GetMenu,
-    GetWindowLongPtrW, LoadCursorW, MessageBoxW, PeekMessageW, PostQuitMessage, RegisterClassExW,
-    SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW,
-    CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA,
-    HMENU, IDC_ARROW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG,
-    PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
+    CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
+    GetClientRect, GetDlgItem, GetMenu, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
+    IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostMessageW,
+    PostQuitMessage, RegisterClassExW, SendMessageW, SetWindowLongPtrW, SetWindowTextW, ShowWindow,
+    TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT,
+    ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW, IDOK, MB_ICONERROR,
+    MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
     WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
     WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
 use spec_chum_host::{
-    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, rom_setup_json,
-    save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession, ModelId,
-    PrefAyStereo, PrefModel, UiPreferences,
+    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, query_recent_media,
+    rom_setup_json, save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession,
+    MediaCategory, MediaCompatibility, MediaEntry, MediaFormat, ModelId, PrefAyStereo, PrefModel,
+    UiPreferences,
 };
 
 use native_shell_common::audio::{self, PcmRing};
@@ -58,6 +64,9 @@ use native_shell_common::{
     IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20, IDM_SET_TAPE_EAR_5, IDM_SET_TAPE_EXPERIENCE,
     IDM_SET_TAPE_INSTANT, IDM_SET_THROTTLE, IDM_TAPE_PAUSE, IDM_TAPE_PLAY, IDM_TAPE_REWIND,
 };
+#[path = "win32/library.rs"]
+mod library;
+
 use windows_shell::keymap::{
     self, apply_chord, apply_modifiers, chord_for_vk, suppresses_modifier_caps,
 };
@@ -69,6 +78,8 @@ const ID_DBG_EDIT: i32 = 2001;
 const IDM_MACHINE_ROM_SETUP: usize = 1289;
 const IDM_LIBRARY_RECENT_BASE: usize = 1600;
 const IDM_LIBRARY_RECENT_COUNT: usize = 12;
+const IDM_LIBRARY_OPEN: usize = 1590;
+const WM_REPORT_ERROR: u32 = WM_APP + 1;
 const PERSONALIZE_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0";
 const APPS_USE_LIGHT_THEME: &str = "AppsUseLightTheme\0";
 
@@ -118,7 +129,15 @@ struct AppState {
     pending_cmd: Option<usize>,
     debug_hwnd: Option<HWND>,
     debug_edit: Option<HWND>,
+    library_hwnd: Option<HWND>,
+    library_search: Option<HWND>,
+    library_category: Option<HWND>,
+    library_list: Option<HWND>,
+    library_details: Option<HWND>,
+    library_entries: Vec<MediaEntry>,
     main_hwnd: Option<HWND>,
+    /// Modal errors are queued so no AppState borrow spans USER32's nested message loop.
+    pending_error_dialogs: VecDeque<(String, String)>,
     /// Last time the debugger EDIT control was rewritten from `tick_frame`.
     last_debug_refresh: Instant,
     next_assets_download: Option<NextAssetDownload>,
@@ -198,7 +217,14 @@ impl AppState {
             pending_cmd: None,
             debug_hwnd: None,
             debug_edit: None,
+            library_hwnd: None,
+            library_search: None,
+            library_category: None,
+            library_list: None,
+            library_details: None,
+            library_entries: Vec::new(),
             main_hwnd: None,
+            pending_error_dialogs: VecDeque::new(),
             last_debug_refresh: Instant::now(),
             next_assets_download: None,
             recent_menu: None,
@@ -393,7 +419,15 @@ impl AppState {
         let msg = format!("{title}: {err}");
         self.host.with_mut(|s| s.set_status(msg.clone()));
         self.status = msg.clone();
-        message_box(self.main_hwnd, title, &msg);
+        self.pending_error_dialogs
+            .push_back((title.to_owned(), msg));
+        if let Some(hwnd) = self.main_hwnd {
+            // PostMessageW queues this for the main window after the current callback returns.
+            // SAFETY: `hwnd` is the live main-window handle; the call only queues scalar arguments.
+            unsafe {
+                let _ = PostMessageW(Some(hwnd), WM_REPORT_ERROR, WPARAM(0), LPARAM(0));
+            }
+        }
     }
 
     fn open_path(
@@ -425,7 +459,7 @@ impl AppState {
         self.open_path(
             "Open Snapshot",
             "Snapshot",
-            &["sna", "z80", "szx"],
+            &["sna", "z80"],
             HostSession::load_snapshot,
         );
     }
@@ -454,24 +488,18 @@ impl AppState {
         else {
             return;
         };
-        let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
-            return;
-        };
-        let load: fn(&mut HostSession, &Path) -> Result<(), HostError> =
-            match extension.to_ascii_lowercase().as_str() {
-                "tap" | "tzx" => HostSession::open_tape,
-                "sna" | "z80" | "szx" => HostSession::load_snapshot,
-                "rzx" => HostSession::load_rzx,
-                "dsk" => HostSession::load_dsk,
-                "trd" => HostSession::load_trd,
-                _ => return,
-            };
-        match self.host.with_mut(|session| load(session, &path)) {
+        match self.host.with_mut(|session| session.open_media_path(&path)) {
             Ok(()) => {
                 self.prefs.push_recent(&path);
                 self.persist_prefs();
             }
             Err(error) => self.report_err("Open recent media", &error),
+        }
+    }
+
+    fn refresh_recent_menu_entries(&self) {
+        if let Some(menu) = self.recent_menu {
+            self.refresh_recent_menu(menu);
         }
     }
 
@@ -623,6 +651,9 @@ impl AppState {
                 }
             }
             Err(error) => self.report_err("Next asset setup", &HostError::Message(error)),
+        }
+        if self.library_hwnd.is_some() {
+            self.refresh_library();
         }
     }
 
@@ -881,10 +912,23 @@ impl AppState {
         self.pending_cmd = Some(id);
     }
 
-    fn drain_pending_command(&mut self) {
-        let Some(id) = self.pending_cmd.take() else {
-            return;
-        };
+    fn drain_pending_command(&mut self, id: usize) {
+        let affects_library = (IDM_LIBRARY_RECENT_BASE
+            ..IDM_LIBRARY_RECENT_BASE + IDM_LIBRARY_RECENT_COUNT)
+            .contains(&id)
+            || model_from_menu_id(id).is_some()
+            || matches!(
+                id,
+                IDM_FILE_OPEN_TAPE
+                    | IDM_FILE_OPEN_SNAPSHOT
+                    | IDM_FILE_OPEN_RZX
+                    | IDM_FILE_OPEN_DSK
+                    | IDM_FILE_OPEN_TRD
+                    | IDM_MACHINE_ROM_SETUP
+                    | IDM_HW_ATTACH_BETA
+                    | IDM_HW_LOAD_TRDOS_ROM
+                    | IDM_HW_OPEN_TRD
+            );
         match id {
             id if (IDM_LIBRARY_RECENT_BASE..IDM_LIBRARY_RECENT_BASE + IDM_LIBRARY_RECENT_COUNT)
                 .contains(&id) =>
@@ -986,6 +1030,9 @@ impl AppState {
             IDM_DBG_CLEAR_BREAKS => self.debug_clear_breaks(),
             IDM_DBG_REFRESH => self.refresh_debug_text(),
             _ => {}
+        }
+        if affects_library && self.library_hwnd.is_some() {
+            self.refresh_library();
         }
         let _ = &self.plane;
     }
@@ -1090,15 +1137,7 @@ fn append_sep(menu: HMENU) {
 fn recent_media_paths(recent_files: &[String]) -> Vec<PathBuf> {
     recent_files
         .iter()
-        .filter_map(|value| {
-            let path = PathBuf::from(value);
-            let extension = path.extension()?.to_str()?.to_ascii_lowercase();
-            matches!(
-                extension.as_str(),
-                "tap" | "tzx" | "sna" | "z80" | "szx" | "rzx" | "dsk" | "trd"
-            )
-            .then_some(path)
-        })
+        .filter_map(|value| MediaFormat::from_path(Path::new(value)).map(|_| PathBuf::from(value)))
         .take(IDM_LIBRARY_RECENT_COUNT)
         .collect()
 }
@@ -1120,6 +1159,10 @@ fn build_menu() -> Result<(HMENU, HMENU)> {
         append_popup(menubar, file, "&File");
 
         let library = CreatePopupMenu()?;
+        append_menu(library, IDM_LIBRARY_OPEN, "Open Library…");
+        append_sep(library);
+        let recent = CreatePopupMenu()?;
+        append_popup(library, recent, "Open &Recent");
         append_popup(menubar, library, "&Library");
 
         let machine = CreatePopupMenu()?;
@@ -1213,7 +1256,7 @@ fn build_menu() -> Result<(HMENU, HMENU)> {
         append_menu(debug, IDM_DBG_REFRESH, "&Refresh");
         append_popup(menubar, debug, "&Debug");
 
-        Ok((menubar, library))
+        Ok((menubar, recent))
     }
 }
 
@@ -1407,6 +1450,19 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
             }
             LRESULT(0)
         }
+        WM_REPORT_ERROR => {
+            let pending = if state_ptr.is_null() {
+                None
+            } else {
+                // End the AppState borrow before MessageBoxW starts a nested message loop.
+                // SAFETY: this callback runs while the main window owns the boxed state.
+                unsafe { &mut *state_ptr }.pending_error_dialogs.pop_front()
+            };
+            if let Some((title, body)) = pending {
+                message_box(Some(hwnd), &title, &body);
+            }
+            LRESULT(0)
+        }
         WM_SETTINGCHANGE => {
             if !state_ptr.is_null() {
                 // SAFETY: state_ptr is owned by this window until WM_DESTROY.
@@ -1460,12 +1516,19 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
         }
         WM_DESTROY => {
             if !state_ptr.is_null() {
-                // SAFETY: tear down debug HWND while AppState is still alive, then free it.
+                // DestroyWindow synchronously calls the Library procedure, which
+                // borrows AppState. End our borrow before destroying either HWND.
                 unsafe {
-                    let state = &mut *state_ptr;
-                    if let Some(dbg) = state.debug_hwnd.take() {
+                    let (dbg, library) = {
+                        let state = &mut *state_ptr;
                         state.debug_edit = None;
-                        let _ = windows::Win32::UI::WindowsAndMessaging::DestroyWindow(dbg);
+                        (state.debug_hwnd.take(), state.library_hwnd.take())
+                    };
+                    if let Some(dbg) = dbg {
+                        let _ = DestroyWindow(dbg);
+                    }
+                    if let Some(library) = library {
+                        let _ = DestroyWindow(library);
                     }
                     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                     drop(Box::from_raw(state_ptr));
@@ -1534,6 +1597,19 @@ pub fn run() -> Result<()> {
                 if msg.message == WM_QUIT {
                     return Ok(());
                 }
+                // SAFETY: `hwnd` is the live main-window handle; its USERDATA remains
+                // the boxed AppState until this message loop exits on WM_QUIT.
+                let state_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppState;
+                let library = (!state_ptr.is_null())
+                    .then(|| (*state_ptr).library_hwnd)
+                    .flatten();
+                if let Some(library) = library {
+                    // SAFETY: the Library HWND belongs to AppState for the event-loop lifetime,
+                    // and `msg` is the live message removed from this thread's queue.
+                    if IsDialogMessageW(library, &msg).as_bool() {
+                        continue;
+                    }
+                }
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
@@ -1542,7 +1618,16 @@ pub fn run() -> Result<()> {
             if state_ptr.is_null() {
                 break;
             }
-            (*state_ptr).drain_pending_command();
+            // The Library constructor enters its window proc synchronously.
+            // Pop the command before calling it so no AppState borrow spans that call.
+            let pending_cmd = (*state_ptr).pending_cmd.take();
+            if let Some(id) = pending_cmd {
+                if id == IDM_LIBRARY_OPEN {
+                    library::open_library(state_ptr);
+                } else {
+                    (*state_ptr).drain_pending_command(id);
+                }
+            }
             (*state_ptr).tick_frame(hwnd);
             let throttle = (*state_ptr).prefs.throttle;
             if throttle {
@@ -1558,13 +1643,14 @@ mod startup_tests {
     use super::*;
 
     #[test]
-    fn library_recent_paths_include_media_and_exclude_hardware_images() {
+    fn library_recent_paths_include_supported_media_only() {
         let recent = [
             "/games/next.rom",
             "/games/disk.img",
             "/games/PLAY.TAP",
             "/games/snapshot.szx",
             "/games/disk.trd",
+            "/games/disk.dsk",
         ]
         .into_iter()
         .map(str::to_owned)
@@ -1576,8 +1662,8 @@ mod startup_tests {
             paths,
             vec![
                 PathBuf::from("/games/PLAY.TAP"),
-                PathBuf::from("/games/snapshot.szx"),
                 PathBuf::from("/games/disk.trd"),
+                PathBuf::from("/games/disk.dsk"),
             ]
         );
     }

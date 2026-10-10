@@ -1,0 +1,497 @@
+use super::*;
+use windows_shell::{
+    library_command, LibraryCommand, ID_LIBRARY_CATEGORY, ID_LIBRARY_CLOSE_BUTTON,
+    ID_LIBRARY_DETAILS, ID_LIBRARY_LIST, ID_LIBRARY_OPEN_BUTTON, ID_LIBRARY_REMOVE_BUTTON,
+    ID_LIBRARY_SEARCH,
+};
+
+const LIBRARY_CLASS: &str = "SpecChumWindowsLibrary\0";
+
+pub(super) fn open_library(app_ptr: *mut AppState) {
+    // Keep the AppState borrow out of USER32 calls: CreateWindowExW synchronously
+    // invokes library_wnd_proc(WM_CREATE), which needs its own mutable borrow.
+    // SAFETY: the main window owns this boxed state until WM_DESTROY. The
+    // shared borrow ends before any Win32 call that can invoke a window proc.
+    let (existing, main_hwnd) = unsafe {
+        let app = &*app_ptr;
+        (app.library_hwnd, app.main_hwnd)
+    };
+    if let Some(hwnd) = existing {
+        // SAFETY: the event loop has no active AppState borrow at this call.
+        unsafe { &mut *app_ptr }.refresh_library();
+        unsafe {
+            let _ = ShowWindow(hwnd, SW_SHOW);
+        }
+        return;
+    }
+    let Ok(instance) = (unsafe { GetModuleHandleW(None) }) else {
+        return;
+    };
+    let Ok(cursor) = (unsafe { LoadCursorW(None, IDC_ARROW) }) else {
+        return;
+    };
+    let class_name: Vec<u16> = LIBRARY_CLASS.encode_utf16().collect();
+    let wc = WNDCLASSEXW {
+        cbSize: size_of::<WNDCLASSEXW>() as u32,
+        style: CS_HREDRAW | CS_VREDRAW,
+        lpfnWndProc: Some(library_wnd_proc),
+        hInstance: instance.into(),
+        hCursor: cursor,
+        lpszClassName: PCWSTR(class_name.as_ptr()),
+        ..unsafe { zeroed() }
+    };
+    unsafe {
+        let _ = RegisterClassExW(&wc);
+    }
+    let title: Vec<u16> = "Spec Chum — Library\0".encode_utf16().collect();
+    let hwnd = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(class_name.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            760,
+            540,
+            main_hwnd,
+            None,
+            Some(instance.into()),
+            Some(app_ptr.cast()),
+        )
+    };
+    if hwnd.is_err() {
+        // SAFETY: CreateWindowExW has returned, so WM_CREATE's borrow ended.
+        unsafe { &mut *app_ptr }.report_err(
+            "Library",
+            &HostError::Message("could not create Library window".into()),
+        );
+    }
+}
+
+impl AppState {
+    pub(super) fn refresh_library(&mut self) {
+        let (Some(search_hwnd), Some(category_hwnd), Some(list_hwnd)) = (
+            self.library_search,
+            self.library_category,
+            self.library_list,
+        ) else {
+            return;
+        };
+        let search = window_text(search_hwnd);
+        let category_index = send_message(category_hwnd, 0x0147, 0, 0).0;
+        let category = match category_index {
+            1 => Some(MediaCategory::Tape),
+            2 => Some(MediaCategory::Snapshot),
+            3 => Some(MediaCategory::Recording),
+            4 => Some(MediaCategory::Disk),
+            _ => None,
+        };
+        let selected = usize::try_from(send_message(list_hwnd, 0x0188, 0, 0).0)
+            .ok()
+            .and_then(|index| self.library_entries.get(index))
+            .map(|entry| entry.path.clone());
+        let recent = self.prefs.recent_files.clone();
+        self.library_entries = self
+            .host
+            .with_mut(|session| query_recent_media(&recent, &search, category, session));
+        let selected_index = selected
+            .and_then(|path| {
+                self.library_entries
+                    .iter()
+                    .position(|entry| entry.path == path)
+            })
+            .unwrap_or(0);
+        {
+            let _ = send_message(list_hwnd, 0x0184, 0, 0);
+            for entry in &self.library_entries {
+                let available = if entry.available { "" } else { " [missing]" };
+                let display_title = entry.title.as_deref().unwrap_or(&entry.name);
+                let label = format!("{} ({:?}){available}", display_title, entry.format);
+                let label: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
+                let _ = send_message(list_hwnd, 0x0180, 0, label.as_ptr() as isize);
+            }
+            if !self.library_entries.is_empty() {
+                let _ = send_message(list_hwnd, 0x0186, selected_index, 0);
+            }
+        }
+        self.refresh_library_details(selected_index);
+    }
+
+    fn refresh_library_details(&self, index: usize) {
+        let can_open = self
+            .library_entries
+            .get(index)
+            .is_some_and(|entry| entry.available && entry.compatibility.can_open());
+        if let Some(hwnd) = self.library_hwnd {
+            if let Ok(button) = unsafe { GetDlgItem(Some(hwnd), ID_LIBRARY_OPEN_BUTTON) } {
+                unsafe {
+                    let _ = EnableWindow(button, can_open);
+                }
+            }
+        }
+        let Some(details) = self.library_details else {
+            return;
+        };
+        let text = self.library_entries.get(index).map_or_else(
+            || "Select a supported recent item to see details.".to_owned(),
+            |entry| {
+                let availability = if entry.available {
+                    "Available"
+                } else {
+                    "File missing"
+                };
+                let title = entry.title.as_ref().map_or_else(String::new, |title| {
+                    format!(
+                        "\r\nKnown title: {title}\r\nTitle source: {}",
+                        entry.title_source.unwrap_or("Unknown")
+                    )
+                });
+                let compatibility = match entry.compatibility {
+                    MediaCompatibility::Ready => "Compatible with current hardware",
+                    MediaCompatibility::MayRequireMachine => "May open without a machine",
+                    MediaCompatibility::MaySelectMachine => {
+                        "Snapshot selects model; ROM may be required"
+                    }
+                    MediaCompatibility::RequiresMachine => "Requires a machine",
+                    MediaCompatibility::RequiresPlus3 => "Requires a +3 or +3e",
+                    MediaCompatibility::RequiresBetaModel => "Requires a Beta-compatible model",
+                    MediaCompatibility::RequiresBeta => "Requires an attached Beta Disk",
+                    MediaCompatibility::RequiresTrdosRom => "Requires a loaded TR-DOS ROM",
+                    MediaCompatibility::UnsupportedOnNext => "Unsupported on ZX Spectrum Next",
+                };
+                format!(
+                    "{}\r\n{}{}\r\n{}\r\n{}",
+                    entry.name, entry.path, title, availability, compatibility
+                )
+            },
+        );
+        let text: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            let _ = SetWindowTextW(details, PCWSTR(text.as_ptr()));
+        }
+    }
+
+    fn open_selected_library_entry(&mut self) -> Result<(), HostError> {
+        let Some(list) = self.library_list else {
+            return Ok(());
+        };
+        let selected = send_message(list, 0x0188, 0, 0).0;
+        let Some(entry) = usize::try_from(selected)
+            .ok()
+            .and_then(|i| self.library_entries.get(i))
+        else {
+            return Ok(());
+        };
+        if !entry.available || !entry.compatibility.can_open() {
+            return Ok(());
+        }
+        let path = PathBuf::from(&entry.path);
+        self.host
+            .with_mut(|session| session.open_media_path(&path))?;
+        self.prefs.push_recent(&path);
+        self.persist_prefs();
+        self.refresh_recent_menu_entries();
+        self.refresh_library();
+        Ok(())
+    }
+
+    fn remove_selected_library_entry(&mut self) {
+        let Some(list) = self.library_list else {
+            return;
+        };
+        let selected = send_message(list, 0x0188, 0, 0).0;
+        let Some(entry) = usize::try_from(selected)
+            .ok()
+            .and_then(|i| self.library_entries.get(i))
+        else {
+            return;
+        };
+        self.prefs.remove_recent(Path::new(&entry.path));
+        self.persist_prefs();
+        self.refresh_recent_menu_entries();
+        self.refresh_library();
+    }
+}
+
+fn window_text(hwnd: HWND) -> String {
+    let len = unsafe { GetWindowTextLengthW(hwnd) }.max(0) as usize;
+    let mut wide = vec![0_u16; len + 1];
+    let copied = unsafe { GetWindowTextW(hwnd, &mut wide) }.max(0) as usize;
+    String::from_utf16_lossy(&wide[..copied])
+}
+
+fn send_message(hwnd: HWND, message: u32, wparam: usize, lparam: isize) -> LRESULT {
+    unsafe { SendMessageW(hwnd, message, Some(WPARAM(wparam)), Some(LPARAM(lparam))) }
+}
+
+fn layout_library(app: &AppState, hwnd: HWND) {
+    let mut client = RECT::default();
+    if unsafe { GetClientRect(hwnd, &mut client) }.is_err() {
+        return;
+    }
+    let width = client.right - client.left;
+    let height = client.bottom - client.top;
+    let left_width = ((width - 48) / 2).max(220);
+    let right_x = left_width + 32;
+    let right_width = (width - right_x - 16).max(200);
+    let list_height = (height - 70).max(180);
+    let details_height = (height - 160).max(100);
+    unsafe {
+        if let Some(search) = app.library_search {
+            let _ = MoveWindow(search, 16, 16, left_width - 8, 26, true);
+        }
+        if let Some(category) = app.library_category {
+            let _ = MoveWindow(category, right_x, 16, right_width, 200, true);
+        }
+        if let Some(list) = app.library_list {
+            let _ = MoveWindow(list, 16, 54, left_width, list_height, true);
+        }
+        if let Some(details) = app.library_details {
+            let _ = MoveWindow(details, right_x, 54, right_width, details_height, true);
+        }
+        if let Ok(button) = GetDlgItem(Some(hwnd), ID_LIBRARY_OPEN_BUTTON) {
+            let _ = MoveWindow(button, right_x, height - 82, 100, 32, true);
+        }
+        if let Ok(button) = GetDlgItem(Some(hwnd), ID_LIBRARY_REMOVE_BUTTON) {
+            let _ = MoveWindow(button, right_x + 108, height - 82, 175, 32, true);
+        }
+        if let Ok(button) = GetDlgItem(Some(hwnd), ID_LIBRARY_CLOSE_BUTTON) {
+            let _ = MoveWindow(button, width - 116, height - 48, 100, 32, true);
+        }
+    }
+}
+
+struct LibraryControlSpec {
+    class: &'static str,
+    text: &'static str,
+    style: u32,
+    bounds: (i32, i32, i32, i32),
+    id: i32,
+}
+
+fn create_library_control(
+    instance: windows::Win32::Foundation::HINSTANCE,
+    parent: HWND,
+    spec: LibraryControlSpec,
+) -> Option<HWND> {
+    let class: Vec<u16> = spec
+        .class
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let text: Vec<u16> = spec.text.encode_utf16().chain(std::iter::once(0)).collect();
+    let (x, y, width, height) = spec.bounds;
+    unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(class.as_ptr()),
+            PCWSTR(text.as_ptr()),
+            WINDOW_STYLE(spec.style),
+            x,
+            y,
+            width,
+            height,
+            Some(parent),
+            Some(HMENU(spec.id as isize as *mut core::ffi::c_void)),
+            Some(instance),
+            None,
+        )
+        .ok()
+    }
+}
+
+extern "system" fn library_wnd_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    // SAFETY: `AppState` is boxed by `run`, stored in GWLP_USERDATA during WM_CREATE,
+    // and remains alive until the main WM_DESTROY synchronously destroys this child.
+    // USER32 dispatches these callbacks serially on the UI thread; mutable borrows below
+    // end before any operation that can synchronously reenter this procedure.
+    let app_ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut AppState;
+    match msg {
+        WM_CREATE => {
+            // SAFETY: CreateWindowExW passes the AppState pointer in lpCreateParams.
+            let cs = unsafe { &*(lparam.0 as *const CREATESTRUCTW) };
+            let app_ptr = cs.lpCreateParams as *mut AppState;
+            if app_ptr.is_null() {
+                return LRESULT(-1);
+            }
+            unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize) };
+            let Ok(instance) = (unsafe { GetModuleHandleW(None) }) else {
+                return LRESULT(-1);
+            };
+            let base = 0x4000_0000_u32 | 0x1000_0000 | 0x0001_0000;
+            let border = base | 0x0080_0000;
+            let search = create_library_control(
+                instance.into(),
+                hwnd,
+                LibraryControlSpec {
+                    class: "EDIT",
+                    text: "",
+                    style: base | border | 0x0080,
+                    bounds: (16, 16, 330, 26),
+                    id: ID_LIBRARY_SEARCH,
+                },
+            );
+            let category = create_library_control(
+                instance.into(),
+                hwnd,
+                LibraryControlSpec {
+                    class: "COMBOBOX",
+                    text: "All types",
+                    style: base | 0x0002_0000 | 0x0000_0003 | 0x0000_0200 | 0x0020_0000,
+                    bounds: (360, 16, 220, 200),
+                    id: ID_LIBRARY_CATEGORY,
+                },
+            );
+            let list = create_library_control(
+                instance.into(),
+                hwnd,
+                LibraryControlSpec {
+                    class: "LISTBOX",
+                    text: "",
+                    style: base | 0x0080_0000 | 0x0020_0000 | 1,
+                    bounds: (16, 54, 350, 360),
+                    id: ID_LIBRARY_LIST,
+                },
+            );
+            let details = create_library_control(
+                instance.into(),
+                hwnd,
+                LibraryControlSpec {
+                    class: "STATIC",
+                    text: "",
+                    style: base | border,
+                    bounds: (382, 54, 340, 250),
+                    id: ID_LIBRARY_DETAILS,
+                },
+            );
+            let _ = create_library_control(
+                instance.into(),
+                hwnd,
+                LibraryControlSpec {
+                    class: "BUTTON",
+                    text: "Open",
+                    style: base | 0x0000_0001,
+                    bounds: (382, 326, 100, 32),
+                    id: ID_LIBRARY_OPEN_BUTTON,
+                },
+            );
+            let _ = create_library_control(
+                instance.into(),
+                hwnd,
+                LibraryControlSpec {
+                    class: "BUTTON",
+                    text: "Remove from Library",
+                    style: base | 0x0000_0001,
+                    bounds: (490, 326, 175, 32),
+                    id: ID_LIBRARY_REMOVE_BUTTON,
+                },
+            );
+            let _ = create_library_control(
+                instance.into(),
+                hwnd,
+                LibraryControlSpec {
+                    class: "BUTTON",
+                    text: "Close",
+                    style: base | 0x0000_0001,
+                    bounds: (622, 420, 100, 32),
+                    id: ID_LIBRARY_CLOSE_BUTTON,
+                },
+            );
+            if let Some(combo) = category {
+                for label in ["All types", "Tape", "Snapshot", "Recording", "Disk"] {
+                    let label: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
+                    let _ = send_message(combo, 0x0143, 0, label.as_ptr() as isize);
+                }
+                let _ = send_message(combo, 0x014E, 0, 0);
+            }
+            // SAFETY: the boxed state is alive, and control creation has returned, so no
+            // nested Library callback can hold another mutable borrow of it.
+            let app = unsafe { &mut *app_ptr };
+            app.library_hwnd = Some(hwnd);
+            app.library_search = search;
+            app.library_category = category;
+            app.library_list = list;
+            app.library_details = details;
+            layout_library(app, hwnd);
+            app.refresh_library();
+            LRESULT(0)
+        }
+        WM_SIZE if !app_ptr.is_null() => {
+            // SAFETY: the state remains boxed for this callback; layout does not reenter
+            // this window procedure while the shared borrow is active.
+            layout_library(unsafe { &*app_ptr }, hwnd);
+            LRESULT(0)
+        }
+        WM_ACTIVATE if !app_ptr.is_null() => {
+            if wparam.0 & 0xffff != 0 {
+                // SAFETY: callbacks are serialized, and refresh only sends updates to child
+                // controls; it does not synchronously reenter this parent procedure.
+                unsafe { &mut *app_ptr }.refresh_library();
+            }
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
+        WM_COMMAND if !app_ptr.is_null() => {
+            let id = wparam.0 & 0xffff;
+            let notification = (wparam.0 >> 16) & 0xffff;
+            let command = library_command(id as i32, notification);
+            if command == Some(LibraryCommand::Close) {
+                // WM_DESTROY reenters this procedure, so release AppState first.
+                unsafe {
+                    let _ = DestroyWindow(hwnd);
+                }
+                return LRESULT(0);
+            }
+            // SAFETY: the state is alive and no mutable borrow spans a reentrant call;
+            // the Close case above destroys the HWND before taking this borrow.
+            let command_result: Result<(), HostError> = {
+                let app = unsafe { &mut *app_ptr };
+                match command {
+                    Some(LibraryCommand::Refresh) => {
+                        app.refresh_library();
+                        Ok(())
+                    }
+                    Some(LibraryCommand::SelectionChanged) => {
+                        let selected = app
+                            .library_list
+                            .map_or(-1, |list| send_message(list, 0x0188, 0, 0).0);
+                        app.refresh_library_details(
+                            usize::try_from(selected).unwrap_or(usize::MAX),
+                        );
+                        Ok(())
+                    }
+                    Some(LibraryCommand::Open) => app.open_selected_library_entry(),
+                    Some(LibraryCommand::Remove) => {
+                        app.remove_selected_library_entry();
+                        Ok(())
+                    }
+                    _ => Ok(()),
+                }
+            };
+            if let Err(error) = command_result {
+                // MessageBoxW runs a nested message loop, so report only after
+                // releasing the mutable borrow used by the command handler.
+                unsafe { &mut *app_ptr }.report_err("Open media", &error);
+            }
+            LRESULT(0)
+        }
+        WM_DESTROY if !app_ptr.is_null() => {
+            // SAFETY: the parent keeps the Box alive until this child callback returns;
+            // this branch only clears fields and makes no reentrant USER32 calls.
+            let app = unsafe { &mut *app_ptr };
+            app.library_hwnd = None;
+            app.library_search = None;
+            app.library_category = None;
+            app.library_list = None;
+            app.library_details = None;
+            app.library_entries.clear();
+            LRESULT(0)
+        }
+        _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+    }
+}

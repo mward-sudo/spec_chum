@@ -20,9 +20,9 @@ use gtk4::{
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use spec_chum_host::{
-    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, rom_setup_json,
-    save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession, ModelId,
-    PrefAyStereo, PrefModel, UiPreferences,
+    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, query_recent_media,
+    rom_setup_json, save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession,
+    MediaCategory, MediaCompatibility, MediaEntry, ModelId, PrefAyStereo, PrefModel, UiPreferences,
 };
 
 use linux_shell::keymap::{
@@ -285,23 +285,25 @@ impl AppState {
         }
     }
 
-    fn refresh_recent_menu(&self) {
+    fn refresh_recent_menu(&mut self) {
         let Some(menu) = &self.recent_menu else {
             return;
         };
+        let recent = self.prefs.recent_files.clone();
+        let entries = self
+            .host
+            .with_mut(|session| query_recent_media(&recent, "", None, session));
         menu.remove_all();
-        for path in self
-            .prefs
-            .recent_files
-            .iter()
-            .filter(|path| is_media_path(path))
-        {
-            let label = Path::new(path)
+        for entry in entries {
+            let label = Path::new(&entry.path)
                 .file_name()
                 .and_then(|name| name.to_str())
-                .unwrap_or(path);
+                .unwrap_or(&entry.path);
             let item = gio::MenuItem::new(Some(label), None);
-            item.set_action_and_target_value(Some("app.open_recent"), Some(&path.to_variant()));
+            item.set_action_and_target_value(
+                Some("app.open_recent"),
+                Some(&entry.path.to_variant()),
+            );
             menu.append_item(&item);
         }
         if menu.n_items() == 0 {
@@ -310,24 +312,7 @@ impl AppState {
     }
 
     fn open_recent_path(&mut self, path: &Path) {
-        let result = match path.extension().and_then(|extension| extension.to_str()) {
-            Some(ext) if ext.eq_ignore_ascii_case("tap") || ext.eq_ignore_ascii_case("tzx") => {
-                self.host.with_mut(|session| session.open_tape(path))
-            }
-            Some(ext) if ext.eq_ignore_ascii_case("sna") || ext.eq_ignore_ascii_case("z80") => {
-                self.host.with_mut(|session| session.load_snapshot(path))
-            }
-            Some(ext) if ext.eq_ignore_ascii_case("rzx") => {
-                self.host.with_mut(|session| session.load_rzx(path))
-            }
-            Some(ext) if ext.eq_ignore_ascii_case("dsk") => {
-                self.host.with_mut(|session| session.load_dsk(path))
-            }
-            Some(ext) if ext.eq_ignore_ascii_case("trd") => {
-                self.host.with_mut(|session| session.load_trd(path))
-            }
-            _ => return,
-        };
+        let result = self.host.with_mut(|session| session.open_media_path(path));
         match result {
             Ok(()) => {
                 self.prefs.push_recent(path);
@@ -880,9 +865,10 @@ fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
     let menubar = gio::Menu::new();
 
     let library = gio::Menu::new();
+    library.append(Some("Browse Library…"), Some("app.show_library"));
     let recent = gio::Menu::new();
     state.borrow_mut().recent_menu = Some(recent.clone());
-    state.borrow().refresh_recent_menu();
+    state.borrow_mut().refresh_recent_menu();
     library.append_submenu(Some("Recent Media"), &recent);
     menubar.append_submenu(Some("_Library"), &library);
 
@@ -998,15 +984,308 @@ fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
     app.set_menubar(Some(&menubar));
 }
 
-fn is_media_path(path: &str) -> bool {
-    Path::new(path)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            ["tap", "tzx", "sna", "z80", "rzx", "dsk", "trd"]
-                .iter()
-                .any(|supported| extension.eq_ignore_ascii_case(supported))
+fn show_media_library(state: Rc<RefCell<AppState>>, parent: &ApplicationWindow) {
+    let window = Window::builder()
+        .title("Media Library")
+        .transient_for(parent)
+        .modal(true)
+        .default_width(620)
+        .default_height(480)
+        .build();
+    let content = gtk4::Box::new(Orientation::Vertical, 10);
+    content.set_margin_top(14);
+    content.set_margin_bottom(14);
+    content.set_margin_start(14);
+    content.set_margin_end(14);
+
+    let controls = gtk4::Box::new(Orientation::Horizontal, 8);
+    let search = gtk4::SearchEntry::new();
+    search.set_placeholder_text(Some("Search recent media"));
+    search.set_hexpand(true);
+    let category =
+        gtk4::DropDown::from_strings(&["All media", "Tape", "Snapshots", "Recordings", "Disks"]);
+    controls.append(&search);
+    controls.append(&category);
+    content.append(&controls);
+
+    let list = gtk4::ListBox::new();
+    list.set_selection_mode(gtk4::SelectionMode::Single);
+    let scroll = ScrolledWindow::builder()
+        .hexpand(true)
+        .vexpand(true)
+        .child(&list)
+        .build();
+    content.append(&scroll);
+
+    let details = Label::new(Some("Select a recent item to view details."));
+    details.set_xalign(0.0);
+    details.set_wrap(true);
+    content.append(&details);
+
+    let actions = gtk4::Box::new(Orientation::Horizontal, 8);
+    let open = gtk4::Button::with_label("Open");
+    open.set_sensitive(false);
+    let remove = gtk4::Button::with_label("Remove from Library");
+    remove.set_sensitive(false);
+    let close = gtk4::Button::with_label("Close");
+    actions.append(&open);
+    actions.append(&remove);
+    actions.append(&close);
+    content.append(&actions);
+    window.set_child(Some(&content));
+
+    let entries = Rc::new(RefCell::new(Vec::<MediaEntry>::new()));
+    refresh_media_library(
+        &state, &search, &category, &list, &entries, &details, &open, &remove,
+    );
+
+    {
+        let entries = Rc::clone(&entries);
+        let details = details.downgrade();
+        let open = open.downgrade();
+        let remove = remove.downgrade();
+        list.connect_row_selected(move |_, row| {
+            let entry = row.and_then(|row| entries.borrow().get(row.index() as usize).cloned());
+            let (Some(details), Some(open), Some(remove)) =
+                (details.upgrade(), open.upgrade(), remove.upgrade())
+            else {
+                return;
+            };
+            if let Some(entry) = entry {
+                let availability = if entry.available {
+                    "Available"
+                } else {
+                    "Missing"
+                };
+                let known_title = entry.title.as_deref().map_or_else(String::new, |title| {
+                    format!(
+                        "\nKnown title: {title} ({})",
+                        entry.title_source.unwrap_or("unknown source")
+                    )
+                });
+                details.set_text(&format!(
+                    "{}{}\nPath: {}\nFormat: {:?}\nAvailability: {}\nCompatibility: {}",
+                    entry.name,
+                    known_title,
+                    entry.path,
+                    entry.format,
+                    availability,
+                    compatibility_label(entry.compatibility)
+                ));
+                open.set_sensitive(entry.available && entry.compatibility.can_open());
+                remove.set_sensitive(true);
+            } else {
+                details.set_text("Select a recent item to view details.");
+                open.set_sensitive(false);
+                remove.set_sensitive(false);
+            }
+        });
+    }
+    {
+        let state = Rc::clone(&state);
+        let search_weak = search.downgrade();
+        let category_weak = category.downgrade();
+        let list_weak = list.downgrade();
+        let entries = Rc::clone(&entries);
+        let details_weak = details.downgrade();
+        let open_weak = open.downgrade();
+        let remove_weak = remove.downgrade();
+        search.connect_search_changed(move |_| {
+            let (Some(search), Some(category), Some(list), Some(details), Some(open), Some(remove)) = (
+                search_weak.upgrade(),
+                category_weak.upgrade(),
+                list_weak.upgrade(),
+                details_weak.upgrade(),
+                open_weak.upgrade(),
+                remove_weak.upgrade(),
+            ) else {
+                return;
+            };
+            refresh_media_library(
+                &state, &search, &category, &list, &entries, &details, &open, &remove,
+            );
+        });
+    }
+    {
+        let state = Rc::clone(&state);
+        let search_weak = search.downgrade();
+        let category_weak = category.downgrade();
+        let list_weak = list.downgrade();
+        let entries = Rc::clone(&entries);
+        let details_weak = details.downgrade();
+        let open_weak = open.downgrade();
+        let remove_weak = remove.downgrade();
+        category.connect_selected_notify(move |_| {
+            let (Some(search), Some(category), Some(list), Some(details), Some(open), Some(remove)) = (
+                search_weak.upgrade(),
+                category_weak.upgrade(),
+                list_weak.upgrade(),
+                details_weak.upgrade(),
+                open_weak.upgrade(),
+                remove_weak.upgrade(),
+            ) else {
+                return;
+            };
+            refresh_media_library(
+                &state, &search, &category, &list, &entries, &details, &open, &remove,
+            );
+        });
+    }
+    {
+        let entries = Rc::clone(&entries);
+        let list = list.downgrade();
+        let state = Rc::clone(&state);
+        let window = window.downgrade();
+        open.connect_clicked(move |_| {
+            let Some(list) = list.upgrade() else {
+                return;
+            };
+            let Some(entry) = list
+                .selected_row()
+                .and_then(|row| entries.borrow().get(row.index() as usize).cloned())
+            else {
+                return;
+            };
+            let path = Path::new(&entry.path);
+            let result = state
+                .borrow_mut()
+                .host
+                .with_mut(|session| session.open_media_path(path));
+            match result {
+                Ok(()) => {
+                    let mut state = state.borrow_mut();
+                    state.prefs.push_recent(path);
+                    state.persist_prefs();
+                    state.refresh_recent_menu();
+                    drop(state);
+                    if let Some(window) = window.upgrade() {
+                        window.close();
+                    }
+                }
+                Err(error) => state.borrow_mut().report_err("Open Media", &error),
+            }
+        });
+    }
+    {
+        let entries = Rc::clone(&entries);
+        let list = list.downgrade();
+        let state = Rc::clone(&state);
+        let search = search.downgrade();
+        let category = category.downgrade();
+        let details = details.downgrade();
+        let open = open.downgrade();
+        let remove_weak = remove.downgrade();
+        remove.connect_clicked(move |_| {
+            let (Some(list), Some(search), Some(category), Some(details), Some(open), Some(remove)) = (
+                list.upgrade(),
+                search.upgrade(),
+                category.upgrade(),
+                details.upgrade(),
+                open.upgrade(),
+                remove_weak.upgrade(),
+            ) else {
+                return;
+            };
+            let Some(path) = list.selected_row().and_then(|row| {
+                entries
+                    .borrow()
+                    .get(row.index() as usize)
+                    .map(|e| e.path.clone())
+            }) else {
+                return;
+            };
+            let mut state_ref = state.borrow_mut();
+            state_ref.prefs.remove_recent(Path::new(&path));
+            state_ref.persist_prefs();
+            state_ref.refresh_recent_menu();
+            drop(state_ref);
+            refresh_media_library(
+                &state, &search, &category, &list, &entries, &details, &open, &remove,
+            );
+        });
+    }
+    {
+        let window = window.downgrade();
+        close.connect_clicked(move |_| {
+            if let Some(window) = window.upgrade() {
+                window.close();
+            }
+        });
+    }
+
+    window.present();
+}
+
+fn refresh_media_library(
+    state: &Rc<RefCell<AppState>>,
+    search: &gtk4::SearchEntry,
+    category: &gtk4::DropDown,
+    list: &gtk4::ListBox,
+    entries: &Rc<RefCell<Vec<MediaEntry>>>,
+    details: &Label,
+    open: &gtk4::Button,
+    remove: &gtk4::Button,
+) {
+    let selected_category = match category.selected() {
+        1 => Some(MediaCategory::Tape),
+        2 => Some(MediaCategory::Snapshot),
+        3 => Some(MediaCategory::Recording),
+        4 => Some(MediaCategory::Disk),
+        _ => None,
+    };
+    let found = {
+        let mut state = state.borrow_mut();
+        let recent = state.prefs.recent_files.clone();
+        state.host.with_mut(|session| {
+            query_recent_media(&recent, search.text().as_str(), selected_category, session)
         })
+    };
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+    for entry in &found {
+        let availability = if entry.available {
+            "Available"
+        } else {
+            "Missing"
+        };
+        let display_title = entry.title.as_deref().unwrap_or(&entry.name);
+        let label = Label::new(Some(&format!(
+            "{}  ·  {:?}  ·  {availability}  ·  {}",
+            display_title,
+            entry.format,
+            compatibility_label(entry.compatibility)
+        )));
+        label.set_xalign(0.0);
+        label.set_margin_top(6);
+        label.set_margin_bottom(6);
+        label.set_margin_start(8);
+        label.set_margin_end(8);
+        list.append(&label);
+    }
+    if found.is_empty() {
+        let label = Label::new(Some("No matching recent media."));
+        label.set_xalign(0.0);
+        list.append(&label);
+    }
+    *entries.borrow_mut() = found;
+    details.set_text("Select a recent item to view details.");
+    open.set_sensitive(false);
+    remove.set_sensitive(false);
+}
+
+fn compatibility_label(compatibility: MediaCompatibility) -> &'static str {
+    match compatibility {
+        MediaCompatibility::Ready => "Ready to open",
+        MediaCompatibility::MayRequireMachine => "May require a machine",
+        MediaCompatibility::MaySelectMachine => "Snapshot selects model; ROM may be required",
+        MediaCompatibility::RequiresMachine => "Requires a machine",
+        MediaCompatibility::RequiresPlus3 => "Requires +3/+3e",
+        MediaCompatibility::RequiresBetaModel => "Requires a Beta-compatible model",
+        MediaCompatibility::RequiresBeta => "Requires Beta Disk",
+        MediaCompatibility::RequiresTrdosRom => "Requires TR-DOS ROM",
+        MediaCompatibility::UnsupportedOnNext => "Unsupported on Next",
+    }
 }
 
 fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefCell<AppState>>) {
@@ -1084,6 +1363,18 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
         }
     ));
     app.add_action(&recent);
+
+    let show_library = gio::SimpleAction::new("show_library", None);
+    show_library.connect_activate(clone!(
+        #[strong]
+        state,
+        #[weak]
+        window,
+        move |_, _| {
+            show_media_library(Rc::clone(&state), &window);
+        }
+    ));
+    app.add_action(&show_library);
     add_action(app, "tape_play", Rc::clone(&state), |s| {
         s.host_action("Play tape", HostSession::play_tape);
     });
@@ -1372,15 +1663,6 @@ fn install_keys(window: &ApplicationWindow, picture: &Picture, state: Rc<RefCell
 #[cfg(test)]
 mod startup_model_tests {
     use super::*;
-
-    #[test]
-    fn library_recent_media_excludes_peripheral_assets() {
-        assert!(is_media_path("/games/PLAY.TAP"));
-        assert!(is_media_path("/games/snapshot.z80"));
-        assert!(is_media_path("/games/disk.trd"));
-        assert!(!is_media_path("/roms/spec48.rom"));
-        assert!(!is_media_path("/images/sd.img"));
-    }
 
     #[test]
     fn falls_back_to_48k_when_preferred_model_fails() {

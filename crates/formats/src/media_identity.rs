@@ -36,6 +36,19 @@ pub enum MediaTitleSource {
     Filename,
 }
 
+impl MediaTitleSource {
+    /// Shared user-facing source label for Library and tape chrome.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::LocalCatalogue => "Local catalogue",
+            Self::Cached => "ZXInfo cache",
+            Self::Online => "ZXInfo online",
+            Self::Filename => "Filename",
+        }
+    }
+}
+
 /// Resolved identity for an inserted media file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MediaIdentity {

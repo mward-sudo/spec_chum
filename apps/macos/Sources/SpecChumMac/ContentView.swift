@@ -36,6 +36,10 @@ struct ContentView: View {
         .sheet(isPresented: $host.showInspector) {
             DebugInspectorView(host: host)
         }
+        .sheet(isPresented: $host.showLibrary) {
+            MediaLibraryView(host: host)
+                .frame(minWidth: 780, minHeight: 500)
+        }
         .sheet(isPresented: $host.showMachineConfigEditor) {
             if let draft = host.machineConfigEditorDraft {
                 MachineConfigEditorView(
@@ -48,6 +52,11 @@ struct ContentView: View {
         .onChange(of: host.showInspector) { _, showing in
             if !showing {
                 FocusSpectrumView.post()
+            }
+        }
+        .onChange(of: host.showLibrary) { _, showing in
+            if !showing {
+                FocusSpectrumView.postDelayed()
             }
         }
         .onChange(of: host.model) { _, _ in
@@ -116,6 +125,13 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var livingRoomToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
+            Button {
+                host.showLibrary = true
+            } label: {
+                Label("Library", systemImage: "books.vertical")
+            }
+            .help("Browse recent media")
+
             Button {
                 chromeAction { host.presentOpenMediaPanel() }
             } label: {
