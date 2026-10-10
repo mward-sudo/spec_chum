@@ -723,9 +723,7 @@ impl AppState {
             .text("0000")
             .width_chars(12)
             .build();
-        address.set_accessible_label("Memory address in hexadecimal");
         let go = Button::with_label("View memory");
-        go.set_accessible_label("View memory at address");
         address_row.append(&Label::new(Some("Memory address")));
         address_row.append(&address);
         address_row.append(&go);
