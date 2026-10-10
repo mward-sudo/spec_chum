@@ -1506,15 +1506,15 @@
     "semantic_hash": ""
   },
   "crates/linux_shell/Cargo.toml": {
-    "mtime": 1791613923.0909986,
-    "seen": 1791650796.124452,
-    "ast_hash": "7cce433b6d56d6ed4fb103b1b73a52bf",
+    "mtime": 1791652854.1111963,
+    "seen": 1791652892.553268,
+    "ast_hash": "2db11e8029d04be9cfd22fb8b0e873e2",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/gtk_ui.rs": {
-    "mtime": 1791652049.4116683,
-    "seen": 1791652195.2843351,
-    "ast_hash": "9a686af56ac3179f623bcb5a9c3b17f3",
+    "mtime": 1791652854.2015016,
+    "seen": 1791652892.553271,
+    "ast_hash": "07a4793a8d4e892fae41235f4888d0b2",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/keymap.rs": {

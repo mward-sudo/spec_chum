@@ -1052,7 +1052,16 @@ fn show_machine_picker(state: Rc<RefCell<AppState>>, parent: &ApplicationWindow)
         image_cell.set_halign(gtk4::Align::Center);
         image_cell.set_valign(gtk4::Align::Center);
         if let Some(bytes) = descriptor.image_key.and_then(machine_image_bytes) {
-            if let Ok(texture) = gdk4::Texture::from_bytes(&glib::Bytes::from_static(bytes)) {
+            if let Ok(decoded) = image::load_from_memory(bytes) {
+                let rgba = decoded.to_rgba8();
+                let (width, height) = rgba.dimensions();
+                let texture = gdk4::MemoryTexture::new(
+                    i32::try_from(width).unwrap_or(1),
+                    i32::try_from(height).unwrap_or(1),
+                    gdk4::MemoryFormat::R8g8b8a8,
+                    &glib::Bytes::from_owned(rgba.into_raw()),
+                    width.saturating_mul(4) as usize,
+                );
                 let picture = Picture::for_paintable(&texture);
                 picture.set_size_request(176, 100);
                 picture.set_can_shrink(true);
@@ -1592,15 +1601,15 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
     ));
     app.add_action(&show_library);
 
-    let show_machine_picker = gio::SimpleAction::new("show_machine_picker", None);
-    show_machine_picker.connect_activate(clone!(
+    let show_machine_picker_action = gio::SimpleAction::new("show_machine_picker", None);
+    show_machine_picker_action.connect_activate(clone!(
         #[strong]
         state,
         #[weak]
         window,
         move |_, _| show_machine_picker(Rc::clone(&state), &window)
     ));
-    app.add_action(&show_machine_picker);
+    app.add_action(&show_machine_picker_action);
     add_action(app, "tape_play", Rc::clone(&state), |s| {
         s.host_action("Play tape", HostSession::play_tape);
     });

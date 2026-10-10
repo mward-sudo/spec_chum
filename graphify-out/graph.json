@@ -13597,7 +13597,7 @@
       "file_type": "code",
       "norm_label": "install_actions()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1489"
+      "source_location": "L1498"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_rs_fnonce",
@@ -49157,7 +49157,7 @@
       "file_type": "code",
       "norm_label": "append_machine_image_fallback()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1176"
+      "source_location": "L1185"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_appstate_maybe_refresh_debug_text",
@@ -49245,7 +49245,7 @@
       "file_type": "code",
       "norm_label": "install_keys()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1917"
+      "source_location": "L1926"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_install_menubar",
@@ -49267,7 +49267,7 @@
       "file_type": "code",
       "norm_label": "refresh_media_library()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417"
+      "source_location": "L1426"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_rs_button",
@@ -49355,7 +49355,7 @@
       "file_type": "code",
       "norm_label": "show_media_library()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1185"
+      "source_location": "L1194"
     },
     {
       "id": "dropdown",
@@ -53276,7 +53276,7 @@
       "file_type": "code",
       "norm_label": "every_catalog_image_key_has_an_embedded_asset()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L2020"
+      "source_location": "L2029"
     },
     {
       "id": "crates_windows_shell_src_win32_every_catalog_image_key_has_a_decodable_embedded_asset",
@@ -62566,7 +62566,7 @@
       "file_type": "code",
       "norm_label": "appearance_variant()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1885"
+      "source_location": "L1894"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_apply_appearance",
@@ -62577,7 +62577,7 @@
       "file_type": "code",
       "norm_label": "apply_appearance()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1894"
+      "source_location": "L1903"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_compatible_peripheral_summary",
@@ -62588,7 +62588,7 @@
       "file_type": "code",
       "norm_label": "compatible_peripheral_summary()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1152"
+      "source_location": "L1161"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_does_not_retry_48k_selection_after_failure",
@@ -62599,7 +62599,7 @@
       "file_type": "code",
       "norm_label": "does_not_retry_48k_selection_after_failure()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L2003"
+      "source_location": "L2012"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_falls_back_to_48k_when_preferred_model_fails",
@@ -62610,7 +62610,7 @@
       "file_type": "code",
       "norm_label": "falls_back_to_48k_when_preferred_model_fails()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1974"
+      "source_location": "L1983"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_keyval_from_gdk",
@@ -62621,7 +62621,7 @@
       "file_type": "code",
       "norm_label": "keyval_from_gdk()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1913"
+      "source_location": "L1922"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_reports_both_preferred_and_fallback_failures",
@@ -62632,7 +62632,7 @@
       "file_type": "code",
       "norm_label": "reports_both_preferred_and_fallback_failures()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1990"
+      "source_location": "L1999"
     },
     {
       "id": "crates_linux_shell_src_gtk_ui_rs_appearancepreference",
@@ -66988,7 +66988,7 @@
       "file_type": "code",
       "norm_label": "compatibility_label()",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1475"
+      "source_location": "L1484"
     },
     {
       "id": "crates_living_room_src_headless_headlessroom_copy_frame_rgba",
@@ -120143,7 +120143,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1177",
+      "source_location": "L1186",
       "weight": 1.0
     },
     {
@@ -121175,7 +121175,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1153",
+      "source_location": "L1162",
       "weight": 1.0
     },
     {
@@ -121187,7 +121187,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L2005",
+      "source_location": "L2014",
       "weight": 1.0
     },
     {
@@ -121199,7 +121199,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1975",
+      "source_location": "L1984",
       "weight": 1.0
     },
     {
@@ -121211,7 +121211,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1976",
+      "source_location": "L1985",
       "weight": 1.0
     },
     {
@@ -121223,7 +121223,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1518",
+      "source_location": "L1527",
       "weight": 1.0
     },
     {
@@ -121235,7 +121235,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1545",
+      "source_location": "L1554",
       "weight": 1.0
     },
     {
@@ -121247,7 +121247,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1570",
+      "source_location": "L1579",
       "weight": 1.0
     },
     {
@@ -121259,7 +121259,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1605",
+      "source_location": "L1614",
       "weight": 1.0
     },
     {
@@ -121271,7 +121271,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1621",
+      "source_location": "L1630",
       "weight": 1.0
     },
     {
@@ -121283,7 +121283,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1626",
+      "source_location": "L1635",
       "weight": 1.0
     },
     {
@@ -121295,7 +121295,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1629",
+      "source_location": "L1638",
       "weight": 1.0
     },
     {
@@ -121307,7 +121307,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1786",
+      "source_location": "L1795",
       "weight": 1.0
     },
     {
@@ -121319,7 +121319,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1798",
+      "source_location": "L1807",
       "weight": 1.0
     },
     {
@@ -121331,7 +121331,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1813",
+      "source_location": "L1822",
       "weight": 1.0
     },
     {
@@ -121343,7 +121343,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1816",
+      "source_location": "L1825",
       "weight": 1.0
     },
     {
@@ -121355,7 +121355,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1819",
+      "source_location": "L1828",
       "weight": 1.0
     },
     {
@@ -121367,7 +121367,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1828",
+      "source_location": "L1837",
       "weight": 1.0
     },
     {
@@ -121379,7 +121379,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1831",
+      "source_location": "L1840",
       "weight": 1.0
     },
     {
@@ -121391,7 +121391,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1834",
+      "source_location": "L1843",
       "weight": 1.0
     },
     {
@@ -121403,7 +121403,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1837",
+      "source_location": "L1846",
       "weight": 1.0
     },
     {
@@ -121415,7 +121415,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1846",
+      "source_location": "L1855",
       "weight": 1.0
     },
     {
@@ -121427,7 +121427,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1851",
+      "source_location": "L1860",
       "weight": 1.0
     },
     {
@@ -121439,7 +121439,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1854",
+      "source_location": "L1863",
       "weight": 1.0
     },
     {
@@ -121451,7 +121451,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1857",
+      "source_location": "L1866",
       "weight": 1.0
     },
     {
@@ -121463,7 +121463,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1860",
+      "source_location": "L1869",
       "weight": 1.0
     },
     {
@@ -121475,7 +121475,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1863",
+      "source_location": "L1872",
       "weight": 1.0
     },
     {
@@ -121487,7 +121487,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1866",
+      "source_location": "L1875",
       "weight": 1.0
     },
     {
@@ -121499,7 +121499,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1879",
+      "source_location": "L1888",
       "weight": 1.0
     },
     {
@@ -121511,7 +121511,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1918",
+      "source_location": "L1927",
       "weight": 1.0
     },
     {
@@ -121559,7 +121559,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1437",
+      "source_location": "L1446",
       "weight": 1.0
     },
     {
@@ -121571,7 +121571,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1451",
+      "source_location": "L1460",
       "weight": 1.0
     },
     {
@@ -121583,7 +121583,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1991",
+      "source_location": "L2000",
       "weight": 1.0
     },
     {
@@ -121619,7 +121619,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1061",
+      "source_location": "L1070",
       "weight": 1.0
     },
     {
@@ -121631,7 +121631,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1065",
+      "source_location": "L1074",
       "weight": 1.0
     },
     {
@@ -121643,7 +121643,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1093",
+      "source_location": "L1102",
       "weight": 1.0
     },
     {
@@ -121655,7 +121655,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1193",
+      "source_location": "L1202",
       "weight": 1.0
     },
     {
@@ -121667,7 +121667,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1236",
+      "source_location": "L1245",
       "weight": 1.0
     },
     {
@@ -121679,7 +121679,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1348",
+      "source_location": "L1357",
       "weight": 1.0
     },
     {
@@ -121691,7 +121691,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1356",
+      "source_location": "L1365",
       "weight": 1.0
     },
     {
@@ -121703,7 +121703,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1357",
+      "source_location": "L1366",
       "weight": 1.0
     },
     {
@@ -121715,7 +121715,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1363",
+      "source_location": "L1372",
       "weight": 1.0
     },
     {
@@ -159827,7 +159827,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1489",
+      "source_location": "L1498",
       "weight": 1.0
     },
     {
@@ -159839,7 +159839,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1489",
+      "source_location": "L1498",
       "weight": 1.0
     },
     {
@@ -159851,7 +159851,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1917",
+      "source_location": "L1926",
       "weight": 1.0
     },
     {
@@ -159863,7 +159863,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1917",
+      "source_location": "L1926",
       "weight": 1.0
     },
     {
@@ -159947,7 +159947,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -159959,7 +159959,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -159971,7 +159971,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -159983,7 +159983,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -160043,7 +160043,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1185",
+      "source_location": "L1194",
       "weight": 1.0
     },
     {
@@ -160055,7 +160055,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1185",
+      "source_location": "L1194",
       "weight": 1.0
     },
     {
@@ -176639,7 +176639,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L2017",
+      "source_location": "L2026",
       "weight": 1.0
     },
     {
@@ -193487,7 +193487,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1885",
+      "source_location": "L1894",
       "weight": 1.0
     },
     {
@@ -193499,7 +193499,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1176",
+      "source_location": "L1185",
       "weight": 1.0
     },
     {
@@ -193511,7 +193511,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1894",
+      "source_location": "L1903",
       "weight": 1.0
     },
     {
@@ -193799,7 +193799,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1475",
+      "source_location": "L1484",
       "weight": 1.0
     },
     {
@@ -193811,7 +193811,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1152",
+      "source_location": "L1161",
       "weight": 1.0
     },
     {
@@ -193847,7 +193847,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1489",
+      "source_location": "L1498",
       "weight": 1.0
     },
     {
@@ -193859,7 +193859,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1489",
+      "source_location": "L1498",
       "weight": 1.0
     },
     {
@@ -193871,7 +193871,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1489",
+      "source_location": "L1498",
       "weight": 1.0
     },
     {
@@ -193883,7 +193883,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1917",
+      "source_location": "L1926",
       "weight": 1.0
     },
     {
@@ -193895,7 +193895,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1917",
+      "source_location": "L1926",
       "weight": 1.0
     },
     {
@@ -193907,7 +193907,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1917",
+      "source_location": "L1926",
       "weight": 1.0
     },
     {
@@ -193943,7 +193943,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1913",
+      "source_location": "L1922",
       "weight": 1.0
     },
     {
@@ -193955,7 +193955,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -193967,7 +193967,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -193979,7 +193979,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -193991,7 +193991,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -194003,7 +194003,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -194015,7 +194015,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -194063,7 +194063,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1185",
+      "source_location": "L1194",
       "weight": 1.0
     },
     {
@@ -194075,7 +194075,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1185",
+      "source_location": "L1194",
       "weight": 1.0
     },
     {
@@ -213977,7 +213977,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1885",
+      "source_location": "L1894",
       "weight": 1.0
     },
     {
@@ -214013,7 +214013,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1152",
+      "source_location": "L1161",
       "weight": 1.0
     },
     {
@@ -236991,7 +236991,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1152",
+      "source_location": "L1161",
       "weight": 1.0
     },
     {
@@ -237002,7 +237002,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1176",
+      "source_location": "L1185",
       "weight": 1.0
     },
     {
@@ -237013,7 +237013,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1185",
+      "source_location": "L1194",
       "weight": 1.0
     },
     {
@@ -237024,7 +237024,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1417",
+      "source_location": "L1426",
       "weight": 1.0
     },
     {
@@ -237035,7 +237035,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1475",
+      "source_location": "L1484",
       "weight": 1.0
     },
     {
@@ -237046,7 +237046,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1489",
+      "source_location": "L1498",
       "weight": 1.0
     },
     {
@@ -237057,7 +237057,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1885",
+      "source_location": "L1894",
       "weight": 1.0
     },
     {
@@ -237068,7 +237068,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1894",
+      "source_location": "L1903",
       "weight": 1.0
     },
     {
@@ -237079,7 +237079,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1913",
+      "source_location": "L1922",
       "weight": 1.0
     },
     {
@@ -237090,7 +237090,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1917",
+      "source_location": "L1926",
       "weight": 1.0
     },
     {
@@ -237101,7 +237101,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1974",
+      "source_location": "L1983",
       "weight": 1.0
     },
     {
@@ -237112,7 +237112,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1990",
+      "source_location": "L1999",
       "weight": 1.0
     },
     {
@@ -237123,7 +237123,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L2003",
+      "source_location": "L2012",
       "weight": 1.0
     },
     {
@@ -237134,7 +237134,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L2020",
+      "source_location": "L2029",
       "weight": 1.0
     },
     {
@@ -290062,7 +290062,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L2025",
+      "source_location": "L2034",
       "weight": 1.0
     },
     {
@@ -290086,7 +290086,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1438",
+      "source_location": "L1447",
       "weight": 1.0
     },
     {
@@ -290098,7 +290098,7 @@
       "confidence_score": 0.85,
       "context": "call",
       "source_file": "crates/linux_shell/src/gtk_ui.rs",
-      "source_location": "L1100",
+      "source_location": "L1109",
       "weight": 1.0
     },
     {
@@ -294720,5 +294720,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "7a879c412ae088381274576dd35c7b6438ed6e83"
+  "built_at_commit": "45054c856a8c42b48409e1628ecf29fdef965af1"
 }
