@@ -322,8 +322,12 @@ impl UiPreferences {
     /// Apply the guest-facing session settings shared by native hosts.
     /// Host audio volume and mute remain owned by each shell's output stream.
     pub fn apply_to_host_session(&self, session: &mut HostSession) -> Result<(), HostError> {
-        // Do the only fallible operation before changing any other session state.
-        if session.has_machine() {
+        // Tape options are the only fallible step, and they apply only to a
+        // classic deck. Spectrum Next is a different runtime: asking it for
+        // classic tape options returns `UnsupportedNext` and would roll back
+        // a successful Next boot in the native shells (and abort startup when
+        // Next is the saved model).
+        if session.machine().is_some() {
             session.set_tape_load_options(self.tape_load_options())?;
         }
         session.set_joystick_mode(self.joystick_mode.to_mode());
