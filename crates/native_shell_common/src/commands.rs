@@ -20,6 +20,8 @@ pub const IDM_TAPE_REWIND: usize = 1103;
 /// Machine → model (1200 + ordinal in [`ModelId::ALL`]) and reset
 pub const IDM_MACHINE_MODEL_BASE: usize = 1200;
 pub const IDM_MACHINE_RESET: usize = 1290;
+/// Machine → Choose Machine gallery. Distinct from [`IDM_MACHINE_RESET`] (1290).
+pub const IDM_MACHINE_PICKER: usize = 1291;
 
 /// Hardware attach / media
 pub const IDM_HW_ATTACH_MULTIFACE: usize = 1301;
@@ -150,6 +152,11 @@ mod tests {
             assert!(label.contains("ROMs ready") || label.contains("ROM setup required"));
         }
         assert_eq!(model_from_menu_id(IDM_MACHINE_RESET), None);
+        assert_ne!(IDM_MACHINE_PICKER, IDM_MACHINE_RESET);
+        assert_eq!(model_from_menu_id(IDM_MACHINE_PICKER), None);
+        for model in ModelId::ALL {
+            assert_ne!(menu_id_for_model(model), IDM_MACHINE_PICKER);
+        }
     }
 
     #[test]

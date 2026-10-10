@@ -22,24 +22,25 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+use windows::Win32::System::SystemServices::SS_BITMAP;
 use windows::Win32::UI::Controls::SetScrollInfo;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     EnableWindow, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
-    GetClientRect, GetDlgItem, GetMenu, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
-    IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostMessageW,
-    PostQuitMessage, RegisterClassExW, ScrollWindowEx, SendMessageW, SetWindowLongPtrW,
-    SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW,
-    CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW,
-    IDOK, IMAGE_BITMAP, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG,
-    PM_REMOVE, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP, SB_THUMBPOSITION, SB_THUMBTRACK,
-    SB_VERT, SCROLLINFO, SIF_ALL, SS_BITMAP, STM_SETIMAGE, SW_INVALIDATE, SW_SCROLLCHILDREN,
-    SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY,
-    WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE,
-    WM_SYSKEYDOWN, WM_SYSKEYUP, WM_VSCROLL, WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW,
-    WS_VISIBLE, WS_VSCROLL,
+    GetClientRect, GetDlgItem, GetMenu, GetScrollInfo, GetWindowLongPtrW, GetWindowTextLengthW,
+    GetWindowTextW, IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW,
+    PostMessageW, PostQuitMessage, RegisterClassExW, ScrollWindowEx, SendMessageW,
+    SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW,
+    CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA,
+    HMENU, IDC_ARROW, IDOK, IMAGE_BITMAP, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND,
+    MF_BYPOSITION, MSG, PM_REMOVE, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP,
+    SB_THUMBPOSITION, SB_THUMBTRACK, SB_VERT, SCROLLINFO, SIF_ALL, STM_SETIMAGE, SW_INVALIDATE,
+    SW_SCROLLCHILDREN, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND,
+    WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT,
+    WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_VSCROLL, WNDCLASSEXW, WS_BORDER,
+    WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
@@ -62,7 +63,7 @@ use native_shell_common::{
     IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1, IDM_HW_ATTACH_MULTIFACE, IDM_HW_DIVMMC_EEPROM,
     IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1, IDM_HW_EJECT_DCK, IDM_HW_INSERT_DCK,
     IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM, IDM_HW_MULTIFACE_NMI, IDM_HW_OPEN_TRD,
-    IDM_MACHINE_RESET, IDM_SET_APPEARANCE_DARK, IDM_SET_APPEARANCE_LIGHT,
+    IDM_MACHINE_PICKER, IDM_MACHINE_RESET, IDM_SET_APPEARANCE_DARK, IDM_SET_APPEARANCE_LIGHT,
     IDM_SET_APPEARANCE_SYSTEM, IDM_SET_AY_ABC, IDM_SET_AY_ACB, IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR,
     IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L, IDM_SET_JOY_SINCLAIR_R, IDM_SET_KEMPSTON_MOUSE,
     IDM_SET_MUTE, IDM_SET_ONLINE_TITLES, IDM_SET_TAPE_EAR_1, IDM_SET_TAPE_EAR_10,
@@ -81,7 +82,6 @@ const DEBUG_CLASS: &str = "SpecChumWindowsDebug\0";
 const WINDOW_TITLE: &str = "Spec Chum\0";
 const ID_DBG_EDIT: i32 = 2001;
 const IDM_MACHINE_ROM_SETUP: usize = 1289;
-const IDM_MACHINE_PICKER: usize = 1290;
 const MACHINE_PICKER_CLASS: &str = "SpecChumMachinePicker\0";
 const MACHINE_PICKER_SELECT_BASE: usize = 3000;
 const IDM_LIBRARY_RECENT_BASE: usize = 1600;
@@ -1511,7 +1511,7 @@ extern "system" fn machine_picker_wnd_proc(
                             let _ = SendMessageW(
                                 image,
                                 STM_SETIMAGE,
-                                WPARAM(IMAGE_BITMAP as usize),
+                                WPARAM(IMAGE_BITMAP.0 as usize),
                                 LPARAM(0),
                             );
                         }
@@ -1566,7 +1566,7 @@ unsafe fn populate_machine_picker(hwnd: HWND, state: &mut MachinePickerState) {
             WS_CHILD
                 | WS_VISIBLE
                 | WS_BORDER
-                | windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(SS_BITMAP as u32)
+                | windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(SS_BITMAP.0)
         } else {
             WS_CHILD | WS_VISIBLE | WS_BORDER
         };
@@ -1598,7 +1598,7 @@ unsafe fn populate_machine_picker(hwnd: HWND, state: &mut MachinePickerState) {
                 let _ = SendMessageW(
                     image_hwnd,
                     STM_SETIMAGE,
-                    WPARAM(IMAGE_BITMAP as usize),
+                    WPARAM(IMAGE_BITMAP.0 as usize),
                     LPARAM(bitmap.0 as isize),
                 );
             }
@@ -1819,7 +1819,9 @@ fn machine_bitmap(encoded: &[u8]) -> Option<HBITMAP> {
     let bitmap = bitmap?;
     if destination.is_null() {
         // SAFETY: bitmap was created above and has not been attached to a control.
-        unsafe { DeleteObject(HGDIOBJ(bitmap.0)) }.ok()?;
+        // Both outcomes abandon this bitmap; BOOL::ok returns Result, which cannot
+        // propagate with `?` from this Option-returning function.
+        let _ = unsafe { DeleteObject(HGDIOBJ(bitmap.0)) };
         return None;
     }
     // SAFETY: CreateDIBSection returned a writable buffer for this 160x90x32bpp
