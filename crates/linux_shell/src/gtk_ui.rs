@@ -1134,8 +1134,8 @@ fn show_machine_picker(state: Rc<RefCell<AppState>>, parent: &ApplicationWindow)
             #[weak]
             picker,
             move |_| {
-                state.borrow_mut().select_model(model);
                 picker.close();
+                state.borrow_mut().select_model(model);
             }
         ));
         row.append(&choose);
