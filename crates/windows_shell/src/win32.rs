@@ -1429,7 +1429,7 @@ extern "system" fn machine_picker_wnd_proc(
                     }
                 }
                 // SAFETY: hwnd is the picker receiving the selection command.
-                unsafe { DestroyWindow(hwnd) };
+                let _ = unsafe { DestroyWindow(hwnd) };
             }
             LRESULT(0)
         }
