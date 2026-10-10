@@ -1114,7 +1114,7 @@ fn show_machine_picker(state: Rc<RefCell<AppState>>, parent: &ApplicationWindow)
                     .slots
                     .iter()
                     .filter(|slot| slot.status != "found")
-                    .map(|slot| slot.label)
+                    .map(|slot| slot.label.as_str())
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("ROM status: Setup required ({missing})")

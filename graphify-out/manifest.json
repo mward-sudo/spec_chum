@@ -1512,9 +1512,9 @@
     "semantic_hash": ""
   },
   "crates/linux_shell/src/gtk_ui.rs": {
-    "mtime": 1791652854.2015016,
-    "seen": 1791652892.553271,
-    "ast_hash": "07a4793a8d4e892fae41235f4888d0b2",
+    "mtime": 1791653018.6244671,
+    "seen": 1791653041.6295521,
+    "ast_hash": "92e8af110175c5b7af627569db34684a",
     "semantic_hash": ""
   },
   "crates/linux_shell/src/keymap.rs": {
