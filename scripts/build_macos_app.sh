@@ -177,7 +177,7 @@ echo "==> ensure + copy living_room assets → SpecChumMac.app Resources"
 "$ROOT/scripts/ensure_living_room_assets.sh" "$ROOT"
 "$ROOT/scripts/stage_living_room_assets.sh" "$ROOT" "$RESOURCES/living_room_assets"
 mkdir -p "$RESOURCES/machines"
-install -m 0644 "$ROOT"/assets/machines/*.jpg "$RESOURCES/machines/"
+install -m 0644 "$ROOT"/assets/machines/*.jpg "$ROOT"/assets/machines/*.png "$RESOURCES/machines/"
 
 echo ""
 echo "Built: $BIN"

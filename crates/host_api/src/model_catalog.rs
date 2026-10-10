@@ -50,8 +50,8 @@ pub fn host_model_catalog() -> Vec<HostModelDescriptor> {
                 preference_slug: preference.slug(),
                 label: machine::model_label(model),
                 title: machine::model_title(model),
-                image_key: model_image_key(model),
-                image_description: model_image_description(model),
+                image_key: Some(model_image_key(model)),
+                image_description: Some(model_image_description(model)),
                 memory_sound_summary: Some(model_summary(model)),
                 compatible_peripherals: crate::hardware_compat(preference),
                 available: crate::rom_setup::model_rom_available(id, &rom_paths),
@@ -75,41 +75,45 @@ pub fn host_model_catalog() -> Vec<HostModelDescriptor> {
         .collect()
 }
 
-/// Catalog key for a verified, rights-cleared standalone computer photograph.
-/// Several firmware/RAM variants share an exterior chassis and therefore share an image.
-const fn model_image_key(model: machine::Model) -> Option<&'static str> {
+/// Catalog key for a bundled computer image. Generated illustrations are explicitly
+/// identified in `model_image_description`; several variants share an exterior.
+const fn model_image_key(model: machine::Model) -> &'static str {
     use machine::Model;
     match model {
-        Model::Spectrum16K | Model::Spectrum48 => Some("spectrum48"),
-        Model::Spectrum128 => Some("spectrum128"),
-        Model::SpectrumPlus2 => Some("plus2"),
-        Model::SpectrumPlus2A => Some("plus2a_black"),
-        Model::SpectrumPlus3 | Model::SpectrumPlus3e => Some("plus3"),
-        Model::TimexTC2048 => Some("tc2048"),
-        Model::TimexTS2068 => Some("ts2068"),
-        Model::Pentagon128 | Model::ScorpionZs256 | Model::SpectrumNext => None,
+        Model::Spectrum16K | Model::Spectrum48 => "spectrum48",
+        Model::Spectrum128 => "spectrum128",
+        Model::SpectrumPlus2 => "plus2",
+        Model::SpectrumPlus2A => "plus2a_black",
+        Model::SpectrumPlus3 | Model::SpectrumPlus3e => "plus3",
+        Model::TimexTC2048 => "tc2048",
+        Model::TimexTS2068 => "ts2068",
+        Model::Pentagon128 => "pentagon128_candidate",
+        Model::ScorpionZs256 => "scorpion_zs256_candidate",
+        Model::SpectrumNext => "spectrum_next_candidate",
     }
 }
 
 /// Short visual label for screen readers; model facts remain in `memory_sound_summary`.
-const fn model_image_description(model: machine::Model) -> Option<&'static str> {
+const fn model_image_description(model: machine::Model) -> &'static str {
     use machine::Model;
     match model {
         Model::Spectrum16K => {
-            Some("Original black rubber-key ZX Spectrum exterior shared with 48K")
+            "Original black rubber-key ZX Spectrum exterior shared with 48K"
         }
-        Model::Spectrum48 => Some("Black rubber-key Sinclair ZX Spectrum"),
-        Model::Spectrum128 => Some("Sinclair ZX Spectrum 128K with numeric keypad and 128K badge"),
-        Model::SpectrumPlus2 => Some("Grey ZX Spectrum +2 with integrated cassette deck"),
+        Model::Spectrum48 => "Black rubber-key Sinclair ZX Spectrum",
+        Model::Spectrum128 => "Sinclair ZX Spectrum 128K with numeric keypad and 128K badge",
+        Model::SpectrumPlus2 => "Grey ZX Spectrum +2 with integrated cassette deck",
         Model::SpectrumPlus2A => {
-            Some("Black ZX Spectrum +2A family case with integrated cassette deck")
+            "Black ZX Spectrum +2A family case with integrated cassette deck"
         }
         Model::SpectrumPlus3 | Model::SpectrumPlus3e => {
-            Some("Black ZX Spectrum +3 case with integrated floppy disk drive")
+            "Black ZX Spectrum +3 case with integrated floppy disk drive"
         }
-        Model::TimexTC2048 => Some("Timex Computer 2048 with white keys and black case"),
-        Model::TimexTS2068 => Some("Timex Sinclair 2068 with grey case and white keys"),
-        Model::Pentagon128 | Model::ScorpionZs256 | Model::SpectrumNext => None,
+        Model::TimexTC2048 => "Timex Computer 2048 with white keys and black case",
+        Model::TimexTS2068 => "Timex Sinclair 2068 with grey case and white keys",
+        Model::Pentagon128 => "Generated illustrative candidate of a Pentagon-style 128K clone; exterior varies by build",
+        Model::ScorpionZs256 => "Generated illustrative candidate of a Scorpion ZS-256-style clone; exterior varies by build",
+        Model::SpectrumNext => "Generated illustrative candidate of a cased Spectrum Next; shown as a concept, not a specific revision",
     }
 }
 
@@ -193,9 +197,9 @@ mod tests {
                     Some("ts2068"),
                     Some("Timex Sinclair 2068 with grey case and white keys"),
                 ),
-                machine::Model::Pentagon128
-                | machine::Model::ScorpionZs256
-                | machine::Model::SpectrumNext => (None, None),
+                machine::Model::Pentagon128 => (Some("pentagon128_candidate"), Some("Generated illustrative candidate of a Pentagon-style 128K clone; exterior varies by build")),
+                machine::Model::ScorpionZs256 => (Some("scorpion_zs256_candidate"), Some("Generated illustrative candidate of a Scorpion ZS-256-style clone; exterior varies by build")),
+                machine::Model::SpectrumNext => (Some("spectrum_next_candidate"), Some("Generated illustrative candidate of a cased Spectrum Next; shown as a concept, not a specific revision")),
             };
             assert_eq!(descriptor.image_key, expected_image_key);
             assert_eq!(descriptor.image_description, expected_image_description);

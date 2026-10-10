@@ -42,9 +42,9 @@
     "semantic_hash": "7f5409df2ce54f1fd9131a68f63f57fd"
   },
   "apps/macos/Sources/SpecChumMac/HostBridge.swift": {
-    "mtime": 1791600998.3182652,
-    "seen": 1791601875.7669508,
-    "ast_hash": "558ed49a55ab7efc36163428664bacb2",
+    "mtime": 1791603904.646352,
+    "seen": 1791603956.376533,
+    "ast_hash": "1d0faee788d6ec8bf19371416d3f7077",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/KempstonMouseTracking.swift": {
@@ -684,9 +684,9 @@
     "semantic_hash": "631934039235910023c60c5c3aabc295"
   },
   "scripts/build_macos_app.sh": {
-    "mtime": 1791601757.3518858,
-    "seen": 1791601875.7671092,
-    "ast_hash": "a4610b0463eac67c6df7a0826bbda88a",
+    "mtime": 1791603904.6712365,
+    "seen": 1791603956.382623,
+    "ast_hash": "ac602ae224db561e2b11b22d941e337c",
     "semantic_hash": ""
   },
   "scripts/build_tape_fixtures.py": {
@@ -1698,9 +1698,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/model_catalog.rs": {
-    "mtime": 1791601837.3093982,
-    "seen": 1791601875.767031,
-    "ast_hash": "f3851bdea5a69c53dc06d6be08023d79",
+    "mtime": 1791603375.8522635,
+    "seen": 1791603409.5434098,
+    "ast_hash": "d0f6efcc3bcfac3f6891707f482d3f6d",
     "semantic_hash": ""
   },
   "crates/living_room/src/baked_room.rs": {
@@ -2466,9 +2466,9 @@
     "semantic_hash": ""
   },
   "crates/app/src/frontend/navigation.rs": {
-    "mtime": 1791601837.2111943,
-    "seen": 1791601875.7669802,
-    "ast_hash": "2c1069b4b4f0e64961d79d2c832904fc",
+    "mtime": 1791603904.6928408,
+    "seen": 1791603956.377672,
+    "ast_hash": "8323d60af39f59aa47cf5c8546d92463",
     "semantic_hash": ""
   },
   "crates/host_api/src/media_library.rs": {
@@ -2502,9 +2502,9 @@
     "semantic_hash": ""
   },
   "assets/machines/README.md": {
-    "mtime": 1791601819.9785442,
-    "seen": 1791601875.767145,
-    "ast_hash": "faf04669db1838d0955e730f453f52a9",
+    "mtime": 1791603923.9263039,
+    "seen": 1791603956.3839061,
+    "ast_hash": "c4fa40977befb27471ff94d8b619fd44",
     "semantic_hash": ""
   },
   "assets/machines/plus2.jpg": {
@@ -2541,6 +2541,30 @@
     "mtime": 1791601692.7236273,
     "seen": 1791601875.767169,
     "ast_hash": "51dfe1b2cfe32a6d4ce2170114fb8f17",
+    "semantic_hash": ""
+  },
+  "assets/machines/pentagon128_candidate.png": {
+    "mtime": 1791603892.8317387,
+    "seen": 1791603956.384681,
+    "ast_hash": "020856abf3db30217dbf833acaa22a01",
+    "semantic_hash": ""
+  },
+  "assets/machines/plus2a_black.jpg": {
+    "mtime": 1791603035.4593618,
+    "seen": 1791603409.548414,
+    "ast_hash": "dd36130e97625da9730f693c4d3f3277",
+    "semantic_hash": ""
+  },
+  "assets/machines/scorpion_zs256_candidate.png": {
+    "mtime": 1791603892.835627,
+    "seen": 1791603956.384755,
+    "ast_hash": "300e7bf9a0dcc43e8da1bd5ad32ba43b",
+    "semantic_hash": ""
+  },
+  "assets/machines/spectrum_next_candidate.png": {
+    "mtime": 1791603892.8394759,
+    "seen": 1791603956.384804,
+    "ast_hash": "b075e29e2963206ff99c45c0c59db79d",
     "semantic_hash": ""
   }
 }

@@ -107,19 +107,28 @@ final class HostBridge: ObservableObject {
         }
 
         var pickerSummary: String {
-            descriptor?.memorySoundSummary ?? "Hardware details unavailable"
+            let summary = descriptor?.memorySoundSummary ?? "Hardware details unavailable"
+            guard imageDescription?.hasPrefix("Generated illustrative candidate") == true else {
+                return summary
+            }
+            return "\(summary) · Illustration candidate"
         }
 
         var imageKey: String? { descriptor?.imageKey }
         var imageDescription: String? { descriptor?.imageDescription }
 
         static func catalogImage(for model: Model) -> NSImage? {
-            guard let key = model.imageKey,
-                  let url = Bundle.main.url(
+            guard let key = model.imageKey else { return nil }
+            let url = Bundle.main.url(
                     forResource: key,
                     withExtension: "jpg",
                     subdirectory: "machines"
-                  ) else { return nil }
+                  ) ?? Bundle.main.url(
+                    forResource: key,
+                    withExtension: "png",
+                    subdirectory: "machines"
+                  )
+            guard let url else { return nil }
             return NSImage(contentsOf: url)
         }
 

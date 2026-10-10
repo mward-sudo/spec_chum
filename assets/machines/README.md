@@ -13,6 +13,9 @@ an asset. A missing key or file must show the model title as the fallback.
 | `plus3` | `plus3.jpg` | ZX Spectrum +3; shared by +3e | [Sintegrity, Wikimedia Commons](https://commons.wikimedia.org/wiki/File:ZX_Spectrum_%2B3.jpg), own work | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | 4000 × 1828 px / 2,218,322 bytes | `ef6301071ea06467e1e303c7a69efef31354918c30d11ef7f214fc8e2c44c5ce` |
 | `tc2048` | `tc2048.jpg` | Timex Computer 2048 | [Thomas Conté, photo; Ubcule, lens correction, Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Timex_Computer_2048_(T_Cont%C3%A9).jpg) | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) | 1600 × 1200 px / 808,085 bytes | `516ce5a71f3337540b7ed26fe24185e3b81ece2d8ccf843723996061c836f7ec` |
 | `ts2068` | `ts2068.jpg` | Timex Sinclair 2068 | [Thomas Conté, Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Timex_Sinclair_2068_(909735771).jpg) | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) | 2048 × 1536 px / 337,057 bytes | `43307811bb5cb35b64599eb2bdad4d4fb96d5b442f1f116c020bb95987875d01` |
+| `pentagon128_candidate` | `pentagon128_candidate.png` | Pentagon-style 128K clone, illustrative candidate | Generated with OpenAI ImageGen for review; generic interpretation, exterior varies by build | Generated illustration; not a historical photograph | 1448 × 1086 px / 1,951,602 bytes | `e78428920aaefac028509c2e361c950f7185cc539acdd9e0b5a1c7ae677eaba4` |
+| `scorpion_zs256_candidate` | `scorpion_zs256_candidate.png` | Scorpion ZS-256-style clone, illustrative candidate | Generated with OpenAI ImageGen for review; generic interpretation, exterior varies by build | Generated illustration; not a historical photograph | 1448 × 1086 px / 1,855,316 bytes | `70482573ce480ad4b84720e313fe91f0ad15d67c11736338cc1df63c80932143` |
+| `spectrum_next_candidate` | `spectrum_next_candidate.png` | Cased Spectrum Next, illustrative candidate | Generated with OpenAI ImageGen for review; concept, not a specific official revision | Generated illustration; not a historical photograph | 1448 × 1086 px / 1,949,083 bytes | `504f6a2e52f59432ac3e6810454d2b2986b08f79bf6e1f0350836cebfba720e0` |
 
 Attribution: “Sinclair ZX spectrum, personal computer, 1982.jpg” by Sailko;
 “ZX Spectrum128K.jpg” photographed by Bill Bertram and enhanced by Pixel8;
@@ -21,10 +24,12 @@ Attribution: “Sinclair ZX spectrum, personal computer, 1982.jpg” by Sailko;
 “Sinclair ZX Spectrum +2 (black) (RetroMadrid 2018).jpg” by AUIC Oficial
 (photographed by Fernando Sáenz), and “Timex Sinclair 2068 (909735771).jpg” by
 Thomas Conté. The black +2-family exterior is used for the +2A profile; the
-grey +2 image remains assigned to the earlier +2 profile. The bundled files
-are the Commons originals at the listed dimensions; they have not been further
-cropped or recompressed. The 16K and 48K models use the same unmarked rubber-key
-exterior photo, while +3 and +3e share a chassis. Models without a verified
-model-specific photo use the picker’s neutral fallback. The photo licenses
-apply to the photos, not to the application. No ROM, firmware, or marketing
-artwork is included in this directory.
+grey +2 image remains assigned to the earlier +2 profile. The bundled Commons
+files have not been further cropped or recompressed. The 16K and 48K models use
+the same unmarked rubber-key exterior photo, while +3 and +3e share a chassis.
+Generated illustrations include model-name markings and keyboard legends and
+are explicitly labeled candidates for visual review; they are not archival
+photographs or evidence of a specific exterior revision. Their descriptions in
+the model catalog preserve that distinction for screen readers and picker
+captions. The photo licenses apply to the photos, not to the application. No
+ROM or firmware is included in this directory.

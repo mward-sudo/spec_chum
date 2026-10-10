@@ -21,13 +21,22 @@ fn machine_photo_bytes(key: &str) -> Option<&'static [u8]> {
         "plus3" => Some(include_bytes!("../../../../assets/machines/plus3.jpg")),
         "tc2048" => Some(include_bytes!("../../../../assets/machines/tc2048.jpg")),
         "ts2068" => Some(include_bytes!("../../../../assets/machines/ts2068.jpg")),
+        "pentagon128_candidate" => Some(include_bytes!(
+            "../../../../assets/machines/pentagon128_candidate.png"
+        )),
+        "scorpion_zs256_candidate" => Some(include_bytes!(
+            "../../../../assets/machines/scorpion_zs256_candidate.png"
+        )),
+        "spectrum_next_candidate" => Some(include_bytes!(
+            "../../../../assets/machines/spectrum_next_candidate.png"
+        )),
         _ => None,
     }
 }
 
 fn load_machine_photo(ctx: &egui::Context, key: &str) -> Option<egui::TextureHandle> {
     let bytes = machine_photo_bytes(key)?;
-    let decoded = image::load_from_memory_with_format(bytes, image::ImageFormat::Jpeg).ok()?;
+    let decoded = image::load_from_memory(bytes).ok()?;
     let rgba = decoded.to_rgba8();
     let size = [rgba.width() as usize, rgba.height() as usize];
     let pixels = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
@@ -202,6 +211,11 @@ impl SpecChumApp {
                             ui.add_space(8.0);
                         }
                         ui.strong(descriptor.title);
+                        if descriptor.image_description.is_some_and(|description| {
+                            description.starts_with("Generated illustrative candidate")
+                        }) {
+                            ui.weak("Illustration candidate");
+                        }
                         if let Some(summary) = descriptor.memory_sound_summary {
                             ui.label(summary);
                         }
@@ -477,7 +491,7 @@ mod machine_photo_tests {
             keys.insert(key);
             let bytes = machine_photo_bytes(key).expect("catalog photo key has an embedded asset");
             assert!(!bytes.is_empty());
-            assert!(image::load_from_memory_with_format(bytes, image::ImageFormat::Jpeg).is_ok());
+            assert!(image::load_from_memory(bytes).is_ok());
             assert!(descriptor.image_description.is_some());
         }
         assert_eq!(
@@ -489,7 +503,10 @@ mod machine_photo_tests {
                 "plus2a_black",
                 "plus3",
                 "tc2048",
-                "ts2068"
+                "ts2068",
+                "pentagon128_candidate",
+                "scorpion_zs256_candidate",
+                "spectrum_next_candidate"
             ])
         );
     }
