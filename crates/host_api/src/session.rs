@@ -596,6 +596,7 @@ impl HostSession {
                 let img =
                     tape::TapImage::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
                 if let Some(m) = self.machine.as_mut().and_then(HostRuntime::classic_mut) {
+                    Self::clear_instant_tape_mode(m);
                     m.insert_tape(tape::TapPlayer::new(img));
                 }
                 self.set_media_identity_from_bytes(&data, path);
@@ -615,6 +616,7 @@ impl HostSession {
                             if let Some(m) =
                                 self.machine.as_mut().and_then(HostRuntime::classic_mut)
                             {
+                                Self::clear_instant_tape_mode(m);
                                 m.insert_tape(player);
                             }
                             self.set_media_identity_from_bytes(&data, path);
@@ -632,6 +634,7 @@ impl HostSession {
                 let player =
                     tape::TzxPlayer::parse(&data).map_err(|e| HostError::Message(e.to_string()))?;
                 if let Some(m) = self.machine.as_mut().and_then(HostRuntime::classic_mut) {
+                    Self::clear_instant_tape_mode(m);
                     m.insert_tzx(player);
                 }
                 self.set_media_identity_from_bytes(&data, path);
@@ -648,6 +651,16 @@ impl HostSession {
             }
         }
         Ok(())
+    }
+
+    /// Instant is an ephemeral action for the currently inserted tape. A valid new tape
+    /// starts on the user's selected EAR/Experience mode, preserving speed and preference.
+    fn clear_instant_tape_mode(machine: &mut Machine) {
+        let mut options = machine.tape_load_options();
+        if options.flash_load {
+            options.flash_load = false;
+            machine.set_tape_load_options(options);
+        }
     }
 
     /// Load a SNA/Z80 snapshot from `path` (128K/+3 first, then 48K), switching model when needed.

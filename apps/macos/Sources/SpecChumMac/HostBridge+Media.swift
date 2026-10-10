@@ -58,6 +58,7 @@ extension HostBridge {
         }
         let url = URL(fileURLWithPath: entry.path)
         mediaTitle = url.lastPathComponent
+        syncTapeLoadOptionsFromHost()
         syncModelFromHost()
         refreshStatus()
         noteRecentFile(url)

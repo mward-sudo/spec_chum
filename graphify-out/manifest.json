@@ -30,9 +30,9 @@
     "semantic_hash": "399e2949d9fb95371b20370ba2053f20"
   },
   "apps/macos/Sources/SpecChumMac/ContentView.swift": {
-    "mtime": 1791576464.0755959,
-    "seen": 1791587905.0344698,
-    "ast_hash": "737a31394d727a14bed0d0854bf38e15",
+    "mtime": 1791591977.9590302,
+    "seen": 1791592445.7799199,
+    "ast_hash": "a802412bb910491a2dc3458fa0fe740d",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/GlassChrome.swift": {
@@ -372,9 +372,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session.rs": {
-    "mtime": 1791574763.3502514,
-    "seen": 1791575478.549023,
-    "ast_hash": "a5da603bfc5c462a1be9618c03a38d99",
+    "mtime": 1791591978.1225991,
+    "seen": 1791592445.79156,
+    "ast_hash": "0370efa78515a22fb57441e620e58339",
     "semantic_hash": ""
   },
   "crates/living_room/Cargo.toml": {
@@ -1080,9 +1080,9 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Media.swift": {
-    "mtime": 1791576464.056939,
-    "seen": 1791587905.034612,
-    "ast_hash": "768d8c25d17e6cd99139c7b078d3e3d5",
+    "mtime": 1791591978.0387151,
+    "seen": 1791592445.7802901,
+    "ast_hash": "f7110ba02946b78d6b8fce82bd7a9615",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/HostBridge+Tape.swift": {
@@ -1476,9 +1476,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1791589238.7964125,
-    "seen": 1791589429.2656682,
-    "ast_hash": "c11fef46e1a3bbab7c08de98d06aa650",
+    "mtime": 1791592378.8308382,
+    "seen": 1791592445.80311,
+    "ast_hash": "9a638ffff22c87061810879643ae3c64",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -2076,9 +2076,9 @@
     "semantic_hash": ""
   },
   "crates/host_api/src/session_tests.rs": {
-    "mtime": 1791574763.3509495,
-    "seen": 1791575478.549024,
-    "ast_hash": "38e4e4c85d4f6853de5839c7df388408",
+    "mtime": 1791592280.5524383,
+    "seen": 1791592445.7916532,
+    "ast_hash": "eec7a5d9fef4728656397620102368e6",
     "semantic_hash": ""
   },
   "crates/machine/src/memory.rs": {
@@ -2484,9 +2484,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32/library.rs": {
-    "mtime": 1791590090.7188344,
-    "seen": 1791590125.941761,
-    "ast_hash": "197c656feb44a9cd638c755d520016e1",
+    "mtime": 1791591978.292822,
+    "seen": 1791592445.803113,
+    "ast_hash": "5e5b626791a938f85a76086a5d44aca8",
     "semantic_hash": ""
   },
   "crates/windows_shell/src/library_cmd.rs": {

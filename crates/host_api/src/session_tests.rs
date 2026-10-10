@@ -564,6 +564,77 @@ fn open_fixture_tap_progress_and_audio_pcm() {
 }
 
 #[test]
+fn opening_tap_or_tzx_clears_ephemeral_instant_mode() {
+    let mut session = HostSession::new(ModelId::Spectrum48, true);
+    session
+        .load_rom_bytes(&vec![0; 16 * 1024])
+        .expect("synthetic 48K ROM");
+
+    let tap = workspace_root().join("tests/fixtures/tape/minimal_code.tap");
+    session
+        .set_tape_load_options(machine::TapeLoadOptions {
+            flash_load: true,
+            speed: 12,
+            ..Default::default()
+        })
+        .expect("set instant mode");
+    session.open_tape(&tap).expect("open TAP");
+    let options = session.tape_load_options().expect("tape options");
+    assert!(!options.flash_load, "new TAP must not inherit Instant");
+    assert_eq!(
+        options.speed, 12,
+        "new TAP preserves the selected EAR speed"
+    );
+
+    let dir = tempfile_dir("spec_chum_new_tape_mode");
+    let tzx = dir.join("pulse_only.tzx");
+    let mut bytes = Vec::from(&b"ZXTape!"[..]);
+    bytes.extend_from_slice(&[0x1a, 1, 20]);
+    bytes.push(0x12); // Pure Tone: this remains a pulse TZX, not a TAP conversion.
+    bytes.extend_from_slice(&1000u16.to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    std::fs::write(&tzx, bytes).expect("write TZX");
+    let experience = machine::TapeLoadOptions::experience();
+    session
+        .set_tape_load_options(experience)
+        .expect("set Experience mode");
+    session.open_tape(&tzx).expect("open pulse TZX");
+    let options = session.tape_load_options().expect("tape options");
+    assert!(!options.flash_load, "new TZX must not inherit Instant");
+    assert!(options.experience_load, "new TZX preserves Experience mode");
+    assert_eq!(
+        options.speed, experience.speed,
+        "new TZX preserves the Experience speed"
+    );
+
+    let standard_tzx = dir.join("standard.tzx");
+    let mut bytes = Vec::from(&b"ZXTape!"[..]);
+    bytes.extend_from_slice(&[0x1a, 1, 20]);
+    bytes.push(0x10);
+    bytes.extend_from_slice(&100u16.to_le_bytes());
+    bytes.extend_from_slice(&3u16.to_le_bytes());
+    bytes.extend_from_slice(&[0x00, b'A', 0x00]);
+    std::fs::write(&standard_tzx, bytes).expect("write standard TZX");
+    session
+        .set_tape_load_options(machine::TapeLoadOptions {
+            flash_load: true,
+            speed: 8,
+            ..Default::default()
+        })
+        .expect("set instant mode for standard TZX");
+    session
+        .open_tape(&standard_tzx)
+        .expect("open standard-speed TZX");
+    let options = session.tape_load_options().expect("tape options");
+    assert!(
+        !options.flash_load,
+        "standard-speed TZX conversion must not inherit Instant"
+    );
+    assert_eq!(options.speed, 8, "standard TZX preserves EAR speed");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn open_local_boggit_tzx_as_tap_when_present() {
     let Some(rom) = rom48() else {
         eprintln!("skip: roms/spec48.rom missing");

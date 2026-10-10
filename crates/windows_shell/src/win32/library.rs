@@ -299,9 +299,12 @@ extern "system" fn library_wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    // SAFETY: GWLP_USERDATA is set to the main window's boxed AppState during WM_CREATE.
+    // The main window destroys this Library HWND before dropping that Box in WM_DESTROY.
     let app_ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut AppState;
     match msg {
         WM_CREATE => {
+            // SAFETY: CreateWindowExW passes the AppState pointer in lpCreateParams.
             let cs = unsafe { &*(lparam.0 as *const CREATESTRUCTW) };
             let app_ptr = cs.lpCreateParams as *mut AppState;
             if app_ptr.is_null() {

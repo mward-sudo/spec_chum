@@ -26,14 +26,14 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
     GetClientRect, GetDlgItem, GetMenu, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
-    LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostQuitMessage, RegisterClassExW,
-    SendMessageW, SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW,
-    CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY,
-    GWLP_USERDATA, HMENU, IDC_ARROW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND,
-    MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_COMMAND,
-    WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT,
-    WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WNDCLASSEXW, WS_BORDER, WS_CHILD,
-    WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostQuitMessage,
+    RegisterClassExW, SendMessageW, SetWindowLongPtrW, SetWindowTextW, ShowWindow,
+    TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT,
+    ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW, IDOK, MB_ICONERROR,
+    MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN,
+    WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
@@ -1570,6 +1570,21 @@ pub fn run() -> Result<()> {
             while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
                 if msg.message == WM_QUIT {
                     return Ok(());
+                }
+                // SAFETY: `hwnd` is the live main-window handle; its USERDATA remains
+                // the boxed AppState until this message loop exits on WM_QUIT.
+                let library = unsafe {
+                    let state_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppState;
+                    (!state_ptr.is_null())
+                        .then(|| (*state_ptr).library_hwnd)
+                        .flatten()
+                };
+                if let Some(library) = library {
+                    // SAFETY: the Library HWND belongs to AppState for the event-loop lifetime,
+                    // and `msg` is the live message removed from this thread's queue.
+                    if unsafe { IsDialogMessageW(library, &msg) }.as_bool() {
+                        continue;
+                    }
                 }
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);

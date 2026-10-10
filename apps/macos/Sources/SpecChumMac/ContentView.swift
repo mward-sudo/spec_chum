@@ -54,6 +54,11 @@ struct ContentView: View {
                 FocusSpectrumView.post()
             }
         }
+        .onChange(of: host.showLibrary) { _, showing in
+            if !showing {
+                FocusSpectrumView.postDelayed()
+            }
+        }
         .onChange(of: host.model) { _, _ in
             // Toolbar Machine menus often keep an NSControl as first responder after pick.
             FocusSpectrumView.postDelayed()
