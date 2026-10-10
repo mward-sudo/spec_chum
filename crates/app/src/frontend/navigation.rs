@@ -151,9 +151,6 @@ impl SpecChumApp {
             });
         if current != previous {
             current.set(ctx);
-            if current == FrontendView::Debugger {
-                self.session.debug_open = true;
-            }
             if current == FrontendView::Play {
                 ctx.data_mut(|data| {
                     data.insert_temp(egui::Id::new(GUEST_KEYBOARD_SUPPRESSED_ID), true);
@@ -184,10 +181,7 @@ impl SpecChumApp {
             }
             FrontendView::Debugger => {
                 ui.heading("Debugger");
-                ui.label("The debugger window is open with the live machine controls.");
-                if ui.button("Show debugger window").clicked() {
-                    self.session.debug_open = true;
-                }
+                self.render_debugger_contents(ui);
             }
             FrontendView::Settings => {
                 ui.heading("Settings");

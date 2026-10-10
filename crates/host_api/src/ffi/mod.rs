@@ -10,7 +10,8 @@
 //! - Treat framebuffer pointers as valid only until the next mutating call
 //!   (especially [`sc_set_border`] / [`sc_destroy`]).
 //! - Free strings from [`sc_status`] / [`sc_last_error`] / [`sc_inspect_json`] /
-//!   [`sc_debug_dump`] / [`sc_debug_dump_json`] with [`sc_string_free`].
+//!   [`sc_debugger_text`] / [`sc_debug_dump`] / [`sc_debug_dump_json`] with
+//!   [`sc_string_free`].
 
 #![allow(unsafe_code)]
 // C ABI entry points cannot be `unsafe fn` for C callers; validity is documented.
@@ -203,5 +204,23 @@ mod tests {
         assert_eq!(sc_step(h), -1);
         assert_eq!(sc_run_until_break(h, 1), -1);
         sc_destroy(h);
+    }
+
+    #[test]
+    fn ffi_debugger_workspace_snapshot_and_breakpoint_clear_fail_cleanly_without_machine() {
+        let handle = sc_create(0, 1);
+        assert!(!handle.is_null());
+        let raw = sc_debugger_text(handle);
+        assert!(!raw.is_null());
+        // SAFETY: debugger snapshot is an owned C string returned by this call.
+        let text = unsafe { CString::from_raw(raw) };
+        let text = text.to_str().expect("debugger snapshot is UTF-8");
+        assert!(text.contains("Execution: no machine loaded"));
+        assert!(text.contains("--- recent trace ("));
+        assert_eq!(sc_clear_breakpoints(handle), -1);
+        let error = sc_last_error();
+        assert!(!error.is_null());
+        sc_string_free(error);
+        sc_destroy(handle);
     }
 }

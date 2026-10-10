@@ -32,7 +32,8 @@ pub extern "C" fn sc_string_free(s: *mut c_char) {
         return;
     }
     // SAFETY: string from `CString::into_raw` via sc_status / sc_last_error /
-    // sc_media_title / sc_media_sha512 / sc_inspect_json / sc_debug_dump /
+    // sc_media_title / sc_media_sha512 / sc_inspect_json / sc_debugger_text /
+    // sc_debug_dump /
     // sc_debug_dump_json.
     drop(unsafe { CString::from_raw(s) });
 }

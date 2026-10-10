@@ -335,7 +335,7 @@ final class HostBridge: ObservableObject {
     @Published var debugPc: UInt16 = 0
     @Published var debugSp: UInt16 = 0
     @Published var debugAf: UInt16 = 0
-    @Published var inspectJsonPreview: String = ""
+    @Published var debuggerTextPreview: String = ""
     @Published var joystickMode: JoystickMode = HostBridge.loadPersistedJoystickMode() {
         didSet {
             guard oldValue != joystickMode else { return }

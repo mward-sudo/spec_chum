@@ -16,6 +16,16 @@ extension HostBridge {
         status = "Trace ring cleared"
     }
 
+    func clearBreakpoints() {
+        guard let handle else { return }
+        if sc_clear_breakpoints(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Clear breakpoints failed"
+        } else {
+            status = "Breakpoints cleared"
+        }
+        refreshInspector()
+    }
+
     func dumpTraceToDesktop() {
         let dir = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
@@ -159,10 +169,11 @@ extension HostBridge {
             debugSp = r.sp
             debugAf = r.af
         }
-        if let json = inspectJson() {
-            inspectJsonPreview = String(json.prefix(2000))
+        if let handle, let cstr = sc_debugger_text(handle) {
+            debuggerTextPreview = String(cString: cstr)
+            sc_string_free(cstr)
         } else {
-            inspectJsonPreview = "(no machine)"
+            debuggerTextPreview = "(no machine)"
         }
     }
 

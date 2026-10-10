@@ -67,6 +67,8 @@ pub const IDM_DBG_STEP: usize = 1504;
 pub const IDM_DBG_BREAK_PC: usize = 1505;
 pub const IDM_DBG_CLEAR_BREAKS: usize = 1506;
 pub const IDM_DBG_REFRESH: usize = 1507;
+pub const IDM_DBG_TRACE_ENABLE: usize = 1508;
+pub const IDM_DBG_TRACE_CLEAR: usize = 1509;
 
 /// Map a Machine→model menu id to [`ModelId`].
 #[must_use]

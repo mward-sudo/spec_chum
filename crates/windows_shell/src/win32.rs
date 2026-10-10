@@ -52,17 +52,18 @@ use native_shell_common::commands::{
 };
 use native_shell_common::{
     IDM_DBG_BREAK_PC, IDM_DBG_CLEAR_BREAKS, IDM_DBG_CONTINUE, IDM_DBG_PAUSE, IDM_DBG_REFRESH,
-    IDM_DBG_STEP, IDM_DBG_TOGGLE, IDM_FILE_EXIT, IDM_FILE_OPEN_DSK, IDM_FILE_OPEN_RZX,
-    IDM_FILE_OPEN_SNAPSHOT, IDM_FILE_OPEN_TAPE, IDM_FILE_OPEN_TRD, IDM_HW_ATTACH_BETA,
-    IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1, IDM_HW_ATTACH_MULTIFACE, IDM_HW_DIVMMC_EEPROM,
-    IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1, IDM_HW_EJECT_DCK, IDM_HW_INSERT_DCK,
-    IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM, IDM_HW_MULTIFACE_NMI, IDM_HW_OPEN_TRD,
-    IDM_MACHINE_RESET, IDM_SET_APPEARANCE_DARK, IDM_SET_APPEARANCE_LIGHT,
-    IDM_SET_APPEARANCE_SYSTEM, IDM_SET_AY_ABC, IDM_SET_AY_ACB, IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR,
-    IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L, IDM_SET_JOY_SINCLAIR_R, IDM_SET_KEMPSTON_MOUSE,
-    IDM_SET_MUTE, IDM_SET_ONLINE_TITLES, IDM_SET_TAPE_EAR_1, IDM_SET_TAPE_EAR_10,
-    IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20, IDM_SET_TAPE_EAR_5, IDM_SET_TAPE_EXPERIENCE,
-    IDM_SET_TAPE_INSTANT, IDM_SET_THROTTLE, IDM_TAPE_PAUSE, IDM_TAPE_PLAY, IDM_TAPE_REWIND,
+    IDM_DBG_STEP, IDM_DBG_TOGGLE, IDM_DBG_TRACE_CLEAR, IDM_DBG_TRACE_ENABLE, IDM_FILE_EXIT,
+    IDM_FILE_OPEN_DSK, IDM_FILE_OPEN_RZX, IDM_FILE_OPEN_SNAPSHOT, IDM_FILE_OPEN_TAPE,
+    IDM_FILE_OPEN_TRD, IDM_HW_ATTACH_BETA, IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1,
+    IDM_HW_ATTACH_MULTIFACE, IDM_HW_DIVMMC_EEPROM, IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1,
+    IDM_HW_EJECT_DCK, IDM_HW_INSERT_DCK, IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM,
+    IDM_HW_MULTIFACE_NMI, IDM_HW_OPEN_TRD, IDM_MACHINE_RESET, IDM_SET_APPEARANCE_DARK,
+    IDM_SET_APPEARANCE_LIGHT, IDM_SET_APPEARANCE_SYSTEM, IDM_SET_AY_ABC, IDM_SET_AY_ACB,
+    IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR, IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L,
+    IDM_SET_JOY_SINCLAIR_R, IDM_SET_KEMPSTON_MOUSE, IDM_SET_MUTE, IDM_SET_ONLINE_TITLES,
+    IDM_SET_TAPE_EAR_1, IDM_SET_TAPE_EAR_10, IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20,
+    IDM_SET_TAPE_EAR_5, IDM_SET_TAPE_EXPERIENCE, IDM_SET_TAPE_INSTANT, IDM_SET_THROTTLE,
+    IDM_TAPE_PAUSE, IDM_TAPE_PLAY, IDM_TAPE_REWIND,
 };
 #[path = "win32/library.rs"]
 mod library;
@@ -957,6 +958,19 @@ impl AppState {
         self.refresh_debug_text();
     }
 
+    fn debug_enable_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_enable_default_trace);
+        self.host
+            .with_mut(|s| s.set_status("Default trace enabled"));
+        self.refresh_debug_text();
+    }
+
+    fn debug_clear_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_clear_trace);
+        self.host.with_mut(|s| s.set_status("Trace ring cleared"));
+        self.refresh_debug_text();
+    }
+
     fn queue_command(&mut self, id: usize) {
         if id == IDM_FILE_EXIT {
             unsafe {
@@ -1084,6 +1098,8 @@ impl AppState {
             IDM_DBG_BREAK_PC => self.debug_break_at_pc(),
             IDM_DBG_CLEAR_BREAKS => self.debug_clear_breaks(),
             IDM_DBG_REFRESH => self.refresh_debug_text(),
+            IDM_DBG_TRACE_ENABLE => self.debug_enable_trace(),
+            IDM_DBG_TRACE_CLEAR => self.debug_clear_trace(),
             _ => {}
         }
         if affects_library && self.library_hwnd.is_some() {
@@ -1301,7 +1317,7 @@ fn build_menu() -> Result<(HMENU, HMENU, HMENU, HMENU)> {
         append_popup(menubar, settings, "&Settings");
 
         let debug = CreatePopupMenu()?;
-        append_menu(debug, IDM_DBG_TOGGLE, "&Inspector…");
+        append_menu(debug, IDM_DBG_TOGGLE, "&Debugger Workspace…");
         append_sep(debug);
         append_menu(debug, IDM_DBG_PAUSE, "&Pause");
         append_menu(debug, IDM_DBG_CONTINUE, "&Continue");
@@ -1310,6 +1326,8 @@ fn build_menu() -> Result<(HMENU, HMENU, HMENU, HMENU)> {
         append_menu(debug, IDM_DBG_BREAK_PC, "Breakpoint at &PC");
         append_menu(debug, IDM_DBG_CLEAR_BREAKS, "C&lear breakpoints");
         append_menu(debug, IDM_DBG_REFRESH, "&Refresh");
+        append_menu(debug, IDM_DBG_TRACE_ENABLE, "Enable Default &Trace");
+        append_menu(debug, IDM_DBG_TRACE_CLEAR, "Clear Trace &Ring");
         append_popup(menubar, debug, "&Debug");
 
         Ok((menubar, recent, hw, file))
@@ -1333,7 +1351,7 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
         };
         let _ = RegisterClassExW(&wc);
 
-        let title: Vec<u16> = "Spec Chum — Debugger\0".encode_utf16().collect();
+        let title: Vec<u16> = "Spec Chum — Debugger Workspace\0".encode_utf16().collect();
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             PCWSTR(class_name.as_ptr()),
@@ -1341,8 +1359,8 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
+            820,
             640,
-            520,
             owner,
             None,
             Some(hinstance.into()),

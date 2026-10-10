@@ -292,6 +292,20 @@ fn classic_frame_tstates(model: machine::Model) -> u32 {
     }
 }
 
+fn z80_flags_text(flags: u8) -> String {
+    format!(
+        "Flags: S={} Z={} 5={} H={} 3={} P/V={} N={} C={}",
+        u8::from(flags & 0x80 != 0),
+        u8::from(flags & 0x40 != 0),
+        u8::from(flags & 0x20 != 0),
+        u8::from(flags & 0x10 != 0),
+        u8::from(flags & 0x08 != 0),
+        u8::from(flags & 0x04 != 0),
+        u8::from(flags & 0x02 != 0),
+        u8::from(flags & 0x01 != 0),
+    )
+}
+
 impl HostSession {
     /// Create an unloaded session for `model` with the selected border mode.
     ///
@@ -1382,6 +1396,11 @@ impl HostSession {
         })
     }
 
+    /// Human-readable Z80 flag bits for debugger workspaces.
+    pub fn debugger_flags_text(&self) -> Result<String, HostError> {
+        Ok(z80_flags_text(self.regs()?.af as u8))
+    }
+
     /// Patch PC / SP / AF for headless entry (e.g. TR-DOS `USR 15616` → `PC=0x3D00`).
     pub fn patch_regs(&mut self, patch: RegsPatch) -> Result<HostRegs, HostError> {
         if patch.is_empty() {
@@ -1638,12 +1657,20 @@ impl HostSession {
         Ok(m.disasm_window(addr, count))
     }
 
-    /// Combined inspect, disassembly, and breakpoint view for native debugger windows.
+    /// Combined debugger workspace snapshot for native windows.
+    ///
+    /// Keep this read-only and bounded: native shells refresh it on a timer so
+    /// debugger UI work never runs in the guest frame or audio path.
     pub fn debugger_text(&self) -> String {
         let inspect = self
             .inspect_text()
             .unwrap_or_else(|e| format!("inspect: {e}"));
+        let flags = self
+            .debugger_flags_text()
+            .unwrap_or_else(|e| format!("flags: {e}"));
         let disasm = self.disasm(None, 16).unwrap_or_default();
+        let pc = self.regs().map_or(0, |regs| regs.pc);
+        let memory = self.hexdump(pc, 64).unwrap_or_default();
         let breaks = self
             .list_pc_breakpoints()
             .unwrap_or_default()
@@ -1651,8 +1678,40 @@ impl HostSession {
             .map(|pc| format!("${pc:04X}"))
             .collect::<Vec<_>>()
             .join(" ");
-        let paused = if self.paused() { "paused" } else { "running" };
-        format!("{inspect}\n\n--- disasm ({paused}) ---\n{disasm}\n\nbreakpoints: {breaks}\n")
+        let paused = if !self.has_machine() {
+            "no machine loaded"
+        } else if self.paused() {
+            "paused"
+        } else {
+            "running"
+        };
+        let trace_events = trace::snapshot();
+        let trace_count = trace_events.len();
+        let trace = trace_events
+            .into_iter()
+            .rev()
+            .take(16)
+            .map(|event| event.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let trace = if trace.is_empty() {
+            "(no trace events; enable tracing from the Debug menu)".to_owned()
+        } else {
+            trace
+        };
+        format!(
+            "Execution: {paused}\n\n{inspect}\n{flags}\n\n--- disassembly at PC ---\n{disasm}\n\n--- memory at PC ---\n{memory}\n\nPC breakpoints: {breaks}\n\n--- recent trace ({trace_count} buffered, latest 16) ---\n{trace}\n"
+        )
+    }
+
+    /// Enable the shared low-volume trace categories exposed by native Debug menus.
+    pub fn debug_enable_default_trace(&mut self) {
+        trace::enable(trace::Category::DEFAULT);
+    }
+
+    /// Clear buffered trace events without changing the enabled categories.
+    pub fn debug_clear_trace(&mut self) {
+        trace::clear();
     }
 
     /// Hexdump `len` bytes starting at `addr`.

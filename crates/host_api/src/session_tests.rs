@@ -68,6 +68,23 @@ fn new_session_has_empty_framebuffer_dims() {
 }
 
 #[test]
+fn debugger_workspace_snapshot_exposes_shared_sections_without_a_machine() {
+    let session = HostSession::new(ModelId::Spectrum48, true);
+    let text = session.debugger_text();
+    assert!(text.contains("Execution: no machine loaded"));
+    assert!(text.contains("--- disassembly at PC ---"));
+    assert!(text.contains("--- memory at PC ---"));
+    assert!(text.contains("PC breakpoints:"));
+    assert!(text.contains("--- recent trace ("));
+}
+
+#[test]
+fn debugger_flag_text_names_each_z80_flag_bit() {
+    let flags = super::z80_flags_text(0b1101_0101);
+    assert_eq!(flags, "Flags: S=1 Z=1 5=0 H=1 3=0 P/V=1 N=0 C=1");
+}
+
+#[test]
 fn load_divmmc_sd_slot_attaches_both_images() {
     let Some(rom) = rom48() else {
         eprintln!("skip: roms/spec48.rom missing");

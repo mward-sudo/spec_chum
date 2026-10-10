@@ -14,7 +14,7 @@ use glib::clone;
 use glib::translate::IntoGlib;
 use gtk4::prelude::*;
 use gtk4::{
-    gio, glib, Application, ApplicationWindow, Label, Orientation, Picture, ScrolledWindow,
+    gio, glib, Application, ApplicationWindow, Button, Label, Orientation, Picture, ScrolledWindow,
     TextBuffer, TextView, Window,
 };
 use machine::TapeLoadOptions;
@@ -659,13 +659,47 @@ impl AppState {
             .hexpand(true)
             .vexpand(true)
             .build();
+        let content = gtk4::Box::new(Orientation::Vertical, 8);
+        content.set_margin_top(10);
+        content.set_margin_bottom(10);
+        content.set_margin_start(10);
+        content.set_margin_end(10);
+        let controls = gtk4::Box::new(Orientation::Horizontal, 6);
+        for (label, accessible_name, action) in [
+            ("Pause", "Pause emulation", 0_u8),
+            ("Continue", "Continue emulation", 1),
+            ("Step", "Execute one instruction", 2),
+            ("Breakpoint at PC", "Add breakpoint at current PC", 3),
+            ("Clear breakpoints", "Clear all PC breakpoints", 4),
+            ("Refresh", "Refresh debugger workspace", 5),
+        ] {
+            let button = Button::with_label(label);
+            button.update_property(&[gtk4::accessible::Property::Label(accessible_name)]);
+            button.set_tooltip_text(Some(accessible_name));
+            let state = Rc::clone(state);
+            button.connect_clicked(move |_| {
+                let mut state = state.borrow_mut();
+                match action {
+                    0 => state.debug_pause(),
+                    1 => state.debug_continue(),
+                    2 => state.debug_step(),
+                    3 => state.debug_break_at_pc(),
+                    4 => state.debug_clear_breaks(),
+                    _ => state.refresh_debug_text(),
+                }
+            });
+            controls.append(&button);
+        }
+        content.append(&controls);
+        content.append(&scroll);
         let win = Window::builder()
             .transient_for(parent)
             .title("Spec Chum — Debugger")
-            .default_width(640)
-            .default_height(520)
-            .child(&scroll)
+            .default_width(820)
+            .default_height(640)
+            .child(&content)
             .build();
+        let parent = parent.clone();
         win.connect_close_request(clone!(
             #[strong]
             state,
@@ -673,6 +707,8 @@ impl AppState {
                 let mut s = state.borrow_mut();
                 s.debug_window = None;
                 s.debug_buffer = None;
+                drop(s);
+                parent.present();
                 glib::Propagation::Proceed
             }
         ));
@@ -735,6 +771,19 @@ impl AppState {
 
     fn debug_clear_breaks(&mut self) {
         self.host_action("Clear breakpoints", HostSession::clear_breakpoints);
+        self.refresh_debug_text();
+    }
+
+    fn debug_enable_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_enable_default_trace);
+        self.host
+            .with_mut(|s| s.set_status("Default trace enabled"));
+        self.refresh_debug_text();
+    }
+
+    fn debug_clear_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_clear_trace);
+        self.host.with_mut(|s| s.set_status("Trace ring cleared"));
         self.refresh_debug_text();
     }
 
@@ -1006,13 +1055,15 @@ fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
     menubar.append_submenu(Some("_Settings"), &settings);
 
     let debug = gio::Menu::new();
-    debug.append(Some("Inspector…"), Some("app.dbg_toggle"));
+    debug.append(Some("Debugger Workspace…"), Some("app.dbg_toggle"));
     debug.append(Some("Pause"), Some("app.dbg_pause"));
     debug.append(Some("Continue"), Some("app.dbg_continue"));
     debug.append(Some("Step"), Some("app.dbg_step"));
     debug.append(Some("Breakpoint at PC"), Some("app.dbg_break_pc"));
     debug.append(Some("Clear breakpoints"), Some("app.dbg_clear_breaks"));
     debug.append(Some("Refresh"), Some("app.dbg_refresh"));
+    debug.append(Some("Enable Default Trace"), Some("app.dbg_trace_enable"));
+    debug.append(Some("Clear Trace Ring"), Some("app.dbg_trace_clear"));
     menubar.append_submenu(Some("_Debug"), &debug);
 
     app.set_menubar(Some(&menubar));
@@ -1691,6 +1742,12 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
     add_action(app, "dbg_refresh", Rc::clone(&state), |s| {
         s.refresh_debug_text();
     });
+    add_action(app, "dbg_trace_enable", Rc::clone(&state), |s| {
+        s.debug_enable_trace();
+    });
+    add_action(app, "dbg_trace_clear", Rc::clone(&state), |s| {
+        s.debug_clear_trace();
+    });
 
     let quit = gio::SimpleAction::new("quit", None);
     quit.connect_activate(clone!(
@@ -1706,6 +1763,9 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
 
     app.set_accels_for_action("app.open_tape", &["<Control>o"]);
     app.set_accels_for_action("app.quit", &["<Control>q"]);
+    app.set_accels_for_action("app.dbg_toggle", &["<Control><Alt>d"]);
+    app.set_accels_for_action("app.dbg_pause", &["<Control><Alt>p"]);
+    app.set_accels_for_action("app.dbg_step", &["<Control><Alt>s"]);
 }
 
 fn appearance_variant(preference: AppearancePreference) -> glib::Variant {

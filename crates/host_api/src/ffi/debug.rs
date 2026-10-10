@@ -153,6 +153,17 @@ pub extern "C" fn sc_inspect_json(handle: *mut c_void) -> *mut c_char {
     }
 }
 
+/// Heap-allocated UTF-8 debugger workspace snapshot; free with [`sc_string_free`].
+#[no_mangle]
+pub extern "C" fn sc_debugger_text(handle: *mut c_void) -> *mut c_char {
+    clear_last_error();
+    let Some(mut s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return ptr::null_mut();
+    };
+    heap_cstring(&s.debugger_text())
+}
+
 /// Fill `pc,sp,af,bc,de,hl,ix,iy`. Null out-params are skipped. Returns 0 on success.
 #[no_mangle]
 // Flat out-params match the C header; packing would break ABI (#171).
@@ -247,6 +258,23 @@ pub extern "C" fn sc_add_breakpoint(handle: *mut c_void, pc: c_uint) -> c_int {
         return -1;
     };
     match s.add_breakpoint(pc) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            -1
+        }
+    }
+}
+
+/// Remove all PC breakpoints. Returns 0 on success, -1 on error.
+#[no_mangle]
+pub extern "C" fn sc_clear_breakpoints(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    let Some(mut s) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    match s.clear_breakpoints() {
         Ok(()) => 0,
         Err(e) => {
             set_last_error(e.to_string());
