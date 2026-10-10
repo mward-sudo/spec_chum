@@ -327,7 +327,7 @@ impl UiPreferences {
         // classic tape options returns `UnsupportedNext` and would roll back
         // a successful Next boot in the native shells (and abort startup when
         // Next is the saved model).
-        if session.machine().is_some() {
+        if session.tape_load_options().is_some() {
             session.set_tape_load_options(self.tape_load_options())?;
         }
         session.set_joystick_mode(self.joystick_mode.to_mode());

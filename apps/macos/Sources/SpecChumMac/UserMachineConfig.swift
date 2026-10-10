@@ -173,6 +173,38 @@ struct HardwareCompatFlags: Decodable {
         plus3Disk: false,
         timexDock: false
     )
+
+    static func forModel(_ model: HostBridge.Model) -> HardwareCompatFlags {
+        let supportsClassicPeripherals: Bool
+        switch model {
+        case .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2,
+             .pentagon128, .scorpionZs256, .timexTC2048, .timexTS2068:
+            supportsClassicPeripherals = true
+        case .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e, .spectrumNext:
+            supportsClassicPeripherals = false
+        }
+
+        let supportsAyStereo: Bool
+        switch model {
+        case .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3,
+             .spectrumPlus3e, .pentagon128, .scorpionZs256, .timexTS2068:
+            supportsAyStereo = true
+        case .spectrum16K, .spectrum48, .timexTC2048, .spectrumNext:
+            supportsAyStereo = false
+        }
+
+        return HardwareCompatFlags(
+            multiface: supportsClassicPeripherals,
+            divmmc: supportsClassicPeripherals,
+            interface1: supportsClassicPeripherals,
+            beta: supportsClassicPeripherals,
+            ayStereo: supportsAyStereo,
+            kempstonMouse: true,
+            joystick: true,
+            plus3Disk: model == .spectrumPlus3 || model == .spectrumPlus3e,
+            timexDock: model == .timexTS2068
+        )
+    }
 }
 
 extension HostBridge.Model {

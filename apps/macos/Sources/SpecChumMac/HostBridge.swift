@@ -7,7 +7,7 @@ import CSpecChumHost
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
-    private enum CatalogError: Error { case invalidModel }
+    private enum CatalogError: Error { case invalidModel, emptyModelCatalog }
 
     private struct ModelDescriptor: Decodable {
         let id: UInt32
@@ -33,10 +33,18 @@ final class HostBridge: ObservableObject {
     }
 
     private static let modelCatalog: [ModelDescriptor] = {
-        guard let cstr = sc_model_catalog_json() else { return [] }
+        guard let cstr = sc_model_catalog_json() else {
+            NSLog("Spec Chum: host model catalog API returned no data")
+            return []
+        }
         defer { sc_string_free(cstr) }
         let data = Data(bytes: cstr, count: strlen(cstr))
-        return (try? JSONDecoder().decode([ModelDescriptor].self, from: data)) ?? []
+        do {
+            return try JSONDecoder().decode([ModelDescriptor].self, from: data)
+        } catch {
+            NSLog("Spec Chum: could not decode host model catalog: %@", error.localizedDescription)
+            return []
+        }
     }()
 
     /// EAR rate Instant falls back to on decks with no LD-BYTES trap (#390).
@@ -79,20 +87,55 @@ final class HostBridge: ObservableObject {
         case spectrumNext = 11
 
         /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
-        static let pickerOrder: [Model] = (try? HostBridge.modelCatalog.map { descriptor in
-            guard let model = Model(rawValue: descriptor.id) else { throw CatalogError.invalidModel }
-            return model
-        }) ?? []
+        static let pickerOrder: [Model] = {
+            do {
+                guard !HostBridge.modelCatalog.isEmpty else {
+                    throw CatalogError.emptyModelCatalog
+                }
+                return try HostBridge.modelCatalog.map { descriptor in
+                    guard let model = Model(rawValue: descriptor.id) else {
+                        throw CatalogError.invalidModel
+                    }
+                    return model
+                }
+            } catch {
+                NSLog("Spec Chum: model catalog contains an unsupported model: %@", error.localizedDescription)
+                return fallbackPickerOrder
+            }
+        }()
+
+        private static let fallbackPickerOrder: [Model] = [
+            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A,
+            .spectrumPlus3, .spectrumPlus3e, .pentagon128, .scorpionZs256,
+            .timexTC2048, .timexTS2068, .spectrumNext,
+        ]
 
         var id: UInt32 { rawValue }
 
-        var title: String { descriptor?.title ?? "Unknown model" }
+        var title: String { descriptor?.title ?? fallbackTitle }
+
+        private var fallbackTitle: String {
+            switch self {
+            case .spectrum16K: "Sinclair ZX Spectrum 16K"
+            case .spectrum48: "Sinclair ZX Spectrum 48K"
+            case .spectrum128: "Sinclair ZX Spectrum 128K"
+            case .spectrumPlus2: "Amstrad ZX Spectrum +2"
+            case .spectrumPlus2A: "Amstrad ZX Spectrum +2A"
+            case .spectrumPlus3: "Amstrad ZX Spectrum +3"
+            case .spectrumPlus3e: "ZX Spectrum +3e"
+            case .pentagon128: "Pentagon 128"
+            case .scorpionZs256: "Scorpion ZS-256"
+            case .timexTC2048: "Timex TC2048"
+            case .timexTS2068: "Timex TS2068"
+            case .spectrumNext: "ZX Spectrum Next"
+            }
+        }
 
         /// Short label for window titles.
-        var shortTitle: String { descriptor?.label ?? "?" }
+        var shortTitle: String { descriptor?.label ?? fallbackTitle }
 
         /// Prefs key segment (`spectrum48`, `pentagon128`, …) — matches host_api JSON v2.
-        var prefSlug: String { descriptor?.preferenceSlug ?? "" }
+        var prefSlug: String { descriptor?.preferenceSlug ?? PrefModelSlug.from(self).rawValue }
 
         private var descriptor: ModelDescriptor? { HostBridge.modelCatalog.first { $0.id == rawValue } }
 
@@ -103,7 +146,7 @@ final class HostBridge: ObservableObject {
         var requiresUserProvidedRoms: Bool { sc_model_requires_user_rom(rawValue) != 0 }
 
         var hardwareCompat: HardwareCompatFlags {
-            descriptor?.compatiblePeripherals ?? .unsupported
+            descriptor?.compatiblePeripherals ?? .forModel(self)
         }
 
         var pickerSummary: String {
