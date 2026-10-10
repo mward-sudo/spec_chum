@@ -1960,11 +1960,35 @@ fn dims(with_border: bool) -> (usize, usize) {
 
 #[cfg(test)]
 mod activation_tests {
-    use super::HostSession;
+    use super::{HostRuntime, HostSession, ModelId};
+    use crate::prefs::{PrefJoystick, UiPreferences};
+    use machine::{JoystickMode, NextMachine};
 
     #[test]
     fn failed_boot_preserves_live_machine_and_success_commits() {
         HostSession::test_activate_model_transaction();
+    }
+
+    #[test]
+    fn native_preferences_apply_on_next_without_classic_tape_options() {
+        let mut session = HostSession::new(ModelId::SpectrumNext, true);
+        let next = NextMachine::new(&vec![0xff; 0x10000]).expect("Next ROM image is 64 KiB");
+        session.model = ModelId::SpectrumNext;
+        session.machine = Some(HostRuntime::Next(Box::new(next)));
+        let prefs = UiPreferences {
+            joystick_mode: PrefJoystick::Cursor,
+            online_tape_titles: true,
+            tape_ear_speed: 5,
+            ..UiPreferences::default()
+        };
+
+        prefs
+            .apply_to_host_session(&mut session)
+            .expect("Next has no classic tape deck to configure");
+
+        assert_eq!(session.joystick_mode(), JoystickMode::Cursor);
+        assert!(session.online_tape_titles());
+        assert!(session.tape_load_options().is_none());
     }
 }
 
