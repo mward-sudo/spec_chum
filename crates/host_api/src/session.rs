@@ -238,6 +238,8 @@ pub struct HostSession {
     media_sha512: Option<String>,
     /// Where [`Self::media_title`] came from (for debug / honesty).
     media_title_source: Option<MediaTitleSource>,
+    /// Original path associated with the current tape identity, for Library metadata matching.
+    media_path: Option<PathBuf>,
     /// Opt-in `ZXInfo` online title lookup (#373). Default off.
     online_tape_titles: bool,
     /// Bumped on each identity set/clear so stale background hits are ignored.
@@ -310,6 +312,7 @@ impl HostSession {
             media_title: None,
             media_sha512: None,
             media_title_source: None,
+            media_path: None,
             online_tape_titles: false,
             media_title_generation: 0,
             pending_media_title: Arc::new(Mutex::new(None)),

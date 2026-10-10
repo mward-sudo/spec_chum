@@ -6,6 +6,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use formats::MediaTitleSource;
 use machine::Machine;
 use serde::Serialize;
 
@@ -85,6 +86,8 @@ pub enum MediaCompatibility {
     Ready,
     /// RZX may carry its own snapshot, so opening can still succeed without a machine.
     MayRequireMachine,
+    /// Snapshot loading selects its required model; that model's ROM may still be needed.
+    MaySelectMachine,
     RequiresMachine,
     RequiresPlus3,
     RequiresBetaModel,
@@ -95,7 +98,10 @@ pub enum MediaCompatibility {
 
 impl MediaCompatibility {
     pub fn can_open(self) -> bool {
-        matches!(self, Self::Ready | Self::MayRequireMachine)
+        matches!(
+            self,
+            Self::Ready | Self::MayRequireMachine | Self::MaySelectMachine
+        )
     }
 }
 
@@ -108,6 +114,10 @@ pub struct MediaEntry {
     pub category: MediaCategory,
     pub available: bool,
     pub compatibility: MediaCompatibility,
+    /// Known catalogue/cache/online title for the currently inserted tape at this exact path.
+    pub title: Option<String>,
+    /// Shared label for the source of `title`.
+    pub title_source: Option<&'static str>,
 }
 
 fn trdos_rom_loaded(session: &HostSession) -> bool {
@@ -121,6 +131,9 @@ fn trdos_rom_loaded(session: &HostSession) -> bool {
 fn compatibility(format: MediaFormat, session: &HostSession) -> MediaCompatibility {
     match format {
         MediaFormat::Rzx if session.machine().is_none() => MediaCompatibility::MayRequireMachine,
+        MediaFormat::Sna | MediaFormat::Z80 if session.machine().is_none() => {
+            MediaCompatibility::MaySelectMachine
+        }
         MediaFormat::Tap | MediaFormat::Tzx | MediaFormat::Trd
             if session.model() == ModelId::SpectrumNext =>
         {
@@ -157,7 +170,7 @@ pub fn query_recent_media(
     recent_paths: &[String],
     search: &str,
     category: Option<MediaCategory>,
-    session: &HostSession,
+    session: &mut HostSession,
 ) -> Vec<MediaEntry> {
     let search = search.trim().to_lowercase();
     let mut seen = HashSet::new();
@@ -172,12 +185,21 @@ pub fn query_recent_media(
                 return None;
             }
             let name = path.file_name()?.to_string_lossy().into_owned();
+            let identity = session
+                .media_identity_for_path(path)
+                .filter(|(_, source)| *source != MediaTitleSource::Filename)
+                .map(|(title, source)| (title.to_owned(), source.label()));
             if !search.is_empty()
                 && !name.to_lowercase().contains(&search)
                 && !original.to_lowercase().contains(&search)
+                && !identity
+                    .as_ref()
+                    .is_some_and(|(title, _)| title.to_lowercase().contains(&search))
             {
                 return None;
             }
+            let (title, title_source) =
+                identity.map_or((None, None), |(title, source)| (Some(title), Some(source)));
             Some(MediaEntry {
                 path: original.clone(),
                 name,
@@ -185,6 +207,8 @@ pub fn query_recent_media(
                 category: format.category(),
                 available: path.is_file(),
                 compatibility: compatibility(format, session),
+                title,
+                title_source,
             })
         })
         .collect()
@@ -214,7 +238,9 @@ impl HostSession {
                     MediaCompatibility::RequiresBeta => "attach Beta Disk first",
                     MediaCompatibility::RequiresTrdosRom => "load a TR-DOS ROM first",
                     MediaCompatibility::UnsupportedOnNext => "unsupported on ZX Spectrum Next",
-                    MediaCompatibility::Ready | MediaCompatibility::MayRequireMachine => {
+                    MediaCompatibility::Ready
+                    | MediaCompatibility::MayRequireMachine
+                    | MediaCompatibility::MaySelectMachine => {
                         unreachable!("can_open checked above")
                     }
                 }
@@ -255,14 +281,14 @@ mod tests {
 
     #[test]
     fn query_searches_and_preserves_original_recent_paths() {
-        let session = HostSession::new(ModelId::Spectrum48, false);
+        let mut session = HostSession::new(ModelId::Spectrum48, false);
         let paths = vec![
             "/Missing/Foo.TAP".into(),
             "/Missing/Foo.TAP".into(),
             "/Missing/Other.Z80".into(),
             "/Missing/Unknown.SZX".into(),
         ];
-        let entries = query_recent_media(&paths, "foo", Some(MediaCategory::Tape), &session);
+        let entries = query_recent_media(&paths, "foo", Some(MediaCategory::Tape), &mut session);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].path, "/Missing/Foo.TAP");
         assert_eq!(entries[0].name, "Foo.TAP");
@@ -274,11 +300,38 @@ mod tests {
     }
 
     #[test]
+    fn snapshots_without_a_loaded_machine_can_still_open_and_select_a_model() {
+        let dir = std::env::temp_dir().join(format!(
+            "spec_chum_library_snapshots_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("create snapshot test directory");
+        let sna = dir.join("snapshot.sna");
+        let z80 = dir.join("snapshot.z80");
+        std::fs::write(&sna, []).expect("write SNA path");
+        std::fs::write(&z80, []).expect("write Z80 path");
+        let paths = vec![
+            sna.to_string_lossy().into_owned(),
+            z80.to_string_lossy().into_owned(),
+        ];
+        let mut session = HostSession::new(ModelId::Spectrum48, false);
+        let entries = query_recent_media(&paths, "", None, &mut session);
+
+        assert_eq!(entries.len(), 2);
+        for entry in entries {
+            assert!(entry.available);
+            assert_eq!(entry.compatibility, MediaCompatibility::MaySelectMachine);
+            assert!(entry.compatibility.can_open());
+        }
+        std::fs::remove_dir_all(dir).expect("remove snapshot test directory");
+    }
+
+    #[test]
     fn disk_hints_follow_current_model_and_peripherals() {
-        let plus3 = HostSession::new(ModelId::SpectrumPlus3, false);
-        let spec48 = HostSession::new(ModelId::Spectrum48, false);
+        let mut plus3 = HostSession::new(ModelId::SpectrumPlus3, false);
+        let mut spec48 = HostSession::new(ModelId::Spectrum48, false);
         let disk = ["/Missing/game.dsk".into(), "/Missing/game.trd".into()];
-        let plus3_entries = query_recent_media(&disk, "", None, &plus3);
+        let plus3_entries = query_recent_media(&disk, "", None, &mut plus3);
         assert_eq!(
             plus3_entries[0].compatibility,
             MediaCompatibility::RequiresMachine
@@ -287,7 +340,7 @@ mod tests {
             plus3_entries[1].compatibility,
             MediaCompatibility::RequiresBetaModel
         );
-        let spec48_entries = query_recent_media(&disk, "", None, &spec48);
+        let spec48_entries = query_recent_media(&disk, "", None, &mut spec48);
         assert_eq!(
             spec48_entries[0].compatibility,
             MediaCompatibility::RequiresPlus3
@@ -305,18 +358,19 @@ mod tests {
             .load_rom_bytes(&[0; 16 * 1024])
             .expect("synthetic main ROM should load");
         let recent = ["/Missing/game.trd".into()];
-        let status =
-            |session: &HostSession| query_recent_media(&recent, "", None, session)[0].compatibility;
-        assert_eq!(status(&session), MediaCompatibility::RequiresBeta);
+        let status = |session: &mut HostSession| {
+            query_recent_media(&recent, "", None, session)[0].compatibility
+        };
+        assert_eq!(status(&mut session), MediaCompatibility::RequiresBeta);
         session.attach_beta().expect("Beta should attach on 48K");
-        assert_eq!(status(&session), MediaCompatibility::RequiresTrdosRom);
+        assert_eq!(status(&mut session), MediaCompatibility::RequiresTrdosRom);
         let beta = session
             .machine_mut()
             .and_then(Machine::beta_mut)
             .expect("attached Beta");
         beta.load_rom(&[0; 16 * 1024])
             .expect("synthetic TR-DOS ROM should load");
-        assert_eq!(status(&session), MediaCompatibility::Ready);
+        assert_eq!(status(&mut session), MediaCompatibility::Ready);
     }
 
     #[test]
@@ -340,5 +394,75 @@ mod tests {
         session.open_media_path(&path).expect("open supported TAP");
         assert!(session.status().contains("Inserted TAP"));
         std::fs::remove_file(&path).expect("remove TAP fixture");
+    }
+
+    #[test]
+    fn library_exposes_known_title_only_for_the_matching_inserted_tape() {
+        let mut session = HostSession::new(ModelId::Spectrum48, false);
+        session
+            .load_rom_bytes(&[0; 16 * 1024])
+            .expect("synthetic main ROM should load");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/tape/print_ok.tap");
+        let path = path.canonicalize().expect("fixture path should exist");
+        session
+            .open_media_path(&path)
+            .expect("known catalogue tape should open");
+        let recent = [
+            path.to_string_lossy().into_owned(),
+            path.with_file_name("other-print_ok.tap")
+                .to_string_lossy()
+                .into_owned(),
+        ];
+
+        let entries = query_recent_media(&recent, "", None, &mut session);
+        assert_eq!(entries[0].title.as_deref(), Some("PRINT \"OK\""));
+        assert_eq!(entries[0].title_source, Some("Local catalogue"));
+        assert_eq!(entries[1].title, None);
+        assert_eq!(entries[1].title_source, None);
+
+        let by_title = query_recent_media(&recent, "\"OK\"", None, &mut session);
+        assert_eq!(by_title.len(), 1);
+        assert_eq!(by_title[0].path, path.to_string_lossy());
+    }
+
+    #[test]
+    fn persisted_recent_tape_can_be_reopened_after_session_restart() {
+        use crate::prefs::{load_prefs, save_prefs, UiPreferences};
+
+        let dir =
+            std::env::temp_dir().join(format!("spec_chum_library_restart_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create restart test directory");
+        let media = dir.join("recent.tap");
+        let prefs_path = dir.join("prefs.json");
+        std::fs::write(&media, [1, 0, 0]).expect("write TAP fixture");
+
+        let mut initial_prefs = UiPreferences::default();
+        initial_prefs.push_recent(&media);
+        save_prefs(&prefs_path, &initial_prefs).expect("persist recent media");
+        drop(initial_prefs);
+
+        // Recreate both sides of the host boundary as a new process would.
+        let restarted_prefs = load_prefs(&prefs_path);
+        let mut restarted_session = HostSession::new(ModelId::Spectrum48, false);
+        restarted_session
+            .load_rom_bytes(&[0; 16 * 1024])
+            .expect("load synthetic machine ROM");
+        let entries = query_recent_media(
+            &restarted_prefs.recent_files,
+            "",
+            None,
+            &mut restarted_session,
+        );
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, media.to_string_lossy());
+        assert!(entries[0].available);
+        restarted_session
+            .open_media_path(&media)
+            .expect("reopen persisted recent media");
+        assert!(restarted_session.has_tape());
+        assert!(restarted_session.status().contains("Inserted TAP"));
+
+        std::fs::remove_dir_all(dir).expect("remove restart test directory");
     }
 }

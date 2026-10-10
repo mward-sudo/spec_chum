@@ -204,7 +204,7 @@ impl SpecChumApp {
             &self.prefs.recent_files,
             &self.library_search,
             self.library_category,
-            &self.session.host_mut(),
+            &mut self.session.host_mut(),
         );
         if self
             .selected_media_path
@@ -231,8 +231,9 @@ impl SpecChumApp {
                 .show(&mut columns[0], |ui| {
                     for entry in &entries {
                         let selected = self.selected_media_path.as_deref() == Some(&entry.path);
+                        let display_title = entry.title.as_deref().unwrap_or(&entry.name);
                         ui.horizontal(|ui| {
-                            if ui.selectable_label(selected, &entry.name).clicked() {
+                            if ui.selectable_label(selected, display_title).clicked() {
                                 self.selected_media_path = Some(entry.path.clone());
                             }
                             ui.small(format_label(entry));
@@ -256,6 +257,12 @@ impl SpecChumApp {
                 .and_then(|selected| entries.iter().find(|entry| entry.path == selected))
             {
                 columns[1].heading(&entry.name);
+                if let Some(title) = &entry.title {
+                    columns[1].label(format!("Known title: {title}"));
+                    if let Some(source) = entry.title_source {
+                        columns[1].small(format!("Title source: {source}"));
+                    }
+                }
                 columns[1].label(format!(
                     "{} · {}",
                     format_label(entry),
@@ -330,6 +337,7 @@ fn compatibility_label(compatibility: MediaCompatibility) -> &'static str {
     match compatibility {
         MediaCompatibility::Ready => "Compatible with current machine",
         MediaCompatibility::MayRequireMachine => "May need a machine",
+        MediaCompatibility::MaySelectMachine => "Snapshot selects model; ROM may be required",
         MediaCompatibility::RequiresMachine => "Select a machine before opening",
         MediaCompatibility::RequiresPlus3 => "Requires a +3 or +3e",
         MediaCompatibility::RequiresBetaModel => "Requires a Beta-compatible model",

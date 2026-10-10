@@ -21,7 +21,7 @@ pub extern "C" fn sc_media_library_json(
     category: *const c_char,
 ) -> *mut c_char {
     clear_last_error();
-    let Some(session) = session_mut(handle) else {
+    let Some(mut session) = session_mut(handle) else {
         set_last_error("null handle");
         return ptr::null_mut();
     };
@@ -70,7 +70,7 @@ pub extern "C" fn sc_media_library_json(
             }
         }
     };
-    match serde_json::to_string(&query_recent_media(&paths, search, category, &session)) {
+    match serde_json::to_string(&query_recent_media(&paths, search, category, &mut session)) {
         Ok(json) => heap_cstring(&json),
         Err(error) => {
             set_last_error(error.to_string());
@@ -283,5 +283,31 @@ mod tests {
         assert_eq!(entries[0]["format"], "tap");
         assert_eq!(entries[0]["compatibility"], "requires_machine");
         sc_destroy(handle);
+    }
+
+    #[test]
+    fn library_json_keeps_snapshots_openable_when_they_can_select_a_model() {
+        let dir = std::env::temp_dir().join(format!(
+            "spec_chum_library_ffi_snapshot_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("create snapshot test directory");
+        let snapshot = dir.join("snapshot.z80");
+        std::fs::write(&snapshot, []).expect("write snapshot path");
+        let paths = CString::new(
+            serde_json::to_string(&[snapshot.to_string_lossy()]).expect("serialize snapshot path"),
+        )
+        .expect("path JSON has no NUL");
+        let handle = sc_create(0, 0);
+        assert!(!handle.is_null());
+        let raw = sc_media_library_json(handle, paths.as_ptr(), ptr::null(), ptr::null());
+        assert!(!raw.is_null());
+        // SAFETY: JSON pointer is the heap allocation returned by this FFI call.
+        let json = unsafe { CString::from_raw(raw) };
+        let entries: serde_json::Value =
+            serde_json::from_str(json.to_str().expect("UTF-8 JSON")).expect("valid JSON");
+        assert_eq!(entries[0]["compatibility"], "may_select_machine");
+        sc_destroy(handle);
+        std::fs::remove_dir_all(dir).expect("remove snapshot test directory");
     }
 }

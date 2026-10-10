@@ -106,7 +106,8 @@ impl AppState {
             let _ = send_message(list_hwnd, 0x0184, 0, 0);
             for entry in &self.library_entries {
                 let available = if entry.available { "" } else { " [missing]" };
-                let label = format!("{} ({:?}){available}", entry.name, entry.format);
+                let display_title = entry.title.as_deref().unwrap_or(&entry.name);
+                let label = format!("{} ({:?}){available}", display_title, entry.format);
                 let label: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
                 let _ = send_message(list_hwnd, 0x0180, 0, label.as_ptr() as isize);
             }
@@ -140,9 +141,18 @@ impl AppState {
                 } else {
                     "File missing"
                 };
+                let title = entry.title.as_ref().map_or_else(String::new, |title| {
+                    format!(
+                        "\r\nKnown title: {title}\r\nTitle source: {}",
+                        entry.title_source.unwrap_or("Unknown")
+                    )
+                });
                 let compatibility = match entry.compatibility {
                     MediaCompatibility::Ready => "Compatible with current hardware",
                     MediaCompatibility::MayRequireMachine => "May open without a machine",
+                    MediaCompatibility::MaySelectMachine => {
+                        "Snapshot selects model; ROM may be required"
+                    }
                     MediaCompatibility::RequiresMachine => "Requires a machine",
                     MediaCompatibility::RequiresPlus3 => "Requires a +3 or +3e",
                     MediaCompatibility::RequiresBetaModel => "Requires a Beta-compatible model",
@@ -151,8 +161,8 @@ impl AppState {
                     MediaCompatibility::UnsupportedOnNext => "Unsupported on ZX Spectrum Next",
                 };
                 format!(
-                    "{}\r\n{}\r\n{}\r\n{}",
-                    entry.name, entry.path, availability, compatibility
+                    "{}\r\n{}{}\r\n{}\r\n{}",
+                    entry.name, entry.path, title, availability, compatibility
                 )
             },
         );
@@ -162,30 +172,28 @@ impl AppState {
         }
     }
 
-    fn open_selected_library_entry(&mut self) {
+    fn open_selected_library_entry(&mut self) -> Result<(), HostError> {
         let Some(list) = self.library_list else {
-            return;
+            return Ok(());
         };
         let selected = send_message(list, 0x0188, 0, 0).0;
         let Some(entry) = usize::try_from(selected)
             .ok()
             .and_then(|i| self.library_entries.get(i))
         else {
-            return;
+            return Ok(());
         };
         if !entry.available || !entry.compatibility.can_open() {
-            return;
+            return Ok(());
         }
         let path = PathBuf::from(&entry.path);
-        match self.host.with_mut(|session| session.open_media_path(&path)) {
-            Ok(()) => {
-                self.prefs.push_recent(&path);
-                self.persist_prefs();
-                self.refresh_recent_menu_entries();
-                self.refresh_library();
-            }
-            Err(error) => self.report_err("Open media", &error),
-        }
+        self.host
+            .with_mut(|session| session.open_media_path(&path))?;
+        self.prefs.push_recent(&path);
+        self.persist_prefs();
+        self.refresh_recent_menu_entries();
+        self.refresh_library();
+        Ok(())
     }
 
     fn remove_selected_library_entry(&mut self) {
@@ -441,18 +449,34 @@ extern "system" fn library_wnd_proc(
             }
             // SAFETY: the state is alive and no mutable borrow spans a reentrant call;
             // the Close case above destroys the HWND before taking this borrow.
-            let app = unsafe { &mut *app_ptr };
-            match command {
-                Some(LibraryCommand::Refresh) => app.refresh_library(),
-                Some(LibraryCommand::SelectionChanged) => {
-                    let selected = app
-                        .library_list
-                        .map_or(-1, |list| send_message(list, 0x0188, 0, 0).0);
-                    app.refresh_library_details(usize::try_from(selected).unwrap_or(usize::MAX));
+            let command_result: Result<(), HostError> = {
+                let app = unsafe { &mut *app_ptr };
+                match command {
+                    Some(LibraryCommand::Refresh) => {
+                        app.refresh_library();
+                        Ok(())
+                    }
+                    Some(LibraryCommand::SelectionChanged) => {
+                        let selected = app
+                            .library_list
+                            .map_or(-1, |list| send_message(list, 0x0188, 0, 0).0);
+                        app.refresh_library_details(
+                            usize::try_from(selected).unwrap_or(usize::MAX),
+                        );
+                        Ok(())
+                    }
+                    Some(LibraryCommand::Open) => app.open_selected_library_entry(),
+                    Some(LibraryCommand::Remove) => {
+                        app.remove_selected_library_entry();
+                        Ok(())
+                    }
+                    _ => Ok(()),
                 }
-                Some(LibraryCommand::Open) => app.open_selected_library_entry(),
-                Some(LibraryCommand::Remove) => app.remove_selected_library_entry(),
-                _ => {}
+            };
+            if let Err(error) = command_result {
+                // MessageBoxW runs a nested message loop, so report only after
+                // releasing the mutable borrow used by the command handler.
+                unsafe { &mut *app_ptr }.report_err("Open media", &error);
             }
             LRESULT(0)
         }

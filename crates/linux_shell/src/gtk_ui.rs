@@ -1057,9 +1057,16 @@ fn show_media_library(state: Rc<RefCell<AppState>>, parent: &ApplicationWindow) 
                 } else {
                     "Missing"
                 };
+                let known_title = entry.title.as_deref().map_or_else(String::new, |title| {
+                    format!(
+                        "\nKnown title: {title} ({})",
+                        entry.title_source.unwrap_or("unknown source")
+                    )
+                });
                 details.set_text(&format!(
-                    "{}\nPath: {}\nFormat: {:?}\nAvailability: {}\nCompatibility: {}",
+                    "{}{}\nPath: {}\nFormat: {:?}\nAvailability: {}\nCompatibility: {}",
                     entry.name,
+                    known_title,
                     entry.path,
                     entry.format,
                     availability,
@@ -1242,9 +1249,10 @@ fn refresh_media_library(
         } else {
             "Missing"
         };
+        let display_title = entry.title.as_deref().unwrap_or(&entry.name);
         let label = Label::new(Some(&format!(
             "{}  ·  {:?}  ·  {availability}  ·  {}",
-            entry.name,
+            display_title,
             entry.format,
             compatibility_label(entry.compatibility)
         )));
@@ -1270,6 +1278,7 @@ fn compatibility_label(compatibility: MediaCompatibility) -> &'static str {
     match compatibility {
         MediaCompatibility::Ready => "Ready to open",
         MediaCompatibility::MayRequireMachine => "May require a machine",
+        MediaCompatibility::MaySelectMachine => "Snapshot selects model; ROM may be required",
         MediaCompatibility::RequiresMachine => "Requires a machine",
         MediaCompatibility::RequiresPlus3 => "Requires +3/+3e",
         MediaCompatibility::RequiresBetaModel => "Requires a Beta-compatible model",

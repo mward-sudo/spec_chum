@@ -57,6 +57,7 @@ impl HostSession {
 
     /// Resolve and store tape identity from a path using the offline catalogue or filename.
     pub fn set_media_identity_from_path(&mut self, path: &Path) {
+        self.media_path = Some(path.to_path_buf());
         if let Ok(id) = formats::identify_path(path) {
             self.install_media_identity(id.display_title, Some(id.sha512_hex), id.source);
             return;
@@ -71,8 +72,21 @@ impl HostSession {
 
     /// Resolve identity from bytes already read for open, avoiding a second read.
     pub fn set_media_identity_from_bytes(&mut self, bytes: &[u8], path: &Path) {
+        self.media_path = Some(path.to_path_buf());
         let id = formats::identify_bytes(bytes, path);
         self.install_media_identity(id.display_title, Some(id.sha512_hex), id.source);
+    }
+
+    /// Return known title metadata only for the exact path that produced the active tape.
+    pub(crate) fn media_identity_for_path(
+        &mut self,
+        path: &Path,
+    ) -> Option<(&str, MediaTitleSource)> {
+        self.apply_pending_media_title();
+        if !self.has_tape() || self.media_path.as_deref() != Some(path) {
+            return None;
+        }
+        Some((self.media_title.as_deref()?, self.media_title_source?))
     }
 
     fn install_media_identity(
@@ -95,6 +109,7 @@ impl HostSession {
         self.media_title = None;
         self.media_sha512 = None;
         self.media_title_source = None;
+        self.media_path = None;
     }
 
     fn maybe_spawn_online_lookup(&mut self) {

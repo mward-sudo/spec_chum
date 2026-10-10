@@ -87,7 +87,7 @@ impl SpecChumApp {
                         &self.prefs.recent_files,
                         "",
                         None,
-                        &self.session.host_mut(),
+                        &mut self.session.host_mut(),
                     );
                     if !recent_media.is_empty() {
                         ui.separator();

@@ -2,6 +2,7 @@
 
 #![allow(unsafe_code)] // Win32 window-proc / GDI / USERDATA — SAFETY at each site.
 
+use std::collections::VecDeque;
 use std::mem::{size_of, zeroed};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -26,13 +27,13 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
     GetClientRect, GetDlgItem, GetMenu, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
-    IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostQuitMessage,
-    RegisterClassExW, SendMessageW, SetWindowLongPtrW, SetWindowTextW, ShowWindow,
+    IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostMessageW,
+    PostQuitMessage, RegisterClassExW, SendMessageW, SetWindowLongPtrW, SetWindowTextW, ShowWindow,
     TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT,
     ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW, IDOK, MB_ICONERROR,
     MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP, WM_KEYDOWN,
-    WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
+    WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
     WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
@@ -78,6 +79,7 @@ const IDM_MACHINE_ROM_SETUP: usize = 1289;
 const IDM_LIBRARY_RECENT_BASE: usize = 1600;
 const IDM_LIBRARY_RECENT_COUNT: usize = 12;
 const IDM_LIBRARY_OPEN: usize = 1590;
+const WM_REPORT_ERROR: u32 = WM_APP + 1;
 const PERSONALIZE_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0";
 const APPS_USE_LIGHT_THEME: &str = "AppsUseLightTheme\0";
 
@@ -134,6 +136,8 @@ struct AppState {
     library_details: Option<HWND>,
     library_entries: Vec<MediaEntry>,
     main_hwnd: Option<HWND>,
+    /// Modal errors are queued so no AppState borrow spans USER32's nested message loop.
+    pending_error_dialogs: VecDeque<(String, String)>,
     /// Last time the debugger EDIT control was rewritten from `tick_frame`.
     last_debug_refresh: Instant,
     next_assets_download: Option<NextAssetDownload>,
@@ -220,6 +224,7 @@ impl AppState {
             library_details: None,
             library_entries: Vec::new(),
             main_hwnd: None,
+            pending_error_dialogs: VecDeque::new(),
             last_debug_refresh: Instant::now(),
             next_assets_download: None,
             recent_menu: None,
@@ -414,7 +419,15 @@ impl AppState {
         let msg = format!("{title}: {err}");
         self.host.with_mut(|s| s.set_status(msg.clone()));
         self.status = msg.clone();
-        message_box(self.main_hwnd, title, &msg);
+        self.pending_error_dialogs
+            .push_back((title.to_owned(), msg));
+        if let Some(hwnd) = self.main_hwnd {
+            // PostMessageW queues this for the main window after the current callback returns.
+            // SAFETY: `hwnd` is the live main-window handle; the call only queues scalar arguments.
+            unsafe {
+                let _ = PostMessageW(hwnd, WM_REPORT_ERROR, WPARAM(0), LPARAM(0));
+            }
+        }
     }
 
     fn open_path(
@@ -1434,6 +1447,19 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
                 // SAFETY: state_ptr owned by this window until WM_DESTROY.
                 let state = unsafe { &mut *state_ptr };
                 state.paint(hwnd);
+            }
+            LRESULT(0)
+        }
+        WM_REPORT_ERROR => {
+            let pending = if state_ptr.is_null() {
+                None
+            } else {
+                // End the AppState borrow before MessageBoxW starts a nested message loop.
+                // SAFETY: this callback runs while the main window owns the boxed state.
+                unsafe { &mut *state_ptr }.pending_error_dialogs.pop_front()
+            };
+            if let Some((title, body)) = pending {
+                message_box(Some(hwnd), &title, &body);
             }
             LRESULT(0)
         }

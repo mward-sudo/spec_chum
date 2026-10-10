@@ -1,15 +1,26 @@
 import SwiftUI
 
 struct MediaLibraryEntry: Decodable, Identifiable {
+    enum CodingKeys: String, CodingKey {
+        case path, name, format, category, available, compatibility, title
+        case titleSource = "title_source"
+    }
+
     let path: String
     let name: String
     let format: String
     let category: String
     let available: Bool
     let compatibility: String
+    let title: String?
+    let titleSource: String?
 
     var id: String { path }
-    var canOpen: Bool { compatibility == "ready" || compatibility == "may_require_machine" }
+    var canOpen: Bool {
+        compatibility == "ready"
+            || compatibility == "may_require_machine"
+            || compatibility == "may_select_machine"
+    }
 
     var symbolName: String {
         switch category {
@@ -25,6 +36,7 @@ struct MediaLibraryEntry: Decodable, Identifiable {
         switch compatibility {
         case "ready": "Compatible with the current machine"
         case "may_require_machine": "May need a machine"
+        case "may_select_machine": "Snapshot selects model; ROM may be required"
         case "requires_machine": "Select a machine before opening"
         case "requires_plus3": "Requires a +3 or +3e"
         case "requires_beta_model": "Requires a Beta-compatible model"
@@ -128,7 +140,7 @@ private struct MediaLibraryRow: View {
             HStack {
                 Image(systemName: entry.symbolName)
                     .foregroundStyle(.tint)
-                Text(entry.name).lineLimit(1)
+                Text(entry.title ?? entry.name).lineLimit(1)
                 Spacer(minLength: 8)
                 Text(entry.formatDescription)
                     .font(.caption.monospaced())
@@ -156,6 +168,12 @@ private struct MediaLibraryDetails: View {
             Text(entry.name)
                 .font(.title2.weight(.semibold))
                 .textSelection(.enabled)
+            if let title = entry.title {
+                LabeledContent("Known title", value: title)
+                if let titleSource = entry.titleSource {
+                    LabeledContent("Title source", value: titleSource)
+                }
+            }
             LabeledContent("Format", value: entry.formatDescription)
             LabeledContent("Type", value: LibraryCategory(rawValue: entry.category)?.title ?? entry.category)
             LabeledContent("Availability", value: entry.available ? "Available" : "Unavailable")
