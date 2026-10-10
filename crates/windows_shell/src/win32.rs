@@ -425,7 +425,7 @@ impl AppState {
             // PostMessageW queues this for the main window after the current callback returns.
             // SAFETY: `hwnd` is the live main-window handle; the call only queues scalar arguments.
             unsafe {
-                let _ = PostMessageW(hwnd, WM_REPORT_ERROR, WPARAM(0), LPARAM(0));
+                let _ = PostMessageW(Some(hwnd), WM_REPORT_ERROR, WPARAM(0), LPARAM(0));
             }
         }
     }

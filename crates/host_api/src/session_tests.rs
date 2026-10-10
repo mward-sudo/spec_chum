@@ -564,7 +564,7 @@ fn open_fixture_tap_progress_and_audio_pcm() {
 }
 
 #[test]
-fn opening_tap_or_tzx_clears_ephemeral_instant_mode() {
+fn opening_tap_or_tzx_clears_ephemeral_instant_mode() -> Result<(), std::io::Error> {
     let mut session = HostSession::new(ModelId::Spectrum48, true);
     session
         .load_rom_bytes(&vec![0; 16 * 1024])
@@ -647,7 +647,8 @@ fn opening_tap_or_tzx_clears_ephemeral_instant_mode() {
         "standard-speed TZX conversion must not inherit Instant"
     );
     assert_eq!(options.speed, 8, "standard TZX preserves EAR speed");
-    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
 }
 
 #[test]
