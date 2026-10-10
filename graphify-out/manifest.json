@@ -12,8 +12,8 @@
     "semantic_hash": ""
   },
   "apps/macos/Sources/CSpecChumHost/include/spec_chum_host.h": {
-    "mtime": 1791651841.122811,
-    "seen": 1791651933.507617,
+    "mtime": 1791655296.5451922,
+    "seen": 1791655433.0585961,
     "ast_hash": "91c317029dd97bf11134f005371ac24b",
     "semantic_hash": ""
   },
@@ -1476,9 +1476,9 @@
     "semantic_hash": ""
   },
   "crates/windows_shell/src/win32.rs": {
-    "mtime": 1791654548.3775296,
-    "seen": 1791654575.2444952,
-    "ast_hash": "7cf48cd4b0e6cba16ee0ea0139bb8c0f",
+    "mtime": 1791655399.5912507,
+    "seen": 1791655433.072646,
+    "ast_hash": "03453af1e06cc5805d505c58445ad760",
     "semantic_hash": ""
   },
   "scripts/build_windows_app.ps1": {
@@ -2106,9 +2106,9 @@
     "semantic_hash": ""
   },
   "crates/native_shell_common/src/commands.rs": {
-    "mtime": 1791613923.201151,
-    "seen": 1791650796.1245031,
-    "ast_hash": "d30977a64650cc578fe7c5b5c06f2b3d",
+    "mtime": 1791655399.5909417,
+    "seen": 1791655433.071451,
+    "ast_hash": "67067c7dbc62458a24863465d5713bfb",
     "semantic_hash": ""
   },
   "crates/native_shell_common/src/lib.rs": {
