@@ -14,8 +14,8 @@ use glib::clone;
 use glib::translate::IntoGlib;
 use gtk4::prelude::*;
 use gtk4::{
-    gio, glib, Application, ApplicationWindow, Label, Orientation, Picture, ScrolledWindow,
-    TextBuffer, TextView, Window,
+    gio, glib, Application, ApplicationWindow, Button, Entry, Label, Orientation, Picture,
+    ScrolledWindow, TextBuffer, TextView, Window,
 };
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
@@ -77,6 +77,8 @@ struct AppState {
     last_frame: Instant,
     debug_window: Option<Window>,
     debug_buffer: Option<TextBuffer>,
+    debug_address: Option<Entry>,
+    debug_memory: u16,
     last_debug_refresh: Instant,
     hardware_actions: Vec<(CompatAction, gio::SimpleAction)>,
     next_assets_download: Option<NextAssetDownload>,
@@ -91,6 +93,16 @@ enum CompatAction {
     Beta,
     TimexDock,
     Plus3Disk,
+}
+
+#[derive(Clone, Copy)]
+enum DebugAction {
+    Pause,
+    Continue,
+    Step,
+    Breakpoint,
+    ClearBreakpoints,
+    Refresh,
 }
 
 impl AppState {
@@ -156,6 +168,8 @@ impl AppState {
             last_frame: Instant::now(),
             debug_window: None,
             debug_buffer: None,
+            debug_address: None,
+            debug_memory: 0,
             last_debug_refresh: Instant::now(),
             hardware_actions: Vec::new(),
             next_assets_download: None,
@@ -644,6 +658,7 @@ impl AppState {
     fn toggle_debug_window(&mut self, parent: &ApplicationWindow, state: &Rc<RefCell<AppState>>) {
         if let Some(win) = self.debug_window.take() {
             self.debug_buffer = None;
+            self.debug_address = None;
             if win.is_visible() {
                 win.destroy();
             }
@@ -659,13 +674,102 @@ impl AppState {
             .hexpand(true)
             .vexpand(true)
             .build();
+        let content = gtk4::Box::new(Orientation::Vertical, 8);
+        content.set_margin_top(10);
+        content.set_margin_bottom(10);
+        content.set_margin_start(10);
+        content.set_margin_end(10);
+        let controls = gtk4::Box::new(Orientation::Horizontal, 6);
+        for (label, accessible_name, action) in [
+            ("Pause", "Pause emulation", DebugAction::Pause),
+            ("Continue", "Continue emulation", DebugAction::Continue),
+            ("Step", "Execute one instruction", DebugAction::Step),
+            (
+                "Breakpoint at PC",
+                "Add breakpoint at current PC",
+                DebugAction::Breakpoint,
+            ),
+            (
+                "Clear breakpoints",
+                "Clear all PC breakpoints",
+                DebugAction::ClearBreakpoints,
+            ),
+            (
+                "Refresh",
+                "Refresh debugger workspace",
+                DebugAction::Refresh,
+            ),
+        ] {
+            let button = Button::with_label(label);
+            button.update_property(&[gtk4::accessible::Property::Label(accessible_name)]);
+            button.set_tooltip_text(Some(accessible_name));
+            let state = Rc::clone(state);
+            button.connect_clicked(move |_| {
+                let mut state = state.borrow_mut();
+                match action {
+                    DebugAction::Pause => state.debug_pause(),
+                    DebugAction::Continue => state.debug_continue(),
+                    DebugAction::Step => state.debug_step(),
+                    DebugAction::Breakpoint => state.debug_break_at_pc(),
+                    DebugAction::ClearBreakpoints => state.debug_clear_breaks(),
+                    DebugAction::Refresh => state.refresh_debug_text(),
+                }
+            });
+            controls.append(&button);
+        }
+        let address_row = gtk4::Box::new(Orientation::Horizontal, 6);
+        let address = Entry::builder()
+            .placeholder_text("Address (hex, e.g. 4000)")
+            .text(format!("{:04X}", self.debug_memory))
+            .width_chars(12)
+            .build();
+        address.set_tooltip_text(Some("Memory address in hexadecimal"));
+        let go = Button::with_label("View memory");
+        address_row.append(&Label::new(Some("Memory address")));
+        address_row.append(&address);
+        address_row.append(&go);
+        let state_for_go = Rc::clone(state);
+        let address_for_go = address.clone();
+        go.connect_clicked(move |_| {
+            let value = address_for_go.text();
+            if let Ok(parsed) = u16::from_str_radix(
+                value
+                    .trim()
+                    .trim_start_matches('$')
+                    .trim_start_matches("0x"),
+                16,
+            ) {
+                let mut state = state_for_go.borrow_mut();
+                state.debug_memory = parsed;
+                state.refresh_debug_text();
+            }
+        });
+        let state_for_enter = Rc::clone(state);
+        address.connect_activate(move |entry| {
+            if let Ok(parsed) = u16::from_str_radix(
+                entry
+                    .text()
+                    .trim()
+                    .trim_start_matches('$')
+                    .trim_start_matches("0x"),
+                16,
+            ) {
+                let mut state = state_for_enter.borrow_mut();
+                state.debug_memory = parsed;
+                state.refresh_debug_text();
+            }
+        });
+        content.append(&address_row);
+        content.append(&controls);
+        content.append(&scroll);
         let win = Window::builder()
             .transient_for(parent)
             .title("Spec Chum — Debugger")
-            .default_width(640)
-            .default_height(520)
-            .child(&scroll)
+            .default_width(820)
+            .default_height(640)
+            .child(&content)
             .build();
+        let parent = parent.clone();
         win.connect_close_request(clone!(
             #[strong]
             state,
@@ -673,11 +777,14 @@ impl AppState {
                 let mut s = state.borrow_mut();
                 s.debug_window = None;
                 s.debug_buffer = None;
+                drop(s);
+                parent.present();
                 glib::Propagation::Proceed
             }
         ));
         win.present();
         self.debug_buffer = Some(buffer);
+        self.debug_address = Some(address);
         self.debug_window = Some(win);
         self.refresh_debug_text();
     }
@@ -697,7 +804,10 @@ impl AppState {
         let Some(buffer) = self.debug_buffer.as_ref() else {
             return;
         };
-        let text = self.host.with_mut(|session| session.debugger_text());
+        let address = self.debug_memory;
+        let text = self
+            .host
+            .with_mut(|session| session.debugger_text_at(address));
         buffer.set_text(&text);
         self.last_debug_refresh = Instant::now();
     }
@@ -735,6 +845,19 @@ impl AppState {
 
     fn debug_clear_breaks(&mut self) {
         self.host_action("Clear breakpoints", HostSession::clear_breakpoints);
+        self.refresh_debug_text();
+    }
+
+    fn debug_enable_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_enable_default_trace);
+        self.host
+            .with_mut(|s| s.set_status("Default trace enabled"));
+        self.refresh_debug_text();
+    }
+
+    fn debug_clear_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_clear_trace);
+        self.host.with_mut(|s| s.set_status("Trace ring cleared"));
         self.refresh_debug_text();
     }
 
@@ -1006,13 +1129,15 @@ fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
     menubar.append_submenu(Some("_Settings"), &settings);
 
     let debug = gio::Menu::new();
-    debug.append(Some("Inspector…"), Some("app.dbg_toggle"));
+    debug.append(Some("Debugger Workspace…"), Some("app.dbg_toggle"));
     debug.append(Some("Pause"), Some("app.dbg_pause"));
     debug.append(Some("Continue"), Some("app.dbg_continue"));
     debug.append(Some("Step"), Some("app.dbg_step"));
     debug.append(Some("Breakpoint at PC"), Some("app.dbg_break_pc"));
     debug.append(Some("Clear breakpoints"), Some("app.dbg_clear_breaks"));
     debug.append(Some("Refresh"), Some("app.dbg_refresh"));
+    debug.append(Some("Enable Default Trace"), Some("app.dbg_trace_enable"));
+    debug.append(Some("Clear Trace Ring"), Some("app.dbg_trace_clear"));
     menubar.append_submenu(Some("_Debug"), &debug);
 
     app.set_menubar(Some(&menubar));
@@ -1691,6 +1816,12 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
     add_action(app, "dbg_refresh", Rc::clone(&state), |s| {
         s.refresh_debug_text();
     });
+    add_action(app, "dbg_trace_enable", Rc::clone(&state), |s| {
+        s.debug_enable_trace();
+    });
+    add_action(app, "dbg_trace_clear", Rc::clone(&state), |s| {
+        s.debug_clear_trace();
+    });
 
     let quit = gio::SimpleAction::new("quit", None);
     quit.connect_activate(clone!(
@@ -1706,6 +1837,9 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
 
     app.set_accels_for_action("app.open_tape", &["<Control>o"]);
     app.set_accels_for_action("app.quit", &["<Control>q"]);
+    app.set_accels_for_action("app.dbg_toggle", &["<Control><Alt>d"]);
+    app.set_accels_for_action("app.dbg_pause", &["<Control><Alt>p"]);
+    app.set_accels_for_action("app.dbg_step", &["<Control><Alt>s"]);
 }
 
 fn appearance_variant(preference: AppearancePreference) -> glib::Variant {

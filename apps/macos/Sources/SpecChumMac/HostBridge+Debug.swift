@@ -16,6 +16,16 @@ extension HostBridge {
         status = "Trace ring cleared"
     }
 
+    func clearBreakpoints() {
+        guard let handle else { return }
+        if sc_clear_breakpoints(handle) != 0 {
+            status = HostBridge.takeLastError() ?? "Clear breakpoints failed"
+        } else {
+            status = "Breakpoints cleared"
+        }
+        refreshInspector()
+    }
+
     func dumpTraceToDesktop() {
         let dir = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
@@ -159,11 +169,25 @@ extension HostBridge {
             debugSp = r.sp
             debugAf = r.af
         }
-        if let json = inspectJson() {
-            inspectJsonPreview = String(json.prefix(2000))
-        } else {
-            inspectJsonPreview = "(no machine)"
+        let normalizedAddress = debugMemoryAddress
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: "0x", with: "", options: .caseInsensitive)
+        guard let address = UInt32(normalizedAddress, radix: 16), address <= 0xFFFF else {
+            status = "Memory address must be a 16-bit hexadecimal value"
+            return
         }
+        if let handle, let cstr = sc_debugger_text_at(handle, address) {
+            debuggerTextPreview = String(cString: cstr)
+            sc_string_free(cstr)
+        } else {
+            debuggerTextPreview = "(no machine)"
+        }
+    }
+
+    func showMemoryAtProgramCounter() {
+        debugMemoryAddress = String(format: "%04X", debugPc)
+        refreshInspector()
     }
 
 }

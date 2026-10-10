@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 machine = { workspace = true }
+z80 = { workspace = true }
 formats = { workspace = true }
 tape = { workspace = true }
 trace = { workspace = true }

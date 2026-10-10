@@ -427,6 +427,7 @@ impl SpecChumApp {
                 ui.menu_button("Debug", |ui| {
                     if ui.button("Debugger window").clicked() {
                         self.session.debug_open = true;
+                        super::navigation::FrontendView::Debugger.set(ctx);
                         ui.close_menu();
                     }
                     ui.separator();

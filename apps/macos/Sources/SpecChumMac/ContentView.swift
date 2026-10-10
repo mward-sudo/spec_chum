@@ -133,6 +133,15 @@ struct ContentView: View {
             .help("Browse recent media")
 
             Button {
+                host.showInspector = true
+                host.refreshInspector()
+            } label: {
+                Label("Debugger", systemImage: "ladybug")
+            }
+            .help("Open the debugger workspace")
+            .accessibilityLabel("Debugger workspace")
+
+            Button {
                 chromeAction { host.presentOpenMediaPanel() }
             } label: {
                 Label(host.openMediaTitle, systemImage: "opticaldiscdrive")
@@ -539,7 +548,7 @@ struct DebugInspectorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Debug Inspector")
+                Text("Debugger")
                     .font(.headline)
                 Spacer()
                 Button("Done") {
@@ -548,6 +557,9 @@ struct DebugInspectorView: View {
                 .keyboardShortcut(.cancelAction)
             }
             HStack(spacing: 16) {
+                Text(host.debuggerTextPreview.components(separatedBy: "\n").first ?? "Execution state unavailable")
+                    .fontWeight(.semibold)
+                    .accessibilityLabel("Current execution state")
                 Text(String(format: "PC %04X", host.debugPc))
                 Text(String(format: "SP %04X", host.debugSp))
                 Text(String(format: "AF %04X", host.debugAf))
@@ -563,18 +575,43 @@ struct DebugInspectorView: View {
                     }
                     host.step()
                 }
+                Button("Add Breakpoint at PC") {
+                    host.addBreakpointAtPc()
+                }
+                Button("Clear Breakpoints") {
+                    host.clearBreakpoints()
+                }
+            }
+            HStack {
+                Text("Memory address")
+                TextField("Hex address", text: $host.debugMemoryAddress)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(width: 110)
+                    .accessibilityLabel("Memory address in hexadecimal")
+                Button("View memory") {
+                    host.refreshInspector()
+                }
+                Button("At PC") {
+                    host.showMemoryAtProgramCounter()
+                }
             }
             ScrollView {
-                Text(host.inspectJsonPreview)
-                    .font(.system(.caption, design: .monospaced))
+                Text(host.debuggerTextPreview)
+                    .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding()
-        .frame(minWidth: 480, minHeight: 320)
+        .frame(minWidth: 680, idealWidth: 820, minHeight: 440, idealHeight: 620)
         .onAppear {
             host.refreshInspector()
+        }
+        .task {
+            while !Task.isCancelled {
+                host.refreshInspector()
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
         }
     }
 }

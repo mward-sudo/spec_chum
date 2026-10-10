@@ -34,7 +34,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE,
     WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
     WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
@@ -52,17 +52,18 @@ use native_shell_common::commands::{
 };
 use native_shell_common::{
     IDM_DBG_BREAK_PC, IDM_DBG_CLEAR_BREAKS, IDM_DBG_CONTINUE, IDM_DBG_PAUSE, IDM_DBG_REFRESH,
-    IDM_DBG_STEP, IDM_DBG_TOGGLE, IDM_FILE_EXIT, IDM_FILE_OPEN_DSK, IDM_FILE_OPEN_RZX,
-    IDM_FILE_OPEN_SNAPSHOT, IDM_FILE_OPEN_TAPE, IDM_FILE_OPEN_TRD, IDM_HW_ATTACH_BETA,
-    IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1, IDM_HW_ATTACH_MULTIFACE, IDM_HW_DIVMMC_EEPROM,
-    IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1, IDM_HW_EJECT_DCK, IDM_HW_INSERT_DCK,
-    IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM, IDM_HW_MULTIFACE_NMI, IDM_HW_OPEN_TRD,
-    IDM_MACHINE_RESET, IDM_SET_APPEARANCE_DARK, IDM_SET_APPEARANCE_LIGHT,
-    IDM_SET_APPEARANCE_SYSTEM, IDM_SET_AY_ABC, IDM_SET_AY_ACB, IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR,
-    IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L, IDM_SET_JOY_SINCLAIR_R, IDM_SET_KEMPSTON_MOUSE,
-    IDM_SET_MUTE, IDM_SET_ONLINE_TITLES, IDM_SET_TAPE_EAR_1, IDM_SET_TAPE_EAR_10,
-    IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20, IDM_SET_TAPE_EAR_5, IDM_SET_TAPE_EXPERIENCE,
-    IDM_SET_TAPE_INSTANT, IDM_SET_THROTTLE, IDM_TAPE_PAUSE, IDM_TAPE_PLAY, IDM_TAPE_REWIND,
+    IDM_DBG_STEP, IDM_DBG_TOGGLE, IDM_DBG_TRACE_CLEAR, IDM_DBG_TRACE_ENABLE, IDM_FILE_EXIT,
+    IDM_FILE_OPEN_DSK, IDM_FILE_OPEN_RZX, IDM_FILE_OPEN_SNAPSHOT, IDM_FILE_OPEN_TAPE,
+    IDM_FILE_OPEN_TRD, IDM_HW_ATTACH_BETA, IDM_HW_ATTACH_DIVMMC, IDM_HW_ATTACH_IF1,
+    IDM_HW_ATTACH_MULTIFACE, IDM_HW_DIVMMC_EEPROM, IDM_HW_DIVMMC_SD, IDM_HW_DIVMMC_SD_SLOT1,
+    IDM_HW_EJECT_DCK, IDM_HW_INSERT_DCK, IDM_HW_INSERT_MDR, IDM_HW_LOAD_TRDOS_ROM,
+    IDM_HW_MULTIFACE_NMI, IDM_HW_OPEN_TRD, IDM_MACHINE_RESET, IDM_SET_APPEARANCE_DARK,
+    IDM_SET_APPEARANCE_LIGHT, IDM_SET_APPEARANCE_SYSTEM, IDM_SET_AY_ABC, IDM_SET_AY_ACB,
+    IDM_SET_AY_MONO, IDM_SET_JOY_CURSOR, IDM_SET_JOY_KEMPSTON, IDM_SET_JOY_SINCLAIR_L,
+    IDM_SET_JOY_SINCLAIR_R, IDM_SET_KEMPSTON_MOUSE, IDM_SET_MUTE, IDM_SET_ONLINE_TITLES,
+    IDM_SET_TAPE_EAR_1, IDM_SET_TAPE_EAR_10, IDM_SET_TAPE_EAR_2, IDM_SET_TAPE_EAR_20,
+    IDM_SET_TAPE_EAR_5, IDM_SET_TAPE_EXPERIENCE, IDM_SET_TAPE_INSTANT, IDM_SET_THROTTLE,
+    IDM_TAPE_PAUSE, IDM_TAPE_PLAY, IDM_TAPE_REWIND,
 };
 #[path = "win32/library.rs"]
 mod library;
@@ -75,6 +76,8 @@ const CLASS_NAME: &str = "SpecChumWindowsShell\0";
 const DEBUG_CLASS: &str = "SpecChumWindowsDebug\0";
 const WINDOW_TITLE: &str = "Spec Chum\0";
 const ID_DBG_EDIT: i32 = 2001;
+const ID_DBG_ADDRESS: i32 = 2002;
+const ID_DBG_VIEW_MEMORY: i32 = 2003;
 const IDM_MACHINE_ROM_SETUP: usize = 1289;
 const IDM_LIBRARY_RECENT_BASE: usize = 1600;
 const IDM_LIBRARY_RECENT_COUNT: usize = 12;
@@ -129,6 +132,7 @@ struct AppState {
     pending_cmd: Option<usize>,
     debug_hwnd: Option<HWND>,
     debug_edit: Option<HWND>,
+    debug_address: u16,
     library_hwnd: Option<HWND>,
     library_search: Option<HWND>,
     library_category: Option<HWND>,
@@ -219,6 +223,7 @@ impl AppState {
             pending_cmd: None,
             debug_hwnd: None,
             debug_edit: None,
+            debug_address: 0,
             library_hwnd: None,
             library_search: None,
             library_category: None,
@@ -914,7 +919,10 @@ impl AppState {
         let Some(edit) = self.debug_edit else {
             return;
         };
-        let text = self.host.with_mut(|session| session.debugger_text());
+        let address = self.debug_address;
+        let text = self
+            .host
+            .with_mut(|session| session.debugger_text_at(address));
         // Win32 multiline EDIT expects CRLF line endings.
         let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
         set_window_title(edit, &text);
@@ -954,6 +962,19 @@ impl AppState {
 
     fn debug_clear_breaks(&mut self) {
         self.host_action("Clear breakpoints", HostSession::clear_breakpoints);
+        self.refresh_debug_text();
+    }
+
+    fn debug_enable_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_enable_default_trace);
+        self.host
+            .with_mut(|s| s.set_status("Default trace enabled"));
+        self.refresh_debug_text();
+    }
+
+    fn debug_clear_trace(&mut self) {
+        self.host.with_mut(HostSession::debug_clear_trace);
+        self.host.with_mut(|s| s.set_status("Trace ring cleared"));
         self.refresh_debug_text();
     }
 
@@ -1084,6 +1105,8 @@ impl AppState {
             IDM_DBG_BREAK_PC => self.debug_break_at_pc(),
             IDM_DBG_CLEAR_BREAKS => self.debug_clear_breaks(),
             IDM_DBG_REFRESH => self.refresh_debug_text(),
+            IDM_DBG_TRACE_ENABLE => self.debug_enable_trace(),
+            IDM_DBG_TRACE_CLEAR => self.debug_clear_trace(),
             _ => {}
         }
         if affects_library && self.library_hwnd.is_some() {
@@ -1131,6 +1154,16 @@ fn set_window_title(hwnd: HWND, title: &str) {
     // SAFETY: wide is NUL-terminated; hwnd is our window.
     unsafe {
         let _ = SetWindowTextW(hwnd, PCWSTR(wide.as_ptr()));
+    }
+}
+
+fn window_text(hwnd: HWND) -> String {
+    // SAFETY: query required UTF-16 length, then provide a buffer with one spare NUL slot.
+    unsafe {
+        let len = GetWindowTextLengthW(hwnd).max(0) as usize;
+        let mut buf = vec![0_u16; len + 1];
+        let written = GetWindowTextW(hwnd, &mut buf) as usize;
+        String::from_utf16_lossy(&buf[..written.min(buf.len())])
     }
 }
 
@@ -1301,7 +1334,7 @@ fn build_menu() -> Result<(HMENU, HMENU, HMENU, HMENU)> {
         append_popup(menubar, settings, "&Settings");
 
         let debug = CreatePopupMenu()?;
-        append_menu(debug, IDM_DBG_TOGGLE, "&Inspector…");
+        append_menu(debug, IDM_DBG_TOGGLE, "&Debugger Workspace…");
         append_sep(debug);
         append_menu(debug, IDM_DBG_PAUSE, "&Pause");
         append_menu(debug, IDM_DBG_CONTINUE, "&Continue");
@@ -1310,6 +1343,8 @@ fn build_menu() -> Result<(HMENU, HMENU, HMENU, HMENU)> {
         append_menu(debug, IDM_DBG_BREAK_PC, "Breakpoint at &PC");
         append_menu(debug, IDM_DBG_CLEAR_BREAKS, "C&lear breakpoints");
         append_menu(debug, IDM_DBG_REFRESH, "&Refresh");
+        append_menu(debug, IDM_DBG_TRACE_ENABLE, "Enable Default &Trace");
+        append_menu(debug, IDM_DBG_TRACE_CLEAR, "Clear Trace &Ring");
         append_popup(menubar, debug, "&Debug");
 
         Ok((menubar, recent, hw, file))
@@ -1333,7 +1368,7 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
         };
         let _ = RegisterClassExW(&wc);
 
-        let title: Vec<u16> = "Spec Chum — Debugger\0".encode_utf16().collect();
+        let title: Vec<u16> = "Spec Chum — Debugger Workspace\0".encode_utf16().collect();
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             PCWSTR(class_name.as_ptr()),
@@ -1341,8 +1376,8 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
+            820,
             640,
-            520,
             owner,
             None,
             Some(hinstance.into()),
@@ -1352,6 +1387,56 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
         let edit_class: Vec<u16> = "EDIT\0".encode_utf16().collect();
         let mut client = RECT::default();
         let _ = GetClientRect(hwnd, &mut client);
+        let static_class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let address_label: Vec<u16> = "Memory address (hex):\0".encode_utf16().collect();
+        let _label = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(static_class.as_ptr()),
+            PCWSTR(address_label.as_ptr()),
+            WS_CHILD | WS_VISIBLE,
+            12,
+            12,
+            130,
+            26,
+            Some(hwnd),
+            None,
+            Some(hinstance.into()),
+            None,
+        )?;
+        let address_class: Vec<u16> = "EDIT\0".encode_utf16().collect();
+        let address_title: Vec<u16> = format!("{:04X}\0", unsafe { (*app).debug_address })
+            .encode_utf16()
+            .collect();
+        let _address = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(address_class.as_ptr()),
+            PCWSTR(address_title.as_ptr()),
+            WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP,
+            150,
+            12,
+            110,
+            26,
+            Some(hwnd),
+            Some(HMENU(ID_DBG_ADDRESS as isize as *mut core::ffi::c_void)),
+            Some(hinstance.into()),
+            None,
+        )?;
+        let button_class: Vec<u16> = "BUTTON\0".encode_utf16().collect();
+        let button_title: Vec<u16> = "View memory\0".encode_utf16().collect();
+        let _button = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(button_class.as_ptr()),
+            PCWSTR(button_title.as_ptr()),
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            270,
+            12,
+            110,
+            26,
+            Some(hwnd),
+            Some(HMENU(ID_DBG_VIEW_MEMORY as isize as *mut core::ffi::c_void)),
+            Some(hinstance.into()),
+            None,
+        )?;
         let edit = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             PCWSTR(edit_class.as_ptr()),
@@ -1363,8 +1448,8 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
                 | windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(
                     (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL) as u32,
                 ),
-            0,
-            0,
+            12,
+            48,
             client.right - client.left,
             client.bottom - client.top,
             Some(hwnd),
@@ -1460,12 +1545,30 @@ extern "system" fn debug_wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     let _ = GetClientRect(hwnd, &mut client);
                     let _ = MoveWindow(
                         edit,
-                        0,
-                        0,
-                        client.right - client.left,
-                        client.bottom - client.top,
+                        12,
+                        48,
+                        client.right - client.left - 24,
+                        client.bottom - client.top - 60,
                         true,
                     );
+                }
+            }
+            LRESULT(0)
+        }
+        WM_COMMAND => {
+            if (wparam.0 & 0xffff) as i32 == ID_DBG_VIEW_MEMORY {
+                let state_ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut AppState;
+                if !state_ptr.is_null() {
+                    let address = unsafe { GetDlgItem(Some(hwnd), ID_DBG_ADDRESS) };
+                    if let Ok(address) = address {
+                        let raw = window_text(address);
+                        let raw = raw.trim().trim_start_matches('$').trim_start_matches("0x");
+                        if let Ok(parsed) = u16::from_str_radix(raw, 16) {
+                            let state = unsafe { &mut *state_ptr };
+                            state.debug_address = parsed;
+                            state.refresh_debug_text();
+                        }
+                    }
                 }
             }
             LRESULT(0)
@@ -1669,10 +1772,19 @@ pub fn run() -> Result<()> {
                 let library = (!state_ptr.is_null())
                     .then(|| (*state_ptr).library_hwnd)
                     .flatten();
+                let debugger = (!state_ptr.is_null())
+                    .then(|| (*state_ptr).debug_hwnd)
+                    .flatten();
                 if let Some(library) = library {
                     // SAFETY: the Library HWND belongs to AppState for the event-loop lifetime,
                     // and `msg` is the live message removed from this thread's queue.
                     if IsDialogMessageW(library, &msg).as_bool() {
+                        continue;
+                    }
+                }
+                if let Some(debugger) = debugger {
+                    // SAFETY: the Debugger HWND belongs to AppState for the event-loop lifetime.
+                    if IsDialogMessageW(debugger, &msg).as_bool() {
                         continue;
                     }
                 }

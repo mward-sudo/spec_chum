@@ -89,12 +89,16 @@ impl FrontendView {
         (Self::Settings, "Settings"),
     ];
 
+    pub(super) fn set(self, ctx: &egui::Context) {
+        self.set_view(ctx);
+    }
+
     pub(super) fn get(ctx: &egui::Context) -> Self {
         ctx.data(|data| data.get_temp(egui::Id::new(FRONTEND_VIEW_ID)))
             .unwrap_or_default()
     }
 
-    fn set(self, ctx: &egui::Context) {
+    fn set_view(self, ctx: &egui::Context) {
         ctx.data_mut(|data| data.insert_temp(egui::Id::new(FRONTEND_VIEW_ID), self));
     }
 }
@@ -151,9 +155,6 @@ impl SpecChumApp {
             });
         if current != previous {
             current.set(ctx);
-            if current == FrontendView::Debugger {
-                self.session.debug_open = true;
-            }
             if current == FrontendView::Play {
                 ctx.data_mut(|data| {
                     data.insert_temp(egui::Id::new(GUEST_KEYBOARD_SUPPRESSED_ID), true);
@@ -184,10 +185,7 @@ impl SpecChumApp {
             }
             FrontendView::Debugger => {
                 ui.heading("Debugger");
-                ui.label("The debugger window is open with the live machine controls.");
-                if ui.button("Show debugger window").clicked() {
-                    self.session.debug_open = true;
-                }
+                egui::ScrollArea::vertical().show(ui, |ui| self.render_debugger_contents(ui));
             }
             FrontendView::Settings => {
                 ui.heading("Settings");

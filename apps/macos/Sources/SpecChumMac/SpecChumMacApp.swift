@@ -81,7 +81,7 @@ struct SpecChumMacApp: App {
 
             // View — inspector (system View menu also keeps toolbar / full screen)
             CommandGroup(after: .toolbar) {
-                Button("Show Inspector") {
+                Button("Debugger Workspace…") {
                     host.showInspector = true
                     host.refreshInspector()
                 }
@@ -250,10 +250,13 @@ struct SpecChumMacApp: App {
                 Button("Add Breakpoint at PC") {
                     host.addBreakpointAtPc()
                 }
+                Button("Clear Breakpoints") {
+                    host.clearBreakpoints()
+                }
                 Button("Dump JSON to Desktop") {
                     host.dumpTraceJsonToDesktop()
                 }
-                Button("Show Inspector") {
+                Button("Debugger Workspace…") {
                     host.showInspector = true
                     host.refreshInspector()
                 }
