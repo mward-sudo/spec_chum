@@ -82,6 +82,27 @@ pub extern "C" fn sc_select_model(handle: *mut c_void, model: c_uint) -> c_int {
     }
 }
 
+/// Activate a model only after its ROM or verified assets boot successfully.
+#[no_mangle]
+pub extern "C" fn sc_activate_model(handle: *mut c_void, model: c_uint) -> c_int {
+    clear_last_error();
+    let Some(mut session) = session_mut(handle) else {
+        set_last_error("null handle");
+        return -1;
+    };
+    let Some(model) = ModelId::from_u32(model) else {
+        set_last_error("invalid model id");
+        return -1;
+    };
+    match session.activate_model(model) {
+        Ok(()) => 0,
+        Err(error) => {
+            set_last_error(error.to_string());
+            -1
+        }
+    }
+}
+
 /// Active model id (`SC_MODEL_*`). Returns `UINT_MAX` on a null handle.
 #[no_mangle]
 pub extern "C" fn sc_get_model(handle: *mut c_void) -> c_uint {
@@ -127,5 +148,26 @@ pub extern "C" fn sc_set_border(handle: *mut c_void, with_border: c_int) {
 pub extern "C" fn sc_run_frame(handle: *mut c_void) {
     if let Some(mut s) = session_mut(handle) {
         s.run_frame();
+    }
+}
+
+#[cfg(test)]
+mod activation_tests {
+    use super::*;
+    use crate::ffi::{sc_load_rom_bytes, sc_peek, sc_poke};
+
+    #[test]
+    fn invalid_activation_keeps_the_ffi_session_usable() {
+        let handle = sc_create(ModelId::Spectrum48.numeric_id(), 1);
+        assert!(!handle.is_null());
+        let rom = vec![0; 16 * 1024];
+        assert_eq!(sc_load_rom_bytes(handle, rom.as_ptr(), rom.len()), 0);
+        assert_eq!(sc_poke(handle, 0xc000, 0x5a), 0);
+        assert_eq!(sc_activate_model(handle, c_uint::MAX), -1);
+        assert_eq!(sc_get_model(handle), ModelId::Spectrum48.numeric_id());
+        let mut value = 0;
+        assert_eq!(sc_peek(handle, 0xc000, &raw mut value), 0);
+        assert_eq!(value, 0x5a);
+        sc_destroy(handle);
     }
 }

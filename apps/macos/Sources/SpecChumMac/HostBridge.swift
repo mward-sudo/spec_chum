@@ -14,10 +14,21 @@ final class HostBridge: ObservableObject {
         let preferenceSlug: String
         let label: String
         let title: String
+        let imageKey: String?
+        let imageDescription: String?
+        let memorySoundSummary: String?
+        let compatiblePeripherals: HardwareCompatFlags
+        let available: Bool
+        let expectedMainRomBytes: Int
 
         enum CodingKeys: String, CodingKey {
-            case id, label, title
+            case id, label, title, available
             case preferenceSlug = "preference_slug"
+            case imageKey = "image_key"
+            case imageDescription = "image_description"
+            case memorySoundSummary = "memory_sound_summary"
+            case compatiblePeripherals = "compatible_peripherals"
+            case expectedMainRomBytes = "expected_main_rom_bytes"
         }
     }
 
@@ -91,16 +102,35 @@ final class HostBridge: ObservableObject {
         /// Models whose ROM dumps are never auto-fetched (user must supply paths).
         var requiresUserProvidedRoms: Bool { sc_model_requires_user_rom(rawValue) != 0 }
 
-        /// +3 has floppy; toolbar/File Open may include `.dsk`.
-        var supportsDisk: Bool { self == .spectrumPlus3 || self == .spectrumPlus3e }
-
-        /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
-        var supportsBeta: Bool {
-            self == .spectrum16K || self == .spectrum48 || self == .timexTC2048 || self == .timexTS2068 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128 || self == .scorpionZs256
+        var hardwareCompat: HardwareCompatFlags {
+            descriptor?.compatiblePeripherals ?? .unsupported
         }
 
+        var pickerSummary: String {
+            descriptor?.memorySoundSummary ?? "Hardware details unavailable"
+        }
+
+        var imageKey: String? { descriptor?.imageKey }
+        var imageDescription: String? { descriptor?.imageDescription }
+
+        static func catalogImage(for model: Model) -> NSImage? {
+            guard let key = model.imageKey,
+                  let url = Bundle.main.url(
+                    forResource: key,
+                    withExtension: "jpg",
+                    subdirectory: "machines"
+                  ) else { return nil }
+            return NSImage(contentsOf: url)
+        }
+
+        /// +3 has floppy; toolbar/File Open may include `.dsk`.
+        var supportsDisk: Bool { hardwareCompat.plus3Disk }
+
+        /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
+        var supportsBeta: Bool { hardwareCompat.beta }
+
         /// Timex dock `.dck` cartridges (TS2068 / TC2068 horizontal MMU).
-        var supportsTimexDock: Bool { self == .timexTS2068 }
+        var supportsTimexDock: Bool { hardwareCompat.timexDock }
 
         /// Soft cap for toolbar machine label glyphs (custom profile names); avoid layout frames.
         static let toolbarPickerMaxLabelChars: Int = 18
@@ -315,15 +345,31 @@ final class HostBridge: ObservableObject {
     @Published var machineConfigEditorIsNew = true
 
     /// ROM setup sheet (#188) — shown when built-in model ROMs are incomplete.
-    @Published var showRomSetup = false
+    @Published var showRomSetup = false {
+        didSet {
+            if !showRomSetup, pendingBuiltinModel != nil {
+                pendingBuiltinModel = nil
+                romSetupModel = model
+                if activeConfigId == nil {
+                    refreshRomSetup()
+                } else {
+                    romSetupPayload = nil
+                    romSetupError = nil
+                }
+            }
+        }
+    }
     @Published var romSetupPayload: RomSetupPayload?
     @Published var romSetupError: String?
     @Published var nextAssetsAcquiring = false
     /// Model the ROM dialog is configuring (may differ while picking from menu).
     @Published var romSetupModel: Model = .spectrum48
+    /// A built-in pick awaiting a successful boot; the active session is unchanged.
+    var pendingBuiltinModel: Model?
 
     /// True when the active built-in model still needs ROM files on disk.
     var needsRomSetup: Bool {
+        if pendingBuiltinModel != nil { return true }
         guard activeConfigId == nil else { return false }
         if let payload = romSetupPayload, !payload.complete {
             return true

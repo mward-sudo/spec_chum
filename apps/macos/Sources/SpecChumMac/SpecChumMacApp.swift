@@ -118,13 +118,10 @@ struct SpecChumMacApp: App {
                             host.selectBuiltinModel(pick)
                             FocusSpectrumView.postDelayed()
                         } label: {
-                            if host.activeConfigId == nil && host.model == pick {
-                                Text("✓ \(pick.title)")
-                            } else if !pick.romAvailable {
-                                Text("\(pick.title) (ROMs required)")
-                            } else {
-                                Text(pick.title)
-                            }
+                            MachineChoiceLabel(
+                                model: pick,
+                                selected: host.activeConfigId == nil && host.model == pick
+                            )
                         }
                     }
                 }
@@ -179,22 +176,24 @@ struct SpecChumMacApp: App {
                 Button("Attach Multiface ROM…") {
                     openMultifaceRom()
                 }
+                .disabled(!host.model.hardwareCompat.multiface)
                 Button("Multiface NMI") {
                     host.multifaceNmi()
                 }
+                .disabled(!host.model.hardwareCompat.multiface)
                 Divider()
                 Button("Attach Interface 1") {
                     host.attachInterface1()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.interface1)
                 Button("Load Interface 1 ROM…") {
                     openInterface1Rom()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.interface1)
                 Button("Open Microdrive MDR…") {
                     openMdr()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.interface1)
                 Divider()
                 Button("Insert Timex Dock DCK…") {
                     openDck()
@@ -208,32 +207,32 @@ struct SpecChumMacApp: App {
                 Button("Attach DivMMC") {
                     host.attachDivmmc()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.divmmc)
                 Button("Open DivMMC SD image…") {
                     openDivmmcSd(slot: 0)
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.divmmc)
                 Button("Open DivMMC SD image (slot 1)…") {
                     openDivmmcSd(slot: 1)
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.divmmc)
                 Button("Open DivMMC EEPROM (ESXDOS)…") {
                     openDivmmcEeprom()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.divmmc)
                 Divider()
                 Button("Attach Beta Disk") {
                     host.attachBeta()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.beta)
                 Button("Load TR-DOS ROM…") {
                     openTrdosRom()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.beta)
                 Button("Open TRD…") {
                     openTrd()
                 }
-                .disabled(!host.model.supportsBeta)
+                .disabled(!host.model.hardwareCompat.beta)
             }
 
             CommandMenu("Debug") {

@@ -159,7 +159,8 @@ struct RomSetupView: View {
                         Label("All required ROMs are present.", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                             .font(.callout)
-                    } else if let err = host.romSetupError {
+                    }
+                    if let err = host.romSetupError {
                         Text(err)
                             .font(.caption)
                             .foregroundStyle(.red)
@@ -193,7 +194,9 @@ struct RomSetupView: View {
         .padding()
         .frame(minWidth: 520, minHeight: 280)
         .onAppear {
-            host.refreshRomSetup()
+            if host.romSetupPayload == nil {
+                host.refreshRomSetup()
+            }
         }
     }
 }

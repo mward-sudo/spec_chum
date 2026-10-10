@@ -508,6 +508,74 @@ impl HostSession {
         }
     }
 
+    /// Boot a built-in model before replacing the running machine.
+    ///
+    /// ROM discovery and Next asset preparation can fail. In that case the
+    /// current model, machine, media, framebuffer and host settings remain live.
+    pub fn activate_model(&mut self, model: ModelId) -> Result<(), HostError> {
+        self.activate_model_with(model, |candidate| candidate.select_model(model))
+    }
+
+    fn activate_model_with(
+        &mut self,
+        model: ModelId,
+        boot: impl FnOnce(&mut HostSession) -> Result<(), HostError>,
+    ) -> Result<(), HostError> {
+        let mut candidate = Self::new(model, self.with_border);
+        boot(&mut candidate)?;
+        let Some(machine) = candidate.machine.take() else {
+            return Err(HostError::NoMachine);
+        };
+        self.model = model;
+        self.machine = Some(machine);
+        self.reapply_host_keys();
+        self.audio_pcm.clear();
+        self.audio_pcm_stereo.clear();
+        self.last_speaker_level = false;
+        self.clear_media_identity();
+        self.status = candidate.status;
+        self.refresh_framebuffer();
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn test_activate_model_transaction() {
+        let mut session = Self::new(ModelId::Spectrum48, true);
+        session.set_machine(Machine::new_48k(&vec![0; 16 * 1024]).expect("test ROM"));
+        session.poke(0xc000, 0x5a).expect("writable RAM");
+        session.set_status("running");
+        session.set_running(false);
+        let pixels = session.framebuffer().to_vec();
+
+        let failure = session.activate_model_with(ModelId::Spectrum16K, |_| {
+            Err(HostError::Message("ROM setup failed".into()))
+        });
+        assert!(failure.is_err());
+        assert_eq!(session.model(), ModelId::Spectrum48);
+        assert_eq!(
+            session.peek(0xc000).expect("old machine remains live"),
+            0x5a
+        );
+        assert_eq!(session.status(), "running");
+        assert_eq!(session.framebuffer(), pixels);
+        assert!(!session.running());
+
+        session
+            .activate_model_with(ModelId::Spectrum16K, |candidate| {
+                candidate.set_machine(Machine::new_16k(&vec![0; 16 * 1024]).expect("test ROM"));
+                candidate.set_status("new machine booted");
+                Ok(())
+            })
+            .expect("activation");
+        assert_eq!(session.model(), ModelId::Spectrum16K);
+        assert_eq!(
+            session.machine().expect("new machine").model(),
+            Model::Spectrum16K
+        );
+        assert_eq!(session.status(), "new machine booted");
+        assert!(!session.running());
+    }
+
     /// Build and install the selected model using already-read ROM bytes.
     ///
     /// Returns a host error if the ROM or any required model-specific ROM is invalid or missing.
@@ -1887,6 +1955,16 @@ fn dims(with_border: bool) -> (usize, usize) {
         (352, 296)
     } else {
         (256, 192)
+    }
+}
+
+#[cfg(test)]
+mod activation_tests {
+    use super::HostSession;
+
+    #[test]
+    fn failed_boot_preserves_live_machine_and_success_commits() {
+        HostSession::test_activate_model_transaction();
     }
 }
 

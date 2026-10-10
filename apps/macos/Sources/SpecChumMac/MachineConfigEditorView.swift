@@ -19,7 +19,7 @@ struct MachineConfigEditorView: View {
     }
 
     private var hardwareCompat: HardwareCompatFlags {
-        HardwareCompatFlags.forBase(draft.base)
+        draft.base.hostModel.editorHardwareCompat
     }
 
     var body: some View {

@@ -35,7 +35,8 @@ impl SpecChumApp {
                     .host_mut()
                     .set_status(format!("Verified {}", archive.display()));
                 self.refresh_rom_setup();
-                if self.session.model() == machine::Model::SpectrumNext
+                if self.show_rom_setup
+                    && self.rom_setup_model() == machine::Model::SpectrumNext
                     && self.rom_setup.as_ref().is_some_and(|setup| setup.complete)
                 {
                     self.finish_rom_setup();
@@ -46,6 +47,9 @@ impl SpecChumApp {
     }
 
     fn needs_rom_setup(&self) -> bool {
+        if self.pending_builtin_model.is_some() {
+            return true;
+        }
         if self.prefs.active_config_id.is_some() {
             return false;
         }
@@ -53,7 +57,7 @@ impl SpecChumApp {
             return true;
         }
         !model_rom_available(
-            PrefModel::from_model(self.session.model()).to_model_id(),
+            PrefModel::from_model(self.rom_setup_model()).to_model_id(),
             &self.prefs.model_rom_paths,
         )
     }
@@ -70,9 +74,14 @@ impl SpecChumApp {
     pub(super) fn refresh_rom_setup(&mut self) {
         self.rom_setup_error = None;
         self.rom_setup = Some(rom_setup_json(
-            PrefModel::from_model(self.session.model()).to_model_id(),
+            PrefModel::from_model(self.rom_setup_model()).to_model_id(),
             &self.prefs.model_rom_paths,
         ));
+    }
+
+    fn rom_setup_model(&self) -> machine::Model {
+        self.pending_builtin_model
+            .unwrap_or_else(|| self.session.model())
     }
 
     pub(super) fn maybe_auto_present_rom_setup(&mut self) {
@@ -90,14 +99,32 @@ impl SpecChumApp {
         }
     }
 
-    fn finish_rom_setup(&mut self) {
-        self.session.try_autoload_rom();
-        self.apply_restored_machine_options();
-        if self.session.host_mut().has_machine() {
-            self.show_rom_setup = false;
-            self.rom_setup_error = None;
+    pub(super) fn finish_rom_setup(&mut self) {
+        if self.pending_builtin_model.is_some() {
+            self.activate_pending_builtin_model();
+        } else {
+            let model = PrefModel::from_model(self.session.model()).to_model_id();
+            sync_model_rom_paths(self.prefs.model_rom_paths.clone());
+            let activated = self.session.host_mut().activate_model(model);
+            match activated {
+                Ok(()) => {
+                    self.apply_restored_machine_options();
+                    self.show_rom_setup = false;
+                    self.rom_setup_error = None;
+                }
+                Err(error) => self.rom_setup_error = Some(error.to_string()),
+            }
         }
-        self.refresh_rom_setup();
+        if !self.show_rom_setup {
+            self.refresh_rom_setup();
+        }
+    }
+
+    pub(super) fn close_rom_setup(&mut self) {
+        self.show_rom_setup = false;
+        if self.pending_builtin_model.take().is_some() {
+            self.refresh_rom_setup();
+        }
     }
 
     fn path_field(ui: &mut egui::Ui, label: &str, path: &mut Option<String>, filter: &str) {
@@ -136,7 +163,7 @@ impl SpecChumApp {
                 };
                 ui.label(&doc.model_title);
                 ui.separator();
-                if self.session.model() == machine::Model::SpectrumNext {
+                if self.rom_setup_model() == machine::Model::SpectrumNext {
                     ui.weak("Get the pinned official System/Next 24.11 distribution and separate GPL boot code, or select the verified archive from its companion asset folder below. Source and license details: https://github.com/mward-sudo/spec_chum/blob/main/docs/ROMS.md. Spec Chum is unaffiliated with SpecNext Ltd.");
                     if ui.add_enabled(self.next_assets_download.is_none(), egui::Button::new("Get official System/Next assets…")).clicked() {
                         self.rom_setup_error = None;
@@ -184,7 +211,7 @@ impl SpecChumApp {
                         }
                         ui.weak(&slot.hint);
                         if ui.button(format!("Choose {}…", slot.label)).clicked() {
-                            let filter = if self.session.model() == machine::Model::SpectrumNext {
+                            let filter = if self.rom_setup_model() == machine::Model::SpectrumNext {
                                 ("Official System/Next archive", &["zip"][..])
                             } else {
                                 ("ROM", &["rom", "bin"][..])
@@ -194,7 +221,7 @@ impl SpecChumApp {
                                 .pick_file()
                             {
                                 let model =
-                                    PrefModel::from_model(self.session.model()).to_model_id();
+                                    PrefModel::from_model(self.rom_setup_model()).to_model_id();
                                 match install_model_rom(
                                     model,
                                     &slot.id,
@@ -236,7 +263,9 @@ impl SpecChumApp {
                     }
                 });
             });
-        self.show_rom_setup = open && !close;
+        if !open || close {
+            self.close_rom_setup();
+        }
         if load_machine {
             self.finish_rom_setup();
         }

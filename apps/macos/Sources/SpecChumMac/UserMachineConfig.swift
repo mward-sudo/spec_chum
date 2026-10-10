@@ -143,36 +143,38 @@ enum PrefAyStereoSlug: String, Codable, CaseIterable {
     case abc
 }
 
-struct HardwareCompatFlags {
+struct HardwareCompatFlags: Decodable {
     let multiface: Bool
     let divmmc: Bool
     let interface1: Bool
     let beta: Bool
     let ayStereo: Bool
+    let kempstonMouse: Bool
+    let joystick: Bool
+    let plus3Disk: Bool
+    let timexDock: Bool
 
-    static func forBase(_ base: PrefModelSlug) -> HardwareCompatFlags {
-        switch base.hostModel {
-        case .spectrum16K, .spectrum48, .timexTC2048:
-            return HardwareCompatFlags(
-                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: false
-            )
-        case .timexTS2068:
-            // Matches host_api::hardware_compat — TS2068 has Timex AY.
-            return HardwareCompatFlags(
-                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: true
-            )
-        case .spectrum128, .spectrumPlus2, .pentagon128, .scorpionZs256:
-            return HardwareCompatFlags(
-                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: true
-            )
-        case .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e:
-            return HardwareCompatFlags(
-                multiface: false, divmmc: false, interface1: false, beta: false, ayStereo: true
-            )
-        case .spectrumNext:
-            return HardwareCompatFlags(
-                multiface: false, divmmc: false, interface1: false, beta: false, ayStereo: false
-            )
-        }
+    enum CodingKeys: String, CodingKey {
+        case multiface, divmmc, interface1, beta, joystick
+        case ayStereo = "ay_stereo"
+        case kempstonMouse = "kempston_mouse"
+        case plus3Disk = "plus3_disk"
+        case timexDock = "timex_dock"
     }
+
+    static let unsupported = HardwareCompatFlags(
+        multiface: false,
+        divmmc: false,
+        interface1: false,
+        beta: false,
+        ayStereo: false,
+        kempstonMouse: false,
+        joystick: false,
+        plus3Disk: false,
+        timexDock: false
+    )
+}
+
+extension HostBridge.Model {
+    var editorHardwareCompat: HardwareCompatFlags { hardwareCompat }
 }

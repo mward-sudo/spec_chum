@@ -136,7 +136,7 @@ fn expand_main_rom_image(
 }
 
 /// Which optional hardware toggles are valid for a base model.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct HardwareCompat {
     pub multiface: bool,
     pub divmmc: bool,
@@ -145,6 +145,8 @@ pub struct HardwareCompat {
     pub ay_stereo: bool,
     pub kempston_mouse: bool,
     pub joystick: bool,
+    pub plus3_disk: bool,
+    pub timex_dock: bool,
 }
 
 #[must_use]
@@ -179,6 +181,8 @@ pub fn hardware_compat(model: PrefModel) -> HardwareCompat {
         ),
         kempston_mouse: true,
         joystick: true,
+        plus3_disk: m.has_plus3_disk(),
+        timex_dock: m == Model::TimexTS2068,
     }
 }
 
