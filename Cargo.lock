@@ -9002,6 +9002,7 @@ dependencies = [
  "anyhow",
  "control_plane",
  "host_api",
+ "image",
  "machine",
  "native_shell_common",
  "parking_lot",

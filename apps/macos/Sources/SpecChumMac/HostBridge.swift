@@ -393,6 +393,7 @@ final class HostBridge: ObservableObject {
     /// When set, the active profile is custom (not a built-in toolbar/menu pick).
     @Published var activeConfigId: String? = UserDefaults.standard.string(forKey: HostBridge.activeConfigIdKey)
     @Published var showMachineConfigEditor = false
+    @Published var showMachinePicker = false
     @Published var machineConfigEditorDraft: UserMachineConfig?
     @Published var machineConfigEditorIsNew = true
 

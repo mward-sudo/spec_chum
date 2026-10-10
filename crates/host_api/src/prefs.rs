@@ -898,6 +898,22 @@ mod tests {
     }
 
     #[test]
+    fn selecting_builtin_keeps_saved_custom_configs_and_rom_overrides() {
+        let mut cfg = UserMachineConfig::new_named("Custom 48K", PrefModel::Spectrum48);
+        cfg.id = "custom-48k".to_owned();
+        cfg.custom_rom_path = Some("/user/48.rom".to_owned());
+        let mut prefs = UiPreferences::default();
+        prefs.upsert_custom_config(cfg.clone());
+        prefs.select_custom_config(&cfg.id);
+
+        prefs.select_builtin_model(PrefModel::Spectrum128);
+
+        assert_eq!(prefs.model, PrefModel::Spectrum128);
+        assert!(prefs.active_config_id.is_none());
+        assert_eq!(prefs.custom_configs, vec![cfg]);
+    }
+
+    #[test]
     fn recent_files_most_recent_first_deduped() {
         let mut p = UiPreferences::default();
         p.push_recent(Path::new("/a.tap"));

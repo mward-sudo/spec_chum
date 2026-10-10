@@ -7,6 +7,7 @@ pub mod ffi;
 pub mod handle;
 pub mod keymap;
 pub mod machine_config;
+pub mod machine_images;
 pub mod media_library;
 pub mod media_title_lookup;
 pub mod model_catalog;
@@ -19,6 +20,7 @@ pub use machine_config::{
     apply_user_config, expected_rom_bytes, hardware_compat, new_config_id, validate_main_rom,
     AppliedConfig, HardwareCompat, MachineConfigError, UserMachineConfig, MAX_CUSTOM_CONFIGS,
 };
+pub use machine_images::machine_image_bytes;
 pub use media_library::{
     query_recent_media, MediaCategory, MediaCompatibility, MediaEntry, MediaFormat,
 };

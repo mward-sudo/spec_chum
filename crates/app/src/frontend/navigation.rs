@@ -2,7 +2,10 @@
 
 use super::{display, SpecChumApp};
 use eframe::egui;
-use spec_chum_host::{query_recent_media, MediaCategory, MediaCompatibility, MediaEntry};
+use spec_chum_host::{
+    machine_image_bytes as machine_photo_bytes, query_recent_media, MediaCategory,
+    MediaCompatibility, MediaEntry,
+};
 
 const FRONTEND_VIEW_ID: &str = "frontend.view";
 pub(super) const GUEST_KEYBOARD_SUPPRESSED_ID: &str = "frontend.guest_keyboard_suppressed";
@@ -14,32 +17,6 @@ const PLAY_FOCUS_REQUEST_ID: &str = "frontend.play_focus_request";
 /// The picker draws them at about 220×112, so this cap stays inside that
 /// limit and inside egui's reported maximum when the GPU is smaller.
 const MAX_MACHINE_PHOTO_SIDE: usize = 1024;
-
-fn machine_photo_bytes(key: &str) -> Option<&'static [u8]> {
-    match key {
-        "spectrum48" => Some(include_bytes!("../../../../assets/machines/spectrum48.jpg")),
-        "spectrum128" => Some(include_bytes!(
-            "../../../../assets/machines/spectrum128.jpg"
-        )),
-        "plus2" => Some(include_bytes!("../../../../assets/machines/plus2.jpg")),
-        "plus2a_black" => Some(include_bytes!(
-            "../../../../assets/machines/plus2a_black.jpg"
-        )),
-        "plus3" => Some(include_bytes!("../../../../assets/machines/plus3.jpg")),
-        "tc2048" => Some(include_bytes!("../../../../assets/machines/tc2048.jpg")),
-        "ts2068" => Some(include_bytes!("../../../../assets/machines/ts2068.jpg")),
-        "pentagon128_candidate" => Some(include_bytes!(
-            "../../../../assets/machines/pentagon128_candidate.png"
-        )),
-        "scorpion_zs256_candidate" => Some(include_bytes!(
-            "../../../../assets/machines/scorpion_zs256_candidate.png"
-        )),
-        "spectrum_next_candidate" => Some(include_bytes!(
-            "../../../../assets/machines/spectrum_next_candidate.png"
-        )),
-        _ => None,
-    }
-}
 
 fn fitted_machine_photo(bytes: &[u8], max_side: u32) -> Option<image::RgbaImage> {
     use image::GenericImageView;

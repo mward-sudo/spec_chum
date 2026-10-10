@@ -16,11 +16,13 @@ use windows::core::PCWSTR;
 use windows::Win32::Foundation::{ERROR_SUCCESS, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, EndPaint, InvalidateRect, StretchDIBits, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
-    DIB_RGB_COLORS, PAINTSTRUCT, SRCCOPY,
+    BeginPaint, CreateDIBSection, DeleteObject, EndPaint, GetDC, InvalidateRect, ReleaseDC,
+    StretchDIBits, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP, HGDIOBJ,
+    PAINTSTRUCT, SRCCOPY,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+use windows::Win32::UI::Controls::SetScrollInfo;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     EnableWindow, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
@@ -28,21 +30,24 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CheckMenuRadioItem, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
     GetClientRect, GetDlgItem, GetMenu, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
     IsDialogMessageW, LoadCursorW, MessageBoxW, MoveWindow, PeekMessageW, PostMessageW,
-    PostQuitMessage, RegisterClassExW, SendMessageW, SetWindowLongPtrW, SetWindowTextW, ShowWindow,
-    TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT,
-    ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW, IDOK, MB_ICONERROR,
-    MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
-    WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    PostQuitMessage, RegisterClassExW, ScrollWindowEx, SendMessageW, SetWindowLongPtrW,
+    SetWindowTextW, ShowWindow, TranslateMessage, CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW,
+    CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_READONLY, GWLP_USERDATA, HMENU, IDC_ARROW,
+    IDOK, IMAGE_BITMAP, MB_ICONERROR, MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG,
+    PM_REMOVE, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP, SB_THUMBPOSITION, SB_THUMBTRACK,
+    SB_VERT, SCROLLINFO, SIF_ALL, SS_BITMAP, STM_SETIMAGE, SW_INVALIDATE, SW_SCROLLCHILDREN,
+    SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY,
+    WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE,
+    WM_SYSKEYDOWN, WM_SYSKEYUP, WM_VSCROLL, WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW,
+    WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
 use spec_chum_host::{
     acquire_next_assets, default_prefs_path, hardware_compat, install_model_rom, load_prefs,
-    query_recent_media, rom_setup_json, save_prefs, sync_model_rom_paths, AppearancePreference,
-    HostError, HostSession, MediaCategory, MediaCompatibility, MediaEntry, MediaFormat, ModelId,
-    PrefAyStereo, PrefModel, UiPreferences,
+    machine_image_bytes, query_recent_media, rom_setup_json, save_prefs, sync_model_rom_paths,
+    AppearancePreference, HostError, HostSession, MediaCategory, MediaCompatibility, MediaEntry,
+    MediaFormat, ModelId, PrefAyStereo, PrefModel, UiPreferences,
 };
 
 use native_shell_common::audio::{self, PcmRing};
@@ -76,6 +81,9 @@ const DEBUG_CLASS: &str = "SpecChumWindowsDebug\0";
 const WINDOW_TITLE: &str = "Spec Chum\0";
 const ID_DBG_EDIT: i32 = 2001;
 const IDM_MACHINE_ROM_SETUP: usize = 1289;
+const IDM_MACHINE_PICKER: usize = 1290;
+const MACHINE_PICKER_CLASS: &str = "SpecChumMachinePicker\0";
+const MACHINE_PICKER_SELECT_BASE: usize = 3000;
 const IDM_LIBRARY_RECENT_BASE: usize = 1600;
 const IDM_LIBRARY_RECENT_COUNT: usize = 12;
 const IDM_LIBRARY_OPEN: usize = 1590;
@@ -1221,6 +1229,8 @@ fn build_menu() -> Result<(HMENU, HMENU, HMENU, HMENU)> {
         append_popup(menubar, library, "&Library");
 
         let machine = CreatePopupMenu()?;
+        append_menu(machine, IDM_MACHINE_PICKER, "Choose Machine…");
+        append_sep(machine);
         for m in ModelId::ALL {
             let label = model_menu_label(m);
             append_menu(machine, menu_id_for_model(m), &label);
@@ -1314,6 +1324,510 @@ fn build_menu() -> Result<(HMENU, HMENU, HMENU, HMENU)> {
 
         Ok((menubar, recent, hw, file))
     }
+}
+
+struct MachinePickerState {
+    owner: HWND,
+    app: *mut AppState,
+    bitmaps: Vec<(i32, HBITMAP)>,
+    scroll_y: i32,
+}
+
+fn create_machine_picker(owner: HWND, app: *mut AppState) -> Result<HWND> {
+    // SAFETY: the picker class and owned controls are local to this process. Its
+    // state points to AppState, which remains owned by the main window.
+    unsafe {
+        let hinstance = GetModuleHandleW(None)?;
+        let class_name: Vec<u16> = MACHINE_PICKER_CLASS.encode_utf16().collect();
+        let cursor = LoadCursorW(None, IDC_ARROW)?;
+        let wc = WNDCLASSEXW {
+            cbSize: size_of::<WNDCLASSEXW>() as u32,
+            style: CS_HREDRAW | CS_VREDRAW,
+            lpfnWndProc: Some(machine_picker_wnd_proc),
+            hInstance: hinstance.into(),
+            hCursor: cursor,
+            lpszClassName: PCWSTR(class_name.as_ptr()),
+            ..zeroed()
+        };
+        let _ = RegisterClassExW(&wc);
+        let title: Vec<u16> = "Choose a Machine — Spec Chum\0".encode_utf16().collect();
+        let picker_state = Box::new(MachinePickerState {
+            owner,
+            app,
+            bitmaps: Vec::new(),
+            scroll_y: 0,
+        });
+        let state_ptr = Box::into_raw(picker_state);
+        match CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(class_name.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_VSCROLL,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            960,
+            720,
+            Some(owner),
+            None,
+            Some(hinstance.into()),
+            Some(state_ptr.cast()),
+        ) {
+            Ok(hwnd) => Ok(hwnd),
+            Err(error) => {
+                drop(Box::from_raw(state_ptr));
+                Err(error.into())
+            }
+        }
+    }
+}
+
+extern "system" fn machine_picker_wnd_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    match msg {
+        WM_CREATE => {
+            // SAFETY: USER32 supplies a valid CREATESTRUCTW for WM_CREATE, and its
+            // lpCreateParams is the Box allocated immediately before CreateWindowExW.
+            let create = unsafe { &*(lparam.0 as *const CREATESTRUCTW) };
+            let state_ptr = create.lpCreateParams as *mut MachinePickerState;
+            // SAFETY: hwnd is the newly-created picker and GWLP_USERDATA stores its state.
+            unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, state_ptr as isize) };
+            if !state_ptr.is_null() {
+                // SAFETY: state_ptr is installed in this window and lives until WM_DESTROY.
+                unsafe { populate_machine_picker(hwnd, &mut *state_ptr) };
+            }
+            LRESULT(0)
+        }
+        WM_COMMAND => {
+            let id = wparam.0 & 0xffff;
+            if (MACHINE_PICKER_SELECT_BASE..MACHINE_PICKER_SELECT_BASE + 32).contains(&id) {
+                // SAFETY: hwnd is this picker window; WM_CREATE stored its Box pointer
+                // in GWLP_USERDATA and WM_DESTROY has not run during this callback.
+                let state_ptr =
+                    unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut MachinePickerState;
+                if !state_ptr.is_null() {
+                    let numeric_id = (id - MACHINE_PICKER_SELECT_BASE) as u32;
+                    if let Some(model) = ModelId::from_u32(numeric_id) {
+                        // Queue selection on the owner so this window procedure does not
+                        // hold an AppState borrow across nested modal UI.
+                        // SAFETY: state_ptr is the live picker Box stored on hwnd.
+                        let owner = unsafe { (*state_ptr).owner };
+                        // SAFETY: the owner is the still-live parent of this picker, and
+                        // WM_COMMAND is posted with the model-menu identifier.
+                        let _ = unsafe {
+                            PostMessageW(
+                                Some(owner),
+                                WM_COMMAND,
+                                WPARAM(menu_id_for_model(model)),
+                                LPARAM(0),
+                            )
+                        };
+                    }
+                }
+                // SAFETY: hwnd is the picker receiving the selection command.
+                unsafe { DestroyWindow(hwnd) };
+            }
+            LRESULT(0)
+        }
+        WM_SIZE => {
+            let state_ptr =
+                unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut MachinePickerState;
+            if !state_ptr.is_null() {
+                // SAFETY: GWLP_USERDATA points to this live picker state during WM_SIZE.
+                unsafe { update_machine_picker_scrollbar(hwnd, &mut *state_ptr) };
+            }
+            LRESULT(0)
+        }
+        WM_VSCROLL => {
+            let state_ptr =
+                unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut MachinePickerState;
+            if !state_ptr.is_null() {
+                let mut info = SCROLLINFO {
+                    cbSize: size_of::<SCROLLINFO>() as u32,
+                    fMask: SIF_ALL,
+                    nMin: 0,
+                    nMax: 0,
+                    nPage: 0,
+                    nPos: 0,
+                    nTrackPos: 0,
+                };
+                // SAFETY: hwnd owns this vertical scrollbar and info is initialized.
+                if unsafe { GetScrollInfo(hwnd, SB_VERT, &mut info) }.is_ok() {
+                    let old_pos = info.nPos;
+                    let max_pos = (info.nMax - info.nPage as i32 + 1).max(0);
+                    let next_pos = match (wparam.0 & 0xffff) as i32 {
+                        value if value == SB_LINEUP.0 => old_pos - 40,
+                        value if value == SB_LINEDOWN.0 => old_pos + 40,
+                        value if value == SB_PAGEUP.0 => old_pos - info.nPage as i32,
+                        value if value == SB_PAGEDOWN.0 => old_pos + info.nPage as i32,
+                        value if value == SB_THUMBPOSITION.0 || value == SB_THUMBTRACK.0 => {
+                            info.nTrackPos
+                        }
+                        _ => old_pos,
+                    }
+                    .clamp(0, max_pos);
+                    if next_pos != old_pos {
+                        info.nPos = next_pos;
+                        // SAFETY: hwnd and its scrollbar remain live during WM_VSCROLL.
+                        unsafe { SetScrollInfo(hwnd, SB_VERT, &info, true) };
+                        let delta = old_pos - next_pos;
+                        // SAFETY: scroll the picker client and child controls together.
+                        unsafe {
+                            ScrollWindowEx(
+                                hwnd,
+                                0,
+                                delta,
+                                None,
+                                None,
+                                None,
+                                None,
+                                SW_SCROLLCHILDREN | SW_INVALIDATE,
+                            )
+                        };
+                        // SAFETY: GWLP_USERDATA still points to this window's live state.
+                        unsafe { (*state_ptr).scroll_y = next_pos };
+                    }
+                }
+            }
+            LRESULT(0)
+        }
+        WM_DESTROY => {
+            // SAFETY: hwnd is the picker whose Box pointer was stored at WM_CREATE.
+            let state_ptr =
+                unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut MachinePickerState;
+            if !state_ptr.is_null() {
+                // SAFETY: WM_DESTROY runs once for this window. Clearing USERDATA
+                // prevents a second reclamation; the Box owns each retained bitmap.
+                unsafe {
+                    SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                    let mut state = Box::from_raw(state_ptr);
+                    for (image_id, bitmap) in state.bitmaps.drain(..) {
+                        // SAFETY: hwnd owns the child control; its image is the bitmap
+                        // retained by this Box. Detach before deleting the GDI object.
+                        if let Ok(image) = GetDlgItem(Some(hwnd), image_id) {
+                            let _ = SendMessageW(
+                                image,
+                                STM_SETIMAGE,
+                                WPARAM(IMAGE_BITMAP as usize),
+                                LPARAM(0),
+                            );
+                        }
+                        // SAFETY: this bitmap was created by machine_bitmap and is no
+                        // longer selected into a child control.
+                        let _ = DeleteObject(HGDIOBJ(bitmap.0));
+                    }
+                }
+            }
+            LRESULT(0)
+        }
+        // SAFETY: USER32 supplied hwnd and message parameters for this callback.
+        _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+    }
+}
+
+/// Build the gallery controls from the current shared catalog.
+///
+/// # Safety
+/// `hwnd` must be the live picker window and `state` must be its unique state
+/// allocated by `create_machine_picker`; `state.app` must remain a live pointer
+/// to the parent window's `AppState` for this call.
+unsafe fn populate_machine_picker(hwnd: HWND, state: &mut MachinePickerState) {
+    let hinstance = match GetModuleHandleW(None) {
+        Ok(instance) => instance,
+        Err(_) => return,
+    };
+    let header = picker_label(hwnd, hinstance, 12, 10, 900, 30, "Choose a Spectrum model");
+    if !header.0.is_null() {
+        let _ = SetWindowTextW(
+            header,
+            PCWSTR(
+                "Choose a Spectrum model\0"
+                    .encode_utf16()
+                    .collect::<Vec<_>>()
+                    .as_ptr(),
+            ),
+        );
+    }
+    let catalog = spec_chum_host::host_model_catalog();
+    for (index, descriptor) in catalog.iter().enumerate() {
+        let col = (index % 2) as i32;
+        let row = (index / 2) as i32;
+        let x = 12 + col * 464;
+        let y = 48 + row * 124;
+        let image_id = 4000 + index;
+        let bitmap = descriptor
+            .image_key
+            .and_then(machine_image_bytes)
+            .and_then(machine_bitmap);
+        let image_style = if bitmap.is_some() {
+            WS_CHILD
+                | WS_VISIBLE
+                | WS_BORDER
+                | windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(SS_BITMAP as u32)
+        } else {
+            WS_CHILD | WS_VISIBLE | WS_BORDER
+        };
+        let image_label = if bitmap.is_some() {
+            descriptor.image_description.unwrap_or("Machine image")
+        } else {
+            "Image unavailable"
+        };
+        let image_label: Vec<u16> = image_label
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let image = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR("STATIC\0".encode_utf16().collect::<Vec<_>>().as_ptr()),
+            PCWSTR(image_label.as_ptr()),
+            image_style,
+            x,
+            y,
+            160,
+            96,
+            Some(hwnd),
+            Some(HMENU(image_id as isize as *mut core::ffi::c_void)),
+            Some(hinstance.into()),
+            None,
+        );
+        if let Some(bitmap) = bitmap {
+            if let Ok(image_hwnd) = image {
+                let _ = SendMessageW(
+                    image_hwnd,
+                    STM_SETIMAGE,
+                    WPARAM(IMAGE_BITMAP as usize),
+                    LPARAM(bitmap.0 as isize),
+                );
+            }
+            state.bitmaps.push((image_id as i32, bitmap));
+        }
+        let text_x = x + 172;
+        let title = descriptor.title;
+        let _ = picker_label(hwnd, hinstance, text_x, y, 238, 20, title);
+        let image_description = descriptor
+            .image_description
+            .unwrap_or("Computer image unavailable");
+        if image_description.starts_with("Generated illustrative candidate") {
+            let _ = picker_label(
+                hwnd,
+                hinstance,
+                text_x,
+                y + 22,
+                238,
+                20,
+                "Illustration candidate",
+            );
+        }
+        if let Some(summary) = descriptor.memory_sound_summary {
+            let _ = picker_label(hwnd, hinstance, text_x, y + 56, 238, 26, summary);
+        }
+        let model = ModelId::from_u32(descriptor.id);
+        let rom_status = model.map_or_else(
+            || "ROM status unavailable".to_owned(),
+            |model| {
+                // SAFETY: create_machine_picker receives the AppState owned by the
+                // parent window, which owns this child picker for its entire lifetime.
+                let app = unsafe { &*state.app };
+                let setup = rom_setup_json(model, &app.prefs.model_rom_paths);
+                if setup.complete {
+                    "ROM status: Ready".to_owned()
+                } else {
+                    let missing = setup
+                        .slots
+                        .iter()
+                        .filter(|slot| slot.status != "found")
+                        .map(|slot| slot.label.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("ROM status: Setup required ({missing})")
+                }
+            },
+        );
+        let _ = picker_label(hwnd, hinstance, text_x, y + 78, 238, 20, &rom_status);
+        let compatible = compatible_peripheral_summary(descriptor.compatible_peripherals);
+        let _ = picker_label(
+            hwnd,
+            hinstance,
+            text_x,
+            y + 98,
+            290,
+            22,
+            &format!("Compatible peripherals: {compatible}"),
+        );
+        let select_text: Vec<u16> = "Select\0".encode_utf16().collect();
+        let _ = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR("BUTTON\0".encode_utf16().collect::<Vec<_>>().as_ptr()),
+            PCWSTR(select_text.as_ptr()),
+            WS_CHILD | WS_VISIBLE,
+            x + 414,
+            y + 36,
+            44,
+            28,
+            Some(hwnd),
+            Some(HMENU(
+                (MACHINE_PICKER_SELECT_BASE + descriptor.id as usize) as isize
+                    as *mut core::ffi::c_void,
+            )),
+            Some(hinstance.into()),
+            None,
+        );
+    }
+    // SAFETY: hwnd is the live picker window with WS_VSCROLL enabled.
+    unsafe { update_machine_picker_scrollbar(hwnd, state) };
+}
+
+/// Refresh the vertical scroll range from the current client size and catalog.
+unsafe fn update_machine_picker_scrollbar(hwnd: HWND, state: &mut MachinePickerState) {
+    let mut client = RECT::default();
+    // SAFETY: hwnd is the live machine picker being sized or populated.
+    if unsafe { GetClientRect(hwnd, &mut client) }.is_err() {
+        return;
+    }
+    let page = (client.bottom - client.top).max(1) as u32;
+    let catalog_len = spec_chum_host::host_model_catalog().len();
+    let content_height = 48 + catalog_len.div_ceil(2) as i32 * 124;
+    let max_position = (content_height - page as i32).max(0);
+    let old_position = state.scroll_y;
+    state.scroll_y = state.scroll_y.clamp(0, max_position);
+    let info = SCROLLINFO {
+        cbSize: size_of::<SCROLLINFO>() as u32,
+        fMask: SIF_ALL,
+        nMin: 0,
+        nMax: content_height - 1,
+        nPage: page,
+        nPos: state.scroll_y,
+        nTrackPos: 0,
+    };
+    // SAFETY: hwnd is the live picker with WS_VSCROLL enabled.
+    unsafe { SetScrollInfo(hwnd, SB_VERT, &info, true) };
+    if state.scroll_y != old_position {
+        // SAFETY: child controls track the scroll offset; clamp them with the new range.
+        unsafe {
+            ScrollWindowEx(
+                hwnd,
+                0,
+                old_position - state.scroll_y,
+                None,
+                None,
+                None,
+                None,
+                SW_SCROLLCHILDREN | SW_INVALIDATE,
+            )
+        };
+    }
+}
+
+fn compatible_peripheral_summary(compat: spec_chum_host::HardwareCompat) -> String {
+    let mut peripherals = Vec::new();
+    if compat.multiface {
+        peripherals.push("Multiface");
+    }
+    if compat.divmmc {
+        peripherals.push("DivMMC");
+    }
+    if compat.interface1 {
+        peripherals.push("Interface 1");
+    }
+    if compat.beta {
+        peripherals.push("Beta Disk");
+    }
+    if compat.timex_dock {
+        peripherals.push("Timex Dock");
+    }
+    if peripherals.is_empty() {
+        "none listed".to_owned()
+    } else {
+        peripherals.join(" · ")
+    }
+}
+
+fn picker_label(
+    parent: HWND,
+    hinstance: windows::Win32::Foundation::HINSTANCE,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    text: &str,
+) -> HWND {
+    let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+    let text: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: the class/text buffers are nul-terminated and live through the call;
+    // parent and HINSTANCE are valid for the owning Win32 UI thread.
+    unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(class.as_ptr()),
+            PCWSTR(text.as_ptr()),
+            WS_CHILD | WS_VISIBLE,
+            x,
+            y,
+            width,
+            height,
+            Some(parent),
+            None,
+            Some(hinstance),
+            None,
+        )
+        .unwrap_or_default()
+    }
+}
+
+fn machine_bitmap(encoded: &[u8]) -> Option<HBITMAP> {
+    let decoded = image::load_from_memory(encoded).ok()?.to_rgba8();
+    let thumb = image::imageops::thumbnail(&decoded, 160, 90);
+    let mut pixels = vec![0xF0_u8; 160 * 90 * 4];
+    let offset_x = (160 - thumb.width()) / 2;
+    let offset_y = (90 - thumb.height()) / 2;
+    for (x, y, pixel) in thumb.enumerate_pixels() {
+        let offset = (((y + offset_y) * 160 + x + offset_x) * 4) as usize;
+        pixels[offset] = pixel[2];
+        pixels[offset + 1] = pixel[1];
+        pixels[offset + 2] = pixel[0];
+        pixels[offset + 3] = 0xff;
+    }
+    // SAFETY: BITMAPINFO is a C-layout POD structure with a valid all-zero base.
+    let mut info: BITMAPINFO = unsafe { zeroed() };
+    info.bmiHeader = BITMAPINFOHEADER {
+        biSize: size_of::<BITMAPINFOHEADER>() as u32,
+        biWidth: 160,
+        biHeight: -90,
+        biPlanes: 1,
+        biBitCount: 32,
+        biCompression: BI_RGB.0,
+        biSizeImage: (pixels.len()) as u32,
+        // SAFETY: remaining reserved BITMAPINFOHEADER fields are zero-initialized.
+        ..unsafe { zeroed() }
+    };
+    // SAFETY: a null HWND requests the screen DC; it is released below on every path.
+    let dc = unsafe { GetDC(None) };
+    if dc.0.is_null() {
+        return None;
+    }
+    let mut destination = core::ptr::null_mut();
+    // SAFETY: info is initialized, dc is live, and destination points to writable
+    // storage for USER32 to fill with the allocated bitmap bits.
+    let bitmap =
+        unsafe { CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut destination, None, 0) }
+            .ok();
+    // SAFETY: dc is the screen DC acquired immediately above.
+    unsafe { ReleaseDC(None, dc) };
+    let bitmap = bitmap?;
+    if destination.is_null() {
+        // SAFETY: bitmap was created above and has not been attached to a control.
+        unsafe { DeleteObject(HGDIOBJ(bitmap.0)) }.ok()?;
+        return None;
+    }
+    // SAFETY: CreateDIBSection returned a writable buffer for this 160x90x32bpp
+    // bitmap, exactly matching the initialized pixel vector length.
+    unsafe {
+        core::ptr::copy_nonoverlapping(pixels.as_ptr(), destination.cast::<u8>(), pixels.len());
+    }
+    Some(bitmap)
 }
 
 fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND, HWND)> {
@@ -1533,8 +2047,21 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
         WM_COMMAND => {
             if !state_ptr.is_null() {
                 let id = wparam.0 & 0xffff;
-                let state = unsafe { &mut *state_ptr };
-                state.queue_command(id);
+                if id == IDM_MACHINE_PICKER {
+                    if let Err(error) = create_machine_picker(hwnd, state_ptr) {
+                        // SAFETY: state_ptr is this main window's live AppState until
+                        // WM_DESTROY; picker creation only failed before ownership changed.
+                        unsafe {
+                            (&mut *state_ptr).report_err(
+                                "Machine picker",
+                                &HostError::Message(error.to_string()),
+                            )
+                        };
+                    }
+                } else {
+                    // SAFETY: state_ptr is the AppState stored on this live main window.
+                    unsafe { (&mut *state_ptr).queue_command(id) };
+                }
             }
             LRESULT(0)
         }
@@ -1776,5 +2303,25 @@ mod startup_tests {
             result,
             Err(StartupModelError::RequiredModel("48K missing"))
         ));
+    }
+}
+
+#[cfg(test)]
+mod machine_picker_image_tests {
+    use super::*;
+
+    #[test]
+    fn every_catalog_image_key_has_a_decodable_embedded_asset() {
+        for model in spec_chum_host::host_model_catalog() {
+            let key = model
+                .image_key
+                .expect("built-in models have catalog image keys");
+            let bytes = machine_image_bytes(key)
+                .unwrap_or_else(|| panic!("catalog image key {key} has no embedded asset"));
+            assert!(
+                image::load_from_memory(bytes).is_ok(),
+                "embedded asset {key} cannot be decoded"
+            );
+        }
     }
 }

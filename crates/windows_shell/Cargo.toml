@@ -39,6 +39,7 @@ windows = { version = "0.61", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 # Win32 FFI lives in `src/win32.rs` with a module-level `unsafe_code` allow.
 [lints.rust]

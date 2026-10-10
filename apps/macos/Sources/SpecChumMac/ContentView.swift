@@ -40,6 +40,10 @@ struct ContentView: View {
             MediaLibraryView(host: host)
                 .frame(minWidth: 780, minHeight: 500)
         }
+        .sheet(isPresented: $host.showMachinePicker) {
+            MachinePickerView(host: host)
+                .frame(minWidth: 760, minHeight: 540)
+        }
         .sheet(isPresented: $host.showMachineConfigEditor) {
             if let draft = host.machineConfigEditorDraft {
                 MachineConfigEditorView(
@@ -241,6 +245,10 @@ struct ContentView: View {
     /// Machine model Menu — hug content; padded label for readable inset inside glass.
     private var machineModelMenu: some View {
         Menu {
+            Button("Browse machines…") {
+                host.showMachinePicker = true
+            }
+            Divider()
             Section("Built-in models") {
                 Text("Select only — default ROMs. Session hardware via Hardware menu.")
                     .font(.caption2)
