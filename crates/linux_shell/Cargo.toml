@@ -29,6 +29,7 @@ control_plane = { workspace = true }
 gtk4 = { version = "0.9", package = "gtk4" }
 gdk4 = { version = "0.9", package = "gdk4" }
 glib = "0.20"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 # GTK UI lives in `src/gtk_ui.rs` (safe gtk-rs bindings).
 [lints.rust]

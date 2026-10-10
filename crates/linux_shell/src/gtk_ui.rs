@@ -14,15 +14,16 @@ use glib::clone;
 use glib::translate::IntoGlib;
 use gtk4::prelude::*;
 use gtk4::{
-    gio, glib, Application, ApplicationWindow, Label, Orientation, Picture, ScrolledWindow,
-    TextBuffer, TextView, Window,
+    gio, glib, Application, ApplicationWindow, Box as GtkBox, Button, Label, Orientation, Picture,
+    ScrolledWindow, TextBuffer, TextView, Window,
 };
 use machine::TapeLoadOptions;
 use parking_lot::Mutex;
 use spec_chum_host::{
-    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, query_recent_media,
-    rom_setup_json, save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession,
-    MediaCategory, MediaCompatibility, MediaEntry, ModelId, PrefAyStereo, PrefModel, UiPreferences,
+    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, machine_image_bytes,
+    query_recent_media, rom_setup_json, save_prefs, sync_model_rom_paths, AppearancePreference,
+    HostError, HostSession, MediaCategory, MediaCompatibility, MediaEntry, ModelId, PrefAyStereo,
+    PrefModel, UiPreferences,
 };
 
 use linux_shell::keymap::{
@@ -918,6 +919,7 @@ fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
     menubar.append_submenu(Some("_File"), &file);
 
     let machine = gio::Menu::new();
+    machine.append(Some("Choose Machine…"), Some("app.show_machine_picker"));
     for (i, m) in ModelId::ALL.iter().enumerate() {
         let label = model_menu_label(*m);
         machine.append(Some(&label), Some(&format!("app.select_model_{i}")));
@@ -1016,6 +1018,177 @@ fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
     menubar.append_submenu(Some("_Debug"), &debug);
 
     app.set_menubar(Some(&menubar));
+}
+
+fn show_machine_picker(state: Rc<RefCell<AppState>>, parent: &ApplicationWindow) {
+    let picker = Window::builder()
+        .title("Choose a Machine")
+        .transient_for(parent)
+        .modal(true)
+        .default_width(760)
+        .default_height(620)
+        .build();
+
+    let content = GtkBox::new(Orientation::Vertical, 10);
+    content.set_margin_top(12);
+    content.set_margin_bottom(12);
+    content.set_margin_start(12);
+    content.set_margin_end(12);
+    let heading = Label::new(Some("Choose a Spectrum model"));
+    heading.set_xalign(0.0);
+    content.append(&heading);
+
+    let list = GtkBox::new(Orientation::Vertical, 8);
+    for descriptor in spec_chum_host::host_model_catalog() {
+        let Some(model) = ModelId::from_u32(descriptor.id) else {
+            continue;
+        };
+        let row = GtkBox::new(Orientation::Horizontal, 12);
+        row.set_margin_top(6);
+        row.set_margin_bottom(6);
+
+        let image_cell = GtkBox::new(Orientation::Vertical, 0);
+        image_cell.set_size_request(176, 100);
+        image_cell.set_halign(gtk4::Align::Center);
+        image_cell.set_valign(gtk4::Align::Center);
+        if let Some(bytes) = descriptor.image_key.and_then(machine_image_bytes) {
+            if let Ok(decoded) = image::load_from_memory(bytes) {
+                let rgba = decoded.to_rgba8();
+                let (width, height) = rgba.dimensions();
+                let texture = gdk4::MemoryTexture::new(
+                    i32::try_from(width).unwrap_or(1),
+                    i32::try_from(height).unwrap_or(1),
+                    gdk4::MemoryFormat::R8g8b8a8,
+                    &glib::Bytes::from_owned(rgba.into_raw()),
+                    width.saturating_mul(4) as usize,
+                );
+                let picture = Picture::for_paintable(&texture);
+                picture.set_size_request(176, 100);
+                picture.set_can_shrink(true);
+                picture.set_tooltip_text(descriptor.image_description);
+                if let Some(description) = descriptor.image_description {
+                    picture.update_property(&[gtk4::accessible::Property::Label(description)]);
+                }
+                image_cell.append(&picture);
+            } else {
+                append_machine_image_fallback(&image_cell);
+            }
+        } else {
+            append_machine_image_fallback(&image_cell);
+        }
+        row.append(&image_cell);
+
+        let details = GtkBox::new(Orientation::Vertical, 4);
+        details.set_hexpand(true);
+        let title = Label::new(Some(descriptor.title));
+        title.set_xalign(0.0);
+        title.add_css_class("heading");
+        details.append(&title);
+        if let Some(description) = descriptor.image_description {
+            if description.starts_with("Generated illustrative candidate") {
+                let visual = Label::new(Some("Illustration candidate"));
+                visual.set_xalign(0.0);
+                visual.add_css_class("dim-label");
+                visual.set_tooltip_text(Some(description));
+                details.append(&visual);
+            }
+        }
+        if let Some(summary) = descriptor.memory_sound_summary {
+            let facts = Label::new(Some(summary));
+            facts.set_xalign(0.0);
+            facts.set_wrap(true);
+            details.append(&facts);
+        }
+        let compatible = compatible_peripheral_summary(descriptor.compatible_peripherals);
+        let peripherals = Label::new(Some(&format!("Compatible peripherals: {compatible}")));
+        peripherals.set_xalign(0.0);
+        peripherals.set_wrap(true);
+        details.append(&peripherals);
+        let status = {
+            let state = state.borrow();
+            let setup = rom_setup_json(model, &state.prefs.model_rom_paths);
+            if setup.complete {
+                "ROM status: Ready".to_owned()
+            } else {
+                let missing = setup
+                    .slots
+                    .iter()
+                    .filter(|slot| slot.status != "found")
+                    .map(|slot| slot.label.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("ROM status: Setup required ({missing})")
+            }
+        };
+        let rom = Label::new(Some(&status));
+        rom.set_xalign(0.0);
+        details.append(&rom);
+        row.append(&details);
+
+        let choose = Button::with_label("Select");
+        choose.set_valign(gtk4::Align::Center);
+        choose.set_tooltip_text(Some(&format!("Select {}", descriptor.title)));
+        choose.connect_clicked(clone!(
+            #[strong]
+            state,
+            #[weak]
+            picker,
+            move |_| {
+                picker.close();
+                state.borrow_mut().select_model(model);
+            }
+        ));
+        row.append(&choose);
+        list.append(&row);
+    }
+
+    let scroll = ScrolledWindow::new();
+    scroll.set_vexpand(true);
+    scroll.set_child(Some(&list));
+    content.append(&scroll);
+    let close = Button::with_label("Close");
+    close.set_halign(gtk4::Align::End);
+    close.connect_clicked(clone!(
+        #[weak]
+        picker,
+        move |_| picker.close()
+    ));
+    content.append(&close);
+    picker.set_child(Some(&content));
+    picker.present();
+}
+
+fn compatible_peripheral_summary(compat: spec_chum_host::HardwareCompat) -> String {
+    let mut peripherals = Vec::new();
+    if compat.multiface {
+        peripherals.push("Multiface");
+    }
+    if compat.divmmc {
+        peripherals.push("DivMMC");
+    }
+    if compat.interface1 {
+        peripherals.push("Interface 1");
+    }
+    if compat.beta {
+        peripherals.push("Beta Disk");
+    }
+    if compat.timex_dock {
+        peripherals.push("Timex Dock");
+    }
+    if peripherals.is_empty() {
+        "none listed".to_owned()
+    } else {
+        peripherals.join(" · ")
+    }
+}
+
+fn append_machine_image_fallback(cell: &GtkBox) {
+    let placeholder = Label::new(Some("▱\nImage unavailable"));
+    placeholder.set_size_request(176, 100);
+    placeholder.set_halign(gtk4::Align::Center);
+    placeholder.set_valign(gtk4::Align::Center);
+    placeholder.add_css_class("dim-label");
+    cell.append(&placeholder);
 }
 
 fn show_media_library(state: Rc<RefCell<AppState>>, parent: &ApplicationWindow) {
@@ -1427,6 +1600,16 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
         }
     ));
     app.add_action(&show_library);
+
+    let show_machine_picker_action = gio::SimpleAction::new("show_machine_picker", None);
+    show_machine_picker_action.connect_activate(clone!(
+        #[strong]
+        state,
+        #[weak]
+        window,
+        move |_, _| show_machine_picker(Rc::clone(&state), &window)
+    ));
+    app.add_action(&show_machine_picker_action);
     add_action(app, "tape_play", Rc::clone(&state), |s| {
         s.host_action("Play tape", HostSession::play_tape);
     });
@@ -1835,5 +2018,22 @@ mod startup_model_tests {
 
         assert!(selected.is_err());
         assert_eq!(attempts, 1);
+    }
+}
+
+#[cfg(test)]
+mod machine_picker_image_tests {
+    use super::*;
+
+    #[test]
+    fn every_catalog_image_key_has_an_embedded_asset() {
+        for model in spec_chum_host::host_model_catalog() {
+            let Some(key) = model.image_key else {
+                continue;
+            };
+            let bytes = machine_image_bytes(key)
+                .unwrap_or_else(|| panic!("catalog image key {key} has no embedded asset"));
+            assert!(!bytes.is_empty(), "embedded asset {key} is empty");
+        }
     }
 }

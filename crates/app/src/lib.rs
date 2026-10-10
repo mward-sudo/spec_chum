@@ -21,6 +21,9 @@ use spec_chum_host::{UiPreferences, UserMachineConfig};
 pub use session::{EmulatorSession, HostAccess};
 
 #[cfg(test)]
+pub(crate) static APP_ROM_PATH_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
@@ -413,6 +416,9 @@ mod tests {
 
     #[test]
     fn egui_menu_smoke_without_window() {
+        let _rom_paths = APP_ROM_PATH_TEST_LOCK
+            .lock()
+            .expect("app ROM path test lock is not poisoned");
         let mut app = SpecChumApp::new_with_audio(false);
         let ctx = egui::Context::default();
         let raw = egui::RawInput::default();
@@ -441,6 +447,9 @@ mod tests {
 
     #[test]
     fn debug_window_smoke_headless() {
+        let _rom_paths = APP_ROM_PATH_TEST_LOCK
+            .lock()
+            .expect("app ROM path test lock is not poisoned");
         let mut app = SpecChumApp::new_with_audio(false);
         app.session.debug_open = true;
         let ctx = egui::Context::default();
@@ -460,6 +469,9 @@ mod tests {
 
     #[test]
     fn prefs_restore_model_tape_volume_on_launch() {
+        let _rom_paths = APP_ROM_PATH_TEST_LOCK
+            .lock()
+            .expect("app ROM path test lock is not poisoned");
         use spec_chum_host::{save_prefs, PrefJoystick, PrefModel, UiPreferences};
         use std::time::{SystemTime, UNIX_EPOCH};
 
