@@ -7,6 +7,68 @@ use spec_chum_host::{query_recent_media, MediaCategory, MediaCompatibility, Medi
 const FRONTEND_VIEW_ID: &str = "frontend.view";
 pub(super) const GUEST_KEYBOARD_SUPPRESSED_ID: &str = "frontend.guest_keyboard_suppressed";
 const PLAY_FOCUS_REQUEST_ID: &str = "frontend.play_focus_request";
+/// Longest side uploaded for a machine photo.
+///
+/// `egui_glow` aborts when a texture exceeds `GL_MAX_TEXTURE_SIZE`. Several
+/// bundled photos are wider than 4096, the limit on common GLES devices.
+/// The picker draws them at about 220×112, so this cap stays inside that
+/// limit and inside egui's reported maximum when the GPU is smaller.
+const MAX_MACHINE_PHOTO_SIDE: usize = 1024;
+
+fn machine_photo_bytes(key: &str) -> Option<&'static [u8]> {
+    match key {
+        "spectrum48" => Some(include_bytes!("../../../../assets/machines/spectrum48.jpg")),
+        "spectrum128" => Some(include_bytes!(
+            "../../../../assets/machines/spectrum128.jpg"
+        )),
+        "plus2" => Some(include_bytes!("../../../../assets/machines/plus2.jpg")),
+        "plus2a_black" => Some(include_bytes!(
+            "../../../../assets/machines/plus2a_black.jpg"
+        )),
+        "plus3" => Some(include_bytes!("../../../../assets/machines/plus3.jpg")),
+        "tc2048" => Some(include_bytes!("../../../../assets/machines/tc2048.jpg")),
+        "ts2068" => Some(include_bytes!("../../../../assets/machines/ts2068.jpg")),
+        "pentagon128_candidate" => Some(include_bytes!(
+            "../../../../assets/machines/pentagon128_candidate.png"
+        )),
+        "scorpion_zs256_candidate" => Some(include_bytes!(
+            "../../../../assets/machines/scorpion_zs256_candidate.png"
+        )),
+        "spectrum_next_candidate" => Some(include_bytes!(
+            "../../../../assets/machines/spectrum_next_candidate.png"
+        )),
+        _ => None,
+    }
+}
+
+fn fitted_machine_photo(bytes: &[u8], max_side: u32) -> Option<image::RgbaImage> {
+    use image::GenericImageView;
+
+    let max_side = max_side.max(1);
+    let decoded = image::load_from_memory(bytes).ok()?;
+    let (width, height) = decoded.dimensions();
+    let fitted = if width > max_side || height > max_side {
+        decoded.resize(max_side, max_side, image::imageops::FilterType::Triangle)
+    } else {
+        decoded
+    };
+    Some(fitted.to_rgba8())
+}
+
+fn load_machine_photo(ctx: &egui::Context, key: &str) -> Option<egui::TextureHandle> {
+    let bytes = machine_photo_bytes(key)?;
+    let max_side = ctx
+        .input(|input| input.max_texture_side)
+        .clamp(1, MAX_MACHINE_PHOTO_SIDE);
+    let rgba = fitted_machine_photo(bytes, max_side as u32)?;
+    let size = [rgba.width() as usize, rgba.height() as usize];
+    let pixels = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
+    Some(ctx.load_texture(
+        format!("machine-{key}-photo"),
+        pixels,
+        egui::TextureOptions::LINEAR,
+    ))
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum FrontendView {
@@ -114,7 +176,9 @@ impl SpecChumApp {
             FrontendView::Library => self.render_library(ui),
             FrontendView::Machines => {
                 ui.heading("Machines");
-                ui.label("Select a built-in model or configure your machine.");
+                ui.label("Choose a built-in machine or open a saved configuration.");
+                ui.separator();
+                self.render_machine_choices(ui, ctx);
                 ui.separator();
                 egui::ScrollArea::vertical().show(ui, |ui| self.machine_menu_contents(ui));
             }
@@ -131,6 +195,92 @@ impl SpecChumApp {
                 self.settings_contents(ui, ctx);
             }
         }
+    }
+
+    fn render_machine_choices(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        use spec_chum_host::{host_model_catalog, ModelId};
+
+        let catalog = host_model_catalog();
+        for descriptor in &catalog {
+            if let Some(key) = descriptor.image_key {
+                self.machine_images
+                    .entry(key)
+                    .or_insert_with(|| load_machine_photo(ctx, key));
+            }
+        }
+        egui::ScrollArea::horizontal().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for descriptor in catalog {
+                    let Some(id) = ModelId::from_u32(descriptor.id) else {
+                        continue;
+                    };
+                    let model = id.to_model();
+                    let photo = descriptor
+                        .image_key
+                        .and_then(|key| self.machine_images.get(key))
+                        .and_then(Option::as_ref)
+                        .map(egui::TextureHandle::id);
+                    ui.group(|ui| {
+                        ui.set_min_width(238.0);
+                        if let Some(texture_id) = photo {
+                            ui.add(
+                                egui::Image::new((texture_id, egui::vec2(220.0, 112.0))).alt_text(
+                                    descriptor.image_description.unwrap_or(descriptor.title),
+                                ),
+                            );
+                        } else {
+                            ui.add_space(8.0);
+                            ui.label(format!("Photo unavailable · {}", descriptor.title));
+                            ui.add_space(8.0);
+                        }
+                        ui.strong(descriptor.title);
+                        if descriptor.image_description.is_some_and(|description| {
+                            description.starts_with("Generated illustrative candidate")
+                        }) {
+                            ui.weak("Illustration candidate");
+                        }
+                        if let Some(summary) = descriptor.memory_sound_summary {
+                            ui.label(summary);
+                        }
+                        ui.label(if descriptor.available {
+                            "ROMs ready"
+                        } else {
+                            "ROM setup required"
+                        });
+                        let compat = descriptor.compatible_peripherals;
+                        let mut peripherals = Vec::new();
+                        if compat.multiface {
+                            peripherals.push("Multiface");
+                        }
+                        if compat.divmmc {
+                            peripherals.push("DivMMC");
+                        }
+                        if compat.interface1 {
+                            peripherals.push("Interface 1");
+                        }
+                        if compat.beta {
+                            peripherals.push("Beta Disk");
+                        }
+                        if compat.timex_dock {
+                            peripherals.push("Timex Dock");
+                        }
+                        if peripherals.is_empty() {
+                            ui.label("Compatible peripherals: none listed");
+                        } else {
+                            ui.label(format!("Compatible: {}", peripherals.join(" · ")));
+                        }
+                        let active =
+                            self.prefs.active_config_id.is_none() && self.session.model() == model;
+                        if ui
+                            .button(if active { "Selected" } else { "Select" })
+                            .clicked()
+                        {
+                            self.on_builtin_model_selected(model);
+                        }
+                    });
+                }
+            });
+        });
     }
 
     fn render_play(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, route_changed: bool) {
@@ -344,5 +494,66 @@ fn compatibility_label(compatibility: MediaCompatibility) -> &'static str {
         MediaCompatibility::RequiresBeta => "Requires Beta Disk hardware",
         MediaCompatibility::RequiresTrdosRom => "Requires a TR-DOS ROM",
         MediaCompatibility::UnsupportedOnNext => "Not supported on Spectrum Next",
+    }
+}
+
+#[cfg(test)]
+mod machine_photo_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn catalog_photo_keys_have_decodable_standalone_assets() {
+        let catalog = spec_chum_host::host_model_catalog();
+        let mut keys = BTreeSet::new();
+        for descriptor in catalog {
+            let Some(key) = descriptor.image_key else {
+                assert_ne!(descriptor.title, "");
+                continue;
+            };
+            keys.insert(key);
+            let bytes = machine_photo_bytes(key).expect("catalog photo key has an embedded asset");
+            assert_ne!(bytes.len(), 0);
+            assert!(image::load_from_memory(bytes).is_ok());
+            let fitted = fitted_machine_photo(bytes, MAX_MACHINE_PHOTO_SIDE as u32)
+                .expect("catalog photo decodes within the texture cap");
+            assert!(fitted.width() <= MAX_MACHINE_PHOTO_SIDE as u32);
+            assert!(fitted.height() <= MAX_MACHINE_PHOTO_SIDE as u32);
+            assert!(descriptor.image_description.is_some());
+        }
+        assert_eq!(
+            keys,
+            BTreeSet::from([
+                "spectrum48",
+                "spectrum128",
+                "plus2",
+                "plus2a_black",
+                "plus3",
+                "tc2048",
+                "ts2068",
+                "pentagon128_candidate",
+                "scorpion_zs256_candidate",
+                "spectrum_next_candidate"
+            ])
+        );
+    }
+
+    #[test]
+    fn physically_shared_variants_use_the_same_catalog_photo() {
+        let catalog = spec_chum_host::host_model_catalog();
+        let image_key = |model: spec_chum_host::ModelId| {
+            catalog
+                .iter()
+                .find(|descriptor| descriptor.id == model.numeric_id())
+                .and_then(|descriptor| descriptor.image_key)
+        };
+        assert_eq!(
+            image_key(spec_chum_host::ModelId::Spectrum16K),
+            image_key(spec_chum_host::ModelId::Spectrum48)
+        );
+        assert_eq!(
+            image_key(spec_chum_host::ModelId::SpectrumPlus3),
+            image_key(spec_chum_host::ModelId::SpectrumPlus3e)
+        );
     }
 }

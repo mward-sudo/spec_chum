@@ -249,16 +249,10 @@ struct ContentView: View {
                     Button {
                         chromeAction { host.selectBuiltinModel(pick) }
                     } label: {
-                        HStack {
-                            Text(pick.title)
-                            if !pick.romAvailable {
-                                Image(systemName: "exclamationmark.circle")
-                                    .foregroundStyle(.secondary)
-                            }
-                            if host.activeConfigId == nil && host.model == pick {
-                                Image(systemName: "checkmark")
-                            }
-                        }
+                        MachineChoiceLabel(
+                            model: pick,
+                            selected: host.activeConfigId == nil && host.model == pick
+                        )
                     }
                 }
             }

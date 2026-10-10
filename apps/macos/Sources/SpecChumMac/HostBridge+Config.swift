@@ -67,20 +67,42 @@ extension HostBridge {
 
     /// Select a built-in model (clears active custom profile).
     func selectBuiltinModel(_ pick: Model) {
+        pendingBuiltinModel = pick
+        romSetupModel = pick
+        syncModelRomPathsToHost()
+        refreshRomSetup()
+        if romSetupPayload?.complete == true {
+            activatePendingBuiltinModel()
+        } else {
+            scheduleRomSetupSheet(auto: true, force: true)
+        }
+        reclaimKeyboardFocus()
+    }
+
+    private func activatePendingBuiltinModel() {
+        guard let pick = pendingBuiltinModel, let handle else { return }
+        syncModelRomPathsToHost()
+        guard sc_activate_model(handle, pick.rawValue) == 0 else {
+            let error = HostBridge.takeLastError() ?? "Machine activation failed"
+            romSetupError = error
+            showRomSetup = true
+            return
+        }
         activeConfigId = nil
         persistActiveConfigId()
-        romSetupModel = pick
-        if model != pick {
-            model = pick
-        } else {
-            guard let handle else { return }
-            _ = sc_set_model(handle, pick.rawValue)
-            tryAutoloadRom()
-            pushTapeLoadOptions()
-            refreshStatus()
-            refreshRomSetupQuiet()
-            maybeAutoPresentRomSetup()
-        }
+        suppressModelPush = true
+        model = pick
+        suppressModelPush = false
+        // `model` does not fire didSet when switching from a custom profile
+        // whose base model is the same as the selected built-in model.
+        UserDefaults.standard.set(Int(pick.rawValue), forKey: Self.modelDefaultsKey)
+        UserDefaults.standard.set(Int(pick.rawValue), forKey: Self.lastBuiltinModelKey)
+        pendingBuiltinModel = nil
+        showRomSetup = false
+        romSetupError = nil
+        pushTapeLoadOptions()
+        refreshStatus()
+        refreshRomSetupQuiet()
         reclaimKeyboardFocus()
     }
 
@@ -96,7 +118,7 @@ extension HostBridge {
 
     /// Open ROM setup manually or after a built-in model pick when files are missing.
     func presentRomSetup(auto: Bool = false) {
-        if activeConfigId == nil {
+        if pendingBuiltinModel == nil && activeConfigId == nil {
             romSetupModel = model
         }
         scheduleRomSetupSheet(auto: auto, force: true)
@@ -112,7 +134,7 @@ extension HostBridge {
 
     /// Present the ROM sheet on the next run loop (SwiftUI may miss `true` set during init).
     func scheduleRomSetupSheet(auto: Bool, force: Bool) {
-        guard activeConfigId == nil else {
+        guard activeConfigId == nil || pendingBuiltinModel != nil else {
             showRomSetup = false
             return
         }
@@ -123,8 +145,12 @@ extension HostBridge {
             showRomSetup = false
             return
         }
+        let requestedModel = romSetupModel
+        let pendingSelection = pendingBuiltinModel
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.activeConfigId == nil else { return }
+            guard let self, self.activeConfigId == nil || self.pendingBuiltinModel != nil else { return }
+            guard self.romSetupModel == requestedModel,
+                  self.pendingBuiltinModel == pendingSelection else { return }
             self.syncModelRomPathsToHost()
             self.refreshRomSetup()
             guard force || self.needsRomSetup else {
@@ -132,7 +158,8 @@ extension HostBridge {
                 return
             }
             self.showRomSetup = true
-            if auto, let payload = self.romSetupPayload, !payload.complete {
+            if auto, self.pendingBuiltinModel == nil,
+               let payload = self.romSetupPayload, !payload.complete {
                 self.status = "ROMs required for \(payload.modelTitle)"
             }
         }
@@ -145,11 +172,11 @@ extension HostBridge {
 
     /// Update cached payload without opening the sheet (model changes / init).
     func refreshRomSetupQuiet() {
-        guard activeConfigId == nil else {
+        guard activeConfigId == nil || pendingBuiltinModel != nil else {
             romSetupPayload = nil
             return
         }
-        romSetupModel = model
+        romSetupModel = pendingBuiltinModel ?? model
         refreshRomSetup()
     }
 
@@ -184,9 +211,10 @@ extension HostBridge {
                 }
                 self.pullModelRomPathsFromHost(only: "spectrum_next_next_assets")
                 self.refreshRomSetup()
-                if self.romSetupModel == .spectrumNext,
-                   self.model == .spectrumNext,
-                   self.romSetupPayload?.complete == true {
+                if self.showRomSetup,
+                   self.romSetupModel == .spectrumNext,
+                   self.romSetupPayload?.complete == true,
+                   (self.pendingBuiltinModel == .spectrumNext || self.model == .spectrumNext) {
                     self.finishRomSetup(loadMachine: true)
                 }
             }
@@ -201,13 +229,15 @@ extension HostBridge {
             }
         }
         if ok != 0 {
-            romSetupError = HostBridge.takeLastError() ?? "ROM install failed"
+            let error = HostBridge.takeLastError() ?? "ROM install failed"
             refreshRomSetup()
+            romSetupError = error
             return
         }
         pullModelRomPathsFromHost()
         refreshRomSetup()
-        if romSetupModel == model, romSetupPayload?.complete == true {
+        if romSetupPayload?.complete == true,
+           (pendingBuiltinModel == romSetupModel || romSetupModel == model) {
             finishRomSetup(loadMachine: true)
         } else {
             status = "Installed \(url.lastPathComponent) → roms/"
@@ -215,8 +245,18 @@ extension HostBridge {
     }
 
     func finishRomSetup(loadMachine: Bool) {
-        if loadMachine, romSetupModel == model {
-            tryAutoloadRom()
+        if loadMachine, pendingBuiltinModel == romSetupModel {
+            activatePendingBuiltinModel()
+            return
+        }
+        if loadMachine, romSetupModel == model, let handle {
+            syncModelRomPathsToHost()
+            guard sc_activate_model(handle, model.rawValue) == 0 else {
+                let error = HostBridge.takeLastError() ?? "Machine activation failed"
+                romSetupError = error
+                status = error
+                return
+            }
             pushTapeLoadOptions()
             refreshStatus()
         }

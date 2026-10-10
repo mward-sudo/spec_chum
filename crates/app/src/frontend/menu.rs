@@ -6,8 +6,8 @@ use super::{
 };
 use eframe::egui;
 use spec_chum_host::{
-    model_rom_available, query_recent_media, AppearancePreference, PrefAyStereo, PrefJoystick,
-    PrefModel,
+    hardware_compat, model_rom_available, query_recent_media, AppearancePreference, PrefAyStereo,
+    PrefJoystick, PrefModel,
 };
 use std::path::Path;
 
@@ -108,6 +108,7 @@ impl SpecChumApp {
                 ui.menu_button("Settings", |ui| self.settings_contents(ui, ctx));
                 ui.menu_button("Hardware", |ui| {
                     let model = self.session.model();
+                    let compatible = hardware_compat(PrefModel::from_model(model));
                     let has_mf = self
                         .session
                         .host_mut().machine()
@@ -129,17 +130,7 @@ impl SpecChumApp {
                     ui.label("Peripherals (partial where noted)");
                     ui.separator();
 
-                    if matches!(
-                        model,
-                        Model::Spectrum16K
-                            | Model::Spectrum48
-                            | Model::TimexTC2048
-                            | Model::TimexTS2068
-                            | Model::Spectrum128
-                            | Model::SpectrumPlus2
-                            | Model::Pentagon128
-                            | Model::ScorpionZs256
-                    ) {
+                    if compatible.multiface {
                         let mf_label = if matches!(
                             model,
                             Model::Spectrum128 | Model::SpectrumPlus2 | Model::Pentagon128 | Model::ScorpionZs256
@@ -171,7 +162,7 @@ impl SpecChumApp {
                         ui.label("Multiface: 48K-class (MF1) or 128K/+2 (MF128); not +2A/+3");
                     }
 
-                    if model == Model::TimexTS2068 {
+                    if compatible.timex_dock {
                         ui.separator();
                         if ui.button("Insert Timex Dock DCK…").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
@@ -197,130 +188,123 @@ impl SpecChumApp {
                     }
 
                     ui.separator();
-                    if matches!(
-                        model,
-                        Model::Spectrum16K
-                            | Model::Spectrum48
-                            | Model::TimexTC2048
-                            | Model::TimexTS2068
-                            | Model::Spectrum128
-                            | Model::SpectrumPlus2
-                            | Model::Pentagon128
-                            | Model::ScorpionZs256
-                    ) {
-                        if ui.button("Attach DivMMC").clicked() {
-                            self.session.attach_divmmc_stub();
-                            ui.close_menu();
-                        }
-                        if ui
-                            .add_enabled(has_div, egui::Button::new("Open DivMMC SD image…"))
-                            .clicked()
-                        {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("SD image", &["img", "bin", "mmc", "sd"])
-                                .pick_file()
-                            {
-                                self.session.attach_divmmc_sd(&path);
+                    if compatible.divmmc || compatible.interface1 || compatible.beta {
+                        if compatible.divmmc {
+                            if ui.button("Attach DivMMC").clicked() {
+                                self.session.attach_divmmc_stub();
+                                ui.close_menu();
                             }
-                            ui.close_menu();
-                        }
-                        if ui
-                            .add_enabled(
-                                has_div,
-                                egui::Button::new("Open DivMMC SD image (slot 1)…"),
-                            )
-                            .clicked()
-                        {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("SD image", &["img", "bin", "mmc", "sd"])
-                                .pick_file()
+                            if ui
+                                .add_enabled(has_div, egui::Button::new("Open DivMMC SD image…"))
+                                .clicked()
                             {
-                                self.session.attach_divmmc_sd_slot(&path, 1);
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("SD image", &["img", "bin", "mmc", "sd"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_divmmc_sd(&path);
+                                }
+                                ui.close_menu();
                             }
-                            ui.close_menu();
-                        }
-                        if ui
-                            .add_enabled(
-                                has_div,
-                                egui::Button::new("Open DivMMC EEPROM (ESXDOS)…"),
-                            )
-                            .clicked()
-                        {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("EEPROM / ESXDOS", &["rom", "bin", "eeprom"])
-                                .pick_file()
+                            if ui
+                                .add_enabled(
+                                    has_div,
+                                    egui::Button::new("Open DivMMC SD image (slot 1)…"),
+                                )
+                                .clicked()
                             {
-                                self.session.attach_divmmc_eeprom(&path);
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("SD image", &["img", "bin", "mmc", "sd"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_divmmc_sd_slot(&path, 1);
+                                }
+                                ui.close_menu();
                             }
-                            ui.close_menu();
+                            if ui
+                                .add_enabled(
+                                    has_div,
+                                    egui::Button::new("Open DivMMC EEPROM (ESXDOS)…"),
+                                )
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("EEPROM / ESXDOS", &["rom", "bin", "eeprom"])
+                                    .pick_file()
+                                {
+                                    self.session.attach_divmmc_eeprom(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_div {
+                                "DivMMC: attached (SPI sector I/O + automap; ESXDOS boot needs EEPROM)"
+                            } else {
+                                "DivMMC: not attached"
+                            });
                         }
-                        ui.label(if has_div {
-                            "DivMMC: attached (SPI sector I/O + automap; ESXDOS boot needs EEPROM)"
-                        } else {
-                            "DivMMC: not attached"
-                        });
 
-                        ui.separator();
-                        if ui.button("Attach Interface 1 (stub)").clicked() {
-                            self.session.attach_interface1_stub();
-                            ui.close_menu();
-                        }
-                        if ui
-                            .add_enabled(has_if1, egui::Button::new("Open Microdrive MDR…"))
-                            .clicked()
-                        {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("MDR", &["mdr"])
-                                .pick_file()
-                            {
-                                self.session.insert_mdr(&path);
+                        if compatible.interface1 {
+                            ui.separator();
+                            if ui.button("Attach Interface 1 (stub)").clicked() {
+                                self.session.attach_interface1_stub();
+                                ui.close_menu();
                             }
-                            ui.close_menu();
+                            if ui
+                                .add_enabled(has_if1, egui::Button::new("Open Microdrive MDR…"))
+                                .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("MDR", &["mdr"])
+                                    .pick_file()
+                                {
+                                    self.session.insert_mdr(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_if1 {
+                                "IF1: attached (Microdrive I/O + ROM paging)"
+                            } else {
+                                "IF1: not attached"
+                            });
                         }
-                        ui.label(if has_if1 {
-                            "IF1: attached (Microdrive I/O + ROM paging)"
-                        } else {
-                            "IF1: not attached"
-                        });
 
-                        ui.separator();
-                        if ui.button("Attach Beta Disk").clicked() {
-                            self.session.attach_beta_stub();
-                            ui.close_menu();
-                        }
-                        if ui.button("Load TR-DOS ROM…").clicked() {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("TR-DOS ROM", &["rom", "bin"])
-                                .pick_file()
-                            {
-                                self.session.load_trdos_rom(&path);
+                        if compatible.beta {
+                            ui.separator();
+                            if ui.button("Attach Beta Disk").clicked() {
+                                self.session.attach_beta_stub();
+                                ui.close_menu();
                             }
-                            ui.close_menu();
-                        }
-                        if ui.button("Open TRD…").clicked() {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("TRD", &["trd"])
-                                .pick_file()
-                            {
-                                self.session.insert_trd(&path);
+                            if ui.button("Load TR-DOS ROM…").clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("TR-DOS ROM", &["rom", "bin"])
+                                    .pick_file()
+                                {
+                                    self.session.load_trdos_rom(&path);
+                                }
+                                ui.close_menu();
                             }
-                            ui.close_menu();
+                            if ui.button("Open TRD…").clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("TRD", &["trd"])
+                                    .pick_file()
+                                {
+                                    self.session.insert_trd(&path);
+                                }
+                                ui.close_menu();
+                            }
+                            ui.label(if has_beta {
+                                "Beta: VG93 + TR-DOS paging (need 16K ROM for USR 15616)"
+                            } else {
+                                "Beta: not attached"
+                            });
                         }
-                        ui.label(if has_beta {
-                            "Beta: VG93 + TR-DOS paging (need 16K ROM for USR 15616)"
-                        } else {
-                            "Beta: not attached"
-                        });
                     } else {
-                        ui.label("DivMMC / IF1 / Beta: not on +2A/+3");
+                        ui.label("No optional peripherals are compatible with this model.");
                     }
 
-                    if model == Model::SpectrumPlus3 || model == Model::SpectrumPlus3e {
+                    if compatible.plus3_disk {
                         ui.separator();
                         ui.label("+3 disk: File → Open DSK…");
-                    } else if model == Model::SpectrumPlus2A {
-                        ui.separator();
-                        ui.label("+2A: no floppy (tape Loader)");
                     }
                 });
                 ui.menu_button("Tape", |ui| {

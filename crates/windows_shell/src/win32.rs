@@ -39,10 +39,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use control_plane::ControlPlane;
 use spec_chum_host::{
-    acquire_next_assets, default_prefs_path, install_model_rom, load_prefs, query_recent_media,
-    rom_setup_json, save_prefs, sync_model_rom_paths, AppearancePreference, HostError, HostSession,
-    MediaCategory, MediaCompatibility, MediaEntry, MediaFormat, ModelId, PrefAyStereo, PrefModel,
-    UiPreferences,
+    acquire_next_assets, default_prefs_path, hardware_compat, install_model_rom, load_prefs,
+    query_recent_media, rom_setup_json, save_prefs, sync_model_rom_paths, AppearancePreference,
+    HostError, HostSession, MediaCategory, MediaCompatibility, MediaEntry, MediaFormat, ModelId,
+    PrefAyStereo, PrefModel, UiPreferences,
 };
 
 use native_shell_common::audio::{self, PcmRing};
@@ -142,6 +142,8 @@ struct AppState {
     last_debug_refresh: Instant,
     next_assets_download: Option<NextAssetDownload>,
     recent_menu: Option<HMENU>,
+    hardware_menu: Option<HMENU>,
+    file_menu: Option<HMENU>,
 }
 
 impl AppState {
@@ -228,6 +230,8 @@ impl AppState {
             last_debug_refresh: Instant::now(),
             next_assets_download: None,
             recent_menu: None,
+            hardware_menu: None,
+            file_menu: None,
         })
     }
 
@@ -503,6 +507,52 @@ impl AppState {
         }
     }
 
+    fn refresh_hardware_menu(&mut self, menu: HMENU) {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnableMenuItem, MF_BYCOMMAND, MF_ENABLED, MF_GRAYED,
+        };
+
+        let compatibility = self
+            .host
+            .with_mut(|session| hardware_compat(PrefModel::from_model_id(session.model())));
+        let beta = compatibility.beta;
+        for (id, enabled) in [
+            (IDM_HW_ATTACH_MULTIFACE, compatibility.multiface),
+            (IDM_HW_MULTIFACE_NMI, compatibility.multiface),
+            (IDM_HW_ATTACH_DIVMMC, compatibility.divmmc),
+            (IDM_HW_DIVMMC_SD, compatibility.divmmc),
+            (IDM_HW_DIVMMC_SD_SLOT1, compatibility.divmmc),
+            (IDM_HW_DIVMMC_EEPROM, compatibility.divmmc),
+            (IDM_HW_ATTACH_IF1, compatibility.interface1),
+            (IDM_HW_INSERT_MDR, compatibility.interface1),
+            (IDM_HW_ATTACH_BETA, beta),
+            (IDM_HW_LOAD_TRDOS_ROM, beta),
+            (IDM_HW_OPEN_TRD, beta),
+            (IDM_HW_INSERT_DCK, compatibility.timex_dock),
+            (IDM_HW_EJECT_DCK, compatibility.timex_dock),
+        ] {
+            let state = if enabled { MF_ENABLED } else { MF_GRAYED };
+            // SAFETY: menu is the live Hardware popup retained from build_menu.
+            unsafe {
+                let _ = EnableMenuItem(menu, id as u32, MF_BYCOMMAND | state);
+            }
+        }
+    }
+
+    fn refresh_file_menu(&mut self, menu: HMENU) {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnableMenuItem, MF_BYCOMMAND, MF_ENABLED, MF_GRAYED,
+        };
+        let compatible = self.host.with_mut(|session| {
+            hardware_compat(PrefModel::from_model_id(session.model())).plus3_disk
+        });
+        let state = if compatible { MF_ENABLED } else { MF_GRAYED };
+        // SAFETY: menu is the live File popup retained from build_menu.
+        unsafe {
+            let _ = EnableMenuItem(menu, IDM_FILE_OPEN_DSK as u32, MF_BYCOMMAND | state);
+        }
+    }
+
     fn refresh_recent_menu(&self, menu: HMENU) {
         use windows::Win32::UI::WindowsAndMessaging::{DeleteMenu, GetMenuItemCount};
         // SAFETY: menu is the Library popup created and owned by this window.
@@ -665,8 +715,11 @@ impl AppState {
         let mut next = self.prefs.clone();
         next.select_builtin_model(PrefModel::from_model_id(model));
         sync_model_rom_paths(next.model_rom_paths.clone());
+        let mut activated = false;
         let result = self.host.with_mut(|s| {
-            s.select_model(model)?;
+            // Build and boot the candidate before replacing the active machine.
+            s.activate_model(model)?;
+            activated = true;
             next.apply_to_host_session(s)?;
             Ok::<(), HostError>(())
         });
@@ -678,18 +731,20 @@ impl AppState {
             Err(e) => {
                 sync_model_rom_paths(self.prefs.model_rom_paths.clone());
                 let setup = rom_setup_json(model, &self.prefs.model_rom_paths);
-                let restore = self.prefs.model.to_model_id();
-                if let Err(restore_error) = self.host.with_mut(|s| {
-                    s.select_model(restore)?;
-                    self.prefs.apply_to_host_session(s)
-                }) {
-                    self.report_err(
-                        "Select model",
-                        &HostError::Message(format!(
-                            "selecting {model:?} failed ({e}); restoring {restore:?} also failed ({restore_error})"
-                        )),
-                    );
-                    return;
+                if activated {
+                    let restore = self.prefs.model.to_model_id();
+                    if let Err(restore_error) = self.host.with_mut(|s| {
+                        s.activate_model(restore)?;
+                        self.prefs.apply_to_host_session(s)
+                    }) {
+                        self.report_err(
+                            "Select model",
+                            &HostError::Message(format!(
+                                "selecting {model:?} failed ({e}); restoring {restore:?} also failed ({restore_error})"
+                            )),
+                        );
+                        return;
+                    }
                 }
                 if !setup.complete
                     && self.setup_roms_for_model(model, AfterNextAssets::Select(model))
@@ -698,7 +753,7 @@ impl AppState {
                     retry.select_builtin_model(PrefModel::from_model_id(model));
                     sync_model_rom_paths(retry.model_rom_paths.clone());
                     match self.host.with_mut(|s| {
-                        s.select_model(model)?;
+                        s.activate_model(model)?;
                         retry.apply_to_host_session(s)
                     }) {
                         Ok(()) => {
@@ -1142,7 +1197,7 @@ fn recent_media_paths(recent_files: &[String]) -> Vec<PathBuf> {
         .collect()
 }
 
-fn build_menu() -> Result<(HMENU, HMENU)> {
+fn build_menu() -> Result<(HMENU, HMENU, HMENU, HMENU)> {
     use windows::Win32::UI::WindowsAndMessaging::{CreateMenu, CreatePopupMenu};
     // SAFETY: CreateMenu/CreatePopupMenu return owned menus we attach to the window.
     unsafe {
@@ -1167,7 +1222,8 @@ fn build_menu() -> Result<(HMENU, HMENU)> {
 
         let machine = CreatePopupMenu()?;
         for m in ModelId::ALL {
-            append_menu(machine, menu_id_for_model(m), model_menu_label(m));
+            let label = model_menu_label(m);
+            append_menu(machine, menu_id_for_model(m), &label);
         }
         append_sep(machine);
         append_menu(machine, IDM_MACHINE_ROM_SETUP, "ROM &Setup…");
@@ -1256,7 +1312,7 @@ fn build_menu() -> Result<(HMENU, HMENU)> {
         append_menu(debug, IDM_DBG_REFRESH, "&Refresh");
         append_popup(menubar, debug, "&Debug");
 
-        Ok((menubar, recent))
+        Ok((menubar, recent, hw, file))
     }
 }
 
@@ -1490,6 +1546,14 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
                     state.refresh_recent_menu(menu);
                     return LRESULT(0);
                 }
+                if state.hardware_menu == Some(menu) {
+                    state.refresh_hardware_menu(menu);
+                    return LRESULT(0);
+                }
+                if state.file_menu == Some(menu) {
+                    state.refresh_file_menu(menu);
+                    return LRESULT(0);
+                }
             }
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
@@ -1569,7 +1633,7 @@ pub fn run() -> Result<()> {
             anyhow::bail!("RegisterClassExW failed");
         }
 
-        let (menu, recent_menu) = build_menu()?;
+        let (menu, recent_menu, hardware_menu, file_menu) = build_menu()?;
         let title: Vec<u16> = WINDOW_TITLE.encode_utf16().collect();
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
@@ -1588,6 +1652,8 @@ pub fn run() -> Result<()> {
 
         (*app_ptr).main_hwnd = Some(hwnd);
         (*app_ptr).recent_menu = Some(recent_menu);
+        (*app_ptr).hardware_menu = Some(hardware_menu);
+        (*app_ptr).file_menu = Some(file_menu);
         apply_window_appearance(hwnd, (*app_ptr).prefs.appearance);
         let _ = ShowWindow(hwnd, SW_SHOW);
 

@@ -143,36 +143,58 @@ enum PrefAyStereoSlug: String, Codable, CaseIterable {
     case abc
 }
 
-struct HardwareCompatFlags {
+struct HardwareCompatFlags: Decodable {
     let multiface: Bool
     let divmmc: Bool
     let interface1: Bool
     let beta: Bool
     let ayStereo: Bool
+    let kempstonMouse: Bool
+    let joystick: Bool
+    let plus3Disk: Bool
+    let timexDock: Bool
 
-    static func forBase(_ base: PrefModelSlug) -> HardwareCompatFlags {
-        switch base.hostModel {
-        case .spectrum16K, .spectrum48, .timexTC2048:
-            return HardwareCompatFlags(
-                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: false
-            )
-        case .timexTS2068:
-            // Matches host_api::hardware_compat — TS2068 has Timex AY.
-            return HardwareCompatFlags(
-                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: true
-            )
-        case .spectrum128, .spectrumPlus2, .pentagon128, .scorpionZs256:
-            return HardwareCompatFlags(
-                multiface: true, divmmc: true, interface1: true, beta: true, ayStereo: true
-            )
-        case .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e:
-            return HardwareCompatFlags(
-                multiface: false, divmmc: false, interface1: false, beta: false, ayStereo: true
-            )
-        case .spectrumNext:
-            return HardwareCompatFlags(
-                multiface: false, divmmc: false, interface1: false, beta: false, ayStereo: false
-            )
-        }
+    enum CodingKeys: String, CodingKey {
+        case multiface, divmmc, interface1, beta, joystick
+        case ayStereo = "ay_stereo"
+        case kempstonMouse = "kempston_mouse"
+        case plus3Disk = "plus3_disk"
+        case timexDock = "timex_dock"
     }
+
+    static func forModel(_ model: HostBridge.Model) -> HardwareCompatFlags {
+        let supportsClassicPeripherals: Bool
+        switch model {
+        case .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2,
+             .pentagon128, .scorpionZs256, .timexTC2048, .timexTS2068:
+            supportsClassicPeripherals = true
+        case .spectrumPlus2A, .spectrumPlus3, .spectrumPlus3e, .spectrumNext:
+            supportsClassicPeripherals = false
+        }
+
+        let supportsAyStereo: Bool
+        switch model {
+        case .spectrum128, .spectrumPlus2, .spectrumPlus2A, .spectrumPlus3,
+             .spectrumPlus3e, .pentagon128, .scorpionZs256, .timexTS2068:
+            supportsAyStereo = true
+        case .spectrum16K, .spectrum48, .timexTC2048, .spectrumNext:
+            supportsAyStereo = false
+        }
+
+        return HardwareCompatFlags(
+            multiface: supportsClassicPeripherals,
+            divmmc: supportsClassicPeripherals,
+            interface1: supportsClassicPeripherals,
+            beta: supportsClassicPeripherals,
+            ayStereo: supportsAyStereo,
+            kempstonMouse: true,
+            joystick: true,
+            plus3Disk: model == .spectrumPlus3 || model == .spectrumPlus3e,
+            timexDock: model == .timexTS2068
+        )
+    }
+}
+
+extension HostBridge.Model {
+    var editorHardwareCompat: HardwareCompatFlags { hardwareCompat }
 }

@@ -30,6 +30,8 @@ void sc_destroy(void *handle);
 int sc_set_model(void *handle, unsigned int model);
 /* Select and boot a verified model; returns -1 with sc_last_error on failure. */
 int sc_select_model(void *handle, unsigned int model);
+/* Boot before switching; preserves the running machine on failure. */
+int sc_activate_model(void *handle, unsigned int model);
 /* Active model id (SC_MODEL_*). Returns UINT_MAX on null handle. */
 unsigned int sc_get_model(void *handle);
 /* 1 when the model's ROM dumps are never auto-fetched (user must supply paths). */

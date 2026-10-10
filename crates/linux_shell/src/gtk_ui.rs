@@ -78,8 +78,19 @@ struct AppState {
     debug_window: Option<Window>,
     debug_buffer: Option<TextBuffer>,
     last_debug_refresh: Instant,
+    hardware_actions: Vec<(CompatAction, gio::SimpleAction)>,
     next_assets_download: Option<NextAssetDownload>,
     recent_menu: Option<gio::Menu>,
+}
+
+#[derive(Clone, Copy)]
+enum CompatAction {
+    Multiface,
+    Divmmc,
+    Interface1,
+    Beta,
+    TimexDock,
+    Plus3Disk,
 }
 
 impl AppState {
@@ -146,9 +157,27 @@ impl AppState {
             debug_window: None,
             debug_buffer: None,
             last_debug_refresh: Instant::now(),
+            hardware_actions: Vec::new(),
             next_assets_download: None,
             recent_menu: None,
         })
+    }
+
+    fn update_hardware_action_states(&mut self) {
+        let compatibility = self.host.with_mut(|session| {
+            spec_chum_host::hardware_compat(PrefModel::from_model_id(session.model()))
+        });
+        for (kind, action) in &self.hardware_actions {
+            let enabled = match kind {
+                CompatAction::Multiface => compatibility.multiface,
+                CompatAction::Divmmc => compatibility.divmmc,
+                CompatAction::Interface1 => compatibility.interface1,
+                CompatAction::Beta => compatibility.beta,
+                CompatAction::TimexDock => compatibility.timex_dock,
+                CompatAction::Plus3Disk => compatibility.plus3_disk,
+            };
+            action.set_enabled(enabled);
+        }
     }
 
     fn persist_prefs(&self) {
@@ -471,8 +500,11 @@ impl AppState {
         let mut next = previous.clone();
         next.select_builtin_model(PrefModel::from_model_id(model));
         sync_model_rom_paths(next.model_rom_paths.clone());
+        let mut activated = false;
         let result = self.host.with_mut(|s| {
-            s.select_model(model)?;
+            // Keep the running machine live until the candidate model boots.
+            s.activate_model(model)?;
+            activated = true;
             next.apply_to_host_session(s)?;
             Ok::<(), HostError>(())
         });
@@ -482,41 +514,45 @@ impl AppState {
                 self.persist_prefs();
             }
             Err(e) => {
-                // `select_model` may leave the host with no machine; restore prior.
                 sync_model_rom_paths(previous.model_rom_paths.clone());
-                let restore = previous.model.to_model_id();
-                if let Err(restore_error) = self.host.with_mut(|s| {
-                    s.select_model(restore)?;
-                    previous.apply_to_host_session(s)
-                }) {
-                    let combined = HostError::Message(format!(
-                        "selecting {model:?} failed ({e}); restoring {restore:?} also failed ({restore_error})"
-                    ));
-                    self.report_err("Select model", &combined);
-                } else {
-                    let setup = rom_setup_json(model, &previous.model_rom_paths);
-                    if !setup.complete
-                        && self.setup_roms_for_model(model, AfterNextAssets::Select(model))
-                    {
-                        let mut retry = self.prefs.clone();
-                        retry.select_builtin_model(PrefModel::from_model_id(model));
-                        sync_model_rom_paths(retry.model_rom_paths.clone());
-                        match self.host.with_mut(|s| {
-                            s.select_model(model)?;
-                            retry.apply_to_host_session(s)
-                        }) {
-                            Ok(()) => {
-                                self.prefs = retry;
-                                self.persist_prefs();
-                            }
-                            Err(retry_error) => self.report_err("Select model", &retry_error),
-                        }
-                    } else if self.next_assets_download.is_none() {
-                        self.report_err("Select model", &e);
+                let setup = rom_setup_json(model, &previous.model_rom_paths);
+                if activated {
+                    // Preferences failed after boot; restore the previous selection.
+                    let restore = previous.model.to_model_id();
+                    if let Err(restore_error) = self.host.with_mut(|s| {
+                        s.activate_model(restore)?;
+                        previous.apply_to_host_session(s)
+                    }) {
+                        let combined = HostError::Message(format!(
+                            "selecting {model:?} failed ({e}); restoring {restore:?} also failed ({restore_error})"
+                        ));
+                        self.report_err("Select model", &combined);
+                        self.update_hardware_action_states();
+                        return;
                     }
+                }
+                if !setup.complete
+                    && self.setup_roms_for_model(model, AfterNextAssets::Select(model))
+                {
+                    let mut retry = self.prefs.clone();
+                    retry.select_builtin_model(PrefModel::from_model_id(model));
+                    sync_model_rom_paths(retry.model_rom_paths.clone());
+                    match self.host.with_mut(|s| {
+                        s.activate_model(model)?;
+                        retry.apply_to_host_session(s)
+                    }) {
+                        Ok(()) => {
+                            self.prefs = retry;
+                            self.persist_prefs();
+                        }
+                        Err(retry_error) => self.report_err("Select model", &retry_error),
+                    }
+                } else if self.next_assets_download.is_none() {
+                    self.report_err("Select model", &e);
                 }
             }
         }
+        self.update_hardware_action_states();
     }
 
     fn open_rom_setup(&mut self) {
@@ -883,10 +919,8 @@ fn install_menubar(app: &Application, state: Rc<RefCell<AppState>>) {
 
     let machine = gio::Menu::new();
     for (i, m) in ModelId::ALL.iter().enumerate() {
-        machine.append(
-            Some(model_menu_label(*m)),
-            Some(&format!("app.select_model_{i}")),
-        );
+        let label = model_menu_label(*m);
+        machine.append(Some(&label), Some(&format!("app.select_model_{i}")));
     }
     machine.append(Some("ROM Setup…"), Some("app.rom_setup"));
     machine.append(Some("Reset"), Some("app.machine_reset"));
@@ -1294,12 +1328,24 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
         name: &str,
         state: Rc<RefCell<AppState>>,
         f: impl Fn(&mut AppState) + 'static,
-    ) {
+    ) -> gio::SimpleAction {
         let action = gio::SimpleAction::new(name, None);
         action.connect_activate(move |_, _| {
             f(&mut state.borrow_mut());
         });
         app.add_action(&action);
+        action
+    }
+
+    fn add_compat_action(
+        app: &Application,
+        name: &str,
+        state: Rc<RefCell<AppState>>,
+        kind: CompatAction,
+        f: impl Fn(&mut AppState) + 'static,
+    ) {
+        let action = add_action(app, name, Rc::clone(&state), f);
+        state.borrow_mut().hardware_actions.push((kind, action));
     }
 
     let appearance = gio::SimpleAction::new_stateful(
@@ -1345,9 +1391,15 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
     add_action(app, "open_rzx", Rc::clone(&state), |s| {
         s.open_path("Open RZX", "RZX", &["rzx"], HostSession::load_rzx);
     });
-    add_action(app, "open_dsk", Rc::clone(&state), |s| {
-        s.open_path("Open Disk (DSK)", "Disk", &["dsk"], HostSession::load_dsk);
-    });
+    add_compat_action(
+        app,
+        "open_dsk",
+        Rc::clone(&state),
+        CompatAction::Plus3Disk,
+        |s| {
+            s.open_path("Open Disk (DSK)", "Disk", &["dsk"], HostSession::load_dsk);
+        },
+    );
     add_action(app, "open_trd", Rc::clone(&state), |s| {
         s.open_path("Open TRD", "TRD", &["trd"], HostSession::load_trd);
     });
@@ -1403,80 +1455,158 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
         s.open_rom_setup();
     });
 
-    add_action(app, "hw_attach_multiface", Rc::clone(&state), |s| {
-        s.open_path(
-            "Attach Multiface ROM",
-            "Multiface ROM",
-            &["rom", "bin"],
-            HostSession::attach_multiface,
-        );
-    });
-    add_action(app, "hw_multiface_nmi", Rc::clone(&state), |s| {
-        s.host_action("Multiface NMI", HostSession::multiface_nmi);
-    });
-    add_action(app, "hw_attach_divmmc", Rc::clone(&state), |s| {
-        s.host_action("Attach DivMMC", HostSession::attach_divmmc);
-    });
-    add_action(app, "hw_divmmc_sd", Rc::clone(&state), |s| {
-        s.open_path(
-            "Open DivMMC SD",
-            "SD image",
-            &["img", "bin", "mmc", "sd"],
-            HostSession::load_divmmc_sd,
-        );
-    });
-    add_action(app, "hw_divmmc_sd_slot1", Rc::clone(&state), |s| {
-        s.open_path(
-            "Open DivMMC SD (slot 1)",
-            "SD image",
-            &["img", "bin", "mmc", "sd"],
-            |sess, p| sess.load_divmmc_sd_slot(p, 1),
-        );
-    });
-    add_action(app, "hw_divmmc_eeprom", Rc::clone(&state), |s| {
-        s.open_path(
-            "Open DivMMC EEPROM",
-            "EEPROM / ESXDOS",
-            &["rom", "bin", "eeprom"],
-            HostSession::load_divmmc_eeprom,
-        );
-    });
-    add_action(app, "hw_attach_if1", Rc::clone(&state), |s| {
-        s.host_action("Attach Interface 1", HostSession::attach_interface1);
-    });
-    add_action(app, "hw_insert_mdr", Rc::clone(&state), |s| {
-        s.open_path(
-            "Open Microdrive MDR",
-            "MDR",
-            &["mdr"],
-            HostSession::insert_mdr,
-        );
-    });
-    add_action(app, "hw_attach_beta", Rc::clone(&state), |s| {
-        s.host_action("Attach Beta Disk", HostSession::attach_beta);
-    });
-    add_action(app, "hw_load_trdos_rom", Rc::clone(&state), |s| {
-        s.open_path(
-            "Load TR-DOS ROM",
-            "TR-DOS ROM",
-            &["rom", "bin"],
-            HostSession::load_trdos_rom,
-        );
-    });
-    add_action(app, "hw_open_trd", Rc::clone(&state), |s| {
-        s.open_path("Open TRD", "TRD", &["trd"], HostSession::load_trd);
-    });
-    add_action(app, "hw_insert_dck", Rc::clone(&state), |s| {
-        s.open_path(
-            "Insert Timex Dock",
-            "Timex dock",
-            &["dck"],
-            HostSession::insert_dck,
-        );
-    });
-    add_action(app, "hw_eject_dck", Rc::clone(&state), |s| {
-        s.host_action("Eject Timex Dock", HostSession::eject_dck);
-    });
+    add_compat_action(
+        app,
+        "hw_attach_multiface",
+        Rc::clone(&state),
+        CompatAction::Multiface,
+        |s| {
+            s.open_path(
+                "Attach Multiface ROM",
+                "Multiface ROM",
+                &["rom", "bin"],
+                HostSession::attach_multiface,
+            );
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_multiface_nmi",
+        Rc::clone(&state),
+        CompatAction::Multiface,
+        |s| {
+            s.host_action("Multiface NMI", HostSession::multiface_nmi);
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_attach_divmmc",
+        Rc::clone(&state),
+        CompatAction::Divmmc,
+        |s| {
+            s.host_action("Attach DivMMC", HostSession::attach_divmmc);
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_divmmc_sd",
+        Rc::clone(&state),
+        CompatAction::Divmmc,
+        |s| {
+            s.open_path(
+                "Open DivMMC SD",
+                "SD image",
+                &["img", "bin", "mmc", "sd"],
+                HostSession::load_divmmc_sd,
+            );
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_divmmc_sd_slot1",
+        Rc::clone(&state),
+        CompatAction::Divmmc,
+        |s| {
+            s.open_path(
+                "Open DivMMC SD (slot 1)",
+                "SD image",
+                &["img", "bin", "mmc", "sd"],
+                |sess, p| sess.load_divmmc_sd_slot(p, 1),
+            );
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_divmmc_eeprom",
+        Rc::clone(&state),
+        CompatAction::Divmmc,
+        |s| {
+            s.open_path(
+                "Open DivMMC EEPROM",
+                "EEPROM / ESXDOS",
+                &["rom", "bin", "eeprom"],
+                HostSession::load_divmmc_eeprom,
+            );
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_attach_if1",
+        Rc::clone(&state),
+        CompatAction::Interface1,
+        |s| {
+            s.host_action("Attach Interface 1", HostSession::attach_interface1);
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_insert_mdr",
+        Rc::clone(&state),
+        CompatAction::Interface1,
+        |s| {
+            s.open_path(
+                "Open Microdrive MDR",
+                "MDR",
+                &["mdr"],
+                HostSession::insert_mdr,
+            );
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_attach_beta",
+        Rc::clone(&state),
+        CompatAction::Beta,
+        |s| {
+            s.host_action("Attach Beta Disk", HostSession::attach_beta);
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_load_trdos_rom",
+        Rc::clone(&state),
+        CompatAction::Beta,
+        |s| {
+            s.open_path(
+                "Load TR-DOS ROM",
+                "TR-DOS ROM",
+                &["rom", "bin"],
+                HostSession::load_trdos_rom,
+            );
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_open_trd",
+        Rc::clone(&state),
+        CompatAction::Beta,
+        |s| {
+            s.open_path("Open TRD", "TRD", &["trd"], HostSession::load_trd);
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_insert_dck",
+        Rc::clone(&state),
+        CompatAction::TimexDock,
+        |s| {
+            s.open_path(
+                "Insert Timex Dock",
+                "Timex dock",
+                &["dck"],
+                HostSession::insert_dck,
+            );
+        },
+    );
+    add_compat_action(
+        app,
+        "hw_eject_dck",
+        Rc::clone(&state),
+        CompatAction::TimexDock,
+        |s| {
+            s.host_action("Eject Timex Dock", HostSession::eject_dck);
+        },
+    );
 
     add_action(app, "set_joy_kempston", Rc::clone(&state), |s| {
         s.set_joystick(spec_chum_host::PrefJoystick::Kempston);
@@ -1571,6 +1701,8 @@ fn install_actions(app: &Application, window: &ApplicationWindow, state: Rc<RefC
         }
     ));
     app.add_action(&quit);
+
+    state.borrow_mut().update_hardware_action_states();
 
     app.set_accels_for_action("app.open_tape", &["<Control>o"]);
     app.set_accels_for_action("app.quit", &["<Control>q"]);

@@ -136,6 +136,7 @@ impl SpecChumApp {
             _agent: agent,
             window_capturer,
             texture: None,
+            machine_images: std::collections::BTreeMap::new(),
             beeper,
             _stream: stream,
             next_frame_deadline: None,
@@ -152,6 +153,7 @@ impl SpecChumApp {
             config_editor_is_new: false,
             config_editor_error: None,
             show_rom_setup: false,
+            pending_builtin_model: None,
             rom_setup: None,
             rom_setup_error: None,
             next_assets_download: None,
@@ -167,15 +169,41 @@ impl SpecChumApp {
         self.plane.as_ref()
     }
 
-    /// Built-in model picked from Machine menu — sync session, prefs, and auto-open ROM dialog when needed.
+    /// Keep the current machine live while ROM setup or activation is pending.
     pub(super) fn on_builtin_model_selected(&mut self, pick: Model) {
-        self.prefs.select_builtin_model(PrefModel::from_model(pick));
-        self.session.set_model(pick);
+        self.pending_builtin_model = Some(pick);
+        self.refresh_rom_setup();
+        if self.rom_setup.as_ref().is_some_and(|setup| setup.complete) {
+            self.activate_pending_builtin_model();
+        } else {
+            self.show_rom_setup = true;
+        }
+    }
+
+    pub(super) fn activate_pending_builtin_model(&mut self) {
+        let Some(pick) = self.pending_builtin_model else {
+            return;
+        };
         sync_model_rom_paths(self.prefs.model_rom_paths.clone());
-        self.session.try_autoload_rom();
-        self.apply_restored_machine_options();
-        self.mark_prefs_dirty();
-        self.maybe_auto_present_rom_setup();
+        let activated = self
+            .session
+            .host_mut()
+            .activate_model(PrefModel::from_model(pick).to_model_id());
+        match activated {
+            Ok(()) => {
+                self.prefs.select_builtin_model(PrefModel::from_model(pick));
+                self.pending_builtin_model = None;
+                self.show_rom_setup = false;
+                self.rom_setup_error = None;
+                self.apply_restored_machine_options();
+                self.mark_prefs_dirty();
+                self.refresh_rom_setup();
+            }
+            Err(error) => {
+                self.rom_setup_error = Some(error.to_string());
+                self.show_rom_setup = true;
+            }
+        }
     }
 
     pub(super) fn mark_prefs_dirty(&mut self) {

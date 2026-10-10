@@ -57,6 +57,7 @@ pub struct SpecChumApp {
     /// Own-window capturer for `GET /v1/host/window` (#239); registered on `plane`.
     window_capturer: Option<Arc<control_plane::OwnWindowCapturer>>,
     texture: Option<egui::TextureHandle>,
+    machine_images: std::collections::BTreeMap<&'static str, Option<egui::TextureHandle>>,
     beeper: Arc<std::sync::Mutex<BeeperState>>,
     _stream: Option<cpal::Stream>,
     next_frame_deadline: Option<Instant>,
@@ -78,6 +79,8 @@ pub struct SpecChumApp {
     config_editor_error: Option<String>,
     /// Built-in ROM picker when files under `roms/` are missing (#188).
     show_rom_setup: bool,
+    /// Requested built-in model; the live machine stays active during ROM setup.
+    pending_builtin_model: Option<Model>,
     rom_setup: Option<RomSetupJson>,
     rom_setup_error: Option<String>,
     next_assets_download: Option<mpsc::Receiver<Result<PathBuf, String>>>,
@@ -271,6 +274,72 @@ mod tests {
     use super::navigation::{should_suppress_guest_keyboard, FrontendView};
     use super::{frame_is_due, frame_repaint_delay, next_frame_deadline, should_step_key_script};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn builtin_rom_setup_preserves_active_profile_until_boot_succeeds() {
+        use crate::{Machine, Model, SpecChumApp, UserMachineConfig};
+        use spec_chum_host::{model_rom_path_key, PrefModel};
+
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock after Unix epoch")
+            .as_nanos();
+        let unique = format!("spec-chum-model-selection-{}-{stamp}", std::process::id());
+        let rom_path = std::env::temp_dir().join(format!("{unique}.rom"));
+        let prefs_path = std::env::temp_dir().join(format!("{unique}.json"));
+        let mut app = SpecChumApp::new_with_audio_prefs(false, prefs_path.clone());
+        app.session
+            .host_mut()
+            .set_machine(Machine::new_48k(&vec![0; 16 * 1024]).expect("test ROM"));
+        app.session
+            .host_mut()
+            .poke(0xc000, 0x5a)
+            .expect("writable RAM");
+        let profile = UserMachineConfig::new_named("Current custom", PrefModel::Spectrum48);
+        app.prefs.custom_configs.push(profile.clone());
+        app.prefs.active_config_id = Some(profile.id.clone());
+        app.prefs.model_rom_paths.insert(
+            model_rom_path_key(PrefModel::Spectrum16K, "main"),
+            rom_path.display().to_string(),
+        );
+
+        app.on_builtin_model_selected(Model::Spectrum16K);
+        assert!(app.show_rom_setup);
+        assert_eq!(app.pending_builtin_model, Some(Model::Spectrum16K));
+        assert_eq!(app.session.model(), Model::Spectrum48);
+        assert_eq!(
+            app.prefs.active_config_id.as_deref(),
+            Some(profile.id.as_str())
+        );
+        app.finish_rom_setup();
+        assert!(app.rom_setup_error.is_some());
+        assert_eq!(
+            app.session.host_mut().peek(0xc000).expect("old machine"),
+            0x5a
+        );
+        app.close_rom_setup();
+        assert_eq!(app.pending_builtin_model, None);
+        assert_eq!(
+            app.prefs.active_config_id.as_deref(),
+            Some(profile.id.as_str())
+        );
+
+        std::fs::write(&rom_path, vec![0; 16 * 1024]).expect("test target ROM");
+        app.on_builtin_model_selected(Model::Spectrum16K);
+        assert_eq!(app.session.model(), Model::Spectrum16K);
+        assert!(app.session.host_mut().has_machine());
+        assert_eq!(app.prefs.active_config_id, None);
+        assert!(app
+            .prefs
+            .custom_configs
+            .iter()
+            .any(|cfg| cfg.id == profile.id));
+        assert!(!app.show_rom_setup);
+
+        spec_chum_host::sync_model_rom_paths(std::collections::BTreeMap::default());
+        let _ = std::fs::remove_file(rom_path);
+        let _ = std::fs::remove_file(prefs_path);
+    }
 
     #[test]
     fn repaint_delay_tracks_next_frame_clock_duration() {

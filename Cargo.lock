@@ -396,6 +396,7 @@ dependencies = [
  "formats",
  "gilrs",
  "host_api",
+ "image",
  "machine",
  "parking_lot",
  "png 0.17.16",

@@ -86,8 +86,22 @@ pub fn menu_id_for_model(model: ModelId) -> usize {
 
 /// Human label for a built-in model (native menu text).
 #[must_use]
-pub fn model_menu_label(model: ModelId) -> &'static str {
-    machine::model_title(model.to_model())
+pub fn model_menu_label(model: ModelId) -> String {
+    let descriptor = spec_chum_host::host_model_catalog()
+        .into_iter()
+        .find(|descriptor| descriptor.id == model.numeric_id());
+    let Some(descriptor) = descriptor else {
+        return machine::model_title(model.to_model()).to_owned();
+    };
+    let summary = descriptor
+        .memory_sound_summary
+        .unwrap_or("Hardware details unavailable");
+    let readiness = if descriptor.available {
+        "ROMs ready"
+    } else {
+        "ROM setup required"
+    };
+    format!("{} — {summary} · {readiness}", descriptor.title)
 }
 
 /// EAR speed for a tape-speed menu id (`None` for Experience / Instant / unknown).
@@ -131,7 +145,9 @@ mod tests {
             let id = menu_id_for_model(m);
             assert_eq!(model_from_menu_id(id), Some(m));
             assert_ne!(model_menu_label(m).len(), 0);
-            assert_eq!(model_menu_label(m), machine::model_title(m.to_model()));
+            let label = model_menu_label(m);
+            assert!(label.starts_with(machine::model_title(m.to_model())));
+            assert!(label.contains("ROMs ready") || label.contains("ROM setup required"));
         }
         assert_eq!(model_from_menu_id(IDM_MACHINE_RESET), None);
     }

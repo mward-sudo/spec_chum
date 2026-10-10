@@ -7,25 +7,44 @@ import CSpecChumHost
 
 /// Thin Swift wrapper around the Spec Chum C host API.
 final class HostBridge: ObservableObject {
-    private enum CatalogError: Error { case invalidModel }
+    private enum CatalogError: Error { case invalidModel, emptyModelCatalog }
 
     private struct ModelDescriptor: Decodable {
         let id: UInt32
         let preferenceSlug: String
         let label: String
         let title: String
+        let imageKey: String?
+        let imageDescription: String?
+        let memorySoundSummary: String?
+        let compatiblePeripherals: HardwareCompatFlags
+        let available: Bool
+        let expectedMainRomBytes: Int
 
         enum CodingKeys: String, CodingKey {
-            case id, label, title
+            case id, label, title, available
             case preferenceSlug = "preference_slug"
+            case imageKey = "image_key"
+            case imageDescription = "image_description"
+            case memorySoundSummary = "memory_sound_summary"
+            case compatiblePeripherals = "compatible_peripherals"
+            case expectedMainRomBytes = "expected_main_rom_bytes"
         }
     }
 
     private static let modelCatalog: [ModelDescriptor] = {
-        guard let cstr = sc_model_catalog_json() else { return [] }
+        guard let cstr = sc_model_catalog_json() else {
+            NSLog("Spec Chum: host model catalog API returned no data")
+            return []
+        }
         defer { sc_string_free(cstr) }
         let data = Data(bytes: cstr, count: strlen(cstr))
-        return (try? JSONDecoder().decode([ModelDescriptor].self, from: data)) ?? []
+        do {
+            return try JSONDecoder().decode([ModelDescriptor].self, from: data)
+        } catch {
+            NSLog("Spec Chum: could not decode host model catalog: %@", error.localizedDescription)
+            return []
+        }
     }()
 
     /// EAR rate Instant falls back to on decks with no LD-BYTES trap (#390).
@@ -68,20 +87,55 @@ final class HostBridge: ObservableObject {
         case spectrumNext = 11
 
         /// Canonical UI order (matches `machine::ALL_MODELS` / egui Machine menu).
-        static let pickerOrder: [Model] = (try? HostBridge.modelCatalog.map { descriptor in
-            guard let model = Model(rawValue: descriptor.id) else { throw CatalogError.invalidModel }
-            return model
-        }) ?? []
+        static let pickerOrder: [Model] = {
+            do {
+                guard !HostBridge.modelCatalog.isEmpty else {
+                    throw CatalogError.emptyModelCatalog
+                }
+                return try HostBridge.modelCatalog.map { descriptor in
+                    guard let model = Model(rawValue: descriptor.id) else {
+                        throw CatalogError.invalidModel
+                    }
+                    return model
+                }
+            } catch {
+                NSLog("Spec Chum: model catalog contains an unsupported model: %@", error.localizedDescription)
+                return fallbackPickerOrder
+            }
+        }()
+
+        private static let fallbackPickerOrder: [Model] = [
+            .spectrum16K, .spectrum48, .spectrum128, .spectrumPlus2, .spectrumPlus2A,
+            .spectrumPlus3, .spectrumPlus3e, .pentagon128, .scorpionZs256,
+            .timexTC2048, .timexTS2068, .spectrumNext,
+        ]
 
         var id: UInt32 { rawValue }
 
-        var title: String { descriptor?.title ?? "Unknown model" }
+        var title: String { descriptor?.title ?? fallbackTitle }
+
+        private var fallbackTitle: String {
+            switch self {
+            case .spectrum16K: "Sinclair ZX Spectrum 16K"
+            case .spectrum48: "Sinclair ZX Spectrum 48K"
+            case .spectrum128: "Sinclair ZX Spectrum 128K"
+            case .spectrumPlus2: "Amstrad ZX Spectrum +2"
+            case .spectrumPlus2A: "Amstrad ZX Spectrum +2A"
+            case .spectrumPlus3: "Amstrad ZX Spectrum +3"
+            case .spectrumPlus3e: "ZX Spectrum +3e"
+            case .pentagon128: "Pentagon 128"
+            case .scorpionZs256: "Scorpion ZS-256"
+            case .timexTC2048: "Timex TC2048"
+            case .timexTS2068: "Timex TS2068"
+            case .spectrumNext: "ZX Spectrum Next"
+            }
+        }
 
         /// Short label for window titles.
-        var shortTitle: String { descriptor?.label ?? "?" }
+        var shortTitle: String { descriptor?.label ?? fallbackTitle }
 
         /// Prefs key segment (`spectrum48`, `pentagon128`, …) — matches host_api JSON v2.
-        var prefSlug: String { descriptor?.preferenceSlug ?? "" }
+        var prefSlug: String { descriptor?.preferenceSlug ?? PrefModelSlug.from(self).rawValue }
 
         private var descriptor: ModelDescriptor? { HostBridge.modelCatalog.first { $0.id == rawValue } }
 
@@ -91,16 +145,44 @@ final class HostBridge: ObservableObject {
         /// Models whose ROM dumps are never auto-fetched (user must supply paths).
         var requiresUserProvidedRoms: Bool { sc_model_requires_user_rom(rawValue) != 0 }
 
-        /// +3 has floppy; toolbar/File Open may include `.dsk`.
-        var supportsDisk: Bool { self == .spectrumPlus3 || self == .spectrumPlus3e }
-
-        /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
-        var supportsBeta: Bool {
-            self == .spectrum16K || self == .spectrum48 || self == .timexTC2048 || self == .timexTS2068 || self == .spectrum128 || self == .spectrumPlus2 || self == .pentagon128 || self == .scorpionZs256
+        var hardwareCompat: HardwareCompatFlags {
+            descriptor?.compatiblePeripherals ?? .forModel(self)
         }
 
+        var pickerSummary: String {
+            let summary = descriptor?.memorySoundSummary ?? "Hardware details unavailable"
+            guard imageDescription?.hasPrefix("Generated illustrative candidate") == true else {
+                return summary
+            }
+            return "\(summary) · Illustration candidate"
+        }
+
+        var imageKey: String? { descriptor?.imageKey }
+        var imageDescription: String? { descriptor?.imageDescription }
+
+        static func catalogImage(for model: Model) -> NSImage? {
+            guard let key = model.imageKey else { return nil }
+            let url = Bundle.main.url(
+                    forResource: key,
+                    withExtension: "jpg",
+                    subdirectory: "machines"
+                  ) ?? Bundle.main.url(
+                    forResource: key,
+                    withExtension: "png",
+                    subdirectory: "machines"
+                  )
+            guard let url else { return nil }
+            return NSImage(contentsOf: url)
+        }
+
+        /// +3 has floppy; toolbar/File Open may include `.dsk`.
+        var supportsDisk: Bool { hardwareCompat.plus3Disk }
+
+        /// Beta Disk / TR-DOS on 48K-class and Sinclair 128K (not Amstrad +2/+2A/+3).
+        var supportsBeta: Bool { hardwareCompat.beta }
+
         /// Timex dock `.dck` cartridges (TS2068 / TC2068 horizontal MMU).
-        var supportsTimexDock: Bool { self == .timexTS2068 }
+        var supportsTimexDock: Bool { hardwareCompat.timexDock }
 
         /// Soft cap for toolbar machine label glyphs (custom profile names); avoid layout frames.
         static let toolbarPickerMaxLabelChars: Int = 18
@@ -315,15 +397,31 @@ final class HostBridge: ObservableObject {
     @Published var machineConfigEditorIsNew = true
 
     /// ROM setup sheet (#188) — shown when built-in model ROMs are incomplete.
-    @Published var showRomSetup = false
+    @Published var showRomSetup = false {
+        didSet {
+            if !showRomSetup, pendingBuiltinModel != nil {
+                pendingBuiltinModel = nil
+                romSetupModel = model
+                if activeConfigId == nil {
+                    refreshRomSetup()
+                } else {
+                    romSetupPayload = nil
+                    romSetupError = nil
+                }
+            }
+        }
+    }
     @Published var romSetupPayload: RomSetupPayload?
     @Published var romSetupError: String?
     @Published var nextAssetsAcquiring = false
     /// Model the ROM dialog is configuring (may differ while picking from menu).
     @Published var romSetupModel: Model = .spectrum48
+    /// A built-in pick awaiting a successful boot; the active session is unchanged.
+    var pendingBuiltinModel: Model?
 
     /// True when the active built-in model still needs ROM files on disk.
     var needsRomSetup: Bool {
+        if pendingBuiltinModel != nil { return true }
         guard activeConfigId == nil else { return false }
         if let payload = romSetupPayload, !payload.complete {
             return true
