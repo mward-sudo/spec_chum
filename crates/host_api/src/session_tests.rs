@@ -86,6 +86,18 @@ fn debugger_workspace_snapshot_uses_selected_memory_address() {
 }
 
 #[test]
+fn debugger_workspace_snapshot_supports_next_machine() {
+    let next = machine::NextMachine::new(&vec![0; 0x1_0000]).expect("valid Next ROM");
+    let mut session = HostSession::new(ModelId::SpectrumNext, true);
+    session.machine = Some(HostRuntime::Next(Box::new(next)));
+    let text = session.debugger_text_at(0x4000);
+    assert!(text.contains("Spectrum Next"));
+    assert!(text.contains("--- disassembly at PC ---"));
+    assert!(text.contains("--- memory at $4000 ---"));
+    assert!(text.contains("Flags:"));
+}
+
+#[test]
 fn debugger_flag_text_names_each_z80_flag_bit() {
     let flags = super::z80_flags_text(0b1101_0101);
     assert_eq!(flags, "Flags: S=1 Z=1 5=0 H=1 3=0 P/V=1 N=0 C=1");

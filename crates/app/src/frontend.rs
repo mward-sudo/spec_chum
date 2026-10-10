@@ -204,9 +204,6 @@ impl SpecChumApp {
             self.render_view(ui, ctx, view, route_changed);
         });
 
-        if view != FrontendView::Debugger {
-            self.render_debugger(ctx);
-        }
         self.config_editor_window(ctx);
         self.rom_setup_window(ctx);
 

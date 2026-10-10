@@ -34,7 +34,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     MB_OK, MB_OKCANCEL, MF_BYCOMMAND, MF_BYPOSITION, MSG, PM_REMOVE, SW_SHOW, WINDOW_EX_STYLE,
     WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_INITMENUPOPUP,
     WM_KEYDOWN, WM_KEYUP, WM_PAINT, WM_QUIT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    WNDCLASSEXW, WS_BORDER, WS_CHILD, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 use control_plane::ControlPlane;
@@ -1387,22 +1387,6 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
         let edit_class: Vec<u16> = "EDIT\0".encode_utf16().collect();
         let mut client = RECT::default();
         let _ = GetClientRect(hwnd, &mut client);
-        let address_class: Vec<u16> = "EDIT\0".encode_utf16().collect();
-        let address_title: Vec<u16> = "0000\0".encode_utf16().collect();
-        let _address = CreateWindowExW(
-            WINDOW_EX_STYLE::default(),
-            PCWSTR(address_class.as_ptr()),
-            PCWSTR(address_title.as_ptr()),
-            WS_CHILD | WS_VISIBLE | WS_BORDER,
-            12,
-            12,
-            110,
-            26,
-            Some(hwnd),
-            Some(HMENU(ID_DBG_ADDRESS as isize as *mut core::ffi::c_void)),
-            Some(hinstance.into()),
-            None,
-        )?;
         let static_class: Vec<u16> = "STATIC\0".encode_utf16().collect();
         let address_label: Vec<u16> = "Memory address (hex):\0".encode_utf16().collect();
         let _label = CreateWindowExW(
@@ -1419,14 +1403,32 @@ fn create_debug_window(owner: Option<HWND>, app: *mut AppState) -> Result<(HWND,
             Some(hinstance.into()),
             None,
         )?;
+        let address_class: Vec<u16> = "EDIT\0".encode_utf16().collect();
+        let address_title: Vec<u16> = format!("{:04X}\0", unsafe { (*app).debug_address })
+            .encode_utf16()
+            .collect();
+        let _address = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(address_class.as_ptr()),
+            PCWSTR(address_title.as_ptr()),
+            WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP,
+            150,
+            12,
+            110,
+            26,
+            Some(hwnd),
+            Some(HMENU(ID_DBG_ADDRESS as isize as *mut core::ffi::c_void)),
+            Some(hinstance.into()),
+            None,
+        )?;
         let button_class: Vec<u16> = "BUTTON\0".encode_utf16().collect();
         let button_title: Vec<u16> = "View memory\0".encode_utf16().collect();
         let _button = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             PCWSTR(button_class.as_ptr()),
             PCWSTR(button_title.as_ptr()),
-            WS_CHILD | WS_VISIBLE,
-            260,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            270,
             12,
             110,
             26,
@@ -1770,10 +1772,19 @@ pub fn run() -> Result<()> {
                 let library = (!state_ptr.is_null())
                     .then(|| (*state_ptr).library_hwnd)
                     .flatten();
+                let debugger = (!state_ptr.is_null())
+                    .then(|| (*state_ptr).debug_hwnd)
+                    .flatten();
                 if let Some(library) = library {
                     // SAFETY: the Library HWND belongs to AppState for the event-loop lifetime,
                     // and `msg` is the live message removed from this thread's queue.
                     if IsDialogMessageW(library, &msg).as_bool() {
+                        continue;
+                    }
+                }
+                if let Some(debugger) = debugger {
+                    // SAFETY: the Debugger HWND belongs to AppState for the event-loop lifetime.
+                    if IsDialogMessageW(debugger, &msg).as_bool() {
                         continue;
                     }
                 }

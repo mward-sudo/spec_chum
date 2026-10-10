@@ -169,7 +169,14 @@ extension HostBridge {
             debugSp = r.sp
             debugAf = r.af
         }
-        let address = UInt32(debugMemoryAddress.trimmingCharacters(in: CharacterSet(charactersIn: "$")) .replacingOccurrences(of: "0x", with: "", options: .caseInsensitive), radix: 16) ?? UInt32(debugPc)
+        let normalizedAddress = debugMemoryAddress
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: "0x", with: "", options: .caseInsensitive)
+        guard let address = UInt32(normalizedAddress, radix: 16), address <= 0xFFFF else {
+            status = "Memory address must be a 16-bit hexadecimal value"
+            return
+        }
         if let handle, let cstr = sc_debugger_text_at(handle, address) {
             debuggerTextPreview = String(cString: cstr)
             sc_string_free(cstr)

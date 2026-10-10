@@ -10,6 +10,7 @@ use formats::MediaTitleSource;
 use machine::{JoystickMode, JoystickState, Machine, Model, NextMachine, Watch};
 use parking_lot::Mutex;
 use thiserror::Error;
+use z80::disasm_one;
 
 pub const KEYBOARD_ROWS: usize = 8;
 pub const KEYBOARD_BITS_PER_ROW: u8 = 5;
@@ -1663,33 +1664,92 @@ impl HostSession {
     /// debugger UI work never runs in the guest frame or audio path.
     pub fn debugger_text(&self) -> String {
         let pc = self.regs().map_or(0, |regs| regs.pc);
+        if self.machine.is_none() {
+            return Self::debugger_text_without_machine(pc);
+        }
         self.debugger_text_at(pc)
     }
 
     /// Combined debugger workspace snapshot focused on a selected memory address.
     pub fn debugger_text_at(&self, address: u16) -> String {
-        let inspect = self
-            .inspect_text()
-            .unwrap_or_else(|e| format!("inspect: {e}"));
-        let flags = self
-            .debugger_flags_text()
-            .unwrap_or_else(|e| format!("flags: {e}"));
-        let disasm = self.disasm(None, 16).unwrap_or_default();
-        let memory = self.hexdump(address, 64).unwrap_or_default();
-        let breaks = self
-            .list_pc_breakpoints()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|pc| format!("${pc:04X}"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let paused = if !self.has_machine() {
-            "no machine loaded"
-        } else if self.paused() {
-            "paused"
-        } else {
-            "running"
+        let Some(runtime) = self.machine.as_ref() else {
+            return Self::debugger_text_without_machine(address);
         };
+        let (regs, inspect, disasm, memory, flags) = match runtime {
+            HostRuntime::Classic(machine) => (
+                {
+                    let regs = &machine.cpu().regs;
+                    HostRegs {
+                        pc: regs.pc,
+                        sp: regs.sp,
+                        af: regs.af(),
+                        bc: regs.bc(),
+                        de: regs.de(),
+                        hl: regs.hl(),
+                        ix: regs.ix(),
+                        iy: regs.iy(),
+                    }
+                },
+                format!("{}", machine.inspect()),
+                machine.disasm_window(machine.cpu().regs.pc, 16),
+                machine.hexdump(address, 64),
+                z80_flags_text(machine.cpu().regs.f),
+            ),
+            HostRuntime::Next(next) => {
+                let r = &next.cpu.regs;
+                let regs = HostRegs {
+                    pc: r.pc,
+                    sp: r.sp,
+                    af: r.af(),
+                    bc: r.bc(),
+                    de: r.de(),
+                    hl: r.hl(),
+                    ix: r.ix(),
+                    iy: r.iy(),
+                };
+                let mut disasm = String::new();
+                let mut pc = r.pc;
+                for _ in 0..16 {
+                    let bytes = std::array::from_fn::<_, 4, _>(|i| {
+                        next.bus.read(pc.wrapping_add(i as u16))
+                    });
+                    let decoded = disasm_one(&bytes);
+                    disasm.push_str(&format!(
+                        "{pc:04X}  {:02X} {:02X} {:02X} {:02X} {}\n",
+                        bytes[0], bytes[1], bytes[2], bytes[3], decoded.text
+                    ));
+                    pc = pc.wrapping_add(u16::from(decoded.len.max(1)));
+                }
+                let mut memory = String::new();
+                for row in (0..64_u16).step_by(16) {
+                    let base = address.wrapping_add(row);
+                    let bytes = (0..16_u16)
+                        .map(|i| next.bus.read(base.wrapping_add(i)))
+                        .collect::<Vec<_>>();
+                    memory.push_str(&format!("{base:04X}  "));
+                    for byte in bytes {
+                        memory.push_str(&format!("{byte:02X} "));
+                    }
+                    memory.push('\n');
+                }
+                (
+                    regs,
+                    format!("Spectrum Next PC={:04X} SP={:04X}", r.pc, r.sp),
+                    disasm,
+                    memory,
+                    z80_flags_text(r.f),
+                )
+            }
+        };
+        let breaks = match runtime {
+            HostRuntime::Classic(machine) => machine.debugger().pc_breaks.clone(),
+            HostRuntime::Next(_) => Vec::new(),
+        }
+        .into_iter()
+        .map(|pc| format!("${pc:04X}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+        let paused = if self.paused() { "paused" } else { "running" };
         let trace_count = trace::len();
         let trace_events = trace::snapshot_recent(16);
         let trace = trace_events
@@ -1705,8 +1765,14 @@ impl HostSession {
             trace
         };
         format!(
-            "Execution: {paused}\n\n{inspect}\n{flags}\n\n--- disassembly at PC ---\n{disasm}\n\n--- memory at ${address:04X} ---\n{memory}\n\nPC breakpoints: {breaks}\n\n--- recent trace ({trace_count} buffered, latest 16) ---\n{trace}\n"
+            "Execution: {paused}\n\n{inspect}\nPC={:04X} SP={:04X} AF={:04X} BC={:04X} DE={:04X} HL={:04X} IX={:04X} IY={:04X}\n{flags}\n\n--- disassembly at PC ---\n{disasm}\n\n--- memory at ${address:04X} ---\n{memory}\n\nPC breakpoints: {breaks}\n\n--- recent trace ({trace_count} buffered, latest 16) ---\n{trace}\n",
+            regs.pc, regs.sp, regs.af, regs.bc, regs.de, regs.hl, regs.ix, regs.iy
         )
+    }
+
+    fn debugger_text_without_machine(address: u16) -> String {
+        let trace_count = trace::len();
+        format!("Execution: no machine loaded\n\n--- disassembly at PC ---\n(no machine)\n\n--- memory at ${address:04X} ---\n(no machine)\n\nPC breakpoints:\n\n--- recent trace ({trace_count} buffered, latest 16) ---\n(no trace events)\n")
     }
 
     /// Enable the shared low-volume trace categories exposed by native Debug menus.

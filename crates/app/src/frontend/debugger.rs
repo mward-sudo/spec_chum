@@ -4,15 +4,6 @@ use super::SpecChumApp;
 use eframe::egui;
 
 impl SpecChumApp {
-    pub(super) fn render_debugger(&mut self, ctx: &egui::Context) {
-        let mut open = self.session.debug_open;
-        egui::Window::new("Debugger")
-            .open(&mut open)
-            .default_size([760.0, 620.0])
-            .show(ctx, |ui| self.render_debugger_contents(ui));
-        self.session.debug_open = open;
-    }
-
     pub(super) fn render_debugger_contents(&mut self, ui: &mut egui::Ui) {
         if !self.session.host_mut().has_machine() {
             ui.label("No machine loaded");
@@ -129,13 +120,15 @@ impl SpecChumApp {
                 });
                 ui.label(format!("Active PC breakpoints: {breaks:?}"));
             });
-        egui::CollapsingHeader::new(format!("Trace ({} events)", trace::len())).show(ui, |ui| {
-            if trace::len() == 0 {
-                ui.label("No trace events. Enable tracing in the Debug menu.");
-            }
-            for event in trace::snapshot().iter().rev().take(16) {
-                ui.monospace(event.to_string());
-            }
-        });
+        egui::CollapsingHeader::new(format!("Trace ({} events)", trace::len()))
+            .id_salt("debugger-trace")
+            .show(ui, |ui| {
+                if trace::len() == 0 {
+                    ui.label("No trace events. Enable tracing in the Debug menu.");
+                }
+                for event in trace::snapshot().iter().rev().take(16) {
+                    ui.monospace(event.to_string());
+                }
+            });
     }
 }

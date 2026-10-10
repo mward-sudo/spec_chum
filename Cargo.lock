@@ -4454,6 +4454,7 @@ dependencies = [
  "thiserror 2.0.21",
  "trace",
  "ureq",
+ "z80",
  "zip",
 ]
 

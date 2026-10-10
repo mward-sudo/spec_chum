@@ -720,9 +720,10 @@ impl AppState {
         let address_row = gtk4::Box::new(Orientation::Horizontal, 6);
         let address = Entry::builder()
             .placeholder_text("Address (hex, e.g. 4000)")
-            .text("0000")
+            .text(format!("{:04X}", self.debug_memory))
             .width_chars(12)
             .build();
+        address.set_tooltip_text(Some("Memory address in hexadecimal"));
         let go = Button::with_label("View memory");
         address_row.append(&Label::new(Some("Memory address")));
         address_row.append(&address);
