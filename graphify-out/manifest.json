@@ -30,9 +30,9 @@
     "semantic_hash": "399e2949d9fb95371b20370ba2053f20"
   },
   "apps/macos/Sources/SpecChumMac/ContentView.swift": {
-    "mtime": 1791651742.1735313,
-    "seen": 1791651933.507869,
-    "ast_hash": "edcd9abf4d0090296cc46a7ecb653717",
+    "mtime": 1791654672.5787733,
+    "seen": 1791654790.845207,
+    "ast_hash": "bc5deb445199429b1468a79a87dc5975",
     "semantic_hash": ""
   },
   "apps/macos/Sources/SpecChumMac/GlassChrome.swift": {
