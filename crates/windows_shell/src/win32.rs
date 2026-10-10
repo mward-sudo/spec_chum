@@ -1573,16 +1573,14 @@ pub fn run() -> Result<()> {
                 }
                 // SAFETY: `hwnd` is the live main-window handle; its USERDATA remains
                 // the boxed AppState until this message loop exits on WM_QUIT.
-                let library = unsafe {
-                    let state_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppState;
-                    (!state_ptr.is_null())
-                        .then(|| (*state_ptr).library_hwnd)
-                        .flatten()
-                };
+                let state_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppState;
+                let library = (!state_ptr.is_null())
+                    .then(|| (*state_ptr).library_hwnd)
+                    .flatten();
                 if let Some(library) = library {
                     // SAFETY: the Library HWND belongs to AppState for the event-loop lifetime,
                     // and `msg` is the live message removed from this thread's queue.
-                    if unsafe { IsDialogMessageW(library, &msg) }.as_bool() {
+                    if IsDialogMessageW(library, &msg).as_bool() {
                         continue;
                     }
                 }

@@ -299,8 +299,10 @@ extern "system" fn library_wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    // SAFETY: GWLP_USERDATA is set to the main window's boxed AppState during WM_CREATE.
-    // The main window destroys this Library HWND before dropping that Box in WM_DESTROY.
+    // SAFETY: `AppState` is boxed by `run`, stored in GWLP_USERDATA during WM_CREATE,
+    // and remains alive until the main WM_DESTROY synchronously destroys this child.
+    // USER32 dispatches these callbacks serially on the UI thread; mutable borrows below
+    // end before any operation that can synchronously reenter this procedure.
     let app_ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut AppState;
     match msg {
         WM_CREATE => {
@@ -400,6 +402,8 @@ extern "system" fn library_wnd_proc(
                 }
                 let _ = send_message(combo, 0x014E, 0, 0);
             }
+            // SAFETY: the boxed state is alive, and control creation has returned, so no
+            // nested Library callback can hold another mutable borrow of it.
             let app = unsafe { &mut *app_ptr };
             app.library_hwnd = Some(hwnd);
             app.library_search = search;
@@ -411,11 +415,15 @@ extern "system" fn library_wnd_proc(
             LRESULT(0)
         }
         WM_SIZE if !app_ptr.is_null() => {
+            // SAFETY: the state remains boxed for this callback; layout does not reenter
+            // this window procedure while the shared borrow is active.
             layout_library(unsafe { &*app_ptr }, hwnd);
             LRESULT(0)
         }
         WM_ACTIVATE if !app_ptr.is_null() => {
             if wparam.0 & 0xffff != 0 {
+                // SAFETY: callbacks are serialized, and refresh only sends updates to child
+                // controls; it does not synchronously reenter this parent procedure.
                 unsafe { &mut *app_ptr }.refresh_library();
             }
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
@@ -431,6 +439,8 @@ extern "system" fn library_wnd_proc(
                 }
                 return LRESULT(0);
             }
+            // SAFETY: the state is alive and no mutable borrow spans a reentrant call;
+            // the Close case above destroys the HWND before taking this borrow.
             let app = unsafe { &mut *app_ptr };
             match command {
                 Some(LibraryCommand::Refresh) => app.refresh_library(),
@@ -447,6 +457,8 @@ extern "system" fn library_wnd_proc(
             LRESULT(0)
         }
         WM_DESTROY if !app_ptr.is_null() => {
+            // SAFETY: the parent keeps the Box alive until this child callback returns;
+            // this branch only clears fields and makes no reentrant USER32 calls.
             let app = unsafe { &mut *app_ptr };
             app.library_hwnd = None;
             app.library_search = None;
